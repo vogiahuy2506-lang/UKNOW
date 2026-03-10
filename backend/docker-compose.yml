@@ -1,0 +1,29 @@
+services:
+  backend:
+    container_name: uknow-campaign-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+    ports:
+      - "${BACKEND_PORT:-5001}:5001"
+    restart: unless-stopped
+    networks:
+      - uknow_network
+    volumes:
+      - backend_uploads:/app/uploads
+    # Giới hạn log: mỗi file tối đa 10MB, giữ tối đa 5 file xoay vòng (~50MB tổng)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  uknow_network:
+    name: uknow_network
+    driver: bridge
+
+volumes:
+  backend_uploads:

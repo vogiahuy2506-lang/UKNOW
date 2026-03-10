@@ -1,0 +1,311 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #f8fafc;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Custom focus styles */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid #ee7518;
+  outline-offset: 2px;
+}
+
+/* Transition utilities */
+.transition-base {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+/* Button base styles */
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-base;
+}
+
+.btn-primary {
+  @apply bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700;
+}
+
+.btn-secondary {
+  @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
+}
+
+.btn-warning {
+  @apply bg-yellow-500 text-white hover:bg-yellow-600 active:bg-yellow-700;
+}
+
+.btn-danger {
+  @apply bg-red-500 text-white hover:bg-red-600 active:bg-red-700;
+}
+
+/* Input base styles */
+.input {
+  @apply w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-base;
+}
+
+.input-error {
+  @apply border-red-500 focus:border-red-500 focus:ring-red-500;
+}
+
+/* Chặn nút reveal/clear của trình duyệt để tránh lộ mật khẩu SMTP trên UI */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100;
+}
+
+.card-body {
+  @apply p-6;
+}
+
+/* Form label */
+.label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+/* Table styles */
+.table-container {
+  @apply overflow-x-auto overflow-y-visible w-full;
+}
+
+.table {
+  @apply w-full min-w-max text-sm;
+}
+
+.table th {
+  @apply px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b;
+}
+
+.table td {
+  @apply px-4 py-3 border-b border-gray-100;
+}
+
+.table tbody tr:hover {
+  @apply bg-gray-50;
+}
+
+/* Status badges */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-error {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-info {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-gray {
+  @apply bg-gray-100 text-gray-800;
+}
+
+/* Sidebar animation */
+.sidebar-transition {
+  transition: width 0.3s ease-in-out;
+}
+
+/* Menu item styles */
+.menu-item {
+  @apply flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-base cursor-pointer;
+}
+
+.menu-item:hover {
+  @apply bg-gray-100;
+}
+
+.menu-item.active {
+  @apply bg-primary-50 text-primary-600;
+}
+
+.menu-item-icon {
+  @apply w-5 h-5 mr-3;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: rgba(17, 24, 39, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: modal-backdrop-in 0.18s ease-out both;
+}
+
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-content-in {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+.modal-content-animate {
+  animation: modal-content-in 0.2s ease-out both;
+}
+
+.modal-content {
+  @apply bg-white rounded-xl shadow-xl max-h-[90vh] overflow-auto;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply w-5 h-5 border-2 border-gray-300 border-t-primary-500 rounded-full animate-spin;
+}
+
+/* Empty state */
+.empty-state {
+  @apply flex flex-col items-center justify-center py-12 text-gray-500;
+}
+
+.empty-state-icon {
+  @apply w-16 h-16 mb-4 text-gray-300;
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  @apply shadow-lg border-2 border-gray-200 rounded-lg bg-white;
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__minimap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  preserveAspectRatio: none;
+}
+
+.react-flow__node.selected {
+  @apply border-primary-500;
+}
+
+.react-flow__edge-path {
+  stroke: #94a3b8;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #ee7518;
+}
+
+/* Toast custom styles */
+.toast-success {
+  background: #10b981 !important;
+  color: white !important;
+}
+
+.toast-error {
+  background: #ef4444 !important;
+  color: white !important;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Slide-over panel transition (used by DashboardFilterPanel) */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.22s ease-out forwards;
+}

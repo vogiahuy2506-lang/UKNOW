@@ -1,0 +1,27 @@
+import express from 'express';
+import dashboardController from '../controllers/dashboard.controller.js';
+import authMiddleware from '../middleware/auth.middleware.js';
+
+const router = express.Router();
+
+router.use(authMiddleware);
+
+// Get overview
+router.get('/overview', dashboardController.getOverview.bind(dashboardController));
+
+// Get analytics
+router.get('/analytics', dashboardController.getAnalytics.bind(dashboardController));
+
+// Get run-level analytics
+router.get('/runs', dashboardController.getRuns.bind(dashboardController));
+
+// Get orders list
+router.get('/orders', dashboardController.getOrdersList.bind(dashboardController));
+
+// Get top lists (top courses by orders, top campaigns by orders/clicks)
+router.get('/top-lists', dashboardController.getTopLists.bind(dashboardController));
+
+// Compare campaigns
+router.get('/compare', dashboardController.compareCampaigns.bind(dashboardController));
+
+export default router;

@@ -1,0 +1,171 @@
+import {
+  HiOutlineDuplicate,
+  HiOutlineEye,
+  HiOutlinePlus,
+  HiOutlineSearch,
+  HiOutlineTrash,
+} from 'react-icons/hi';
+
+const EmailTemplateListSection = ({
+  isLoading,
+  filteredTemplates,
+  templates,
+  filterCategory,
+  setFilterCategory,
+  searchTerm,
+  setSearchTerm,
+  onCreateTemplate,
+  getCategoryBadge,
+  handlePreview,
+  handleDuplicate,
+  handleEdit,
+  handleDelete,
+  title = 'Thư viện Template',
+  description = 'Quản lý và thiết kế các mẫu email chuyên nghiệp cho chiến dịch của bạn',
+  emptyTitle = 'Chưa có template nào',
+  emptyDescription = 'Bắt đầu tạo mẫu email đầu tiên của bạn để sử dụng trong các chiến dịch marketing.',
+  searchPlaceholder = 'Tìm kiếm template...',
+}) => (
+  <>
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+          {title}
+        </h1>
+        <p className="text-gray-500 mt-1">
+          {description}
+        </p>
+      </div>
+      <button
+        onClick={onCreateTemplate}
+        className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center font-medium"
+      >
+        <HiOutlinePlus className="w-5 h-5 mr-2" />
+        Tạo template mới
+      </button>
+    </div>
+
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
+        {[
+          { id: '', label: 'Tất cả' },
+          { id: 'marketing', label: 'Marketing' },
+          { id: 'notification', label: 'Thông báo' },
+        ].map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setFilterCategory(cat.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+              filterCategory === cat.id
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+            }`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="relative w-full md:w-80 group">
+        <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary-500 transition-colors" />
+        <input
+          type="text"
+          placeholder={searchPlaceholder}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+        />
+      </div>
+    </div>
+
+    {isLoading ? (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    ) : filteredTemplates.length === 0 ? (
+      <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
+        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <HiOutlineDuplicate className="w-8 h-8 text-gray-400" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyTitle}</h3>
+        <p className="text-gray-500 max-w-sm mx-auto mb-6">
+          {emptyDescription}
+        </p>
+        <button
+          onClick={onCreateTemplate}
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg"
+        >
+          Tạo template ngay
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {filteredTemplates.map((template) => (
+          <div
+            key={template.id}
+            className="group bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col overflow-hidden"
+          >
+            <div className="p-3 flex-1 flex flex-col relative">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {getCategoryBadge(template.category)}
+                  {template?.activeUsage?.isUsedInActiveCampaign && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Đang được dùng
+                    </span>
+                  )}
+                </div>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 flex space-x-1 bg-white shadow-md rounded-md p-1 border border-gray-100">
+                  <button
+                    onClick={() => handlePreview(template)}
+                    className="p-1 rounded hover:bg-gray-50 text-gray-500 hover:text-primary-600"
+                    title="Xem trước"
+                  >
+                    <HiOutlineEye className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDuplicate(template)}
+                    className="p-1 rounded hover:bg-gray-50 text-gray-500 hover:text-primary-600"
+                    title="Nhân bản"
+                  >
+                    <HiOutlineDuplicate className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="font-semibold text-gray-900 text-sm mb-2 line-clamp-2" title={template.templateName}>
+                {template.templateName}
+              </h3>
+              <p className="text-xs text-gray-500 line-clamp-2 mb-3 bg-gray-50 p-2 rounded-md border border-gray-100">
+                {template.subject}
+              </p>
+
+              <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-400">
+                  {new Date(template.updatedAt).toLocaleDateString('vi-VN')}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEdit(template)}
+                    className="text-xs font-medium text-gray-600 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-50 transition-colors"
+                  >
+                    Chỉnh sửa
+                  </button>
+                  <button
+                    onClick={() => handleDelete(template.id)}
+                    className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <HiOutlineTrash className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </>
+);
+
+export default EmailTemplateListSection;
