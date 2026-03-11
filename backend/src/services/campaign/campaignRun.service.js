@@ -391,6 +391,113 @@ class CampaignRunService {
         });
         return Array.from(dedupMap.values());
       };
+      const continuousNodeDataState = new Map();
+      const canonicalizeComparableValue = (value) => {
+        if (Array.isArray(value)) {
+          return value.map((item) => canonicalizeComparableValue(item));
+        }
+        if (value && typeof value === 'object') {
+          return Object.keys(value)
+            .sort()
+            .reduce((acc, key) => {
+              acc[key] = canonicalizeComparableValue(value[key]);
+              return acc;
+            }, {});
+        }
+        return value;
+      };
+      const stringifyComparableItem = (item) => {
+        if (item == null) return '';
+        if (typeof item !== 'object') return String(item);
+        try {
+          return JSON.stringify(canonicalizeComparableValue(item));
+        } catch {
+          return String(item);
+        }
+      };
+      /**
+       * Tạo khóa dedupe cho các node dữ liệu trong continuous mode.
+       *
+       * Luồng hoạt động:
+       * 1. Ưu tiên khóa nghiệp vụ ổn định theo từng node (customerId/uid/courseId...).
+       * 2. Fallback về fingerprint object để tránh mất bản ghi khi thiếu khóa chính.
+       *
+       * @param {string} nodeSubtype subtype node hiện tại
+       * @param {Record<string, any>} item bản ghi dữ liệu
+       * @returns {string}
+       */
+      const buildContinuousDataNodeItemKey = (nodeSubtype, item = {}) => {
+        const subtype = String(nodeSubtype || '').trim().toLowerCase();
+        const row = item && typeof item === 'object' ? item : {};
+        if (subtype === 'read_courses_db') {
+          const courseId = row.id ?? row.courseId ?? row.course_code ?? row.courseCode;
+          if (courseId != null && String(courseId).trim()) return `course:${String(courseId).trim()}`;
+        }
+        if (subtype === 'get_all_friends') {
+          const uid = row.uid ?? row.zalo_id ?? row.zaloId ?? row.id;
+          if (uid != null && String(uid).trim()) return `friend_uid:${String(uid).trim()}`;
+          const phone = row.phone ?? row.phoneNumber ?? row.zaloPhone;
+          if (phone != null && String(phone).trim()) return `friend_phone:${String(phone).trim()}`;
+        }
+        if (subtype === 'read_interested_customers' || subtype === 'interested_customers') {
+          const customerId = row.id_customer ?? row.customer_id ?? row.customerId ?? row.id;
+          if (customerId != null && String(customerId).trim()) return `customer:${String(customerId).trim()}`;
+          const email = String(row.email || '').trim().toLowerCase();
+          const phone = String(row.phone || '').trim();
+          if (email || phone) return `customer_contact:${email}|${phone}`;
+        }
+        if (subtype === 'read_sheet' || subtype === 'google_sheet') {
+          const email = String(row.email || '').trim().toLowerCase();
+          const phone = String(row.phone || row.dien_thoai || '').trim();
+          if (email || phone) return `sheet_contact:${email}|${phone}`;
+        }
+        return `raw:${stringifyComparableItem(row)}`;
+      };
+      /**
+       * Merge output node dữ liệu theo chế độ continuous, chỉ giữ item mới.
+       *
+       * @param {object} input
+       * @param {number|string} input.nodeId id node
+       * @param {string} input.nodeSubtype subtype node
+       * @param {Array<Record<string, any>>} input.fetchedItems danh sách vừa đọc được
+       * @returns {{allItems: Array<Record<string, any>>, newItems: Array<Record<string, any>>}}
+       */
+      const mergeContinuousNodeItems = ({ nodeId, nodeSubtype, fetchedItems }) => {
+        const safeNodeId = String(nodeId || '').trim();
+        const incomingItems = Array.isArray(fetchedItems) ? fetchedItems : [];
+        if (!safeNodeId) {
+          return {
+            allItems: incomingItems,
+            newItems: incomingItems,
+          };
+        }
+
+        const previousState = continuousNodeDataState.get(safeNodeId) || {
+          allItems: [],
+          seenKeys: new Set(),
+        };
+        const seenKeys = new Set(previousState.seenKeys);
+        const allItems = [...previousState.allItems];
+        const newItems = [];
+
+        incomingItems.forEach((item) => {
+          const itemKey = buildContinuousDataNodeItemKey(nodeSubtype, item);
+          if (seenKeys.has(itemKey)) return;
+          seenKeys.add(itemKey);
+          allItems.push(item);
+          newItems.push(item);
+        });
+
+        continuousNodeDataState.set(safeNodeId, {
+          allItems,
+          seenKeys,
+        });
+
+        return {
+          allItems,
+          newItems,
+        };
+      };
       const renderTemplateText = (templateText, variables = {}) =>
         String(templateText || '').replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, varName) => {
           const value = variables?.[varName];
@@ -1129,8 +1236,8 @@ class CampaignRunService {
         const rowEmail = extractEmailFromEntryRow(entryRow);
         const rowFullName = extractFullNameFromEntryRow(entryRow);
 
-        // Keep old behavior for phone-only recipients: placeholder is required only for UID flow.
-        if (!Number.isFinite(parsedCustomerId) && !normalizedUid) {
+        // Không chặn nhánh phone-only: vẫn cần tạo/find customer để ghi hành trình Zalo như email.
+        if (!Number.isFinite(parsedCustomerId) && !normalizedUid && !normalizedPhone) {
           return null;
         }
 
@@ -1311,31 +1418,37 @@ class CampaignRunService {
         zaloMessageId = null,
         messageText = '',
         channel = 'zalo',
+        trackingToken = null,
       }) => {
         const parsedCustomerId = Number.parseInt(customerId, 10);
         const parsedZaloMessageId = Number.parseInt(zaloMessageId, 10);
         const eventChannel = String(channel || '').trim().toLowerCase() === 'zalo_group'
           ? 'zalo_group'
           : 'zalo';
-        if (!Number.isFinite(parsedZaloMessageId) || !Number.isFinite(parsedCustomerId)) return;
+        const isZaloGroupChannel = eventChannel === 'zalo_group';
+        const canTrackPersonalJourney = Number.isFinite(parsedCustomerId);
+        if (!Number.isFinite(parsedZaloMessageId)) return;
+        // Zalo cá nhân cần id_customer; Zalo group được phép lưu journey không gắn khách.
+        if (!isZaloGroupChannel && !canTrackPersonalJourney) return;
         await db.query(
           `INSERT INTO customer_journey
              (id_customer, id_campaign, id_run, id_node, event_type, event_channel, id_zalo_message, event_data, event_at)
            VALUES
              ($1, $2, $3, $4, 'zalo_sent', $5, $6, $7::jsonb, CURRENT_TIMESTAMP)`,
           [
-            parsedCustomerId,
+            canTrackPersonalJourney ? parsedCustomerId : null,
             campaignId,
             runId,
             nodeId,
             eventChannel,
             parsedZaloMessageId,
             JSON.stringify({
-              description: eventChannel === 'zalo_group'
+              description: isZaloGroupChannel
                 ? 'Đã gửi tin nhắn Zalo nhóm'
                 : 'Đã gửi tin nhắn Zalo',
               channel: eventChannel,
               message: String(messageText || '').slice(0, 500),
+              trackingToken: String(trackingToken || '').trim() || null,
             }),
           ]
         );
@@ -1668,11 +1781,26 @@ class CampaignRunService {
               );
             },
           });
-          const previewItems = Array.isArray(nodeCustomers) ? nodeCustomers.slice(0, 100) : [];
-          const fetched = Array.isArray(nodeCustomers) ? nodeCustomers.length : 0;
-          const message = campaignFlowService.buildNodeSuccessMessage(nodeSubtype, { fetched, total: fetched });
-          nodeOutputs[String(node.id)] = Array.isArray(nodeCustomers) ? nodeCustomers : [];
-          lastOutputItems = nodeOutputs[String(node.id)];
+          const fetchedItems = Array.isArray(nodeCustomers) ? nodeCustomers : [];
+          const mergedNodeData = isContinuousMode
+            ? mergeContinuousNodeItems({
+                nodeId: node.id,
+                nodeSubtype,
+                fetchedItems,
+              })
+            : {
+                allItems: fetchedItems,
+                newItems: fetchedItems,
+              };
+          const outputItems = isContinuousMode ? mergedNodeData.newItems : mergedNodeData.allItems;
+          const previewItems = outputItems.slice(0, 100);
+          const fetched = outputItems.length;
+          const totalItems = mergedNodeData.allItems.length;
+          const message = isContinuousMode
+            ? campaignFlowService.buildNodeSuccessMessage(nodeSubtype, { fetched, total: totalItems })
+            : campaignFlowService.buildNodeSuccessMessage(nodeSubtype, { fetched, total: fetched });
+          nodeOutputs[String(node.id)] = mergedNodeData.allItems;
+          lastOutputItems = mergedNodeData.allItems;
 
           await campaignExecutionLogService.logExecutionNode({
             campaignId,
@@ -1687,8 +1815,11 @@ class CampaignRunService {
               schema: campaignFlowService.buildSchemaFromRows(previewItems),
               meta: {
                 fetched,
-                totalItems: fetched,
+                totalItems,
                 previewed: previewItems.length,
+                ...(isContinuousMode
+                  ? { newItems: fetched, accumulatedItems: totalItems, continuousMode: true }
+                  : {}),
               },
             },
           });
@@ -2189,25 +2320,22 @@ class CampaignRunService {
           if (emailSteps.length > 0) {
             totalRecipients += dedupedRecipients.length * emailSteps.length;
             const stoppedRecipientKeys = new Set();
-            for (const customer of dedupedRecipients) {
-              const customerKey = String(customer.email || '').trim().toLowerCase() || 'unknown';
-              if (stoppedRecipientKeys.has(customerKey)) continue;
-              const scheduleStartAt = Date.now();
-              let previousStepTargetAt = scheduleStartAt;
-              for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
-                const step = emailSteps[stepIndex];
-                if (stoppedRecipientKeys.has(customerKey)) break;
-                if (emailSendMode === 'schedule') {
-                  // eslint-disable-next-line no-await-in-loop
-                  previousStepTargetAt = await waitForScheduledStep({
-                    scheduleStartAt,
-                    previousStepTargetAt,
-                    step,
-                    channel: 'email',
-                    recipientKey: customerKey,
-                    stepIndex: stepIndex + 1,
-                  });
-                }
+            /**
+             * Gửi 1 step email cho toàn bộ người nhận, bảo đảm đúng thứ tự theo step.
+             *
+             * Luồng hoạt động:
+             * 1. Duyệt toàn bộ danh sách khách ở step hiện tại.
+             * 2. Bỏ qua khách đã bị chặn các step tiếp theo (unsubscribed/bounce/failed cứng).
+             * 3. Gửi lần lượt từng khách, cập nhật cờ dừng nếu cần để không chạy step sau cho khách đó.
+             *
+             * @param {object} step dữ liệu step email hiện tại
+             * @param {number} stepIndex chỉ số step (0-based)
+             * @returns {Promise<void>}
+             */
+            const runEmailTemplateStep = async (step, stepIndex) => {
+              for (const customer of dedupedRecipients) {
+                const customerKey = String(customer.email || '').trim().toLowerCase() || 'unknown';
+                if (stoppedRecipientKeys.has(customerKey)) continue;
                 const runtimeNode = {
                   ...node,
                   config: {
@@ -2225,12 +2353,35 @@ class CampaignRunService {
                     stepIndex: stepIndex + 1,
                     sendMode: emailSendMode,
                   },
-                  applyRandomDelay: emailSendMode !== 'schedule',
+                  applyRandomDelay: true,
                 });
                 if (sendOutcome?.stopRemainingStepsForRecipient) {
                   stoppedRecipientKeys.add(customerKey);
-                  break;
                 }
+              }
+            };
+
+            if (emailSendMode === 'schedule') {
+              const scheduleStartAt = Date.now();
+              let previousStepTargetAt = scheduleStartAt;
+              for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
+                const step = emailSteps[stepIndex];
+                // eslint-disable-next-line no-await-in-loop
+                previousStepTargetAt = await waitForScheduledStep({
+                  scheduleStartAt,
+                  previousStepTargetAt,
+                  step,
+                  channel: 'email',
+                  recipientKey: 'all_recipients',
+                  stepIndex: stepIndex + 1,
+                });
+                // eslint-disable-next-line no-await-in-loop
+                await runEmailTemplateStep(step, stepIndex);
+              }
+            } else {
+              for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
+                // eslint-disable-next-line no-await-in-loop
+                await runEmailTemplateStep(emailSteps[stepIndex], stepIndex);
               }
             }
           } else {
@@ -2327,8 +2478,19 @@ class CampaignRunService {
           } else if (selectionMode === 'all_exclude' && excludedSet.size > 0) {
             items = allItems.filter((item) => !excludedSet.has(extractFriendId(item)));
           }
-          nodeOutputs[String(node.id)] = items;
-          lastOutputItems = items;
+          const mergedFriendData = isContinuousMode
+            ? mergeContinuousNodeItems({
+                nodeId: node.id,
+                nodeSubtype,
+                fetchedItems: items,
+              })
+            : {
+                allItems: items,
+                newItems: items,
+              };
+          const outputFriendItems = isContinuousMode ? mergedFriendData.newItems : mergedFriendData.allItems;
+          nodeOutputs[String(node.id)] = mergedFriendData.allItems;
+          lastOutputItems = mergedFriendData.allItems;
 
           await campaignExecutionLogService.logExecutionNode({
             campaignId,
@@ -2336,15 +2498,24 @@ class CampaignRunService {
             node,
             status: 'success',
             executionData: {
-              message: `Lấy danh sách bạn bè Zalo thành công (${items.length})`,
-              items: items.slice(0, 100),
-              schema: campaignFlowService.buildSchemaFromRows(items),
+              message: isContinuousMode
+                ? `Lấy danh sách bạn bè Zalo thành công (${outputFriendItems.length}/${mergedFriendData.allItems.length})`
+                : `Lấy danh sách bạn bè Zalo thành công (${outputFriendItems.length})`,
+              items: outputFriendItems.slice(0, 100),
+              schema: campaignFlowService.buildSchemaFromRows(outputFriendItems),
               meta: {
-                totalItems: items.length,
+                totalItems: mergedFriendData.allItems.length,
                 filtered: (selectionMode === 'fixed' && selectedSet.size > 0)
                   || (selectionMode === 'all_exclude' && excludedSet.size > 0),
                 selectionMode,
                 accountSourceNodeId: accountSourceNodeId || null,
+                ...(isContinuousMode
+                  ? {
+                      newItems: outputFriendItems.length,
+                      accumulatedItems: mergedFriendData.allItems.length,
+                      continuousMode: true,
+                    }
+                  : {}),
               },
             },
           });
@@ -2450,6 +2621,27 @@ class CampaignRunService {
             ? config.zaloPersonalTemplateSteps
             : [];
           const sendResults = [];
+          /**
+           * Chuẩn hóa payload execution cho node gửi Zalo cá nhân để UI log luôn tích lũy đúng.
+           *
+           * @param {object} payload kết quả gửi hiện tại
+           * @returns {{message: string, items: Array<object>, schema: Array<object>, meta: object}}
+           */
+          const buildSendZaloPersonalExecutionData = (payload = {}) => {
+            const item = { ...payload };
+            const attempted = successfulSends + failedSends;
+            return {
+              message: String(payload?.messageText || payload?.message || ''),
+              items: [item],
+              schema: campaignFlowService.buildSchemaFromRows([item]),
+              meta: {
+                attempted,
+                sent: successfulSends,
+                failed: failedSends,
+                totalItems: sendResults.length,
+              },
+            };
+          };
 
           const sendSingleRecipient = async ({
             recipient,
@@ -2557,6 +2749,7 @@ class CampaignRunService {
                 zaloMessageId,
                 messageText: trackedMessage,
                 channel: 'zalo',
+                trackingToken,
               });
               sendResults.push(resultPayload);
               await campaignExecutionLogService.logExecutionNode({
@@ -2566,7 +2759,7 @@ class CampaignRunService {
                 status: 'success',
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
-                executionData: resultPayload,
+                executionData: buildSendZaloPersonalExecutionData(resultPayload),
               });
               return { success: true };
             } catch (error) {
@@ -2614,7 +2807,7 @@ class CampaignRunService {
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
                 errorMessage: error.message,
-                executionData: failedPayload,
+                executionData: buildSendZaloPersonalExecutionData(failedPayload),
               });
               return { success: false };
             }
@@ -3003,6 +3196,27 @@ class CampaignRunService {
           }
 
           const sendResults = [];
+          /**
+           * Chuẩn hóa payload execution cho node gửi lời mời kết bạn để UI log tích lũy đúng theo từng item.
+           *
+           * @param {object} payload kết quả xử lý hiện tại
+           * @returns {{message: string, items: Array<object>, schema: Array<object>, meta: object}}
+           */
+          const buildSendZaloFriendExecutionData = (payload = {}) => {
+            const item = { ...payload };
+            const attempted = successfulSends + failedSends;
+            return {
+              message: String(payload?.messageText || payload?.message || ''),
+              items: [item],
+              schema: campaignFlowService.buildSchemaFromRows([item]),
+              meta: {
+                attempted,
+                sent: successfulSends,
+                failed: failedSends,
+                totalItems: sendResults.length,
+              },
+            };
+          };
 
           for (const entry of effectivePhoneEntries) {
             const phone = String(entry.value || '').trim();
@@ -3066,6 +3280,37 @@ class CampaignRunService {
             if (!isContinuousMode) {
               totalRecipients += 1;
             }
+            let customerId = extractCustomerIdFromRow(entry?.row || null);
+            if (!Number.isFinite(Number.parseInt(customerId, 10))) {
+              // Tạo/đồng bộ customer theo phone để có dữ liệu hành trình giống luồng email.
+              // eslint-disable-next-line no-await-in-loop
+              const customerSync = await upsertZaloFriendCustomerByPhone({
+                phone,
+                uid: '',
+                entryRow: entry?.row || null,
+              });
+              customerId = customerSync.customerId;
+            }
+            let zaloMessageId = null;
+            const trackingToken = campaignZaloSenderService.createTrackingToken();
+            // eslint-disable-next-line no-await-in-loop
+            zaloMessageId = await createZaloMessageTrackingRecord({
+              nodeId: node.id,
+              channel: 'zalo_friend_request',
+              recipientType: 'phone',
+              recipientValue: phone,
+              uid: null,
+              groupId: null,
+              accountId: account.id,
+              accountName: account.displayName,
+              messageText: message,
+              customerId: Number.parseInt(customerId, 10) || null,
+              trackingToken,
+              trackingMetadata: {
+                contentMode,
+                status: 'queued',
+              },
+            });
             try {
               await waitRandomApiDelay();
               const sendResult = await campaignZaloSenderService.sendFriendRequest({
@@ -3083,10 +3328,26 @@ class CampaignRunService {
                 requestMessage: message,
                 status: 'success',
                 contentMode,
+                customerId: Number.parseInt(customerId, 10) || null,
+                zaloMessageId,
+                trackingToken,
                 uid: sendResult.uid || null,
                 response: sendResult.response || null,
                 messageText: progressMessage,
               };
+              await updateZaloMessageTrackingMeta(zaloMessageId, {
+                status: 'sent',
+                uid: sendResult.uid || null,
+                response: sendResult.response || null,
+              });
+              await logZaloSentJourneyEvent({
+                customerId: Number.parseInt(customerId, 10) || null,
+                nodeId: node.id,
+                zaloMessageId,
+                messageText: message,
+                channel: 'zalo',
+                trackingToken,
+              });
               sendResults.push(resultPayload);
               await campaignExecutionLogService.logExecutionNode({
                 campaignId,
@@ -3095,7 +3356,7 @@ class CampaignRunService {
                 status: 'success',
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
-                executionData: resultPayload,
+                executionData: buildSendZaloFriendExecutionData(resultPayload),
               });
               if (isContinuousMode) {
                 const completedAtIso = toHoChiMinhIso();
@@ -3131,10 +3392,26 @@ class CampaignRunService {
                     contentMode,
                     friendRequestStatus: 'already_friend',
                     responseMessage: String(error?.message || '').trim() || 'Người nhận đã là bạn bè Zalo',
-                    customerId: customerSync.customerId,
+                    customerId: customerSync.customerId || Number.parseInt(customerId, 10) || null,
+                    zaloMessageId,
+                    trackingToken,
                     customerSyncAction: customerSync.action,
                     messageText: progressMessage,
                   };
+                  await updateZaloMessageTrackingMeta(zaloMessageId, {
+                    status: 'sent',
+                    friendRequestStatus: 'already_friend',
+                    responseMessage: alreadyFriendPayload.responseMessage,
+                    customerId: alreadyFriendPayload.customerId,
+                  });
+                  await logZaloSentJourneyEvent({
+                    customerId: alreadyFriendPayload.customerId,
+                    nodeId: node.id,
+                    zaloMessageId,
+                    messageText: message,
+                    channel: 'zalo',
+                    trackingToken,
+                  });
                   sendResults.push(alreadyFriendPayload);
                   await campaignExecutionLogService.logExecutionNode({
                     campaignId,
@@ -3143,7 +3420,7 @@ class CampaignRunService {
                     status: 'success',
                     progressCurrent: successfulSends + failedSends,
                     progressTotal: totalRecipients,
-                    executionData: alreadyFriendPayload,
+                    executionData: buildSendZaloFriendExecutionData(alreadyFriendPayload),
                   });
                   if (isContinuousMode) {
                     const completedAtIso = toHoChiMinhIso();
@@ -3170,9 +3447,17 @@ class CampaignRunService {
                     requestMessage: message,
                     status: 'failed',
                     contentMode,
+                    customerId: Number.parseInt(customerId, 10) || null,
+                    zaloMessageId,
+                    trackingToken,
                     error: `Đã là bạn bè nhưng đồng bộ khách hàng thất bại: ${customerSyncError.message}`,
                     messageText: progressMessage,
                   };
+                  await updateZaloMessageTrackingMeta(zaloMessageId, {
+                    status: 'failed',
+                    error: failedPayload.error,
+                    customerId: failedPayload.customerId,
+                  });
                   sendResults.push(failedPayload);
                   await campaignExecutionLogService.logExecutionNode({
                     campaignId,
@@ -3182,7 +3467,7 @@ class CampaignRunService {
                     progressCurrent: successfulSends + failedSends,
                     progressTotal: totalRecipients,
                     errorMessage: failedPayload.error,
-                    executionData: failedPayload,
+                    executionData: buildSendZaloFriendExecutionData(failedPayload),
                   });
                 }
               } else {
@@ -3196,9 +3481,17 @@ class CampaignRunService {
                   requestMessage: message,
                   status: 'failed',
                   contentMode,
+                  customerId: Number.parseInt(customerId, 10) || null,
+                  zaloMessageId,
+                  trackingToken,
                   error: error.message,
                   messageText: progressMessage,
                 };
+                await updateZaloMessageTrackingMeta(zaloMessageId, {
+                  status: 'failed',
+                  error: error.message,
+                  customerId: failedPayload.customerId,
+                });
                 sendResults.push(failedPayload);
                 await campaignExecutionLogService.logExecutionNode({
                   campaignId,
@@ -3208,7 +3501,7 @@ class CampaignRunService {
                   progressCurrent: successfulSends + failedSends,
                   progressTotal: totalRecipients,
                   errorMessage: error.message,
-                  executionData: failedPayload,
+                  executionData: buildSendZaloFriendExecutionData(failedPayload),
                 });
               }
             }
@@ -3366,6 +3659,7 @@ class CampaignRunService {
                 zaloMessageId,
                 messageText: trackedMessage,
                 channel: 'zalo_group',
+                trackingToken,
               });
               sendResults.push(resultPayload);
               await campaignExecutionLogService.logExecutionNode({

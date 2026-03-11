@@ -6,6 +6,144 @@ class CampaignExecutionLogService {
   }
 
   /**
+   * Parse execution payload về object để có thể merge an toàn.
+   *
+   * @param {unknown} payload dữ liệu execution_data từ DB hoặc runtime
+   * @returns {object|null} object đã parse hoặc null nếu không hợp lệ
+   */
+  parseExecutionPayload(payload) {
+    if (!payload) return null;
+    if (typeof payload === 'object') return payload;
+    if (typeof payload !== 'string') return null;
+    try {
+      return JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Chuẩn hóa dữ liệu về dạng ổn định để so sánh chống trùng.
+   *
+   * @param {unknown} value dữ liệu bất kỳ cần chuẩn hóa
+   * @returns {unknown} dữ liệu đã chuẩn hóa thứ tự key
+   */
+  canonicalizeComparableValue(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.canonicalizeComparableValue(item));
+    }
+    if (value && typeof value === 'object') {
+      return Object.keys(value)
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = this.canonicalizeComparableValue(value[key]);
+          return acc;
+        }, {});
+    }
+    return value;
+  }
+
+  /**
+   * Tạo fingerprint ổn định cho item để dedupe dữ liệu.
+   *
+   * @param {unknown} item một item trong mảng payload
+   * @returns {string} chuỗi fingerprint dùng để so sánh
+   */
+  stringifyComparableItem(item) {
+    if (item == null) return '';
+    if (typeof item !== 'object') return String(item);
+    try {
+      return JSON.stringify(this.canonicalizeComparableValue(item));
+    } catch {
+      return String(item);
+    }
+  }
+
+  /**
+   * Merge mảng items giữa dữ liệu cũ và mới.
+   *
+   * Luồng hoạt động:
+   * 1. Giữ nguyên toàn bộ item cũ đã có trong DB.
+   * 2. Chỉ thêm item mới nếu fingerprint chưa xuất hiện.
+   * 3. Bỏ qua item bị trùng để tránh lặp dữ liệu ở continuous mode.
+   *
+   * @param {Array<unknown>} existingItems item đã có trong DB
+   * @param {Array<unknown>} incomingItems item mới từ lần update hiện tại
+   * @returns {Array<unknown>} mảng item sau khi merge
+   */
+  mergeExecutionItems(existingItems = [], incomingItems = []) {
+    const sourceExisting = Array.isArray(existingItems) ? existingItems : [];
+    const sourceIncoming = Array.isArray(incomingItems) ? incomingItems : [];
+
+    if (sourceIncoming.length === 0) return sourceExisting;
+    if (sourceExisting.length === 0) return [...sourceIncoming];
+    const merged = [...sourceExisting];
+    const existingFingerprints = new Set(
+      sourceExisting.map((item) => this.stringifyComparableItem(item))
+    );
+
+    sourceIncoming.forEach((item) => {
+      const fingerprint = this.stringifyComparableItem(item);
+      if (existingFingerprints.has(fingerprint)) return;
+      merged.push(item);
+      existingFingerprints.add(fingerprint);
+    });
+
+    return merged;
+  }
+
+  /**
+   * Merge execution data mới vào dữ liệu cũ của cùng node để không mất lịch sử log.
+   *
+   * @param {unknown} existingPayload payload đang lưu trong DB
+   * @param {unknown} incomingPayload payload mới từ lần cập nhật
+   * @returns {object|null} payload đã merge
+   */
+  mergeExecutionData(existingPayload, incomingPayload) {
+    const parsedExisting = this.parseExecutionPayload(existingPayload);
+    const parsedIncoming = this.parseExecutionPayload(incomingPayload);
+
+    if (!parsedIncoming) return parsedExisting;
+    if (!parsedExisting) return parsedIncoming;
+
+    const merged = {
+      ...parsedExisting,
+      ...parsedIncoming,
+    };
+
+    const existingItems = Array.isArray(parsedExisting.items) ? parsedExisting.items : [];
+    const incomingItems = Array.isArray(parsedIncoming.items) ? parsedIncoming.items : [];
+    if (existingItems.length > 0 || incomingItems.length > 0) {
+      merged.items = this.mergeExecutionItems(existingItems, incomingItems);
+    }
+
+    const incomingSchema = Array.isArray(parsedIncoming.schema) ? parsedIncoming.schema : [];
+    const existingSchema = Array.isArray(parsedExisting.schema) ? parsedExisting.schema : [];
+    if (incomingSchema.length > 0) {
+      merged.schema = incomingSchema;
+    } else if (existingSchema.length > 0) {
+      merged.schema = existingSchema;
+    }
+
+    const mergedMeta = {
+      ...(parsedExisting.meta && typeof parsedExisting.meta === 'object' ? parsedExisting.meta : {}),
+      ...(parsedIncoming.meta && typeof parsedIncoming.meta === 'object' ? parsedIncoming.meta : {}),
+    };
+    if (Array.isArray(merged.items)) {
+      mergedMeta.totalItems = merged.items.length;
+    }
+    if (Object.keys(mergedMeta).length > 0) {
+      merged.meta = mergedMeta;
+    }
+
+    if (!merged.message && parsedExisting.message) {
+      merged.message = parsedExisting.message;
+    }
+
+    return merged;
+  }
+
+  /**
    * Xác định run hiện tại có bật continuousMode hay không.
    *
    * Luồng hoạt động:
@@ -68,7 +206,10 @@ class CampaignExecutionLogService {
     const nodeOrder = Number.isFinite(parseInt(node.execution_order, 10))
       ? parseInt(node.execution_order, 10)
       : null;
-    const serializedExecutionData = executionData ? JSON.stringify(executionData) : null;
+    const parsedIncomingExecutionData = this.parseExecutionPayload(executionData);
+    const serializedExecutionData = parsedIncomingExecutionData
+      ? JSON.stringify(parsedIncomingExecutionData)
+      : null;
     const isContinuousMode = await this.isContinuousRun(runId);
 
     /**
@@ -76,53 +217,62 @@ class CampaignExecutionLogService {
      * Nếu node đã có log trước đó thì update lại bản ghi cũ, tránh phình bảng log.
      */
     if (isContinuousMode && nodeId) {
-      const updateResult = await db.query(
-        `WITH target AS (
-           SELECT id
-           FROM campaign_executions
-           WHERE id_run = $1
-             AND node_id = $2
-           ORDER BY id DESC
-           LIMIT 1
-         )
-         UPDATE campaign_executions ce
-         SET id_campaign = $3,
-             id_customer = $4,
-             status = $5,
-             action_type = $6,
-             node_name = $7,
-             node_type = $8,
-             node_subtype = $9,
-             node_order = $10,
-             progress_current = $11,
-             progress_total = $12,
-             execution_data = $13,
-             node_result_json = $14,
-             error_message = $15,
-             updated_at = CURRENT_TIMESTAMP
-         FROM target
-         WHERE ce.id = target.id
-         RETURNING ce.id`,
-        [
-          runId,
-          nodeId,
-          campaignId,
-          customerId,
-          status,
-          nodeSubtype || nodeType,
-          nodeName,
-          nodeType,
-          nodeSubtype,
-          nodeOrder,
-          progressCurrent,
-          progressTotal,
-          serializedExecutionData,
-          serializedExecutionData,
-          errorMessage,
-        ]
+      const existingLogResult = await db.query(
+        `SELECT id, execution_data, node_result_json
+         FROM campaign_executions
+         WHERE id_run = $1
+           AND node_id = $2
+         ORDER BY id DESC
+         LIMIT 1`,
+        [runId, nodeId]
       );
 
-      if (updateResult.rows.length > 0) return;
+      if (existingLogResult.rows.length > 0) {
+        const existingLog = existingLogResult.rows[0];
+        const mergedExecutionData = this.mergeExecutionData(
+          existingLog.execution_data ?? existingLog.node_result_json,
+          parsedIncomingExecutionData
+        );
+        const serializedMergedExecutionData = mergedExecutionData
+          ? JSON.stringify(mergedExecutionData)
+          : null;
+
+        await db.query(
+          `UPDATE campaign_executions
+           SET id_campaign = $1,
+               id_customer = $2,
+               status = $3,
+               action_type = $4,
+               node_name = $5,
+               node_type = $6,
+               node_subtype = $7,
+               node_order = $8,
+               progress_current = $9,
+               progress_total = $10,
+               execution_data = $11,
+               node_result_json = $12,
+               error_message = $13,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $14`,
+          [
+            campaignId,
+            customerId,
+            status,
+            nodeSubtype || nodeType,
+            nodeName,
+            nodeType,
+            nodeSubtype,
+            nodeOrder,
+            progressCurrent,
+            progressTotal,
+            serializedMergedExecutionData,
+            serializedMergedExecutionData,
+            errorMessage,
+            existingLog.id,
+          ]
+        );
+        return;
+      }
     }
 
     await db.query(
