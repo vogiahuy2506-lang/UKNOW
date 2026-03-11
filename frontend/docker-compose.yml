@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Domain backend public theo yêu cầu deploy VPS.
-        VITE_API_URL: ${VITE_API_URL:-https://api-campaign.uknow.edu.vn/api}
+        VITE_API_URL: ${VITE_API_URL:-https://api-campaign.digiso.vn/api}
     ports:
       - "${FRONTEND_HTTP_PORT:-80}:80"
       - "${FRONTEND_HTTPS_PORT:-443}:443"
