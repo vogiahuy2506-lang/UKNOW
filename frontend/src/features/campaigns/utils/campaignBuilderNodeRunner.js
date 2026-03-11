@@ -1124,7 +1124,8 @@ export const createCampaignNodeRunner = (deps) => {
         const normalizedCustomerId = Number.isFinite(recipientCustomerId) ? recipientCustomerId : null;
         const normalizedCampaignId = Number.parseInt(campaignId, 10);
         const canAttachCampaignId = Number.isFinite(normalizedCampaignId) ? normalizedCampaignId : null;
-        const shouldSaveMessageLog = config.saveMessageLog !== false;
+        // Builder chỉ dùng để preview: luôn không lưu message log vào DB.
+        const shouldSaveMessageLog = false;
 
         try {
           if (!skipApiDelay) {
@@ -1143,8 +1144,8 @@ export const createCampaignNodeRunner = (deps) => {
             emailTemplateId: step.templateId,
             saveMessageLog: shouldSaveMessageLog,
             customerId: normalizedCustomerId,
-            // Builder vẫn chạy theo thời gian thực, nhưng bật chế độ gửi thật để lưu DB theo nhu cầu vận hành.
-            previewMode: false,
+            // Builder luôn gửi ở chế độ preview để không tạo tracking/unsubscribe và không ghi DB.
+            previewMode: true,
             runId: null,
           }, { signal });
           const trackingWarnings = resp.data?.data?.tracking?.warnings || [];
