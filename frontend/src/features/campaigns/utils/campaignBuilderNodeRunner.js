@@ -1146,6 +1146,8 @@ export const createCampaignNodeRunner = (deps) => {
             customerId: normalizedCustomerId,
             // Builder luôn gửi ở chế độ preview để không tạo tracking/unsubscribe và không ghi DB.
             previewMode: true,
+            // Giữ tương thích ngược cho backend cũ đang đọc cờ `isPreview`.
+            isPreview: true,
             runId: null,
           }, { signal });
           const trackingWarnings = resp.data?.data?.tracking?.warnings || [];

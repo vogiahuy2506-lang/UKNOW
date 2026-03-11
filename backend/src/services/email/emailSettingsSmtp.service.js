@@ -5,6 +5,30 @@ import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBoun
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
 
 class EmailSettingsSmtpService {
+  /**
+   * Chuẩn hóa cờ preview từ nhiều biến thể payload để tương thích ngược FE/BE.
+   *
+   * Luồng hoạt động:
+   * 1. Ưu tiên đọc lần lượt `previewMode`, `isPreview`, `preview`.
+   * 2. Chuyển đổi các kiểu giá trị thường gặp (boolean/string/number) về boolean.
+   * 3. Mặc định `false` nếu không có cờ hợp lệ.
+   *
+   * @param {object} body payload request body
+   * @returns {boolean} true nếu là chế độ preview (không tracking/unsubscribe/log DB)
+   */
+  normalizePreviewMode(body = {}) {
+    const rawValue = [body?.previewMode, body?.isPreview, body?.preview]
+      .find((value) => value !== undefined && value !== null);
+
+    if (typeof rawValue === 'boolean') return rawValue;
+    if (typeof rawValue === 'number') return rawValue === 1;
+    if (typeof rawValue === 'string') {
+      const normalized = rawValue.trim().toLowerCase();
+      return ['1', 'true', 'yes', 'y', 'on'].includes(normalized);
+    }
+    return false;
+  }
+
   async logEmailSent(ctx, payload) {
     const client = await db.getClient();
     try {
@@ -154,6 +178,7 @@ class EmailSettingsSmtpService {
   async sendCustomEmail(ctx, req, res) {
     try {
       const userId = req.user.id;
+      const isPreviewMode = this.normalizePreviewMode(req.body);
       const {
         fromEmailId,
         to,
@@ -167,12 +192,11 @@ class EmailSettingsSmtpService {
         emailTemplateId,
         saveMessageLog,
         customerId,
-        previewMode = false,
         runId = null,
       } = req.body;
 
       // Kiểm tra trạng thái unsubscribe / hard bounce trước khi gửi (chỉ khi không phải preview)
-      if (!previewMode && to) {
+      if (!isPreviewMode && to) {
         const customerCheck = await db.query(
           `SELECT email_subscribed, email_hard_bounced
            FROM customers
@@ -205,7 +229,7 @@ class EmailSettingsSmtpService {
       const trackingConfig = ctx.resolveTrackingBaseUrl(req);
       const { baseUrl: trackingBaseUrl, isPublic, source } = trackingConfig;
       const trackingWarnings = [];
-      if (!previewMode && !isPublic) {
+      if (!isPreviewMode && !isPublic) {
         trackingWarnings.push(
           'Tracking URL chưa public. Hãy đặt TRACKING_BASE_URL là domain HTTPS public để theo dõi mở/click từ Gmail.'
         );
@@ -229,7 +253,7 @@ class EmailSettingsSmtpService {
       const plainTextContent = content || 'Đây là email từ hệ thống UKNOW';
       const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
       // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
-      const trackedHtmlContent = previewMode
+      const trackedHtmlContent = isPreviewMode
         ? rawHtml
         : ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, runId);
 
@@ -276,7 +300,7 @@ class EmailSettingsSmtpService {
         }
 
         // Hard bounce: đánh dấu customer để bỏ qua lần sau (chỉ khi không phải preview)
-        if (bounceType === 'hard' && !previewMode) {
+        if (bounceType === 'hard' && !isPreviewMode) {
           await db.query(
             `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
              WHERE id_user = $1 AND LOWER(email) = $2`,
@@ -299,7 +323,7 @@ class EmailSettingsSmtpService {
       await emailSettingsRepository.incrementSentCount(fromEmailId);
 
       const sentAt = new Date();
-      if (saveMessageLog && !previewMode) {
+      if (saveMessageLog && !isPreviewMode) {
         try {
           await this.logEmailSent(ctx, {
             userId,
