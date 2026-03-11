@@ -4,15 +4,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file:
-      - ./.env
     ports:
-      - "${BACKEND_PORT:-5001}:5001"
+      # Chỉ publish nội bộ VPS, tránh mở trực tiếp ra Internet.
+      - "127.0.0.1:${BACKEND_PORT:-5001}:5001"
     restart: unless-stopped
+    environment:
+      NODE_ENV: production
     networks:
       - uknow_network
     volumes:
-      - backend_uploads:/app/uploads
+      - ./.env:/app/.env
+      - ./uploads:/app/uploads
+      - ./temp_uploads:/app/temp_uploads
     # Giới hạn log: mỗi file tối đa 10MB, giữ tối đa 5 file xoay vòng (~50MB tổng)
     logging:
       driver: "json-file"
@@ -22,8 +25,6 @@ services:
 
 networks:
   uknow_network:
+    # Network dùng chung cho các stack tách riêng (backend/frontend).
+    external: true
     name: uknow_network
-    driver: bridge
-
-volumes:
-  backend_uploads:

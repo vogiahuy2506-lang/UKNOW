@@ -9,3 +9,5 @@ Dockerfile
 coverage
 dist
 tmp
+uploads
+temp_uploads
