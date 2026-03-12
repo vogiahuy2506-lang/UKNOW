@@ -22,12 +22,16 @@ class EmailSettingsController {
     const rawPassword = String(config.password || '').trim();
     const envSendGridHost = String(process.env.SENDGRID_SMTP_HOST || '').trim() || 'smtp.sendgrid.net';
     const envSendGridPort = Number.parseInt(process.env.SENDGRID_SMTP_PORT, 10);
-    const envSendGridUsername = String(process.env.SENDGRID_SMTP_USERNAME || '').trim() || 'apikey';
+    const envSendGridUsername = String(process.env.SENDGRID_SMTP_USERNAME || '').trim();
     const envSendGridApiKey = String(process.env.SENDGRID_API_KEY || '').trim();
     const resolvedPassword = rawPassword.startsWith('SG.') ? rawPassword : envSendGridApiKey;
+    const resolvedUsername = 'apikey';
     const hasLegacyProviderHost = rawHost && !rawHost.includes('sendgrid');
     if (hasLegacyProviderHost) {
       console.warn('[EmailSettings] Phát hiện SMTP host không phải SendGrid, hệ thống sẽ ép dùng SendGrid.');
+    }
+    if (envSendGridUsername && envSendGridUsername.toLowerCase() !== 'apikey') {
+      console.warn('[EmailSettings] SENDGRID_SMTP_USERNAME không hợp lệ, hệ thống sẽ ép về "apikey".');
     }
     if (!resolvedPassword || !resolvedPassword.startsWith('SG.')) {
       throw new Error('Thiếu SendGrid API key hợp lệ. Vui lòng cấu hình SMTP Password (SG.*) hoặc SENDGRID_API_KEY.');
@@ -36,7 +40,7 @@ class EmailSettingsController {
     return {
       host: envSendGridHost,
       port: Number.isFinite(envSendGridPort) ? envSendGridPort : 587,
-      username: envSendGridUsername,
+      username: resolvedUsername,
       password: resolvedPassword,
     };
   }
