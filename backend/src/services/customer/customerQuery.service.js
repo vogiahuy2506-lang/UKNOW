@@ -186,6 +186,8 @@ class CustomerQueryService {
     }
 
     if (Number.isFinite(parsedCampaignId)) {
+      // Khi lọc theo chiến dịch, xem khách "đã tham gia" theo 4 nguồn:
+      // 1) campaign_customers, 2) campaign_participations, 3) customer_purchases, 4) customer_journey.
       query += ` AND EXISTS (
         SELECT 1
         FROM campaigns cp
@@ -200,9 +202,21 @@ class CustomerQueryService {
             )
             OR EXISTS (
               SELECT 1
+              FROM campaign_participations cpa
+              WHERE cpa.id_customer = c.id
+                AND cpa.id_campaign = cp.id
+            )
+            OR EXISTS (
+              SELECT 1
               FROM customer_purchases cpr
               WHERE cpr.id_customer = c.id
                 AND cpr.id_campaign = cp.id
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM customer_journey cj
+              WHERE cj.id_customer = c.id
+                AND cj.id_campaign = cp.id
             )
           )
       )`;
@@ -242,6 +256,7 @@ class CustomerQueryService {
     }
     if (Number.isFinite(parsedCampaignId)) {
       countParams.push(parsedCampaignId);
+      // Đồng bộ điều kiện đếm với query dữ liệu để không lệch phân trang.
       countQuery += ` AND EXISTS (
         SELECT 1
         FROM campaigns cp
@@ -256,9 +271,21 @@ class CustomerQueryService {
             )
             OR EXISTS (
               SELECT 1
+              FROM campaign_participations cpa
+              WHERE cpa.id_customer = c.id
+                AND cpa.id_campaign = cp.id
+            )
+            OR EXISTS (
+              SELECT 1
               FROM customer_purchases cpr
               WHERE cpr.id_customer = c.id
                 AND cpr.id_campaign = cp.id
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM customer_journey cj
+              WHERE cj.id_customer = c.id
+                AND cj.id_campaign = cp.id
             )
           )
       )`;

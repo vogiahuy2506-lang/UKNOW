@@ -1144,6 +1144,8 @@ export const createCampaignNodeRunner = (deps) => {
             previewMode: true,
             // Giữ tương thích ngược cho backend cũ đang đọc cờ `isPreview`.
             isPreview: true,
+            // Cờ ngữ cảnh Build để backend chặn tuyệt đối các nhánh ghi dữ liệu.
+            builderMode: true,
             runId: null,
           }, { signal });
           const trackingWarnings = resp.data?.data?.tracking?.warnings || [];

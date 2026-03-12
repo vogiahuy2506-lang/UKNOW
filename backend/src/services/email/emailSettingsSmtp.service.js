@@ -29,7 +29,37 @@ class EmailSettingsSmtpService {
     return false;
   }
 
+  /**
+   * Chuẩn hóa cờ ngữ cảnh chạy từ Builder để chặn ghi DB.
+   *
+   * Luồng hoạt động:
+   * 1. Đọc lần lượt các cờ `builderMode`, `fromBuilder`, `isBuilder`.
+   * 2. Chuyển đổi về boolean từ các kiểu giá trị phổ biến.
+   * 3. Mặc định `false` nếu payload không chứa cờ hợp lệ.
+   *
+   * @param {object} body payload request body
+   * @returns {boolean} true nếu request xuất phát từ luồng Builder demo/test
+   */
+  normalizeBuilderMode(body = {}) {
+    const rawValue = [body?.builderMode, body?.fromBuilder, body?.isBuilder]
+      .find((value) => value !== undefined && value !== null);
+
+    if (typeof rawValue === 'boolean') return rawValue;
+    if (typeof rawValue === 'number') return rawValue === 1;
+    if (typeof rawValue === 'string') {
+      const normalized = rawValue.trim().toLowerCase();
+      return ['1', 'true', 'yes', 'y', 'on'].includes(normalized);
+    }
+    return false;
+  }
+
   async logEmailSent(ctx, payload) {
+    const runIdNum = Number.isFinite(parseInt(payload?.runId, 10))
+      ? parseInt(payload.runId, 10)
+      : null;
+    // Không có runId thì coi là gửi demo/manual, không tạo bản ghi email_messages/journey để tránh dữ liệu mồ côi.
+    if (!runIdNum) return null;
+
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
@@ -54,7 +84,7 @@ class EmailSettingsSmtpService {
 
       const emailMessageId = await emailSettingsRepository.insertEmailMessage(client, {
         campaignId: campaignIdNum,
-        runId: payload.runId,
+        runId: runIdNum,
         customerId: resolvedCustomerId,
         templateId: templateIdNum,
         fromEmailId: payload.fromEmailId,
@@ -84,12 +114,12 @@ class EmailSettingsSmtpService {
           client,
           resolvedCustomerId,
           campaignIdNum,
-          payload.runId
+          runIdNum
         );
         await emailSettingsRepository.insertCustomerJourney(client, {
           customerId: resolvedCustomerId,
           campaignId: campaignIdNum,
-          runId: payload.runId,
+          runId: runIdNum,
           emailMessageId,
           eventData: JSON.stringify({
             subject: payload.subject || null,
@@ -179,6 +209,7 @@ class EmailSettingsSmtpService {
     try {
       const userId = req.user.id;
       const isPreviewMode = this.normalizePreviewMode(req.body);
+      const isBuilderMode = this.normalizeBuilderMode(req.body);
       const {
         fromEmailId,
         to,
@@ -194,9 +225,20 @@ class EmailSettingsSmtpService {
         customerId,
         runId = null,
       } = req.body;
+      const normalizedRunId = Number.isFinite(parseInt(runId, 10))
+        ? parseInt(runId, 10)
+        : null;
+      /**
+       * Builder chỉ dùng demo/test:
+       * - không tracking/unsubscribe rewrite
+       * - không ghi email_messages/customer_journey/campaign_participations
+       * - không update cờ bounce/subscribed ở bảng customer
+       */
+      const shouldForcePreviewOnly = isPreviewMode || isBuilderMode || !normalizedRunId;
+      const shouldSaveMessageLog = Boolean(saveMessageLog) && !shouldForcePreviewOnly;
 
-      // Kiểm tra trạng thái unsubscribe / hard bounce trước khi gửi (chỉ khi không phải preview)
-      if (!isPreviewMode && to) {
+      // Kiểm tra unsubscribe/hard bounce chỉ cho luồng run thật.
+      if (!shouldForcePreviewOnly && to) {
         const customerCheck = await db.query(
           `SELECT email_subscribed, email_hard_bounced
            FROM customers
@@ -229,7 +271,7 @@ class EmailSettingsSmtpService {
       const trackingConfig = ctx.resolveTrackingBaseUrl(req);
       const { baseUrl: trackingBaseUrl, isPublic, source } = trackingConfig;
       const trackingWarnings = [];
-      if (!isPreviewMode && !isPublic) {
+      if (!shouldForcePreviewOnly && !isPublic) {
         trackingWarnings.push(
           'Tracking URL chưa public. Hãy đặt TRACKING_BASE_URL là domain HTTPS public để theo dõi mở/click từ Gmail.'
         );
@@ -253,9 +295,9 @@ class EmailSettingsSmtpService {
       const plainTextContent = content || 'Đây là email từ hệ thống UKNOW';
       const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
       // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
-      const trackedHtmlContent = isPreviewMode
+      const trackedHtmlContent = shouldForcePreviewOnly
         ? rawHtml
-        : ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, runId);
+        : ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, normalizedRunId);
 
       const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
         ? await ctx.buildMailAttachments(attachments)
@@ -284,8 +326,8 @@ class EmailSettingsSmtpService {
           console.warn(`[sendCustomEmail] SMTP ${bounceType} bounce cho ${to}: ${bounceReason}`);
         }
 
-        // Chế độ preview trong Builder không được ghi dữ liệu thống kê vào DB.
-        if (!isPreviewMode) {
+        // Chỉ tăng thống kê gửi ở luồng chạy thật có runId hợp lệ.
+        if (!shouldForcePreviewOnly) {
           await emailSettingsRepository.incrementSentCount(fromEmailId).catch(() => {});
         }
 
@@ -302,8 +344,8 @@ class EmailSettingsSmtpService {
           });
         }
 
-        // Hard bounce: đánh dấu customer để bỏ qua lần sau (chỉ khi không phải preview)
-        if (bounceType === 'hard' && !isPreviewMode) {
+        // Hard bounce chỉ cập nhật ở run thật, tránh làm bẩn dữ liệu khi Builder demo.
+        if (bounceType === 'hard' && !shouldForcePreviewOnly) {
           await db.query(
             `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
              WHERE id_user = $1 AND LOWER(email) = $2`,
@@ -323,13 +365,13 @@ class EmailSettingsSmtpService {
         });
       }
 
-      // Chế độ preview chỉ gửi thử, không tăng bộ đếm gửi trong DB.
-      if (!isPreviewMode) {
+      // Chỉ tăng bộ đếm gửi trong DB với luồng run thật.
+      if (!shouldForcePreviewOnly) {
         await emailSettingsRepository.incrementSentCount(fromEmailId);
       }
 
       const sentAt = new Date();
-      if (saveMessageLog && !isPreviewMode) {
+      if (shouldSaveMessageLog) {
         try {
           await this.logEmailSent(ctx, {
             userId,
@@ -345,7 +387,7 @@ class EmailSettingsSmtpService {
             info,
             sentAt,
             setting,
-            runId,
+            runId: normalizedRunId,
           });
         } catch (logError) {
           console.error('Log email message error:', logError);
