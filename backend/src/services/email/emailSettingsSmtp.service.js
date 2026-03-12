@@ -284,7 +284,10 @@ class EmailSettingsSmtpService {
           console.warn(`[sendCustomEmail] SMTP ${bounceType} bounce cho ${to}: ${bounceReason}`);
         }
 
-        await emailSettingsRepository.incrementSentCount(fromEmailId).catch(() => {});
+        // Chế độ preview trong Builder không được ghi dữ liệu thống kê vào DB.
+        if (!isPreviewMode) {
+          await emailSettingsRepository.incrementSentCount(fromEmailId).catch(() => {});
+        }
 
         if (smtpConfigError) {
           return res.status(422).json({
@@ -320,7 +323,10 @@ class EmailSettingsSmtpService {
         });
       }
 
-      await emailSettingsRepository.incrementSentCount(fromEmailId);
+      // Chế độ preview chỉ gửi thử, không tăng bộ đếm gửi trong DB.
+      if (!isPreviewMode) {
+        await emailSettingsRepository.incrementSentCount(fromEmailId);
+      }
 
       const sentAt = new Date();
       if (saveMessageLog && !isPreviewMode) {

@@ -1117,13 +1117,9 @@ export const createCampaignNodeRunner = (deps) => {
         const subject = renderTemplateString(config.emailSubject || tpl.subject || '', mergedVars);
         const htmlContent = renderTemplateString(tpl.bodyHtml || '', mergedVars);
         const content = renderTemplateString(tpl.bodyText || '', mergedVars) || subject;
-        const recipientCustomerId = Number.parseInt(
-          rowForRecipient?.id_customer ?? rowForRecipient?.id,
-          10
-        );
-        const normalizedCustomerId = Number.isFinite(recipientCustomerId) ? recipientCustomerId : null;
-        const normalizedCampaignId = Number.parseInt(campaignId, 10);
-        const canAttachCampaignId = Number.isFinite(normalizedCampaignId) ? normalizedCampaignId : null;
+        // Builder luôn preview-only nên không truyền khóa campaign/customer để tránh backend ghi dữ liệu ngoài ý muốn.
+        const normalizedCustomerId = null;
+        const canAttachCampaignId = null;
         // Builder chỉ dùng để preview: luôn không lưu message log vào DB.
         const shouldSaveMessageLog = false;
 
