@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineChatAlt2,
@@ -448,48 +449,52 @@ const ZaloSettings = () => {
           )}
         </div>
 
-      {qrPreview.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Quét QR để đăng nhập Zalo</h3>
-              <button
-                type="button"
-                className="p-2 rounded-md hover:bg-gray-100 text-gray-500"
-                onClick={closeQrPreview}
-                aria-label="Đóng popup QR"
-              >
-                <HiOutlineXCircle className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="rounded-lg border border-gray-200 p-3 flex items-center justify-center">
-                <img src={qrPreview.image} alt="Mã QR đăng nhập Zalo" className="w-64 h-64 object-contain" />
-              </div>
-              <p className="text-sm text-gray-600 text-center">
-                Mở ứng dụng Zalo trên điện thoại, vào mục quét mã và quét QR này.
-              </p>
-              {qrPreview.path && (
+      {qrPreview.isOpen &&
+        createPortal(
+          // Render ra document.body để overlay luôn phủ full viewport,
+          // tránh bị giới hạn bởi layout cha có overflow/transform.
+          <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center px-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">Quét QR để đăng nhập Zalo</h3>
                 <button
                   type="button"
-                  onClick={() => copyText(qrPreview.path, 'Đã sao chép đường dẫn file QR')}
-                  className="btn btn-secondary w-full"
+                  className="p-2 rounded-md hover:bg-gray-100 text-gray-500"
+                  onClick={closeQrPreview}
+                  aria-label="Đóng popup QR"
                 >
-                  <HiOutlineClipboardCopy className="w-4 h-4 mr-2" />
-                  Sao chép đường dẫn QR
+                  <HiOutlineXCircle className="w-5 h-5" />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={closeQrPreview}
-                className="btn btn-primary w-full"
-              >
-                Đóng cửa sổ QR
-              </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="rounded-lg border border-gray-200 p-3 flex items-center justify-center">
+                  <img src={qrPreview.image} alt="Mã QR đăng nhập Zalo" className="w-64 h-64 object-contain" />
+                </div>
+                <p className="text-sm text-gray-600 text-center">
+                  Mở ứng dụng Zalo trên điện thoại, vào mục quét mã và quét QR này.
+                </p>
+                {qrPreview.path && (
+                  <button
+                    type="button"
+                    onClick={() => copyText(qrPreview.path, 'Đã sao chép đường dẫn file QR')}
+                    className="btn btn-secondary w-full"
+                  >
+                    <HiOutlineClipboardCopy className="w-4 h-4 mr-2" />
+                    Sao chép đường dẫn QR
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={closeQrPreview}
+                  className="btn btn-primary w-full"
+                >
+                  Đóng cửa sổ QR
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

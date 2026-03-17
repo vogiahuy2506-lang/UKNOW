@@ -33,7 +33,7 @@
     "papaparse": "^5.5.3",
     "pg": "^8.11.3",
     "uuid": "^9.0.1",
-    "zca-js": "^2.1.1"
+    "zca-js": "^2.1.2"
   },
   "devDependencies": {
     "jest": "^29.7.0",

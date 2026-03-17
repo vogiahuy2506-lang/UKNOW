@@ -2,7 +2,12 @@ import db from '../config/database.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'node:crypto';
-import { LoginQRCallbackEventType, Zalo } from 'zca-js';
+import { API, LoginQRCallbackEventType, Zalo } from 'zca-js';
+import { createContext, isContextSession } from '../../node_modules/zca-js/dist/context.js';
+import { getServerInfo as rawGetServerInfo, login as rawCookieLogin } from '../../node_modules/zca-js/dist/apis/login.js';
+import { loginQR as rawLoginQR } from '../../node_modules/zca-js/dist/apis/loginQR.js';
+import { generateZaloUUID } from '../../node_modules/zca-js/dist/utils.js';
+import { request as rawRequest } from '../../node_modules/zca-js/dist/utils.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
 
@@ -557,6 +562,860 @@ class ZaloSettingsController {
   }
 
   /**
+   * Hoàn tất luồng đăng nhập QR sau khi đã có API hợp lệ.
+   *
+   * Luồng hoạt động:
+   * 1. Cập nhật session QR sang trạng thái connected để frontend dừng polling.
+   * 2. Trích xuất identity tài khoản từ API + metadata quét QR.
+   * 3. Upsert tài khoản vào DB và đăng ký API vào session service.
+   *
+   * @param {{ sessionKey: string; userId: number; api: any; loginMeta: { qrScannedName?: string; loginInfoCookie?: unknown; imei?: string; userAgent?: string; language?: string } }} input
+   * @returns {Promise<void>}
+   */
+  async finalizeQrLoginSuccess(input) {
+    const sessionKey = String(input?.sessionKey || '').trim();
+    const userId = Number.parseInt(input?.userId, 10);
+    const api = input?.api;
+    const loginMeta = input?.loginMeta || {};
+    if (!sessionKey || !Number.isFinite(userId) || !api) return;
+
+    this.patchLoginSession(sessionKey, {
+      status: 'connected',
+      message: 'Đăng nhập Zalo thành công.',
+      api,
+    });
+
+    const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
+    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity);
+    this.patchLoginSession(sessionKey, { account });
+    zaloAccountSessionService.setAccountApi(account?.id, api);
+    zaloAccountSessionService.startAccountListenerSafely({
+      accountId: account?.id,
+      api,
+      context: 'loginQr',
+    });
+  }
+
+  /**
+   * Trích xuất login info từ payload callback QR theo nhiều định dạng.
+   *
+   * Luồng hoạt động:
+   * 1. Thu gom nhiều candidate có thể chứa cookie/session.
+   * 2. Chọn candidate đầu tiên có dữ liệu hợp lệ để dùng cho login fallback.
+   * 3. Chuẩn hóa imei/userAgent/language về định dạng thống nhất.
+   *
+   * @param {unknown} eventData
+   * @returns {{ cookie: unknown; imei: string; userAgent: string; language: string }}
+   */
+  extractQrLoginInfo(eventData) {
+    const source = eventData && typeof eventData === 'object' ? eventData : {};
+    const toNonEmptyString = (value) => String(value || '').trim();
+    const isMeaningfulCookie = (value) => {
+      if (!value) return false;
+      if (typeof value === 'string') return Boolean(value.trim());
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'object') return Object.keys(value).length > 0;
+      return false;
+    };
+
+    const nestedLoginInfo = source?.loginInfo && typeof source.loginInfo === 'object' ? source.loginInfo : null;
+    const nestedSession = source?.session && typeof source.session === 'object' ? source.session : null;
+    const cookieCandidates = [
+      source?.cookie,
+      source?.cookies,
+      source?.cookieJar,
+      source?.jar,
+      source?.loginInfoCookie,
+      nestedLoginInfo?.cookie,
+      nestedLoginInfo?.cookies,
+      nestedSession?.cookie,
+      nestedSession?.cookies,
+    ];
+
+    const cookie = cookieCandidates.find((candidate) => isMeaningfulCookie(candidate)) || null;
+    return {
+      cookie,
+      imei:
+        toNonEmptyString(source?.imei) ||
+        toNonEmptyString(source?.z_uuid) ||
+        toNonEmptyString(nestedLoginInfo?.imei) ||
+        '',
+      userAgent:
+        toNonEmptyString(source?.userAgent) ||
+        toNonEmptyString(source?.user_agent) ||
+        toNonEmptyString(source?.ua) ||
+        toNonEmptyString(nestedLoginInfo?.userAgent) ||
+        '',
+      language:
+        toNonEmptyString(source?.language) ||
+        toNonEmptyString(source?.lang) ||
+        toNonEmptyString(nestedLoginInfo?.language) ||
+        this.defaultZaloLanguage,
+    };
+  }
+
+  /**
+   * Tạo credentials từ metadata callback của login QR để thử login fallback.
+   *
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa cookie/imei/userAgent/language từ metadata callback.
+   * 2. Trả về credentials hợp lệ cho `zalo.login(...)`.
+   * 3. Nếu thiếu cookie thì trả về null để bỏ qua fallback.
+   *
+   * @param {{ loginInfoCookie?: unknown; imei?: string; userAgent?: string; language?: string }} loginMeta
+   * @returns {{ imei: string; userAgent: string; language: string; cookie: unknown } | null}
+   */
+  buildLoginCredentialsFromQrMeta(loginMeta = {}) {
+    const candidates = [];
+    const registerCandidate = (candidate) => {
+      const normalized = this.normalizeLoginCredentials(candidate);
+      if (normalized) {
+        candidates.push(normalized);
+      }
+    };
+
+    registerCandidate({
+      imei: loginMeta?.imei,
+      userAgent: loginMeta?.userAgent,
+      language: loginMeta?.language,
+      cookie: loginMeta?.loginInfoCookie,
+    });
+    registerCandidate(loginMeta?.loginInfoRaw);
+    registerCandidate({
+      ...(loginMeta?.loginInfoRaw && typeof loginMeta.loginInfoRaw === 'object' ? loginMeta.loginInfoRaw : {}),
+      imei: loginMeta?.imei,
+      userAgent: loginMeta?.userAgent,
+      language: loginMeta?.language,
+      cookie: loginMeta?.loginInfoCookie || loginMeta?.loginInfoRaw?.cookie || loginMeta?.loginInfoRaw?.cookies,
+    });
+
+    return candidates[0] || null;
+  }
+
+  /**
+   * Chuẩn hóa lỗi thành object gọn để log chẩn đoán dễ đọc.
+   *
+   * Luồng hoạt động:
+   * 1. Trích xuất name/message/code/status/cause từ error.
+   * 2. Cắt ngắn stack để tránh log quá dài.
+   * 3. Trả về object an toàn, không chứa dữ liệu nhạy cảm.
+   *
+   * @param {unknown} error
+   * @returns {{ name: string; message: string; code: string; status: number|null; stack: string; cause: string }}
+   */
+  formatErrorForLog(error) {
+    const safeError = error && typeof error === 'object' ? error : null;
+    const stackText = String(safeError?.stack || '').split('\n').slice(0, 4).join(' | ');
+    const causeMessage =
+      typeof safeError?.cause === 'string'
+        ? safeError.cause
+        : safeError?.cause?.message
+          ? String(safeError.cause.message)
+          : '';
+
+    return {
+      name: String(safeError?.name || 'Error'),
+      message: String(safeError?.message || error || 'Unknown error'),
+      code: String(safeError?.code || ''),
+      status: Number.isFinite(Number(safeError?.status)) ? Number(safeError.status) : null,
+      stack: stackText,
+      cause: causeMessage,
+    };
+  }
+
+  /**
+   * Đếm số cookie để log nhanh trạng thái dữ liệu login.
+   *
+   * @param {unknown} cookieSource
+   * @returns {number}
+   */
+  getCookieCount(cookieSource) {
+    if (!cookieSource) return 0;
+    if (Array.isArray(cookieSource)) return cookieSource.length;
+    if (typeof cookieSource === 'string') return cookieSource.trim() ? 1 : 0;
+    if (typeof cookieSource === 'object' && Array.isArray(cookieSource.cookies)) return cookieSource.cookies.length;
+    if (typeof cookieSource === 'object') return Object.keys(cookieSource).length > 0 ? 1 : 0;
+    return 0;
+  }
+
+  /**
+   * Tóm tắt shape payload để debug nhanh khi response đổi format.
+   *
+   * @param {unknown} payload
+   * @returns {{ type: string; keys: string[]; hasDataObject: boolean; hasErrorCode: boolean }}
+   */
+  summarizePayloadShape(payload) {
+    const safePayload = payload && typeof payload === 'object' ? payload : null;
+    const keys = safePayload ? Object.keys(safePayload).slice(0, 12) : [];
+    const dataValue = safePayload?.data;
+    const dataPreview =
+      typeof dataValue === 'string'
+        ? dataValue.slice(0, 180)
+        : (dataValue && typeof dataValue === 'object' ? JSON.stringify(Object.keys(dataValue).slice(0, 10)) : '');
+    return {
+      type: Array.isArray(payload) ? 'array' : typeof payload,
+      keys,
+      hasDataObject: Boolean(safePayload?.data && typeof safePayload.data === 'object'),
+      hasErrorCode: Boolean(safePayload && Object.prototype.hasOwnProperty.call(safePayload, 'error_code')),
+      errorCode: safePayload?.error_code ?? null,
+      errorMessage: String(safePayload?.error_message || ''),
+      dataPreview,
+    };
+  }
+
+  /**
+   * Nhận diện lỗi session QR đã hết hiệu lực từ payload hoặc error.
+   *
+   * @param {unknown} input
+   * @returns {boolean}
+   */
+  isQrSessionTimeoutIssue(input) {
+    const safeObject = input && typeof input === 'object' ? input : null;
+    const errorCode = Number(safeObject?.error_code);
+    const errorMessage = String(safeObject?.error_message || safeObject?.message || input || '').toLowerCase();
+    return (
+      errorCode === 102 ||
+      errorMessage.includes('session key was improperly submitted') ||
+      errorMessage.includes('has reached its timeout') ||
+      errorMessage.includes('cannot get session, login failed')
+    );
+  }
+
+  /**
+   * Chuẩn hóa lỗi đăng nhập QR để đồng bộ nhánh timeout session.
+   *
+   * Luồng hoạt động:
+   * 1. Nhận diện lỗi timeout từ payload hoặc object error.
+   * 2. Nếu là timeout, luôn quy về `QR_SESSION_TIMEOUT`.
+   * 3. Trả lại lỗi gốc cho các trường hợp khác.
+   *
+   * @param {unknown} error
+   * @returns {Error}
+   */
+  normalizeQrLoginError(error) {
+    if (this.isQrSessionTimeoutIssue(error)) {
+      const timeoutError = new Error('QR_SESSION_TIMEOUT');
+      timeoutError.cause = error;
+      return timeoutError;
+    }
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error(String(error || 'ZALO_QR_UNKNOWN_ERROR'));
+  }
+
+  /**
+   * Trích xuất loginInfo từ nhiều dạng payload khác nhau.
+   *
+   * @param {unknown} loginPayload
+   * @returns {Record<string, any> | null}
+   */
+  extractLoginInfoPayload(loginPayload) {
+    const payload = loginPayload && typeof loginPayload === 'object' ? loginPayload : null;
+    if (!payload) return null;
+    const candidates = [
+      payload?.data,
+      payload?.loginInfo,
+      payload?.login_info,
+      payload?.info,
+      payload,
+    ];
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== 'object') continue;
+      if (candidate?.uid && candidate?.zpw_enk && candidate?.zpw_ws && candidate?.zpw_service_map_v3) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Chờ session QR ổn định sau khi quét thành công nhưng login tức thời bị fail.
+   *
+   * Luồng hoạt động:
+   * 1. Poll checksession + userinfo tối đa vài lần.
+   * 2. Nếu userinfo.logged=true thì dừng sớm để thử login lại.
+   * 3. Ghi log chi tiết từng vòng để theo dõi trạng thái đồng bộ session.
+   *
+   * @param {any} rawCtx
+   * @param {{ traceId: string; attempts?: number; waitMs?: number }} options
+   * @returns {Promise<boolean>}
+   */
+  async waitForQrSessionReady(rawCtx, options = {}) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const attempts = Number.isFinite(Number(options?.attempts)) ? Number(options.attempts) : 4;
+    const waitMs = Number.isFinite(Number(options?.waitMs)) ? Number(options.waitMs) : 1200;
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    for (let index = 0; index < attempts; index += 1) {
+      try {
+        await rawRequest(rawCtx, 'https://id.zalo.me/account/checksession?continue=https%3A%2F%2Fchat.zalo.me%2Findex.html', {
+          method: 'GET',
+          redirect: 'manual',
+        });
+        const userInfoResponse = await rawRequest(rawCtx, 'https://jr.chat.zalo.me/jr/userinfo', {
+          method: 'GET',
+        });
+        const userInfoData = await userInfoResponse.json();
+        const isLogged = Boolean(userInfoData?.data?.logged);
+        console.info('[ZALO_QR_SESSION_POLL]', {
+          traceId,
+          attempt: index + 1,
+          isLogged,
+          hasInfo: Boolean(userInfoData?.data?.info),
+        });
+        if (isLogged) {
+          return true;
+        }
+      } catch (error) {
+        console.error('[ZALO_QR_SESSION_POLL_FAIL]', {
+          traceId,
+          attempt: index + 1,
+          error: this.formatErrorForLog(error),
+        });
+      }
+      await delay(waitMs);
+    }
+    return false;
+  }
+
+  /**
+   * Gọi login low-level có retry để giảm fail giả do session QR đồng bộ chậm.
+   *
+   * Luồng hoạt động:
+   * 1. Thử `rawCookieLogin` + `rawGetServerInfo` với context hiện tại.
+   * 2. Nếu dính `QR_SESSION_TIMEOUT`, chờ/poll session rồi retry thêm vài lần.
+   * 3. Trả về payload thành công hoặc ném lỗi cuối cùng khi hết số lần thử.
+   *
+   * @param {any} ctx
+   * @param {{ traceId: string; stepLabel: string; strategyName: string; enableEncryptParam: boolean; maxAttempts?: number; retryWaitMs?: number }} options
+   * @returns {Promise<{ loginPayload: unknown; serverPayload: unknown }>}
+   */
+  async performLowLevelLoginWithRetry(ctx, options) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const stepLabel = String(options?.stepLabel || 'low-level-login');
+    const strategyName = String(options?.strategyName || 'unknown-strategy');
+    const enableEncryptParam = options?.enableEncryptParam !== false;
+    const maxAttempts = Number.isFinite(Number(options?.maxAttempts))
+      ? Math.max(1, Number(options.maxAttempts))
+      : 4;
+    const retryWaitMs = Number.isFinite(Number(options?.retryWaitMs))
+      ? Math.max(300, Number(options.retryWaitMs))
+      : 1800;
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let loginPayload = null;
+      let serverPayload = null;
+      try {
+        loginPayload = await rawCookieLogin(ctx, enableEncryptParam);
+        serverPayload = await rawGetServerInfo(ctx, enableEncryptParam);
+        return { loginPayload, serverPayload };
+      } catch (error) {
+        const normalizedError = this.normalizeQrLoginError(error);
+        lastError = normalizedError;
+        console.error('[ZALO_QR_LOW_LEVEL_ATTEMPT_FAIL]', {
+          traceId,
+          stepLabel,
+          strategy: strategyName,
+          attempt,
+          maxAttempts,
+          loginPayloadShape: this.summarizePayloadShape(loginPayload),
+          serverPayloadShape: this.summarizePayloadShape(serverPayload),
+          error: this.formatErrorForLog(normalizedError),
+        });
+
+        if (normalizedError.message !== 'QR_SESSION_TIMEOUT' || attempt >= maxAttempts) {
+          throw normalizedError;
+        }
+
+        await this.waitForQrSessionReady(ctx, {
+          traceId,
+          attempts: 2,
+          waitMs: Math.round(retryWaitMs / 2),
+        });
+        await delay(retryWaitMs);
+      }
+    }
+
+    throw lastError || new Error('LOW_LEVEL_LOGIN_FAILED');
+  }
+
+  /**
+   * Trích xuất serverInfo từ nhiều dạng payload khác nhau.
+   *
+   * @param {unknown} serverPayload
+   * @returns {Record<string, any> | null}
+   */
+  extractServerInfoPayload(serverPayload) {
+    const payload = serverPayload && typeof serverPayload === 'object' ? serverPayload : null;
+    if (!payload) return null;
+    const candidates = [
+      payload?.data,
+      payload?.serverInfo,
+      payload?.server_info,
+      payload,
+    ];
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== 'object') continue;
+      if (candidate?.setttings || candidate?.settings || candidate?.extra_ver) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Tạo API từ payload low-level theo cách tolerant để tránh fail vì đổi shape response.
+   *
+   * @param {any} ctx
+   * @param {unknown} loginPayload
+   * @param {unknown} serverPayload
+   * @returns {any}
+   */
+  buildApiFromLowLevelPayload(ctx, loginPayload, serverPayload) {
+    const loginInfo = this.extractLoginInfoPayload(loginPayload);
+    const serverInfo = this.extractServerInfoPayload(serverPayload);
+
+    // Một số response có thể gắn cờ timeout nhưng vẫn kèm login info hợp lệ.
+    // Chỉ fail timeout khi thực sự không trích xuất được dữ liệu session cần thiết.
+    if (this.isQrSessionTimeoutIssue(loginPayload) && !loginInfo) {
+      throw new Error('QR_SESSION_TIMEOUT');
+    }
+    if (this.isQrSessionTimeoutIssue(serverPayload) && !serverInfo) {
+      throw new Error('QR_SESSION_TIMEOUT');
+    }
+
+    if (!loginInfo || !serverInfo) {
+      throw new Error('RAW_CTX_LOGIN_DATA_INVALID');
+    }
+
+    ctx.secretKey = loginInfo.zpw_enk;
+    ctx.uid = loginInfo.uid;
+    ctx.settings = serverInfo.setttings || serverInfo.settings || {};
+    ctx.extraVer = serverInfo.extra_ver || '';
+    ctx.loginInfo = loginInfo;
+
+    if (!isContextSession(ctx)) {
+      throw new Error('RAW_CTX_CONTEXT_INVALID');
+    }
+
+    return new API(ctx, loginInfo.zpw_service_map_v3, loginInfo.zpw_ws);
+  }
+
+  /**
+   * Retry luồng low-level + dựng API để xử lý trường hợp session vừa xác nhận nhưng chưa đồng bộ kịp.
+   *
+   * Luồng hoạt động:
+   * 1. Gọi low-level login/getServerInfo để lấy payload mới nhất.
+   * 2. Thử dựng API từ payload; nếu dính `QR_SESSION_TIMEOUT` thì chờ/poll rồi thử lại.
+   * 3. Trả về cả API và loginPayload cuối cùng khi thành công.
+   *
+   * @param {any} ctx
+   * @param {{ traceId: string; stepLabel: string; strategyName: string; enableEncryptParam: boolean; buildMaxAttempts?: number; buildRetryWaitMs?: number }} options
+   * @returns {Promise<{ api: any; loginPayload: unknown; serverPayload: unknown }>}
+   */
+  async buildApiWithLowLevelRetry(ctx, options) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const stepLabel = String(options?.stepLabel || 'low-level-build-api');
+    const strategyName = String(options?.strategyName || 'unknown-strategy');
+    const enableEncryptParam = options?.enableEncryptParam !== false;
+    const buildMaxAttempts = Number.isFinite(Number(options?.buildMaxAttempts))
+      ? Math.max(1, Number(options.buildMaxAttempts))
+      : 3;
+    const buildRetryWaitMs = Number.isFinite(Number(options?.buildRetryWaitMs))
+      ? Math.max(400, Number(options.buildRetryWaitMs))
+      : 1800;
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= buildMaxAttempts; attempt += 1) {
+      const { loginPayload, serverPayload } = await this.performLowLevelLoginWithRetry(ctx, {
+        traceId,
+        stepLabel,
+        strategyName,
+        enableEncryptParam,
+      });
+
+      try {
+        const api = this.buildApiFromLowLevelPayload(ctx, loginPayload, serverPayload);
+        return { api, loginPayload, serverPayload };
+      } catch (error) {
+        const normalizedError = this.normalizeQrLoginError(error);
+        lastError = normalizedError;
+        console.error('[ZALO_QR_BUILD_API_ATTEMPT_FAIL]', {
+          traceId,
+          stepLabel,
+          strategy: strategyName,
+          attempt,
+          buildMaxAttempts,
+          loginPayloadShape: this.summarizePayloadShape(loginPayload),
+          serverPayloadShape: this.summarizePayloadShape(serverPayload),
+          error: this.formatErrorForLog(normalizedError),
+        });
+        if (normalizedError.message !== 'QR_SESSION_TIMEOUT' || attempt >= buildMaxAttempts) {
+          throw normalizedError;
+        }
+
+        await this.waitForQrSessionReady(ctx, {
+          traceId,
+          attempts: 3,
+          waitMs: 1200,
+        });
+        await delay(buildRetryWaitMs);
+      }
+    }
+
+    throw lastError || new Error('LOW_LEVEL_BUILD_API_FAILED');
+  }
+
+  /**
+   * Tạo context mới từ credentials rồi login bằng low-level API tolerant.
+   *
+   * @param {{ imei: string; userAgent: string; language: string; cookie: unknown }} credentials
+   * @param {{ traceId: string; stepLabel: string }} options
+   * @returns {Promise<any>}
+   */
+  async loginWithManualContext(credentials, options) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const stepLabel = String(options?.stepLabel || 'manual-context-login');
+    const zalo = new Zalo({
+      selfListen: false,
+      checkUpdate: true,
+      logging: false,
+    });
+    const ctx = createContext(zalo.options.apiType, zalo.options.apiVersion);
+    Object.assign(ctx.options, zalo.options);
+    ctx.imei = String(credentials?.imei || '').trim() || this.buildImeiFromUserAgent(credentials?.userAgent);
+    ctx.userAgent = String(credentials?.userAgent || '').trim() || this.defaultZaloUserAgent;
+    ctx.language = String(credentials?.language || '').trim() || this.defaultZaloLanguage;
+    ctx.cookie = zalo.parseCookies(credentials?.cookie);
+
+    try {
+      const { api } = await this.buildApiWithLowLevelRetry(ctx, {
+        traceId,
+        stepLabel,
+        strategyName: 'manual_low_level_tolerant',
+        enableEncryptParam: true,
+      });
+      return api;
+    } catch (error) {
+      console.error('[ZALO_QR_MANUAL_CONTEXT_FAIL]', {
+        traceId,
+        stepLabel,
+        error: this.formatErrorForLog(this.normalizeQrLoginError(error)),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Thử đăng nhập với nhiều strategy để tăng độ ổn định của zca-js.
+   *
+   * Luồng hoạt động:
+   * 1. Thử strategy mặc định `zalo.login(credentials)`.
+   * 2. Nếu fail, thử strategy low-level tolerant bằng manual context.
+   * 3. Log chi tiết từng attempt và ném lỗi cuối cùng nếu tất cả đều thất bại.
+   *
+   * @param {{ imei: string; userAgent: string; language: string; cookie: unknown }} credentials
+   * @param {{ traceId: string; stepLabel: string; sourceLabel: string }} options
+   * @returns {Promise<any>}
+   */
+  async loginWithStrategies(credentials, options) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const stepLabel = String(options?.stepLabel || 'unknown-step');
+    const sourceLabel = String(options?.sourceLabel || 'unknown-source');
+    const strategyList = [
+      { name: 'default_sdk_login', kind: 'sdk' },
+      { name: 'manual_low_level_tolerant', kind: 'manual' },
+    ];
+
+    let lastError = null;
+    for (const strategy of strategyList) {
+      try {
+        let api = null;
+        if (strategy.kind === 'sdk') {
+          const zalo = new Zalo({
+            selfListen: false,
+            checkUpdate: true,
+            logging: false,
+          });
+          api = await zalo.login(credentials);
+        } else {
+          api = await this.loginWithManualContext(credentials, {
+            traceId,
+            stepLabel: `${stepLabel}_manual`,
+          });
+        }
+        console.info('[ZALO_QR_LOGIN_OK]', {
+          traceId,
+          stepLabel,
+          sourceLabel,
+          strategy: strategy.name,
+          cookieCount: this.getCookieCount(credentials?.cookie),
+        });
+        return api;
+      } catch (error) {
+        const normalizedError = this.normalizeQrLoginError(error);
+        lastError = normalizedError;
+        console.error('[ZALO_QR_LOGIN_ATTEMPT_FAIL]', {
+          traceId,
+          stepLabel,
+          sourceLabel,
+          strategy: strategy.name,
+          cookieCount: this.getCookieCount(credentials?.cookie),
+          imei: String(credentials?.imei || '').slice(0, 18),
+          language: String(credentials?.language || ''),
+          error: this.formatErrorForLog(normalizedError),
+        });
+        if (normalizedError.message === 'QR_SESSION_TIMEOUT') {
+          throw normalizedError;
+        }
+      }
+    }
+
+    throw lastError || new Error('ZALO_QR_LOGIN_STRATEGIES_FAILED');
+  }
+
+  /**
+   * Login bằng raw context để giữ nguyên cookie-jar gốc từ luồng quét QR.
+   *
+   * Luồng hoạt động:
+   * 1. Dùng trực tiếp `rawCtx.cookie` mà không serialize/parse lại.
+   * 2. Gọi low-level `login/getServerInfo` để lấy session data.
+   * 3. Khởi tạo API từ context đã hợp lệ; nếu fail thì trả lỗi để nhánh khác xử lý.
+   *
+   * @param {any} rawCtx
+   * @param {{ imei: string; userAgent: string; language: string }} credentialMeta
+   * @param {{ traceId: string; stepLabel: string }} options
+   * @returns {Promise<any>}
+   */
+  async loginWithRawContextStrategies(rawCtx, credentialMeta, options) {
+    const traceId = String(options?.traceId || 'no-trace');
+    const stepLabel = String(options?.stepLabel || 'raw-context-login');
+    if (!rawCtx) {
+      throw new Error('RAW_CTX_MISSING');
+    }
+
+    rawCtx.imei = String(credentialMeta?.imei || '').trim();
+    rawCtx.userAgent = String(credentialMeta?.userAgent || '').trim() || this.defaultZaloUserAgent;
+    rawCtx.language = String(credentialMeta?.language || '').trim() || this.defaultZaloLanguage;
+
+    const strategyList = [{ name: 'raw_ctx_encrypt_on', enableEncryptParam: true }];
+
+    let lastError = null;
+    for (const strategy of strategyList) {
+      try {
+        const { api, loginPayload } = await this.buildApiWithLowLevelRetry(rawCtx, {
+          traceId,
+          stepLabel,
+          strategyName: strategy.name,
+          enableEncryptParam: strategy.enableEncryptParam,
+        });
+        const loginInfo = this.extractLoginInfoPayload(loginPayload);
+        console.info('[ZALO_QR_RAW_CTX_LOGIN_OK]', {
+          traceId,
+          stepLabel,
+          strategy: strategy.name,
+          uid: String(loginInfo?.uid || ''),
+          hasServiceMap: Boolean(loginInfo?.zpw_service_map_v3),
+          hasWs: Boolean(loginInfo?.zpw_ws),
+        });
+        return api;
+      } catch (error) {
+        const normalizedError = this.normalizeQrLoginError(error);
+        lastError = normalizedError;
+        console.error('[ZALO_QR_RAW_CTX_LOGIN_FAIL]', {
+          traceId,
+          stepLabel,
+          strategy: strategy.name,
+          error: this.formatErrorForLog(normalizedError),
+        });
+        if (normalizedError.message === 'QR_SESSION_TIMEOUT') {
+          throw normalizedError;
+        }
+      }
+    }
+
+    throw lastError || new Error('RAW_CTX_LOGIN_FAILED');
+  }
+
+  /**
+   * Đăng nhập QR theo luồng low-level để có thể "cứu" cookie khi thư viện báo `Can't login`.
+   *
+   * Luồng hoạt động:
+   * 1. Gọi raw `loginQR` để nhận callback QR và thu cookie thật từ phiên quét.
+   * 2. Phát sự kiện `GotLoginInfo` mô phỏng như luồng mặc định để code phía trên tái sử dụng.
+   * 3. Thử đăng nhập bằng cookie nhận được; nếu lỗi thì thử lại bằng cookie đang có trong cookie-jar.
+   *
+   * @param {{ callback?: (event: any) => Promise<void> | void; traceId?: string }} options
+   * @returns {Promise<any>}
+   */
+  async loginQrWithRescue(options = {}) {
+    const callback = typeof options?.callback === 'function' ? options.callback : null;
+    const traceId = String(options?.traceId || `qr-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`);
+    const userAgent = this.defaultZaloUserAgent;
+    const language = this.defaultZaloLanguage;
+    const imei = generateZaloUUID(userAgent);
+    const rawCtx = createContext();
+    Object.assign(rawCtx.options, {
+      selfListen: false,
+      checkUpdate: true,
+      logging: false,
+    });
+
+    let qrResult = null;
+    let rawLoginError = null;
+
+    try {
+      qrResult = await rawLoginQR(
+        rawCtx,
+        {
+          userAgent,
+          language,
+        },
+        async (event) => {
+          if (!callback) return;
+          await callback(event);
+        }
+      );
+    } catch (error) {
+      rawLoginError = error;
+      console.error('[ZALO_QR_RAW_LOGIN_FAIL]', {
+        traceId,
+        stepLabel: 'raw_login_qr',
+        error: this.formatErrorForLog(error),
+      });
+      if (this.isQrSessionTimeoutIssue(error) || String(error?.message || '').includes("Can't login")) {
+        const isSessionReady = await this.waitForQrSessionReady(rawCtx, {
+          traceId,
+          attempts: 5,
+          waitMs: 1200,
+        });
+        if (!isSessionReady && this.isQrSessionTimeoutIssue(error)) {
+          throw new Error('QR_SESSION_TIMEOUT');
+        }
+      }
+    }
+
+    // Ưu tiên cookie trả về trực tiếp từ rawLoginQR, fallback sang cookie còn lại trong cookie-jar.
+    const primaryCredentials = this.normalizeLoginCredentials({
+      imei,
+      userAgent,
+      language,
+      cookie: qrResult?.cookies || rawCtx?.cookie?.toJSON?.()?.cookies || [],
+    });
+
+    if (callback && primaryCredentials?.cookie) {
+      await callback({
+        type: LoginQRCallbackEventType.GotLoginInfo,
+        data: {
+          cookie: primaryCredentials.cookie,
+          imei: primaryCredentials.imei,
+          userAgent: primaryCredentials.userAgent,
+          language: primaryCredentials.language,
+        },
+        actions: null,
+      });
+    }
+
+    if (!primaryCredentials) {
+      if (rawLoginError) {
+        throw rawLoginError;
+      }
+      throw new Error('QR_LOGIN_MISSING_COOKIES');
+    }
+
+    try {
+      // Ưu tiên nhánh raw context để giữ nguyên cookie-jar gốc từ rawLoginQR.
+      return await this.loginWithRawContextStrategies(
+        rawCtx,
+        {
+          imei: primaryCredentials.imei,
+          userAgent: primaryCredentials.userAgent,
+          language: primaryCredentials.language,
+        },
+        {
+          traceId,
+          stepLabel: 'primary_raw_context_login',
+        }
+      );
+    } catch (rawCtxPrimaryError) {
+      const normalizedRawCtxPrimaryError = this.normalizeQrLoginError(rawCtxPrimaryError);
+      console.error('[ZALO_QR_PRIMARY_RAW_CTX_FAIL]', {
+        traceId,
+        error: this.formatErrorForLog(normalizedRawCtxPrimaryError),
+      });
+      if (normalizedRawCtxPrimaryError.message === 'QR_SESSION_TIMEOUT') {
+        throw normalizedRawCtxPrimaryError;
+      }
+    }
+
+    try {
+      return await this.loginWithStrategies(primaryCredentials, {
+        traceId,
+        stepLabel: 'primary_login',
+        sourceLabel: 'qr_result_or_cookie_jar',
+      });
+    } catch (primaryError) {
+      const normalizedPrimaryError = this.normalizeQrLoginError(primaryError);
+      if (normalizedPrimaryError.message === 'QR_SESSION_TIMEOUT') {
+        throw normalizedPrimaryError;
+      }
+      const rescuedCookies = rawCtx?.cookie?.toJSON?.()?.cookies || [];
+      const rescueCredentials = this.normalizeLoginCredentials({
+        imei,
+        userAgent,
+        language,
+        cookie: rescuedCookies,
+      });
+      if (!rescueCredentials) {
+        throw normalizedPrimaryError;
+      }
+      try {
+        // Thử lại raw context lần nữa trước khi fallback sang credentials parse.
+        return await this.loginWithRawContextStrategies(
+          rawCtx,
+          {
+            imei: rescueCredentials.imei,
+            userAgent: rescueCredentials.userAgent,
+            language: rescueCredentials.language,
+          },
+          {
+            traceId,
+            stepLabel: 'rescue_raw_context_login',
+          }
+        );
+      } catch (rawCtxRescueError) {
+        const normalizedRawCtxRescueError = this.normalizeQrLoginError(rawCtxRescueError);
+        console.error('[ZALO_QR_RESCUE_RAW_CTX_FAIL]', {
+          traceId,
+          error: this.formatErrorForLog(normalizedRawCtxRescueError),
+        });
+        if (normalizedRawCtxRescueError.message === 'QR_SESSION_TIMEOUT') {
+          throw normalizedRawCtxRescueError;
+        }
+      }
+
+      try {
+        return await this.loginWithStrategies(rescueCredentials, {
+          traceId,
+          stepLabel: 'rescue_login',
+          sourceLabel: 'cookie_jar_retry',
+        });
+      } catch (rescueError) {
+        const normalizedRescueError = this.normalizeQrLoginError(rescueError);
+        if (normalizedRescueError.message === 'QR_SESSION_TIMEOUT') {
+          throw normalizedRescueError;
+        }
+        // Ưu tiên giữ nguyên lỗi gốc từ rawLoginQR để dễ theo dõi đúng nguyên nhân.
+        throw this.normalizeQrLoginError(rawLoginError || normalizedRescueError || normalizedPrimaryError);
+      }
+    }
+  }
+
+  /**
    * Tạo key phiên QR và đăng ký metadata vào bộ nhớ.
    *
    * @param {number} userId
@@ -945,17 +1804,13 @@ class ZaloSettingsController {
       const userId = req.user.id;
       this.pruneExpiredLoginSessions();
       const sessionKey = this.createLoginSession(userId);
-      const zalo = new Zalo({
-        selfListen: false,
-        checkUpdate: true,
-        logging: false,
-      });
-
+      const loginTraceId = `session-${sessionKey}`;
       const qrPayload = await new Promise((resolve, reject) => {
         let isSettled = false;
         const loginMeta = {
           qrScannedName: '',
           loginInfoCookie: null,
+          loginInfoRaw: null,
           imei: '',
           userAgent: '',
           language: this.defaultZaloLanguage,
@@ -966,7 +1821,9 @@ class ZaloSettingsController {
           reject(new Error('QR_TIMEOUT'));
         }, 20000);
 
-        const loginPromise = zalo.loginQR({}, async (event) => {
+        const loginPromise = this.loginQrWithRescue({
+          traceId: loginTraceId,
+          callback: async (event) => {
           try {
             if (!event) {
               return;
@@ -984,10 +1841,12 @@ class ZaloSettingsController {
             }
 
             if (event.type === LoginQRCallbackEventType.GotLoginInfo) {
-              loginMeta.loginInfoCookie = event?.data?.cookie || null;
-              loginMeta.imei = String(event?.data?.imei || '').trim();
-              loginMeta.userAgent = String(event?.data?.userAgent || '').trim();
-              loginMeta.language = String(event?.data?.language || '').trim() || this.defaultZaloLanguage;
+              const parsedLoginInfo = this.extractQrLoginInfo(event?.data);
+              loginMeta.loginInfoRaw = event?.data || null;
+              loginMeta.loginInfoCookie = parsedLoginInfo.cookie || loginMeta.loginInfoCookie;
+              loginMeta.imei = parsedLoginInfo.imei || loginMeta.imei;
+              loginMeta.userAgent = parsedLoginInfo.userAgent || loginMeta.userAgent;
+              loginMeta.language = parsedLoginInfo.language || loginMeta.language || this.defaultZaloLanguage;
               return;
             }
 
@@ -1018,33 +1877,78 @@ class ZaloSettingsController {
             clearTimeout(timeout);
             reject(error);
           }
+          },
         });
 
         loginPromise
           .then(async (api) => {
-            this.patchLoginSession(sessionKey, {
-              status: 'connected',
-              message: 'Đăng nhập Zalo thành công.',
+            await this.finalizeQrLoginSuccess({
+              sessionKey,
+              userId,
               api,
-            });
-
-            const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
-            const account = await this.upsertQrLoggedInAccount(userId, accountIdentity);
-            this.patchLoginSession(sessionKey, { account });
-            zaloAccountSessionService.setAccountApi(account?.id, api);
-
-            zaloAccountSessionService.startAccountListenerSafely({
-              accountId: account?.id,
-              api,
-              context: 'loginQr',
+              loginMeta,
             });
           })
-          .catch((error) => {
+          .catch(async (error) => {
+            const fallbackCredentials = this.buildLoginCredentialsFromQrMeta(loginMeta);
+            const isSessionTimeout = error?.message === 'QR_SESSION_TIMEOUT';
+            const hasScannedEvidence = Boolean(loginMeta?.qrScannedName || loginMeta?.loginInfoRaw || loginMeta?.loginInfoCookie);
+            const shouldTryFallback = Boolean(fallbackCredentials) && (!isSessionTimeout || hasScannedEvidence);
+
+            // Với timeout 102 nhưng đã có dữ liệu quét hợp lệ, vẫn thử rescue 1 lần
+            // để tránh false-negative khi phiên trên server Zalo vừa được đồng bộ.
+            if (shouldTryFallback) {
+              this.patchLoginSession(sessionKey, {
+                status: 'verifying',
+                message: isSessionTimeout
+                  ? 'Đã quét thành công, đang đồng bộ phiên và xác thực lại...'
+                  : 'Đang thử xác thực lại từ dữ liệu phiên quét QR...',
+              });
+
+              try {
+                if (isSessionTimeout) {
+                  await new Promise((resolve) => setTimeout(resolve, 1500));
+                }
+                const fallbackApi = await this.loginWithStrategies(fallbackCredentials, {
+                  traceId: loginTraceId,
+                  stepLabel: 'controller_fallback_login',
+                  sourceLabel: 'login_meta_from_callback',
+                });
+                if (fallbackApi) {
+                  await this.finalizeQrLoginSuccess({
+                    sessionKey,
+                    userId,
+                    api: fallbackApi,
+                    loginMeta,
+                  });
+                  return;
+                }
+              } catch (fallbackError) {
+                error = fallbackError;
+              }
+            }
+
+            const normalizedLoginMessage =
+              error?.message === 'QR_SESSION_TIMEOUT'
+                ? 'Phiên QR đã hết hiệu lực hoặc quá thời gian xác thực. Vui lòng tạo và quét lại mã QR mới.'
+                : `Đăng nhập thất bại: ${error?.message || 'Lỗi không xác định'}`;
+
             this.patchLoginSession(sessionKey, {
               status: 'failed',
-              message: `Đăng nhập thất bại: ${error?.message || 'Lỗi không xác định'}`,
+              message: normalizedLoginMessage,
             });
-            console.error('Zalo loginQR completed with error:', error.message);
+            console.error('[ZALO_QR_FINAL_FAIL]', {
+              traceId: loginTraceId,
+              sessionKey,
+              hasFallbackCredentials: shouldTryFallback,
+              loginMetaState: {
+                hasLoginInfoCookie: Boolean(loginMeta?.loginInfoCookie),
+                hasLoginInfoRaw: Boolean(loginMeta?.loginInfoRaw),
+                imeiLength: String(loginMeta?.imei || '').length,
+                userAgentLength: String(loginMeta?.userAgent || '').length,
+              },
+              error: this.formatErrorForLog(error),
+            });
           });
       });
 
