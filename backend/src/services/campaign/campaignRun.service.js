@@ -523,10 +523,12 @@ class CampaignRunService {
         }
         await this.ensureRunStillRunning(runId);
       };
-      const API_DELAY_MIN_MS = 3000;
-      const API_DELAY_MAX_MS = 10000;
-      const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 5000;
-      const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 10000;
+      const EMAIL_API_DELAY_MIN_MS = 100;
+      const EMAIL_API_DELAY_MAX_MS = 500;
+      const ZALO_API_DELAY_MIN_MS = 50;
+      const ZALO_API_DELAY_MAX_MS = 250;
+      const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 500;
+      const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 2500;
       /**
        * Add random delay for outbound email/Zalo API calls.
        *
@@ -535,9 +537,14 @@ class CampaignRunService {
        */
       const waitRandomApiDelay = async (reason = 'api_call') => {
         await this.ensureRunStillRunning(runId);
+        // Tách riêng delay theo kênh để có thể giảm tốc độ chờ cho Zalo
+        // mà không làm thay đổi nhịp gửi email đã cấu hình.
+        const isZaloDelay = String(reason || '').toLowerCase().includes('zalo');
+        const minDelayMs = isZaloDelay ? ZALO_API_DELAY_MIN_MS : EMAIL_API_DELAY_MIN_MS;
+        const maxDelayMs = isZaloDelay ? ZALO_API_DELAY_MAX_MS : EMAIL_API_DELAY_MAX_MS;
         const delayMs = Math.floor(
-          Math.random() * (API_DELAY_MAX_MS - API_DELAY_MIN_MS + 1)
-        ) + API_DELAY_MIN_MS;
+          Math.random() * (maxDelayMs - minDelayMs + 1)
+        ) + minDelayMs;
         console.log(
           `[CampaignRun][Delay] run=${runId} reason=${reason} random_delay_ms=${delayMs}`
         );
@@ -2454,7 +2461,7 @@ class CampaignRunService {
           const page = Number.isFinite(parseInt(config.zaloFriendsPage, 10))
             ? parseInt(config.zaloFriendsPage, 10)
             : undefined;
-          await waitRandomApiDelay();
+          await waitRandomApiDelay('zalo_get_all_friends');
           const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
           const allItems = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
           const selectedFriendIds = (Array.isArray(config.zaloSelectedFriendIds) ? config.zaloSelectedFriendIds : [])
@@ -2544,7 +2551,7 @@ class CampaignRunService {
             accountId: account.id,
             userId,
           });
-          await waitRandomApiDelay();
+          await waitRandomApiDelay('zalo_get_all_groups');
           const groupResp = await campaignZaloSenderService.getAllGroupsWithRetry(api);
           const baseItems = campaignZaloSenderService.extractGroupsFromResponse(groupResp);
           const allItems = await campaignZaloSenderService.enrichGroupNames(api, baseItems);
@@ -2689,7 +2696,7 @@ class CampaignRunService {
                 zaloUid: entryZaloUid || null,
               });
               if (applyRandomDelay) {
-                await waitRandomApiDelay();
+                await waitRandomApiDelay('zalo_send_personal');
               }
               const sendResult = await campaignZaloSenderService.sendPersonalMessage({
                 api,
@@ -3312,7 +3319,7 @@ class CampaignRunService {
               },
             });
             try {
-              await waitRandomApiDelay();
+              await waitRandomApiDelay('zalo_send_friend_request');
               const sendResult = await campaignZaloSenderService.sendFriendRequest({
                 api,
                 phone,
@@ -3565,7 +3572,7 @@ class CampaignRunService {
           const groupEntryMap = new Map(
             groupEntries.map((entry) => [String(entry?.value || '').trim(), entry])
           );
-          await waitRandomApiDelay();
+          await waitRandomApiDelay('zalo_send_group');
           const groupIdSet = await campaignZaloSenderService.getAllGroupIdSet(api);
           const sendResults = [];
           const sendSingleGroup = async ({
@@ -3613,7 +3620,7 @@ class CampaignRunService {
                 zaloMessageId,
               });
               if (applyRandomDelay) {
-                await waitRandomApiDelay();
+                await waitRandomApiDelay('zalo_send_group');
               }
               const sendResult = await campaignZaloSenderService.sendGroupMessage({
                 api,
