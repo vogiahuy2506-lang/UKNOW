@@ -46,7 +46,7 @@ const LOG_LIST_MIN_WIDTH = 200;
 const LOG_DETAIL_MIN_WIDTH = 220;
 const NODE_DROP_OFFSET_X = 76;
 const NODE_DROP_OFFSET_Y = 50;
-const ADJACENT_ZALO_NODE_DELAY_MS = 5000;
+const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
 const RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE =
   'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi lưu thay đổi.';
 const ZALO_NODE_TYPES = new Set([

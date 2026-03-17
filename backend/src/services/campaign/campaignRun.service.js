@@ -523,12 +523,12 @@ class CampaignRunService {
         }
         await this.ensureRunStillRunning(runId);
       };
-      const EMAIL_API_DELAY_MIN_MS = 100;
-      const EMAIL_API_DELAY_MAX_MS = 500;
-      const ZALO_API_DELAY_MIN_MS = 50;
-      const ZALO_API_DELAY_MAX_MS = 250;
-      const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 500;
-      const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 2500;
+      const EMAIL_API_DELAY_MIN_MS = 50;
+      const EMAIL_API_DELAY_MAX_MS = 250;
+      const ZALO_API_DELAY_MIN_MS = 25;
+      const ZALO_API_DELAY_MAX_MS = 125;
+      const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
+      const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
       /**
        * Add random delay for outbound email/Zalo API calls.
        *
@@ -551,7 +551,7 @@ class CampaignRunService {
         await sleepWithRunCheck(delayMs);
       };
       /**
-       * Chờ 5-10 giây giữa 2 lần gửi nhóm trong cùng một template step.
+       * Chờ ngẫu nhiên 0.25-1.25 giây giữa 2 lần gửi nhóm trong cùng một template step.
        *
        * @param {string} reason ngữ cảnh để log debug
        * @returns {Promise<void>}

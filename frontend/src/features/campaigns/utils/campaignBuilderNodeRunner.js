@@ -207,10 +207,10 @@ export const createCampaignNodeRunner = (deps) => {
     if (normalized === 'fixed' || normalized === 'all_exclude') return normalized;
     return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
   };
-  const PREVIEW_API_DELAY_MIN_MS = 3000;
-  const PREVIEW_API_DELAY_MAX_MS = 5000;
-  const TEMPLATE_STEP_DELAY_MIN_MS = 5000;
-  const TEMPLATE_STEP_DELAY_MAX_MS = 10000;
+  const PREVIEW_API_DELAY_MIN_MS = 1500;
+  const PREVIEW_API_DELAY_MAX_MS = 2500;
+  const TEMPLATE_STEP_DELAY_MIN_MS = 2500;
+  const TEMPLATE_STEP_DELAY_MAX_MS = 5000;
   const getRandomPreviewApiDelayMs = () => Math.floor(
     Math.random() * (PREVIEW_API_DELAY_MAX_MS - PREVIEW_API_DELAY_MIN_MS + 1)
   ) + PREVIEW_API_DELAY_MIN_MS;
@@ -260,10 +260,10 @@ export const createCampaignNodeRunner = (deps) => {
     return delayMs;
   };
   /**
-   * Chờ ngẫu nhiên 5-10 giây giữa 2 lần gửi trong cùng một template step.
+   * Chờ ngẫu nhiên 2.5-5 giây giữa 2 lần gửi trong cùng một template step.
    *
    * Luồng hoạt động:
-   * 1. Sinh ngẫu nhiên khoảng nghỉ trong dải cấu hình 5-10 giây.
+   * 1. Sinh ngẫu nhiên khoảng nghỉ trong dải cấu hình 2.5-5 giây.
    * 2. Sleep có hỗ trợ AbortSignal để dừng run ngay khi người dùng cancel.
    * 3. Trả về delay thực tế để debug khi cần.
    *

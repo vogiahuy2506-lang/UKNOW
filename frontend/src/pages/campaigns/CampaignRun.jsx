@@ -27,7 +27,7 @@ const WEEKLY_DAY_OPTIONS = [
   { value: '6', label: 'Thứ 7' },
   { value: '0', label: 'Chủ nhật' },
 ];
-const ADJACENT_ZALO_NODE_DELAY_MS = 5000;
+const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
 const DEFAULT_CONTINUOUS_MODE = true;
 const DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES = 120;
 const ZALO_GROUP_CAMPAIGN_TYPE = 'zalo_group';
