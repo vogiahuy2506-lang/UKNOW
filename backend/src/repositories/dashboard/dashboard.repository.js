@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 
 class DashboardRepository {
   /**
@@ -11,9 +12,20 @@ class DashboardRepository {
    * @param {'all'|'email'|'zalo'|'zalo_group'} input.campaignType
    * @returns {{ clause: string, params: any[] }}
    */
-  buildCampaignScopeClause({ userAlias = 'c', userId, campaignIds = [], campaignType = 'all' }) {
-    const params = [userId];
-    let clause = `${userAlias}.id_user = $1`;
+  buildCampaignScopeClause({ userAlias = 'c', userId, roleCode, campaignIds = [], campaignType = 'all' }) {
+    const params = [];
+    let clause = '1=1';
+    if (!isAdminRole(roleCode)) {
+      const normalizedUserId = Number(userId);
+      // Nhân viên chỉ được xem các chiến dịch do chính họ tạo.
+      // Nếu userId không hợp lệ thì chặn toàn bộ dữ liệu để tránh rò rỉ ngoài phạm vi.
+      if (!Number.isFinite(normalizedUserId)) {
+        clause = '1=0';
+      } else {
+        params.push(normalizedUserId);
+        clause = `${userAlias}.id_user = $${params.length}`;
+      }
+    }
 
     if (Array.isArray(campaignIds) && campaignIds.length > 0) {
       params.push(campaignIds);

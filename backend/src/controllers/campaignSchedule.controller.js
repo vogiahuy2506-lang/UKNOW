@@ -1,12 +1,14 @@
 import db from '../config/database.js';
 import { serverError } from '../helpers.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
 
 class CampaignScheduleController {
   // Lấy tất cả lịch chạy của user
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
 
       const result = await db.query(
         `SELECT
@@ -22,9 +24,9 @@ class CampaignScheduleController {
            ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
            LIMIT 1
          ) lr ON TRUE
-         WHERE c.id_user = $1
+         WHERE ($1::boolean = TRUE OR c.id_user = $2)
          ORDER BY cs.created_at DESC`,
-        [userId]
+        [isAdmin, userId]
       );
 
       const schedules = result.rows.map(row => ({
@@ -56,6 +58,7 @@ class CampaignScheduleController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { id } = req.params;
 
       const result = await db.query(
@@ -72,8 +75,9 @@ class CampaignScheduleController {
            ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
            LIMIT 1
          ) lr ON TRUE
-         WHERE cs.id = $1 AND c.id_user = $2`,
-        [id, userId]
+         WHERE cs.id = $1
+           AND ($2::boolean = TRUE OR c.id_user = $3)`,
+        [id, isAdmin, userId]
       );
 
       if (result.rows.length === 0) {
@@ -113,12 +117,16 @@ class CampaignScheduleController {
   async create(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { campaignId, scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
       const campaignCheck = await db.query(
-        'SELECT id FROM campaigns WHERE id = $1 AND id_user = $2',
-        [campaignId, userId]
+        `SELECT id
+         FROM campaigns
+         WHERE id = $1
+           AND ($2::boolean = TRUE OR id_user = $3)`,
+        [campaignId, isAdmin, userId]
       );
 
       if (campaignCheck.rows.length === 0) {
@@ -183,6 +191,7 @@ class CampaignScheduleController {
   async update(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { id } = req.params;
       const { scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
@@ -190,8 +199,9 @@ class CampaignScheduleController {
       const scheduleCheck = await db.query(
         `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.run_count, cs.last_run_at FROM campaign_schedules cs
          JOIN campaigns c ON cs.id_campaign = c.id
-         WHERE cs.id = $1 AND c.id_user = $2`,
-        [id, userId]
+         WHERE cs.id = $1
+           AND ($2::boolean = TRUE OR c.id_user = $3)`,
+        [id, isAdmin, userId]
       );
 
       if (scheduleCheck.rows.length === 0) {
@@ -275,14 +285,16 @@ class CampaignScheduleController {
   async delete(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { id } = req.params;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
       const scheduleCheck = await db.query(
         `SELECT cs.id FROM campaign_schedules cs
          JOIN campaigns c ON cs.id_campaign = c.id
-         WHERE cs.id = $1 AND c.id_user = $2`,
-        [id, userId]
+         WHERE cs.id = $1
+           AND ($2::boolean = TRUE OR c.id_user = $3)`,
+        [id, isAdmin, userId]
       );
 
       if (scheduleCheck.rows.length === 0) {

@@ -17,12 +17,15 @@ import {
   HiOutlinePlusCircle,
   HiOutlineLogout,
   HiOutlineLockClosed,
+  HiOutlineUserCircle,
   HiOutlineAcademicCap,
   HiOutlineX,
   HiOutlineClipboardList,
+  HiOutlineUserGroup,
 } from 'react-icons/hi';
 import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
+import AccountProfileModal from '../../features/auth/components/AccountProfileModal';
 
 const menuItems = [
   {
@@ -60,6 +63,12 @@ const menuItems = [
     path: '/orders',
     icon: HiOutlineClipboardList,
   },
+  {
+    name: 'Quản lý nhân viên',
+    path: '/settings/employees',
+    icon: HiOutlineUserGroup,
+    adminOnly: true,
+  },
 ];
 
 /**
@@ -78,8 +87,10 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useLocalStorageState('uknow_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
   const { user, logout } = useAuthStore();
+  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const userMenuRef = useRef(null);
   const navRef = useRef(null);
@@ -138,6 +149,16 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   // On mobile the sidebar is always "open" layout (full labels shown), never icon-only
   const showLabels = isMobile ? true : isOpen;
 
+  const visibleMenuItems = menuItems
+    .map((item) => {
+      if (!item.children) return item;
+      return {
+        ...item,
+        children: item.children.filter((child) => !child.adminOnly || isAdmin),
+      };
+    })
+    .filter((item) => (!item.adminOnly || isAdmin) && (!item.children || item.children.length > 0));
+
   return (
     <aside
       className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-40 sidebar-transition flex flex-col transition-transform duration-300 ease-in-out ${sidebarTransformClass}`}
@@ -173,7 +194,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
 
       {/* Navigation */}
       <nav ref={navRef} className={`p-2 space-y-1 overflow-y-auto flex-1 min-h-0 ${!showLabels ? 'px-2' : ''}`}>
-        {menuItems.map((item) => (
+        {visibleMenuItems.map((item) => (
           <div key={item.name}>
             {item.children ? (
               <div>
@@ -303,6 +324,16 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
             <button
               onClick={() => {
                 setShowUserMenu(false);
+                setShowAccountProfile(true);
+              }}
+              className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              <HiOutlineUserCircle className="w-4 h-4 mr-3" />
+              Thông tin tài khoản
+            </button>
+            <button
+              onClick={() => {
+                setShowUserMenu(false);
                 setShowChangePassword(true);
               }}
               className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -322,6 +353,10 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
         )}
       </div>
 
+      <AccountProfileModal
+        isOpen={showAccountProfile}
+        onClose={() => setShowAccountProfile(false)}
+      />
       <ChangePasswordModal
         isOpen={showChangePassword}
         onClose={() => setShowChangePassword(false)}

@@ -5,6 +5,7 @@ import uploadController from '../../controllers/upload.controller.js';
 import { ThreadType, Zalo } from 'zca-js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import { executeWithZaloTimeoutRetry } from '../../utils/zaloTimeoutRetry.util.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -1298,6 +1299,7 @@ class CampaignZaloSenderService {
   mapCampaignZaloAccount(account) {
     return {
       id: String(account.id),
+      userId: Number.isFinite(Number(account.id_user)) ? Number(account.id_user) : null,
       displayName: account.display_name || 'Tài khoản Zalo',
       status: account.status,
       isActive: account.is_active === true,
@@ -1311,20 +1313,22 @@ class CampaignZaloSenderService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getCampaignZaloAccount({ userId, accountId }) {
+  async getCampaignZaloAccount({ userId, accountId, roleCode }) {
     const normalizedId = Number.isFinite(parseInt(accountId, 10))
       ? parseInt(accountId, 10)
       : null;
+    const isAdmin = isAdminRole(roleCode);
     if (!normalizedId) {
       throw new Error('Chưa chọn tài khoản Zalo gửi');
     }
 
     const accountResult = await db.query(
-      `SELECT id, display_name, status, is_active, is_default, cookie_text
+      `SELECT id, id_user, display_name, status, is_active, is_default, cookie_text
        FROM zalo_settings
-       WHERE id = $1 AND id_user = $2
+       WHERE id = $1
+         ${isAdmin ? '' : 'AND id_user = $2'}
        LIMIT 1`,
-      [normalizedId, userId]
+      isAdmin ? [normalizedId] : [normalizedId, userId]
     );
     const account = accountResult.rows[0] || null;
     if (!account) {
@@ -1340,7 +1344,7 @@ class CampaignZaloSenderService {
     if (isActive) {
       const restoredApi = await this.tryAutoRestoreSession({
         accountId: normalizedId,
-        userId,
+        userId: account.id_user,
         cookieText: account.cookie_text,
         fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
       });

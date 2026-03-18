@@ -1,5 +1,7 @@
 import db from '../config/database.js';
 import uploadController from './upload.controller.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 
 class EmailTemplateController {
   /**
@@ -47,6 +49,7 @@ class EmailTemplateController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { page = 1, limit = 10, category, search } = req.query;
       const offset = (page - 1) * limit;
 
@@ -77,9 +80,14 @@ class EmailTemplateController {
               )
           ) AS is_used_in_active_campaign
         FROM email_templates et
-        WHERE et.id_user = $1
+        WHERE 1 = 1
       `;
-      const params = [userId];
+      const params = [];
+
+      if (!isAdmin) {
+        params.push(userId);
+        query += ` AND et.id_user = $${params.length}`;
+      }
 
       if (category) {
         params.push(category);
@@ -97,8 +105,12 @@ class EmailTemplateController {
       const result = await db.query(query, params);
 
       // Count query
-      let countQuery = 'SELECT COUNT(*) FROM email_templates WHERE id_user = $1';
-      const countParams = [userId];
+      let countQuery = 'SELECT COUNT(*) FROM email_templates WHERE 1 = 1';
+      const countParams = [];
+      if (!isAdmin) {
+        countParams.push(userId);
+        countQuery += ` AND id_user = $${countParams.length}`;
+      }
       if (category) {
         countParams.push(category);
         countQuery += ` AND category = $${countParams.length}`;
@@ -152,11 +164,14 @@ class EmailTemplateController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
 
       const result = await db.query(
-        'SELECT * FROM email_templates WHERE id = $1 AND id_user = $2',
-        [id, userId]
+        isAdmin
+          ? 'SELECT * FROM email_templates WHERE id = $1'
+          : 'SELECT * FROM email_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
       );
 
       if (result.rows.length === 0) {
@@ -167,7 +182,8 @@ class EmailTemplateController {
       }
 
       const item = result.rows[0];
-      const activeCampaignUsages = await this.getActiveCampaignUsages(userId, id);
+      const ownerUserId = result.rows[0]?.id_user || userId;
+      const activeCampaignUsages = await this.getActiveCampaignUsages(ownerUserId, id);
 
       res.json({
         success: true,
@@ -239,7 +255,20 @@ class EmailTemplateController {
   async create(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { templateName, templateCode, subject, bodyHtml, bodyText, tempAttachments, variables, category } = req.body;
+
+      const emailTemplateLimitCheck = await checkUserResourceLimit({
+        userId,
+        roleCode,
+        resourceKey: 'emailTemplates',
+      });
+      if (!emailTemplateLimitCheck.allowed) {
+        return res.status(400).json({
+          success: false,
+          message: emailTemplateLimitCheck.message,
+        });
+      }
 
       const hasBodyHtml = Object.prototype.hasOwnProperty.call(req.body, 'bodyHtml');
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
@@ -318,6 +347,7 @@ class EmailTemplateController {
   async update(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
       const { 
         templateName, 
@@ -340,8 +370,10 @@ class EmailTemplateController {
 
       // Kiểm tra template tồn tại và lấy current attachments
       const existing = await db.query(
-        'SELECT id, attachments FROM email_templates WHERE id = $1 AND id_user = $2',
-        [id, userId]
+        isAdmin
+          ? 'SELECT id, attachments, id_user FROM email_templates WHERE id = $1'
+          : 'SELECT id, attachments, id_user FROM email_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
       );
 
       if (existing.rows.length === 0) {
@@ -350,6 +382,7 @@ class EmailTemplateController {
           message: 'Không tìm thấy mẫu email'
         });
       }
+      const templateOwnerUserId = existing.rows[0].id_user || userId;
 
       const currentAttachments = Array.isArray(existing.rows[0].attachments)
         ? existing.rows[0].attachments
@@ -403,7 +436,7 @@ class EmailTemplateController {
       // Xử lý new temp attachments - lưu vào local uploads
       if (tempAttachments && tempAttachments.length > 0) {
         try {
-          let storedAttachments = await uploadController.moveToS3(tempAttachments, userId);
+          let storedAttachments = await uploadController.moveToS3(tempAttachments, templateOwnerUserId);
           // Gắn lại displayName từ tempAttachments
           storedAttachments = storedAttachments.map((savedAtt) => {
             const src = (tempAttachments || []).find((t) => t.tempId === savedAtt.tempId);
@@ -431,23 +464,39 @@ class EmailTemplateController {
           category = COALESCE($10, category),
           is_active = COALESCE($11, is_active),
           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $12 AND id_user = $13
+         WHERE id = $12
+           ${isAdmin ? '' : 'AND id_user = $13'}
          RETURNING *`,
-        [
-          templateName,
-          templateCode,
-          subject,
-          hasBodyHtml,
-          normalizedBodyHtml,
-          hasBodyText,
-          normalizedBodyText,
-          JSON.stringify(finalAttachments),
-          variables ? JSON.stringify(variables) : null,
-          category,
-          isActive,
-          id,
-          userId
-        ]
+        isAdmin
+          ? [
+              templateName,
+              templateCode,
+              subject,
+              hasBodyHtml,
+              normalizedBodyHtml,
+              hasBodyText,
+              normalizedBodyText,
+              JSON.stringify(finalAttachments),
+              variables ? JSON.stringify(variables) : null,
+              category,
+              isActive,
+              id,
+            ]
+          : [
+              templateName,
+              templateCode,
+              subject,
+              hasBodyHtml,
+              normalizedBodyHtml,
+              hasBodyText,
+              normalizedBodyText,
+              JSON.stringify(finalAttachments),
+              variables ? JSON.stringify(variables) : null,
+              category,
+              isActive,
+              id,
+              userId,
+            ]
       );
 
       const item = result.rows[0];
@@ -486,12 +535,15 @@ class EmailTemplateController {
   async delete(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
 
       // Lấy attachments trước khi delete
       const templateResult = await db.query(
-        'SELECT attachments FROM email_templates WHERE id = $1 AND id_user = $2',
-        [id, userId]
+        isAdmin
+          ? 'SELECT attachments FROM email_templates WHERE id = $1'
+          : 'SELECT attachments FROM email_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
       );
 
       if (templateResult.rows.length === 0) {
@@ -505,8 +557,10 @@ class EmailTemplateController {
 
       // Delete template từ database
       await db.query(
-        'DELETE FROM email_templates WHERE id = $1 AND id_user = $2',
-        [id, userId]
+        isAdmin
+          ? 'DELETE FROM email_templates WHERE id = $1'
+          : 'DELETE FROM email_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
       );
 
       // Xóa files local nếu có attachments

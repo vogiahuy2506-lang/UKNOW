@@ -53,7 +53,8 @@ class AuthController {
         [username, email, passwordHash, fullName || null, phone || null]
       );
 
-      const user = result.rows[0];
+      const createdUser = result.rows[0];
+      const user = (await this.getUserWithRoleById(client, createdUser.id)) || createdUser;
 
       // Tạo token
       const accessToken = this.generateAccessToken(user);
@@ -68,7 +69,9 @@ class AuthController {
             username: user.username,
             email: user.email,
             fullName: user.full_name,
-            avatarUrl: user.avatar_url
+            avatarUrl: user.avatar_url,
+            roleCode: user.role_code || 'employee',
+            roleName: user.role_name || 'Nhân viên',
           },
           accessToken,
           refreshToken
@@ -100,10 +103,7 @@ class AuthController {
       const userAgent = req.headers['user-agent'];
 
       // Tìm user theo username
-      const result = await client.query(
-        'SELECT * FROM users WHERE username = $1',
-        [username]
-      );
+      const result = await this.getUserWithRoleByUsername(client, username);
 
       if (result.rows.length === 0) {
         await this.logLoginAttempt(client, null, username, 'failed', 'Username không tồn tại', ipAddress, userAgent);
@@ -184,7 +184,9 @@ class AuthController {
             username: user.username,
             email: user.email,
             fullName: user.full_name,
-            avatarUrl: user.avatar_url
+            avatarUrl: user.avatar_url,
+            roleCode: user.role_code || 'employee',
+            roleName: user.role_name || 'Nhân viên',
           },
           accessToken,
           refreshToken
@@ -232,12 +234,25 @@ class AuthController {
       }
 
       // Kiểm tra token trong database
-      const tokenResult = await client.query(
-        `SELECT rt.*, u.* FROM refresh_tokens rt
-         JOIN users u ON rt.id_user = u.id
-         WHERE rt.token_hash = $1 AND rt.is_revoked = FALSE AND rt.expires_at > NOW()`,
-        [this.hashToken(refreshToken)]
-      );
+      let tokenResult;
+      try {
+        tokenResult = await client.query(
+          `SELECT rt.*, u.*, r.role_code, r.role_name
+           FROM refresh_tokens rt
+           JOIN users u ON rt.id_user = u.id
+           LEFT JOIN roles r ON u.id_role = r.id
+           WHERE rt.token_hash = $1 AND rt.is_revoked = FALSE AND rt.expires_at > NOW()`,
+          [this.hashToken(refreshToken)]
+        );
+      } catch {
+        tokenResult = await client.query(
+          `SELECT rt.*, u.*
+           FROM refresh_tokens rt
+           JOIN users u ON rt.id_user = u.id
+           WHERE rt.token_hash = $1 AND rt.is_revoked = FALSE AND rt.expires_at > NOW()`,
+          [this.hashToken(refreshToken)]
+        );
+      }
 
       if (tokenResult.rows.length === 0) {
         return res.status(401).json({
@@ -327,7 +342,9 @@ class AuthController {
             username: req.user.username,
             email: req.user.email,
             fullName: req.user.full_name,
-            avatarUrl: req.user.avatar_url
+            avatarUrl: req.user.avatar_url,
+            roleCode: req.user.role_code || 'employee',
+            roleName: req.user.role_name || 'Nhân viên',
           }
         }
       });
@@ -343,7 +360,11 @@ class AuthController {
   // Helper methods
   generateAccessToken(user) {
     return jwt.sign(
-      { userId: user.id, email: user.email },
+      {
+        userId: user.id,
+        email: user.email,
+        roleCode: user.role_code || user.roleCode || 'employee',
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
     );
@@ -383,6 +404,41 @@ class AuthController {
        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
       [userId, email, status, failureReason, ipAddress, userAgent]
     );
+  }
+
+  async getUserWithRoleById(client, userId) {
+    try {
+      const result = await client.query(
+        `SELECT u.*, r.role_code, r.role_name
+         FROM users u
+         LEFT JOIN roles r ON u.id_role = r.id
+         WHERE u.id = $1
+         LIMIT 1`,
+        [userId]
+      );
+      return result.rows[0] || null;
+    } catch {
+      const result = await client.query(
+        'SELECT * FROM users WHERE id = $1 LIMIT 1',
+        [userId]
+      );
+      return result.rows[0] || null;
+    }
+  }
+
+  async getUserWithRoleByUsername(client, username) {
+    try {
+      const result = await client.query(
+        `SELECT u.*, r.role_code, r.role_name
+         FROM users u
+         LEFT JOIN roles r ON u.id_role = r.id
+         WHERE u.username = $1`,
+        [username]
+      );
+      return result;
+    } catch {
+      return client.query('SELECT * FROM users WHERE username = $1', [username]);
+    }
   }
 }
 

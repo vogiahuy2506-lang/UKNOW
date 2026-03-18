@@ -8,6 +8,8 @@ import campaignNodeDataService from '../services/campaign/campaignNodeData.servi
 import campaignExecutionLogService from '../services/campaign/campaignExecutionLog.service.js';
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 
 class CampaignController {
   /**
@@ -192,9 +194,11 @@ class CampaignController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const { page = 1, limit = 10, status, type, search } = req.query;
       const data = await campaignCrudService.getAllCampaigns({
         userId,
+        roleCode,
         page,
         limit,
         status,
@@ -223,9 +227,11 @@ class CampaignController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const { id } = req.params;
       const campaign = await campaignCrudService.getCampaignById({
         userId,
+        roleCode,
         campaignId: id,
       });
       if (!campaign) {
@@ -257,9 +263,8 @@ class CampaignController {
     const client = await db.getClient();
 
     try {
-      await client.query('BEGIN');
-
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const {
         campaignName,
         description,
@@ -272,6 +277,20 @@ class CampaignController {
         nodes,
         connections
       } = req.body;
+
+      const campaignLimitCheck = await checkUserResourceLimit({
+        userId,
+        roleCode,
+        resourceKey: 'campaigns',
+      });
+      if (!campaignLimitCheck.allowed) {
+        return res.status(400).json({
+          success: false,
+          message: campaignLimitCheck.message,
+        });
+      }
+
+      await client.query('BEGIN');
 
       // Create campaign
       const campaignResult = await client.query(
@@ -368,6 +387,8 @@ class CampaignController {
       await client.query('BEGIN');
 
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
+      const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
       const {
         campaignName,
@@ -385,10 +406,13 @@ class CampaignController {
       const isContentUpdateRequest = this.isCampaignContentUpdateRequest(req.body);
 
       // Check ownership
-      const existing = await client.query(
-        'SELECT id FROM campaigns WHERE id = $1 AND id_user = $2',
-        [id, userId]
-      );
+      const existingParams = [id];
+      let existingQuery = 'SELECT id FROM campaigns WHERE id = $1';
+      if (!isAdmin) {
+        existingParams.push(userId);
+        existingQuery += ` AND id_user = $${existingParams.length}`;
+      }
+      const existing = await client.query(existingQuery, existingParams);
 
       if (existing.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -411,22 +435,36 @@ class CampaignController {
       }
 
       // Update campaign
-      const result = await client.query(
-        `UPDATE campaigns SET
-          campaign_name = COALESCE($1, campaign_name),
-          description = COALESCE($2, description),
-          campaign_type = COALESCE($3, campaign_type),
-          status = COALESCE($4, status),
-          landing_page_url = COALESCE($5, landing_page_url),
-          start_date = COALESCE($6, start_date),
-          end_date = COALESCE($7, end_date),
-          timezone = COALESCE($8, timezone),
-          flow_json = COALESCE($9, flow_json),
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = $10 AND id_user = $11
-         RETURNING *`,
-        [campaignName, description, campaignType, status, landingPageUrl, startDate, endDate, timezone, flowJson ? JSON.stringify(flowJson) : null, id, userId]
-      );
+      const updateParams = [
+        campaignName,
+        description,
+        campaignType,
+        status,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson ? JSON.stringify(flowJson) : null,
+        id,
+      ];
+      let updateQuery = `UPDATE campaigns SET
+        campaign_name = COALESCE($1, campaign_name),
+        description = COALESCE($2, description),
+        campaign_type = COALESCE($3, campaign_type),
+        status = COALESCE($4, status),
+        landing_page_url = COALESCE($5, landing_page_url),
+        start_date = COALESCE($6, start_date),
+        end_date = COALESCE($7, end_date),
+        timezone = COALESCE($8, timezone),
+        flow_json = COALESCE($9, flow_json),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10`;
+      if (!isAdmin) {
+        updateParams.push(userId);
+        updateQuery += ` AND id_user = $${updateParams.length}`;
+      }
+      updateQuery += ' RETURNING *';
+      const result = await client.query(updateQuery, updateParams);
 
       // Update nodes and connections if provided
       if (nodes !== undefined) {
@@ -517,13 +555,18 @@ class CampaignController {
       await client.query('BEGIN');
       
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
+      const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
 
       // Kiểm tra campaign có tồn tại không
-      const campaignResult = await client.query(
-        'SELECT id FROM campaigns WHERE id = $1 AND id_user = $2',
-        [id, userId]
-      );
+      const campaignParams = [id];
+      let campaignQuery = 'SELECT id FROM campaigns WHERE id = $1';
+      if (!isAdmin) {
+        campaignParams.push(userId);
+        campaignQuery += ` AND id_user = $${campaignParams.length}`;
+      }
+      const campaignResult = await client.query(campaignQuery, campaignParams);
 
       if (campaignResult.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -548,10 +591,13 @@ class CampaignController {
           
           // Kiểm tra nếu node có sử dụng email template
           if (config && config.emailTemplateId) {
-            const templateResult = await client.query(
-              'SELECT attachments FROM email_templates WHERE id = $1 AND id_user = $2',
-              [config.emailTemplateId, userId]
-            );
+            const templateParams = [config.emailTemplateId];
+            let templateQuery = 'SELECT attachments FROM email_templates WHERE id = $1';
+            if (!isAdmin) {
+              templateParams.push(userId);
+              templateQuery += ` AND id_user = $${templateParams.length}`;
+            }
+            const templateResult = await client.query(templateQuery, templateParams);
             
             if (templateResult.rows.length > 0) {
               const attachments = templateResult.rows[0].attachments;
@@ -577,10 +623,13 @@ class CampaignController {
       }
 
       // Xóa campaign và các bảng liên quan (CASCADE sẽ tự động xóa nodes và connections)
-      await client.query(
-        'DELETE FROM campaigns WHERE id = $1 AND id_user = $2',
-        [id, userId]
-      );
+      const deleteParams = [id];
+      let deleteQuery = 'DELETE FROM campaigns WHERE id = $1';
+      if (!isAdmin) {
+        deleteParams.push(userId);
+        deleteQuery += ` AND id_user = $${deleteParams.length}`;
+      }
+      await client.query(deleteQuery, deleteParams);
 
       await client.query('COMMIT');
 
@@ -619,10 +668,12 @@ class CampaignController {
   async publish(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.publishCampaign({
         userId,
+        roleCode,
         campaignId: id,
       });
 
@@ -658,10 +709,12 @@ class CampaignController {
   async pause(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.pauseCampaign({
         userId,
+        roleCode,
         campaignId: id,
       });
 
@@ -710,6 +763,7 @@ class CampaignController {
   async run(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const campaignId = parseInt(req.params.id, 10);
       const source = String(req.body?.source || '').trim().toLowerCase();
       const scheduleId = Number.isFinite(parseInt(req.body?.scheduleId, 10))
@@ -773,6 +827,7 @@ class CampaignController {
         runRecord = await campaignRunService.resumeContinuousRunRecord({
           campaignId,
           userId,
+          roleCode,
           runId: continueRunId,
           runOptions: {
             adjacentZaloNodeDelayMs,
@@ -783,6 +838,7 @@ class CampaignController {
         runRecord = await this.createCampaignRunRecord({
           campaignId,
           userId,
+          roleCode,
           source,
           scheduleId,
           runName,
@@ -806,7 +862,8 @@ class CampaignController {
         }
       });
 
-      this.executeCampaign(campaignId, runRecord.id, userId).catch(error => {
+      const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
+      this.executeCampaign(campaignId, runRecord.id, executionUserId).catch(error => {
         console.error('Execute campaign error:', error);
       });
     } catch (error) {
@@ -822,6 +879,7 @@ class CampaignController {
   async createCampaignRunRecord({
     campaignId,
     userId,
+    roleCode,
     source,
     scheduleId = null,
     runName = '',
@@ -830,6 +888,7 @@ class CampaignController {
     return campaignRunService.createCampaignRunRecord({
       campaignId,
       userId,
+      roleCode,
       source,
       scheduleId,
       runName,
@@ -926,10 +985,12 @@ class CampaignController {
   async duplicate(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const { id } = req.params;
       const { campaignName } = req.body;
       const duplicated = await campaignCrudService.duplicateCampaign({
         userId,
+        roleCode,
         campaignId: id,
         campaignName,
       });
@@ -947,9 +1008,10 @@ class CampaignController {
       });
     } catch (error) {
       console.error('Duplicate campaign error:', error);
-      res.status(500).json({
+      const statusCode = error?.statusCode || 500;
+      res.status(statusCode).json({
         success: false,
-        message: 'Lỗi server'
+        message: statusCode === 500 ? 'Lỗi server' : (error?.message || 'Không thể nhân bản chiến dịch'),
       });
     }
   }

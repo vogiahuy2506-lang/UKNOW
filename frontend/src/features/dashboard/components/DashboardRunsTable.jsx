@@ -303,6 +303,52 @@ const EmptyState = ({ hasFilter }) => (
   </tr>
 );
 
+/**
+ * Hiển thị text rút gọn bằng dấu `...` và cho phép bấm để bung toàn bộ xuống dòng.
+ *
+ * Luồng hoạt động:
+ * 1. Nếu chuỗi ngắn hơn ngưỡng, hiển thị bình thường và không có nút thao tác.
+ * 2. Nếu chuỗi dài hơn ngưỡng, mặc định rút gọn 1 dòng có ellipsis.
+ * 3. Khi người dùng bấm, chuyển sang trạng thái bung toàn bộ và cho phép xuống dòng.
+ *
+ * @param {object} props - Thuộc tính hiển thị text.
+ * @param {string} props.value - Nội dung cần hiển thị.
+ * @param {number} [props.maxPreviewChars=72] - Ngưỡng ký tự để bật chế độ rút gọn.
+ * @param {string} [props.className=''] - CSS class bổ sung cho text.
+ * @returns {JSX.Element}
+ */
+const ExpandableCellText = ({ value, maxPreviewChars = 72, className = '' }) => {
+  const [expanded, setExpanded] = useState(false);
+  const safeValue = String(value || '');
+  const canExpand = safeValue.length > maxPreviewChars;
+
+  if (!safeValue) {
+    return <span className={className}>-</span>;
+  }
+
+  return (
+    <div className="max-w-[340px]">
+      <p
+        className={`${className} ${
+          expanded ? 'whitespace-normal break-words' : 'truncate whitespace-nowrap'
+        }`}
+        title={canExpand && !expanded ? safeValue : undefined}
+      >
+        {safeValue}
+      </p>
+      {canExpand && (
+        <button
+          type="button"
+          className="mt-0.5 text-[11px] font-medium text-primary-500 hover:text-primary-600 transition-colors"
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? 'Thu gọn' : 'Xem thêm'}
+        </button>
+      )}
+    </div>
+  );
+};
+
 // ─── Channel & Status filter option definitions ───────────────────────────────
 const CHANNEL_FILTER_OPTIONS = [
   { value: 'email',      label: 'Email',      badge: 'bg-sky-100 text-sky-700' },
@@ -518,8 +564,18 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
                     <tr key={item.runId} className="hover:bg-gray-50/80 transition-colors">
                       {/* Run name + campaign */}
                       <td className="px-4 py-3 border-b border-gray-100">
-                        <div className="font-medium text-gray-900 text-sm leading-snug">{item.runName}</div>
-                        <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{item.campaignName}</div>
+                        <ExpandableCellText
+                          value={item.runName}
+                          maxPreviewChars={78}
+                          className="font-medium text-gray-900 text-sm leading-snug"
+                        />
+                        <div className="mt-0.5">
+                          <ExpandableCellText
+                            value={item.campaignName}
+                            maxPreviewChars={64}
+                            className="text-xs text-gray-400"
+                          />
+                        </div>
                       </td>
 
                       {/* Channel */}

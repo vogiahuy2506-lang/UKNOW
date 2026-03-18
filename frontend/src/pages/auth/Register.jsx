@@ -19,7 +19,10 @@ const registerSchema = z.object({
     .string()
     .min(3, 'Tên đăng nhập phải có ít nhất 3 ký tự')
     .max(50, 'Tên đăng nhập không được quá 50 ký tự')
-    .regex(/^[a-zA-Z0-9_]+$/, 'Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới'),
+    .regex(
+      /^[A-Za-z0-9]+$/,
+      'Tên đăng nhập chỉ được chứa chữ cái không dấu và số (không khoảng trắng, không ký tự đặc biệt)'
+    ),
   email: z.string().email('Email không hợp lệ'),
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
   confirmPassword: z.string(),

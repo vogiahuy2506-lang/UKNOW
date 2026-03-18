@@ -1,4 +1,5 @@
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
+import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
 class EmailSettingsCrudService {
   mapListItem(item) {
@@ -23,6 +24,7 @@ class EmailSettingsCrudService {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { page = 1, limit = 10, status } = req.query;
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
@@ -30,6 +32,7 @@ class EmailSettingsCrudService {
         page: pageNum,
         limit: limitNum,
         status,
+        roleCode,
       });
 
       res.json({
@@ -56,8 +59,9 @@ class EmailSettingsCrudService {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { id } = req.params;
-      const item = await emailSettingsRepository.getById(userId, id);
+      const item = await emailSettingsRepository.getById(userId, id, { roleCode });
       if (!item) {
         return res.status(404).json({
           success: false,
@@ -97,6 +101,7 @@ class EmailSettingsCrudService {
   async create(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const {
         name,
         email,
@@ -108,6 +113,18 @@ class EmailSettingsCrudService {
         dailyLimit = 1000,
         hourlyLimit = 100,
       } = req.body;
+
+      const emailAccountLimitCheck = await checkUserResourceLimit({
+        userId,
+        roleCode,
+        resourceKey: 'emailAccounts',
+      });
+      if (!emailAccountLimitCheck.allowed) {
+        return res.status(400).json({
+          success: false,
+          message: emailAccountLimitCheck.message,
+        });
+      }
 
       const item = await emailSettingsRepository.create(userId, {
         name,
@@ -149,8 +166,9 @@ class EmailSettingsCrudService {
   async update(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { id } = req.params;
-      const current = await emailSettingsRepository.getById(userId, id);
+      const current = await emailSettingsRepository.getById(userId, id, { roleCode });
       if (!current) {
         return res.status(404).json({
           success: false,
@@ -158,7 +176,7 @@ class EmailSettingsCrudService {
         });
       }
 
-      const item = await emailSettingsRepository.update(userId, id, req.body);
+      const item = await emailSettingsRepository.update(userId, id, req.body, { roleCode });
       res.json({
         success: true,
         message: 'Cập nhật cấu hình email thành công',
@@ -187,8 +205,9 @@ class EmailSettingsCrudService {
   async delete(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { id } = req.params;
-      const deleted = await emailSettingsRepository.delete(userId, id);
+      const deleted = await emailSettingsRepository.delete(userId, id, { roleCode });
       if (!deleted) {
         return res.status(404).json({
           success: false,
@@ -212,7 +231,8 @@ class EmailSettingsCrudService {
   async getActiveSettings(req, res) {
     try {
       const userId = req.user.id;
-      const rows = await emailSettingsRepository.getActiveByUser(userId);
+      const roleCode = req.user?.role_code;
+      const rows = await emailSettingsRepository.getActiveByUser(userId, { roleCode });
       res.json({
         success: true,
         data: rows.map((item) => ({

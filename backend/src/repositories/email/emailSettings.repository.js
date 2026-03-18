@@ -1,19 +1,26 @@
 import db from '../../config/database.js';
 import { encryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 
 class EmailSettingsRepository {
-  async getPagedByUser(userId, { page, limit, status }) {
+  async getPagedByUser(userId, { page, limit, status, roleCode }) {
     const offset = (page - 1) * limit;
+    const isAdmin = isAdminRole(roleCode);
     let query = `
       SELECT id, name, email, smtp_host, smtp_port, use_tls, daily_limit, hourly_limit,
              daily_sent_count, total_sent_count, is_verified, status, created_at, updated_at
       FROM email_settings
-      WHERE id_user = $1
+      WHERE 1=1
     `;
-    const params = [userId];
+    const params = [];
+
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
 
     if (status) {
-      query += ' AND status = $2';
+      query += ` AND status = $${params.length + 1}`;
       params.push(status);
     }
 
@@ -23,10 +30,34 @@ class EmailSettingsRepository {
     const [result, countResult] = await Promise.all([
       db.query(query, params),
       db.query(
-        status
-          ? 'SELECT COUNT(*) FROM email_settings WHERE id_user = $1 AND status = $2'
-          : 'SELECT COUNT(*) FROM email_settings WHERE id_user = $1',
-        status ? [userId, status] : [userId]
+        (() => {
+          if (isAdmin) {
+            return status
+              ? {
+                  query: 'SELECT COUNT(*) FROM email_settings WHERE status = $1',
+                  params: [status],
+                }
+              : {
+                  query: 'SELECT COUNT(*) FROM email_settings',
+                  params: [],
+                };
+          }
+          return status
+            ? {
+                query: 'SELECT COUNT(*) FROM email_settings WHERE id_user = $1 AND status = $2',
+                params: [userId, status],
+              }
+            : {
+                query: 'SELECT COUNT(*) FROM email_settings WHERE id_user = $1',
+                params: [userId],
+              };
+        })().query,
+        (() => {
+          if (isAdmin) {
+            return status ? [status] : [];
+          }
+          return status ? [userId, status] : [userId];
+        })()
       ),
     ]);
 
@@ -36,8 +67,14 @@ class EmailSettingsRepository {
     };
   }
 
-  async getById(userId, id) {
-    const result = await db.query('SELECT * FROM email_settings WHERE id = $1 AND id_user = $2', [id, userId]);
+  async getById(userId, id, { roleCode } = {}) {
+    const isAdmin = isAdminRole(roleCode);
+    const result = await db.query(
+      isAdmin
+        ? 'SELECT * FROM email_settings WHERE id = $1'
+        : 'SELECT * FROM email_settings WHERE id = $1 AND id_user = $2',
+      isAdmin ? [id] : [id, userId]
+    );
     return result.rows[0] || null;
   }
 
@@ -55,10 +92,11 @@ class EmailSettingsRepository {
     return result.rows[0];
   }
 
-  async update(userId, id, payload) {
+  async update(userId, id, payload, { roleCode } = {}) {
     const { name, email, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
       payload;
     const encryptedSmtpPassword = smtpPassword === undefined ? undefined : encryptSmtpSecret(smtpPassword);
+    const isAdmin = isAdminRole(roleCode);
     const result = await db.query(
       `UPDATE email_settings SET
         name = COALESCE($1, name),
@@ -72,37 +110,73 @@ class EmailSettingsRepository {
         hourly_limit = COALESCE($9, hourly_limit),
         status = COALESCE($10, status),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11 AND id_user = $12
+       WHERE id = $11
+         ${isAdmin ? '' : 'AND id_user = $12'}
        RETURNING *`,
-      [name, email, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, status, id, userId]
+      isAdmin
+        ? [
+            name,
+            email,
+            smtpHost,
+            smtpPort,
+            smtpUsername,
+            encryptedSmtpPassword,
+            useTls,
+            dailyLimit,
+            hourlyLimit,
+            status,
+            id,
+          ]
+        : [
+            name,
+            email,
+            smtpHost,
+            smtpPort,
+            smtpUsername,
+            encryptedSmtpPassword,
+            useTls,
+            dailyLimit,
+            hourlyLimit,
+            status,
+            id,
+            userId,
+          ]
     );
     return result.rows[0] || null;
   }
 
-  async delete(userId, id) {
-    const result = await db.query('DELETE FROM email_settings WHERE id = $1 AND id_user = $2 RETURNING id', [
-      id,
-      userId,
-    ]);
+  async delete(userId, id, { roleCode } = {}) {
+    const isAdmin = isAdminRole(roleCode);
+    const result = await db.query(
+      isAdmin
+        ? 'DELETE FROM email_settings WHERE id = $1 RETURNING id'
+        : 'DELETE FROM email_settings WHERE id = $1 AND id_user = $2 RETURNING id',
+      isAdmin ? [id] : [id, userId]
+    );
     return result.rows[0] || null;
   }
 
-  async getActiveByUser(userId) {
+  async getActiveByUser(userId, { roleCode } = {}) {
+    const isAdmin = isAdminRole(roleCode);
     const result = await db.query(
       `SELECT id, name, email, smtp_host, smtp_port, is_verified, status
        FROM email_settings
-       WHERE id_user = $1 AND status = 'active'
+       WHERE status = 'active'
+       ${isAdmin ? '' : 'AND id_user = $1'}
        ORDER BY name`,
-      [userId]
+      isAdmin ? [] : [userId]
     );
     return result.rows;
   }
 
-  async getActiveById(userId, id) {
-    const result = await db.query("SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'", [
-      id,
-      userId,
-    ]);
+  async getActiveById(userId, id, { roleCode } = {}) {
+    const isAdmin = isAdminRole(roleCode);
+    const result = await db.query(
+      isAdmin
+        ? "SELECT * FROM email_settings WHERE id = $1 AND status = 'active'"
+        : "SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'",
+      isAdmin ? [id] : [id, userId]
+    );
     return result.rows[0] || null;
   }
 

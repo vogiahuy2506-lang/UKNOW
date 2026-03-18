@@ -30,7 +30,8 @@ class DashboardController {
   async getOverview(req, res) {
     try {
       const userId = req.user.id;
-      const data = await dashboardAnalyticsService.getOverview(userId, req.query);
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getOverview(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -62,7 +63,8 @@ class DashboardController {
   async getAnalytics(req, res) {
     try {
       const userId = req.user.id;
-      const data = await dashboardAnalyticsService.getAnalytics(userId, req.query);
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getAnalytics(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -95,7 +97,8 @@ class DashboardController {
   async getRuns(req, res) {
     try {
       const userId = req.user.id;
-      const data = await dashboardAnalyticsService.getRuns(userId, req.query);
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getRuns(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -131,7 +134,8 @@ class DashboardController {
   async getOrdersList(req, res) {
     try {
       const userId = req.user.id;
-      const data = await dashboardAnalyticsService.getOrdersList(userId, req.query);
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getOrdersList(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -168,7 +172,8 @@ class DashboardController {
   async getTopLists(req, res) {
     try {
       const userId = req.user.id;
-      const data = await dashboardAnalyticsService.getTopLists(userId, req.query);
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getTopLists(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -193,6 +198,8 @@ class DashboardController {
   async compareCampaigns(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
+      const isAdmin = String(roleCode || '').trim().toLowerCase() === 'admin';
       const { campaignIds } = req.query;
 
       if (!campaignIds) {
@@ -213,14 +220,16 @@ class DashboardController {
         });
       }
 
+      const queryParams = [ids, isAdmin, userId];
       const result = await db.query(
         `SELECT id, campaign_name, campaign_type, status,
                 total_customers, total_sent, total_delivered,
                 total_opened, total_clicked, total_converted, total_revenue,
                 created_at, published_at
          FROM campaigns
-         WHERE id = ANY($1::bigint[]) AND id_user = $2`,
-        [ids, userId]
+         WHERE id = ANY($1::bigint[])
+           AND ($2::boolean = TRUE OR id_user = $3)`,
+        queryParams
       );
 
       res.json({

@@ -18,10 +18,23 @@ const authMiddleware = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // Kiểm tra user trong database
-      const result = await db.query(
-        'SELECT id, username, email, full_name, avatar_url, status FROM users WHERE id = $1 AND status = $2',
-        [decoded.userId, 'active']
-      );
+      let result;
+      try {
+        result = await db.query(
+          `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.status,
+                  r.role_code, r.role_name
+           FROM users u
+           LEFT JOIN roles r ON u.id_role = r.id
+           WHERE u.id = $1 AND u.status = $2`,
+          [decoded.userId, 'active']
+        );
+      } catch (queryError) {
+        // Tương thích ngược: nếu DB chưa chạy migration role thì fallback về schema cũ.
+        result = await db.query(
+          'SELECT id, username, email, full_name, avatar_url, status FROM users WHERE id = $1 AND status = $2',
+          [decoded.userId, 'active']
+        );
+      }
 
       if (result.rows.length === 0) {
         return res.status(401).json({
@@ -30,7 +43,11 @@ const authMiddleware = async (req, res, next) => {
         });
       }
 
-      req.user = result.rows[0];
+      req.user = {
+        ...result.rows[0],
+        role_code: result.rows[0]?.role_code || 'employee',
+        role_name: result.rows[0]?.role_name || 'Nhân viên',
+      };
       next();
     } catch (jwtError) {
       if (jwtError.name === 'TokenExpiredError') {

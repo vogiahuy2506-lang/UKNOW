@@ -17,6 +17,7 @@ import {
   HiOutlineChat,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
+import { useAuthStore } from '../../stores/authStore';
 
 const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
   'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi tạm dừng.';
@@ -34,6 +35,8 @@ const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
 const isCampaignCurrentlyRunning = (campaign) => Number(campaign?.runningCount || 0) > 0;
 
 const Campaigns = () => {
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
   const navigate = useNavigate();
   const location = useLocation();
   const [campaigns, setCampaigns] = useState([]);
@@ -216,7 +219,11 @@ const Campaigns = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý quy trình</h1>
-          <p className="text-gray-500 mt-1">Tạo và quản lý các chiến dịch marketing của bạn</p>
+          <p className="text-gray-500 mt-1">
+            {isAdmin
+              ? 'Xem và chỉnh sửa chiến dịch của toàn bộ nhân viên'
+              : 'Tạo và quản lý các chiến dịch marketing của bạn'}
+          </p>
         </div>
         <button
           onClick={openCreateModal}

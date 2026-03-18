@@ -167,9 +167,10 @@ class EmailSettingsSmtpService {
   async sendTestEmail(ctx, req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { id } = req.params;
       const { to, subject, content, htmlContent } = req.body;
-      const setting = await emailSettingsRepository.getById(userId, id);
+      const setting = await emailSettingsRepository.getById(userId, id, { roleCode });
       if (!setting) {
         return res.status(404).json({
           success: false,
@@ -208,6 +209,7 @@ class EmailSettingsSmtpService {
   async sendCustomEmail(ctx, req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const isPreviewMode = this.normalizePreviewMode(req.body);
       const isBuilderMode = this.normalizeBuilderMode(req.body);
       const {
@@ -277,7 +279,7 @@ class EmailSettingsSmtpService {
         );
       }
 
-      const setting = await emailSettingsRepository.getActiveById(userId, fromEmailId);
+      const setting = await emailSettingsRepository.getActiveById(userId, fromEmailId, { roleCode });
       if (!setting) {
         return res.status(404).json({
           success: false,

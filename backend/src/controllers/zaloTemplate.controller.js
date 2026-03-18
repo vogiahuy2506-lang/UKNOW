@@ -1,5 +1,7 @@
 import db from '../config/database.js';
 import uploadController from './upload.controller.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 
 class ZaloTemplateController {
   /**
@@ -78,6 +80,7 @@ class ZaloTemplateController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const page = Number.parseInt(req.query.page, 10) || 1;
       const limit = Number.parseInt(req.query.limit, 10) || 10;
       const { category, search } = req.query;
@@ -110,9 +113,13 @@ class ZaloTemplateController {
               )
           ) AS is_used_in_active_campaign
         FROM zalo_templates zt
-        WHERE zt.id_user = $1
+        WHERE 1 = 1
       `;
-      const params = [userId];
+      const params = [];
+      if (!isAdmin) {
+        params.push(userId);
+        query += ` AND zt.id_user = $${params.length}`;
+      }
 
       if (category) {
         params.push(category);
@@ -129,8 +136,12 @@ class ZaloTemplateController {
 
       const result = await db.query(query, params);
 
-      let countQuery = 'SELECT COUNT(*) FROM zalo_templates WHERE id_user = $1';
-      const countParams = [userId];
+      let countQuery = 'SELECT COUNT(*) FROM zalo_templates WHERE 1 = 1';
+      const countParams = [];
+      if (!isAdmin) {
+        countParams.push(userId);
+        countQuery += ` AND id_user = $${countParams.length}`;
+      }
       if (category) {
         countParams.push(category);
         countQuery += ` AND category = $${countParams.length}`;
@@ -177,8 +188,14 @@ class ZaloTemplateController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
-      const result = await db.query('SELECT * FROM zalo_templates WHERE id = $1 AND id_user = $2', [id, userId]);
+      const result = await db.query(
+        isAdmin
+          ? 'SELECT * FROM zalo_templates WHERE id = $1'
+          : 'SELECT * FROM zalo_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
+      );
 
       if (result.rows.length === 0) {
         res.status(404).json({
@@ -187,7 +204,8 @@ class ZaloTemplateController {
         });
         return;
       }
-      const activeCampaignUsages = await this.getActiveCampaignUsages(userId, id);
+      const ownerUserId = result.rows[0]?.id_user || userId;
+      const activeCampaignUsages = await this.getActiveCampaignUsages(ownerUserId, id);
 
       res.json({
         success: true,
@@ -223,7 +241,21 @@ class ZaloTemplateController {
   async create(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user?.role_code;
       const { templateName, templateCode, subject, bodyText, tempAttachments, variables, category } = req.body;
+
+      const zaloTemplateLimitCheck = await checkUserResourceLimit({
+        userId,
+        roleCode,
+        resourceKey: 'zaloTemplates',
+      });
+      if (!zaloTemplateLimitCheck.allowed) {
+        res.status(400).json({
+          success: false,
+          message: zaloTemplateLimitCheck.message,
+        });
+        return;
+      }
 
       const normalizedBodyText = typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
       let storedAttachments = [];
@@ -289,6 +321,7 @@ class ZaloTemplateController {
   async update(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
       const {
         templateName,
@@ -306,7 +339,12 @@ class ZaloTemplateController {
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
-      const existing = await db.query('SELECT id, attachments FROM zalo_templates WHERE id = $1 AND id_user = $2', [id, userId]);
+      const existing = await db.query(
+        isAdmin
+          ? 'SELECT id, attachments, id_user FROM zalo_templates WHERE id = $1'
+          : 'SELECT id, attachments, id_user FROM zalo_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
+      );
       if (existing.rows.length === 0) {
         res.status(404).json({
           success: false,
@@ -314,6 +352,7 @@ class ZaloTemplateController {
         });
         return;
       }
+      const templateOwnerUserId = existing.rows[0].id_user || userId;
 
       const currentAttachments = Array.isArray(existing.rows[0].attachments) ? existing.rows[0].attachments : [];
       const incomingAttachments = Array.isArray(attachments) ? attachments : null;
@@ -355,7 +394,7 @@ class ZaloTemplateController {
 
       if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
         try {
-          let storedAttachments = await uploadController.moveToS3(tempAttachments, userId);
+          let storedAttachments = await uploadController.moveToS3(tempAttachments, templateOwnerUserId);
           storedAttachments = storedAttachments.map((savedAtt) => {
             const source = tempAttachments.find((item) => item.tempId === savedAtt.tempId);
             return { ...savedAtt, displayName: source?.displayName || '' };
@@ -382,21 +421,35 @@ class ZaloTemplateController {
           category = COALESCE($8, category),
           is_active = COALESCE($9, is_active),
           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $10 AND id_user = $11
+         WHERE id = $10
+           ${isAdmin ? '' : 'AND id_user = $11'}
          RETURNING *`,
-        [
-          templateName || null,
-          templateCode || null,
-          subject || null,
-          hasBodyText,
-          normalizedBodyText,
-          JSON.stringify(finalAttachments),
-          Array.isArray(variables) ? JSON.stringify(variables) : null,
-          category || null,
-          typeof isActive === 'boolean' ? isActive : null,
-          id,
-          userId,
-        ]
+        isAdmin
+          ? [
+              templateName || null,
+              templateCode || null,
+              subject || null,
+              hasBodyText,
+              normalizedBodyText,
+              JSON.stringify(finalAttachments),
+              Array.isArray(variables) ? JSON.stringify(variables) : null,
+              category || null,
+              typeof isActive === 'boolean' ? isActive : null,
+              id,
+            ]
+          : [
+              templateName || null,
+              templateCode || null,
+              subject || null,
+              hasBodyText,
+              normalizedBodyText,
+              JSON.stringify(finalAttachments),
+              Array.isArray(variables) ? JSON.stringify(variables) : null,
+              category || null,
+              typeof isActive === 'boolean' ? isActive : null,
+              id,
+              userId,
+            ]
       );
 
       res.json({
@@ -427,9 +480,15 @@ class ZaloTemplateController {
   async delete(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const { id } = req.params;
 
-      const templateResult = await db.query('SELECT attachments FROM zalo_templates WHERE id = $1 AND id_user = $2', [id, userId]);
+      const templateResult = await db.query(
+        isAdmin
+          ? 'SELECT attachments FROM zalo_templates WHERE id = $1'
+          : 'SELECT attachments FROM zalo_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
+      );
       if (templateResult.rows.length === 0) {
         res.status(404).json({
           success: false,
@@ -438,7 +497,12 @@ class ZaloTemplateController {
         return;
       }
 
-      await db.query('DELETE FROM zalo_templates WHERE id = $1 AND id_user = $2', [id, userId]);
+      await db.query(
+        isAdmin
+          ? 'DELETE FROM zalo_templates WHERE id = $1'
+          : 'DELETE FROM zalo_templates WHERE id = $1 AND id_user = $2',
+        isAdmin ? [id] : [id, userId]
+      );
 
       const attachments = Array.isArray(templateResult.rows[0].attachments) ? templateResult.rows[0].attachments : [];
       const fileKeys = attachments.map((att) => uploadController.normalizeStorageKey(att)).filter(Boolean);

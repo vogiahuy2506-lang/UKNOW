@@ -36,7 +36,7 @@ const removeToken = (key) => {
   sessionStorage.removeItem(key);
 };
 
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -50,8 +50,14 @@ export const useAuthStore = create((set) => ({
     if (token) {
       try {
         const response = await api.get('/auth/me');
+        const rawUser = response.data.data.user;
+        const normalizedUser = {
+          ...rawUser,
+          roleCode: rawUser?.roleCode || 'employee',
+          roleName: rawUser?.roleName || 'Nhân viên',
+        };
         set({
-          user: response.data.data.user,
+          user: normalizedUser,
           isAuthenticated: true,
           isLoading: false,
         });
@@ -82,12 +88,17 @@ export const useAuthStore = create((set) => ({
   login: async (username, password, rememberMe = true) => {
     const response = await api.post('/auth/login', { username, password });
     const { user, accessToken, refreshToken } = response.data.data;
+    const normalizedUser = {
+      ...user,
+      roleCode: user?.roleCode || 'employee',
+      roleName: user?.roleName || 'Nhân viên',
+    };
 
     storeToken('accessToken', accessToken, rememberMe);
     storeToken('refreshToken', refreshToken, rememberMe);
 
     set({
-      user,
+      user: normalizedUser,
       isAuthenticated: true,
     });
 
@@ -98,12 +109,17 @@ export const useAuthStore = create((set) => ({
   register: async (data) => {
     const response = await api.post('/auth/register', data);
     const { user, accessToken, refreshToken } = response.data.data;
+    const normalizedUser = {
+      ...user,
+      roleCode: user?.roleCode || 'employee',
+      roleName: user?.roleName || 'Nhân viên',
+    };
 
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
 
     set({
-      user,
+      user: normalizedUser,
       isAuthenticated: true,
     });
 
@@ -131,8 +147,19 @@ export const useAuthStore = create((set) => ({
 
   /** Cập nhật thông tin user trong store. */
   updateUser: (user) => {
-    set({ user });
+    set({
+      user: user
+        ? {
+            ...user,
+            roleCode: user?.roleCode || 'employee',
+            roleName: user?.roleName || 'Nhân viên',
+          }
+        : null,
+    });
   },
+
+  /** Xác định user hiện tại có phải admin hay không. */
+  isAdmin: () => String(get().user?.roleCode || '').trim().toLowerCase() === 'admin',
 }));
 
 // Khởi tạo auth khi app load

@@ -5,6 +5,7 @@ import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 
 class CampaignRunService {
   constructor() {
@@ -92,6 +93,7 @@ class CampaignRunService {
   async createCampaignRunRecord({
     campaignId,
     userId,
+    roleCode,
     source,
     scheduleId = null,
     runName = '',
@@ -103,14 +105,18 @@ class CampaignRunService {
 
     try {
       await client.query('BEGIN');
+      const isAdmin = isAdminRole(roleCode);
 
-      const campaign = await client.query(
-        `SELECT id, id_user, status, campaign_name
-         FROM campaigns
-         WHERE id = $1 AND id_user = $2
-         FOR UPDATE`,
-        [campaignId, userId]
-      );
+      const campaignParams = [campaignId];
+      let campaignQuery = `SELECT id, id_user, status, campaign_name
+       FROM campaigns
+       WHERE id = $1`;
+      if (!isAdmin) {
+        campaignParams.push(userId);
+        campaignQuery += ` AND id_user = $${campaignParams.length}`;
+      }
+      campaignQuery += ' FOR UPDATE';
+      const campaign = await client.query(campaignQuery, campaignParams);
 
       if (campaign.rows.length === 0) {
         const error = new Error('Không tìm thấy chiến dịch');
@@ -160,10 +166,10 @@ class CampaignRunService {
            JOIN campaigns c ON c.id = cr.id_campaign
            WHERE cr.id = $1
              AND cr.id_campaign = $2
-             AND c.id_user = $3
+             AND ($3::boolean = TRUE OR c.id_user = $4)
              AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
            LIMIT 1`,
-          [resumeFromRunId, campaignId, userId]
+          [resumeFromRunId, campaignId, isAdmin, userId]
         );
         if (resumeRunCheck.rows.length === 0) {
           const error = new Error('Lượt continuous cũ để chạy tiếp không hợp lệ');
@@ -192,7 +198,10 @@ class CampaignRunService {
         [campaignId, scheduleId, runType, 'running', JSON.stringify(runMetadata)]
       );
 
-      runRecord = runResult.rows[0];
+      runRecord = {
+        ...runResult.rows[0],
+        campaign_owner_id: campaignData.id_user,
+      };
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -225,7 +234,8 @@ class CampaignRunService {
    * @param {number} input.userId owner identifier
    * @returns {Promise<{found: boolean, stopped: boolean}>}
    */
-  async stopCampaignRun({ runId, userId }) {
+  async stopCampaignRun({ runId, userId, roleCode }) {
+    const isAdmin = isAdminRole(roleCode);
     const result = await db.query(
       `UPDATE campaign_runs cr
        SET status = 'stopped',
@@ -234,10 +244,10 @@ class CampaignRunService {
        FROM campaigns c
        WHERE cr.id = $1
          AND cr.id_campaign = c.id
-         AND c.id_user = $2
+         AND ($2::boolean = TRUE OR c.id_user = $3)
          AND cr.status = 'running'
        RETURNING cr.id, cr.status`,
-      [runId, userId]
+      [runId, isAdmin, userId]
     );
 
     if (result.rows.length === 0) {
@@ -246,9 +256,9 @@ class CampaignRunService {
          FROM campaign_runs cr
          JOIN campaigns c ON c.id = cr.id_campaign
          WHERE cr.id = $1
-           AND c.id_user = $2
+           AND ($2::boolean = TRUE OR c.id_user = $3)
          LIMIT 1`,
-        [runId, userId]
+        [runId, isAdmin, userId]
       );
       return {
         found: existsResult.rows.length > 0,
@@ -280,22 +290,24 @@ class CampaignRunService {
   async resumeContinuousRunRecord({
     campaignId,
     userId,
+    roleCode,
     runId,
     runOptions = {},
   }) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      const isAdmin = isAdminRole(roleCode);
 
       const runResult = await client.query(
-        `SELECT cr.*
+        `SELECT cr.*, c.id_user
          FROM campaign_runs cr
          JOIN campaigns c ON c.id = cr.id_campaign
          WHERE cr.id = $1
            AND cr.id_campaign = $2
-           AND c.id_user = $3
+           AND ($3::boolean = TRUE OR c.id_user = $4)
          FOR UPDATE`,
-        [runId, campaignId, userId]
+        [runId, campaignId, isAdmin, userId]
       );
       if (runResult.rows.length === 0) {
         const error = new Error('Không tìm thấy lượt continuous cũ để chạy tiếp');
@@ -370,7 +382,10 @@ class CampaignRunService {
       );
 
       await client.query('COMMIT');
-      return updatedRunResult.rows[0];
+      return {
+        ...updatedRunResult.rows[0],
+        campaign_owner_id: currentRun.id_user || null,
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

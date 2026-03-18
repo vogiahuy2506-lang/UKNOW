@@ -3,6 +3,27 @@ import customerHelperService from '../customer/customerHelper.service.js';
 
 class DashboardAnalyticsService {
   /**
+   * Đồng bộ số liệu journey với số liệu email_messages để tránh hụt KPI email.
+   *
+   * Luồng hoạt động:
+   * 1. Lấy số email gửi/mở/click từ journeyEvents (nếu có).
+   * 2. Luôn ưu tiên bộ đếm từ emailMetrics vì đây là nguồn dữ liệu gửi email chuẩn.
+   * 3. Trả về object mới để không làm mutate dữ liệu đầu vào.
+   *
+   * @param {object} journeyEvents số liệu từ customer_journey
+   * @param {object} emailMetrics số liệu từ email_messages
+   * @returns {object} số liệu journey đã được đồng bộ KPI email
+   */
+  mergeJourneyWithEmailMetrics(journeyEvents, emailMetrics) {
+    return {
+      ...journeyEvents,
+      emailSent: Number(emailMetrics.sent_count || 0),
+      emailOpened: Number(emailMetrics.opened_unique_count || 0),
+      emailClicked: Number(emailMetrics.clicked_unique_count || 0),
+    };
+  }
+
+  /**
    * Parse and normalize dashboard filters from query params.
    *
    * @param {object} input
@@ -149,12 +170,13 @@ class DashboardAnalyticsService {
    * Build dashboard overview payload.
    *
    * @param {number} userId
+   * @param {string} roleCode
    * @param {object} query
    * @returns {Promise<object>}
    */
-  async getOverview(userId, query) {
+  async getOverview(userId, roleCode, query) {
     const filters = this.parseFilters(query);
-    const scopedFilters = { ...filters, userId };
+    const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
     const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
 
@@ -207,7 +229,7 @@ class DashboardAnalyticsService {
       return Object.values(channelMap).reduce((sum, v) => sum + v, 0);
     };
 
-    const journeyEvents = {
+    const rawJourneyEvents = {
       emailSent: getJourneyCount('email_sent'),
       emailOpened: getJourneyCount('email_opened'),
       emailClicked: getJourneyCount('email_clicked'),
@@ -217,6 +239,7 @@ class DashboardAnalyticsService {
       zaloGroupClicked: getJourneyCount('zalo_clicked', 'zalo_group'),
       orderPending: getJourneyCount('order_pending'),
     };
+    const journeyEvents = this.mergeJourneyWithEmailMetrics(rawJourneyEvents, emailMetrics);
 
     const totalRecipients = Number(runHeadline.total_recipients || 0);
     const successfulSends = Number(runHeadline.successful_sends || 0);
@@ -271,14 +294,15 @@ class DashboardAnalyticsService {
    * top campaigns by clicks. All respect the current filter scope.
    *
    * @param {number} userId
+   * @param {string} roleCode
    * @param {object} query
    * @param {number} [query.limit=10] - number of items per list
    * @returns {Promise<object>}
    */
-  async getTopLists(userId, query) {
+  async getTopLists(userId, roleCode, query) {
     const filters = this.parseFilters(query);
     const limit = Math.min(20, Math.max(1, Number.parseInt(query.limit, 10) || 10));
-    const scopedFilters = { ...filters, userId };
+    const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
     const [topCourses, topCampaignsByOrders, topCampaignsByClicks] = await Promise.all([
@@ -304,12 +328,13 @@ class DashboardAnalyticsService {
    * Build timeline analytics payload.
    *
    * @param {number} userId
+   * @param {string} roleCode
    * @param {object} query
    * @returns {Promise<object>}
    */
-  async getAnalytics(userId, query) {
+  async getAnalytics(userId, roleCode, query) {
     const filters = this.parseFilters(query);
-    const scopedFilters = { ...filters, userId };
+    const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
     const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
     const rows = await dashboardRepository.getTimeline(scopedFilters, purchaseOrderStatusExpr, hasZaloMessages);
@@ -380,15 +405,16 @@ class DashboardAnalyticsService {
    * Get paginated list of individual orders enriched with run/campaign/channel info.
    *
    * @param {number} userId
+   * @param {string} roleCode
    * @param {object} query
    * @param {string} [query.orderStatus] - 'all'|'pending'|'completed'
    * @returns {Promise<object>}
    */
-  async getOrdersList(userId, query) {
+  async getOrdersList(userId, roleCode, query) {
     const filters = this.parseFilters(query);
     const rawOrderStatus = String(query.orderStatus || 'all').trim().toLowerCase();
     const orderStatus = ['all', 'pending', 'completed'].includes(rawOrderStatus) ? rawOrderStatus : 'all';
-    const scopedFilters = { ...filters, userId, orderStatus };
+    const scopedFilters = { ...filters, userId, roleCode, orderStatus };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
     const result = await dashboardRepository.getOrdersList(scopedFilters, purchaseOrderStatusExpr);
@@ -415,12 +441,13 @@ class DashboardAnalyticsService {
    * Get paginated run-level metrics.
    *
    * @param {number} userId
+   * @param {string} roleCode
    * @param {object} query
    * @returns {Promise<object>}
    */
-  async getRuns(userId, query) {
+  async getRuns(userId, roleCode, query) {
     const filters = this.parseFilters(query);
-    const scopedFilters = { ...filters, userId };
+    const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
     const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
 

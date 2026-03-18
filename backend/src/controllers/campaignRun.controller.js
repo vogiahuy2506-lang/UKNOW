@@ -2,6 +2,7 @@ import db from '../config/database.js';
 import { serverError } from '../helpers.js';
 import customerHelperService from '../services/customer/customerHelper.service.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
 
 class CampaignRunController {
   /**
@@ -35,6 +36,7 @@ class CampaignRunController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { campaignId, scheduleId, limit = 50 } = req.query;
 
       let query = `
@@ -42,10 +44,10 @@ class CampaignRunController {
         FROM campaign_runs cr
         JOIN campaigns c ON cr.id_campaign = c.id
         LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
-        WHERE c.id_user = $1
+        WHERE ($1::boolean = TRUE OR c.id_user = $2)
       `;
-      const params = [userId];
-      let paramIndex = 2;
+      const params = [isAdmin, userId];
+      let paramIndex = 3;
 
       if (campaignId) {
         query += ` AND cr.id_campaign = $${paramIndex}`;
@@ -96,6 +98,7 @@ class CampaignRunController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user.role_code);
       const { id } = req.params;
 
       const result = await db.query(
@@ -103,8 +106,9 @@ class CampaignRunController {
          FROM campaign_runs cr
          JOIN campaigns c ON cr.id_campaign = c.id
          LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
-         WHERE cr.id = $1 AND c.id_user = $2`,
-        [id, userId]
+         WHERE cr.id = $1
+           AND ($2::boolean = TRUE OR c.id_user = $3)`,
+        [id, isAdmin, userId]
       );
 
       if (result.rows.length === 0) {
@@ -238,6 +242,7 @@ class CampaignRunController {
   async stopById(req, res) {
     try {
       const userId = req.user.id;
+      const roleCode = req.user.role_code;
       const runId = Number.parseInt(req.params.id, 10);
 
       if (!Number.isFinite(runId)) {
@@ -250,6 +255,7 @@ class CampaignRunController {
       const stopResult = await campaignRunService.stopCampaignRun({
         runId,
         userId,
+        roleCode,
       });
 
       if (!stopResult.found) {

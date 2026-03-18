@@ -20,6 +20,7 @@ import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
 import EmailSettings from './pages/settings/EmailSettings';
 import ZaloSettings from './pages/settings/ZaloSettings';
+import EmployeeManagement from './pages/settings/EmployeeManagement';
 import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
@@ -53,6 +54,20 @@ const ProtectedRoute = ({ children }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+/**
+ * Chặn route chỉ dành cho admin.
+ */
+const AdminRoute = ({ children }) => {
+  const { user } = useAuthStore();
+  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -146,6 +161,14 @@ function App() {
           {/* Settings */}
           <Route path="settings/email" element={<EmailSettings />} />
           <Route path="settings/zalo" element={<ZaloSettings />} />
+          <Route
+            path="settings/employees"
+            element={(
+              <AdminRoute>
+                <EmployeeManagement />
+              </AdminRoute>
+            )}
+          />
           <Route path="settings/email-templates" element={<EmailTemplates />} />
           <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
           

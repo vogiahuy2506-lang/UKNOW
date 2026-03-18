@@ -1,4 +1,6 @@
 import db from '../../config/database.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
+import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
 class CampaignCrudService {
   /**
@@ -7,8 +9,9 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getAllCampaigns({ userId, page = 1, limit = 10, status, type, search }) {
+  async getAllCampaigns({ userId, roleCode, page = 1, limit = 10, status, type, search }) {
     const offset = (page - 1) * limit;
+    const isAdmin = isAdminRole(roleCode);
 
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
@@ -28,9 +31,14 @@ class CampaignCrudService {
         FROM campaign_runs cr
         WHERE cr.id_campaign = c.id
       ) run_stats ON TRUE
-      WHERE c.id_user = $1
+      WHERE 1=1
     `;
-    const params = [userId];
+    const params = [];
+
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND c.id_user = $${params.length}`;
+    }
 
     if (status) {
       params.push(status);
@@ -50,8 +58,12 @@ class CampaignCrudService {
 
     const result = await db.query(query, params);
 
-    let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE id_user = $1';
-    const countParams = [userId];
+    let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE 1=1';
+    const countParams = [];
+    if (!isAdmin) {
+      countParams.push(userId);
+      countQuery += ` AND id_user = $${countParams.length}`;
+    }
     if (status) {
       countParams.push(status);
       countQuery += ` AND status = $${countParams.length}`;
@@ -105,11 +117,15 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async getCampaignById({ userId, campaignId }) {
-    const result = await db.query(
-      'SELECT * FROM campaigns WHERE id = $1 AND id_user = $2',
-      [campaignId, userId]
-    );
+  async getCampaignById({ userId, roleCode, campaignId }) {
+    const isAdmin = isAdminRole(roleCode);
+    const params = [campaignId];
+    let query = 'SELECT * FROM campaigns WHERE id = $1';
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
+    const result = await db.query(query, params);
     if (result.rows.length === 0) return null;
 
     const campaign = result.rows[0];
@@ -172,21 +188,37 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async duplicateCampaign({ userId, campaignId, campaignName }) {
+  async duplicateCampaign({ userId, roleCode, campaignId, campaignName }) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      const isAdmin = isAdminRole(roleCode);
 
-      const campaignResult = await client.query(
-        'SELECT * FROM campaigns WHERE id = $1 AND id_user = $2',
-        [campaignId, userId]
-      );
+      const campaignParams = [campaignId];
+      let campaignQuery = 'SELECT * FROM campaigns WHERE id = $1';
+      if (!isAdmin) {
+        campaignParams.push(userId);
+        campaignQuery += ` AND id_user = $${campaignParams.length}`;
+      }
+      const campaignResult = await client.query(campaignQuery, campaignParams);
       if (campaignResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return null;
       }
 
       const originalCampaign = campaignResult.rows[0];
+      const campaignLimitCheck = await checkUserResourceLimit({
+        userId,
+        roleCode,
+        resourceKey: 'campaigns',
+      });
+      if (!campaignLimitCheck.allowed) {
+        await client.query('ROLLBACK');
+        const limitError = new Error(campaignLimitCheck.message);
+        limitError.statusCode = 400;
+        throw limitError;
+      }
+
       const newCampaignResult = await client.query(
         `INSERT INTO campaigns (
           id_user, campaign_name, description, campaign_type, landing_page_url,
@@ -280,16 +312,22 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async publishCampaign({ userId, campaignId }) {
-    const result = await db.query(
-      `UPDATE campaigns SET
-        status = 'active',
-        published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND id_user = $2 AND status IN ('draft', 'paused')
-       RETURNING *`,
-      [campaignId, userId]
-    );
+  async publishCampaign({ userId, roleCode, campaignId }) {
+    const isAdmin = isAdminRole(roleCode);
+    const params = [campaignId];
+    let query = `UPDATE campaigns SET
+      status = 'active',
+      published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
+      updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND status IN ('draft', 'paused')`;
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
+    query += ' RETURNING *';
+
+    const result = await db.query(query, params);
 
     return result.rows[0] || null;
   }
@@ -300,15 +338,20 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async pauseCampaign({ userId, campaignId }) {
-    const result = await db.query(
-      `UPDATE campaigns SET
-        status = 'paused',
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND id_user = $2 AND status = 'active'
-       RETURNING *`,
-      [campaignId, userId]
-    );
+  async pauseCampaign({ userId, roleCode, campaignId }) {
+    const isAdmin = isAdminRole(roleCode);
+    const params = [campaignId];
+    let query = `UPDATE campaigns SET
+      status = 'paused',
+      updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND status = 'active'`;
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
+    query += ' RETURNING *';
+
+    const result = await db.query(query, params);
 
     return result.rows[0] || null;
   }

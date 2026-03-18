@@ -10,6 +10,8 @@ import { generateZaloUUID } from '../../node_modules/zca-js/dist/utils.js';
 import { request as rawRequest } from '../../node_modules/zca-js/dist/utils.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 
 class ZaloSettingsController {
   constructor() {
@@ -481,7 +483,7 @@ class ZaloSettingsController {
    * @param {{ zaloUserId: string; displayName: string; zaloName: string; zaloPhone: string; cookieText: string }} accountIdentity
    * @returns {Promise<Record<string, any>>}
    */
-  async upsertQrLoggedInAccount(userId, accountIdentity) {
+  async upsertQrLoggedInAccount(userId, accountIdentity, roleCode = 'employee') {
     const now = new Date();
     const zaloUserId = String(accountIdentity?.zaloUserId || '').trim();
     const displayName = String(accountIdentity?.displayName || '').trim() || 'Tài khoản Zalo';
@@ -547,6 +549,17 @@ class ZaloSettingsController {
     }
 
     const existingCount = await db.query('SELECT COUNT(*)::int AS total FROM zalo_settings WHERE id_user = $1', [userId]);
+    const zaloAccountLimitCheck = await checkUserResourceLimit({
+      userId,
+      roleCode,
+      resourceKey: 'zaloAccounts',
+    });
+    if (!zaloAccountLimitCheck.allowed) {
+      const limitError = new Error(zaloAccountLimitCheck.message);
+      limitError.statusCode = 400;
+      throw limitError;
+    }
+
     const isDefault = existingCount.rows[0]?.total === 0;
     const inserted = await db.query(
       `INSERT INTO zalo_settings (
@@ -586,7 +599,7 @@ class ZaloSettingsController {
     });
 
     const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
-    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity);
+    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity, input?.roleCode);
     this.patchLoginSession(sessionKey, { account });
     zaloAccountSessionService.setAccountApi(account?.id, api);
     zaloAccountSessionService.startAccountListenerSafely({
@@ -1563,17 +1576,41 @@ class ZaloSettingsController {
   async getAccounts(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const result = await db.query(
-        `SELECT id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at
+        `SELECT id_user, id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at
          FROM zalo_settings
-         WHERE id_user = $1
+         WHERE 1 = 1
+           ${isAdmin ? '' : 'AND id_user = $1'}
          ORDER BY is_default DESC, created_at DESC`,
-        [userId]
+        isAdmin ? [] : [userId]
       );
-      const disconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
-        userId,
-        accounts: result.rows,
-      });
+
+      const disconnectedIds = new Set();
+      if (isAdmin) {
+        const accountsByOwner = result.rows.reduce((acc, row) => {
+          const ownerId = Number.parseInt(row.id_user, 10);
+          if (!Number.isFinite(ownerId)) return acc;
+          if (!acc[ownerId]) acc[ownerId] = [];
+          acc[ownerId].push(row);
+          return acc;
+        }, {});
+
+        for (const [ownerUserId, ownerAccounts] of Object.entries(accountsByOwner)) {
+          const ownerDisconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
+            userId: ownerUserId,
+            accounts: ownerAccounts,
+          });
+          ownerDisconnectedIds.forEach((id) => disconnectedIds.add(id));
+        }
+      } else {
+        const ownerDisconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
+          userId,
+          accounts: result.rows,
+        });
+        ownerDisconnectedIds.forEach((id) => disconnectedIds.add(id));
+      }
+
       const normalizedRows = result.rows.map((row) => {
         if (!disconnectedIds.has(String(row.id))) return row;
         return {
@@ -1608,13 +1645,15 @@ class ZaloSettingsController {
   async deleteAccount(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const accountId = parseInt(req.params.id, 10);
 
       const deleted = await db.query(
         `DELETE FROM zalo_settings
-         WHERE id = $1 AND id_user = $2
-         RETURNING id, is_default`,
-        [accountId, userId]
+         WHERE id = $1
+           ${isAdmin ? '' : 'AND id_user = $2'}
+         RETURNING id, id_user, is_default`,
+        isAdmin ? [accountId] : [accountId, userId]
       );
 
       if (deleted.rows.length === 0) {
@@ -1624,6 +1663,7 @@ class ZaloSettingsController {
       zaloAccountSessionService.clearAccountApi(deleted.rows[0].id);
 
       if (deleted.rows[0].is_default) {
+        const ownerUserId = deleted.rows[0].id_user;
         await db.query(
           `WITH first_row AS (
              SELECT id FROM zalo_settings
@@ -1634,7 +1674,7 @@ class ZaloSettingsController {
            UPDATE zalo_settings
            SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP
            WHERE id IN (SELECT id FROM first_row)`,
-          [userId]
+          [ownerUserId]
         );
       }
 
@@ -1660,22 +1700,27 @@ class ZaloSettingsController {
     const client = await db.getClient();
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const accountId = parseInt(req.params.id, 10);
 
       await client.query('BEGIN');
       const existing = await client.query(
-        'SELECT id FROM zalo_settings WHERE id = $1 AND id_user = $2 LIMIT 1',
-        [accountId, userId]
+        `SELECT id, id_user FROM zalo_settings
+         WHERE id = $1
+           ${isAdmin ? '' : 'AND id_user = $2'}
+         LIMIT 1`,
+        isAdmin ? [accountId] : [accountId, userId]
       );
       if (existing.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
       }
+      const ownerUserId = existing.rows[0].id_user;
 
-      await client.query('UPDATE zalo_settings SET is_default = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id_user = $1', [userId]);
+      await client.query('UPDATE zalo_settings SET is_default = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id_user = $1', [ownerUserId]);
       await client.query(
         'UPDATE zalo_settings SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND id_user = $2',
-        [accountId, userId]
+        [accountId, ownerUserId]
       );
       await client.query('COMMIT');
 
@@ -1704,13 +1749,15 @@ class ZaloSettingsController {
   async restoreAccountSessionByCookie(req, res) {
     try {
       const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role_code);
       const accountId = Number.parseInt(req.params.id, 10);
       const accountResult = await db.query(
-        `SELECT id, display_name, cookie_text, is_active
+        `SELECT id, id_user, display_name, cookie_text, is_active
          FROM zalo_settings
-         WHERE id_user = $1 AND id = $2
+         WHERE id = $1
+           ${isAdmin ? '' : 'AND id_user = $2'}
          LIMIT 1`,
-        [userId, accountId]
+        isAdmin ? [accountId] : [accountId, userId]
       );
       const accountRow = accountResult.rows[0] || null;
       if (!accountRow) {
@@ -1736,10 +1783,11 @@ class ZaloSettingsController {
       }
 
       try {
+        const ownerUserId = accountRow.id_user;
         const api = await this.restoreApiFromCookieText(cookieText);
         const accountIdentity = await this.extractAccountIdentityFromApi(api, {});
         const updatedAccount = await this.markAccountConnectedAfterRestore({
-          userId,
+          userId: ownerUserId,
           accountId,
           accountIdentity,
           fallbackDisplayName: accountRow.display_name || 'Tài khoản Zalo',
@@ -1768,7 +1816,10 @@ class ZaloSettingsController {
           },
         });
       } catch (error) {
-        await this.markAccountDisconnectedAfterRestoreFail({ userId, accountId });
+        await this.markAccountDisconnectedAfterRestoreFail({
+          userId: accountRow.id_user,
+          accountId,
+        });
         return res.status(400).json({
           success: false,
           message:
@@ -1885,6 +1936,7 @@ class ZaloSettingsController {
             await this.finalizeQrLoginSuccess({
               sessionKey,
               userId,
+              roleCode: req.user?.role_code,
               api,
               loginMeta,
             });
@@ -1918,6 +1970,7 @@ class ZaloSettingsController {
                   await this.finalizeQrLoginSuccess({
                     sessionKey,
                     userId,
+                    roleCode: req.user?.role_code,
                     api: fallbackApi,
                     loginMeta,
                   });
@@ -2033,14 +2086,15 @@ class ZaloSettingsController {
    * @param {string|number} accountId
    * @returns {Promise<{account: object, api: any}>}
    */
-  async resolvePreviewAccountAndApi(userId, accountId) {
+  async resolvePreviewAccountAndApi({ userId, roleCode, accountId }) {
     const account = await campaignZaloSenderService.getCampaignZaloAccount({
       userId,
       accountId,
+      roleCode,
     });
     const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
       accountId: account.id,
-      userId,
+      userId: account.userId || userId,
     });
     return { account, api };
   }
@@ -2067,7 +2121,11 @@ class ZaloSettingsController {
       const normalizedRecipients = Array.from(new Set(
         recipients.map((item) => String(item || '').trim()).filter(Boolean)
       ));
-      const { account, api } = await this.resolvePreviewAccountAndApi(userId, accountId);
+      const { account, api } = await this.resolvePreviewAccountAndApi({
+        userId,
+        roleCode: req.user?.role_code,
+        accountId,
+      });
       const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
         templateAttachments
       );
@@ -2144,7 +2202,11 @@ class ZaloSettingsController {
       const normalizedRecipients = Array.from(new Set(
         recipients.map((item) => String(item || '').trim()).filter(Boolean)
       ));
-      const { account, api } = await this.resolvePreviewAccountAndApi(userId, accountId);
+      const { account, api } = await this.resolvePreviewAccountAndApi({
+        userId,
+        roleCode: req.user?.role_code,
+        accountId,
+      });
 
       const items = [];
       for (const phone of normalizedRecipients) {
@@ -2209,7 +2271,11 @@ class ZaloSettingsController {
       const normalizedGroupIds = Array.from(new Set(
         groupIds.map((item) => String(item || '').trim()).filter(Boolean)
       ));
-      const { account, api } = await this.resolvePreviewAccountAndApi(userId, accountId);
+      const { account, api } = await this.resolvePreviewAccountAndApi({
+        userId,
+        roleCode: req.user?.role_code,
+        accountId,
+      });
       const groupIdSet = await campaignZaloSenderService.getAllGroupIdSet(api);
       /**
        * Chuẩn bị attachment một lần để preview nhiều nhóm dùng chung,
@@ -2289,7 +2355,11 @@ class ZaloSettingsController {
       const page = Number.isFinite(parseInt(req.query?.page, 10))
         ? parseInt(req.query.page, 10)
         : undefined;
-      const { account, api } = await this.resolvePreviewAccountAndApi(userId, accountId);
+      const { account, api } = await this.resolvePreviewAccountAndApi({
+        userId,
+        roleCode: req.user?.role_code,
+        accountId,
+      });
       const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
       const items = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
       return res.json({
@@ -2324,7 +2394,11 @@ class ZaloSettingsController {
     try {
       const userId = req.user.id;
       const accountId = req.query?.accountId;
-      const { account, api } = await this.resolvePreviewAccountAndApi(userId, accountId);
+      const { account, api } = await this.resolvePreviewAccountAndApi({
+        userId,
+        roleCode: req.user?.role_code,
+        accountId,
+      });
       const groupResp = await campaignZaloSenderService.getAllGroupsWithRetry(api);
       const baseItems = campaignZaloSenderService.extractGroupsFromResponse(groupResp);
       const items = await campaignZaloSenderService.enrichGroupNames(api, baseItems);

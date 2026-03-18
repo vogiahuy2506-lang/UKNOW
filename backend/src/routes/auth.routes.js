@@ -5,6 +5,7 @@ import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 
 const router = express.Router();
+const USERNAME_REGEX = /^[A-Za-z0-9]+$/;
 
 // Đăng ký
 router.post('/register',
@@ -13,8 +14,8 @@ router.post('/register',
       .trim()
       .isLength({ min: 3, max: 50 })
       .withMessage('Tên đăng nhập phải từ 3-50 ký tự')
-      .matches(/^[a-zA-Z0-9_]+$/)
-      .withMessage('Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới'),
+      .matches(USERNAME_REGEX)
+      .withMessage('Tên đăng nhập chỉ được chứa chữ cái không dấu và số (không khoảng trắng, không ký tự đặc biệt)'),
     body('email')
       .trim()
       .isEmail()
