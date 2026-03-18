@@ -127,7 +127,6 @@ class CampaignNodeDataService {
       case 'read_sheet':
       case 'google_sheet': {
         const sheetUrl = config.sheetUrl;
-        const columns = Array.isArray(config.columns) ? config.columns : [];
         const sheetName = String(config.sheetName || 'Sheet1').trim() || 'Sheet1';
         const headerRowRaw = Number.parseInt(config.headerRow, 10);
         const headerRow = Number.isFinite(headerRowRaw) ? Math.max(1, headerRowRaw) : 1;
@@ -206,37 +205,31 @@ class CampaignNodeDataService {
           headerColumns.forEach((colName, idx) => {
             if (colName) columnIndexMap[colName] = idx;
           });
+          const namedHeaderIndices = Object.values(columnIndexMap).sort((a, b) => a - b);
 
           const dataStartIdx = Math.min(rows.length, Math.max(dataStartRow - 1, headerIdx + 1));
-          const dataRows = rows.slice(dataStartIdx);
-
-          const effectiveColumns = columns.length > 0
-            ? columns
-            : headerColumns.filter(Boolean);
           const customers = [];
-          for (const row of dataRows) {
+          for (let rowIdx = dataStartIdx; rowIdx < rows.length; rowIdx += 1) {
+            const row = rows[rowIdx];
             if (!Array.isArray(row) || !row.length) continue;
 
-            const customer = {};
-            effectiveColumns.forEach((colName) => {
-              const colIdx = columnIndexMap[colName];
-              if (colIdx !== undefined && row[colIdx] !== undefined) {
-                const rawValue = String(row[colIdx] || '').trim();
-                customer[colName] = rawValue;
-                if (colName === 'email') {
-                  customer.email = rawValue;
-                } else if (colName === 'ten_khach' || colName === 'full_name' || colName === 'fullName') {
-                  customer.full_name = rawValue;
-                  customer.fullName = rawValue;
-                } else if (colName === 'phone' || colName === 'dien_thoai') {
-                  customer.phone = rawValue;
-                } else {
-                  customer[colName] = rawValue;
-                }
-              }
+            /**
+             * Đồng bộ với luồng preview ở Builder:
+             * - Luôn đọc theo các cột header thực tế của sheet hiện tại.
+             * - Gắn `row_number` để UI/flow phía sau có thể trace ngược dòng gốc.
+             * - Chỉ bỏ qua dòng trống hoàn toàn.
+             */
+            const customer = { row_number: rowIdx + 1 };
+            let hasAnyValue = false;
+            namedHeaderIndices.forEach((colIdx) => {
+              const headerName = String(headerRowData[colIdx] ?? '').trim();
+              if (!headerName) return;
+              const rawValue = String(row[colIdx] ?? '').trim();
+              customer[headerName] = rawValue;
+              if (rawValue) hasAnyValue = true;
             });
 
-            if ((customer.email && customer.email !== '') || (customer.phone && customer.phone !== '')) {
+            if (hasAnyValue) {
               customers.push(customer);
             }
           }
