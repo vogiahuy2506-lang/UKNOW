@@ -207,16 +207,26 @@ export const createCampaignNodeRunner = (deps) => {
     if (normalized === 'fixed' || normalized === 'all_exclude') return normalized;
     return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
   };
-  const PREVIEW_API_DELAY_MIN_MS = 1500;
-  const PREVIEW_API_DELAY_MAX_MS = 2500;
-  const TEMPLATE_STEP_DELAY_MIN_MS = 2500;
-  const TEMPLATE_STEP_DELAY_MAX_MS = 5000;
-  const getRandomPreviewApiDelayMs = () => Math.floor(
-    Math.random() * (PREVIEW_API_DELAY_MAX_MS - PREVIEW_API_DELAY_MIN_MS + 1)
-  ) + PREVIEW_API_DELAY_MIN_MS;
-  const getRandomTemplateStepDelayMs = () => Math.floor(
-    Math.random() * (TEMPLATE_STEP_DELAY_MAX_MS - TEMPLATE_STEP_DELAY_MIN_MS + 1)
-  ) + TEMPLATE_STEP_DELAY_MIN_MS;
+  // Đồng bộ delay với Campaign Run để Build phản ánh sát hành vi thực thi thực tế.
+  const EMAIL_API_DELAY_MIN_MS = 50;
+  const EMAIL_API_DELAY_MAX_MS = 250;
+  const ZALO_API_DELAY_MIN_MS = 25;
+  const ZALO_API_DELAY_MAX_MS = 125;
+  const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
+  const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
+  const getRandomDelayMsByRange = (minMs, maxMs) => Math.floor(
+    Math.random() * (maxMs - minMs + 1)
+  ) + minMs;
+  const getDelayRangeByChannel = (channel = 'email') => {
+    const normalizedChannel = String(channel || '').trim().toLowerCase();
+    if (normalizedChannel === 'zalo_group_template') {
+      return { minMs: ZALO_GROUP_TEMPLATE_DELAY_MIN_MS, maxMs: ZALO_GROUP_TEMPLATE_DELAY_MAX_MS };
+    }
+    if (normalizedChannel === 'zalo') {
+      return { minMs: ZALO_API_DELAY_MIN_MS, maxMs: ZALO_API_DELAY_MAX_MS };
+    }
+    return { minMs: EMAIL_API_DELAY_MIN_MS, maxMs: EMAIL_API_DELAY_MAX_MS };
+  };
   const buildAbortError = () => {
     const error = new Error('Run cancelled');
     error.name = 'AbortError';
@@ -253,26 +263,31 @@ export const createCampaignNodeRunner = (deps) => {
    * @param {AbortSignal|undefined} signal
    * @returns {Promise<number>}
    */
-  const waitRandomPreviewApiDelay = async (label = 'preview_api', signal) => {
-    const delayMs = getRandomPreviewApiDelayMs();
+  const waitRandomPreviewApiDelay = async (label = 'preview_api', signal, options = {}) => {
+    const { channel = 'email' } = options;
+    const { minMs, maxMs } = getDelayRangeByChannel(channel);
+    const delayMs = getRandomDelayMsByRange(minMs, maxMs);
     console.info(`[CampaignBuilder][PreviewDelay] ${label}: ${delayMs}ms`);
     await sleepWithAbort(delayMs, signal);
     return delayMs;
   };
   /**
-   * Chờ ngẫu nhiên 2.5-5 giây giữa 2 lần gửi trong cùng một template step.
+   * Chờ ngẫu nhiên giữa 2 lần gửi trong cùng step theo đúng dải delay của Campaign Run.
    *
    * Luồng hoạt động:
-   * 1. Sinh ngẫu nhiên khoảng nghỉ trong dải cấu hình 2.5-5 giây.
+   * 1. Xác định kênh gửi (email/zalo/zalo_group_template).
+   * 2. Sinh khoảng nghỉ ngẫu nhiên theo dải delay tương ứng của kênh.
    * 2. Sleep có hỗ trợ AbortSignal để dừng run ngay khi người dùng cancel.
    * 3. Trả về delay thực tế để debug khi cần.
    *
    * @param {string} label ngữ cảnh để log debug
    * @param {AbortSignal|undefined} signal tín hiệu hủy
+   * @param {string} channel kênh delay cần áp dụng
    * @returns {Promise<number>}
    */
-  const waitRandomTemplateStepDelay = async (label = 'template_step', signal) => {
-    const delayMs = getRandomTemplateStepDelayMs();
+  const waitRandomTemplateStepDelay = async (label = 'template_step', signal, channel = 'email') => {
+    const { minMs, maxMs } = getDelayRangeByChannel(channel);
+    const delayMs = getRandomDelayMsByRange(minMs, maxMs);
     console.info(`[CampaignBuilder][TemplateStepDelay] ${label}: ${delayMs}ms`);
     await sleepWithAbort(delayMs, signal);
     return delayMs;
@@ -1125,7 +1140,9 @@ export const createCampaignNodeRunner = (deps) => {
 
         try {
           if (!skipApiDelay) {
-            await waitRandomPreviewApiDelay(`email_send_to_${String(to || '').trim() || 'unknown'}`, signal);
+            await waitRandomPreviewApiDelay(`email_send_to_${String(to || '').trim() || 'unknown'}`, signal, {
+              channel: 'email',
+            });
           }
           const resp = await apiService.sendPreviewEmail({
             fromEmailId: config.fromEmailId,
@@ -1317,7 +1334,7 @@ export const createCampaignNodeRunner = (deps) => {
           const recipient = recipientsForStep[index];
           if (index > 0) {
             // eslint-disable-next-line no-await-in-loop
-            await waitRandomTemplateStepDelay(`email_step_${stepIndex + 1}`, signal);
+            await waitRandomTemplateStepDelay(`email_step_${stepIndex + 1}`, signal, 'email');
           }
           // eslint-disable-next-line no-await-in-loop
           const result = await sendStepToRecipient(recipient, step, stepIndex, { skipApiDelay: true });
@@ -1460,7 +1477,9 @@ export const createCampaignNodeRunner = (deps) => {
             })
             : String(step.message || '').trim();
           if (!skipApiDelay) {
-            await waitRandomPreviewApiDelay(`zalo_personal_single_step_${stepIndex + 1}`, signal);
+            await waitRandomPreviewApiDelay(`zalo_personal_single_step_${stepIndex + 1}`, signal, {
+              channel: 'zalo',
+            });
           }
           // eslint-disable-next-line no-await-in-loop
           const response = await apiService.sendPreviewZaloPersonal({
@@ -1547,7 +1566,7 @@ export const createCampaignNodeRunner = (deps) => {
           for (let index = 0; index < recipientsForStep.length; index += 1) {
             if (index > 0) {
               // eslint-disable-next-line no-await-in-loop
-              await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal);
+              await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo');
             }
             // eslint-disable-next-line no-await-in-loop
             await runStepForRecipient(step, stepIndex, recipientsForStep[index], { skipApiDelay: true });
@@ -1601,7 +1620,9 @@ export const createCampaignNodeRunner = (deps) => {
       }
 
       const message = String(config.zaloMessage || '').trim();
-      await waitRandomPreviewApiDelay('zalo_personal_bulk_single_message', signal);
+      await waitRandomPreviewApiDelay('zalo_personal_bulk_single_message', signal, {
+        channel: 'zalo',
+      });
       const pendingRecipients = uniqueRecipients.filter(
         (recipient) => getRecipientNextStepIndex(zaloProgressMap, recipient) < 1
       );
@@ -1743,7 +1764,9 @@ export const createCampaignNodeRunner = (deps) => {
       for (const entry of recipientEntries) {
         const renderedMessage = renderFriendTemplateMessage(entry);
         // eslint-disable-next-line no-await-in-loop
-        await waitRandomPreviewApiDelay('zalo_friend_request_single', signal);
+        await waitRandomPreviewApiDelay('zalo_friend_request_single', signal, {
+          channel: 'zalo',
+        });
         // eslint-disable-next-line no-await-in-loop
         const response = await apiService.sendPreviewZaloFriendRequest({
           accountId: selectedAccount.id,
@@ -1871,7 +1894,7 @@ export const createCampaignNodeRunner = (deps) => {
             if (!groupId) continue;
             if (index > 0) {
               // eslint-disable-next-line no-await-in-loop
-              await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal);
+              await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template');
             }
             const renderedMessage = mappings.length > 0
               ? renderZaloTemplateMessage({
@@ -1984,7 +2007,9 @@ export const createCampaignNodeRunner = (deps) => {
       }
 
       const message = String(config.zaloGroupMessage || '').trim();
-      await waitRandomPreviewApiDelay('zalo_group_bulk_single_message', signal);
+      await waitRandomPreviewApiDelay('zalo_group_bulk_single_message', signal, {
+        channel: 'zalo',
+      });
       const response = await apiService.sendPreviewZaloGroup({
         accountId: selectedAccount.id,
         groupIds,

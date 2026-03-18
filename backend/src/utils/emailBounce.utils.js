@@ -49,21 +49,90 @@ export function classifyBounceType(error) {
 }
 
 /**
- * Kiểm tra lỗi SMTP có phải lỗi cấu hình/xác thực hay không.
+ * Nhận diện lỗi SMTP thuộc phía cấu hình/mail gửi (không liên quan email người nhận).
+ *
+ * @param {string} messageLower thông điệp lỗi đã lower-case
+ * @returns {boolean}
+ */
+function hasSenderSideConfigPatterns(messageLower) {
+  const senderSidePatterns = [
+    'from address does not match a verified sender identity',
+    'sender identity',
+    'verified sender',
+    'domain is not verified',
+    'from address is not verified',
+    'mail from address not verified',
+    'unauthenticated sender',
+  ];
+  return senderSidePatterns.some((pattern) => messageLower.includes(pattern));
+}
+
+/**
+ * Xác định lỗi SMTP có thật sự là "email người nhận không tồn tại" hay không.
+ *
+ * Luồng hoạt động:
+ * 1. Ưu tiên nhận diện các mã SMTP hard bounce điển hình cho địa chỉ sai (550/551/553).
+ * 2. So khớp thêm các pattern quen thuộc trong message của provider.
+ * 3. Trả về false cho mọi lỗi khác (rate limit, mailbox full, tạm thời, ...).
+ *
+ * @param {Error} error - Lỗi trả về từ nodemailer sendMail
+ * @returns {boolean} true nếu có thể kết luận địa chỉ email người nhận không tồn tại/hợp lệ
+ */
+export function isRecipientAddressNotFoundError(error) {
+  const code = Number(error?.responseCode ?? error?.smtpCode ?? NaN);
+  const msg = String(error?.message || error?.response || '').toLowerCase();
+
+  // Ưu tiên loại trừ lỗi phía người gửi để tránh đánh nhầm bounced cho khách hàng.
+  if (hasSenderSideConfigPatterns(msg)) {
+    return false;
+  }
+
+  const recipientKeyPatterns = [
+    'recipient',
+    'user',
+    'mailbox',
+    'address',
+    'destination',
+  ];
+  const hasRecipientContext = recipientKeyPatterns.some((pattern) => msg.includes(pattern));
+
+  if (Number.isFinite(code) && [550, 551, 553].includes(code) && hasRecipientContext) {
+    return true;
+  }
+
+  const recipientNotFoundPatterns = [
+    'no such user',
+    'user not found',
+    'user unknown',
+    'does not exist',
+    'invalid address',
+    'recipient address rejected',
+    'mailbox not found',
+    'bad destination mailbox address',
+    '5.1.1',
+    '5.1.0',
+  ];
+
+  return recipientNotFoundPatterns.some((pattern) => msg.includes(pattern));
+}
+
+/**
+ * Kiểm tra lỗi SMTP có phải lỗi cấu hình phía người gửi hay không.
  *
  * Luồng hoạt động:
  * 1. Đọc `responseCode`/`smtpCode` và thông điệp lỗi từ nodemailer.
- * 2. So khớp các mã xác thực (điển hình 535) hoặc cụm từ báo sai credential.
+ * 2. So khớp các mã xác thực (điển hình 535) và lỗi Sender Identity/From address.
  * 3. Trả về true để luồng gửi email xử lý như lỗi cấu hình thay vì bounce.
  *
  * @param {Error} error - Lỗi trả về từ nodemailer sendMail
- * @returns {boolean} true nếu là lỗi cấu hình/xác thực SMTP
+ * @returns {boolean} true nếu là lỗi cấu hình SMTP (auth hoặc sender identity)
  */
 export function isSmtpAuthConfigError(error) {
   const code = Number(error?.responseCode ?? error?.smtpCode ?? NaN);
   const msg = String(error?.message || error?.response || '').toLowerCase();
 
   if (Number.isFinite(code) && code === 535) return true;
+  if (hasSenderSideConfigPatterns(msg)) return true;
 
   const authPatterns = [
     'authentication credentials invalid',

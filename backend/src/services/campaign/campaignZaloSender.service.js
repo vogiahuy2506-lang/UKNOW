@@ -5,6 +5,9 @@ import uploadController from '../../controllers/upload.controller.js';
 import { ThreadType, Zalo } from 'zca-js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import { executeWithZaloTimeoutRetry } from '../../utils/zaloTimeoutRetry.util.js';
+import outboundMessageQueueService, {
+  OUTBOUND_MESSAGE_JOB_TYPES,
+} from '../queue/outboundMessageQueue.service.js';
 
 class CampaignZaloSenderService {
   constructor() {
@@ -1551,6 +1554,61 @@ class CampaignZaloSenderService {
   }
 
   /**
+   * Đẩy job gửi tin Zalo cá nhân vào BullMQ.
+   * Payload chỉ chứa dữ liệu serialize được; API session sẽ được worker tự resolve.
+   *
+   * @param {object} input
+   * @param {string|number} input.userId
+   * @param {string|number} input.accountId
+   * @param {string} input.recipient
+   * @param {'phone'|'uid'} [input.recipientType]
+   * @param {string} input.message
+   * @param {Array<any>} [input.attachments]
+   * @returns {Promise<object>}
+   */
+  async sendPersonalMessageQueued({
+    userId,
+    accountId,
+    recipient,
+    recipientType = 'phone',
+    message,
+    attachments = [],
+  }) {
+    return outboundMessageQueueService.enqueueAndWait({
+      type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_PERSONAL_SEND,
+      payload: {
+        userId,
+        accountId,
+        recipient,
+        recipientType,
+        message,
+        attachments,
+      },
+    });
+  }
+
+  /**
+   * Thực thi job gửi Zalo cá nhân từ worker BullMQ.
+   *
+   * @param {object} payload
+   * @returns {Promise<object>}
+   */
+  async sendPersonalMessageByQueue(payload = {}) {
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
+    return this.sendPersonalMessage({
+      api,
+      recipient: payload?.recipient,
+      recipientType: payload?.recipientType,
+      message: payload?.message,
+      attachments: revivedAttachments,
+    });
+  }
+
+  /**
    * Send personal message to one recipient (phone or uid).
    *
    * @param {object} input
@@ -1593,6 +1651,46 @@ class CampaignZaloSenderService {
       response: sendResult.response || null,
       dispatchCount: sendResult.dispatchCount || 0,
     };
+  }
+
+  /**
+   * Đẩy job gửi lời mời kết bạn vào BullMQ.
+   *
+   * @param {object} input
+   * @param {string|number} input.userId
+   * @param {string|number} input.accountId
+   * @param {string} input.phone
+   * @param {string} input.message
+   * @returns {Promise<object>}
+   */
+  async sendFriendRequestQueued({ userId, accountId, phone, message }) {
+    return outboundMessageQueueService.enqueueAndWait({
+      type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_FRIEND_REQUEST_SEND,
+      payload: {
+        userId,
+        accountId,
+        phone,
+        message,
+      },
+    });
+  }
+
+  /**
+   * Thực thi job gửi lời mời kết bạn từ worker BullMQ.
+   *
+   * @param {object} payload
+   * @returns {Promise<object>}
+   */
+  async sendFriendRequestByQueue(payload = {}) {
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+    return this.sendFriendRequest({
+      api,
+      phone: payload?.phone,
+      message: payload?.message,
+    });
   }
 
   /**
@@ -1679,6 +1777,106 @@ class CampaignZaloSenderService {
         );
       },
     });
+  }
+
+  /**
+   * Đẩy job gửi tin nhắn nhóm vào BullMQ.
+   *
+   * @param {object} input
+   * @param {string|number} input.userId
+   * @param {string|number} input.accountId
+   * @param {string} input.groupId
+   * @param {string} input.message
+   * @param {Array<any>} [input.attachments]
+   * @returns {Promise<object>}
+   */
+  async sendGroupMessageQueued({
+    userId,
+    accountId,
+    groupId,
+    message,
+    attachments = [],
+  }) {
+    return outboundMessageQueueService.enqueueAndWait({
+      type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_GROUP_SEND,
+      payload: {
+        userId,
+        accountId,
+        groupId,
+        message,
+        attachments,
+      },
+    });
+  }
+
+  /**
+   * Thực thi job gửi Zalo nhóm từ worker BullMQ.
+   *
+   * @param {object} payload
+   * @returns {Promise<object>}
+   */
+  async sendGroupMessageByQueue(payload = {}) {
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
+    return this.sendGroupMessage({
+      api,
+      groupId: payload?.groupId,
+      message: payload?.message,
+      attachments: revivedAttachments,
+    });
+  }
+
+  /**
+   * Phục hồi attachment source sau khi payload đi qua BullMQ/Redis.
+   *
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa danh sách attachment từ payload job.
+   * 2. Khôi phục `data` về đúng kiểu `Buffer` (Redis serialize sẽ thành object JSON).
+   * 3. Bổ sung metadata tối thiểu để zca-js xử lý file ổn định.
+   *
+   * @param {Array<any>} attachments
+   * @returns {Array<{data: Buffer, filename: string, metadata: {totalSize: number, width?: number, height?: number}}>}
+   */
+  reviveZaloAttachmentSourcesFromQueue(attachments = []) {
+    const source = Array.isArray(attachments) ? attachments : [];
+    if (!source.length) return [];
+
+    return source.map((item) => {
+      if (!item || typeof item !== 'object') return null;
+
+      const rawData = item.data;
+      let bufferData = null;
+      if (Buffer.isBuffer(rawData)) {
+        bufferData = rawData;
+      } else if (
+        rawData
+        && typeof rawData === 'object'
+        && String(rawData.type || '').trim().toLowerCase() === 'buffer'
+        && Array.isArray(rawData.data)
+      ) {
+        bufferData = Buffer.from(rawData.data);
+      }
+      if (!bufferData) return null;
+
+      const normalizedFilename = String(item.filename || '').trim() || 'zalo_attachment.bin';
+      const metadata = item.metadata && typeof item.metadata === 'object'
+        ? { ...item.metadata }
+        : {};
+      const normalizedTotalSize = Number.parseInt(metadata.totalSize, 10);
+      if (!Number.isFinite(normalizedTotalSize) || normalizedTotalSize <= 0) {
+        metadata.totalSize = bufferData.length;
+      }
+
+      return {
+        ...item,
+        data: bufferData,
+        filename: normalizedFilename,
+        metadata,
+      };
+    }).filter(Boolean);
   }
 
   /**

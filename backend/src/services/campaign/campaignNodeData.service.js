@@ -3,6 +3,9 @@ import campaignFlowService from './campaignFlow.service.js';
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
 import customerInterestedService from '../customer/customerInterested.service.js';
 import customerHelperService from '../customer/customerHelper.service.js';
+import outboundMessageQueueService, {
+  OUTBOUND_MESSAGE_JOB_TYPES,
+} from '../queue/outboundMessageQueue.service.js';
 
 const decodeJsQuotedString = (value = '') => {
   try {
@@ -323,7 +326,36 @@ class CampaignNodeDataService {
   }
 
   /**
-   * Save campaign customers into database with dedupe and upsert behavior.
+   * Đẩy tác vụ lưu khách hàng của node `save_customer` vào BullMQ.
+   *
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa payload để worker có đủ context lưu dữ liệu.
+   * 2. Enqueue job `customer.save` và chờ kết quả xử lý cuối cùng.
+   * 3. Fallback inline tự động nếu BullMQ/Redis tạm thời chưa sẵn sàng.
+   *
+   * @param {Array<object>} customers danh sách dữ liệu đầu vào từ node nguồn
+   * @param {number} campaignId id campaign đang chạy
+   * @param {number} userId id người dùng sở hữu campaign
+   * @param {object} saveNode cấu hình node save_customer
+   * @param {number|null} runId id phiên chạy campaign
+   * @returns {Promise<{saved:number,updated:number,skipped:number}>}
+   */
+  async saveCustomersFromCampaign(customers, campaignId, userId, saveNode, runId = null) {
+    return outboundMessageQueueService.enqueueAndWait({
+      type: OUTBOUND_MESSAGE_JOB_TYPES.CUSTOMER_SAVE,
+      payload: {
+        customers,
+        campaignId,
+        userId,
+        saveNode,
+        runId,
+      },
+    });
+  }
+
+  /**
+   * Lưu khách hàng trực tiếp vào database với cơ chế dedupe + upsert.
+   * Hàm này được worker BullMQ gọi để xử lý dữ liệu thật của một job.
    *
    * @param {Array<object>} customers
    * @param {number} campaignId
@@ -332,7 +364,7 @@ class CampaignNodeDataService {
    * @param {number|null} runId
    * @returns {Promise<{saved:number,updated:number,skipped:number}>}
    */
-  async saveCustomersFromCampaign(customers, campaignId, userId, saveNode, runId = null) {
+  async saveCustomersFromCampaignDirect(customers, campaignId, userId, saveNode, runId = null) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
@@ -463,7 +495,7 @@ class CampaignNodeDataService {
       return { saved, updated, skipped };
     } catch (error) {
       await client.query('ROLLBACK');
-      console.error('[saveCustomersFromCampaign] Error:', error);
+      console.error('[saveCustomersFromCampaignDirect] Error:', error);
       throw error;
     } finally {
       client.release();

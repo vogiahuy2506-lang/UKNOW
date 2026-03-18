@@ -84,12 +84,68 @@ export function buildFlowOrderIndex(flowNodes = [], flowEdges = []) {
   return orderMap;
 }
 
+/**
+ * Lấy payload output chuẩn từ các format execution khác nhau.
+ *
+ * @param {object|null} payload payload execution gốc
+ * @returns {object|null}
+ */
+const extractPayloadOutput = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const resultOutput = payload?.result?.output;
+  return resultOutput && typeof resultOutput === 'object' ? resultOutput : null;
+};
+
+/**
+ * Chuẩn hóa payload execution về một mặt bằng chung cho UI trang Run.
+ *
+ * Luồng hoạt động:
+ * 1. Ưu tiên dùng payload root như hiện tại để giữ tương thích ngược.
+ * 2. Nếu backend trả dữ liệu theo format `result.output`, chuyển về format root.
+ * 3. Giữ lại message/meta từ cả 2 nguồn để tránh mất thông tin khi aggregate.
+ *
+ * @param {object|null} payload payload execution đã parse
+ * @returns {object|null}
+ */
+const normalizeExecutionPayloadForWorkspace = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const outputPayload = extractPayloadOutput(payload);
+  if (!outputPayload) return payload;
+
+  const normalized = { ...outputPayload };
+  if (!Array.isArray(normalized.items) && Array.isArray(payload.items)) {
+    normalized.items = payload.items;
+  }
+  if (!Array.isArray(normalized.schema) && Array.isArray(payload.schema)) {
+    normalized.schema = payload.schema;
+  }
+  if (!normalized.message && payload.message) {
+    normalized.message = payload.message;
+  }
+  if (!normalized.messageText && payload.messageText) {
+    normalized.messageText = payload.messageText;
+  }
+
+  const rootMeta = payload?.meta && typeof payload.meta === 'object' ? payload.meta : {};
+  const outputMeta = outputPayload?.meta && typeof outputPayload.meta === 'object' ? outputPayload.meta : {};
+  const mergedMeta = {
+    ...rootMeta,
+    ...outputMeta,
+  };
+  if (Object.keys(mergedMeta).length > 0) {
+    normalized.meta = mergedMeta;
+  }
+
+  return normalized;
+};
+
 const getPayloadScore = (payload) => {
-  if (!payload || typeof payload !== 'object') return 0;
-  const itemCount = Array.isArray(payload.items) ? payload.items.length : 0;
-  const schemaCount = Array.isArray(payload.schema) ? payload.schema.length : 0;
+  const normalizedPayload = normalizeExecutionPayloadForWorkspace(payload);
+  if (!normalizedPayload || typeof normalizedPayload !== 'object') return 0;
+  const itemCount = Array.isArray(normalizedPayload.items) ? normalizedPayload.items.length : 0;
+  const schemaCount = Array.isArray(normalizedPayload.schema) ? normalizedPayload.schema.length : 0;
   if (itemCount > 0 || schemaCount > 0) return 3;
-  return Object.keys(payload).length > 0 ? 2 : 1;
+  return Object.keys(normalizedPayload).length > 0 ? 2 : 1;
 };
 
 const SEND_NODE_SUBTYPES = new Set([
@@ -199,7 +255,9 @@ const resolveNodeDisplayStatus = (group = {}) => {
 
 const extractExecutionMessage = (log, parsedPayload, fallback = '-') => (
   log?.executionData?.message
+  || log?.executionData?.result?.output?.message
   || log?.executionData?.messageText
+  || log?.executionData?.result?.output?.messageText
   || parsedPayload?.message
   || parsedPayload?.messageText
   || log?.errorMessage
@@ -318,7 +376,8 @@ export function buildWorkspaceLogsFromExecution(executionLogs = [], options = {}
     const nodeId = log?.nodeId != null ? String(log.nodeId) : null;
     const nodeKey = nodeId || `${log?.nodeOrder ?? 'na'}:${log?.nodeName || log?.nodeSubtype || log?.actionType || 'node'}`;
     const groupKey = String(nodeKey);
-    const parsedPayload = parseExecutionPayload(log?.nodeResultJson ?? log?.executionData ?? null);
+    const parsedRawPayload = parseExecutionPayload(log?.nodeResultJson ?? log?.executionData ?? null);
+    const parsedPayload = normalizeExecutionPayloadForWorkspace(parsedRawPayload);
     const nodeSubtype = String(log?.nodeSubtype || log?.actionType || '');
     const normalizedNodeSubtype = nodeSubtype.trim().toLowerCase();
     const createdAt = log?.createdAt ? new Date(log.createdAt) : new Date();

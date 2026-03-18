@@ -2,14 +2,29 @@ import db from '../../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import campaignFlowService from './campaignFlow.service.js';
-import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBounce.utils.js';
+import {
+  classifyBounceType,
+  isRecipientAddressNotFoundError,
+  isSmtpAuthConfigError,
+} from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
+import outboundMessageQueueService, {
+  OUTBOUND_MESSAGE_JOB_TYPES,
+} from '../queue/outboundMessageQueue.service.js';
 
 class CampaignEmailSenderService {
   constructor() {
     // Cache SMTP transporter theo settings.id để tái sử dụng kết nối TCP thay vì mở mới mỗi email.
     // Key: `smtp:{settings.id}`, Value: nodemailer transporter.
     this.transporterCache = new Map();
+    // Cache metadata theo từng run/node để giảm query lặp template/settings cho mỗi recipient.
+    // Key: `run:{runId}:node:{nodeId}`, Value: { templates: Map, settings: Map, lastAccessAt }.
+    this.runNodeCache = new Map();
+    this.RUN_NODE_CACHE_TTL_MS = 30 * 60 * 1000;
+    this.RUN_NODE_CACHE_MAX_KEYS = 500;
+    // State rate-limit in-memory cho email theo SMTP account.
+    this.rateLimitStateMap = new Map();
+    this.RATE_LIMIT_STATE_TTL_MS = 90 * 60 * 1000;
   }
 
   /**
@@ -49,7 +64,283 @@ class CampaignEmailSenderService {
   }
 
   /**
+   * Đọc biến môi trường dạng số nguyên dương.
+   *
+   * @param {string} envName tên biến môi trường
+   * @param {number} defaultValue giá trị mặc định
+   * @returns {number}
+   */
+  parsePositiveIntEnv(envName, defaultValue) {
+    const parsed = Number.parseInt(process.env?.[envName], 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+    return parsed;
+  }
+
+  /**
+   * Tạm dừng theo milliseconds.
+   *
+   * @param {number} ms thời gian chờ
+   * @returns {Promise<void>}
+   */
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number.parseInt(ms, 10) || 0)));
+  }
+
+  /**
+   * Tạo khóa cache theo run/node để gom query lặp của cùng một action node.
+   *
+   * @param {string|number} runId
+   * @param {string|number} nodeId
+   * @returns {string}
+   */
+  buildRunNodeCacheKey(runId, nodeId) {
+    const safeRunId = String(runId || 'unknown').trim() || 'unknown';
+    const safeNodeId = String(nodeId || 'unknown').trim() || 'unknown';
+    return `run:${safeRunId}:node:${safeNodeId}`;
+  }
+
+  /**
+   * Lấy bucket cache theo run/node, đồng thời dọn cache cũ để tránh tăng RAM vô hạn.
+   *
+   * @param {string|number} runId
+   * @param {string|number} nodeId
+   * @returns {{templates: Map<string, any>, settings: Map<string, any>, lastAccessAt: number}}
+   */
+  getOrCreateRunNodeCache(runId, nodeId) {
+    const now = Date.now();
+    for (const [key, value] of this.runNodeCache.entries()) {
+      if (!value || typeof value !== 'object') {
+        this.runNodeCache.delete(key);
+        continue;
+      }
+      const lastAccessAt = Number.parseInt(value.lastAccessAt, 10) || 0;
+      if ((now - lastAccessAt) > this.RUN_NODE_CACHE_TTL_MS) {
+        this.runNodeCache.delete(key);
+      }
+    }
+
+    const cacheKey = this.buildRunNodeCacheKey(runId, nodeId);
+    if (this.runNodeCache.has(cacheKey)) {
+      const existing = this.runNodeCache.get(cacheKey);
+      existing.lastAccessAt = now;
+      return existing;
+    }
+
+    if (this.runNodeCache.size >= this.RUN_NODE_CACHE_MAX_KEYS) {
+      const oldestEntry = this.runNodeCache.entries().next().value;
+      if (oldestEntry?.[0]) {
+        this.runNodeCache.delete(oldestEntry[0]);
+      }
+    }
+
+    const created = {
+      templates: new Map(),
+      settings: new Map(),
+      lastAccessAt: now,
+    };
+    this.runNodeCache.set(cacheKey, created);
+    return created;
+  }
+
+  /**
+   * Lấy template email có cache theo run/node.
+   *
+   * Luồng hoạt động:
+   * 1. Kiểm tra cache bucket của run/node theo templateId.
+   * 2. Nếu chưa có thì query DB 1 lần, rồi lưu cache.
+   * 3. Trả về template object hoặc null nếu không tồn tại.
+   *
+   * @param {object} input
+   * @param {string|number} input.runId id run hiện tại
+   * @param {string|number} input.nodeId id node hiện tại
+   * @param {string|number} input.templateId id template cần lấy
+   * @returns {Promise<object|null>}
+   */
+  async getTemplateByRunNodeCache({ runId, nodeId, templateId }) {
+    if (!templateId) return null;
+    const bucket = this.getOrCreateRunNodeCache(runId, nodeId);
+    const templateKey = String(templateId).trim();
+    if (bucket.templates.has(templateKey)) {
+      return bucket.templates.get(templateKey);
+    }
+    const templateResult = await db.query(
+      'SELECT * FROM email_templates WHERE id = $1',
+      [templateId]
+    );
+    const template = templateResult.rows[0] || null;
+    bucket.templates.set(templateKey, template);
+    return template;
+  }
+
+  /**
+   * Lấy SMTP settings có cache theo run/node + user/fromEmailId.
+   *
+   * @param {object} input
+   * @param {string|number} input.runId id run hiện tại
+   * @param {string|number} input.nodeId id node hiện tại
+   * @param {string|number} input.userId id user sở hữu campaign
+   * @param {string|number|null} input.fromEmailId id account gửi, null nếu lấy mặc định
+   * @returns {Promise<object>}
+   */
+  async getEmailSettingsByRunNodeCache({
+    runId,
+    nodeId,
+    userId,
+    fromEmailId = null,
+  }) {
+    const bucket = this.getOrCreateRunNodeCache(runId, nodeId);
+    const settingsKey = `user:${String(userId || '').trim()}::from:${String(fromEmailId || 'default').trim() || 'default'}`;
+    if (bucket.settings.has(settingsKey)) {
+      return bucket.settings.get(settingsKey);
+    }
+    let settingsResult;
+    if (fromEmailId) {
+      settingsResult = await db.query(
+        "SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'",
+        [fromEmailId, userId]
+      );
+    } else {
+      settingsResult = await db.query(
+        "SELECT * FROM email_settings WHERE id_user = $1 AND status = 'active' LIMIT 1",
+        [userId]
+      );
+    }
+    const settings = settingsResult.rows[0] || null;
+    if (!settings) {
+      throw new Error('Chưa cấu hình email settings');
+    }
+    bucket.settings.set(settingsKey, settings);
+    return settings;
+  }
+
+  /**
+   * Trả về giới hạn gửi tối đa theo SMTP account trong mỗi phút.
+   *
+   * @param {object} input
+   * @param {object} input.settings SMTP settings hiện tại
+   * @returns {{accountPerMinute: number}}
+   */
+  resolveEmailRateLimitConfig({ settings }) {
+    const accountPerMinute = this.parsePositiveIntEnv('SMTP_RATE_LIMIT_PER_MINUTE_ACCOUNT', 60);
+    // Cho phép override theo chính account SMTP cụ thể.
+    const accountSpecificKey = `SMTP_RATE_LIMIT_PER_MINUTE_ACCOUNT_${String(settings?.id || '').trim()}`;
+    const accountSpecificLimit = this.parsePositiveIntEnv(accountSpecificKey, accountPerMinute);
+    return {
+      accountPerMinute: accountSpecificLimit,
+    };
+  }
+
+  /**
+   * Lấy hoặc tạo state rate-limit cho một key.
+   *
+   * @param {string} key
+   * @returns {{windowStartMs: number, sentCount: number, tail: Promise<void>, lastAccessAt: number}}
+   */
+  getOrCreateRateLimitState(key) {
+    const now = Date.now();
+    for (const [stateKey, state] of this.rateLimitStateMap.entries()) {
+      if (!state || typeof state !== 'object') {
+        this.rateLimitStateMap.delete(stateKey);
+        continue;
+      }
+      if ((now - (Number.parseInt(state.lastAccessAt, 10) || 0)) > this.RATE_LIMIT_STATE_TTL_MS) {
+        this.rateLimitStateMap.delete(stateKey);
+      }
+    }
+
+    const normalizedKey = String(key || '').trim();
+    if (this.rateLimitStateMap.has(normalizedKey)) {
+      const existing = this.rateLimitStateMap.get(normalizedKey);
+      existing.lastAccessAt = now;
+      return existing;
+    }
+    const created = {
+      windowStartMs: now,
+      sentCount: 0,
+      tail: Promise.resolve(),
+      lastAccessAt: now,
+    };
+    this.rateLimitStateMap.set(normalizedKey, created);
+    return created;
+  }
+
+  /**
+   * Chặn theo rate-limit cho một key với cơ chế queue tuần tự.
+   *
+   * @param {object} input
+   * @param {string} input.key khóa limiter
+   * @param {number} input.limitPerMinute số email tối đa / phút
+   * @returns {Promise<void>}
+   */
+  async throttleByRateLimit({ key, limitPerMinute }) {
+    const safeLimit = Number.parseInt(limitPerMinute, 10);
+    if (!key || !Number.isFinite(safeLimit) || safeLimit <= 0) return;
+    const state = this.getOrCreateRateLimitState(key);
+    const task = state.tail.then(async () => {
+      const now = Date.now();
+      const elapsed = now - state.windowStartMs;
+      if (elapsed >= 60_000) {
+        state.windowStartMs = now;
+        state.sentCount = 0;
+      }
+      if (state.sentCount >= safeLimit) {
+        const waitMs = Math.max(0, 60_000 - (now - state.windowStartMs));
+        if (waitMs > 0) {
+          await this.sleep(waitMs);
+        }
+        state.windowStartMs = Date.now();
+        state.sentCount = 0;
+      }
+      state.sentCount += 1;
+      state.lastAccessAt = Date.now();
+    });
+    // Giữ chuỗi task luôn tiếp tục kể cả khi có exception ở nhánh trước.
+    state.tail = task.catch(() => {});
+    await task;
+  }
+
+  /**
+   * Áp dụng rate-limit theo SMTP account trước khi gửi email thực tế.
+   *
+   * @param {object} input
+   * @param {object} input.settings SMTP settings hiện tại
+   * @returns {Promise<void>}
+   */
+  async applyEmailSendRateLimit({ settings }) {
+    const config = this.resolveEmailRateLimitConfig({ settings });
+    await this.throttleByRateLimit({
+      key: `smtp_account:${String(settings?.id || '').trim()}`,
+      limitPerMinute: config.accountPerMinute,
+    });
+  }
+
+  /**
    * Send email for one customer in campaign execution.
+   *
+   * Luồng này đẩy job vào BullMQ để worker xử lý gửi mail có retry/backoff.
+   * Nếu BullMQ/Redis chưa sẵn sàng, hệ thống tự fallback chạy inline để không gián đoạn.
+   *
+   * @param {object} actionNode
+   * @param {object} customer
+   * @param {object} campaign
+   * @param {number} runId
+   * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
+   */
+  async sendEmailToCustomer(actionNode, customer, campaign, runId) {
+    return outboundMessageQueueService.enqueueAndWait({
+      type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
+      payload: {
+        actionNode,
+        customer,
+        campaign,
+        runId,
+      },
+    });
+  }
+
+  /**
+   * Hàm gửi email thực thi trực tiếp.
+   * Hàm này được worker BullMQ gọi để xử lý một recipient cụ thể.
    *
    * Trước khi gửi, kiểm tra trạng thái unsubscribe / hard bounce của khách hàng.
    * Nếu khách hàng đã unsubscribe hoặc bị hard bounce, trả về object bỏ qua (skipped).
@@ -62,8 +353,9 @@ class CampaignEmailSenderService {
    * @param {number} runId
    * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
    */
-  async sendEmailToCustomer(actionNode, customer, campaign, runId) {
+  async sendEmailToCustomerDirect(actionNode, customer, campaign, runId) {
     const config = actionNode.config || {};
+    const nodeId = actionNode?.id || 'unknown';
 
     let templateId = config.emailTemplateId || config.templateId;
     let templateMappings = [];
@@ -74,35 +366,17 @@ class CampaignEmailSenderService {
       templateMappings = firstStep.templateMappings || [];
     }
 
-    let template = null;
-    if (templateId) {
-      const templateResult = await db.query(
-        'SELECT * FROM email_templates WHERE id = $1',
-        [templateId]
-      );
-      if (templateResult.rows.length > 0) {
-        template = templateResult.rows[0];
-      }
-    }
-
-    let settingsResult;
-    if (config.fromEmailId) {
-      settingsResult = await db.query(
-        "SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'",
-        [config.fromEmailId, campaign.id_user]
-      );
-    } else {
-      settingsResult = await db.query(
-        "SELECT * FROM email_settings WHERE id_user = $1 AND status = 'active' LIMIT 1",
-        [campaign.id_user]
-      );
-    }
-
-    if (settingsResult.rows.length === 0) {
-      throw new Error('Chưa cấu hình email settings');
-    }
-
-    const settings = settingsResult.rows[0];
+    const template = await this.getTemplateByRunNodeCache({
+      runId,
+      nodeId,
+      templateId,
+    });
+    const settings = await this.getEmailSettingsByRunNodeCache({
+      runId,
+      nodeId,
+      userId: campaign.id_user,
+      fromEmailId: config.fromEmailId || null,
+    });
 
     if (!settings.email) {
       throw new Error('Email settings không có địa chỉ email (source)');
@@ -237,6 +511,10 @@ class CampaignEmailSenderService {
 
     let info;
     try {
+      // Áp rate-limit cứng theo SMTP account để tránh bị provider chặn khi gửi dồn dập.
+      await this.applyEmailSendRateLimit({
+        settings,
+      });
       info = await transporter.sendMail({
         from: `"${settings.name}" <${settings.email}>`,
         to: customer.email,
@@ -248,6 +526,7 @@ class CampaignEmailSenderService {
     } catch (smtpError) {
       const smtpConfigError = isSmtpAuthConfigError(smtpError);
       const bounceType = classifyBounceType(smtpError);
+      const shouldMarkAsRecipientBounce = isRecipientAddressNotFoundError(smtpError);
       const bounceReason = String(smtpError?.message || '').slice(0, 500);
       const shortBounceReason = bounceReason.slice(0, 180);
       if (smtpConfigError) {
@@ -255,10 +534,15 @@ class CampaignEmailSenderService {
           `[CampaignRun][Email] smtp_config_error run=${runId} to=${customer.email} `
           + `reason=${shortBounceReason}`
         );
-      } else {
+      } else if (shouldMarkAsRecipientBounce) {
         console.warn(
           `[CampaignRun][Email] bounced run=${runId} to=${customer.email} `
           + `type=${bounceType} reason=${shortBounceReason}`
+        );
+      } else {
+        console.warn(
+          `[CampaignRun][Email] smtp_delivery_error run=${runId} to=${customer.email} `
+          + `reason=${shortBounceReason}`
         );
       }
 
@@ -310,6 +594,45 @@ class CampaignEmailSenderService {
           to: customer.email,
           status: 'failed',
           errorType: 'smtp_config',
+          error: bounceReason,
+        };
+      }
+
+      // Chỉ đánh dấu bounce khi có dấu hiệu rõ ràng email người nhận không tồn tại.
+      if (!shouldMarkAsRecipientBounce) {
+        const failedAt = new Date();
+        try {
+          const failedTrackingToken = uuidv4();
+          await emailSettingsController.logEmailSent({
+            userId: campaign.id_user,
+            campaignId: campaign.id,
+            customerId,
+            emailTemplateId: null,
+            fromEmailId: settings.id,
+            to: customer.email,
+            subject,
+            trackedHtmlContent: null,
+            plainTextContent: textBody,
+            trackingToken: failedTrackingToken,
+            info: { messageId: null },
+            sentAt: failedAt,
+            setting: settings,
+            runId,
+          });
+          await db.query(
+            `UPDATE email_messages
+             SET status = 'failed', bounce_reason = $1
+             WHERE tracking_token = $2`,
+            [bounceReason, failedTrackingToken]
+          );
+        } catch (logErr) {
+          console.error('[sendEmailToCustomer] Lỗi ghi log SMTP delivery error:', logErr.message);
+        }
+
+        return {
+          to: customer.email,
+          status: 'failed',
+          errorType: 'smtp_delivery',
           error: bounceReason,
         };
       }

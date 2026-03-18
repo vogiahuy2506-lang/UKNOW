@@ -28,9 +28,37 @@ const WEEKLY_DAY_OPTIONS = [
   { value: '0', label: 'Chủ nhật' },
 ];
 const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
-const DEFAULT_CONTINUOUS_MODE = true;
-const DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES = 120;
+const DEFAULT_CONTINUOUS_MODE = false;
 const ZALO_GROUP_CAMPAIGN_TYPE = 'zalo_group';
+const CONTINUOUS_POLL_MIN_MINUTES = 120;
+const CONTINUOUS_POLL_MAX_MINUTES = 300;
+const CONTINUOUS_POLL_STEP_MINUTES = 5;
+
+/**
+ * Sinh số phút random cho chu kỳ continuous theo khoảng chuẩn.
+ *
+ * @returns {number}
+ */
+const getRandomContinuousPollIntervalMinutes = () => {
+  const totalSteps = Math.floor(
+    (CONTINUOUS_POLL_MAX_MINUTES - CONTINUOUS_POLL_MIN_MINUTES) / CONTINUOUS_POLL_STEP_MINUTES
+  );
+  const randomStep = Math.floor(Math.random() * (totalSteps + 1));
+  return CONTINUOUS_POLL_MIN_MINUTES + (randomStep * CONTINUOUS_POLL_STEP_MINUTES);
+};
+
+/**
+ * Chuẩn hóa số phút nhập tay cho chu kỳ quét continuous.
+ * Nếu input không hợp lệ thì fallback về giá trị random mặc định.
+ *
+ * @param {number|string} rawValue
+ * @returns {number}
+ */
+const normalizeContinuousPollIntervalMinutes = (rawValue) => {
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return getRandomContinuousPollIntervalMinutes();
+  return parsed;
+};
 
 const CampaignRun = () => {
   const [campaigns, setCampaigns] = useState([]);
@@ -60,7 +88,11 @@ const CampaignRun = () => {
   const [runConfirmCampaign, setRunConfirmCampaign] = useState(null);
   const [runNameInput, setRunNameInput] = useState('');
   const [runContinuousMode, setRunContinuousMode] = useState(DEFAULT_CONTINUOUS_MODE);
-  const [runPollIntervalMinutes, setRunPollIntervalMinutes] = useState(DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES);
+  const [runPollIntervalMinutes, setRunPollIntervalMinutes] = useState(() => getRandomContinuousPollIntervalMinutes());
+  const [runResumeMode, setRunResumeMode] = useState(false);
+  const [runResumeFromId, setRunResumeFromId] = useState('');
+  const [continuousResumeRunOptions, setContinuousResumeRunOptions] = useState([]);
+  const [isLoadingContinuousResumeOptions, setIsLoadingContinuousResumeOptions] = useState(false);
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [stopRunConfirmTarget, setStopRunConfirmTarget] = useState(null);
   const [selectedCampaignForLogs, setSelectedCampaignForLogs] = useState(null);
@@ -72,6 +104,9 @@ const CampaignRun = () => {
   const [pausedCampaignSearch, setPausedCampaignSearch] = useState('');
   const [activatingCampaignIds, setActivatingCampaignIds] = useState(new Set());
   const [stoppingRunIds, setStoppingRunIds] = useState(new Set());
+  const selectedResumeRunId = Number.parseInt(runResumeFromId, 10);
+  const isResumeRunSelected = Number.isFinite(selectedResumeRunId) && selectedResumeRunId > 0;
+  const isRunResumeLocked = Boolean(runContinuousMode && runResumeMode && isResumeRunSelected);
 
   const getCampaignKey = (campaignId) => String(campaignId);
   const isCampaignRunningById = (campaignId) => runningCampaigns.has(getCampaignKey(campaignId));
@@ -114,6 +149,12 @@ const CampaignRun = () => {
     
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (runContinuousMode) return;
+    setRunResumeMode(false);
+    setRunResumeFromId('');
+  }, [runContinuousMode]);
 
   const fetchActiveCampaigns = async () => {
     setIsLoading(true);
@@ -210,15 +251,82 @@ const CampaignRun = () => {
     setScheduleRuns([]);
   };
 
-  const openRunConfirmModal = (campaign) => {
+  /**
+   * Tải danh sách run continuous có thể dùng để chạy tiếp.
+   *
+   * Luồng hoạt động:
+   * 1. Lấy lịch sử run theo campaign hiện tại.
+   * 2. Chỉ giữ các run có `runMetadata.continuousMode = true` và không còn running.
+   * 3. Map thành option thân thiện để hiển thị trong modal.
+   *
+   * @param {number|string} campaignId id campaign
+   * @returns {Promise<void>}
+   */
+  const loadContinuousResumeRunOptions = async (campaignId) => {
+    if (!campaignId) {
+      setContinuousResumeRunOptions([]);
+      return;
+    }
+    setIsLoadingContinuousResumeOptions(true);
+    try {
+      const response = await campaignRunApiService.getCampaignRuns(`campaignId=${campaignId}&limit=100`);
+      const runs = Array.isArray(response.data?.data) ? response.data.data : [];
+      const options = runs
+        .filter((run) => {
+          const isContinuous = Boolean(run?.runMetadata?.continuousMode);
+          const status = String(run?.status || '').trim().toLowerCase();
+          return isContinuous && status !== 'running';
+        })
+        .map((run) => {
+          const runId = Number.parseInt(run?.id, 10);
+          const runName = String(run?.runName || '').trim() || `Run #${run?.id}`;
+          const pollIntervalMs = Number.parseInt(run?.runMetadata?.pollIntervalMs, 10);
+          const pollIntervalMinutesRaw = Number.parseInt(
+            run?.runMetadata?.continuousCycleMinutes ?? run?.runMetadata?.pollIntervalMinutes,
+            10
+          );
+          const pollIntervalMinutes = normalizeContinuousPollIntervalMinutes(
+            Number.isFinite(pollIntervalMs) && pollIntervalMs > 0
+              ? Math.round(pollIntervalMs / (60 * 1000))
+              : pollIntervalMinutesRaw
+          );
+          const startedAtLabel = run?.startedAt
+            ? new Date(run.startedAt).toLocaleString('vi-VN')
+            : 'không rõ thời gian';
+          const statusLabel = String(run?.status || '').trim() || 'unknown';
+          return {
+            id: runId,
+            runName,
+            pollIntervalMinutes,
+            label: `#${runId} - ${runName} (${statusLabel}, bắt đầu: ${startedAtLabel}, quét: ${pollIntervalMinutes} phút)`,
+          };
+        })
+        .filter((item) => Number.isFinite(item.id));
+      setContinuousResumeRunOptions(options);
+    } catch (error) {
+      setContinuousResumeRunOptions([]);
+      toast.error('Không thể tải danh sách lượt continuous cũ');
+    } finally {
+      setIsLoadingContinuousResumeOptions(false);
+    }
+  };
+
+  const openRunConfirmModal = async (campaign) => {
     if (isCampaignRunningById(campaign.id)) {
       toast.error('Chiến dịch đang chạy, vui lòng chờ hoàn tất');
       return;
     }
+    const isGroupCampaign = isZaloGroupCampaign(campaign);
     setRunConfirmCampaign(campaign);
     setRunNameInput(campaign?.campaignName || '');
-    setRunContinuousMode(isZaloGroupCampaign(campaign) ? false : DEFAULT_CONTINUOUS_MODE);
-    setRunPollIntervalMinutes(DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES);
+    setRunContinuousMode(isGroupCampaign ? false : DEFAULT_CONTINUOUS_MODE);
+    setRunPollIntervalMinutes(getRandomContinuousPollIntervalMinutes());
+    setRunResumeMode(false);
+    setRunResumeFromId('');
+    setContinuousResumeRunOptions([]);
+    if (!isGroupCampaign) {
+      await loadContinuousResumeRunOptions(campaign.id);
+    }
     setShowRunConfirmModal(true);
   };
 
@@ -228,7 +336,11 @@ const CampaignRun = () => {
     setRunConfirmCampaign(null);
     setRunNameInput('');
     setRunContinuousMode(DEFAULT_CONTINUOUS_MODE);
-    setRunPollIntervalMinutes(DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES);
+    setRunPollIntervalMinutes(getRandomContinuousPollIntervalMinutes());
+    setRunResumeMode(false);
+    setRunResumeFromId('');
+    setContinuousResumeRunOptions([]);
+    setIsLoadingContinuousResumeOptions(false);
   };
 
   const handleRunNow = async () => {
@@ -240,17 +352,30 @@ const CampaignRun = () => {
     setIsSubmittingRun(true);
     try {
       const isGroupCampaign = isZaloGroupCampaign(runConfirmCampaign);
-      const parsedPollIntervalMinutes = Number.parseInt(runPollIntervalMinutes, 10);
-      const safePollIntervalMinutes = Number.isFinite(parsedPollIntervalMinutes)
-        ? Math.max(1, Math.min(parsedPollIntervalMinutes, 24 * 60))
-        : DEFAULT_CONTINUOUS_POLL_INTERVAL_MINUTES;
       const effectiveContinuousMode = isGroupCampaign ? false : Boolean(runContinuousMode);
+      const normalizedPollIntervalMinutes = normalizeContinuousPollIntervalMinutes(runPollIntervalMinutes);
+      const continueRunId = effectiveContinuousMode
+        && runResumeMode
+        && isResumeRunSelected
+        ? selectedResumeRunId
+        : null;
+      if (effectiveContinuousMode && runResumeMode && !continueRunId) {
+        toast.error('Vui lòng chọn lượt continuous cũ để chạy tiếp');
+        return;
+      }
       await campaignRunApiService.runCampaign(runConfirmCampaign.id, {
         source: 'campaign_run',
         runName: runNameInput?.trim() || runConfirmCampaign.campaignName,
         adjacentZaloNodeDelayMs: ADJACENT_ZALO_NODE_DELAY_MS,
         continuousMode: effectiveContinuousMode,
-        pollIntervalMs: safePollIntervalMinutes * 60 * 1000,
+        ...(effectiveContinuousMode
+          ? {
+            pollIntervalMs: normalizedPollIntervalMinutes * 60 * 1000,
+            pollIntervalMinutes: normalizedPollIntervalMinutes,
+            continuousCycleMinutes: normalizedPollIntervalMinutes,
+          }
+          : {}),
+        ...(continueRunId ? { continueRunId } : {}),
       });
       toast.success('Đã bắt đầu chạy chiến dịch');
       await checkRunningCampaigns();
@@ -261,6 +386,21 @@ const CampaignRun = () => {
       setIsSubmittingRun(false);
     }
   };
+
+  useEffect(() => {
+    if (!isRunResumeLocked) return;
+    const selectedRun = continuousResumeRunOptions.find(
+      (item) => Number.parseInt(item?.id, 10) === selectedResumeRunId
+    );
+    if (!selectedRun) return;
+    setRunNameInput(String(selectedRun.runName || runConfirmCampaign?.campaignName || '').trim());
+    setRunPollIntervalMinutes(selectedRun.pollIntervalMinutes);
+  }, [
+    isRunResumeLocked,
+    selectedResumeRunId,
+    continuousResumeRunOptions,
+    runConfirmCampaign?.campaignName,
+  ]);
 
   const openCampaignLogs = async (campaign) => {
     setSelectedCampaignForLogs(campaign);
@@ -681,6 +821,13 @@ const CampaignRun = () => {
         setRunContinuousMode={setRunContinuousMode}
         runPollIntervalMinutes={runPollIntervalMinutes}
         setRunPollIntervalMinutes={setRunPollIntervalMinutes}
+        isRunResumeLocked={isRunResumeLocked}
+        runResumeMode={runResumeMode}
+        setRunResumeMode={setRunResumeMode}
+        runResumeFromId={runResumeFromId}
+        setRunResumeFromId={setRunResumeFromId}
+        continuousResumeRunOptions={continuousResumeRunOptions}
+        isLoadingContinuousResumeOptions={isLoadingContinuousResumeOptions}
         shouldShowRunContinuousOptions={!isZaloGroupCampaign(runConfirmCampaign)}
         isSubmittingRun={isSubmittingRun}
         handleRunNow={handleRunNow}

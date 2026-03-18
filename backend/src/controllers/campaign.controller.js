@@ -698,7 +698,9 @@ class CampaignController {
    * - scheduleId: id lịch (khi source=schedule)
    * - adjacentZaloNodeDelayMs: delay giữa 2 node Zalo liền kề (ms)
    * - continuousMode: bật/tắt chế độ 1 run quét liên tục khách mới
-   * - pollIntervalMs: chu kỳ quét khách mới (ms) khi continuousMode=true
+   * - pollIntervalMs: (legacy) chu kỳ quét khách mới (ms) khi continuousMode=true
+   * - resumeFromRunId: id lượt continuous cũ cần chạy tiếp để không gửi lại khách đã xử lý
+   * - continueRunId: id run continuous cũ cần chạy tiếp bằng chính run_id đó (không tạo run mới)
    *
    * Response:
    * - runId, campaignId, runName, status
@@ -721,8 +723,30 @@ class CampaignController {
       const continuousModeRaw = String(req.body?.continuousMode ?? '').trim().toLowerCase();
       const continuousMode = continuousModeRaw === 'true' || req.body?.continuousMode === true;
       const pollIntervalMsRaw = Number.parseInt(req.body?.pollIntervalMs, 10);
-      const pollIntervalMs = Number.isFinite(pollIntervalMsRaw) && pollIntervalMsRaw >= 1000
-        ? pollIntervalMsRaw
+      const pollIntervalMinutesRaw = Number.parseInt(
+        req.body?.pollIntervalMinutes
+          ?? req.body?.continuousCycleMinutes
+          ?? req.body?.continuous_cycle_minutes,
+        10
+      );
+      let pollIntervalMs = null;
+      // Tương thích ngược:
+      // - payload mới gửi `pollIntervalMs` (milliseconds)
+      // - payload cũ có thể gửi nhầm phút vào `pollIntervalMs` hoặc dùng key phút riêng.
+      if (Number.isFinite(pollIntervalMsRaw) && pollIntervalMsRaw > 0) {
+        pollIntervalMs = pollIntervalMsRaw >= 1000
+          ? pollIntervalMsRaw
+          : pollIntervalMsRaw * 60 * 1000;
+      } else if (Number.isFinite(pollIntervalMinutesRaw) && pollIntervalMinutesRaw > 0) {
+        pollIntervalMs = pollIntervalMinutesRaw * 60 * 1000;
+      }
+      const resumeFromRunIdRaw = Number.parseInt(req.body?.resumeFromRunId, 10);
+      const resumeFromRunId = Number.isFinite(resumeFromRunIdRaw) && resumeFromRunIdRaw > 0
+        ? resumeFromRunIdRaw
+        : null;
+      const continueRunIdRaw = Number.parseInt(req.body?.continueRunId, 10);
+      const continueRunId = Number.isFinite(continueRunIdRaw) && continueRunIdRaw > 0
+        ? continueRunIdRaw
         : null;
 
       if (!['campaign_run', 'schedule'].includes(source)) {
@@ -731,19 +755,45 @@ class CampaignController {
           message: 'Chỉ được chạy chiến dịch từ trang Chạy chiến dịch',
         });
       }
+      if (continueRunId !== null && source !== 'campaign_run') {
+        return res.status(400).json({
+          success: false,
+          message: 'Chỉ hỗ trợ chạy tiếp run continuous từ trang Chạy chiến dịch',
+        });
+      }
+      if (continueRunId !== null && !continuousMode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Chạy tiếp run cũ chỉ áp dụng cho chế độ continuous',
+        });
+      }
 
-      const runRecord = await this.createCampaignRunRecord({
-        campaignId,
-        userId,
-        source,
-        scheduleId,
-        runName,
-        runOptions: {
-          adjacentZaloNodeDelayMs,
-          continuousMode,
-          pollIntervalMs,
-        },
-      });
+      let runRecord;
+      if (continueRunId !== null) {
+        runRecord = await campaignRunService.resumeContinuousRunRecord({
+          campaignId,
+          userId,
+          runId: continueRunId,
+          runOptions: {
+            adjacentZaloNodeDelayMs,
+            pollIntervalMs,
+          },
+        });
+      } else {
+        runRecord = await this.createCampaignRunRecord({
+          campaignId,
+          userId,
+          source,
+          scheduleId,
+          runName,
+          runOptions: {
+            adjacentZaloNodeDelayMs,
+            continuousMode,
+            pollIntervalMs,
+            resumeFromRunId,
+          },
+        });
+      }
 
       res.json({
         success: true,

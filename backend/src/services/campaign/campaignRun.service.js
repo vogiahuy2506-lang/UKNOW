@@ -8,6 +8,19 @@ import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zalo
 
 class CampaignRunService {
   constructor() {
+    const parsePositiveInt = (value, defaultValue) => {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+      return parsed;
+    };
+    const parseEnvBoolean = (value, defaultValue) => {
+      const normalized = String(value ?? '').trim().toLowerCase();
+      if (!normalized) return defaultValue;
+      if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+      if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+      return defaultValue;
+    };
+
     // Giữ danh sách run đang thực thi trong RAM để tránh chạy trùng cùng một runId.
     this.activeRunIds = new Set();
     // Hàng đợi cho các run chờ slot trống (chỉ áp dụng cho one-shot và setup phase).
@@ -25,6 +38,49 @@ class CampaignRunService {
     this.continuousWorkerQueue = [];
     // Tập runKey đang giữ worker slot (để cleanup an toàn ở finally).
     this.continuousWorkerHolders = new Set();
+
+    // Giới hạn batch gửi trong chế độ continuous để tăng throughput nhưng vẫn tránh quá tải Redis/API.
+    this.CONTINUOUS_EMAIL_BATCH_SIZE = parsePositiveInt(
+      process.env.CONTINUOUS_EMAIL_BATCH_SIZE,
+      12
+    );
+    this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE = parsePositiveInt(
+      process.env.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE,
+      8
+    );
+    this.CONTINUOUS_ZALO_FRIEND_BATCH_SIZE = parsePositiveInt(
+      process.env.CONTINUOUS_ZALO_FRIEND_BATCH_SIZE,
+      8
+    );
+    this.CONTINUOUS_ZALO_GROUP_BATCH_SIZE = parsePositiveInt(
+      process.env.CONTINUOUS_ZALO_GROUP_BATCH_SIZE,
+      6
+    );
+    // Với continuous + BullMQ, mặc định tắt random delay để worker queue chủ động điều tiết tốc độ.
+    this.CONTINUOUS_RANDOM_DELAY_ENABLED = parseEnvBoolean(
+      process.env.CONTINUOUS_RANDOM_DELAY_ENABLED,
+      false
+    );
+  }
+
+  /**
+   * Sinh chu kỳ quét cho continuous mode theo khoảng ngẫu nhiên cố định.
+   *
+   * Luồng hoạt động:
+   * 1. Chọn ngẫu nhiên số phút trong đoạn 120-300.
+   * 2. Ràng buộc theo bước nhảy 5 phút.
+   * 3. Quy đổi sang milliseconds để dùng cho sleep nội bộ.
+   *
+   * @returns {number} Thời gian chờ tính theo milliseconds.
+   */
+  getRandomContinuousPollIntervalMs() {
+    const minMinutes = 120;
+    const maxMinutes = 300;
+    const stepMinutes = 5;
+    const totalSteps = Math.floor((maxMinutes - minMinutes) / stepMinutes);
+    const randomStep = Math.floor(Math.random() * (totalSteps + 1));
+    const selectedMinutes = minMinutes + (randomStep * stepMinutes);
+    return selectedMinutes * 60 * 1000;
   }
 
   /**
@@ -93,6 +149,28 @@ class CampaignRunService {
       const pollIntervalMs = Number.isFinite(rawPollIntervalMs)
         ? Math.max(1000, rawPollIntervalMs)
         : null;
+      const rawResumeFromRunId = Number.parseInt(runOptions?.resumeFromRunId, 10);
+      const resumeFromRunId = Number.isFinite(rawResumeFromRunId) && rawResumeFromRunId > 0
+        ? rawResumeFromRunId
+        : null;
+      if (continuousMode && resumeFromRunId !== null) {
+        const resumeRunCheck = await client.query(
+          `SELECT cr.id
+           FROM campaign_runs cr
+           JOIN campaigns c ON c.id = cr.id_campaign
+           WHERE cr.id = $1
+             AND cr.id_campaign = $2
+             AND c.id_user = $3
+             AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
+           LIMIT 1`,
+          [resumeFromRunId, campaignId, userId]
+        );
+        if (resumeRunCheck.rows.length === 0) {
+          const error = new Error('Lượt continuous cũ để chạy tiếp không hợp lệ');
+          error.statusCode = 400;
+          throw error;
+        }
+      }
       const runMetadata = {
         triggeredBy: userId,
         source,
@@ -100,6 +178,10 @@ class CampaignRunService {
         ...(adjacentZaloNodeDelayMs !== null ? { adjacentZaloNodeDelayMs } : {}),
         ...(continuousMode ? { continuousMode: true } : {}),
         ...(continuousMode && pollIntervalMs !== null ? { pollIntervalMs } : {}),
+        ...(continuousMode && pollIntervalMs !== null
+          ? { continuousCycleMinutes: Math.max(1, Math.round(pollIntervalMs / (60 * 1000))) }
+          : {}),
+        ...(continuousMode && resumeFromRunId !== null ? { resumeFromRunId } : {}),
       };
 
       const runResult = await client.query(
@@ -178,6 +260,123 @@ class CampaignRunService {
       found: true,
       stopped: true,
     };
+  }
+
+  /**
+   * Tiếp tục một run continuous cũ bằng chính run_id hiện có.
+   *
+   * Luồng hoạt động:
+   * 1. Khóa bản ghi run để kiểm tra quyền sở hữu và trạng thái continuous.
+   * 2. Chặn nếu campaign đang có run khác ở trạng thái running.
+   * 3. Set lại trạng thái run về running, cập nhật metadata cần thiết để tiếp tục xử lý.
+   *
+   * @param {object} input
+   * @param {number} input.campaignId id campaign đang chạy
+   * @param {number} input.userId chủ sở hữu campaign
+   * @param {number} input.runId run continuous cần chạy tiếp
+   * @param {object} [input.runOptions] tuỳ chọn runtime (poll interval, delay...)
+   * @returns {Promise<object>} run record sau khi cập nhật
+   */
+  async resumeContinuousRunRecord({
+    campaignId,
+    userId,
+    runId,
+    runOptions = {},
+  }) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+
+      const runResult = await client.query(
+        `SELECT cr.*
+         FROM campaign_runs cr
+         JOIN campaigns c ON c.id = cr.id_campaign
+         WHERE cr.id = $1
+           AND cr.id_campaign = $2
+           AND c.id_user = $3
+         FOR UPDATE`,
+        [runId, campaignId, userId]
+      );
+      if (runResult.rows.length === 0) {
+        const error = new Error('Không tìm thấy lượt continuous cũ để chạy tiếp');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const currentRun = runResult.rows[0];
+      const isContinuousRun = String(currentRun?.run_metadata?.continuousMode || '').trim().toLowerCase() === 'true'
+        || currentRun?.run_metadata?.continuousMode === true;
+      if (!isContinuousRun) {
+        const error = new Error('Lượt chạy đã chọn không phải continuous mode');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (String(currentRun?.status || '').trim().toLowerCase() === 'running') {
+        const error = new Error('Lượt chạy continuous này đang hoạt động');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const runningOtherRun = await client.query(
+        `SELECT id
+         FROM campaign_runs
+         WHERE id_campaign = $1
+           AND status = 'running'
+           AND id <> $2
+         LIMIT 1`,
+        [campaignId, runId]
+      );
+      if (runningOtherRun.rows.length > 0) {
+        const error = new Error('Chiến dịch này đã có lượt chạy khác đang hoạt động');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const rawAdjacentDelay = Number.parseInt(runOptions?.adjacentZaloNodeDelayMs, 10);
+      const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay >= 0
+        ? rawAdjacentDelay
+        : null;
+      const rawPollIntervalMs = Number.parseInt(runOptions?.pollIntervalMs, 10);
+      const pollIntervalMs = Number.isFinite(rawPollIntervalMs) && rawPollIntervalMs >= 1000
+        ? rawPollIntervalMs
+        : null;
+
+      const mergedMetadata = {
+        ...(currentRun.run_metadata || {}),
+        triggeredBy: userId,
+        source: 'campaign_run',
+        continuousMode: true,
+      };
+      if (adjacentZaloNodeDelayMs !== null) {
+        mergedMetadata.adjacentZaloNodeDelayMs = adjacentZaloNodeDelayMs;
+      }
+      if (pollIntervalMs !== null) {
+        mergedMetadata.pollIntervalMs = pollIntervalMs;
+        mergedMetadata.continuousCycleMinutes = Math.max(1, Math.round(pollIntervalMs / (60 * 1000)));
+      }
+      // Resume chính run cũ nên không cần fallback sang run khác.
+      delete mergedMetadata.resumeFromRunId;
+
+      const updatedRunResult = await client.query(
+        `UPDATE campaign_runs
+         SET status = 'running',
+             started_at = CURRENT_TIMESTAMP,
+             completed_at = NULL,
+             error_message = NULL,
+             run_metadata = $1::jsonb
+         WHERE id = $2
+         RETURNING *`,
+        [JSON.stringify(mergedMetadata), runId]
+      );
+
+      await client.query('COMMIT');
+      return updatedRunResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -566,6 +765,34 @@ class CampaignRunService {
         );
         await sleepWithRunCheck(delayMs);
       };
+      const shouldApplyRandomDelayInContinuous = () => this.CONTINUOUS_RANDOM_DELAY_ENABLED;
+      /**
+       * Chạy danh sách task theo batch song song có giới hạn.
+       * Dùng cho continuous mode để tăng tốc gửi nhiều recipient nhưng vẫn kiểm soát tải.
+       *
+       * Luồng hoạt động:
+       * 1. Chia toàn bộ input thành từng batch theo `concurrency`.
+       * 2. Trong mỗi batch chạy song song bằng Promise.all.
+       * 3. Chờ batch hiện tại xong mới chuyển batch tiếp theo để tránh bùng nổ tài nguyên.
+       *
+       * @param {object} input
+       * @param {Array<any>} input.items danh sách phần tử cần xử lý
+       * @param {number} input.concurrency số lượng xử lý song song tối đa mỗi batch
+       * @param {(item: any) => Promise<void>} input.handler hàm xử lý từng phần tử
+       * @returns {Promise<void>}
+       */
+      const runTasksWithConcurrency = async ({ items = [], concurrency = 1, handler }) => {
+        const sourceItems = Array.isArray(items) ? items : [];
+        const safeConcurrency = Math.max(1, Number.parseInt(concurrency, 10) || 1);
+        for (let index = 0; index < sourceItems.length; index += safeConcurrency) {
+          const batch = sourceItems.slice(index, index + safeConcurrency);
+          await Promise.all(
+            batch.map(async (item) => {
+              await handler(item);
+            })
+          );
+        }
+      };
       const unitToMs = (unit) => {
         if (unit === 'hours') return 60 * 60 * 1000;
         if (unit === 'days') return 24 * 60 * 60 * 1000;
@@ -607,11 +834,20 @@ class CampaignRunService {
         return targetTime;
       };
       let isContinuousMode = false;
-      let continuousPollIntervalMs = 120 * 60 * 1000;
+      let resumeFromRunId = null;
+      let configuredContinuousPollIntervalMs = null;
       const localRecipientProgress = new Map();
+      const resumedRecipientProgress = new Map();
       let isRecipientLedgerTableAvailable = true;
       const buildRecipientLedgerKey = ({ nodeId, channel, recipientKey }) =>
         `${String(nodeId)}::${String(channel)}::${String(recipientKey || '').trim().toLowerCase()}`;
+      const createEmptyRecipientProgress = () => ({
+        lastCompletedStep: 0,
+        isFullyCompleted: false,
+        firstSentAt: null,
+        lastCompletedAt: null,
+        nextDueAt: null,
+      });
       /**
        * Read recipient step progress from DB ledger; fallback to in-memory map when table not present.
        *
@@ -623,25 +859,15 @@ class CampaignRunService {
        */
       const getRecipientProgress = async ({ nodeId, channel, recipientKey }) => {
         const safeRecipientKey = String(recipientKey || '').trim().toLowerCase();
-        if (!safeRecipientKey) {
-          return {
-            lastCompletedStep: 0,
-            isFullyCompleted: false,
-            firstSentAt: null,
-            lastCompletedAt: null,
-            nextDueAt: null,
-          };
-        }
+        if (!safeRecipientKey) return createEmptyRecipientProgress();
         const localKey = buildRecipientLedgerKey({ nodeId, channel, recipientKey: safeRecipientKey });
-        if (!isRecipientLedgerTableAvailable) {
-          return localRecipientProgress.get(localKey) || {
-            lastCompletedStep: 0,
-            isFullyCompleted: false,
-            firstSentAt: null,
-            lastCompletedAt: null,
-            nextDueAt: null,
-          };
+        if (localRecipientProgress.has(localKey)) {
+          return localRecipientProgress.get(localKey) || createEmptyRecipientProgress();
         }
+        if (resumedRecipientProgress.has(localKey)) {
+          return resumedRecipientProgress.get(localKey) || createEmptyRecipientProgress();
+        }
+        if (!isRecipientLedgerTableAvailable) return createEmptyRecipientProgress();
         try {
           const progressResult = await db.query(
             `SELECT last_completed_step, is_fully_completed, meta
@@ -654,32 +880,46 @@ class CampaignRunService {
             [runId, nodeId, channel, safeRecipientKey]
           );
           if (progressResult.rows.length === 0) {
-            return {
-              lastCompletedStep: 0,
-              isFullyCompleted: false,
-              firstSentAt: null,
-              lastCompletedAt: null,
-              nextDueAt: null,
-            };
+            if (Number.isFinite(resumeFromRunId) && resumeFromRunId > 0) {
+              const resumeResult = await db.query(
+                `SELECT last_completed_step, is_fully_completed, meta
+                 FROM campaign_run_recipient_steps
+                 WHERE id_run = $1
+                   AND id_node = $2
+                   AND channel = $3
+                   AND recipient_key = $4
+                 LIMIT 1`,
+                [resumeFromRunId, nodeId, channel, safeRecipientKey]
+              );
+              if (resumeResult.rows.length > 0) {
+                const resumeMeta = resumeResult.rows[0].meta || {};
+                const resumedProgress = {
+                  lastCompletedStep: Number.parseInt(resumeResult.rows[0].last_completed_step, 10) || 0,
+                  isFullyCompleted: Boolean(resumeResult.rows[0].is_fully_completed),
+                  firstSentAt: resumeMeta?.firstSentAt || null,
+                  lastCompletedAt: resumeMeta?.lastCompletedAt || null,
+                  nextDueAt: resumeMeta?.nextDueAt || null,
+                };
+                resumedRecipientProgress.set(localKey, resumedProgress);
+                return resumedProgress;
+              }
+            }
+            return createEmptyRecipientProgress();
           }
           const meta = progressResult.rows[0].meta || {};
-          return {
+          const currentProgress = {
             lastCompletedStep: Number.parseInt(progressResult.rows[0].last_completed_step, 10) || 0,
             isFullyCompleted: Boolean(progressResult.rows[0].is_fully_completed),
             firstSentAt: meta?.firstSentAt || null,
             lastCompletedAt: meta?.lastCompletedAt || null,
             nextDueAt: meta?.nextDueAt || null,
           };
+          localRecipientProgress.set(localKey, currentProgress);
+          return currentProgress;
         } catch (error) {
           if (String(error?.code || '') === '42P01' || String(error?.code || '') === '42703') {
             isRecipientLedgerTableAvailable = false;
-            return localRecipientProgress.get(localKey) || {
-              lastCompletedStep: 0,
-              isFullyCompleted: false,
-              firstSentAt: null,
-              lastCompletedAt: null,
-              nextDueAt: null,
-            };
+            return createEmptyRecipientProgress();
           }
           throw error;
         }
@@ -712,6 +952,13 @@ class CampaignRunService {
         const isFullyCompleted = safeCompletedStep >= safeTotalSteps;
         const localKey = buildRecipientLedgerKey({ nodeId, channel, recipientKey: safeRecipientKey });
         localRecipientProgress.set(localKey, {
+          lastCompletedStep: safeCompletedStep,
+          isFullyCompleted,
+          firstSentAt,
+          lastCompletedAt,
+          nextDueAt,
+        });
+        resumedRecipientProgress.set(localKey, {
           lastCompletedStep: safeCompletedStep,
           isFullyCompleted,
           firstSentAt,
@@ -847,10 +1094,30 @@ class CampaignRunService {
       const rawContinuousMode = runResult.rows[0]?.run_metadata?.continuousMode;
       isContinuousMode = runSource === 'campaign_run'
         && (rawContinuousMode === true || String(rawContinuousMode).trim().toLowerCase() === 'true');
+      const rawResumeFromRunId = Number.parseInt(runResult.rows[0]?.run_metadata?.resumeFromRunId, 10);
+      if (isContinuousMode && Number.isFinite(rawResumeFromRunId) && rawResumeFromRunId > 0) {
+        const normalizedRunId = Number.parseInt(runId, 10);
+        resumeFromRunId = rawResumeFromRunId !== normalizedRunId ? rawResumeFromRunId : null;
+      }
       const rawPollIntervalMs = Number.parseInt(runResult.rows[0]?.run_metadata?.pollIntervalMs, 10);
-      continuousPollIntervalMs = Number.isFinite(rawPollIntervalMs)
-        ? Math.max(1000, rawPollIntervalMs)
-        : 120 * 60 * 1000;
+      const rawPollIntervalMinutes = Number.parseInt(
+        runResult.rows[0]?.run_metadata?.continuousCycleMinutes
+          ?? runResult.rows[0]?.run_metadata?.pollIntervalMinutes,
+        10
+      );
+      if (isContinuousMode && Number.isFinite(rawPollIntervalMs)) {
+        configuredContinuousPollIntervalMs = Math.max(60 * 1000, rawPollIntervalMs);
+      } else if (isContinuousMode && Number.isFinite(rawPollIntervalMinutes) && rawPollIntervalMinutes > 0) {
+        configuredContinuousPollIntervalMs = rawPollIntervalMinutes * 60 * 1000;
+      }
+      if (isContinuousMode && Number.isFinite(resumeFromRunId)) {
+        console.log(`[CampaignRun][Continuous] run=${runId} resume_from_run=${resumeFromRunId}`);
+      }
+      if (isContinuousMode && Number.isFinite(configuredContinuousPollIntervalMs)) {
+        console.log(
+          `[CampaignRun][Continuous] run=${runId} configured_poll_ms=${configuredContinuousPollIntervalMs}`
+        );
+      }
       const trackingBaseUrl = String(process.env.TRACKING_BASE_URL || '').trim() || 'http://localhost:5000';
       const UTM_SOURCE_BY_ZALO_CHANNEL = {
         personal: 'zalo_person_campaign',
@@ -2224,93 +2491,93 @@ class CampaignRunService {
                 },
               });
             }
-            for (const customer of dedupedRecipients) {
-              const customerKey = String(customer.email || '').trim().toLowerCase();
-              if (!customerKey) continue;
-              try {
-                // eslint-disable-next-line no-await-in-loop
-                const progress = await getRecipientProgress({
-                  nodeId: node.id,
-                  channel: 'email',
-                  recipientKey: customerKey,
-                });
-                const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
-                if (progress.isFullyCompleted || nextStepIndex >= loopEmailSteps.length) continue;
-                const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
-                // khi loop chạy lâu qua nhiều recipient.
-                const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                if (!isDueNow) {
-                  registerNextContinuousWakeAt(nextDueAtMs);
-                  continue;
-                }
-                const step = loopEmailSteps[nextStepIndex];
-                const runtimeNode = {
-                  ...node,
-                  config: {
-                    ...config,
-                    emailTemplateId: step.templateId || config.emailTemplateId,
-                    emailSteps: [step],
-                  },
-                };
-                totalRecipients += 1;
-                // eslint-disable-next-line no-await-in-loop
-                const sendOutcome = await sendEmailWithLogging({
-                  customer,
-                  runtimeNode,
-                  stepMeta: {
-                    templateId: step.templateId || null,
-                    stepIndex: nextStepIndex + 1,
-                    sendMode: loopEmailSendMode,
-                  },
-                  // Luôn có delay ngẫu nhiên giữa các khách để tránh gửi đồng loạt
-                  applyRandomDelay: true,
-                });
-                if (sendOutcome?.success) {
-                  const completedAtIso = toHoChiMinhIso();
-                  const firstSentAt = progress.firstSentAt || completedAtIso;
-                  const nextDueAt = computeStepDueAt({
-                    steps: loopEmailSteps,
-                    completedStep: nextStepIndex + 1,
-                    firstSentAt,
-                    lastCompletedAt: completedAtIso,
-                    sendMode: loopEmailSendMode,
-                  });
-                  // eslint-disable-next-line no-await-in-loop
-                  await upsertRecipientProgress({
+            await runTasksWithConcurrency({
+              items: dedupedRecipients,
+              concurrency: this.CONTINUOUS_EMAIL_BATCH_SIZE,
+              handler: async (customer) => {
+                const customerKey = String(customer?.email || '').trim().toLowerCase();
+                if (!customerKey) return;
+                try {
+                  const progress = await getRecipientProgress({
                     nodeId: node.id,
                     channel: 'email',
                     recipientKey: customerKey,
-                    completedStep: nextStepIndex + 1,
-                    totalSteps: loopEmailSteps.length,
-                    firstSentAt,
-                    lastCompletedAt: completedAtIso,
-                    nextDueAt,
                   });
-                  registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
-                } else if (sendOutcome?.stopRemainingStepsForRecipient) {
-                  const completedAtIso = toHoChiMinhIso();
-                  // eslint-disable-next-line no-await-in-loop
-                  await upsertRecipientProgress({
-                    nodeId: node.id,
-                    channel: 'email',
-                    recipientKey: customerKey,
-                    completedStep: loopEmailSteps.length,
-                    totalSteps: loopEmailSteps.length,
-                    firstSentAt: progress.firstSentAt || completedAtIso,
-                    lastCompletedAt: completedAtIso,
-                    nextDueAt: null,
+                  const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
+                  if (progress.isFullyCompleted || nextStepIndex >= loopEmailSteps.length) return;
+                  const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
+                  // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
+                  // khi loop chạy lâu qua nhiều recipient.
+                  const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
+                  if (!isDueNow) {
+                    registerNextContinuousWakeAt(nextDueAtMs);
+                    return;
+                  }
+                  const step = loopEmailSteps[nextStepIndex];
+                  const runtimeNode = {
+                    ...node,
+                    config: {
+                      ...config,
+                      emailTemplateId: step.templateId || config.emailTemplateId,
+                      emailSteps: [step],
+                    },
+                  };
+                  totalRecipients += 1;
+                  const sendOutcome = await sendEmailWithLogging({
+                    customer,
+                    runtimeNode,
+                    stepMeta: {
+                      templateId: step.templateId || null,
+                      stepIndex: nextStepIndex + 1,
+                      sendMode: loopEmailSendMode,
+                    },
+                    // Continuous mode ưu tiên throughput, delay ngẫu nhiên được điều khiển bằng env.
+                    applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
+                  if (sendOutcome?.success) {
+                    const completedAtIso = toHoChiMinhIso();
+                    const firstSentAt = progress.firstSentAt || completedAtIso;
+                    const nextDueAt = computeStepDueAt({
+                      steps: loopEmailSteps,
+                      completedStep: nextStepIndex + 1,
+                      firstSentAt,
+                      lastCompletedAt: completedAtIso,
+                      sendMode: loopEmailSendMode,
+                    });
+                    await upsertRecipientProgress({
+                      nodeId: node.id,
+                      channel: 'email',
+                      recipientKey: customerKey,
+                      completedStep: nextStepIndex + 1,
+                      totalSteps: loopEmailSteps.length,
+                      firstSentAt,
+                      lastCompletedAt: completedAtIso,
+                      nextDueAt,
+                    });
+                    registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
+                  } else if (sendOutcome?.stopRemainingStepsForRecipient) {
+                    const completedAtIso = toHoChiMinhIso();
+                    await upsertRecipientProgress({
+                      nodeId: node.id,
+                      channel: 'email',
+                      recipientKey: customerKey,
+                      completedStep: loopEmailSteps.length,
+                      totalSteps: loopEmailSteps.length,
+                      firstSentAt: progress.firstSentAt || completedAtIso,
+                      lastCompletedAt: completedAtIso,
+                      nextDueAt: null,
+                    });
+                  }
+                } catch (recipientError) {
+                  // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
+                  console.error(
+                    `[CampaignRun][Email] run=${runId} email=${customerKey} step_error:`,
+                    recipientError.message
+                  );
                 }
-              } catch (recipientError) {
-                // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
-                if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
-                console.error(
-                  `[CampaignRun][Email] run=${runId} email=${customerKey} step_error:`,
-                  recipientError.message
-                );
-              }
-            }
+              },
+            });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
             await db.query(
@@ -2698,8 +2965,9 @@ class CampaignRunService {
               if (applyRandomDelay) {
                 await waitRandomApiDelay('zalo_send_personal');
               }
-              const sendResult = await campaignZaloSenderService.sendPersonalMessage({
-                api,
+              const sendResult = await campaignZaloSenderService.sendPersonalMessageQueued({
+                userId,
+                accountId: account.id,
                 recipient,
                 recipientType,
                 message: trackedMessage,
@@ -2862,120 +3130,119 @@ class CampaignRunService {
                 },
               });
             }
-            for (const recipient of dedupedRecipients) {
-              const normalizedRecipient = String(recipient || '').trim();
-              if (!normalizedRecipient) continue;
-              try {
-                // eslint-disable-next-line no-await-in-loop
-                const progress = await getRecipientProgress({
-                  nodeId: node.id,
-                  channel: 'zalo_personal',
-                  recipientKey: normalizedRecipient,
-                });
-                const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
-                const entry = recipientEntryMap.get(normalizedRecipient) || null;
-                if (templateSteps.length > 0) {
-                  if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) continue;
+            await runTasksWithConcurrency({
+              items: dedupedRecipients,
+              concurrency: this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE,
+              handler: async (recipient) => {
+                const normalizedRecipient = String(recipient || '').trim();
+                if (!normalizedRecipient) return;
+                try {
+                  const progress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: normalizedRecipient,
+                  });
+                  const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
+                  const entry = recipientEntryMap.get(normalizedRecipient) || null;
+                  if (templateSteps.length > 0) {
+                    if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) return;
+                    const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
+                    // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
+                    // khi loop chạy lâu qua nhiều recipient.
+                    const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
+                    if (!isDueNow) {
+                      registerNextContinuousWakeAt(nextDueAtMs);
+                      return;
+                    }
+                    const step = stepsWithMessage[nextStepIndex];
+                    const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
+                    const variables = resolveTemplateVariablesFromMappings({
+                      mappings,
+                      entry,
+                      fallbackNodeId: sourceNodeId,
+                    });
+                    const renderedMessage = mappings.length
+                      ? renderTemplateText(step.message, variables).trim()
+                      : String(step.message || '').trim();
+                    if (!renderedMessage) return;
+                    totalRecipients += 1;
+                    const sendOutcome = await sendSingleRecipient({
+                      recipient: normalizedRecipient,
+                      message: renderedMessage,
+                      attachments: step.attachments,
+                      stepMeta: {
+                        templateId: step.templateId,
+                        stepIndex: nextStepIndex + 1,
+                      },
+                      variables,
+                      entryRow: entry?.row || null,
+                      applyRandomDelay: shouldApplyRandomDelayInContinuous(),
+                    });
+                    if (sendOutcome?.success) {
+                      const completedAtIso = toHoChiMinhIso();
+                      const firstSentAt = progress.firstSentAt || completedAtIso;
+                      const nextDueAt = computeStepDueAt({
+                        steps: stepsWithMessage,
+                        completedStep: nextStepIndex + 1,
+                        firstSentAt,
+                        lastCompletedAt: completedAtIso,
+                        sendMode,
+                      });
+                      await upsertRecipientProgress({
+                        nodeId: node.id,
+                        channel: 'zalo_personal',
+                        recipientKey: normalizedRecipient,
+                        completedStep: nextStepIndex + 1,
+                        totalSteps: stepsWithMessage.length,
+                        firstSentAt,
+                        lastCompletedAt: completedAtIso,
+                        nextDueAt,
+                      });
+                      registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
+                    }
+                    return;
+                  }
+                  if (progress.isFullyCompleted || nextStepIndex >= 1) return;
                   const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
                   // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
                   // khi loop chạy lâu qua nhiều recipient.
                   const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
                   if (!isDueNow) {
                     registerNextContinuousWakeAt(nextDueAtMs);
-                    continue;
+                    return;
                   }
-                  const step = stepsWithMessage[nextStepIndex];
-                  const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                  const variables = resolveTemplateVariablesFromMappings({
-                    mappings,
-                    entry,
-                    fallbackNodeId: sourceNodeId,
-                  });
-                  const renderedMessage = mappings.length
-                    ? renderTemplateText(step.message, variables).trim()
-                    : String(step.message || '').trim();
-                  if (!renderedMessage) continue;
+                  const message = String(config.zaloMessage || config.message || '').trim();
+                  if (!message) return;
                   totalRecipients += 1;
-                  // eslint-disable-next-line no-await-in-loop
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
-                    message: renderedMessage,
-                    attachments: step.attachments,
-                    stepMeta: {
-                      templateId: step.templateId,
-                      stepIndex: nextStepIndex + 1,
-                    },
-                    variables,
+                    message,
                     entryRow: entry?.row || null,
-                    applyRandomDelay: true,
+                    applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
                   if (sendOutcome?.success) {
                     const completedAtIso = toHoChiMinhIso();
-                    const firstSentAt = progress.firstSentAt || completedAtIso;
-                    const nextDueAt = computeStepDueAt({
-                      steps: stepsWithMessage,
-                      completedStep: nextStepIndex + 1,
-                      firstSentAt,
-                      lastCompletedAt: completedAtIso,
-                      sendMode,
-                    });
-                    // eslint-disable-next-line no-await-in-loop
                     await upsertRecipientProgress({
                       nodeId: node.id,
                       channel: 'zalo_personal',
                       recipientKey: normalizedRecipient,
-                      completedStep: nextStepIndex + 1,
-                      totalSteps: stepsWithMessage.length,
-                      firstSentAt,
+                      completedStep: 1,
+                      totalSteps: 1,
+                      firstSentAt: progress.firstSentAt || completedAtIso,
                       lastCompletedAt: completedAtIso,
-                      nextDueAt,
+                      nextDueAt: null,
                     });
-                    registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
                   }
-                  continue;
+                } catch (recipientError) {
+                  // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
+                  console.error(
+                    `[CampaignRun][Zalo] run=${runId} recipient=${normalizedRecipient} step_error:`,
+                    recipientError.message
+                  );
                 }
-                if (progress.isFullyCompleted || nextStepIndex >= 1) continue;
-                const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
-                // khi loop chạy lâu qua nhiều recipient.
-                const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                if (!isDueNow) {
-                  registerNextContinuousWakeAt(nextDueAtMs);
-                  continue;
-                }
-                const message = String(config.zaloMessage || config.message || '').trim();
-                if (!message) continue;
-                totalRecipients += 1;
-                // eslint-disable-next-line no-await-in-loop
-                const sendOutcome = await sendSingleRecipient({
-                  recipient: normalizedRecipient,
-                  message,
-                  entryRow: entry?.row || null,
-                  applyRandomDelay: true,
-                });
-                if (sendOutcome?.success) {
-                  const completedAtIso = toHoChiMinhIso();
-                  // eslint-disable-next-line no-await-in-loop
-                  await upsertRecipientProgress({
-                    nodeId: node.id,
-                    channel: 'zalo_personal',
-                    recipientKey: normalizedRecipient,
-                    completedStep: 1,
-                    totalSteps: 1,
-                    firstSentAt: progress.firstSentAt || completedAtIso,
-                    lastCompletedAt: completedAtIso,
-                    nextDueAt: null,
-                  });
-                }
-              } catch (recipientError) {
-                // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
-                if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
-                console.error(
-                  `[CampaignRun][Zalo] run=${runId} recipient=${normalizedRecipient} step_error:`,
-                  recipientError.message
-                );
-              }
-            }
+              },
+            });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
             await db.query(
@@ -3319,9 +3586,12 @@ class CampaignRunService {
               },
             });
             try {
-              await waitRandomApiDelay('zalo_send_friend_request');
-              const sendResult = await campaignZaloSenderService.sendFriendRequest({
-                api,
+              if (!isContinuousMode || shouldApplyRandomDelayInContinuous()) {
+                await waitRandomApiDelay('zalo_send_friend_request');
+              }
+              const sendResult = await campaignZaloSenderService.sendFriendRequestQueued({
+                userId,
+                accountId: account.id,
                 phone,
                 message,
               });
@@ -3572,9 +3842,37 @@ class CampaignRunService {
           const groupEntryMap = new Map(
             groupEntries.map((entry) => [String(entry?.value || '').trim(), entry])
           );
-          await waitRandomApiDelay('zalo_send_group');
+          if (!isContinuousMode || shouldApplyRandomDelayInContinuous()) {
+            await waitRandomApiDelay('zalo_send_group');
+          }
           const groupIdSet = await campaignZaloSenderService.getAllGroupIdSet(api);
           const sendResults = [];
+          /**
+           * Chuẩn hóa payload execution cho node gửi Zalo nhóm để UI log luôn đọc được bảng dữ liệu.
+           *
+           * Luồng hoạt động:
+           * 1. Bọc kết quả hiện tại vào `items` để mỗi lần gửi đều có 1 bản ghi chuẩn.
+           * 2. Cập nhật `schema` tương ứng với item mới nhất.
+           * 3. Ghi `meta.totalItems` theo số bản ghi đã tích lũy ở runtime.
+           *
+           * @param {object} payload kết quả gửi hiện tại
+           * @returns {{message: string, items: Array<object>, schema: Array<object>, meta: object}}
+           */
+          const buildSendZaloGroupExecutionData = (payload = {}) => {
+            const item = { ...payload };
+            const attempted = successfulSends + failedSends;
+            return {
+              message: String(payload?.messageText || payload?.message || ''),
+              items: [item],
+              schema: campaignFlowService.buildSchemaFromRows([item]),
+              meta: {
+                attempted,
+                sent: successfulSends,
+                failed: failedSends,
+                totalItems: sendResults.length,
+              },
+            };
+          };
           const sendSingleGroup = async ({
             groupId,
             message,
@@ -3622,8 +3920,9 @@ class CampaignRunService {
               if (applyRandomDelay) {
                 await waitRandomApiDelay('zalo_send_group');
               }
-              const sendResult = await campaignZaloSenderService.sendGroupMessage({
-                api,
+              const sendResult = await campaignZaloSenderService.sendGroupMessageQueued({
+                userId,
+                accountId: account.id,
                 groupId,
                 message: trackedMessage,
                 attachments,
@@ -3676,8 +3975,9 @@ class CampaignRunService {
                 status: 'success',
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
-                executionData: resultPayload,
+                executionData: buildSendZaloGroupExecutionData(resultPayload),
               });
+              return { success: true, status: 'success' };
             } catch (error) {
               failedSends += 1;
               const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
@@ -3721,8 +4021,9 @@ class CampaignRunService {
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
                 errorMessage: error.message,
-                executionData: failedPayload,
+                executionData: buildSendZaloGroupExecutionData(failedPayload),
               });
+              return { success: false, status: 'failed', error: error.message };
             }
           };
 
@@ -3787,113 +4088,114 @@ class CampaignRunService {
                 },
               });
             }
-            for (const groupId of refreshedGroupIds) {
-              const normalizedGroupId = String(groupId || '').trim();
-              if (!normalizedGroupId) continue;
-              try {
-                // eslint-disable-next-line no-await-in-loop
-                const progress = await getRecipientProgress({
-                  nodeId: node.id,
-                  channel: 'zalo_group',
-                  recipientKey: normalizedGroupId,
-                });
-                const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
-                const entry = refreshedGroupEntryMap.get(normalizedGroupId) || null;
-                if (stepsWithMessage.length > 0) {
-                  if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) continue;
-                  const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                  const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                  if (!isDueNow) {
-                    registerNextContinuousWakeAt(nextDueAtMs);
-                    continue;
-                  }
-                  const step = stepsWithMessage[nextStepIndex];
-                  const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                  const variables = resolveTemplateVariablesFromMappings({
-                    mappings,
-                    entry,
-                    fallbackNodeId: sourceNodeId,
+            await runTasksWithConcurrency({
+              items: refreshedGroupIds,
+              concurrency: this.CONTINUOUS_ZALO_GROUP_BATCH_SIZE,
+              handler: async (groupId) => {
+                const normalizedGroupId = String(groupId || '').trim();
+                if (!normalizedGroupId) return;
+                try {
+                  const progress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_group',
+                    recipientKey: normalizedGroupId,
                   });
-                  const renderedMessage = mappings.length
-                    ? renderTemplateText(step.message, variables).trim()
-                    : String(step.message || '').trim();
-                  if (!renderedMessage) continue;
-                  totalRecipients += 1;
-                  // eslint-disable-next-line no-await-in-loop
-                  const sendOutcome = await sendSingleGroup({
-                    groupId: normalizedGroupId,
-                    message: renderedMessage,
-                    attachments: step.attachments,
-                    stepMeta: { templateId: step.templateId, stepIndex: nextStepIndex + 1 },
-                    variables,
-                    groupEntry: entry,
-                    applyRandomDelay: true,
-                  });
-                  if (sendOutcome !== undefined && sendOutcome?.status !== 'failed') {
-                    const completedAtIso = toHoChiMinhIso();
-                    const firstSentAt = progress.firstSentAt || completedAtIso;
-                    const nextDueAt = computeStepDueAt({
-                      steps: stepsWithMessage,
-                      completedStep: nextStepIndex + 1,
-                      firstSentAt,
-                      lastCompletedAt: completedAtIso,
-                      sendMode,
+                  const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
+                  const entry = refreshedGroupEntryMap.get(normalizedGroupId) || null;
+                  if (stepsWithMessage.length > 0) {
+                    if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) return;
+                    const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
+                    const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
+                    if (!isDueNow) {
+                      registerNextContinuousWakeAt(nextDueAtMs);
+                      return;
+                    }
+                    const step = stepsWithMessage[nextStepIndex];
+                    const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
+                    const variables = resolveTemplateVariablesFromMappings({
+                      mappings,
+                      entry,
+                      fallbackNodeId: sourceNodeId,
                     });
-                    // eslint-disable-next-line no-await-in-loop
-                    await upsertRecipientProgress({
-                      nodeId: node.id,
-                      channel: 'zalo_group',
-                      recipientKey: normalizedGroupId,
-                      completedStep: nextStepIndex + 1,
-                      totalSteps: stepsWithMessage.length,
-                      firstSentAt,
-                      lastCompletedAt: completedAtIso,
-                      nextDueAt,
+                    const renderedMessage = mappings.length
+                      ? renderTemplateText(step.message, variables).trim()
+                      : String(step.message || '').trim();
+                    if (!renderedMessage) return;
+                    totalRecipients += 1;
+                    const sendOutcome = await sendSingleGroup({
+                      groupId: normalizedGroupId,
+                      message: renderedMessage,
+                      attachments: step.attachments,
+                      stepMeta: { templateId: step.templateId, stepIndex: nextStepIndex + 1 },
+                      variables,
+                      groupEntry: entry,
+                      applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                     });
-                    registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
+                    if (sendOutcome?.success) {
+                      const completedAtIso = toHoChiMinhIso();
+                      const firstSentAt = progress.firstSentAt || completedAtIso;
+                      const nextDueAt = computeStepDueAt({
+                        steps: stepsWithMessage,
+                        completedStep: nextStepIndex + 1,
+                        firstSentAt,
+                        lastCompletedAt: completedAtIso,
+                        sendMode,
+                      });
+                      await upsertRecipientProgress({
+                        nodeId: node.id,
+                        channel: 'zalo_group',
+                        recipientKey: normalizedGroupId,
+                        completedStep: nextStepIndex + 1,
+                        totalSteps: stepsWithMessage.length,
+                        firstSentAt,
+                        lastCompletedAt: completedAtIso,
+                        nextDueAt,
+                      });
+                      registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
+                    }
+                    return;
                   }
-                } else {
                   // Không có templateSteps: mỗi nhóm chỉ gửi 1 lần (step duy nhất)
-                  if (progress.isFullyCompleted || nextStepIndex >= 1) continue;
+                  if (progress.isFullyCompleted || nextStepIndex >= 1) return;
                   const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
                   const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
                   if (!isDueNow) {
                     registerNextContinuousWakeAt(nextDueAtMs);
-                    continue;
+                    return;
                   }
                   const message = String(config.zaloGroupMessage || '').trim();
-                  if (!message) continue;
+                  if (!message) return;
                   totalRecipients += 1;
-                  // eslint-disable-next-line no-await-in-loop
-                  await sendSingleGroup({
+                  const sendOutcome = await sendSingleGroup({
                     groupId: normalizedGroupId,
                     message,
                     attachments: manualGroupAttachments,
                     groupEntry: entry,
-                    applyRandomDelay: true,
+                    applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
-                  const completedAtIso = toHoChiMinhIso();
-                  // eslint-disable-next-line no-await-in-loop
-                  await upsertRecipientProgress({
-                    nodeId: node.id,
-                    channel: 'zalo_group',
-                    recipientKey: normalizedGroupId,
-                    completedStep: 1,
-                    totalSteps: 1,
-                    firstSentAt: progress.firstSentAt || completedAtIso,
-                    lastCompletedAt: completedAtIso,
-                    nextDueAt: null,
-                  });
+                  if (sendOutcome?.success) {
+                    const completedAtIso = toHoChiMinhIso();
+                    await upsertRecipientProgress({
+                      nodeId: node.id,
+                      channel: 'zalo_group',
+                      recipientKey: normalizedGroupId,
+                      completedStep: 1,
+                      totalSteps: 1,
+                      firstSentAt: progress.firstSentAt || completedAtIso,
+                      lastCompletedAt: completedAtIso,
+                      nextDueAt: null,
+                    });
+                  }
+                } catch (groupError) {
+                  // Lỗi của 1 nhóm không dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  if (groupError?.code === 'RUN_STOPPED') throw groupError;
+                  console.error(
+                    `[CampaignRun][ZaloGroup] run=${runId} groupId=${normalizedGroupId} step_error:`,
+                    groupError.message
+                  );
                 }
-              } catch (groupError) {
-                // Lỗi của 1 nhóm không dừng toàn bộ run; chỉ propagate lệnh dừng do user.
-                if (groupError?.code === 'RUN_STOPPED') throw groupError;
-                console.error(
-                  `[CampaignRun][ZaloGroup] run=${runId} groupId=${normalizedGroupId} step_error:`,
-                  groupError.message
-                );
-              }
-            }
+              },
+            });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
             await db.query(
@@ -4108,10 +4410,17 @@ class CampaignRunService {
           );
         }
         continuousCycleIndex += 1;
+        const randomContinuousPollIntervalMs = this.getRandomContinuousPollIntervalMs();
+        const effectiveContinuousPollIntervalMs = Number.isFinite(configuredContinuousPollIntervalMs)
+          ? configuredContinuousPollIntervalMs
+          : randomContinuousPollIntervalMs;
+        const pollStrategy = Number.isFinite(configuredContinuousPollIntervalMs)
+          ? 'fixed_user_config'
+          : 'random_120_300_step_5';
         const wakeByDueMs = Number.isFinite(nextContinuousWakeAtMs)
           ? Math.max(0, nextContinuousWakeAtMs - Date.now())
-          : continuousPollIntervalMs;
-        const baseSleepMs = Math.max(1000, Math.min(continuousPollIntervalMs, wakeByDueMs));
+          : effectiveContinuousPollIntervalMs;
+        const baseSleepMs = Math.max(1000, Math.min(effectiveContinuousPollIntervalMs, wakeByDueMs));
         // Jitter ±30% để phân tán wake-up time, tránh thundering herd khi nhiều
         // campaigns có cùng poll interval thức dậy đồng thời.
         const jitterMs = Math.floor((Math.random() * 2 - 1) * 0.3 * baseSleepMs);
@@ -4119,7 +4428,8 @@ class CampaignRunService {
         console.log(
           `[CampaignRun][Continuous] run=${runId} cycle=${continuousCycleIndex} sleep_ms=${nextSleepMs} `
           + `(base=${baseSleepMs} jitter=${jitterMs > 0 ? '+' : ''}${jitterMs}) `
-          + `poll_ms=${continuousPollIntervalMs} wake_at=${nextContinuousWakeAtMs || 'poll_interval'} `
+          + `poll_ms=${effectiveContinuousPollIntervalMs} poll_strategy=${pollStrategy} `
+          + `wake_at=${nextContinuousWakeAtMs || 'poll_interval'} `
           + `workers=${this.MAX_CONTINUOUS_WORKERS - this.continuousAvailableWorkers}/${this.MAX_CONTINUOUS_WORKERS}`
         );
         await sleepWithRunCheck(nextSleepMs);

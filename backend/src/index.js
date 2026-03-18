@@ -30,6 +30,8 @@ import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
+import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
+import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 
 const app = express();
 
@@ -119,6 +121,10 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+let isShuttingDown = false;
+
+// Đăng ký processor trước khi start worker để tránh job không có handler.
+registerOutboundMessageProcessors();
 
 // Test database connection
 const testDBConnection = async () => {
@@ -148,11 +154,39 @@ const setupCleanupTask = () => {
   }, 10000);
 };
 
+/**
+ * Đóng tài nguyên theo thứ tự an toàn khi process nhận tín hiệu dừng.
+ * Giúp worker BullMQ thoát sạch và tránh job bị treo.
+ *
+ * @param {string} signal
+ */
+const gracefulShutdown = async (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.info(`[Server] Nhận tín hiệu ${signal}, đang shutdown...`);
+  try {
+    await outboundMessageQueueService.close();
+  } catch (error) {
+    console.error(`[Server] Lỗi khi đóng BullMQ: ${error?.message || error}`);
+  } finally {
+    process.exit(0);
+  }
+};
+
+process.on('SIGINT', () => {
+  gracefulShutdown('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  gracefulShutdown('SIGTERM');
+});
+
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   await testDBConnection();
   setupCleanupTask();
   initScheduler();
+  await outboundMessageQueueService.startWorker();
   console.log(`Cleanup task scheduled`);
 });

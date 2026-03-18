@@ -20,6 +20,13 @@ const CampaignRunModals = ({
   setRunContinuousMode,
   runPollIntervalMinutes,
   setRunPollIntervalMinutes,
+  isRunResumeLocked = false,
+  runResumeMode,
+  setRunResumeMode,
+  runResumeFromId,
+  setRunResumeFromId,
+  continuousResumeRunOptions,
+  isLoadingContinuousResumeOptions,
   shouldShowRunContinuousOptions = true,
   isSubmittingRun,
   handleRunNow,
@@ -67,6 +74,7 @@ const CampaignRunModals = ({
                 onChange={(e) => setRunNameInput(e.target.value)}
                 className="input"
                 placeholder="Nhập tên lần chạy"
+                disabled={isRunResumeLocked}
               />
             </div>
             {shouldShowRunContinuousOptions && (
@@ -83,24 +91,73 @@ const CampaignRunModals = ({
                     className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Chu kỳ quét khách mới (phút)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={1440}
-                    step={1}
-                    value={runPollIntervalMinutes}
-                    onChange={(e) => setRunPollIntervalMinutes(e.target.value)}
-                    className="input"
-                    disabled={!runContinuousMode}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Khuyến nghị 120 phút. Hệ thống chỉ gửi cho khách mới hoặc bước tiếp theo chưa hoàn tất.
-                  </p>
-                </div>
+                {runContinuousMode && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chu kỳ quét khách mới (phút)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={runPollIntervalMinutes}
+                        onChange={(e) => setRunPollIntervalMinutes(e.target.value)}
+                        className="input"
+                        disabled={isRunResumeLocked}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Hệ thống random mặc định 120-300 phút, bạn có thể nhập chu kỳ khác trước khi chạy.
+                      </p>
+                      {isRunResumeLocked && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Đang chạy tiếp run continuous cũ nên chu kỳ quét và tên lượt chạy được khóa theo run đã chọn.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label htmlFor="run-resume-mode" className="text-sm font-medium text-gray-700">
+                        Chạy tiếp lượt continuous cũ
+                      </label>
+                      <input
+                        id="run-resume-mode"
+                        type="checkbox"
+                        checked={Boolean(runResumeMode)}
+                        onChange={(e) => setRunResumeMode(e.target.checked)}
+                        className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                      />
+                    </div>
+                    {runResumeMode && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Chọn lượt continuous cần chạy tiếp
+                        </label>
+                        <select
+                          value={runResumeFromId}
+                          onChange={(e) => setRunResumeFromId(e.target.value)}
+                          className="input"
+                          disabled={isLoadingContinuousResumeOptions}
+                        >
+                          <option value="">
+                            {isLoadingContinuousResumeOptions
+                              ? 'Đang tải danh sách lượt continuous...'
+                              : 'Chọn lượt continuous'}
+                          </option>
+                          {(Array.isArray(continuousResumeRunOptions) ? continuousResumeRunOptions : []).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                        {!isLoadingContinuousResumeOptions && (!continuousResumeRunOptions || continuousResumeRunOptions.length === 0) && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Chưa có lượt continuous cũ để chạy tiếp.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
