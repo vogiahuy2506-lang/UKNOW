@@ -64,6 +64,7 @@ class EmailTemplateController {
           et.usage_count,
           et.created_at,
           et.updated_at,
+          COALESCE(u.full_name, u.username) AS creator_name,
           EXISTS (
             SELECT 1
             FROM campaigns c
@@ -80,6 +81,7 @@ class EmailTemplateController {
               )
           ) AS is_used_in_active_campaign
         FROM email_templates et
+        LEFT JOIN users u ON et.id_user = u.id
         WHERE 1 = 1
       `;
       const params = [];
@@ -135,6 +137,8 @@ class EmailTemplateController {
             activeUsage: {
               isUsedInActiveCampaign: Boolean(item.is_used_in_active_campaign),
             },
+            creatorName: item.creator_name || null,
+            createdBy: item.creator_name ? { name: item.creator_name } : null,
             createdAt: item.created_at,
             updatedAt: item.updated_at
           })),

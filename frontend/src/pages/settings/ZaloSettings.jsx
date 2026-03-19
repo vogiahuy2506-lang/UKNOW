@@ -29,6 +29,8 @@ import api from '../../services/api';
  *  isDefault: boolean;
  *  loginMethod: string;
  *  notes: string;
+ *  creatorName: string;
+ *  createdBy: { name: string } | null;
  *  updatedAt: string | null;
  * }}
  */
@@ -44,6 +46,10 @@ function normalizeAccount(account = {}) {
     isDefault: account.isDefault ?? false,
     loginMethod: account.loginMethod || 'qr',
     notes: account.notes || '',
+    creatorName: String(account.creatorName || account.createdBy?.name || ''),
+    createdBy: account?.createdBy?.name
+      ? { name: String(account.createdBy.name) }
+      : (account.creatorName ? { name: String(account.creatorName) } : null),
     updatedAt: account.updatedAt || account.lastSyncAt || null,
   };
 }
@@ -391,6 +397,9 @@ const ZaloSettings = () => {
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         SĐT: {account.zaloPhone || 'Chưa có dữ liệu'}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Người tạo: {account?.createdBy?.name || account?.creatorName || 'Không xác định'}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
                         Cập nhật: {account.updatedAt ? new Date(account.updatedAt).toLocaleString('vi-VN') : 'N/A'}

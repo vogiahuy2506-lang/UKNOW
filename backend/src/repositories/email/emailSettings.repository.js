@@ -7,24 +7,26 @@ class EmailSettingsRepository {
     const offset = (page - 1) * limit;
     const isAdmin = isAdminRole(roleCode);
     let query = `
-      SELECT id, name, email, smtp_host, smtp_port, use_tls, daily_limit, hourly_limit,
-             daily_sent_count, total_sent_count, is_verified, status, created_at, updated_at
-      FROM email_settings
+      SELECT es.id, es.name, es.email, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
+             es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
+             COALESCE(u.full_name, u.username) AS creator_name
+      FROM email_settings es
+      LEFT JOIN users u ON es.id_user = u.id
       WHERE 1=1
     `;
     const params = [];
 
     if (!isAdmin) {
       params.push(userId);
-      query += ` AND id_user = $${params.length}`;
+      query += ` AND es.id_user = $${params.length}`;
     }
 
     if (status) {
-      query += ` AND status = $${params.length + 1}`;
+      query += ` AND es.status = $${params.length + 1}`;
       params.push(status);
     }
 
-    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    query += ` ORDER BY es.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
 
     const [result, countResult] = await Promise.all([

@@ -65,6 +65,8 @@ class ZaloTemplateController {
       activeUsage: {
         isUsedInActiveCampaign: Boolean(item.is_used_in_active_campaign),
       },
+      creatorName: item.creator_name || null,
+      createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     };
@@ -97,6 +99,7 @@ class ZaloTemplateController {
           zt.usage_count,
           zt.created_at,
           zt.updated_at,
+          COALESCE(u.full_name, u.username) AS creator_name,
           EXISTS (
             SELECT 1
             FROM campaigns c
@@ -113,6 +116,7 @@ class ZaloTemplateController {
               )
           ) AS is_used_in_active_campaign
         FROM zalo_templates zt
+        LEFT JOIN users u ON zt.id_user = u.id
         WHERE 1 = 1
       `;
       const params = [];

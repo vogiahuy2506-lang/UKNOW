@@ -147,6 +147,7 @@ const Customers = () => {
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
                     <span>Tạo lúc {formatDate(c.createdAt)}</span>
+                    <span>Người tạo: {c?.createdBy?.name || c?.creatorName || 'Không xác định'}</span>
                     <span className="flex items-center gap-1">
                       <HiOutlineUsers className="w-4 h-4" />
                       {c.totalSent ?? 0} đã gửi

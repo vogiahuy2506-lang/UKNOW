@@ -863,7 +863,7 @@ class CampaignController {
       });
 
       const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
-      this.executeCampaign(campaignId, runRecord.id, executionUserId).catch(error => {
+      this.executeCampaign(campaignId, runRecord.id, executionUserId, roleCode).catch(error => {
         console.error('Execute campaign error:', error);
       });
     } catch (error) {
@@ -901,9 +901,10 @@ class CampaignController {
    * @param {number} campaignId 
    * @param {number} runId 
    * @param {number} userId 
+   * @param {string|null} roleCode
    */
-  async executeCampaign(campaignId, runId, userId) {
-    await campaignRunService.executeCampaign(campaignId, runId, userId);
+  async executeCampaign(campaignId, runId, userId, roleCode = null) {
+    await campaignRunService.executeCampaign(campaignId, runId, userId, roleCode);
   }
 
   /**

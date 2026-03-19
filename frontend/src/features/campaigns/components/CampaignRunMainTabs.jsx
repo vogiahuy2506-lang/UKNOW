@@ -126,6 +126,9 @@ const CampaignRunMainTabs = ({
                     Loại
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Người tạo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Cập nhật lần cuối
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -180,6 +183,9 @@ const CampaignRunMainTabs = ({
                             </span>
                           );
                         })()}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        {campaign?.createdBy?.name || campaign?.creatorName || 'Không xác định'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {formatCampaignDateTime(campaign.updatedAt)}
@@ -385,6 +391,7 @@ const CampaignRunMainTabs = ({
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên chiến dịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Người tạo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cập nhật lần cuối</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
                 </tr>
@@ -409,6 +416,9 @@ const CampaignRunMainTabs = ({
                             </span>
                           );
                         })()}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        {campaign?.createdBy?.name || campaign?.creatorName || 'Không xác định'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {formatCampaignDateTime(campaign.updatedAt)}

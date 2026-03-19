@@ -189,6 +189,9 @@ const EmailSettings = () => {
                             <p className="text-sm text-gray-600 truncate">
                               {email.email}
                             </p>
+                            <p className="text-xs text-gray-500 truncate mt-1">
+                              Người tạo: {email?.createdBy?.name || email?.creatorName || 'Không xác định'}
+                            </p>
                           </div>
                         </div>
                       </div>

@@ -120,6 +120,8 @@ class ZaloSettingsController {
       isActive: item.is_active,
       isDefault: item.is_default,
       notes: item.notes || '',
+      creatorName: item.creator_name || '',
+      createdBy: item.creator_name ? { name: item.creator_name } : null,
       updatedAt: item.updated_at,
       lastConnectedAt: item.last_connected_at,
     };
@@ -1578,11 +1580,14 @@ class ZaloSettingsController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user?.role_code);
       const result = await db.query(
-        `SELECT id_user, id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at
-         FROM zalo_settings
+        `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
+                zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes, zs.updated_at, zs.last_connected_at,
+                COALESCE(u.full_name, u.username) AS creator_name
+         FROM zalo_settings zs
+         LEFT JOIN users u ON zs.id_user = u.id
          WHERE 1 = 1
-           ${isAdmin ? '' : 'AND id_user = $1'}
-         ORDER BY is_default DESC, created_at DESC`,
+           ${isAdmin ? '' : 'AND zs.id_user = $1'}
+         ORDER BY zs.is_default DESC, zs.created_at DESC`,
         isAdmin ? [] : [userId]
       );
 

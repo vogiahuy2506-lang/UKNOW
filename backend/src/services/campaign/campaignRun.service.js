@@ -427,9 +427,10 @@ class CampaignRunService {
    * @param {number} campaignId
    * @param {number} runId
    * @param {number} userId
+   * @param {string|null} roleCode
    * @returns {Promise<void>}
    */
-  async executeCampaign(campaignId, runId, userId) {
+  async executeCampaign(campaignId, runId, userId, roleCode = null) {
     const normalizedRunId = Number.parseInt(runId, 10);
     const runKey = Number.isFinite(normalizedRunId) ? String(normalizedRunId) : String(runId || '').trim();
     if (!runKey) {
@@ -445,13 +446,21 @@ class CampaignRunService {
     // Nếu đạt ngưỡng chạy đồng thời → đưa vào hàng đợi, đợi slot trống.
     if (this.activeRunIds.size >= this.MAX_CONCURRENT_CAMPAIGNS) {
       return new Promise((resolve, reject) => {
-        this.pendingRunQueue.push({ campaignId, runId, userId, runKey, resolve, reject });
+        this.pendingRunQueue.push({
+          campaignId,
+          runId,
+          userId,
+          roleCode,
+          runKey,
+          resolve,
+          reject,
+        });
         console.log(
           `[CampaignRun] Queued run=${runKey} (queue_size=${this.pendingRunQueue.length}, active=${this.activeRunIds.size}/${this.MAX_CONCURRENT_CAMPAIGNS})`
         );
       });
     }
-    await this._doExecuteCampaign(campaignId, runId, userId, runKey);
+    await this._doExecuteCampaign(campaignId, runId, userId, runKey, roleCode);
   }
 
   /**
@@ -466,7 +475,7 @@ class CampaignRunService {
     console.log(
       `[CampaignRun] Dequeued run=${next.runKey} (remaining=${this.pendingRunQueue.length}, active=${this.activeRunIds.size}/${this.MAX_CONCURRENT_CAMPAIGNS})`
     );
-    this._doExecuteCampaign(next.campaignId, next.runId, next.userId, next.runKey)
+    this._doExecuteCampaign(next.campaignId, next.runId, next.userId, next.runKey, next.roleCode)
       .then(next.resolve)
       .catch(next.reject);
   }
@@ -533,9 +542,10 @@ class CampaignRunService {
    * @param {number} runId
    * @param {number} userId
    * @param {string} runKey
+   * @param {string|null} roleCode
    * @returns {Promise<void>}
    */
-  async _doExecuteCampaign(campaignId, runId, userId, runKey) {
+  async _doExecuteCampaign(campaignId, runId, userId, runKey, roleCode = null) {
     this.activeRunIds.add(runKey);
     try {
       console.log(`[Campaign ${campaignId}] Bắt đầu thực thi...`);
@@ -2188,6 +2198,7 @@ class CampaignRunService {
           const account = await campaignZaloSenderService.getCampaignZaloAccount({
             userId,
             accountId: selectedAccountId,
+            roleCode,
           });
           selectedZaloAccount = account;
           const outputItems = [{
@@ -2724,6 +2735,7 @@ class CampaignRunService {
             ? await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: sourceNodeAccount.id,
+              roleCode,
             })
             : null;
           const account = accountFromSourceNode
@@ -2731,11 +2743,12 @@ class CampaignRunService {
             || await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: config.zaloAccountId,
+              roleCode,
             });
           selectedZaloAccount = account;
           const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
             accountId: account.id,
-            userId,
+            userId: account.userId || userId,
           });
           const count = Number.isFinite(parseInt(config.zaloFriendsCount, 10))
             ? parseInt(config.zaloFriendsCount, 10)
@@ -2820,6 +2833,7 @@ class CampaignRunService {
             ? await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: sourceNodeAccount.id,
+              roleCode,
             })
             : null;
           const account = accountFromSourceNode
@@ -2827,11 +2841,12 @@ class CampaignRunService {
             || await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: config.zaloAccountId,
+              roleCode,
             });
           selectedZaloAccount = account;
           const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
             accountId: account.id,
-            userId,
+            userId: account.userId || userId,
           });
           await waitRandomApiDelay('zalo_get_all_groups');
           const groupResp = await campaignZaloSenderService.getAllGroupsWithRetry(api);
@@ -2873,11 +2888,12 @@ class CampaignRunService {
             || await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: config.zaloAccountId,
+              roleCode,
             });
           selectedZaloAccount = account;
           const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
             accountId: account.id,
-            userId,
+            userId: account.userId || userId,
           });
 
           const recipientType = String(config.zaloRecipientType || 'phone').trim().toLowerCase() === 'uid'
@@ -3425,11 +3441,12 @@ class CampaignRunService {
             || await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: config.zaloAccountId,
+              roleCode,
             });
           selectedZaloAccount = account;
           const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
             accountId: account.id,
-            userId,
+            userId: account.userId || userId,
           });
           const recipientSource = config.zaloFriendSource || 'manual';
           const manualPhones = config.zaloFriendPhones || '';
@@ -3836,11 +3853,12 @@ class CampaignRunService {
             || await campaignZaloSenderService.getCampaignZaloAccount({
               userId,
               accountId: config.zaloAccountId,
+              roleCode,
             });
           selectedZaloAccount = account;
           const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
             accountId: account.id,
-            userId,
+            userId: account.userId || userId,
           });
           const groupSource = config.zaloGroupSource || 'manual';
           const manualGroupIds = config.zaloGroupIds || '';

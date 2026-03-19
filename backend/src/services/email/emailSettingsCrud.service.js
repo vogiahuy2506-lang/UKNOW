@@ -16,6 +16,8 @@ class EmailSettingsCrudService {
       totalSentCount: item.total_sent_count,
       isVerified: item.is_verified,
       status: item.status,
+      creatorName: item.creator_name || null,
+      createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     };
