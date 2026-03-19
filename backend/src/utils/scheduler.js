@@ -6,6 +6,7 @@ import campaignController from '../controllers/campaign.controller.js';
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
+const activeNonContinuousRunIds = new Set();
 
 const stopAllCampaignScheduleTasks = () => {
   for (const task of campaignScheduleTasks.values()) {
@@ -164,6 +165,50 @@ const recoverContinuousCampaignRuns = async () => {
   }
 };
 
+/**
+ * Khởi chạy lại các campaign run không continuous đang ở trạng thái running.
+ *
+ * Luồng hoạt động:
+ * 1. Quét DB lấy các run `status = running` nhưng `continuousMode != true`.
+ * 2. Bỏ qua các run đã được tiến trình hiện tại phục hồi để tránh chạy trùng.
+ * 3. Kích hoạt lại executeCampaign để tiếp tục luồng còn dang dở của run (schedule/chạy ngay).
+ *
+ * @returns {Promise<void>}
+ */
+const recoverNonContinuousCampaignRuns = async () => {
+  const result = await db.query(
+    `SELECT cr.id, cr.id_campaign, c.id_user
+     FROM campaign_runs cr
+     JOIN campaigns c ON c.id = cr.id_campaign
+     WHERE cr.status = 'running'
+       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'`
+  );
+  if (result.rows.length === 0) return;
+
+  for (const row of result.rows) {
+    const runId = Number.parseInt(row.id, 10);
+    const campaignId = Number.parseInt(row.id_campaign, 10);
+    const userId = Number.parseInt(row.id_user, 10);
+    if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
+      continue;
+    }
+    const runKey = String(runId);
+    if (activeNonContinuousRunIds.has(runKey)) {
+      continue;
+    }
+
+    activeNonContinuousRunIds.add(runKey);
+    console.log(`[Scheduler] Phục hồi campaign run non-continuous #${runId} (campaign #${campaignId})`);
+    campaignController.executeCampaign(campaignId, runId, userId)
+      .catch((error) => {
+        console.error(`[Scheduler] Lỗi phục hồi non-continuous run #${runId}:`, error.message);
+      })
+      .finally(() => {
+        activeNonContinuousRunIds.delete(runKey);
+      });
+  }
+};
+
 export const requestCampaignScheduleRefresh = async () => {
   try {
     await refreshCampaignSchedules();
@@ -210,6 +255,7 @@ export const initScheduler = () => {
     try {
       await refreshCampaignSchedules();
       await recoverContinuousCampaignRuns();
+      await recoverNonContinuousCampaignRuns();
     } catch (error) {
       console.error('[Scheduler] Lỗi khi refresh campaign schedules:', error.message);
     }
@@ -222,5 +268,8 @@ export const initScheduler = () => {
   });
   recoverContinuousCampaignRuns().catch((error) => {
     console.error('[Scheduler] Không thể phục hồi campaign run continuous ban đầu:', error.message);
+  });
+  recoverNonContinuousCampaignRuns().catch((error) => {
+    console.error('[Scheduler] Không thể phục hồi campaign run non-continuous ban đầu:', error.message);
   });
 };

@@ -1069,6 +1069,68 @@ class CampaignRunService {
           : (firstSentAt ? Date.parse(firstSentAt) : Date.now());
         return toHoChiMinhIso(baseTimestamp + delayMs);
       };
+      const shouldProcessRecipientStep = ({
+        progress = null,
+        stepIndex = 0,
+        totalSteps = 1,
+      }) => {
+        const safeTotalSteps = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
+        const safeProgress = progress && typeof progress === 'object'
+          ? progress
+          : createEmptyRecipientProgress();
+        const nextStepIndex = Math.max(0, Number.parseInt(safeProgress.lastCompletedStep, 10) || 0);
+        if (safeProgress.isFullyCompleted || nextStepIndex >= safeTotalSteps) return false;
+        return nextStepIndex === Math.max(0, Number.parseInt(stepIndex, 10) || 0);
+      };
+      /**
+       * Ghi nhận một recipient đã hoàn tất step thành công để lần chạy sau chỉ gửi step tiếp theo.
+       *
+       * Luồng hoạt động:
+       * 1. Chuẩn hóa thời điểm hoàn tất hiện tại theo ISO +07.
+       * 2. Tính `nextDueAt` dựa theo `sendMode` và delay cấu hình.
+       * 3. Upsert vào `campaign_run_recipient_steps` cùng `id_run` hiện tại.
+       *
+       * @param {object} input
+       * @param {number|string} input.nodeId
+       * @param {string} input.channel
+       * @param {string} input.recipientKey
+       * @param {number} input.completedStep
+       * @param {number} input.totalSteps
+       * @param {{firstSentAt?: string|null}} [input.progress]
+       * @param {Array<object>} [input.steps]
+       * @param {string} [input.sendMode]
+       * @returns {Promise<void>}
+       */
+      const markRecipientStepCompleted = async ({
+        nodeId,
+        channel,
+        recipientKey,
+        completedStep,
+        totalSteps,
+        progress = null,
+        steps = [],
+        sendMode = 'all',
+      }) => {
+        const completedAtIso = toHoChiMinhIso();
+        const firstSentAt = progress?.firstSentAt || completedAtIso;
+        const nextDueAt = computeStepDueAt({
+          steps,
+          completedStep,
+          firstSentAt,
+          lastCompletedAt: completedAtIso,
+          sendMode,
+        });
+        await upsertRecipientProgress({
+          nodeId,
+          channel,
+          recipientKey,
+          completedStep,
+          totalSteps,
+          firstSentAt,
+          lastCompletedAt: completedAtIso,
+          nextDueAt,
+        });
+      };
       const resolveTemplateVariablesFromMappings = ({
         mappings = [],
         entry = null,
@@ -2636,6 +2698,19 @@ class CampaignRunService {
               for (const customer of dedupedRecipients) {
                 const customerKey = String(customer.email || '').trim().toLowerCase() || 'unknown';
                 if (stoppedRecipientKeys.has(customerKey)) continue;
+                // eslint-disable-next-line no-await-in-loop
+                const progress = await getRecipientProgress({
+                  nodeId: node.id,
+                  channel: 'email',
+                  recipientKey: customerKey,
+                });
+                if (!shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: emailSteps.length,
+                })) {
+                  continue;
+                }
                 const runtimeNode = {
                   ...node,
                   config: {
@@ -2657,6 +2732,29 @@ class CampaignRunService {
                 });
                 if (sendOutcome?.stopRemainingStepsForRecipient) {
                   stoppedRecipientKeys.add(customerKey);
+                  // eslint-disable-next-line no-await-in-loop
+                  await markRecipientStepCompleted({
+                    nodeId: node.id,
+                    channel: 'email',
+                    recipientKey: customerKey,
+                    completedStep: emailSteps.length,
+                    totalSteps: emailSteps.length,
+                    progress,
+                    steps: emailSteps,
+                    sendMode: emailSendMode,
+                  });
+                } else if (sendOutcome?.success) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await markRecipientStepCompleted({
+                    nodeId: node.id,
+                    channel: 'email',
+                    recipientKey: customerKey,
+                    completedStep: stepIndex + 1,
+                    totalSteps: emailSteps.length,
+                    progress,
+                    steps: emailSteps,
+                    sendMode: emailSendMode,
+                  });
                 }
               }
             };
@@ -2687,13 +2785,41 @@ class CampaignRunService {
           } else {
             totalRecipients += dedupedRecipients.length;
             for (const customer of dedupedRecipients) {
+              const customerKey = String(customer?.email || '').trim().toLowerCase();
+              if (!customerKey) continue;
               // eslint-disable-next-line no-await-in-loop
-              await sendEmailWithLogging({
+              const progress = await getRecipientProgress({
+                nodeId: node.id,
+                channel: 'email',
+                recipientKey: customerKey,
+              });
+              if (!shouldProcessRecipientStep({
+                progress,
+                stepIndex: 0,
+                totalSteps: 1,
+              })) {
+                continue;
+              }
+              // eslint-disable-next-line no-await-in-loop
+              const sendOutcome = await sendEmailWithLogging({
                 customer,
                 runtimeNode: node,
                 stepMeta: null,
                 applyRandomDelay: true,
               });
+              if (sendOutcome?.stopRemainingStepsForRecipient || sendOutcome?.success) {
+                // eslint-disable-next-line no-await-in-loop
+                await markRecipientStepCompleted({
+                  nodeId: node.id,
+                  channel: 'email',
+                  recipientKey: customerKey,
+                  completedStep: 1,
+                  totalSteps: 1,
+                  progress,
+                  steps: [{ templateId: config.emailTemplateId || null }],
+                  sendMode: 'all',
+                });
+              }
             }
           }
 
@@ -3324,7 +3450,22 @@ class CampaignRunService {
                 });
                 // eslint-disable-next-line no-restricted-syntax
                 for (const recipient of dedupedRecipients) {
-                  const entry = recipientEntryMap.get(String(recipient || '').trim()) || null;
+                  const normalizedRecipient = String(recipient || '').trim();
+                  if (!normalizedRecipient) continue;
+                  // eslint-disable-next-line no-await-in-loop
+                  const progress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: normalizedRecipient,
+                  });
+                  if (!shouldProcessRecipientStep({
+                    progress,
+                    stepIndex,
+                    totalSteps: stepsWithMessage.length,
+                  })) {
+                    continue;
+                  }
+                  const entry = recipientEntryMap.get(normalizedRecipient) || null;
                   const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
                   const variables = resolveTemplateVariablesFromMappings({
                     mappings,
@@ -3338,8 +3479,8 @@ class CampaignRunService {
                     throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
                   }
                   // eslint-disable-next-line no-await-in-loop
-                  await sendSingleRecipient({
-                    recipient,
+                  const sendOutcome = await sendSingleRecipient({
+                    recipient: normalizedRecipient,
                     message: renderedMessage,
                     attachments: step.attachments,
                     stepMeta: {
@@ -3350,6 +3491,19 @@ class CampaignRunService {
                     entryRow: entry?.row || null,
                     applyRandomDelay: true,
                   });
+                  if (sendOutcome?.success) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await markRecipientStepCompleted({
+                      nodeId: node.id,
+                      channel: 'zalo_personal',
+                      recipientKey: normalizedRecipient,
+                      completedStep: stepIndex + 1,
+                      totalSteps: stepsWithMessage.length,
+                      progress,
+                      steps: stepsWithMessage,
+                      sendMode,
+                    });
+                  }
                 }
               }
             } else {
@@ -3357,7 +3511,22 @@ class CampaignRunService {
                 const step = stepsWithMessage[stepIndex];
                 // eslint-disable-next-line no-restricted-syntax
                 for (const recipient of dedupedRecipients) {
-                  const entry = recipientEntryMap.get(String(recipient || '').trim()) || null;
+                  const normalizedRecipient = String(recipient || '').trim();
+                  if (!normalizedRecipient) continue;
+                  // eslint-disable-next-line no-await-in-loop
+                  const progress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: normalizedRecipient,
+                  });
+                  if (!shouldProcessRecipientStep({
+                    progress,
+                    stepIndex,
+                    totalSteps: stepsWithMessage.length,
+                  })) {
+                    continue;
+                  }
+                  const entry = recipientEntryMap.get(normalizedRecipient) || null;
                   const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
                   const variables = resolveTemplateVariablesFromMappings({
                     mappings,
@@ -3371,8 +3540,8 @@ class CampaignRunService {
                     throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
                   }
                   // eslint-disable-next-line no-await-in-loop
-                  await sendSingleRecipient({
-                    recipient,
+                  const sendOutcome = await sendSingleRecipient({
+                    recipient: normalizedRecipient,
                     message: renderedMessage,
                     attachments: step.attachments,
                     stepMeta: {
@@ -3383,6 +3552,19 @@ class CampaignRunService {
                     entryRow: entry?.row || null,
                     applyRandomDelay: true,
                   });
+                  if (sendOutcome?.success) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await markRecipientStepCompleted({
+                      nodeId: node.id,
+                      channel: 'zalo_personal',
+                      recipientKey: normalizedRecipient,
+                      completedStep: stepIndex + 1,
+                      totalSteps: stepsWithMessage.length,
+                      progress,
+                      steps: stepsWithMessage,
+                      sendMode,
+                    });
+                  }
                 }
               }
             }
@@ -3393,14 +3575,42 @@ class CampaignRunService {
             }
             totalRecipients += dedupedRecipients.length;
             for (const recipient of dedupedRecipients) {
-              const entry = recipientEntryMap.get(String(recipient || '').trim()) || null;
+              const normalizedRecipient = String(recipient || '').trim();
+              if (!normalizedRecipient) continue;
               // eslint-disable-next-line no-await-in-loop
-              await sendSingleRecipient({
-                recipient,
+              const progress = await getRecipientProgress({
+                nodeId: node.id,
+                channel: 'zalo_personal',
+                recipientKey: normalizedRecipient,
+              });
+              if (!shouldProcessRecipientStep({
+                progress,
+                stepIndex: 0,
+                totalSteps: 1,
+              })) {
+                continue;
+              }
+              const entry = recipientEntryMap.get(normalizedRecipient) || null;
+              // eslint-disable-next-line no-await-in-loop
+              const sendOutcome = await sendSingleRecipient({
+                recipient: normalizedRecipient,
                 message,
                 entryRow: entry?.row || null,
                 applyRandomDelay: true,
               });
+              if (sendOutcome?.success) {
+                // eslint-disable-next-line no-await-in-loop
+                await markRecipientStepCompleted({
+                  nodeId: node.id,
+                  channel: 'zalo_personal',
+                  recipientKey: normalizedRecipient,
+                  completedStep: 1,
+                  totalSteps: 1,
+                  progress,
+                  steps: [{ message }],
+                  sendMode: 'all',
+                });
+              }
             }
           }
 
@@ -4276,11 +4486,26 @@ class CampaignRunService {
             const runZaloGroupTemplateStep = async (step, stepIndex) => {
               for (let groupIndex = 0; groupIndex < dedupedGroupIds.length; groupIndex += 1) {
                 const groupId = dedupedGroupIds[groupIndex];
+                const normalizedGroupId = String(groupId || '').trim();
+                if (!normalizedGroupId) continue;
+                // eslint-disable-next-line no-await-in-loop
+                const progress = await getRecipientProgress({
+                  nodeId: node.id,
+                  channel: 'zalo_group',
+                  recipientKey: normalizedGroupId,
+                });
+                if (!shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: stepsWithMessage.length,
+                })) {
+                  continue;
+                }
                 if (groupIndex > 0) {
                   // eslint-disable-next-line no-await-in-loop
                   await waitRandomZaloGroupTemplateDelay(`zalo_group_step_${stepIndex + 1}`);
                 }
-                const entry = groupEntryMap.get(String(groupId || '').trim()) || null;
+                const entry = groupEntryMap.get(normalizedGroupId) || null;
                 const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
                 const variables = resolveTemplateVariablesFromMappings({
                   mappings,
@@ -4291,11 +4516,11 @@ class CampaignRunService {
                   ? renderTemplateText(step.message, variables).trim()
                   : String(step.message || '').trim();
                 if (!renderedMessage) {
-                  throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${groupId}`);
+                  throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${normalizedGroupId}`);
                 }
                 // eslint-disable-next-line no-await-in-loop
-                await sendSingleGroup({
-                  groupId,
+                const sendOutcome = await sendSingleGroup({
+                  groupId: normalizedGroupId,
                   message: renderedMessage,
                   attachments: step.attachments,
                   stepMeta: {
@@ -4306,6 +4531,19 @@ class CampaignRunService {
                   groupEntry: entry,
                   applyRandomDelay: false,
                 });
+                if (sendOutcome?.success) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await markRecipientStepCompleted({
+                    nodeId: node.id,
+                    channel: 'zalo_group',
+                    recipientKey: normalizedGroupId,
+                    completedStep: stepIndex + 1,
+                    totalSteps: stepsWithMessage.length,
+                    progress,
+                    steps: stepsWithMessage,
+                    sendMode,
+                  });
+                }
               }
             };
 
@@ -4339,14 +4577,42 @@ class CampaignRunService {
             }
             totalRecipients += dedupedGroupIds.length;
             for (const groupId of dedupedGroupIds) {
-              const entry = groupEntryMap.get(String(groupId || '').trim()) || null;
+              const normalizedGroupId = String(groupId || '').trim();
+              if (!normalizedGroupId) continue;
               // eslint-disable-next-line no-await-in-loop
-              await sendSingleGroup({
-                groupId,
+              const progress = await getRecipientProgress({
+                nodeId: node.id,
+                channel: 'zalo_group',
+                recipientKey: normalizedGroupId,
+              });
+              if (!shouldProcessRecipientStep({
+                progress,
+                stepIndex: 0,
+                totalSteps: 1,
+              })) {
+                continue;
+              }
+              const entry = groupEntryMap.get(normalizedGroupId) || null;
+              // eslint-disable-next-line no-await-in-loop
+              const sendOutcome = await sendSingleGroup({
+                groupId: normalizedGroupId,
                 message,
                 attachments: manualGroupAttachments,
                 groupEntry: entry,
               });
+              if (sendOutcome?.success) {
+                // eslint-disable-next-line no-await-in-loop
+                await markRecipientStepCompleted({
+                  nodeId: node.id,
+                  channel: 'zalo_group',
+                  recipientKey: normalizedGroupId,
+                  completedStep: 1,
+                  totalSteps: 1,
+                  progress,
+                  steps: [{ message }],
+                  sendMode: 'all',
+                });
+              }
             }
           }
 
