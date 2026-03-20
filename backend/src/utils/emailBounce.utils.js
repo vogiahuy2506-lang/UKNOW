@@ -147,3 +147,37 @@ export function isSmtpAuthConfigError(error) {
 
   return authPatterns.some((pattern) => msg.includes(pattern));
 }
+
+/**
+ * Nhận diện lỗi bị giới hạn gửi của provider SMTP (đặc biệt SendGrid).
+ *
+ * Luồng hoạt động:
+ * 1. So khớp các pattern lỗi quota/rate-limit thường gặp của SendGrid.
+ * 2. So khớp mã trạng thái 429 hoặc thông điệp "too many requests".
+ * 3. Trả về true để luồng gửi lên lịch retry trễ thay vì fail cứng ngay.
+ *
+ * @param {Error} error - Lỗi trả về từ nodemailer sendMail
+ * @returns {boolean} true nếu là lỗi giới hạn gửi cần chờ hồi
+ */
+export function isSmtpProviderRateLimitError(error) {
+  const code = Number(error?.responseCode ?? error?.smtpCode ?? NaN);
+  const msg = String(error?.message || error?.response || '').toLowerCase();
+
+  const rateLimitPatterns = [
+    'maximum credits exceeded',
+    'credits exceeded',
+    'rate limit',
+    'quota exceeded',
+    'too many requests',
+    'try again later',
+    'temporarily deferred',
+    'daily user sending quota exceeded',
+    'exceeded sending limits',
+  ];
+
+  if (rateLimitPatterns.some((pattern) => msg.includes(pattern))) {
+    return true;
+  }
+
+  return Number.isFinite(code) && code === 429;
+}

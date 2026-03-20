@@ -2480,7 +2480,9 @@ class CampaignRunService {
                 failedSends += 1;
                 const failedMessage = sendResult.errorType === 'smtp_config'
                   ? `Lỗi cấu hình SMTP: ${sendResult.error || 'Xác thực email gửi không hợp lệ'}`
-                  : (sendResult.error || 'Gửi email thất bại');
+                  : (sendResult.errorType === 'smtp_rate_limited_retry_scheduled'
+                    ? (sendResult.error || 'SendGrid đang giới hạn gửi, đã lên lịch gửi lại sau 3 giờ')
+                    : (sendResult.error || 'Gửi email thất bại'));
                 const failedPayload = {
                   ...sendResult,
                   message: failedMessage,

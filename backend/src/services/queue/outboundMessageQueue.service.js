@@ -296,6 +296,59 @@ class OutboundMessageQueueService {
   }
 
   /**
+   * Đẩy job vào queue nhưng không chờ kết quả hoàn tất.
+   * Dùng cho các trường hợp cần trì hoãn (delay) để retry sau.
+   *
+   * Luồng hoạt động:
+   * 1. Nếu queue tắt/chưa sẵn sàng thì chạy inline ngay để không mất job.
+   * 2. Nếu queue sẵn sàng thì add job với `jobOptions` (ví dụ delay 3 giờ).
+   * 3. Trả về thông tin job đã enqueue để caller ghi log theo dõi.
+   *
+   * @param {object} input
+   * @param {string} input.type loại job
+   * @param {any} input.payload dữ liệu job
+   * @param {object} [input.jobOptions] tùy chọn add job
+   * @returns {Promise<{enqueued: boolean, jobId: string|number|null}>}
+   */
+  async enqueue({ type, payload, jobOptions = {} }) {
+    const normalizedType = String(type || '').trim();
+    const hasDelay = Number.parseInt(jobOptions?.delay, 10) > 0;
+    if (!normalizedType) {
+      throw new Error('Thiếu loại job khi enqueue BullMQ');
+    }
+
+    if (!this.isQueueFeatureEnabled() || this.runtimeDisabled) {
+      if (hasDelay) {
+        throw new Error('Queue đang tắt nên không thể lên lịch retry delay');
+      }
+      await this.executeInline(normalizedType, payload);
+      return { enqueued: false, jobId: null };
+    }
+
+    if (!this.workerStarted) {
+      await this.startWorker();
+    }
+    if (!this.workerStarted) {
+      if (hasDelay) {
+        throw new Error('Queue chưa sẵn sàng nên không thể lên lịch retry delay');
+      }
+      await this.executeInline(normalizedType, payload);
+      return { enqueued: false, jobId: null };
+    }
+
+    const attempts = Number.parseInt(process.env.BULLMQ_JOB_ATTEMPTS || '4', 10);
+    const job = await this.queue.add(normalizedType, payload, {
+      attempts: Number.isFinite(attempts) ? Math.max(1, attempts) : 4,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: 3000,
+      removeOnFail: 3000,
+      ...jobOptions,
+    });
+    await this.logQueueMetrics('enqueue_no_wait', normalizedType, job?.id);
+    return { enqueued: true, jobId: job?.id || null };
+  }
+
+  /**
    * Đóng tài nguyên BullMQ để shutdown sạch.
    *
    * @returns {Promise<void>}

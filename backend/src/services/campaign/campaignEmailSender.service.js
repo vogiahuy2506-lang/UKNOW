@@ -6,6 +6,7 @@ import {
   classifyBounceType,
   isRecipientAddressNotFoundError,
   isSmtpAuthConfigError,
+  isSmtpProviderRateLimitError,
 } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
 import outboundMessageQueueService, {
@@ -74,6 +75,18 @@ class CampaignEmailSenderService {
     const parsed = Number.parseInt(process.env?.[envName], 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
     return parsed;
+  }
+
+  /**
+   * Lấy cấu hình retry khi gặp giới hạn gửi từ provider SMTP.
+   *
+   * @returns {{delayMs: number, maxRetries: number}}
+   */
+  resolveProviderRateLimitRetryConfig() {
+    return {
+      delayMs: this.parsePositiveIntEnv('SENDGRID_LIMIT_RETRY_DELAY_MS', 3 * 60 * 60 * 1000),
+      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 5),
+    };
   }
 
   /**
@@ -326,7 +339,7 @@ class CampaignEmailSenderService {
    * @param {number} runId
    * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
    */
-  async sendEmailToCustomer(actionNode, customer, campaign, runId) {
+  async sendEmailToCustomer(actionNode, customer, campaign, runId, retryMeta = null) {
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
       payload: {
@@ -334,6 +347,7 @@ class CampaignEmailSenderService {
         customer,
         campaign,
         runId,
+        retryMeta,
       },
     });
   }
@@ -351,9 +365,10 @@ class CampaignEmailSenderService {
    * @param {object} customer
    * @param {object} campaign
    * @param {number} runId
+   * @param {object|null} retryMeta metadata retry nội bộ cho job delay
    * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
    */
-  async sendEmailToCustomerDirect(actionNode, customer, campaign, runId) {
+  async sendEmailToCustomerDirect(actionNode, customer, campaign, runId, retryMeta = null) {
     const config = actionNode.config || {};
     const nodeId = actionNode?.id || 'unknown';
 
@@ -524,12 +539,18 @@ class CampaignEmailSenderService {
         attachments: realMailAttachments.length ? realMailAttachments : undefined,
       });
     } catch (smtpError) {
-      const smtpConfigError = isSmtpAuthConfigError(smtpError);
+      const providerRateLimitError = isSmtpProviderRateLimitError(smtpError);
+      const smtpConfigError = !providerRateLimitError && isSmtpAuthConfigError(smtpError);
       const bounceType = classifyBounceType(smtpError);
       const shouldMarkAsRecipientBounce = isRecipientAddressNotFoundError(smtpError);
       const bounceReason = String(smtpError?.message || '').slice(0, 500);
       const shortBounceReason = bounceReason.slice(0, 180);
-      if (smtpConfigError) {
+      if (providerRateLimitError) {
+        console.warn(
+          `[CampaignRun][Email] smtp_rate_limited run=${runId} to=${customer.email} `
+          + `reason=${shortBounceReason}`
+        );
+      } else if (smtpConfigError) {
         console.warn(
           `[CampaignRun][Email] smtp_config_error run=${runId} to=${customer.email} `
           + `reason=${shortBounceReason}`
@@ -553,6 +574,61 @@ class CampaignEmailSenderService {
         'UPDATE email_settings SET daily_sent_count = daily_sent_count + 1, total_sent_count = total_sent_count + 1 WHERE id = $1',
         [settings.id]
       ).catch(() => {});
+
+      if (providerRateLimitError) {
+        const retryConfig = this.resolveProviderRateLimitRetryConfig();
+        const currentRetryCount = Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0;
+        const nextRetryCount = currentRetryCount + 1;
+        const canRetry = nextRetryCount <= retryConfig.maxRetries;
+
+        if (canRetry) {
+          const retryScheduleAt = new Date(Date.now() + retryConfig.delayMs);
+          try {
+            await outboundMessageQueueService.enqueue({
+              type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
+              payload: {
+                actionNode,
+                customer,
+                campaign,
+                runId,
+                retryMeta: {
+                  ...(retryMeta && typeof retryMeta === 'object' ? retryMeta : {}),
+                  sendgridLimitRetryCount: nextRetryCount,
+                  scheduledRetryAt: retryScheduleAt.toISOString(),
+                },
+              },
+              jobOptions: {
+                delay: retryConfig.delayMs,
+              },
+            });
+          } catch (enqueueError) {
+            console.error(
+              `[CampaignRun][Email] enqueue_retry_failed run=${runId} to=${customer.email} `
+              + `error=${enqueueError?.message || enqueueError}`
+            );
+            return {
+              to: customer.email,
+              status: 'failed',
+              errorType: 'smtp_rate_limited',
+              error: bounceReason,
+            };
+          }
+
+          return {
+            to: customer.email,
+            status: 'failed',
+            errorType: 'smtp_rate_limited_retry_scheduled',
+            error: `SendGrid đang giới hạn gửi, đã lên lịch gửi lại sau 3 giờ (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
+          };
+        }
+
+        return {
+          to: customer.email,
+          status: 'failed',
+          errorType: 'smtp_rate_limited',
+          error: `SendGrid đang giới hạn gửi và đã vượt số lần retry (${retryConfig.maxRetries}).`,
+        };
+      }
 
       // Lỗi auth/config SMTP → xóa transporter khỏi cache để lần gửi kế tiếp không tái dùng session lỗi.
       if (smtpConfigError) {
