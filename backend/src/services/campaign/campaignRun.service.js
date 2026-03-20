@@ -1869,6 +1869,8 @@ class CampaignRunService {
       let totalRecipients = 0;
       let successfulSends = 0;
       let failedSends = 0;
+      let hasPendingEmailRetry = false;
+      let pendingEmailRetryCount = 0;
       let selectedZaloAccount = null;
       const zaloTemplateContentCache = new Map();
       const zaloTemplateAttachmentSourceCache = new Map();
@@ -2384,6 +2386,36 @@ class CampaignRunService {
               },
             };
           };
+          /**
+           * Chuẩn hóa thời điểm retry từ worker về định dạng ISO +07 để lưu vào recipient ledger.
+           *
+           * Luồng hoạt động:
+           * 1. Nhận `scheduledAt` từ kết quả gửi (có thể null/rỗng).
+           * 2. Parse thành timestamp hợp lệ, nếu lỗi thì bỏ qua để không ghi sai lịch.
+           * 3. Convert về ISO +07 dùng chung với `nextDueAt`.
+           *
+           * @param {string|null|undefined} scheduledAt
+           * @returns {string|null}
+           */
+          const normalizeRetryScheduledAt = (scheduledAt) => {
+            if (!scheduledAt) return null;
+            const timestamp = Date.parse(scheduledAt);
+            if (!Number.isFinite(timestamp)) return null;
+            return toHoChiMinhIso(timestamp);
+          };
+          /**
+           * Ghi nhận run hiện còn recipient đang chờ retry do provider rate-limit.
+           *
+           * Luồng hoạt động:
+           * 1. Đặt cờ để chặn bước finalize `completed` ở cuối run one-shot.
+           * 2. Đếm số lượt retry đã được lên lịch để phục vụ quan sát log.
+           *
+           * @returns {void}
+           */
+          const markRunHasPendingEmailRetry = () => {
+            hasPendingEmailRetry = true;
+            pendingEmailRetryCount += 1;
+          };
           const sendEmailWithLogging = async ({
             customer,
             runtimeNode,
@@ -2477,7 +2509,10 @@ class CampaignRunService {
 
               // Lỗi cấu hình SMTP (ví dụ 535) không phải bounce của người nhận.
               if (sendResult.status === 'failed') {
-                failedSends += 1;
+                const isRateLimitedRetryScheduled = sendResult.errorType === 'smtp_rate_limited_retry_scheduled';
+                if (!isRateLimitedRetryScheduled) {
+                  failedSends += 1;
+                }
                 const failedMessage = sendResult.errorType === 'smtp_config'
                   ? `Lỗi cấu hình SMTP: ${sendResult.error || 'Xác thực email gửi không hợp lệ'}`
                   : (sendResult.errorType === 'smtp_rate_limited_retry_scheduled'
@@ -2496,12 +2531,21 @@ class CampaignRunService {
                   runId,
                   node,
                   customerId: customer.id || null,
-                  status: 'failed',
+                  status: isRateLimitedRetryScheduled ? 'warning' : 'failed',
                   progressCurrent: successfulSends + failedSends,
                   progressTotal: totalRecipients,
                   errorMessage: failedMessage,
                   executionData: buildSendEmailExecutionData(failedPayload),
                 });
+                if (isRateLimitedRetryScheduled) {
+                  markRunHasPendingEmailRetry();
+                  return {
+                    success: false,
+                    stopRemainingStepsForRecipient: true,
+                    preservePendingStep: true,
+                    retryScheduledAt: sendResult.retryScheduledAt || null,
+                  };
+                }
                 return {
                   success: false,
                   stopRemainingStepsForRecipient: true,
@@ -2645,6 +2689,21 @@ class CampaignRunService {
                       nextDueAt,
                     });
                     registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
+                  } else if (sendOutcome?.preservePendingStep) {
+                    const retryScheduledAt = normalizeRetryScheduledAt(sendOutcome.retryScheduledAt);
+                    if (retryScheduledAt) {
+                      await upsertRecipientProgress({
+                        nodeId: node.id,
+                        channel: 'email',
+                        recipientKey: customerKey,
+                        completedStep: nextStepIndex,
+                        totalSteps: loopEmailSteps.length,
+                        firstSentAt: progress.firstSentAt || null,
+                        lastCompletedAt: progress.lastCompletedAt || null,
+                        nextDueAt: retryScheduledAt,
+                      });
+                      registerNextContinuousWakeAt(Date.parse(retryScheduledAt));
+                    }
                   } else if (sendOutcome?.stopRemainingStepsForRecipient) {
                     const completedAtIso = toHoChiMinhIso();
                     await upsertRecipientProgress({
@@ -2734,17 +2793,34 @@ class CampaignRunService {
                 });
                 if (sendOutcome?.stopRemainingStepsForRecipient) {
                   stoppedRecipientKeys.add(customerKey);
-                  // eslint-disable-next-line no-await-in-loop
-                  await markRecipientStepCompleted({
-                    nodeId: node.id,
-                    channel: 'email',
-                    recipientKey: customerKey,
-                    completedStep: emailSteps.length,
-                    totalSteps: emailSteps.length,
-                    progress,
-                    steps: emailSteps,
-                    sendMode: emailSendMode,
-                  });
+                  if (sendOutcome?.preservePendingStep) {
+                    const retryScheduledAt = normalizeRetryScheduledAt(sendOutcome.retryScheduledAt);
+                    if (retryScheduledAt) {
+                      // eslint-disable-next-line no-await-in-loop
+                      await upsertRecipientProgress({
+                        nodeId: node.id,
+                        channel: 'email',
+                        recipientKey: customerKey,
+                        completedStep: progress?.lastCompletedStep || 0,
+                        totalSteps: emailSteps.length,
+                        firstSentAt: progress?.firstSentAt || null,
+                        lastCompletedAt: progress?.lastCompletedAt || null,
+                        nextDueAt: retryScheduledAt,
+                      });
+                    }
+                  } else {
+                    // eslint-disable-next-line no-await-in-loop
+                    await markRecipientStepCompleted({
+                      nodeId: node.id,
+                      channel: 'email',
+                      recipientKey: customerKey,
+                      completedStep: emailSteps.length,
+                      totalSteps: emailSteps.length,
+                      progress,
+                      steps: emailSteps,
+                      sendMode: emailSendMode,
+                    });
+                  }
                 } else if (sendOutcome?.success) {
                   // eslint-disable-next-line no-await-in-loop
                   await markRecipientStepCompleted({
@@ -2809,7 +2885,7 @@ class CampaignRunService {
                 stepMeta: null,
                 applyRandomDelay: true,
               });
-              if (sendOutcome?.stopRemainingStepsForRecipient || sendOutcome?.success) {
+              if (sendOutcome?.success) {
                 // eslint-disable-next-line no-await-in-loop
                 await markRecipientStepCompleted({
                   nodeId: node.id,
@@ -2821,6 +2897,35 @@ class CampaignRunService {
                   steps: [{ templateId: config.emailTemplateId || null }],
                   sendMode: 'all',
                 });
+              } else if (sendOutcome?.stopRemainingStepsForRecipient) {
+                if (sendOutcome?.preservePendingStep) {
+                  const retryScheduledAt = normalizeRetryScheduledAt(sendOutcome.retryScheduledAt);
+                  if (retryScheduledAt) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await upsertRecipientProgress({
+                      nodeId: node.id,
+                      channel: 'email',
+                      recipientKey: customerKey,
+                      completedStep: progress?.lastCompletedStep || 0,
+                      totalSteps: 1,
+                      firstSentAt: progress?.firstSentAt || null,
+                      lastCompletedAt: progress?.lastCompletedAt || null,
+                      nextDueAt: retryScheduledAt,
+                    });
+                  }
+                } else {
+                  // eslint-disable-next-line no-await-in-loop
+                  await markRecipientStepCompleted({
+                    nodeId: node.id,
+                    channel: 'email',
+                    recipientKey: customerKey,
+                    completedStep: 1,
+                    totalSteps: 1,
+                    progress,
+                    steps: [{ templateId: config.emailTemplateId || null }],
+                    sendMode: 'all',
+                  });
+                }
               }
             }
           }
@@ -4737,14 +4842,23 @@ class CampaignRunService {
       }
 
       await db.query(
-        `UPDATE campaign_runs SET
-         status = 'completed',
-         completed_at = CURRENT_TIMESTAMP,
-         total_recipients = $1,
-         successful_sends = $2,
-         failed_sends = $3
-         WHERE id = $4
-           AND status = 'running'`,
+        hasPendingEmailRetry && !isContinuousMode
+          ? `UPDATE campaign_runs SET
+             status = 'running',
+             completed_at = NULL,
+             total_recipients = $1,
+             successful_sends = $2,
+             failed_sends = $3
+             WHERE id = $4
+               AND status = 'running'`
+          : `UPDATE campaign_runs SET
+             status = 'completed',
+             completed_at = CURRENT_TIMESTAMP,
+             total_recipients = $1,
+             successful_sends = $2,
+             failed_sends = $3
+             WHERE id = $4
+               AND status = 'running'`,
         [totalRecipients, successfulSends, failedSends, runId]
       );
 
@@ -4756,7 +4870,14 @@ class CampaignRunService {
         [successfulSends, campaignId]
       );
 
-      console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${failedSends} thất bại`);
+      if (hasPendingEmailRetry && !isContinuousMode) {
+        console.log(
+          `[Campaign ${campaignId}] Run ${runId} đang chờ retry email: `
+          + `${pendingEmailRetryCount} lượt đã lên lịch, giữ trạng thái running`
+        );
+      } else {
+        console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${failedSends} thất bại`);
+      }
     } catch (error) {
       if (error?.code === 'RUN_STOPPED') {
         console.log(`[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);

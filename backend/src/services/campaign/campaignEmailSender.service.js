@@ -90,6 +90,31 @@ class CampaignEmailSenderService {
   }
 
   /**
+   * Kiểm tra mốc retry tuyệt đối từ metadata để ngăn gửi sớm hơn lịch.
+   *
+   * Luồng hoạt động:
+   * 1. Đọc `scheduledRetryAt` từ `retryMeta` và parse về timestamp.
+   * 2. Nếu timestamp không hợp lệ hoặc đã tới hạn thì cho phép gửi ngay.
+   * 3. Nếu chưa tới hạn, trả về delay còn lại để caller tự re-enqueue đúng lịch.
+   *
+   * @param {object|null} retryMeta metadata retry hiện tại
+   * @returns {{scheduledAtIso: string|null, scheduledAtMs: number|null, remainingDelayMs: number}}
+   */
+  resolveRetryScheduleGuard(retryMeta = null) {
+    const scheduledAtIso = String(retryMeta?.scheduledRetryAt || '').trim();
+    if (!scheduledAtIso) {
+      return { scheduledAtIso: null, scheduledAtMs: null, remainingDelayMs: 0 };
+    }
+    const scheduledAtMs = Date.parse(scheduledAtIso);
+    if (!Number.isFinite(scheduledAtMs)) {
+      return { scheduledAtIso: null, scheduledAtMs: null, remainingDelayMs: 0 };
+    }
+    // Chừa 1 giây tolerance để tránh lệch nhỏ giữa clock app và Redis/worker.
+    const remainingDelayMs = Math.max(0, scheduledAtMs - Date.now() - 1000);
+    return { scheduledAtIso, scheduledAtMs, remainingDelayMs };
+  }
+
+  /**
    * Tạm dừng theo milliseconds.
    *
    * @param {number} ms thời gian chờ
@@ -337,7 +362,7 @@ class CampaignEmailSenderService {
    * @param {object} customer
    * @param {object} campaign
    * @param {number} runId
-   * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
+   * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string, retryScheduledAt?: string|null}>}
    */
   async sendEmailToCustomer(actionNode, customer, campaign, runId, retryMeta = null) {
     return outboundMessageQueueService.enqueueAndWait({
@@ -366,9 +391,50 @@ class CampaignEmailSenderService {
    * @param {object} campaign
    * @param {number} runId
    * @param {object|null} retryMeta metadata retry nội bộ cho job delay
-   * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string}>}
+   * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string, retryScheduledAt?: string|null}>}
    */
   async sendEmailToCustomerDirect(actionNode, customer, campaign, runId, retryMeta = null) {
+    const retryScheduleGuard = this.resolveRetryScheduleGuard(retryMeta);
+    if (retryScheduleGuard.remainingDelayMs > 0) {
+      try {
+        await outboundMessageQueueService.enqueue({
+          type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
+          payload: {
+            actionNode,
+            customer,
+            campaign,
+            runId,
+            retryMeta: {
+              ...(retryMeta && typeof retryMeta === 'object' ? retryMeta : {}),
+              scheduledRetryAt: retryScheduleGuard.scheduledAtIso,
+            },
+          },
+          jobOptions: {
+            delay: retryScheduleGuard.remainingDelayMs,
+          },
+        });
+      } catch (enqueueError) {
+        console.error(
+          `[CampaignRun][Email] requeue_retry_guard_failed run=${runId} to=${customer?.email || ''} `
+          + `error=${enqueueError?.message || enqueueError}`
+        );
+        return {
+          to: customer?.email || '',
+          status: 'failed',
+          errorType: 'smtp_rate_limited',
+          error: 'Không thể lên lịch lại retry email theo mốc thời gian đã cấu hình.',
+        };
+      }
+
+      return {
+        to: customer?.email || '',
+        status: 'failed',
+        errorType: 'smtp_rate_limited_retry_scheduled',
+        error: 'Email chưa tới giờ retry, hệ thống đã giữ lịch gửi lại đúng mốc 3 giờ.',
+        retryScheduledAt: retryScheduleGuard.scheduledAtIso,
+      };
+    }
+
     const config = actionNode.config || {};
     const nodeId = actionNode?.id || 'unknown';
 
@@ -619,6 +685,7 @@ class CampaignEmailSenderService {
             status: 'failed',
             errorType: 'smtp_rate_limited_retry_scheduled',
             error: `SendGrid đang giới hạn gửi, đã lên lịch gửi lại sau 3 giờ (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
+            retryScheduledAt: retryScheduleAt.toISOString(),
           };
         }
 

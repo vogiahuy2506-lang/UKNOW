@@ -173,10 +173,33 @@ export function isSmtpProviderRateLimitError(error) {
     'temporarily deferred',
     'daily user sending quota exceeded',
     'exceeded sending limits',
+    'messaging limits',
+    "you've exceeded your messaging limits",
+    'you have exceeded your messaging limits',
+    'too many messages',
+    'recipient rate limit',
+    'sender rate limit'
   ];
 
   if (rateLimitPatterns.some((pattern) => msg.includes(pattern))) {
     return true;
+  }
+
+  // Một số provider trả 451 cho lỗi vượt ngưỡng gửi tạm thời.
+  // Chỉ coi là rate-limit khi message có ngữ nghĩa giới hạn/quota để tránh bắt nhầm soft-bounce khác.
+  if (Number.isFinite(code) && code === 451) {
+    const limitHints = [
+      'limit',
+      'quota',
+      'exceeded',
+      'too many',
+      'throttl',
+      'rate',
+      'temporarily deferred',
+    ];
+    if (limitHints.some((hint) => msg.includes(hint))) {
+      return true;
+    }
   }
 
   return Number.isFinite(code) && code === 429;
