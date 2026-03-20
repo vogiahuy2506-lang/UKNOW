@@ -1080,6 +1080,12 @@ class CampaignRunService {
           : createEmptyRecipientProgress();
         const nextStepIndex = Math.max(0, Number.parseInt(safeProgress.lastCompletedStep, 10) || 0);
         if (safeProgress.isFullyCompleted || nextStepIndex >= safeTotalSteps) return false;
+        // Chặn xử lý sớm khi recipient đang có mốc nextDueAt trong tương lai.
+        // Đây là guard dùng chung cho cả luồng resume one-shot để không gửi retry trước hạn.
+        const nextDueAtMs = safeProgress?.nextDueAt ? Date.parse(safeProgress.nextDueAt) : Number.NaN;
+        if (Number.isFinite(nextDueAtMs) && nextDueAtMs > Date.now()) {
+          return false;
+        }
         return nextStepIndex === Math.max(0, Number.parseInt(stepIndex, 10) || 0);
       };
       /**
@@ -1874,6 +1880,42 @@ class CampaignRunService {
       let selectedZaloAccount = null;
       const zaloTemplateContentCache = new Map();
       const zaloTemplateAttachmentSourceCache = new Map();
+      /**
+       * Đồng bộ trạng thái pending retry email từ recipient ledger trước khi finalize run.
+       *
+       * Luồng hoạt động:
+       * 1. Chỉ kiểm tra cho run one-shot khi chưa có cờ pending trong cycle hiện tại.
+       * 2. Query ledger để tìm recipient email chưa hoàn tất và có `nextDueAt` còn ở tương lai.
+       * 3. Nếu có ít nhất 1 bản ghi, giữ run ở trạng thái `running` để chờ tới hạn retry.
+       *
+       * @returns {Promise<void>}
+       */
+      const syncPendingEmailRetryFromLedger = async () => {
+        if (isContinuousMode || hasPendingEmailRetry || !isRecipientLedgerTableAvailable) return;
+        try {
+          const pendingRetryResult = await db.query(
+            `SELECT COUNT(*)::int AS pending_count
+             FROM campaign_run_recipient_steps
+             WHERE id_run = $1
+               AND channel = 'email'
+               AND COALESCE(is_fully_completed, FALSE) = FALSE
+               AND NULLIF(TRIM(COALESCE(meta->>'nextDueAt', '')), '') IS NOT NULL
+               AND (meta->>'nextDueAt')::timestamptz > NOW()`,
+            [runId]
+          );
+          const pendingCount = Number.parseInt(pendingRetryResult.rows[0]?.pending_count, 10) || 0;
+          if (pendingCount > 0) {
+            hasPendingEmailRetry = true;
+            pendingEmailRetryCount = Math.max(pendingEmailRetryCount, pendingCount);
+          }
+        } catch (pendingCheckError) {
+          if (String(pendingCheckError?.code || '') === '42P01' || String(pendingCheckError?.code || '') === '42703') {
+            isRecipientLedgerTableAvailable = false;
+            return;
+          }
+          throw pendingCheckError;
+        }
+      };
       /**
        * Kiểm tra lỗi thiếu key file trên storage (S3/compatible).
        *
@@ -4840,6 +4882,8 @@ class CampaignRunService {
         );
         await sleepWithRunCheck(nextSleepMs);
       }
+
+      await syncPendingEmailRetryFromLedger();
 
       await db.query(
         hasPendingEmailRetry && !isContinuousMode

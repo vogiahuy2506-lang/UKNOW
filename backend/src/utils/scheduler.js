@@ -7,6 +7,7 @@ const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
 const activeNonContinuousRunIds = new Set();
+const activeOverdueNonContinuousRunIds = new Set();
 
 const stopAllCampaignScheduleTasks = () => {
   for (const task of campaignScheduleTasks.values()) {
@@ -209,6 +210,56 @@ const recoverNonContinuousCampaignRuns = async () => {
   }
 };
 
+/**
+ * Quét các run non-continuous đang chạy nhưng đã quá hạn `nextDueAt` để gửi tiếp step kế tiếp.
+ *
+ * Luồng hoạt động:
+ * 1. Lấy danh sách run có `status = running`, `continuousMode != true` và còn recipient chưa hoàn tất.
+ * 2. Chỉ chọn bản ghi có `meta.nextDueAt` đã tới hạn (`<= NOW()`).
+ * 3. Trigger lại executeCampaign theo từng run để resume gửi step còn treo.
+ *
+ * @returns {Promise<void>}
+ */
+const recoverOverdueNonContinuousCampaignRuns = async () => {
+  const result = await db.query(
+    `SELECT DISTINCT cr.id, cr.id_campaign, c.id_user
+     FROM campaign_runs cr
+     JOIN campaigns c ON c.id = cr.id_campaign
+     JOIN campaign_run_recipient_steps crs ON crs.id_run = cr.id
+     WHERE cr.status = 'running'
+       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
+       AND COALESCE(crs.is_fully_completed, FALSE) = FALSE
+       AND NULLIF(TRIM(COALESCE(crs.meta->>'nextDueAt', '')), '') IS NOT NULL
+       AND (crs.meta->>'nextDueAt')::timestamptz <= NOW()`
+  );
+  if (result.rows.length === 0) return;
+
+  for (const row of result.rows) {
+    const runId = Number.parseInt(row.id, 10);
+    const campaignId = Number.parseInt(row.id_campaign, 10);
+    const userId = Number.parseInt(row.id_user, 10);
+    if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
+      continue;
+    }
+    const runKey = String(runId);
+    if (activeOverdueNonContinuousRunIds.has(runKey)) {
+      continue;
+    }
+
+    activeOverdueNonContinuousRunIds.add(runKey);
+    console.log(
+      `[Scheduler] Quét retry non-continuous quá hạn cho run #${runId} (campaign #${campaignId})`
+    );
+    campaignController.executeCampaign(campaignId, runId, userId)
+      .catch((error) => {
+        console.error(`[Scheduler] Lỗi retry non-continuous run #${runId}:`, error.message);
+      })
+      .finally(() => {
+        activeOverdueNonContinuousRunIds.delete(runKey);
+      });
+  }
+};
+
 export const requestCampaignScheduleRefresh = async () => {
   try {
     await refreshCampaignSchedules();
@@ -263,6 +314,18 @@ export const initScheduler = () => {
     timezone: 'Asia/Ho_Chi_Minh'
   });
 
+  // Cứ 2 tiếng quét các run non-continuous còn treo step quá hạn để gửi tiếp.
+  // Dùng cron có giây: "0 0 */2 * * *" = phút 0, giây 0, mỗi 2 giờ.
+  cron.schedule('0 0 */2 * * *', async () => {
+    try {
+      await recoverOverdueNonContinuousCampaignRuns();
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi quét retry non-continuous quá hạn:', error.message);
+    }
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
   refreshCampaignSchedules().catch((error) => {
     console.error('[Scheduler] Không thể nạp campaign schedules ban đầu:', error.message);
   });
@@ -271,5 +334,8 @@ export const initScheduler = () => {
   });
   recoverNonContinuousCampaignRuns().catch((error) => {
     console.error('[Scheduler] Không thể phục hồi campaign run non-continuous ban đầu:', error.message);
+  });
+  recoverOverdueNonContinuousCampaignRuns().catch((error) => {
+    console.error('[Scheduler] Không thể quét retry non-continuous quá hạn ban đầu:', error.message);
   });
 };

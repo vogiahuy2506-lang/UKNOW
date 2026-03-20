@@ -114,8 +114,11 @@ class EmailSettingsController {
   }
 
   formatUtc7() {
-    const d = new Date(Date.now() + 7 * 60 * 60 * 1000);
-    return d.toISOString().replace('Z', '+07:00');
+    /**
+     * Luôn trả về timestamp ISO theo thời điểm thực tế hiện tại.
+     * Không cộng tay +7 giờ để tránh tình trạng UI cộng timezone thêm lần nữa.
+     */
+    return new Date().toISOString();
   }
 
   normalizeEmailList(value) {
