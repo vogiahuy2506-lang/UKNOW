@@ -953,7 +953,13 @@ class CampaignRunService {
         }
       };
       /**
-       * Upsert recipient step progress into DB ledger; fallback to in-memory map when table not present.
+       * Ghi/ghi đè tiến độ recipient vào ledger DB (và map bộ nhớ khi không có bảng).
+       *
+       * Luồng hoạt động:
+       * 1. Merge `meta` mới với bản ghi cũ theo `||` (jsonb).
+       * 2. Khi lên lịch retry SMTP rate-limit: truyền `retryCount` để lưu vào meta.
+       * 3. Khi hoàn thành bước (sang template kế / kết thúc chuỗi): bật `removeRetryCountFromMeta`
+       *    để gỡ hẳn khóa `retryCount` khỏi jsonb — tránh sót giá trị cũ sau merge.
        *
        * @param {object} input
        * @param {number|string} input.nodeId
@@ -962,6 +968,7 @@ class CampaignRunService {
        * @param {number} input.completedStep
        * @param {number} input.totalSteps
        * @param {number|null} [input.retryCount] số lần retry SMTP đang theo dõi cho recipient (dùng cho email)
+       * @param {boolean} [input.removeRetryCountFromMeta] khi true: sau merge meta sẽ gỡ khóa `retryCount` khỏi jsonb (hoàn thành bước / sang template kế)
        * @returns {Promise<void>}
        */
       const upsertRecipientProgress = async ({
@@ -974,6 +981,7 @@ class CampaignRunService {
         lastCompletedAt = null,
         nextDueAt = null,
         retryCount = null,
+        removeRetryCountFromMeta = false,
       }) => {
         const safeRecipientKey = String(recipientKey || '').trim().toLowerCase();
         if (!safeRecipientKey) return;
@@ -981,13 +989,17 @@ class CampaignRunService {
         const safeTotalSteps = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
         const isFullyCompleted = safeCompletedStep >= safeTotalSteps;
         const localKey = buildRecipientLedgerKey({ nodeId, channel, recipientKey: safeRecipientKey });
+        // Khi hoàn thành bước: đồng bộ bộ nhớ về 0 để sendgridLimitRetryCount không kéo dài sang template kế.
+        const resolvedRetryCount = removeRetryCountFromMeta
+          ? 0
+          : Math.max(0, Number.parseInt(retryCount, 10) || 0);
         localRecipientProgress.set(localKey, {
           lastCompletedStep: safeCompletedStep,
           isFullyCompleted,
           firstSentAt,
           lastCompletedAt,
           nextDueAt,
-          retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0),
+          retryCount: resolvedRetryCount,
         });
         resumedRecipientProgress.set(localKey, {
           lastCompletedStep: safeCompletedStep,
@@ -995,20 +1007,32 @@ class CampaignRunService {
           firstSentAt,
           lastCompletedAt,
           nextDueAt,
-          retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0),
+          retryCount: resolvedRetryCount,
         });
         if (!isRecipientLedgerTableAvailable) return;
         try {
           await db.query(
             `INSERT INTO campaign_run_recipient_steps
              (id_run, id_campaign, id_node, channel, recipient_key, last_completed_step, is_fully_completed, last_sent_at, meta, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8::jsonb, CURRENT_TIMESTAMP)
+             VALUES (
+               $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP,
+               CASE
+                 WHEN COALESCE($9::boolean, FALSE) THEN ($8::jsonb - 'retryCount')
+                 ELSE $8::jsonb
+               END,
+               CURRENT_TIMESTAMP
+             )
              ON CONFLICT (id_run, id_node, channel, recipient_key)
              DO UPDATE SET
                last_completed_step = GREATEST(campaign_run_recipient_steps.last_completed_step, EXCLUDED.last_completed_step),
                is_fully_completed = campaign_run_recipient_steps.is_fully_completed OR EXCLUDED.is_fully_completed,
                last_sent_at = CURRENT_TIMESTAMP,
-               meta = COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta,
+               meta = CASE
+                 WHEN COALESCE($9::boolean, FALSE) THEN (
+                   COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+                 ) - 'retryCount'
+                 ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+               END,
                updated_at = CURRENT_TIMESTAMP`,
             [
               runId,
@@ -1026,6 +1050,7 @@ class CampaignRunService {
                   ? { retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0) }
                   : {}),
               }),
+              removeRetryCountFromMeta,
             ]
           );
         } catch (error) {
@@ -1182,7 +1207,7 @@ class CampaignRunService {
           firstSentAt,
           lastCompletedAt: completedAtIso,
           nextDueAt,
-          retryCount: 0,
+          removeRetryCountFromMeta: true,
         });
       };
       const resolveTemplateVariablesFromMappings = ({
@@ -1925,16 +1950,20 @@ class CampaignRunService {
       let failedSends = 0;
       let hasPendingEmailRetry = false;
       let pendingEmailRetryCount = 0;
+      /** Số bản ghi (trong các dòng chờ nextDueAt) còn `meta.retryCount` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
+      let pendingEmailWithRetryMetaInLedger = null;
       let selectedZaloAccount = null;
       const zaloTemplateContentCache = new Map();
       const zaloTemplateAttachmentSourceCache = new Map();
       /**
-       * Đồng bộ trạng thái pending retry email từ recipient ledger trước khi finalize run.
+       * Đồng bộ trạng thái “còn chờ mốc gửi email” từ ledger trước khi finalize run.
        *
        * Luồng hoạt động:
        * 1. Chỉ kiểm tra cho run one-shot khi chưa có cờ pending trong cycle hiện tại.
-       * 2. Query ledger để tìm recipient email chưa hoàn tất và có `nextDueAt` còn ở tương lai.
-       * 3. Nếu có ít nhất 1 bản ghi, giữ run ở trạng thái `running` để chờ tới hạn retry.
+       * 2. Đếm recipient email chưa hoàn tất có `nextDueAt` trong tương lai — gồm cả lịch template/bước kế
+       *    (multi-step, sendMode schedule) và mốc gửi lại sau rate-limit SMTP (cùng lưu `nextDueAt`).
+       * 3. Đếm thêm (con) các dòng còn `meta.retryCount` > 0 để phân biệt nhánh đang theo dõi retry SMTP.
+       * 4. Nếu có ít nhất 1 bản ghi chờ `nextDueAt`, giữ run `running` tới khi scheduler/resume xử lý.
        *
        * @returns {Promise<void>}
        */
@@ -1942,7 +1971,14 @@ class CampaignRunService {
         if (isContinuousMode || hasPendingEmailRetry || !isRecipientLedgerTableAvailable) return;
         try {
           const pendingRetryResult = await db.query(
-            `SELECT COUNT(*)::int AS pending_count
+            `SELECT
+               COUNT(*)::int AS pending_count,
+               COUNT(*) FILTER (
+                 WHERE meta ? 'retryCount'
+                   AND TRIM(COALESCE(meta->>'retryCount', '')) <> ''
+                   AND TRIM(meta->>'retryCount') ~ '^[0-9]+$'
+                   AND (meta->>'retryCount')::int > 0
+               )::int AS pending_with_retry_meta
              FROM campaign_run_recipient_steps
              WHERE id_run = $1
                AND channel = 'email'
@@ -1952,9 +1988,14 @@ class CampaignRunService {
             [runId]
           );
           const pendingCount = Number.parseInt(pendingRetryResult.rows[0]?.pending_count, 10) || 0;
+          const pendingWithRetryMeta = Number.parseInt(
+            pendingRetryResult.rows[0]?.pending_with_retry_meta,
+            10
+          ) || 0;
           if (pendingCount > 0) {
             hasPendingEmailRetry = true;
             pendingEmailRetryCount = Math.max(pendingEmailRetryCount, pendingCount);
+            pendingEmailWithRetryMetaInLedger = pendingWithRetryMeta;
           }
         } catch (pendingCheckError) {
           if (String(pendingCheckError?.code || '') === '42P01' || String(pendingCheckError?.code || '') === '42703') {
@@ -2310,7 +2351,7 @@ class CampaignRunService {
 
           const saveSummary = sourceItems.length > 0
             ? await campaignNodeDataService.saveCustomersFromCampaign(sourceItems, campaignId, userId, { ...node, config }, runId)
-            : { saved: 0, updated: 0, skipped: 0 };
+            : { saved: 0, updated: 0, skipped: 0, unchanged: 0 };
 
           nodeOutputs[String(node.id)] = sourceItems;
           lastOutputItems = sourceItems;
@@ -2325,16 +2366,19 @@ class CampaignRunService {
                 inserted: saveSummary.saved,
                 updated: saveSummary.updated,
                 skipped: saveSummary.skipped,
+                unchanged: saveSummary.unchanged,
               }),
               savedCustomers: saveSummary.saved,
               updatedCustomers: saveSummary.updated,
               skippedCustomers: saveSummary.skipped,
+              unchangedCustomers: saveSummary.unchanged,
               items: mappedLogItems.slice(0, 100),
               schema: campaignFlowService.buildSchemaFromRows(mappedLogItems.slice(0, 1)),
               meta: {
                 inserted: saveSummary.saved,
                 updated: saveSummary.updated,
                 skipped: saveSummary.skipped,
+                unchanged: saveSummary.unchanged,
                 totalItems: mappedLogItems.length,
                 previewed: Math.min(mappedLogItems.length, 100),
               },
@@ -2794,6 +2838,7 @@ class CampaignRunService {
                       firstSentAt,
                       lastCompletedAt: completedAtIso,
                       nextDueAt,
+                      removeRetryCountFromMeta: true,
                     });
                     registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
                   } else if (sendOutcome?.preservePendingStep) {
@@ -2823,7 +2868,7 @@ class CampaignRunService {
                       firstSentAt: progress.firstSentAt || completedAtIso,
                       lastCompletedAt: completedAtIso,
                       nextDueAt: null,
-                      retryCount: 0,
+                      removeRetryCountFromMeta: true,
                     });
                   }
                 } catch (recipientError) {
@@ -4965,9 +5010,14 @@ class CampaignRunService {
       );
 
       if (hasPendingEmailRetry && !isContinuousMode) {
+        const ledgerRetryHint = pendingEmailWithRetryMetaInLedger !== null
+          ? ` Trong số đó (theo ledger) ${pendingEmailWithRetryMetaInLedger} bản ghi còn meta.retryCount (thường là chờ gửi lại sau rate-limit SMTP).`
+          : '';
         console.log(
-          `[Campaign ${campaignId}] Run ${runId} đang chờ retry email: `
-          + `${pendingEmailRetryCount} lượt đã lên lịch, giữ trạng thái running`
+          `[Campaign ${campaignId}] Run ${runId} giữ trạng thái running: `
+          + `${pendingEmailRetryCount} recipient email chưa hoàn tất và có nextDueAt trong tương lai`
+          + ' (gồm lịch bước/template kế hoặc hẹn gửi lại sau giới hạn SMTP — không bắt buộc phải có meta.retryCount).'
+          + ledgerRetryHint
         );
       } else {
         console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${failedSends} thất bại`);

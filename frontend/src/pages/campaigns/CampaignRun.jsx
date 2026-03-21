@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
+import {
+  fetchCampaignRunDetailAllExecutionLogs,
+  getMaxExecutionLogUpdatedAt,
+} from '../../features/campaigns/utils/campaignRunExecutionLogLoader';
 import toast from 'react-hot-toast';
 import { buildFlowOrderIndex } from '../../utils/campaignExecutionLogs';
 import CampaignRunMainTabs from '../../features/campaigns/components/CampaignRunMainTabs';
@@ -108,6 +112,11 @@ const CampaignRun = () => {
   const isResumeRunSelected = Number.isFinite(selectedResumeRunId) && selectedResumeRunId > 0;
   const isRunResumeLocked = Boolean(runContinuousMode && runResumeMode && isResumeRunSelected);
 
+  /** Mốc `updated_at` lớn nhất để poll execution log dạng delta (không tải lại full mỗi nhịp). */
+  const executionLogDeltaCursorRef = useRef(null);
+  /** Chi tiết run mới nhất sau render — dùng khi poll merge log, tránh closure cũ. */
+  const selectedRunDetailRef = useRef(null);
+
   const getCampaignKey = (campaignId) => String(campaignId);
   const isCampaignRunningById = (campaignId) => runningCampaigns.has(getCampaignKey(campaignId));
   const isZaloGroupCampaign = (campaign) =>
@@ -135,6 +144,10 @@ const CampaignRun = () => {
       setFlowOrderByNodeId(new Map());
     }
   };
+
+  useEffect(() => {
+    selectedRunDetailRef.current = selectedRunDetail;
+  }, [selectedRunDetail]);
 
   useEffect(() => {
     fetchActiveCampaigns();
@@ -214,14 +227,20 @@ const CampaignRun = () => {
 
   const handleViewRunDetail = async (runId, campaignId) => {
     setIsLoadingRunDetail(true);
+    executionLogDeltaCursorRef.current = null;
     try {
-      const [runRes, historyRes] = await Promise.all([
-        campaignRunApiService.getCampaignRunDetail(runId),
+      const [historyRes, , full] = await Promise.all([
         campaignRunApiService.getCampaignRuns(`campaignId=${campaignId}&limit=20`),
+        loadCampaignFlowOrder(campaignId),
+        fetchCampaignRunDetailAllExecutionLogs(
+          (rid, params) => campaignRunApiService.getCampaignRunDetail(rid, params),
+          runId,
+          150
+        ),
       ]);
-      await loadCampaignFlowOrder(campaignId);
-      setSelectedRunDetail(runRes.data?.data || null);
       setCampaignRunHistory(historyRes.data?.data || []);
+      setSelectedRunDetail(full);
+      executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
     } catch (error) {
       toast.error('Không thể tải log chạy chiến dịch');
     } finally {
@@ -408,6 +427,7 @@ const CampaignRun = () => {
     setSelectedExecutionLogId(null);
     setFlowOrderByNodeId(new Map());
     setIsLoadingRunDetail(true);
+    executionLogDeltaCursorRef.current = null;
     try {
       const [historyRes] = await Promise.all([
         campaignRunApiService.getCampaignRuns(`campaignId=${campaign.id}&limit=20`),
@@ -417,8 +437,15 @@ const CampaignRun = () => {
       setCampaignRunHistory(history);
       if (history.length > 0) {
         const latestRunId = history[0].id;
-        const runRes = await campaignRunApiService.getCampaignRunDetail(latestRunId);
-        setSelectedRunDetail(runRes.data?.data || null);
+        const full = await fetchCampaignRunDetailAllExecutionLogs(
+          (rid, params) => campaignRunApiService.getCampaignRunDetail(rid, params),
+          latestRunId,
+          150
+        );
+        setSelectedRunDetail(full);
+        executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
+      } else {
+        setSelectedRunDetail(null);
       }
     } catch (error) {
       toast.error('Không thể tải log chạy chiến dịch');
@@ -443,6 +470,7 @@ const CampaignRun = () => {
     setCampaignRunHistory([]);
     setSelectedExecutionLogId(null);
     setFlowOrderByNodeId(new Map());
+    executionLogDeltaCursorRef.current = null;
   };
 
   const isShowingLogsForCampaign = (campaignId) =>
@@ -499,9 +527,41 @@ const CampaignRun = () => {
           return;
         }
 
-        const runRes = await campaignRunApiService.getCampaignRunDetail(targetRunId);
-        if (isCancelled) return;
-        setSelectedRunDetail(runRes.data?.data || null);
+        const cursor = executionLogDeltaCursorRef.current;
+
+        if (cursor) {
+          const runRes = await campaignRunApiService.getCampaignRunDetail(targetRunId, {
+            executionLogsLimit: 500,
+            executionLogsUpdatedAfter: cursor,
+          });
+          if (isCancelled) return;
+          const incoming = runRes.data?.data;
+          if (!incoming) return;
+
+          const prevDetail = selectedRunDetailRef.current;
+          if (!prevDetail || Number(prevDetail.id) !== Number(targetRunId)) {
+            executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(incoming.executionLogs || []);
+            setSelectedRunDetail(incoming);
+          } else {
+            const map = new Map((prevDetail.executionLogs || []).map((l) => [l.id, l]));
+            (incoming.executionLogs || []).forEach((l) => map.set(l.id, l));
+            const merged = Array.from(map.values());
+            executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(merged);
+            setSelectedRunDetail({
+              ...incoming,
+              executionLogs: merged,
+            });
+          }
+        } else {
+          const full = await fetchCampaignRunDetailAllExecutionLogs(
+            (rid, params) => campaignRunApiService.getCampaignRunDetail(rid, params),
+            targetRunId,
+            150
+          );
+          if (isCancelled) return;
+          setSelectedRunDetail(full);
+          executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
+        }
       } catch (error) {
         console.error('Không thể cập nhật log chạy chiến dịch:', error);
       }
@@ -721,12 +781,18 @@ const CampaignRun = () => {
       toast.success('Đã dừng lượt chạy');
       await checkRunningCampaigns();
       if (selectedRunDetail?.id === runId && selectedCampaignForLogs?.id) {
-        const [runRes, historyRes] = await Promise.all([
-          campaignRunApiService.getCampaignRunDetail(runId),
+        executionLogDeltaCursorRef.current = null;
+        const [full, historyRes] = await Promise.all([
+          fetchCampaignRunDetailAllExecutionLogs(
+            (rid, params) => campaignRunApiService.getCampaignRunDetail(rid, params),
+            runId,
+            150
+          ),
           campaignRunApiService.getCampaignRuns(`campaignId=${selectedCampaignForLogs.id}&limit=20`),
         ]);
-        setSelectedRunDetail(runRes.data?.data || null);
+        setSelectedRunDetail(full);
         setCampaignRunHistory(historyRes.data?.data || []);
+        executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
       }
       setStopRunConfirmTarget(null);
     } catch (error) {

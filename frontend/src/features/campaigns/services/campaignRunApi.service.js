@@ -17,8 +17,27 @@ const campaignRunApiService = {
     return api.get(`/campaign-runs?${paramsQuery}`, options);
   },
 
-  getCampaignRunDetail(runId, options = {}) {
-    return api.get(`/campaign-runs/${runId}`, options);
+  /**
+   * Chi tiết một lượt chạy. `queryParams` bật data loader (cursor) cho `executionLogs`.
+   *
+   * @param {number|string} runId id run
+   * @param {object} [queryParams={}] executionLogsLimit, executionLogsAfterId, executionLogsUpdatedAfter
+   * @param {object} [options={}] tùy chọn axios (vd cancel token)
+   * @returns {Promise<object>}
+   */
+  getCampaignRunDetail(runId, queryParams = {}, options = {}) {
+    const q = new URLSearchParams();
+    if (queryParams.executionLogsLimit != null && queryParams.executionLogsLimit !== '') {
+      q.set('executionLogsLimit', String(queryParams.executionLogsLimit));
+    }
+    if (queryParams.executionLogsAfterId != null && queryParams.executionLogsAfterId !== '') {
+      q.set('executionLogsAfterId', String(queryParams.executionLogsAfterId));
+    }
+    if (queryParams.executionLogsUpdatedAfter) {
+      q.set('executionLogsUpdatedAfter', String(queryParams.executionLogsUpdatedAfter));
+    }
+    const qs = q.toString();
+    return api.get(`/campaign-runs/${runId}${qs ? `?${qs}` : ''}`, options);
   },
 
   runCampaign(campaignId, payload = {}, options = {}) {

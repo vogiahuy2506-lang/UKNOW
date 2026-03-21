@@ -30,7 +30,7 @@ class CampaignFlowService {
    * Build success message for a node subtype.
    *
    * @param {string} nodeSubtype
-   * @param {{ fetched?: number, total?: number, inserted?: number, updated?: number, skipped?: number }} stats
+   * @param {{ fetched?: number, total?: number, inserted?: number, updated?: number, skipped?: number, unchanged?: number }} stats
    * @returns {string}
    */
   buildNodeSuccessMessage(nodeSubtype, stats = {}) {
@@ -39,6 +39,7 @@ class CampaignFlowService {
     const inserted = Number(stats.inserted || 0);
     const updated = Number(stats.updated || 0);
     const skipped = Number(stats.skipped || 0);
+    const unchanged = Number(stats.unchanged || 0);
 
     if (nodeSubtype === 'read_sheet') return `Đọc dữ liệu thành công (${fetched} dòng)`;
     if (nodeSubtype === 'read_interested_customers' || nodeSubtype === 'interested_customers') {
@@ -46,7 +47,7 @@ class CampaignFlowService {
     }
     if (nodeSubtype === 'read_courses_db') return `Lấy khóa học đã chọn thành công (${fetched} khóa học)`;
     if (nodeSubtype === 'save_customer') {
-      return `Lưu khách hàng xong (${inserted} mới, ${updated} cập nhật, ${skipped} bỏ qua)`;
+      return `Lưu khách hàng xong (${inserted} mới, ${updated} cập nhật, ${unchanged} giữ nguyên, ${skipped} bỏ qua)`;
     }
     return 'Thực thi thành công';
   }
