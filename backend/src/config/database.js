@@ -12,6 +12,8 @@ const pool = new Pool({
   // Tăng timeout chờ kết nối từ 2s → 10s để chịu được tải cao khi nhiều campaign chạy đồng thời.
   connectionTimeoutMillis: 10000,
   // Timeout query tối đa 30s để phát hiện query bị kẹt sớm.
+  // Lưu ý: transaction lưu khách hàng batch (`saveCustomersFromCampaignDirect`) tự `SET LOCAL statement_timeout`
+  // theo biến `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` để không bị cắt bởi giới hạn 30s này.
   statement_timeout: 30000,
 });
 

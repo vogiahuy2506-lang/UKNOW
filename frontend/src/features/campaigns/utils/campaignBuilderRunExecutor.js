@@ -395,10 +395,11 @@ const buildNodeSuccessValidation = (nodeType, result) => {
   if (nodeType === 'save_customer') {
     const inserted = result?.output?.meta?.inserted || 0;
     const updated = result?.output?.meta?.updated || 0;
+    const unchanged = result?.output?.meta?.unchanged || 0;
     const skipped = result?.output?.meta?.skipped || 0;
     return {
       status: 'success',
-      message: `Lưu khách hàng xong (${inserted} mới, ${updated} cập nhật, ${skipped} bỏ qua)`,
+      message: `Lưu khách hàng xong (${inserted} mới, ${updated} cập nhật, ${unchanged} giữ nguyên, ${skipped} bỏ qua)`,
     };
   }
   if (nodeType === 'select_zalo_account') {
