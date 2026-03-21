@@ -84,14 +84,14 @@ const KpiCard = ({ label, value, sub, icon, color = 'blue' }) => {
 };
 
 /**
- * KPI cards grid — 6 cards derived from journey event_type counts + completed orders.
+ * KPI cards grid — 6 cards: gửi/mở/click từ tổng dòng customer_journey; đơn mua/chờ từ customer_purchases.
  *
- * Card 1: Tổng chiến dịch  (from campaigns/campaign_runs — unchanged)
- * Card 2: Tổng gửi         (emailSent + zaloSent from customer_journey)
- * Card 3: Email Open Rate  (emailOpened / emailSent from journey)
- * Card 4: Click Rate       (emailClicked + zaloClicked from journey)
- * Card 5: Đơn chờ         (orderPending from customer_journey)
- * Card 6: Đã mua          (completedOrderCount from customer_purchases via overview.channels)
+ * Card 1: Tổng chiến dịch (campaigns / campaign_runs)
+ * Card 2: Tổng gửi (email_sent + zalo_sent trên hành trình)
+ * Card 3: Email Open Rate (email_opened / email_sent, cùng nguồn hành trình)
+ * Card 4: Click Rate (email_clicked + zalo_clicked trên hành trình)
+ * Card 5: Đơn chờ (order_pending trên hành trình + chi tiết kênh từ channels)
+ * Card 6: Đã mua (customer_purchases qua overview.channels)
  *
  * @param {object} props
  * @param {object} props.overview

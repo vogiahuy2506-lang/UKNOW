@@ -210,36 +210,12 @@ class DashboardRepository {
   }
 
   /**
-   * Get channel click metrics for zalo + zalo group.
+   * Click Zalo / Zalo Group: tổng dòng zalo_clicked trên customer_journey (mỗi lượt = 1 dòng).
    *
    * @param {object} filters
-   * @param {boolean} hasZaloMessages
    * @returns {Promise<Array<{campaign_type: string, click_count: number}>>}
    */
-  async getZaloClickMetrics(filters, hasZaloMessages) {
-    if (hasZaloMessages) {
-      const scope = this.buildCampaignScopeClause(filters);
-      const scoped = this.withDateRange({
-        baseClause: `${scope.clause} AND c.campaign_type IN ('zalo', 'zalo_group')`,
-        params: scope.params,
-        dateColumn: 'COALESCE(zm.created_at, zm.sent_at)',
-        startAt: filters.startAt,
-        endExclusive: filters.endExclusive,
-      });
-
-      const result = await db.query(
-        `SELECT
-           c.campaign_type,
-           COALESCE(SUM(COALESCE(zm.click_count, 0)), 0)::INTEGER AS click_count
-         FROM zalo_messages zm
-         JOIN campaigns c ON c.id = zm.id_campaign
-         WHERE ${scoped.clause}
-         GROUP BY c.campaign_type`,
-        scoped.params
-      );
-      return result.rows || [];
-    }
-
+  async getZaloClickMetrics(filters) {
     const scope = this.buildCampaignScopeClause(filters);
     const scoped = this.withDateRange({
       baseClause: `${scope.clause}
@@ -305,14 +281,14 @@ class DashboardRepository {
   }
 
   /**
-   * Get analytics timeline grouped by day.
+   * Timeline theo ngày: mở/click/tải từ customer_journey; tin gửi từ email_sent / zalo_sent trên hành trình;
+   * đơn từ customer_purchases. Đồng bộ với thẻ KPI và biểu đồ kênh.
    *
    * @param {object} filters
    * @param {string} purchaseOrderStatusExpr
-   * @param {boolean} hasZaloMessages - whether zalo_messages table exists
    * @returns {Promise<object>}
    */
-  async getTimeline(filters, purchaseOrderStatusExpr, hasZaloMessages = false) {
+  async getTimeline(filters, purchaseOrderStatusExpr) {
     const scope = this.buildCampaignScopeClause(filters);
     const purchaseDateExpr = this.getPurchaseDateExpr('cp');
     const normalizedOrderStatusExpr = this.buildNormalizedPurchaseStatusExpr(purchaseOrderStatusExpr);
@@ -383,73 +359,54 @@ class DashboardRepository {
       purchaseScoped.params
     );
 
-    // Email sent per day — count rows in email_messages where sent_at is set
+    // Email đã gửi theo ngày — mỗi dòng email_sent trên customer_journey
     const emailSentScoped = this.withDateRange({
-      baseClause: `${scope.clause} AND c.campaign_type = 'email' AND em.sent_at IS NOT NULL`,
+      baseClause: `${scope.clause} AND c.campaign_type = 'email' AND cj.event_type = 'email_sent'`,
       params: scope.params,
-      dateColumn: 'em.sent_at',
+      dateColumn: 'cj.event_at',
       startAt: filters.startAt,
       endExclusive: filters.endExclusive,
     });
     const emailSentResult = await db.query(
       `SELECT
-         TO_CHAR(DATE(em.sent_at), 'YYYY-MM-DD') AS date,
+         TO_CHAR(DATE(cj.event_at), 'YYYY-MM-DD') AS date,
          COUNT(*)::INTEGER AS email_sent
-       FROM email_messages em
-       JOIN campaigns c ON c.id = em.id_campaign
+       FROM customer_journey cj
+       JOIN campaigns c ON c.id = cj.id_campaign
        WHERE ${emailSentScoped.clause}
-       GROUP BY DATE(em.sent_at)
-       ORDER BY DATE(em.sent_at) ASC`,
+       GROUP BY DATE(cj.event_at)
+       ORDER BY DATE(cj.event_at) ASC`,
       emailSentScoped.params
     );
 
-    // Zalo/ZaloGroup sent per day
-    let zaloSentRows = [];
-    if (hasZaloMessages) {
-      // Use zalo_messages table if available — count sent messages per day per channel type
-      const zaloSentScoped = this.withDateRange({
-        baseClause: `${scope.clause} AND c.campaign_type IN ('zalo', 'zalo_group')`,
-        params: scope.params,
-        dateColumn: 'COALESCE(zm.created_at, zm.sent_at)',
-        startAt: filters.startAt,
-        endExclusive: filters.endExclusive,
-      });
-      const res = await db.query(
-        `SELECT
-           TO_CHAR(DATE(COALESCE(zm.created_at, zm.sent_at)), 'YYYY-MM-DD') AS date,
-           c.campaign_type,
-           COUNT(*)::INTEGER AS sent_count
-         FROM zalo_messages zm
-         JOIN campaigns c ON c.id = zm.id_campaign
-         WHERE ${zaloSentScoped.clause}
-         GROUP BY DATE(COALESCE(zm.created_at, zm.sent_at)), c.campaign_type
-         ORDER BY DATE(COALESCE(zm.created_at, zm.sent_at)) ASC`,
-        zaloSentScoped.params
-      );
-      zaloSentRows = res.rows || [];
-    } else {
-      // Fallback: approximate from campaign_runs.successful_sends grouped by started_at date
-      const zaloSentScoped = this.withDateRange({
-        baseClause: `${scope.clause} AND c.campaign_type IN ('zalo', 'zalo_group')`,
-        params: scope.params,
-        dateColumn: 'cr.started_at',
-        startAt: filters.startAt,
-        endExclusive: filters.endExclusive,
-      });
-      const res = await db.query(
-        `SELECT
-           TO_CHAR(DATE(cr.started_at), 'YYYY-MM-DD') AS date,
-           c.campaign_type,
-           COALESCE(SUM(COALESCE(cr.successful_sends, 0)), 0)::INTEGER AS sent_count
-         FROM campaign_runs cr
-         JOIN campaigns c ON c.id = cr.id_campaign
-         WHERE ${zaloSentScoped.clause}
-         GROUP BY DATE(cr.started_at), c.campaign_type
-         ORDER BY DATE(cr.started_at) ASC`,
-        zaloSentScoped.params
-      );
-      zaloSentRows = res.rows || [];
-    }
+    // Zalo / Zalo Group đã gửi theo ngày — zalo_sent trên customer_journey
+    const zaloSentScoped = this.withDateRange({
+      baseClause: `${scope.clause} AND c.campaign_type IN ('zalo', 'zalo_group') AND cj.event_type = 'zalo_sent'`,
+      params: scope.params,
+      dateColumn: 'cj.event_at',
+      startAt: filters.startAt,
+      endExclusive: filters.endExclusive,
+    });
+    const zaloSentRes = await db.query(
+      `SELECT
+         TO_CHAR(DATE(cj.event_at), 'YYYY-MM-DD') AS date,
+         CASE
+           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
+           ELSE 'zalo'
+         END AS campaign_type,
+         COUNT(*)::INTEGER AS sent_count
+       FROM customer_journey cj
+       JOIN campaigns c ON c.id = cj.id_campaign
+       WHERE ${zaloSentScoped.clause}
+       GROUP BY DATE(cj.event_at),
+         CASE
+           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
+           ELSE 'zalo'
+         END
+       ORDER BY DATE(cj.event_at) ASC`,
+      zaloSentScoped.params
+    );
+    const zaloSentRows = zaloSentRes.rows || [];
 
     return {
       journeyEngagementRows: journeyEngagementResult.rows || [],
@@ -460,14 +417,17 @@ class DashboardRepository {
   }
 
   /**
-   * Get run list with pagination.
+   * Danh sách lượt chạy có phân trang + chỉ số theo run.
+   *
+   * Gửi / mở / click: đếm từng dòng customer_journey theo event_type (tổng sự kiện, không unique khách).
+   * Tin đã gửi hiển thị: email_sent nếu campaign_type = email, zalo_sent nếu zalo / zalo_group.
+   * Đơn hàng: customer_purchases (pending / completed theo purchaseOrderStatusExpr).
    *
    * @param {object} filters
    * @param {string} purchaseOrderStatusExpr
-   * @param {boolean} hasZaloMessages
    * @returns {Promise<{items: object[], total: number}>}
    */
-  async getRuns(filters, purchaseOrderStatusExpr, hasZaloMessages) {
+  async getRuns(filters, purchaseOrderStatusExpr) {
     const scope = this.buildCampaignScopeClause(filters);
     const normalizedOrderStatusExpr = this.buildNormalizedPurchaseStatusExpr(purchaseOrderStatusExpr);
     const scoped = this.withDateRange({
@@ -523,18 +483,22 @@ class DashboardRepository {
 
     const runIds = runRows.map((item) => Number(item.id)).filter(Number.isFinite);
 
-    const emailAggResult = await db.query(
+    /**
+     * Thống kê theo từng lượt chạy từ customer_journey: đếm mọi bản ghi sự kiện (không gộp unique khách).
+     * - Tin đã gửi (hiển thị theo kênh): email_sent / zalo_sent
+     * - Mở / click: email_opened, email_clicked, zalo_clicked
+     */
+    const journeyAggResult = await db.query(
       `SELECT
-         em.id_run,
-         COUNT(*) FILTER (
-           WHERE COALESCE(em.open_count, 0) > 0 OR em.first_opened_at IS NOT NULL
-         )::INTEGER AS opened_count,
-         COUNT(*) FILTER (
-           WHERE COALESCE(em.click_count, 0) > 0 OR em.first_clicked_at IS NOT NULL
-         )::INTEGER AS clicked_count
-       FROM email_messages em
-       WHERE em.id_run = ANY($1::int[])
-       GROUP BY em.id_run`,
+         cj.id_run,
+         COUNT(*) FILTER (WHERE cj.event_type = 'email_sent')::INTEGER AS email_sent_count,
+         COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent')::INTEGER AS zalo_sent_count,
+         COUNT(*) FILTER (WHERE cj.event_type = 'email_opened')::INTEGER AS email_opened_count,
+         COUNT(*) FILTER (WHERE cj.event_type = 'email_clicked')::INTEGER AS email_clicked_count,
+         COUNT(*) FILTER (WHERE cj.event_type = 'zalo_clicked')::INTEGER AS zalo_clicked_count
+       FROM customer_journey cj
+       WHERE cj.id_run = ANY($1::int[])
+       GROUP BY cj.id_run`,
       [runIds]
     );
 
@@ -564,36 +528,15 @@ class DashboardRepository {
       [runIds]
     );
 
-    let zaloAggResult = { rows: [] };
-    if (hasZaloMessages) {
-      zaloAggResult = await db.query(
-        `SELECT
-           zm.id_run,
-           COALESCE(SUM(COALESCE(zm.click_count, 0)), 0)::INTEGER AS click_count
-         FROM zalo_messages zm
-         WHERE zm.id_run = ANY($1::int[])
-         GROUP BY zm.id_run`,
-        [runIds]
-      );
-    } else {
-      zaloAggResult = await db.query(
-        `SELECT
-           cj.id_run,
-           COUNT(*)::INTEGER AS click_count
-         FROM customer_journey cj
-         WHERE cj.id_run = ANY($1::int[])
-           AND cj.event_type = 'zalo_clicked'
-         GROUP BY cj.id_run`,
-        [runIds]
-      );
-    }
-
-    const emailMap = new Map(
-      (emailAggResult.rows || []).map((item) => [
+    const journeyMap = new Map(
+      (journeyAggResult.rows || []).map((item) => [
         Number(item.id_run),
         {
-          openedCount: Number(item.opened_count || 0),
-          clickedCount: Number(item.clicked_count || 0),
+          emailSentCount: Number(item.email_sent_count || 0),
+          zaloSentCount: Number(item.zalo_sent_count || 0),
+          emailOpenedCount: Number(item.email_opened_count || 0),
+          emailClickedCount: Number(item.email_clicked_count || 0),
+          zaloClickedCount: Number(item.zalo_clicked_count || 0),
         },
       ])
     );
@@ -609,18 +552,30 @@ class DashboardRepository {
         },
       ])
     );
-    const zaloMap = new Map(
-      (zaloAggResult.rows || []).map((item) => [Number(item.id_run), Number(item.click_count || 0)])
-    );
-
     const items = runRows.map((item) => {
       const runId = Number(item.id);
-      const emailData = emailMap.get(runId) || { openedCount: 0, clickedCount: 0 };
+      const j = journeyMap.get(runId) || {
+        emailSentCount: 0,
+        zaloSentCount: 0,
+        emailOpenedCount: 0,
+        emailClickedCount: 0,
+        zaloClickedCount: 0,
+      };
       const orderData = purchaseMap.get(runId) || { pendingOrders: 0, completedOrders: 0 };
       const totalRecipients = Number(item.total_recipients || 0);
       const successfulSends = Number(item.successful_sends || 0);
       const failedSends = Number(item.failed_sends || 0);
       const successRate = totalRecipients > 0 ? (successfulSends / totalRecipients) * 100 : 0;
+
+      const channel = String(item.campaign_type || '').trim().toLowerCase();
+      let journeySentCount = 0;
+      if (channel === 'email') {
+        journeySentCount = j.emailSentCount;
+      } else if (channel === 'zalo' || channel === 'zalo_group') {
+        journeySentCount = j.zaloSentCount;
+      } else {
+        journeySentCount = j.emailSentCount + j.zaloSentCount;
+      }
 
       return {
         runId,
@@ -635,10 +590,12 @@ class DashboardRepository {
         successfulSends,
         failedSends,
         successRate: Number(successRate.toFixed(2)),
-        emailOpenedCount: emailData.openedCount,
-        emailClickedCount: emailData.clickedCount,
+        /** Số tin đã gửi theo hành trình (email_sent hoặc zalo_sent tùy kênh) */
+        journeySentCount,
+        emailOpenedCount: j.emailOpenedCount,
+        emailClickedCount: j.emailClickedCount,
         emailDownloadCount: Number(attachmentMap.get(runId) || 0),
-        zaloClickCount: Number(zaloMap.get(runId) || 0),
+        zaloClickCount: j.zaloClickedCount,
         pendingOrderCount: orderData.pendingOrders,
         completedOrderCount: orderData.completedOrders,
       };

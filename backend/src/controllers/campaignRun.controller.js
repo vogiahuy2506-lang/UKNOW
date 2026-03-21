@@ -94,7 +94,11 @@ class CampaignRunController {
     }
   }
 
-  // Lấy chi tiết một lần chạy
+  /**
+   * Chi tiết một lần chạy.
+   * - linkClickCount: tổng bản ghi customer_journey với event_type email_clicked hoặc zalo_clicked (mỗi lượt = 1 dòng).
+   * - Đơn hàng: đếm từ customer_purchases theo nhóm trạng thái (đồng bộ bộ lọc với dashboard).
+   */
   async getById(req, res) {
     try {
       const userId = req.user.id;
@@ -135,34 +139,29 @@ class CampaignRunController {
       };
 
       try {
+        const normalizedStatusExpr = `LOWER(TRIM(COALESCE(${purchaseOrderStatusExpr}, '')))`;
         const purchaseSummaryResult = await db.query(
           `SELECT
              COALESCE(COUNT(*) FILTER (
-               WHERE ${purchaseOrderStatusExpr} IN ('completed', 'processing')
+               WHERE ${normalizedStatusExpr} IN ('completed', 'processing')
              ), 0)::INTEGER AS purchase_count,
              COALESCE(COUNT(*) FILTER (
-               WHERE ${purchaseOrderStatusExpr} IN ('on-hold', 'pending')
+               WHERE ${normalizedStatusExpr} IN (
+                 'on-hold', 'on-holder', 'onhold', 'pending', 'interested'
+               )
              ), 0)::INTEGER AS pending_count,
              COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS customer_with_order_count
            FROM customer_purchases cp
            WHERE cp.id_run = $1`,
           [id]
         );
+        /** Tổng lượt click link: mỗi dòng customer_journey (email_clicked / zalo_clicked) là một lượt */
         const clickSummaryResult = await db.query(
           `SELECT
-             (
-               COALESCE((
-                 SELECT SUM(COALESCE(em.click_count, 0))
-                 FROM email_messages em
-                 WHERE em.id_run = $1
-               ), 0)
-               +
-               COALESCE((
-                 SELECT SUM(COALESCE(zm.click_count, 0))
-                 FROM zalo_messages zm
-                 WHERE zm.id_run = $1
-               ), 0)
-             )::INTEGER AS link_click_count`,
+             COALESCE(COUNT(*), 0)::INTEGER AS link_click_count
+           FROM customer_journey cj
+           WHERE cj.id_run = $1
+             AND cj.event_type IN ('email_clicked', 'zalo_clicked')`,
           [id]
         );
         trackingSummary = {

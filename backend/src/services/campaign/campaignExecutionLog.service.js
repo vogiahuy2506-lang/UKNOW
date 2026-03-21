@@ -1,10 +1,6 @@
 import db from '../../config/database.js';
 
 class CampaignExecutionLogService {
-  constructor() {
-    this.runContinuousModeCache = new Map();
-  }
-
   /**
    * Parse execution payload về object để có thể merge an toàn.
    *
@@ -65,7 +61,7 @@ class CampaignExecutionLogService {
    * Luồng hoạt động:
    * 1. Giữ nguyên toàn bộ item cũ đã có trong DB.
    * 2. Chỉ thêm item mới nếu fingerprint chưa xuất hiện.
-   * 3. Bỏ qua item bị trùng để tránh lặp dữ liệu ở continuous mode.
+   * 3. Bỏ qua item bị trùng để tránh lặp khi ghi log nhiều lần cho cùng node trong một run.
    *
    * @param {Array<unknown>} existingItems item đã có trong DB
    * @param {Array<unknown>} incomingItems item mới từ lần update hiện tại
@@ -144,47 +140,24 @@ class CampaignExecutionLogService {
   }
 
   /**
-   * Xác định run hiện tại có bật continuousMode hay không.
+   * Ghi hoặc cập nhật một dòng log execution cho node trong lần chạy chiến dịch.
    *
    * Luồng hoạt động:
-   * 1. Dùng cache theo `runId` để tránh query lặp lại khi log nhiều lần.
-   * 2. Đọc `run_metadata.continuousMode` từ `campaign_runs`.
-   * 3. Chuẩn hóa giá trị boolean/string để xử lý ổn định cho dữ liệu cũ.
-   *
-   * @param {number|string|null} runId id của campaign run
-   * @returns {Promise<boolean>} true nếu run đang chạy continuous mode
-   */
-  async isContinuousRun(runId) {
-    if (!runId) return false;
-    const runKey = String(runId);
-    if (this.runContinuousModeCache.has(runKey)) {
-      return this.runContinuousModeCache.get(runKey) === true;
-    }
-
-    let isContinuousMode = false;
-    try {
-      const runResult = await db.query(
-        `SELECT run_metadata
-         FROM campaign_runs
-         WHERE id = $1
-         LIMIT 1`,
-        [runId]
-      );
-      const rawContinuousMode = runResult.rows[0]?.run_metadata?.continuousMode;
-      isContinuousMode = rawContinuousMode === true
-        || String(rawContinuousMode || '').trim().toLowerCase() === 'true';
-    } catch {
-      isContinuousMode = false;
-    }
-
-    this.runContinuousModeCache.set(runKey, isContinuousMode);
-    return isContinuousMode;
-  }
-
-  /**
-   * Persist one execution log row for a campaign node.
+   * 1. Với mọi loại run, nếu có `node.id` thì coi khóa ổn định là `(id_run, node_id)`.
+   * 2. Đã có bản ghi: UPDATE bản mới nhất (ORDER BY id DESC), merge `execution_data` để giữ items tiến độ và tránh trùng.
+   * 3. Chưa có: INSERT hàng mới. Không có `node_id` thì luôn INSERT (không đủ khóa upsert).
+   * 4. `created_at` giữ nguyên khi UPDATE; `updated_at` luôn cập nhật.
    *
    * @param {object} input
+   * @param {number|null} input.campaignId id chiến dịch
+   * @param {number|null} input.runId id lượt chạy
+   * @param {object} input.node metadata node (id, node_name, node_type, …)
+   * @param {number|null} [input.customerId]
+   * @param {string} [input.status]
+   * @param {unknown} [input.executionData] payload log (object hoặc JSON string)
+   * @param {string|null} [input.errorMessage]
+   * @param {number|null} [input.progressCurrent]
+   * @param {number|null} [input.progressTotal]
    * @returns {Promise<void>}
    */
   async logExecutionNode({
@@ -210,13 +183,9 @@ class CampaignExecutionLogService {
     const serializedExecutionData = parsedIncomingExecutionData
       ? JSON.stringify(parsedIncomingExecutionData)
       : null;
-    const isContinuousMode = await this.isContinuousRun(runId);
 
-    /**
-     * Chế độ continuous chỉ giữ 1 log mới nhất cho mỗi node trong cùng run.
-     * Nếu node đã có log trước đó thì update lại bản ghi cũ, tránh phình bảng log.
-     */
-    if (isContinuousMode && nodeId) {
+    // Một node trong một run chỉ nên một hàng log; mọi lần ghi sau cập nhật + merge payload.
+    if (nodeId) {
       const existingLogResult = await db.query(
         `SELECT id, execution_data, node_result_json
          FROM campaign_executions

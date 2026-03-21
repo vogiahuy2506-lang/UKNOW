@@ -872,6 +872,7 @@ class CampaignRunService {
         firstSentAt: null,
         lastCompletedAt: null,
         nextDueAt: null,
+        retryCount: 0,
       });
       /**
        * Read recipient step progress from DB ledger; fallback to in-memory map when table not present.
@@ -924,6 +925,7 @@ class CampaignRunService {
                   firstSentAt: resumeMeta?.firstSentAt || null,
                   lastCompletedAt: resumeMeta?.lastCompletedAt || null,
                   nextDueAt: resumeMeta?.nextDueAt || null,
+                  retryCount: Math.max(0, Number.parseInt(resumeMeta?.retryCount, 10) || 0),
                 };
                 resumedRecipientProgress.set(localKey, resumedProgress);
                 return resumedProgress;
@@ -938,6 +940,7 @@ class CampaignRunService {
             firstSentAt: meta?.firstSentAt || null,
             lastCompletedAt: meta?.lastCompletedAt || null,
             nextDueAt: meta?.nextDueAt || null,
+            retryCount: Math.max(0, Number.parseInt(meta?.retryCount, 10) || 0),
           };
           localRecipientProgress.set(localKey, currentProgress);
           return currentProgress;
@@ -958,6 +961,7 @@ class CampaignRunService {
        * @param {string} input.recipientKey
        * @param {number} input.completedStep
        * @param {number} input.totalSteps
+       * @param {number|null} [input.retryCount] số lần retry SMTP đang theo dõi cho recipient (dùng cho email)
        * @returns {Promise<void>}
        */
       const upsertRecipientProgress = async ({
@@ -969,6 +973,7 @@ class CampaignRunService {
         firstSentAt = null,
         lastCompletedAt = null,
         nextDueAt = null,
+        retryCount = null,
       }) => {
         const safeRecipientKey = String(recipientKey || '').trim().toLowerCase();
         if (!safeRecipientKey) return;
@@ -982,6 +987,7 @@ class CampaignRunService {
           firstSentAt,
           lastCompletedAt,
           nextDueAt,
+          retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0),
         });
         resumedRecipientProgress.set(localKey, {
           lastCompletedStep: safeCompletedStep,
@@ -989,6 +995,7 @@ class CampaignRunService {
           firstSentAt,
           lastCompletedAt,
           nextDueAt,
+          retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0),
         });
         if (!isRecipientLedgerTableAvailable) return;
         try {
@@ -1015,6 +1022,9 @@ class CampaignRunService {
                 ...(firstSentAt ? { firstSentAt } : {}),
                 ...(lastCompletedAt ? { lastCompletedAt } : {}),
                 ...(nextDueAt ? { nextDueAt } : {}),
+                ...(Number.isFinite(Number.parseInt(retryCount, 10))
+                  ? { retryCount: Math.max(0, Number.parseInt(retryCount, 10) || 0) }
+                  : {}),
               }),
             ]
           );
@@ -1069,6 +1079,43 @@ class CampaignRunService {
           : (firstSentAt ? Date.parse(firstSentAt) : Date.now());
         return toHoChiMinhIso(baseTimestamp + delayMs);
       };
+      /**
+       * Đánh giá trạng thái đến hạn của `nextDueAt` để dùng chung cho mọi channel.
+       *
+       * Luồng hoạt động:
+       * 1. Nếu chưa có `nextDueAt` thì cho phép chạy ngay (step đầu hoặc không có delay).
+       * 2. Nếu parse được timestamp thì chỉ cho chạy khi `Date.now() >= nextDueAt`.
+       * 3. Nếu `nextDueAt` sai định dạng, chặn xử lý để tránh gửi sớm ngoài lịch.
+       *
+       * @param {string|null|undefined} nextDueAt mốc chạy tiếp theo lưu trong recipient ledger
+       * @returns {{hasDueAt: boolean, nextDueAtMs: number|null, isDueNow: boolean}}
+       */
+      const resolveNextDueAtStatus = (nextDueAt) => {
+        const normalizedNextDueAt = String(nextDueAt || '').trim();
+        if (!normalizedNextDueAt) {
+          return {
+            hasDueAt: false,
+            nextDueAtMs: null,
+            isDueNow: true,
+          };
+        }
+        const nextDueAtMs = Date.parse(normalizedNextDueAt);
+        if (!Number.isFinite(nextDueAtMs)) {
+          console.warn(
+            `[CampaignRun][Schedule] run=${runId} invalid_next_due_at=${normalizedNextDueAt}`
+          );
+          return {
+            hasDueAt: true,
+            nextDueAtMs: null,
+            isDueNow: false,
+          };
+        }
+        return {
+          hasDueAt: true,
+          nextDueAtMs,
+          isDueNow: nextDueAtMs <= Date.now(),
+        };
+      };
       const shouldProcessRecipientStep = ({
         progress = null,
         stepIndex = 0,
@@ -1082,8 +1129,8 @@ class CampaignRunService {
         if (safeProgress.isFullyCompleted || nextStepIndex >= safeTotalSteps) return false;
         // Chặn xử lý sớm khi recipient đang có mốc nextDueAt trong tương lai.
         // Đây là guard dùng chung cho cả luồng resume one-shot để không gửi retry trước hạn.
-        const nextDueAtMs = safeProgress?.nextDueAt ? Date.parse(safeProgress.nextDueAt) : Number.NaN;
-        if (Number.isFinite(nextDueAtMs) && nextDueAtMs > Date.now()) {
+        const dueStatus = resolveNextDueAtStatus(safeProgress?.nextDueAt);
+        if (!dueStatus.isDueNow) {
           return false;
         }
         return nextStepIndex === Math.max(0, Number.parseInt(stepIndex, 10) || 0);
@@ -1135,6 +1182,7 @@ class CampaignRunService {
           firstSentAt,
           lastCompletedAt: completedAtIso,
           nextDueAt,
+          retryCount: 0,
         });
       };
       const resolveTemplateVariablesFromMappings = ({
@@ -2462,6 +2510,7 @@ class CampaignRunService {
             customer,
             runtimeNode,
             stepMeta = null,
+            progress = null,
             applyRandomDelay = true,
           }) => {
             if (applyRandomDelay) {
@@ -2469,13 +2518,26 @@ class CampaignRunService {
               await waitRandomApiDelay(`email_send_step_${stepMeta?.stepIndex || 1}`);
             }
             try {
+              const retryCountFromProgress = Math.max(
+                0,
+                Number.parseInt(progress?.retryCount, 10) || 0
+              );
+              const scheduledRetryAtFromProgress = String(progress?.nextDueAt || '').trim();
+              // Đồng bộ retry metadata từ ledger để:
+              // 1) không reset bộ đếm retry về lần 1 ở mỗi vòng xử lý;
+              // 2) có guard chặn gửi sớm hơn mốc nextDueAt nếu worker lệch nhịp.
+              const retryMeta = {
+                ...(retryCountFromProgress > 0 ? { sendgridLimitRetryCount: retryCountFromProgress } : {}),
+                ...(scheduledRetryAtFromProgress ? { scheduledRetryAt: scheduledRetryAtFromProgress } : {}),
+              };
               const sendResult = await executeWithTimeoutRetry({
                 operationName: 'send_email_node',
                 operation: () => campaignEmailSenderService.sendEmailToCustomer(
                   runtimeNode,
                   customer,
                   campaign,
-                  runId
+                  runId,
+                  Object.keys(retryMeta).length > 0 ? retryMeta : null
                 ),
                 onRetry: ({ attempt, maxAttempts, delayMs }) => {
                   console.warn(
@@ -2558,11 +2620,12 @@ class CampaignRunService {
                 const failedMessage = sendResult.errorType === 'smtp_config'
                   ? `Lỗi cấu hình SMTP: ${sendResult.error || 'Xác thực email gửi không hợp lệ'}`
                   : (sendResult.errorType === 'smtp_rate_limited_retry_scheduled'
-                    ? (sendResult.error || 'SendGrid đang giới hạn gửi, đã lên lịch gửi lại sau 3 giờ')
+                    ? (sendResult.error || 'SendGrid đang giới hạn gửi, đã lên lịch gửi lại')
                     : (sendResult.error || 'Gửi email thất bại'));
                 const failedPayload = {
                   ...sendResult,
                   message: failedMessage,
+                  retryAttemptCount: Math.max(0, Number.parseInt(sendResult?.retryAttemptCount, 10) || 0),
                   templateId: stepMeta?.templateId || null,
                   stepIndex: stepMeta?.stepIndex || null,
                   sendMode: stepMeta?.sendMode || null,
@@ -2586,6 +2649,10 @@ class CampaignRunService {
                     stopRemainingStepsForRecipient: true,
                     preservePendingStep: true,
                     retryScheduledAt: sendResult.retryScheduledAt || null,
+                    retryAttemptCount: Math.max(
+                      0,
+                      Number.parseInt(sendResult?.retryAttemptCount, 10) || 0
+                    ),
                   };
                 }
                 return {
@@ -2681,12 +2748,9 @@ class CampaignRunService {
                   });
                   const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
                   if (progress.isFullyCompleted || nextStepIndex >= loopEmailSteps.length) return;
-                  const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                  // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
-                  // khi loop chạy lâu qua nhiều recipient.
-                  const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                  if (!isDueNow) {
-                    registerNextContinuousWakeAt(nextDueAtMs);
+                  const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+                  if (!dueStatus.isDueNow) {
+                    registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                     return;
                   }
                   const step = loopEmailSteps[nextStepIndex];
@@ -2707,6 +2771,7 @@ class CampaignRunService {
                       stepIndex: nextStepIndex + 1,
                       sendMode: loopEmailSendMode,
                     },
+                    progress,
                     // Continuous mode ưu tiên throughput, delay ngẫu nhiên được điều khiển bằng env.
                     applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
@@ -2743,6 +2808,7 @@ class CampaignRunService {
                         firstSentAt: progress.firstSentAt || null,
                         lastCompletedAt: progress.lastCompletedAt || null,
                         nextDueAt: retryScheduledAt,
+                        retryCount: Math.max(1, Number.parseInt(sendOutcome?.retryAttemptCount, 10) || 1),
                       });
                       registerNextContinuousWakeAt(Date.parse(retryScheduledAt));
                     }
@@ -2757,6 +2823,7 @@ class CampaignRunService {
                       firstSentAt: progress.firstSentAt || completedAtIso,
                       lastCompletedAt: completedAtIso,
                       nextDueAt: null,
+                      retryCount: 0,
                     });
                   }
                 } catch (recipientError) {
@@ -2831,6 +2898,7 @@ class CampaignRunService {
                     stepIndex: stepIndex + 1,
                     sendMode: emailSendMode,
                   },
+                  progress,
                   applyRandomDelay: true,
                 });
                 if (sendOutcome?.stopRemainingStepsForRecipient) {
@@ -2848,6 +2916,7 @@ class CampaignRunService {
                         firstSentAt: progress?.firstSentAt || null,
                         lastCompletedAt: progress?.lastCompletedAt || null,
                         nextDueAt: retryScheduledAt,
+                        retryCount: Math.max(1, Number.parseInt(sendOutcome?.retryAttemptCount, 10) || 1),
                       });
                     }
                   } else {
@@ -2879,28 +2948,14 @@ class CampaignRunService {
               }
             };
 
-            if (emailSendMode === 'schedule') {
-              const scheduleStartAt = Date.now();
-              let previousStepTargetAt = scheduleStartAt;
-              for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
-                const step = emailSteps[stepIndex];
-                // eslint-disable-next-line no-await-in-loop
-                previousStepTargetAt = await waitForScheduledStep({
-                  scheduleStartAt,
-                  previousStepTargetAt,
-                  step,
-                  channel: 'email',
-                  recipientKey: 'all_recipients',
-                  stepIndex: stepIndex + 1,
-                });
-                // eslint-disable-next-line no-await-in-loop
-                await runEmailTemplateStep(step, stepIndex);
-              }
-            } else {
-              for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
-                // eslint-disable-next-line no-await-in-loop
-                await runEmailTemplateStep(emailSteps[stepIndex], stepIndex);
-              }
+            /**
+             * Không sleep theo run-level cho non-continuous schedule.
+             * Lý do: mốc chờ đã được quản lý bằng `nextDueAt` theo từng recipient trong ledger,
+             * nếu sleep toàn run sẽ làm lệch lịch khi recover/retry và gây "quá hạn nhưng chưa gửi".
+             */
+            for (let stepIndex = 0; stepIndex < emailSteps.length; stepIndex += 1) {
+              // eslint-disable-next-line no-await-in-loop
+              await runEmailTemplateStep(emailSteps[stepIndex], stepIndex);
             }
           } else {
             totalRecipients += dedupedRecipients.length;
@@ -2925,6 +2980,7 @@ class CampaignRunService {
                 customer,
                 runtimeNode: node,
                 stepMeta: null,
+                progress,
                 applyRandomDelay: true,
               });
               if (sendOutcome?.success) {
@@ -2953,6 +3009,7 @@ class CampaignRunService {
                       firstSentAt: progress?.firstSentAt || null,
                       lastCompletedAt: progress?.lastCompletedAt || null,
                       nextDueAt: retryScheduledAt,
+                      retryCount: Math.max(1, Number.parseInt(sendOutcome?.retryAttemptCount, 10) || 1),
                     });
                   }
                 } else {
@@ -3452,12 +3509,9 @@ class CampaignRunService {
                   const entry = recipientEntryMap.get(normalizedRecipient) || null;
                   if (templateSteps.length > 0) {
                     if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) return;
-                    const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                    // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
-                    // khi loop chạy lâu qua nhiều recipient.
-                    const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                    if (!isDueNow) {
-                      registerNextContinuousWakeAt(nextDueAtMs);
+                    const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+                    if (!dueStatus.isDueNow) {
+                      registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                       return;
                     }
                     const step = stepsWithMessage[nextStepIndex];
@@ -3509,12 +3563,9 @@ class CampaignRunService {
                     return;
                   }
                   if (progress.isFullyCompleted || nextStepIndex >= 1) return;
-                  const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                  // Dùng Date.now() thay vì snapshot cycleNow để tránh bỏ sót bước đã đến hạn
-                  // khi loop chạy lâu qua nhiều recipient.
-                  const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                  if (!isDueNow) {
-                    registerNextContinuousWakeAt(nextDueAtMs);
+                  const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+                  if (!dueStatus.isDueNow) {
+                    registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                     return;
                   }
                   const message = String(config.zaloMessage || config.message || '').trim();
@@ -3581,7 +3632,8 @@ class CampaignRunService {
             }
             totalRecipients += dedupedRecipients.length * stepsWithMessage.length;
 
-            if (sendMode === 'schedule') {
+            // Tắt nhánh sleep theo run-level cho schedule mode ở non-continuous để tránh dời lịch nextDueAt.
+            if (false && sendMode === 'schedule') {
               // Chạy theo từng step cho toàn bộ người nhận để giữ đúng thứ tự:
               // step 1 gửi cho tất cả -> đợi lịch -> step 2 gửi cho tất cả.
               const scheduleStartAt = Date.now();
@@ -3897,10 +3949,9 @@ class CampaignRunService {
               });
               const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
               if (progress.isFullyCompleted || nextStepIndex >= 1) continue;
-              const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-              const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-              if (!isDueNow) {
-                registerNextContinuousWakeAt(nextDueAtMs);
+              const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+              if (!dueStatus.isDueNow) {
+                registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                 continue;
               }
               totalRecipients += 1;
@@ -4496,10 +4547,9 @@ class CampaignRunService {
                   const entry = refreshedGroupEntryMap.get(normalizedGroupId) || null;
                   if (stepsWithMessage.length > 0) {
                     if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) return;
-                    const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                    const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                    if (!isDueNow) {
-                      registerNextContinuousWakeAt(nextDueAtMs);
+                    const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+                    if (!dueStatus.isDueNow) {
+                      registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                       return;
                     }
                     const step = stepsWithMessage[nextStepIndex];
@@ -4549,10 +4599,9 @@ class CampaignRunService {
                   }
                   // Không có templateSteps: mỗi nhóm chỉ gửi 1 lần (step duy nhất)
                   if (progress.isFullyCompleted || nextStepIndex >= 1) return;
-                  const nextDueAtMs = progress.nextDueAt ? Date.parse(progress.nextDueAt) : null;
-                  const isDueNow = !Number.isFinite(nextDueAtMs) || nextDueAtMs <= Date.now();
-                  if (!isDueNow) {
-                    registerNextContinuousWakeAt(nextDueAtMs);
+                  const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
+                  if (!dueStatus.isDueNow) {
+                    registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                     return;
                   }
                   const message = String(config.zaloGroupMessage || '').trim();
@@ -4696,7 +4745,8 @@ class CampaignRunService {
               }
             };
 
-            if (sendMode === 'schedule') {
+            // Tắt nhánh sleep theo run-level cho schedule mode ở non-continuous để tránh dời lịch nextDueAt.
+            if (false && sendMode === 'schedule') {
               const scheduleStartAt = Date.now();
               let previousStepTargetAt = scheduleStartAt;
               for (let stepIndex = 0; stepIndex < stepsWithMessage.length; stepIndex += 1) {

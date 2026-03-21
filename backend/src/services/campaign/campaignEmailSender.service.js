@@ -26,6 +26,8 @@ class CampaignEmailSenderService {
     // State rate-limit in-memory cho email theo SMTP account.
     this.rateLimitStateMap = new Map();
     this.RATE_LIMIT_STATE_TTL_MS = 90 * 60 * 1000;
+    // Chuẩn hoá retry email tối thiểu 3 giờ để tránh gửi lại quá sớm khi provider đang giới hạn.
+    this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS = 3 * 60 * 60 * 1000;
   }
 
   /**
@@ -80,13 +82,42 @@ class CampaignEmailSenderService {
   /**
    * Lấy cấu hình retry khi gặp giới hạn gửi từ provider SMTP.
    *
+   * Luồng:
+   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (tối thiểu 3 giờ theo `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`).
+   * 2. Đọc `SENDGRID_LIMIT_MAX_RETRIES` — mặc định 30 lần nếu không set env.
+   *
    * @returns {{delayMs: number, maxRetries: number}}
    */
   resolveProviderRateLimitRetryConfig() {
+    const configuredDelayMs = this.parsePositiveIntEnv(
+      'SENDGRID_LIMIT_RETRY_DELAY_MS',
+      this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS
+    );
     return {
-      delayMs: this.parsePositiveIntEnv('SENDGRID_LIMIT_RETRY_DELAY_MS', 3 * 60 * 60 * 1000),
-      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 5),
+      delayMs: Math.max(this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS, configuredDelayMs),
+      // Trần số lần thử lại khi SMTP/SendGrid báo rate-limit (override bằng SENDGRID_LIMIT_MAX_RETRIES).
+      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 30),
     };
+  }
+
+  /**
+   * Chuẩn hóa text thời gian retry để hiển thị trong log/thông báo.
+   *
+   * Luồng hoạt động:
+   * 1. Quy đổi `delayMs` sang tổng số phút và ép tối thiểu 1 phút.
+   * 2. Nếu dưới 60 phút thì trả text theo phút.
+   * 3. Nếu từ 60 phút trở lên thì trả text theo giờ, kèm phút lẻ nếu có.
+   *
+   * @param {number} delayMs thời gian chờ retry (milliseconds)
+   * @returns {string} nhãn tiếng Việt dễ đọc (ví dụ: "3 giờ", "1 giờ 30 phút")
+   */
+  formatRetryDelayLabel(delayMs) {
+    const totalMinutes = Math.max(1, Math.round((Number(delayMs) || 0) / 60000));
+    if (totalMinutes < 60) return `${totalMinutes} phút`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (minutes === 0) return `${hours} giờ`;
+    return `${hours} giờ ${minutes} phút`;
   }
 
   /**
@@ -396,42 +427,17 @@ class CampaignEmailSenderService {
   async sendEmailToCustomerDirect(actionNode, customer, campaign, runId, retryMeta = null) {
     const retryScheduleGuard = this.resolveRetryScheduleGuard(retryMeta);
     if (retryScheduleGuard.remainingDelayMs > 0) {
-      try {
-        await outboundMessageQueueService.enqueue({
-          type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
-          payload: {
-            actionNode,
-            customer,
-            campaign,
-            runId,
-            retryMeta: {
-              ...(retryMeta && typeof retryMeta === 'object' ? retryMeta : {}),
-              scheduledRetryAt: retryScheduleGuard.scheduledAtIso,
-            },
-          },
-          jobOptions: {
-            delay: retryScheduleGuard.remainingDelayMs,
-          },
-        });
-      } catch (enqueueError) {
-        console.error(
-          `[CampaignRun][Email] requeue_retry_guard_failed run=${runId} to=${customer?.email || ''} `
-          + `error=${enqueueError?.message || enqueueError}`
-        );
-        return {
-          to: customer?.email || '',
-          status: 'failed',
-          errorType: 'smtp_rate_limited',
-          error: 'Không thể lên lịch lại retry email theo mốc thời gian đã cấu hình.',
-        };
-      }
-
+      const retryDelayLabel = this.formatRetryDelayLabel(this.resolveProviderRateLimitRetryConfig().delayMs);
+      // Không enqueue thêm job BullMQ trì hoãn: job đó nếu gửi thành công sẽ không cập nhật ledger
+      // (campaign_run_recipient_steps), khiến lần chạy chiến dịch sau vẫn coi step chưa xong và gửi trùng cùng template.
+      // Luồng đúng: trả về trạng thái chờ retry để campaignRun ghi nextDueAt; scheduler/resume sẽ gọi lại.
       return {
         to: customer?.email || '',
         status: 'failed',
         errorType: 'smtp_rate_limited_retry_scheduled',
-        error: 'Email chưa tới giờ retry, hệ thống đã giữ lịch gửi lại đúng mốc 3 giờ.',
+        error: `Email chưa tới giờ retry, hệ thống giữ lịch theo mốc ${retryDelayLabel} (chiến dịch sẽ thử lại khi tới hạn).`,
         retryScheduledAt: retryScheduleGuard.scheduledAtIso,
+        retryAttemptCount: Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0,
       };
     }
 
@@ -643,49 +649,23 @@ class CampaignEmailSenderService {
 
       if (providerRateLimitError) {
         const retryConfig = this.resolveProviderRateLimitRetryConfig();
+        const retryDelayLabel = this.formatRetryDelayLabel(retryConfig.delayMs);
         const currentRetryCount = Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0;
         const nextRetryCount = currentRetryCount + 1;
         const canRetry = nextRetryCount <= retryConfig.maxRetries;
 
         if (canRetry) {
           const retryScheduleAt = new Date(Date.now() + retryConfig.delayMs);
-          try {
-            await outboundMessageQueueService.enqueue({
-              type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
-              payload: {
-                actionNode,
-                customer,
-                campaign,
-                runId,
-                retryMeta: {
-                  ...(retryMeta && typeof retryMeta === 'object' ? retryMeta : {}),
-                  sendgridLimitRetryCount: nextRetryCount,
-                  scheduledRetryAt: retryScheduleAt.toISOString(),
-                },
-              },
-              jobOptions: {
-                delay: retryConfig.delayMs,
-              },
-            });
-          } catch (enqueueError) {
-            console.error(
-              `[CampaignRun][Email] enqueue_retry_failed run=${runId} to=${customer.email} `
-              + `error=${enqueueError?.message || enqueueError}`
-            );
-            return {
-              to: customer.email,
-              status: 'failed',
-              errorType: 'smtp_rate_limited',
-              error: bounceReason,
-            };
-          }
-
+          // Không tạo job BullMQ delay ở đây: khi job chạy sau không đi qua campaignRun nên không mark step;
+          // chiến dịch vẫn thấy step hiện tại pending → gửi lại cùng template (lỗi template 2 hai lần).
+          // campaignRun đã lưu nextDueAt + retryCount qua ledger; scheduler/resume kích hoạt gửi lại đúng một lần.
           return {
             to: customer.email,
             status: 'failed',
             errorType: 'smtp_rate_limited_retry_scheduled',
-            error: `SendGrid đang giới hạn gửi, đã lên lịch gửi lại sau 3 giờ (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
+            error: `SendGrid đang giới hạn gửi; chiến dịch sẽ thử lại sau ${retryDelayLabel} (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
             retryScheduledAt: retryScheduleAt.toISOString(),
+            retryAttemptCount: nextRetryCount,
           };
         }
 
