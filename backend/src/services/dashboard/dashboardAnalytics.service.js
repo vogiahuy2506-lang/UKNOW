@@ -3,27 +3,6 @@ import customerHelperService from '../customer/customerHelper.service.js';
 
 class DashboardAnalyticsService {
   /**
-   * Đồng bộ số liệu journey với số liệu email_messages để tránh hụt KPI email.
-   *
-   * Luồng hoạt động:
-   * 1. Lấy số email gửi/mở/click từ journeyEvents (nếu có).
-   * 2. Luôn ưu tiên bộ đếm từ emailMetrics vì đây là nguồn dữ liệu gửi email chuẩn.
-   * 3. Trả về object mới để không làm mutate dữ liệu đầu vào.
-   *
-   * @param {object} journeyEvents số liệu từ customer_journey
-   * @param {object} emailMetrics số liệu từ email_messages
-   * @returns {object} số liệu journey đã được đồng bộ KPI email
-   */
-  mergeJourneyWithEmailMetrics(journeyEvents, emailMetrics) {
-    return {
-      ...journeyEvents,
-      emailSent: Number(emailMetrics.sent_count || 0),
-      emailOpened: Number(emailMetrics.opened_unique_count || 0),
-      emailClicked: Number(emailMetrics.clicked_unique_count || 0),
-    };
-  }
-
-  /**
    * Parse and normalize dashboard filters from query params.
    *
    * @param {object} input
@@ -178,14 +157,12 @@ class DashboardAnalyticsService {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
-
     const [campaignCount, runHeadline, emailMetrics, attachmentDownloads, zaloRows, orderRows, journeyEventRows] = await Promise.all([
       dashboardRepository.countCampaigns(scopedFilters),
       dashboardRepository.getRunHeadline(scopedFilters),
       dashboardRepository.getEmailMetrics(scopedFilters),
       dashboardRepository.getAttachmentDownloadCount(scopedFilters),
-      dashboardRepository.getZaloClickMetrics(scopedFilters, hasZaloMessages),
+      dashboardRepository.getZaloClickMetrics(scopedFilters),
       dashboardRepository.getOrderMetricsByType(scopedFilters, purchaseOrderStatusExpr),
       dashboardRepository.getJourneyEventStats(scopedFilters),
     ]);
@@ -229,7 +206,11 @@ class DashboardAnalyticsService {
       return Object.values(channelMap).reduce((sum, v) => sum + v, 0);
     };
 
-    const rawJourneyEvents = {
+    /**
+     * KPI + donut dùng đúng tổng số dòng sự kiện trên customer_journey (không dùng unique từ email_messages)
+     * để khớp biểu đồ Top chiến dịch và bảng lượt chạy.
+     */
+    const journeyEvents = {
       emailSent: getJourneyCount('email_sent'),
       emailOpened: getJourneyCount('email_opened'),
       emailClicked: getJourneyCount('email_clicked'),
@@ -239,7 +220,6 @@ class DashboardAnalyticsService {
       zaloGroupClicked: getJourneyCount('zalo_clicked', 'zalo_group'),
       orderPending: getJourneyCount('order_pending'),
     };
-    const journeyEvents = this.mergeJourneyWithEmailMetrics(rawJourneyEvents, emailMetrics);
 
     const totalRecipients = Number(runHeadline.total_recipients || 0);
     const successfulSends = Number(runHeadline.successful_sends || 0);
@@ -284,7 +264,7 @@ class DashboardAnalyticsService {
           completedOrderCount: ordersByType.zalo_group.completed,
         },
       },
-      // Journey-sourced event counts — used by KPI cards as single source of truth
+      // Tổng sự kiện customer_journey — thẻ KPI + donut click (đồng bộ với Top / bảng run)
       journeyEvents,
     };
   }
@@ -336,8 +316,7 @@ class DashboardAnalyticsService {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
-    const rows = await dashboardRepository.getTimeline(scopedFilters, purchaseOrderStatusExpr, hasZaloMessages);
+    const rows = await dashboardRepository.getTimeline(scopedFilters, purchaseOrderStatusExpr);
     const timelineMap = this.createTimelineMap(filters.startDate, filters.endDate);
 
     for (const row of rows.journeyEngagementRows || []) {
@@ -449,13 +428,8 @@ class DashboardAnalyticsService {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const hasZaloMessages = await dashboardRepository.hasZaloMessagesTable();
 
-    const result = await dashboardRepository.getRuns(
-      scopedFilters,
-      purchaseOrderStatusExpr,
-      hasZaloMessages
-    );
+    const result = await dashboardRepository.getRuns(scopedFilters, purchaseOrderStatusExpr);
 
     return {
       filters: {

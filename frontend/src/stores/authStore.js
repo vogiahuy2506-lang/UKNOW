@@ -128,11 +128,17 @@ export const useAuthStore = create((set, get) => ({
 
   /**
    * Đăng xuất: thu hồi refresh token, xóa tokens khỏi mọi storage.
+   *
+   * @param {{skipServer?: boolean}} [options] cấu hình logout
+   * @param {boolean} [options.skipServer=false] true để chỉ logout local, không gọi API server
    */
-  logout: async () => {
+  logout: async (options = {}) => {
+    const shouldSkipServerLogout = Boolean(options?.skipServer);
     try {
-      const refreshToken = getStoredToken('refreshToken');
-      await api.post('/auth/logout', { refreshToken });
+      if (!shouldSkipServerLogout) {
+        const refreshToken = getStoredToken('refreshToken');
+        await api.post('/auth/logout', { refreshToken });
+      }
     } catch {
       // Bỏ qua lỗi logout phía server, vẫn xóa local state
     } finally {

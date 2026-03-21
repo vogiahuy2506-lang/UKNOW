@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('vi-VN');
-const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
-
 const formatDate = (value) => {
   if (!value) return '—';
   const date = new Date(value);
@@ -275,7 +273,7 @@ const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
 // ─── Skeleton / Empty ─────────────────────────────────────────────────────────
 const SkeletonRow = () => (
   <tr>
-    {Array.from({ length: 9 }).map((_, i) => (
+    {Array.from({ length: 8 }).map((_, i) => (
       <td key={i} className="px-4 py-3 border-b border-gray-100">
         <div className="h-3.5 bg-gray-100 rounded animate-pulse" style={{ width: i === 0 ? '80%' : '55%' }} />
         {i === 0 && <div className="h-2.5 bg-gray-100 rounded animate-pulse mt-1.5 w-2/3" />}
@@ -286,7 +284,7 @@ const SkeletonRow = () => (
 
 const EmptyState = ({ hasFilter }) => (
   <tr>
-    <td colSpan={9} className="py-16 text-center">
+    <td colSpan={8} className="py-16 text-center">
       <div className="flex flex-col items-center gap-3">
         <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
@@ -372,8 +370,9 @@ const STATUS_FILTER_OPTIONS = [
  * - Text search by campaign/run name
  * - Column sort (click header)
  * - Column filter dropdowns for "Kênh" and "Trạng thái"
- * - "Người nhận" shows số tin đã gửi (successfulSends)
- * - "Đơn đặt" column sortable by "Đã đặt" or "Chờ xử lý" with a mode picker
+ * - "Tin đã gửi" = số sự kiện email_sent / zalo_sent trên customer_journey (theo kênh)
+ * - "Email mở" / "Click" = tổng bản ghi email_opened / email_clicked + zalo_clicked trên hành trình
+ * - "Đơn đặt" từ customer_purchases; có thể sắp xếp theo Đã đặt / Chờ xử lý
  * - Loading skeleton & empty state
  *
  * @param {object} props
@@ -520,11 +519,8 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
               {/* Ngày chạy */}
               <SortTh column="startedAt">Ngày chạy</SortTh>
 
-              {/* Người nhận = số tin đã gửi */}
-              <SortTh column="successfulSends">Tin đã gửi</SortTh>
-
-              {/* Tỷ lệ thành công */}
-              <SortTh column="successRate">Thành công</SortTh>
+              {/* Tin đã gửi: đếm event email_sent / zalo_sent trên customer_journey */}
+              <SortTh column="journeySentCount">Tin đã gửi</SortTh>
 
               {/* Email mở */}
               <SortTh column="emailOpenedCount">Email mở</SortTh>
@@ -588,25 +584,9 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
                         {formatDate(item.startedAt)}
                       </td>
 
-                      {/* Số tin đã gửi (successfulSends) */}
+                      {/* Số tin đã gửi theo hành trình */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-700 text-right tabular-nums">
-                        <span className="font-medium">{formatNumber(item.successfulSends)}</span>
-                        {item.totalRecipients > 0 && item.totalRecipients !== item.successfulSends && (
-                          <div className="text-[10px] text-gray-400">/ {formatNumber(item.totalRecipients)}</div>
-                        )}
-                      </td>
-
-                      {/* Success rate */}
-                      <td className="px-4 py-3 border-b border-gray-100">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[48px] max-w-[72px]">
-                            <div className="h-full bg-green-400 rounded-full"
-                              style={{ width: `${Math.min(100, item.successRate || 0)}%` }} />
-                          </div>
-                          <span className="text-xs text-gray-600 tabular-nums whitespace-nowrap">
-                            {formatPercent(item.successRate)}
-                          </span>
-                        </div>
+                        <span className="font-medium">{formatNumber(item.journeySentCount ?? 0)}</span>
                       </td>
 
                       {/* Email open */}
