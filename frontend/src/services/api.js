@@ -11,7 +11,8 @@ const api = axios.create({
   timeout: 10000, // 10 seconds timeout
 });
 
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token'];
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/logout'];
+let isForcingLogout = false;
 
 /**
  * Đọc token từ storage — ưu tiên localStorage, fallback sessionStorage.
@@ -51,11 +52,17 @@ const isAuthEndpointRequest = (requestUrl) => {
  * @returns {Promise<void>}
  */
 const forceLogoutAndRedirect = async () => {
+  if (isForcingLogout) return;
+  isForcingLogout = true;
   try {
-    await useAuthStore.getState().logout();
+    // Dọn local auth state khi interceptor bắt phiên hết hạn, không gọi lại API logout
+    // để tránh vòng lặp 401 -> logout -> 401 -> logout.
+    await useAuthStore.getState().logout({ skipServer: true });
   } catch {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
   }
 
   if (window.location.pathname !== '/login') {
