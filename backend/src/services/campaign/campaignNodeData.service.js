@@ -6,6 +6,12 @@ import customerHelperService from '../customer/customerHelper.service.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
+import {
+  getReadSheetBullmqWaitTimeoutMs,
+  getReadSheetFetchTimeoutMs,
+  getReadSheetParseYieldEveryRows,
+  shouldReadSheetUseBullMq,
+} from '../../utils/readSheetConfig.util.js';
 
 const decodeJsQuotedString = (value = '') => {
   try {
@@ -126,119 +132,18 @@ class CampaignNodeDataService {
 
       case 'read_sheet':
       case 'google_sheet': {
-        const sheetUrl = config.sheetUrl;
-        const sheetName = String(config.sheetName || 'Sheet1').trim() || 'Sheet1';
-        const headerRowRaw = Number.parseInt(config.headerRow, 10);
-        const headerRow = Number.isFinite(headerRowRaw) ? Math.max(1, headerRowRaw) : 1;
-        const dataStartRowRaw = Number.parseInt(config.dataStartRow, 10);
-        const dataStartRow = Number.isFinite(dataStartRowRaw) ? Math.max(1, dataStartRowRaw) : 2;
-
-        if (!sheetUrl) {
+        if (!config.sheetUrl) {
           return [];
         }
-
-        try {
-          const spreadsheetIdMatch = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-          if (!spreadsheetIdMatch) {
-            return [];
-          }
-
-          const spreadsheetId = spreadsheetIdMatch[1];
-          const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-          const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
-
-          const axios = (await import('axios')).default;
-          const Papa = (await import('papaparse')).default;
-          logApiCall('google_sheet', worksheetHtmlViewUrl);
-          const validationResponse = await axios.get(worksheetHtmlViewUrl, {
-            responseType: 'text',
-            timeout: 15000,
-            validateStatus: () => true,
+        const queueFeatureOn = outboundMessageQueueService.isQueueFeatureEnabled();
+        if (shouldReadSheetUseBullMq(queueFeatureOn)) {
+          return outboundMessageQueueService.enqueueAndWait({
+            type: OUTBOUND_MESSAGE_JOB_TYPES.GOOGLE_SHEET_FETCH,
+            payload: { config },
+            waitTimeoutMs: getReadSheetBullmqWaitTimeoutMs(),
           });
-          if (validationResponse.status >= 400) {
-            return [];
-          }
-          const html = String(validationResponse.data || '');
-          const worksheetNames = [];
-          const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
-          let match;
-          while ((match = regex.exec(html))) {
-            const decoded = decodeJsQuotedString(match[1]).trim();
-            if (decoded) worksheetNames.push(decoded);
-          }
-          const dedupedWorksheetNames = Array.from(new Set(worksheetNames));
-          if (!dedupedWorksheetNames.includes(sheetName)) {
-            return [];
-          }
-
-          logApiCall('google_sheet', csvUrl);
-          const response = await axios.get(csvUrl, {
-            responseType: 'text',
-            timeout: 15000,
-            validateStatus: () => true,
-          });
-          if (response.status >= 400) {
-            return [];
-          }
-          const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
-          const bodyText = typeof response.data === 'string' ? response.data : '';
-          const isHtml = contentType.includes('text/html') || bodyText.trim().startsWith('<!DOCTYPE html');
-          if (isHtml) {
-            return [];
-          }
-
-          const parsed = Papa.parse(bodyText, { skipEmptyLines: true });
-          if (parsed.errors && parsed.errors.length) {
-            return [];
-          }
-
-          const rows = Array.isArray(parsed.data) ? parsed.data : [];
-          if (!rows.length) {
-            return [];
-          }
-
-          const headerIdx = Math.min(rows.length - 1, Math.max(0, headerRow - 1));
-          const headerRowData = Array.isArray(rows[headerIdx]) ? rows[headerIdx] : [];
-          const headerColumns = headerRowData.map((cell) => String(cell ?? '').trim());
-
-          const columnIndexMap = {};
-          headerColumns.forEach((colName, idx) => {
-            if (colName) columnIndexMap[colName] = idx;
-          });
-          const namedHeaderIndices = Object.values(columnIndexMap).sort((a, b) => a - b);
-
-          const dataStartIdx = Math.min(rows.length, Math.max(dataStartRow - 1, headerIdx + 1));
-          const customers = [];
-          for (let rowIdx = dataStartIdx; rowIdx < rows.length; rowIdx += 1) {
-            const row = rows[rowIdx];
-            if (!Array.isArray(row) || !row.length) continue;
-
-            /**
-             * Đồng bộ với luồng preview ở Builder:
-             * - Luôn đọc theo các cột header thực tế của sheet hiện tại.
-             * - Gắn `row_number` để UI/flow phía sau có thể trace ngược dòng gốc.
-             * - Chỉ bỏ qua dòng trống hoàn toàn.
-             */
-            const customer = { row_number: rowIdx + 1 };
-            let hasAnyValue = false;
-            namedHeaderIndices.forEach((colIdx) => {
-              const headerName = String(headerRowData[colIdx] ?? '').trim();
-              if (!headerName) return;
-              const rawValue = String(row[colIdx] ?? '').trim();
-              customer[headerName] = rawValue;
-              if (rawValue) hasAnyValue = true;
-            });
-
-            if (hasAnyValue) {
-              customers.push(customer);
-            }
-          }
-
-          return customers;
-        } catch (error) {
-          console.error('[getCustomersFromDataNode] Lỗi đọc Google Sheet:', error.message);
-          return [];
         }
+        return this.fetchGoogleSheetCustomersFromConfig(config);
       }
 
       case 'read_courses_db': {
@@ -315,6 +220,144 @@ class CampaignNodeDataService {
 
       default:
         return [];
+    }
+  }
+
+  /**
+   * Tải CSV công khai từ Google Sheet, parse và map từng dòng thành object theo header.
+   * Dùng chung cho luồng inline và worker BullMQ `GOOGLE_SHEET_FETCH`.
+   *
+   * Luồng hoạt động:
+   * 1. Kiểm tra URL, lấy spreadsheetId, gọi htmlview để xác nhận tên sheet tồn tại.
+   * 2. Tải CSV qua gviz (timeout theo `READ_SHEET_FETCH_TIMEOUT_MS`).
+   * 3. Parse Papa, map dòng dữ liệu; cứ mỗi N dòng đã ghi nhận thì nhường event loop để tránh block lâu.
+   *
+   * @param {object} config cấu hình node read_sheet (sheetUrl, sheetName, headerRow, dataStartRow, ...)
+   * @returns {Promise<Array<object>>}
+   */
+  async fetchGoogleSheetCustomersFromConfig(config) {
+    const sheetUrl = config?.sheetUrl;
+    const sheetName = String(config?.sheetName || 'Sheet1').trim() || 'Sheet1';
+    const headerRowRaw = Number.parseInt(config?.headerRow, 10);
+    const headerRow = Number.isFinite(headerRowRaw) ? Math.max(1, headerRowRaw) : 1;
+    const dataStartRowRaw = Number.parseInt(config?.dataStartRow, 10);
+    const dataStartRow = Number.isFinite(dataStartRowRaw) ? Math.max(1, dataStartRowRaw) : 2;
+
+    if (!sheetUrl) {
+      return [];
+    }
+
+    const fetchTimeoutMs = getReadSheetFetchTimeoutMs();
+    const yieldEvery = getReadSheetParseYieldEveryRows();
+
+    try {
+      const spreadsheetIdMatch = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!spreadsheetIdMatch) {
+        return [];
+      }
+
+      const spreadsheetId = spreadsheetIdMatch[1];
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+      const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
+
+      const axios = (await import('axios')).default;
+      const Papa = (await import('papaparse')).default;
+      logApiCall('google_sheet', worksheetHtmlViewUrl);
+      const validationResponse = await axios.get(worksheetHtmlViewUrl, {
+        responseType: 'text',
+        timeout: fetchTimeoutMs,
+        validateStatus: () => true,
+      });
+      if (validationResponse.status >= 400) {
+        return [];
+      }
+      const html = String(validationResponse.data || '');
+      const worksheetNames = [];
+      const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
+      let match;
+      while ((match = regex.exec(html))) {
+        const decoded = decodeJsQuotedString(match[1]).trim();
+        if (decoded) worksheetNames.push(decoded);
+      }
+      const dedupedWorksheetNames = Array.from(new Set(worksheetNames));
+      if (!dedupedWorksheetNames.includes(sheetName)) {
+        return [];
+      }
+
+      logApiCall('google_sheet', csvUrl);
+      const response = await axios.get(csvUrl, {
+        responseType: 'text',
+        timeout: fetchTimeoutMs,
+        validateStatus: () => true,
+      });
+      if (response.status >= 400) {
+        return [];
+      }
+      const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+      const bodyText = typeof response.data === 'string' ? response.data : '';
+      const isHtml = contentType.includes('text/html') || bodyText.trim().startsWith('<!DOCTYPE html');
+      if (isHtml) {
+        return [];
+      }
+
+      const parsed = Papa.parse(bodyText, { skipEmptyLines: true });
+      if (parsed.errors && parsed.errors.length) {
+        return [];
+      }
+
+      const rows = Array.isArray(parsed.data) ? parsed.data : [];
+      if (!rows.length) {
+        return [];
+      }
+
+      const headerIdx = Math.min(rows.length - 1, Math.max(0, headerRow - 1));
+      const headerRowData = Array.isArray(rows[headerIdx]) ? rows[headerIdx] : [];
+      const headerColumns = headerRowData.map((cell) => String(cell ?? '').trim());
+
+      const columnIndexMap = {};
+      headerColumns.forEach((colName, idx) => {
+        if (colName) columnIndexMap[colName] = idx;
+      });
+      const namedHeaderIndices = Object.values(columnIndexMap).sort((a, b) => a - b);
+
+      const dataStartIdx = Math.min(rows.length, Math.max(dataStartRow - 1, headerIdx + 1));
+      const customers = [];
+      let acceptedRowCount = 0;
+
+      for (let rowIdx = dataStartIdx; rowIdx < rows.length; rowIdx += 1) {
+        const row = rows[rowIdx];
+        if (!Array.isArray(row) || !row.length) continue;
+
+        /**
+         * Đồng bộ với luồng preview ở Builder:
+         * - Luôn đọc theo các cột header thực tế của sheet hiện tại.
+         * - Gắn `row_number` để UI/flow phía sau có thể trace ngược dòng gốc.
+         * - Chỉ bỏ qua dòng trống hoàn toàn.
+         */
+        const customer = { row_number: rowIdx + 1 };
+        let hasAnyValue = false;
+        namedHeaderIndices.forEach((colIdx) => {
+          const headerName = String(headerRowData[colIdx] ?? '').trim();
+          if (!headerName) return;
+          const rawValue = String(row[colIdx] ?? '').trim();
+          customer[headerName] = rawValue;
+          if (rawValue) hasAnyValue = true;
+        });
+
+        if (hasAnyValue) {
+          customers.push(customer);
+          acceptedRowCount += 1;
+          // Nhường event loop theo lô để sheet ~10k dòng không block một chunk quá dài
+          if (acceptedRowCount % yieldEvery === 0) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+        }
+      }
+
+      return customers;
+    } catch (error) {
+      console.error('[fetchGoogleSheetCustomersFromConfig] Lỗi đọc Google Sheet:', error.message);
+      return [];
     }
   }
 

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Papa from 'papaparse';
+import { getReadSheetFetchTimeoutMs } from '../utils/readSheetConfig.util.js';
 
 function extractSpreadsheetId(sheetUrl) {
   if (!sheetUrl || typeof sheetUrl !== 'string') return null;
@@ -44,7 +45,7 @@ async function fetchWorksheetNames(spreadsheetId) {
   const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
   const response = await axios.get(url, {
     responseType: 'text',
-    timeout: 15000,
+    timeout: getReadSheetFetchTimeoutMs(),
     validateStatus: () => true,
   });
   if (response.status >= 400) return [];
@@ -111,7 +112,7 @@ class GoogleSheetsController {
       const csvUrl = buildCsvUrl(spreadsheetId, normalizedSheetName);
       const response = await axios.get(csvUrl, {
         responseType: 'text',
-        timeout: 15000,
+        timeout: getReadSheetFetchTimeoutMs(),
         validateStatus: () => true,
       });
       if (response.status >= 400) {
@@ -231,7 +232,7 @@ class GoogleSheetsController {
       const csvUrl = buildCsvUrl(spreadsheetId, normalizedSheetName);
       const response = await axios.get(csvUrl, {
         responseType: 'text',
-        timeout: 15000,
+        timeout: getReadSheetFetchTimeoutMs(),
         validateStatus: () => true,
       });
       if (response.status >= 400) {

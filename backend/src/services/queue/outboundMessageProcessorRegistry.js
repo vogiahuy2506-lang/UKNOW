@@ -15,6 +15,11 @@ export const registerOutboundMessageProcessors = () => {
   if (registered) return;
 
   outboundMessageQueueService.registerProcessor(
+    OUTBOUND_MESSAGE_JOB_TYPES.GOOGLE_SHEET_FETCH,
+    async (payload) => campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(payload?.config || {})
+  );
+
+  outboundMessageQueueService.registerProcessor(
     OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
     async (payload) => campaignEmailSenderService.sendEmailToCustomerDirect(
       payload?.actionNode,

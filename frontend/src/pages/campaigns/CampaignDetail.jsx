@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { getCampaignEngagementStatDefinitions } from '../../utils/campaignDetailEngagementLabels';
 import {
   HiOutlineArrowLeft,
   HiOutlinePencil,
   HiOutlinePlay,
   HiOutlinePause,
-  HiOutlineTrash,
 } from 'react-icons/hi';
 
 const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
@@ -18,6 +18,12 @@ const CampaignDetail = () => {
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  /** Nhãn + mã event_type theo loại chiến dịch (phải gọi hook trước mọi return) */
+  const engagementStats = useMemo(
+    () => getCampaignEngagementStatDefinitions(campaign?.campaignType),
+    [campaign?.campaignType]
+  );
 
   useEffect(() => {
     fetchCampaign();
@@ -125,19 +131,35 @@ const CampaignDetail = () => {
           </p>
         </div>
         <div className="card p-6">
-          <p className="text-sm text-gray-500">Đã gửi</p>
+          <p className="text-sm text-gray-500">{engagementStats.sent.label}</p>
+          <p className="text-xs uppercase tracking-wide text-gray-400 font-mono mt-0.5">
+            {engagementStats.sent.eventType}
+          </p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
             {campaign.totalSent?.toLocaleString() || 0}
           </p>
         </div>
         <div className="card p-6">
-          <p className="text-sm text-gray-500">Đã mở</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">
-            {campaign.totalOpened?.toLocaleString() || 0}
+          <p className="text-sm text-gray-500">{engagementStats.opened.label}</p>
+          <p className="text-xs uppercase tracking-wide text-gray-400 font-mono mt-0.5">
+            {engagementStats.opened.eventType ?? '—'}
           </p>
+          {engagementStats.opened.unavailableReason ? (
+            <>
+              <p className="text-2xl font-bold text-gray-400 mt-1">—</p>
+              <p className="text-xs text-gray-500 mt-1">{engagementStats.opened.unavailableReason}</p>
+            </>
+          ) : (
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {campaign.totalOpened?.toLocaleString() || 0}
+            </p>
+          )}
         </div>
         <div className="card p-6">
-          <p className="text-sm text-gray-500">Đã click</p>
+          <p className="text-sm text-gray-500">{engagementStats.clicked.label}</p>
+          <p className="text-xs uppercase tracking-wide text-gray-400 font-mono mt-0.5">
+            {engagementStats.clicked.eventType}
+          </p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
             {campaign.totalClicked?.toLocaleString() || 0}
           </p>

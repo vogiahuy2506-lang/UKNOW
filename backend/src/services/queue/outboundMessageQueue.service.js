@@ -7,6 +7,8 @@ export const OUTBOUND_MESSAGE_JOB_TYPES = {
   ZALO_GROUP_SEND: 'zalo.group.send',
   ZALO_FRIEND_REQUEST_SEND: 'zalo.friend_request.send',
   CUSTOMER_SAVE: 'customer.save',
+  /** Tải + parse Google Sheet (public link) trên worker để tách tải và scale concurrency */
+  GOOGLE_SHEET_FETCH: 'sheet.google.fetch',
 };
 
 class OutboundMessageQueueService {
@@ -249,9 +251,10 @@ class OutboundMessageQueueService {
    * @param {string} input.type loại job
    * @param {any} input.payload dữ liệu job
    * @param {object} [input.jobOptions] tùy chọn thêm cho job
+   * @param {number} [input.waitTimeoutMs] ghi đè thời gian chờ kết quả job (mặc định BULLMQ_WAIT_RESULT_TIMEOUT_MS)
    * @returns {Promise<any>}
    */
-  async enqueueAndWait({ type, payload, jobOptions = {} }) {
+  async enqueueAndWait({ type, payload, jobOptions = {}, waitTimeoutMs }) {
     const normalizedType = String(type || '').trim();
     if (!normalizedType) {
       throw new Error('Thiếu loại job khi enqueue BullMQ');
@@ -270,7 +273,10 @@ class OutboundMessageQueueService {
 
     try {
       const attempts = Number.parseInt(process.env.BULLMQ_JOB_ATTEMPTS || '4', 10);
-      const waitTimeoutMs = Number.parseInt(process.env.BULLMQ_WAIT_RESULT_TIMEOUT_MS || '300000', 10);
+      const defaultWaitMs = Number.parseInt(process.env.BULLMQ_WAIT_RESULT_TIMEOUT_MS || '300000', 10);
+      const effectiveWaitMs = Number.isFinite(Number(waitTimeoutMs))
+        ? Number(waitTimeoutMs)
+        : defaultWaitMs;
       const job = await this.queue.add(normalizedType, payload, {
         attempts: Number.isFinite(attempts) ? Math.max(1, attempts) : 4,
         backoff: { type: 'exponential', delay: 2000 },
@@ -281,7 +287,7 @@ class OutboundMessageQueueService {
       await this.logQueueMetrics('enqueue', normalizedType, job?.id);
       return job.waitUntilFinished(
         this.queueEvents,
-        Number.isFinite(waitTimeoutMs) ? Math.max(1000, waitTimeoutMs) : 300000
+        Number.isFinite(effectiveWaitMs) ? Math.max(1000, effectiveWaitMs) : 300000
       );
     } catch (error) {
       await this.logQueueMetrics('enqueue_error', normalizedType);
