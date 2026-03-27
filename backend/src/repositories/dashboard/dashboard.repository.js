@@ -742,6 +742,12 @@ class DashboardRepository {
    * email_sent, email_opened, email_clicked, zalo_sent, zalo_clicked, order_pending.
    * Grouping by event_channel allows separating Zalo vs Zalo Group contributions.
    *
+   * Lưu ý chống đếm trùng / trạng thái đơn:
+   * - `order_pending` / `order_completed`: đếm theo `order_id` trong `event_data` (không trùng dòng).
+   * - Nếu đơn đã có sự kiện `order_completed` (cùng `order_id`, trong phạm vi chiến dịch, không lọc theo ngày)
+   *   thì không còn đếm vào `order_pending` dù vẫn còn bản ghi pending cũ.
+   * - Các event khác vẫn đếm theo số dòng customer_journey.
+   *
    * @param {object} filters
    * @returns {Promise<Array<{event_type: string, event_channel: string, count: number}>>}
    */
@@ -756,14 +762,44 @@ class DashboardRepository {
     });
 
     const result = await db.query(
-      `SELECT
-         cj.event_type,
-         COALESCE(cj.event_channel, '') AS event_channel,
-         COUNT(*)::INTEGER AS count
-       FROM customer_journey cj
-       JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE ${scoped.clause}
-       GROUP BY cj.event_type, cj.event_channel`,
+      `WITH completed_order_keys AS (
+         SELECT DISTINCT
+           NULLIF(TRIM(COALESCE(cj.event_data->>'order_id', cj.event_data->>'orderId', '')), '') AS order_key
+         FROM customer_journey cj
+         JOIN campaigns c ON c.id = cj.id_campaign
+         WHERE ${scope.clause}
+           AND cj.event_type = 'order_completed'
+           AND NULLIF(TRIM(COALESCE(cj.event_data->>'order_id', cj.event_data->>'orderId', '')), '') IS NOT NULL
+       ),
+       base AS (
+         SELECT
+           cj.id,
+           cj.event_type,
+           COALESCE(cj.event_channel, '') AS event_channel,
+           NULLIF(TRIM(COALESCE(cj.event_data->>'order_id', cj.event_data->>'orderId', '')), '') AS order_key
+         FROM customer_journey cj
+         JOIN campaigns c ON c.id = cj.id_campaign
+         WHERE ${scoped.clause}
+       )
+       SELECT
+         b.event_type,
+         b.event_channel,
+         COUNT(
+           DISTINCT CASE
+             WHEN b.event_type = 'order_pending' THEN
+               CASE
+                 WHEN b.order_key IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM completed_order_keys cok WHERE cok.order_key = b.order_key)
+                 THEN b.order_key
+                 WHEN b.order_key IS NULL THEN b.id::text
+               END
+             WHEN b.event_type = 'order_completed' THEN
+               COALESCE(b.order_key, b.id::text)
+             ELSE b.id::text
+           END
+         )::INTEGER AS count
+       FROM base b
+       GROUP BY b.event_type, b.event_channel`,
       scoped.params
     );
     return result.rows || [];

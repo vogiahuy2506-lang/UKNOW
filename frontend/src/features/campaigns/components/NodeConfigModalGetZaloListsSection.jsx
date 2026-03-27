@@ -595,6 +595,7 @@ export const NodeConfigGetAllGroupsSection = ({
   const selectedGroupIds = (Array.isArray(formData.zaloSelectedGroupIds) ? formData.zaloSelectedGroupIds : [])
     .map((value) => String(value || '').trim())
     .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
+  const isGroupSelectionSnapshotLocked = Boolean(formData.zaloGroupSelectionSnapshotLocked);
 
   const accountSourceNodes = useMemo(() => {
     const sourceNodes = Array.isArray(upstreamNodes) ? upstreamNodes : [];
@@ -647,7 +648,12 @@ export const NodeConfigGetAllGroupsSection = ({
       const next = current.includes(normalizedGroupId)
         ? current.filter((value) => value !== normalizedGroupId)
         : [...current, normalizedGroupId];
-      return { ...prev, zaloSelectedGroupIds: next };
+      return {
+        ...prev,
+        zaloSelectedGroupIds: next,
+        // Người dùng chỉnh tay danh sách thì tắt trạng thái khóa snapshot "chọn tất cả".
+        zaloGroupSelectionSnapshotLocked: false,
+      };
     });
   };
 
@@ -671,7 +677,12 @@ export const NodeConfigGetAllGroupsSection = ({
       const next = allSelected
         ? current.filter((id) => !allFilteredIds.includes(id))
         : Array.from(new Set([...current, ...allFilteredIds]));
-      return { ...prev, zaloSelectedGroupIds: next };
+      return {
+        ...prev,
+        zaloSelectedGroupIds: next,
+        // "Chọn tất cả" sẽ khóa snapshot hiện tại để các lần quét sau không tự thêm nhóm mới.
+        zaloGroupSelectionSnapshotLocked: !allSelected && allFilteredIds.length > 0,
+      };
     });
   };
 
@@ -883,10 +894,15 @@ export const NodeConfigGetAllGroupsSection = ({
             <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
               <p className="text-xs text-primary-700">
                 Đã chọn <strong>{selectedGroupIds.length}</strong> nhóm. Khi chạy node sẽ chỉ lấy các nhóm đã tích.
+                {isGroupSelectionSnapshotLocked ? ' Đang khóa snapshot từ thao tác "Chọn tất cả".' : ''}
               </p>
               <button
                 type="button"
-                onClick={() => setFormData((prev) => ({ ...prev, zaloSelectedGroupIds: [] }))}
+                onClick={() => setFormData((prev) => ({
+                  ...prev,
+                  zaloSelectedGroupIds: [],
+                  zaloGroupSelectionSnapshotLocked: false,
+                }))}
                 className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
               >
                 Xóa chọn
