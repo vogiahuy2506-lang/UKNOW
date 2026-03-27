@@ -731,11 +731,13 @@ export const createCampaignNodeRunner = (deps) => {
         accountId: selectedAccount.id,
       }, { signal });
       const allItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+      const isSelectionSnapshotLocked = Boolean(config.zaloGroupSelectionSnapshotLocked);
       const selectedGroupIds = (Array.isArray(config.zaloSelectedGroupIds) ? config.zaloSelectedGroupIds : [])
         .map((value) => String(value || '').trim())
         .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
       const selectedSet = new Set(selectedGroupIds);
-      const items = selectedSet.size > 0
+      // Khi khóa snapshot "chọn tất cả", luôn giữ đúng danh sách đã chốt, không tự ăn thêm nhóm mới.
+      const items = (selectedSet.size > 0 || isSelectionSnapshotLocked)
         ? allItems.filter((item) => selectedSet.has(String(item?.groupId || '').trim()))
         : allItems;
       return {
@@ -743,13 +745,14 @@ export const createCampaignNodeRunner = (deps) => {
           accountId: selectedAccount.id,
           accountSourceNodeId: String(config.zaloGroupAccountNodeId || '').trim() || null,
           selectedGroupIds,
+          selectionSnapshotLocked: isSelectionSnapshotLocked,
         },
         output: {
           items,
           schema: buildSchemaFromRows(items),
           meta: {
             totalItems: items.length,
-            filtered: selectedSet.size > 0,
+            filtered: selectedSet.size > 0 || isSelectionSnapshotLocked,
           },
         },
       };

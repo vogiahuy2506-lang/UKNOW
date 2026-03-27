@@ -47,7 +47,7 @@ class CampaignRunService {
     );
     this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE = parsePositiveInt(
       process.env.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE,
-      8
+      1
     );
     this.CONTINUOUS_ZALO_FRIEND_BATCH_SIZE = parsePositiveInt(
       process.env.CONTINUOUS_ZALO_FRIEND_BATCH_SIZE,
@@ -62,6 +62,183 @@ class CampaignRunService {
       process.env.CONTINUOUS_RANDOM_DELAY_ENABLED,
       false
     );
+    // --- Zalo outbound policy (áp cho cá nhân / nhóm / kết bạn) ---
+    // Lưu state rate-limit theo `accountId + channel` dùng chung cho toàn bộ run.
+    // Mục tiêu: mỗi tài khoản Zalo có nhịp gửi ổn định và không vượt 100 tin/giờ/kênh.
+    this.zaloOutboundRateLimitState = new Map();
+    // Zalo cá nhân: khi API báo tra số điện thoại quá nhiều lần/giờ → cooldown toàn tài khoản (theo accountId).
+    this.zaloPersonalPhoneLookupCooldownUntil = new Map();
+    this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS = parsePositiveInt(
+      process.env.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS,
+      3 * 60 * 60 * 1000
+    );
+
+    // Cấu hình chung: 100 tin/giờ, khoảng cách 20–50s, chặn 23:00–06:00 (giờ Việt Nam).
+    this.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT = parsePositiveInt(
+      process.env.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT,
+      100
+    );
+    this.ZALO_OUTBOUND_RATE_WINDOW_MS = parsePositiveInt(
+      process.env.ZALO_OUTBOUND_RATE_WINDOW_MS,
+      60 * 60 * 1000
+    );
+    this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT = parsePositiveInt(
+      process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT,
+      20_000
+    );
+    this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT = parsePositiveInt(
+      process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT,
+      50_000
+    );
+    if (this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT < this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT) {
+      this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT = this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT;
+    }
+    const quietStartRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START, 10);
+    const quietEndRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END, 10);
+    this.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = Number.isFinite(quietStartRaw) ? quietStartRaw : 23;
+    this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = Number.isFinite(quietEndRaw) ? quietEndRaw : 6;
+
+    // Override theo kênh (nếu không set thì dùng default chung).
+    // Tương thích ngược: nếu vẫn cấu hình `ZALO_PERSONAL_BLOCK_*` thì coi như limit/window của kênh cá nhân.
+    this.ZALO_PERSONAL_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_PERSONAL_PER_HOUR_LIMIT, 0);
+    this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0);
+    this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0);
+    this.ZALO_PERSONAL_BLOCK_SEND_LIMIT = parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_SEND_LIMIT, 0);
+    this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS = parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_COOLDOWN_MS, 0);
+
+    this.ZALO_GROUP_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_GROUP_PER_HOUR_LIMIT, 0);
+    this.ZALO_GROUP_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0);
+    this.ZALO_GROUP_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0);
+
+    this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT, 0);
+    this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0);
+    this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0);
+
+    // Chờ Zalo outbound dài (hết quota/giờ yên lặng/cooldown tra số): nếu >= ngưỡng này thì nhả slot và resume sau qua scheduler.
+    this.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS = parsePositiveInt(
+      process.env.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS,
+      60_000
+    );
+  }
+
+  /**
+   * Nếu run còn mốc `zaloOutboundDeferredUntil` trong tương lai → thoát ngay (scheduler sẽ gọi lại sau).
+   * Nếu đã quá hạn hoặc dữ liệu sai → xóa các khóa defer khỏi metadata và tiếp tục bình thường.
+   *
+   * Luồng hoạt động:
+   * 1. Đọc `run_metadata` của run đang `running`.
+   * 2. Không có mốc defer → false (không thoát).
+   * 3. Parse ISO; nếu còn trong tương lai → true (caller return sớm, finally nhả slot).
+   * 4. Nếu đã đến hạn hoặc parse lỗi → xóa khóa defer và false.
+   *
+   * @param {number} runId id lượt chạy
+   * @returns {Promise<boolean>} true nếu nên thoát sớm khỏi `_doExecuteCampaign`
+   */
+  async _exitIfZaloDeferredUntilFuture(runId) {
+    const result = await db.query(
+      `SELECT run_metadata FROM campaign_runs WHERE id = $1 AND status = 'running' LIMIT 1`,
+      [runId]
+    );
+    const meta = result.rows[0]?.run_metadata || {};
+    const raw = meta?.zaloOutboundDeferredUntil;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return false;
+    }
+    const untilMs = Date.parse(String(raw));
+    if (!Number.isFinite(untilMs)) {
+      await db.query(
+        `UPDATE campaign_runs
+         SET run_metadata = COALESCE(run_metadata, '{}'::jsonb)
+           - 'zaloOutboundDeferredUntil' - 'zaloDeferredReason' - 'zaloDeferredAt'
+         WHERE id = $1 AND status = 'running'`,
+        [runId]
+      );
+      return false;
+    }
+    if (untilMs > Date.now()) {
+      console.log(
+        `[CampaignRun] run=${runId} vẫn chờ zaloOutboundDeferredUntil=${String(raw)} — thoát sớm, không chiếm slot`
+      );
+      return true;
+    }
+    await db.query(
+      `UPDATE campaign_runs
+       SET run_metadata = COALESCE(run_metadata, '{}'::jsonb)
+         - 'zaloOutboundDeferredUntil' - 'zaloDeferredReason' - 'zaloDeferredAt'
+       WHERE id = $1 AND status = 'running'`,
+      [runId]
+    );
+    return false;
+  }
+
+  /**
+   * Lưu mốc resume Zalo vào DB và ném lỗi điều khiển để `finally` nhả slot one-shot / worker continuous.
+   *
+   * Luồng hoạt động:
+   * 1. Merge JSON vào `campaign_runs.run_metadata` (mốc ISO, lý do, thời điểm ghi).
+   * 2. Ném `RUN_YIELD_SLOT` — catch ở `_doExecuteCampaign` không đánh fail run.
+   *
+   * @param {object} input
+   * @param {number} input.runId
+   * @param {number} input.campaignId
+   * @param {number} input.waitMs thời gian chờ còn lại (ms)
+   * @param {string} input.reason mã ngữ cảnh (log / debug)
+   * @returns {Promise<never>}
+   */
+  async persistZaloDeferYieldSlot({ runId, campaignId, waitMs, reason }) {
+    const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
+    const resumeAt = new Date(Date.now() + w);
+    const patch = {
+      zaloOutboundDeferredUntil: resumeAt.toISOString(),
+      zaloDeferredReason: String(reason || 'zalo_outbound_wait'),
+      zaloDeferredAt: new Date().toISOString(),
+    };
+    await db.query(
+      `UPDATE campaign_runs
+       SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $1::jsonb
+       WHERE id = $2 AND status = 'running'`,
+      [JSON.stringify(patch), runId]
+    );
+    const err = new Error(
+      `Zalo outbound chờ ${Math.round(w / 1000)}s (${String(reason || 'wait')}) — nhả slot, scheduler/resume sẽ chạy tiếp.`
+    );
+    err.code = 'RUN_YIELD_SLOT';
+    err.campaignId = campaignId;
+    err.runId = runId;
+    throw err;
+  }
+
+  /**
+   * Nhận diện lỗi Zalo khi tra số quá nhiều / vượt quota request — áp cooldown gửi cá nhân theo tài khoản.
+   *
+   * @param {unknown} error
+   * @returns {boolean}
+   */
+  isZaloPersonalPhoneLookupRateLimitError(error) {
+    const msg = String(error?.message ?? error ?? '').trim().toLowerCase();
+    if (!msg) return false;
+    return msg.includes('tìm số điện thoại quá nhiều')
+      || (msg.includes('quá nhiều lần trong 1 giờ') && msg.includes('bất thường'))
+      || msg.includes('vượt quá số request cho phép');
+  }
+
+  /**
+   * Đặt cooldown gửi Zalo cá nhân cho tài khoản (sau lỗi tra số quá nhiều).
+   * Nếu đã có mốc sau hơn thì giữ mốc đó; nếu không thì cộng thêm `ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS` kể từ bây giờ.
+   *
+   * @param {string|number} accountId
+   * @returns {number} epoch ms mốc hết cooldown
+   */
+  scheduleZaloPersonalPhoneLookupCooldown(accountId) {
+    const key = String(accountId ?? '').trim();
+    if (!key) return 0;
+    const nowMs = Date.now();
+    const prevUntil = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(key)) || 0;
+    // 3 giờ kể từ lần lỗi này; không rút ngắn nếu đang còn cooldown dài hơn.
+    const candidateUntil = nowMs + this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS;
+    const untilMs = Math.max(prevUntil, candidateUntil);
+    this.zaloPersonalPhoneLookupCooldownUntil.set(key, untilMs);
+    return untilMs;
   }
 
   /**
@@ -548,6 +725,10 @@ class CampaignRunService {
   async _doExecuteCampaign(campaignId, runId, userId, runKey, roleCode = null) {
     this.activeRunIds.add(runKey);
     try {
+      // Đã yield slot trước đó do chờ Zalo dài; nếu mốc resume chưa tới thì thoát ngay (scheduler gọi lại sau).
+      if (await this._exitIfZaloDeferredUntilFuture(runId)) {
+        return;
+      }
       console.log(`[Campaign ${campaignId}] Bắt đầu thực thi...`);
       const pickNodeItems = (nodeId) => {
         const key = String(nodeId || '').trim();
@@ -747,6 +928,26 @@ class CampaignRunService {
         }
         await this.ensureRunStillRunning(runId);
       };
+      /**
+       * Delay Zalo outbound: chờ ngắn giữ nguyên slot; chờ dài (>= env) thì lưu mốc resume và nhả slot.
+       *
+       * Luồng hoạt động:
+       * 1. waitMs <= 0 → không làm gì.
+       * 2. waitMs < ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS → sleep nội bộ (giữ slot one-shot / worker).
+       * 3. waitMs đủ lớn → ghi `zaloOutboundDeferredUntil` và ném RUN_YIELD_SLOT (finally nhả slot).
+       *
+       * @param {number} waitMs thời gian chờ còn lại (ms)
+       * @param {string} reason mã ngữ cảnh (phone_lookup_cooldown / quiet_hours / rate_limited)
+       * @returns {Promise<void>}
+       */
+      const yieldOrSleepZaloOutboundWait = async (waitMs, reason) => {
+        const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
+        if (w <= 0) return;
+        if (w >= this.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
+          await this.persistZaloDeferYieldSlot({ runId, campaignId, waitMs: w, reason });
+        }
+        await sleepWithRunCheck(w);
+      };
       const EMAIL_API_DELAY_MIN_MS = 50;
       const EMAIL_API_DELAY_MAX_MS = 250;
       const ZALO_API_DELAY_MIN_MS = 25;
@@ -773,6 +974,208 @@ class CampaignRunService {
           `[CampaignRun][Delay] run=${runId} reason=${reason} random_delay_ms=${delayMs}`
         );
         await sleepWithRunCheck(delayMs);
+      };
+      /**
+       * Tính toán các tham số rate-limit cho từng kênh Zalo.
+       *
+       * Luồng hoạt động:
+       * 1. Lấy default chung (100 tin/giờ, 20–50s).
+       * 2. Nếu có override theo kênh thì dùng override.
+       * 3. Tương thích ngược cho Zalo cá nhân: nếu còn cấu hình `ZALO_PERSONAL_BLOCK_*` thì map sang limit/window.
+       *
+       * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} channel
+       * @returns {{limitPerWindow: number, windowMs: number, minDelayMs: number, maxDelayMs: number}}
+       */
+      const resolveZaloOutboundPolicy = (channel) => {
+        const base = {
+          limitPerWindow: this.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT,
+          windowMs: this.ZALO_OUTBOUND_RATE_WINDOW_MS,
+          minDelayMs: this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT,
+          maxDelayMs: this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT,
+        };
+        const safeChannel = String(channel || '').trim();
+        if (safeChannel === 'zalo_group') {
+          const limit = this.ZALO_GROUP_PER_HOUR_LIMIT > 0 ? this.ZALO_GROUP_PER_HOUR_LIMIT : 0;
+          const minMs = this.ZALO_GROUP_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_GROUP_INTER_MESSAGE_MIN_MS : 0;
+          const maxMs = this.ZALO_GROUP_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_GROUP_INTER_MESSAGE_MAX_MS : 0;
+          return {
+            ...base,
+            ...(limit ? { limitPerWindow: limit } : {}),
+            ...(minMs ? { minDelayMs: minMs } : {}),
+            ...(maxMs ? { maxDelayMs: maxMs } : {}),
+          };
+        }
+        if (safeChannel === 'zalo_friend_request') {
+          const limit = this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT > 0 ? this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT : 0;
+          const minMs = this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS : 0;
+          const maxMs = this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS : 0;
+          return {
+            ...base,
+            ...(limit ? { limitPerWindow: limit } : {}),
+            ...(minMs ? { minDelayMs: minMs } : {}),
+            ...(maxMs ? { maxDelayMs: maxMs } : {}),
+          };
+        }
+        // default: zalo_personal
+        const legacyLimit = this.ZALO_PERSONAL_BLOCK_SEND_LIMIT > 0 ? this.ZALO_PERSONAL_BLOCK_SEND_LIMIT : 0;
+        const legacyWindow = this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS > 0 ? this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS : 0;
+        const limit = this.ZALO_PERSONAL_PER_HOUR_LIMIT > 0 ? this.ZALO_PERSONAL_PER_HOUR_LIMIT : legacyLimit;
+        const minMs = this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS : 0;
+        const maxMs = this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS : 0;
+        return {
+          ...base,
+          ...(limit ? { limitPerWindow: limit } : {}),
+          ...(legacyWindow ? { windowMs: legacyWindow } : {}),
+          ...(minMs ? { minDelayMs: minMs } : {}),
+          ...(maxMs ? { maxDelayMs: maxMs } : {}),
+        };
+      };
+      /**
+       * Nếu đang trong khung giờ yên lặng (23:00–06:00), trả về mốc thời gian được phép gửi tiếp theo.
+       *
+       * @param {number} nowMs
+       * @returns {number|null} epoch ms của 06:00 (giờ VN) kế tiếp, hoặc null nếu không bị chặn.
+       */
+      const computeNextAllowedZaloSendAtByQuietHours = (nowMs) => {
+        const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
+        const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
+        const hour = shifted.getUTCHours();
+        const quietStart = this.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+        const quietEnd = this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+        const isQuiet = hour >= quietStart || hour < quietEnd;
+        if (!isQuiet) return null;
+
+        const year = shifted.getUTCFullYear();
+        const month = shifted.getUTCMonth(); // 0-based
+        const day = shifted.getUTCDate();
+        const addDays = hour >= quietStart ? 1 : 0;
+        const targetLocalUtcMs = Date.UTC(year, month, day + addDays, quietEnd, 0, 0, 0);
+        const targetEpochMs = targetLocalUtcMs - utcPlusSevenOffsetMs;
+        return targetEpochMs > nowMs ? targetEpochMs : null;
+      };
+      /**
+       * Enforce rate-limit + giờ yên lặng cho outbound Zalo theo `accountId + channel`.
+       *
+       * Luồng hoạt động:
+       * 1. Nếu rơi vào 23:00–06:00: chờ đến 06:00 (chờ dài → có thể nhả slot theo env).
+       * 2. Nếu đủ quota cửa sổ: chờ qua cửa sổ (chờ dài → có thể nhả slot).
+       * 3. Nếu đã từng gửi trước đó: sleep ngẫu nhiên 20–50s rồi kiểm tra lại (thường giữ slot).
+       * 4. Khi đủ điều kiện, đánh dấu `lastAttemptAtMs` và cho phép gọi API gửi.
+       *
+       * @param {object} input
+       * @param {string|number} input.accountId
+       * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
+       * @returns {Promise<void>}
+       */
+      const enforceZaloOutboundPolicyBeforeSend = async ({ accountId, channel }) => {
+        const safeAccountId = String(accountId || '').trim();
+        const safeChannel = String(channel || '').trim();
+        if (!safeAccountId || !safeChannel) return;
+
+        const stateKey = `${safeAccountId}:${safeChannel}`;
+        const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
+        while (true) {
+          await this.ensureRunStillRunning(runId);
+          const nowMs = Date.now();
+
+          // Cooldown 3h (hoặc env) khi Zalo báo tra số điện thoại quá nhiều — chỉ áp kênh cá nhân, theo tài khoản.
+          if (safeChannel === 'zalo_personal') {
+            const phoneLookupUntilMs = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0;
+            if (phoneLookupUntilMs > nowMs) {
+              const waitMs = phoneLookupUntilMs - nowMs;
+              console.log(
+                `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
+                + `phone_lookup_cooldown=true wait_ms=${waitMs}`
+              );
+              await yieldOrSleepZaloOutboundWait(waitMs, 'phone_lookup_cooldown');
+              continue;
+            }
+          }
+
+          const quietUntilMs = computeNextAllowedZaloSendAtByQuietHours(nowMs);
+          if (quietUntilMs) {
+            const waitMs = Math.max(0, quietUntilMs - nowMs);
+            console.log(
+              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
+              + `quiet_hours=true wait_ms=${waitMs}`
+            );
+            await yieldOrSleepZaloOutboundWait(waitMs, 'quiet_hours');
+            continue;
+          }
+
+          const policy = resolveZaloOutboundPolicy(safeChannel);
+          const limitPerWindow = Math.max(1, Number.parseInt(policy.limitPerWindow, 10) || 1);
+          const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
+          const minDelayMs = Math.max(0, Number.parseInt(policy.minDelayMs, 10) || 0);
+          const maxDelayMs = Math.max(minDelayMs, Number.parseInt(policy.maxDelayMs, 10) || minDelayMs);
+
+          const current = this.zaloOutboundRateLimitState.get(stateKey) || {
+            windowStartMs: nowMs,
+            successCount: 0,
+            lastAttemptAtMs: null,
+          };
+          if (nowMs - current.windowStartMs >= windowMs) {
+            current.windowStartMs = nowMs;
+            current.successCount = 0;
+          }
+
+          if (current.successCount >= limitPerWindow) {
+            const targetMs = current.windowStartMs + windowMs;
+            const waitMs = Math.max(0, targetMs - nowMs);
+            const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
+            console.log(
+              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
+              + `rate_limited=true success=${current.successCount}/${limitPerWindow} `
+              + `window_start=${current.windowStartMs} now_local=${shifted.toISOString()} wait_ms=${waitMs}`
+            );
+            await yieldOrSleepZaloOutboundWait(waitMs, 'rate_limited');
+            continue;
+          }
+
+          if (current.lastAttemptAtMs) {
+            const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
+            console.log(
+              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
+              + `inter_message_delay_ms=${delayMs}`
+            );
+            await sleepWithRunCheck(delayMs);
+            // Sau khi sleep, quay lại vòng lặp để tránh vượt mốc 23:00 hoặc cửa sổ giờ.
+            current.lastAttemptAtMs = null;
+            this.zaloOutboundRateLimitState.set(stateKey, current);
+            continue;
+          }
+
+          current.lastAttemptAtMs = nowMs;
+          this.zaloOutboundRateLimitState.set(stateKey, current);
+          return;
+        }
+      };
+      /**
+       * Ghi nhận một lần gửi thành công để tính quota theo giờ.
+       *
+       * @param {object} input
+       * @param {string|number} input.accountId
+       * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
+       */
+      const markZaloOutboundSuccess = ({ accountId, channel }) => {
+        const safeAccountId = String(accountId || '').trim();
+        const safeChannel = String(channel || '').trim();
+        if (!safeAccountId || !safeChannel) return;
+        const stateKey = `${safeAccountId}:${safeChannel}`;
+        const nowMs = Date.now();
+        const current = this.zaloOutboundRateLimitState.get(stateKey) || {
+          windowStartMs: nowMs,
+          successCount: 0,
+          lastAttemptAtMs: null,
+        };
+        const policy = resolveZaloOutboundPolicy(safeChannel);
+        const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
+        if (nowMs - current.windowStartMs >= windowMs) {
+          current.windowStartMs = nowMs;
+          current.successCount = 0;
+        }
+        current.successCount += 1;
+        this.zaloOutboundRateLimitState.set(stateKey, current);
       };
       /**
        * Chờ ngẫu nhiên 0.25-1.25 giây giữa 2 lần gửi nhóm trong cùng một template step.
@@ -3229,11 +3632,13 @@ class CampaignRunService {
           const groupResp = await campaignZaloSenderService.getAllGroupsWithRetry(api);
           const baseItems = campaignZaloSenderService.extractGroupsFromResponse(groupResp);
           const allItems = await campaignZaloSenderService.enrichGroupNames(api, baseItems);
+          const isSelectionSnapshotLocked = Boolean(config.zaloGroupSelectionSnapshotLocked);
           const selectedGroupIds = (Array.isArray(config.zaloSelectedGroupIds) ? config.zaloSelectedGroupIds : [])
             .map((value) => String(value || '').trim())
             .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
           const selectedSet = new Set(selectedGroupIds);
-          const items = selectedSet.size > 0
+          // Nếu người dùng đã khóa snapshot từ thao tác "chọn tất cả", không tự động thêm nhóm mới ở lượt quét sau.
+          const items = (selectedSet.size > 0 || isSelectionSnapshotLocked)
             ? allItems.filter((item) => selectedSet.has(String(item.groupId || '').trim()))
             : allItems;
           nodeOutputs[String(node.id)] = items;
@@ -3250,7 +3655,8 @@ class CampaignRunService {
               schema: campaignFlowService.buildSchemaFromRows(items),
               meta: {
                 totalItems: items.length,
-                filtered: selectedSet.size > 0,
+                filtered: selectedSet.size > 0 || isSelectionSnapshotLocked,
+                selectionSnapshotLocked: isSelectionSnapshotLocked,
                 accountSourceNodeId: accountSourceNodeId || null,
                 version: String(groupResp?.version || ''),
               },
@@ -3332,14 +3738,15 @@ class CampaignRunService {
             stepMeta = null,
             variables = {},
             entryRow = null,
-            applyRandomDelay = true,
           }) => {
             let zaloMessageId = null;
             let customerId = extractCustomerIdFromRow(entryRow);
             // Extract Zalo UID from entry row (available when source is a Zalo friends node)
             const entryZaloUid = extractZaloUidFromRow(entryRow);
-            const trackingToken = campaignZaloSenderService.createTrackingToken();
+            let trackingToken = '';
             try {
+              // Policy Zalo outbound: giới hạn theo tài khoản + kênh, delay 20–50s, chặn 23:00–06:00.
+              await enforceZaloOutboundPolicyBeforeSend({ accountId: account.id, channel: 'zalo_personal' });
               customerId = await ensureCustomerForZaloPersonalRecipient({
                 userId,
                 recipientType,
@@ -3348,6 +3755,16 @@ class CampaignRunService {
                 customerId,
                 entryUid: entryZaloUid,
               });
+              /**
+               * Resolve UID trước khi tạo tracking để tránh lưu tracking "mồ côi"
+               * trong các trường hợp Zalo trả về lỗi tra số/quota và cần defer.
+               */
+              const resolvedRecipientUid = await campaignZaloSenderService.resolveUidFromRecipient({
+                api,
+                recipient,
+                recipientType,
+              });
+              trackingToken = campaignZaloSenderService.createTrackingToken();
               zaloMessageId = await createZaloMessageTrackingRecord({
                 nodeId: node.id,
                 channel: 'zalo_personal',
@@ -3370,18 +3787,16 @@ class CampaignRunService {
                 zaloMessageId,
                 zaloUid: entryZaloUid || null,
               });
-              if (applyRandomDelay) {
-                await waitRandomApiDelay('zalo_send_personal');
-              }
               const sendResult = await campaignZaloSenderService.sendPersonalMessageQueued({
                 userId,
                 accountId: account.id,
-                recipient,
-                recipientType,
+                recipient: resolvedRecipientUid,
+                recipientType: 'uid',
                 message: trackedMessage,
                 attachments,
               });
               successfulSends += 1;
+              markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_personal' });
               const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
               // UID resolved by Zalo API (always available after successful send)
               const resolvedUid = String(sendResult.uid || entryZaloUid || '').trim();
@@ -3403,7 +3818,7 @@ class CampaignRunService {
                 recipient,
                 customerId,
                 zaloMessageId,
-                phone: sendResult.phone || null,
+                phone: sendResult.phone || (recipientType === 'phone' ? recipient : null),
                 message: trackedMessage,
                 status: 'success',
                 uid: resolvedUid || null,
@@ -3446,6 +3861,29 @@ class CampaignRunService {
               });
               return { success: true };
             } catch (error) {
+              // RUN_YIELD_SLOT là tín hiệu điều phối slot/resume, không phải lỗi gửi.
+              if (error?.code === 'RUN_YIELD_SLOT') {
+                throw error;
+              }
+              if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
+                const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(account.id);
+                const waitMs = Math.max(0, untilMs - Date.now());
+                console.log(
+                  `[CampaignRun][ZaloPersonal] run=${runId} account=${account.id} `
+                  + `lỗi_giới_hạn_zalo (tra_số / vượt_request) → cooldown `
+                  + `${Math.round(this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs}`
+                );
+                if (waitMs > 0) {
+                  await this.persistZaloDeferYieldSlot({
+                    runId,
+                    campaignId,
+                    waitMs,
+                    reason: 'phone_lookup_cooldown_api_error',
+                  });
+                }
+                // Không có wait hợp lệ thì vẫn thoát yên lặng, không tính failed/log execution.
+                return { success: false, deferred: true };
+              }
               failedSends += 1;
               const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
@@ -3538,9 +3976,18 @@ class CampaignRunService {
                 },
               });
             }
+            // Gửi Zalo cá nhân tuần tự để giữ đúng delay 10–30s và block 100 tin / chờ 1h.
+            const zaloPersonalConcurrency = 1;
+            if (this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE > zaloPersonalConcurrency) {
+              console.warn(
+                `[CampaignRun][ZaloPersonal] run=${runId} CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE=`
+                + `${this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE} bị ép xuống ${zaloPersonalConcurrency} `
+                + 'do policy giới hạn tin Zalo cá nhân.'
+              );
+            }
             await runTasksWithConcurrency({
               items: dedupedRecipients,
-              concurrency: this.CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE,
+              concurrency: zaloPersonalConcurrency,
               handler: async (recipient) => {
                 const normalizedRecipient = String(recipient || '').trim();
                 if (!normalizedRecipient) return;
@@ -3581,7 +4028,6 @@ class CampaignRunService {
                       },
                       variables,
                       entryRow: entry?.row || null,
-                      applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                     });
                     if (sendOutcome?.success) {
                       const completedAtIso = toHoChiMinhIso();
@@ -3620,7 +4066,6 @@ class CampaignRunService {
                     recipient: normalizedRecipient,
                     message,
                     entryRow: entry?.row || null,
-                    applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
                   if (sendOutcome?.success) {
                     const completedAtIso = toHoChiMinhIso();
@@ -3636,8 +4081,11 @@ class CampaignRunService {
                     });
                   }
                 } catch (recipientError) {
-                  // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  // Lỗi của 1 khách không được dừng toàn bộ run; ngoại lệ:
+                  // - RUN_STOPPED: người dùng dừng thủ công.
+                  // - RUN_YIELD_SLOT: defer outbound Zalo toàn run theo tài khoản.
                   if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
+                  if (recipientError?.code === 'RUN_YIELD_SLOT') throw recipientError;
                   console.error(
                     `[CampaignRun][Zalo] run=${runId} recipient=${normalizedRecipient} step_error:`,
                     recipientError.message
@@ -3735,7 +4183,6 @@ class CampaignRunService {
                     },
                     variables,
                     entryRow: entry?.row || null,
-                    applyRandomDelay: true,
                   });
                   if (sendOutcome?.success) {
                     // eslint-disable-next-line no-await-in-loop
@@ -3796,7 +4243,6 @@ class CampaignRunService {
                     },
                     variables,
                     entryRow: entry?.row || null,
-                    applyRandomDelay: true,
                   });
                   if (sendOutcome?.success) {
                     // eslint-disable-next-line no-await-in-loop
@@ -3842,7 +4288,6 @@ class CampaignRunService {
                 recipient: normalizedRecipient,
                 message,
                 entryRow: entry?.row || null,
-                applyRandomDelay: true,
               });
               if (sendOutcome?.success) {
                 // eslint-disable-next-line no-await-in-loop
@@ -4073,9 +4518,7 @@ class CampaignRunService {
               },
             });
             try {
-              if (!isContinuousMode || shouldApplyRandomDelayInContinuous()) {
-                await waitRandomApiDelay('zalo_send_friend_request');
-              }
+              await enforceZaloOutboundPolicyBeforeSend({ accountId: account.id, channel: 'zalo_friend_request' });
               const sendResult = await campaignZaloSenderService.sendFriendRequestQueued({
                 userId,
                 accountId: account.id,
@@ -4083,6 +4526,7 @@ class CampaignRunService {
                 message,
               });
               successfulSends += 1;
+              markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_friend_request' });
               const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
               const resultPayload = {
                 channel: 'zalo_friend_request',
@@ -4330,9 +4774,6 @@ class CampaignRunService {
           const groupEntryMap = new Map(
             groupEntries.map((entry) => [String(entry?.value || '').trim(), entry])
           );
-          if (!isContinuousMode || shouldApplyRandomDelayInContinuous()) {
-            await waitRandomApiDelay('zalo_send_group');
-          }
           const groupIdSet = await campaignZaloSenderService.getAllGroupIdSet(api);
           const sendResults = [];
           /**
@@ -4374,10 +4815,13 @@ class CampaignRunService {
             const trackingToken = campaignZaloSenderService.createTrackingToken();
             const groupName = resolveGroupDisplayName(groupId, groupEntry);
             const attachmentList = normalizeAttachmentMetadata(attachments);
+            // `applyRandomDelay` giữ lại để tương thích lời gọi cũ; policy delay/giới hạn hiện áp theo rule Zalo outbound dùng chung.
+            void applyRandomDelay;
             try {
               if (groupIdSet.size > 0 && !groupIdSet.has(groupId)) {
                 throw new Error(`Không tìm thấy nhóm ${groupId} trong tài khoản Zalo hiện tại`);
               }
+              await enforceZaloOutboundPolicyBeforeSend({ accountId: account.id, channel: 'zalo_group' });
               zaloMessageId = await createZaloMessageTrackingRecord({
                 nodeId: node.id,
                 channel: 'zalo_group',
@@ -4405,9 +4849,6 @@ class CampaignRunService {
                 customerId: null,
                 zaloMessageId,
               });
-              if (applyRandomDelay) {
-                await waitRandomApiDelay('zalo_send_group');
-              }
               const sendResult = await campaignZaloSenderService.sendGroupMessageQueued({
                 userId,
                 accountId: account.id,
@@ -4416,6 +4857,7 @@ class CampaignRunService {
                 attachments,
               });
               successfulSends += 1;
+              markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_group' });
               const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
@@ -4576,9 +5018,18 @@ class CampaignRunService {
                 },
               });
             }
+            // Gửi Zalo nhóm tuần tự để giữ đúng delay 20–50s và quota 100 tin/giờ theo tài khoản.
+            const zaloGroupConcurrency = 1;
+            if (this.CONTINUOUS_ZALO_GROUP_BATCH_SIZE > zaloGroupConcurrency) {
+              console.warn(
+                `[CampaignRun][ZaloGroup] run=${runId} CONTINUOUS_ZALO_GROUP_BATCH_SIZE=`
+                + `${this.CONTINUOUS_ZALO_GROUP_BATCH_SIZE} bị ép xuống ${zaloGroupConcurrency} `
+                + 'do policy giới hạn tin Zalo.'
+              );
+            }
             await runTasksWithConcurrency({
               items: refreshedGroupIds,
-              concurrency: this.CONTINUOUS_ZALO_GROUP_BATCH_SIZE,
+              concurrency: zaloGroupConcurrency,
               handler: async (groupId) => {
                 const normalizedGroupId = String(groupId || '').trim();
                 if (!normalizedGroupId) return;
@@ -5025,6 +5476,13 @@ class CampaignRunService {
     } catch (error) {
       if (error?.code === 'RUN_STOPPED') {
         console.log(`[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
+        return;
+      }
+      if (error?.code === 'RUN_YIELD_SLOT') {
+        console.log(
+          `[Campaign ${campaignId}] Run ${runId} nhả slot chờ Zalo (metadata zaloOutboundDeferredUntil): `
+          + String(error?.message || 'RUN_YIELD_SLOT')
+        );
         return;
       }
       console.error(`[Campaign ${campaignId}] Lỗi thực thi:`, error);

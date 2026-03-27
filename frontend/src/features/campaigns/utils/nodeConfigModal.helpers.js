@@ -282,6 +282,7 @@ export const createNodeConfigFormData = ({
   zaloExcludedFriendIds: Array.isArray(config.zaloExcludedFriendIds) ? config.zaloExcludedFriendIds : [],
   zaloFriendAccountNodeId: config.zaloFriendAccountNodeId || '',
   zaloSelectedGroupIds: Array.isArray(config.zaloSelectedGroupIds) ? config.zaloSelectedGroupIds : [],
+  zaloGroupSelectionSnapshotLocked: Boolean(config.zaloGroupSelectionSnapshotLocked),
   zaloGroupAccountNodeId: config.zaloGroupAccountNodeId || '',
   triggerType: config.triggerType || 'object',
   object: config.object || 'Quote',
@@ -502,6 +503,7 @@ export const handleNodeConfigSaveClick = async ({
     onSave({
       ...formData,
       zaloSelectedGroupIds: selectedGroupIds,
+      zaloGroupSelectionSnapshotLocked: Boolean(formData?.zaloGroupSelectionSnapshotLocked),
     });
     return;
   }
