@@ -39,6 +39,8 @@ const CampaignBuilderPageLayout = ({
   filterNodes,
   allowedActionNodeTypes,
   allowedDataNodeTypes,
+  /** Khi true — ẩn «Lấy danh sách bạn bè Zalo» khỏi palette (đang bật pool đa TK) */
+  suppressGetAllFriendsPalette = false,
   onDragStart,
   isResizingBuilderSidebar,
   onBuilderSidebarResizeStart,
@@ -288,7 +290,11 @@ const CampaignBuilderPageLayout = ({
               </button>
               {expandedCategories.includes('Data') && (
                 <div className="space-y-1">
-                  {filterNodes(nodeConfigs.data.filter((node) => !allowedDataNodeTypes || allowedDataNodeTypes.has(node.type))).map((node) => (
+                  {filterNodes(nodeConfigs.data.filter((node) => {
+                    if (allowedDataNodeTypes && !allowedDataNodeTypes.has(node.type)) return false;
+                    if (suppressGetAllFriendsPalette && node.type === 'get_all_friends') return false;
+                    return true;
+                  })).map((node) => (
                     <div
                       key={node.type}
                       draggable
@@ -343,6 +349,7 @@ const CampaignBuilderPageLayout = ({
           nodeDropOffsetY={nodeDropOffsetY}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          suppressGetAllFriendsPalette={suppressGetAllFriendsPalette}
         />
 
         {selectedNode && (

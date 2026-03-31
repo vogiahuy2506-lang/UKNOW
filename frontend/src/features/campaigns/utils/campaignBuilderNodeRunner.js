@@ -650,19 +650,40 @@ export const createCampaignNodeRunner = (deps) => {
     }
 
     if (nodeType === 'select_zalo_account') {
-      const selectedId = String(config.zaloAccountId || '').trim();
+      const poolOn = Boolean(config.zaloPoolMultiAccountEnabled);
+      const poolIds = [...new Set(
+        (Array.isArray(config.zaloPoolAccountIds) ? config.zaloPoolAccountIds : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      )];
+      const selectedId = poolOn && poolIds.length > 0
+        ? poolIds[0]
+        : String(config.zaloAccountId || '').trim();
+      if (!selectedId) {
+        throw new Error('Chưa chọn tài khoản Zalo hoặc pool rỗng');
+      }
       const selected = await resolveReadyZaloAccountForRun(selectedId, signal);
 
       ctx.selectedZaloAccount = selected;
+      ctx.zaloPoolFromSelect = poolOn ? poolIds : null;
       return {
         input: {
           zaloAccountId: selected.id,
+          zaloPoolMultiAccountEnabled: poolOn,
+          zaloPoolAccountIds: poolIds,
         },
         output: {
-          items: [selected],
+          items: [
+            {
+              ...selected,
+              ...(poolOn && poolIds.length > 0 ? { __zaloPoolAccountIds: poolIds } : {}),
+            },
+          ],
           schema: buildSchemaFromRows([selected]),
           meta: {
             selected: true,
+            poolEnabled: poolOn,
+            poolSize: poolIds.length,
           },
         },
       };

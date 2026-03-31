@@ -149,6 +149,7 @@ const NodeConfigModal = ({
                     delayValue: 0,
                     delayUnit: 'minutes',
                     templateId: config.emailTemplateId,
+                    enableLinkTracking: true,
                     templateMappings: nextMappings,
                   },
                 ],
@@ -180,6 +181,7 @@ const NodeConfigModal = ({
                 delayUnit: 'minutes',
                 delayFrom: 'start',
                 templateId: prev.emailTemplateId || '',
+                enableLinkTracking: true,
                 templateMappings: [],
               },
             ],
@@ -202,6 +204,7 @@ const NodeConfigModal = ({
                 delayUnit: 'minutes',
                 delayFrom: 'start',
                 templateId: '',
+                enableLinkTracking: true,
               },
             ],
           };
@@ -223,6 +226,7 @@ const NodeConfigModal = ({
                 delayUnit: 'minutes',
                 delayFrom: 'start',
                 templateId: '',
+                enableLinkTracking: true,
               },
             ],
           };

@@ -379,6 +379,7 @@ class CustomerZaloTrackingService {
 
     return res.redirect(302, redirectUrl);
   }
+
 }
 
 export default new CustomerZaloTrackingService();

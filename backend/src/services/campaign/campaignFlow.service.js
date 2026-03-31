@@ -414,6 +414,36 @@ class CampaignFlowService {
 
     return safeConfig;
   }
+
+  /**
+   * Kiểm tra flow có bật pool đa tài khoản Zalo (node chọn TK hoặc legacy trên node gửi).
+   * Dùng để runtime bỏ qua bước lấy danh sách bạn bè khi không cần nguồn đó.
+   *
+   * @param {object|null|undefined} flowJson
+   * @returns {boolean}
+   */
+  flowJsonHasZaloPersonalMultiAccount(flowJson) {
+    const nodes = flowJson?.nodes;
+    if (!Array.isArray(nodes)) return false;
+    for (const n of nodes) {
+      const cfg = n?.data?.config || {};
+      const nodeType = String(n?.data?.nodeType || n?.type || '').trim();
+      if (nodeType === 'select_zalo_account') {
+        if (!cfg.zaloPoolMultiAccountEnabled) continue;
+        const ids = Array.isArray(cfg.zaloPoolAccountIds) ? cfg.zaloPoolAccountIds : [];
+        const hasIds = ids.map((id) => String(id || '').trim()).filter(Boolean).length > 0;
+        if (hasIds) return true;
+        continue;
+      }
+      if (nodeType === 'send_zalo_personal') {
+        if (!cfg.zaloPersonalMultiAccountEnabled) continue;
+        const ids = Array.isArray(cfg.zaloPersonalAccountIds) ? cfg.zaloPersonalAccountIds : [];
+        const hasIds = ids.map((id) => String(id || '').trim()).filter(Boolean).length > 0;
+        if (hasIds) return true;
+      }
+    }
+    return false;
+  }
 }
 
 export default new CampaignFlowService();

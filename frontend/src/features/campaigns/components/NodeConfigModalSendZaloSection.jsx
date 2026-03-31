@@ -134,6 +134,7 @@ const buildDefaultZaloStep = () => ({
   delayValue: 0,
   delayUnit: 'minutes',
   delayFrom: 'start',
+  enableLinkTracking: true,
   templateId: '',
 });
 
@@ -287,6 +288,7 @@ const ZaloTemplateListSection = ({
           return {
             ...step,
             templateId: selectedTemplateId,
+            enableLinkTracking: step?.enableLinkTracking !== false,
             templateMappings: selectedTemplate
               ? buildTemplateStepMappings({
                   template: selectedTemplate,
@@ -445,6 +447,18 @@ const ZaloTemplateListSection = ({
                 onPreview={() => handlePreviewTemplate(step.templateId)}
               />
             </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={step.enableLinkTracking !== false}
+                onChange={(e) => handleStepChange(idx, 'enableLinkTracking', e.target.checked)}
+                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              />
+              <span className="text-xs text-gray-700">
+                Gửi link tracking click (tự rút gọn bằng short-link nội bộ)
+              </span>
+            </label>
 
             {(step.templateMappings || []).length > 0 && (
               <div className="space-y-3">
@@ -650,7 +664,7 @@ export const NodeConfigSendZaloPersonalSection = ({
         />
 
         <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-          Tài khoản gửi được lấy từ node <strong>Chọn tài khoản Zalo</strong> ở upstream.
+          Tài khoản gửi và chế độ pool nhiều tài khoản được cấu hình tại node «Chọn tài khoản Zalo» phía trước trên sơ đồ.
         </div>
       </div>
     );
@@ -754,6 +768,10 @@ export const NodeConfigSendZaloFriendRequestSection = ({
         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         placeholder="Gửi lời mời kết bạn Zalo"
       />
+    </div>
+
+    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+      Tài khoản gửi lời mời (một hoặc pool nhiều tài khoản) được cấu hình tại node «Chọn tài khoản Zalo» phía trước trên sơ đồ.
     </div>
 
     <DataSourceSelector

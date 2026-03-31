@@ -7,6 +7,7 @@ import campaignBuilderApiService from '../../features/campaigns/services/campaig
 import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
 import useBrowserRouterBlocker from '../../features/campaigns/hooks/useBrowserRouterBlocker';
 import {
+  campaignFlowHasZaloPoolMulti,
   getAllowedActionNodeTypesByCampaignType,
   getAllowedDataNodeTypesByCampaignType,
   isTriggerNodeType,
@@ -622,29 +623,55 @@ const CampaignBuilder = () => {
         interestedSelectedCustomerIds: formData.interestedSelectedCustomerIds,
         formData,
       });
-      
+
+      const savedNodeType = nodeToConfig.data?.nodeType || nodeToConfig.type;
+      const poolOn =
+        savedNodeType === 'select_zalo_account'
+        && Boolean(formData.zaloPoolMultiAccountEnabled);
+      const poolIds = Array.isArray(formData.zaloPoolAccountIds)
+        ? formData.zaloPoolAccountIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : [];
+      const shouldStripFriendListNodes = poolOn && poolIds.length > 0;
+
+      const friendNodeIds = shouldStripFriendListNodes
+        ? nodes
+          .filter((n) => (n.data?.nodeType || n.type) === 'get_all_friends')
+          .map((n) => n.id)
+        : [];
+
       // Cập nhật node với config mới
       const updatedNode = {
         ...nodeToConfig,
-        data: { ...nodeToConfig.data, label: formData.label, config: formData }
+        data: { ...nodeToConfig.data, label: formData.label, config: formData },
       };
 
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === nodeToConfig.id
-            ? updatedNode
-            : n
-        )
-      );
-      
+      setNodes((nds) => {
+        const mapped = nds.map((n) => (n.id === nodeToConfig.id ? updatedNode : n));
+        if (!shouldStripFriendListNodes) return mapped;
+        return mapped.filter((n) => (n.data?.nodeType || n.type) !== 'get_all_friends');
+      });
+
+      if (shouldStripFriendListNodes && friendNodeIds.length > 0) {
+        setEdges((eds) => eds.filter(
+          (e) => !friendNodeIds.includes(e.source) && !friendNodeIds.includes(e.target)
+        ));
+      }
+
       // Cập nhật selectedNode nếu đang được chọn
       if (selectedNode && selectedNode.id === nodeToConfig.id) {
         setSelectedNode(updatedNode);
       }
-      
+      if (shouldStripFriendListNodes && selectedNode && friendNodeIds.includes(selectedNode.id)) {
+        setSelectedNode(null);
+      }
+
       setShowConfigModal(false);
       setNodeToConfig(null);
-      toast.success('Đã lưu cấu hình node');
+      toast.success(
+        shouldStripFriendListNodes && friendNodeIds.length > 0
+          ? 'Đã lưu cấu hình node và gỡ node «Lấy danh sách bạn bè Zalo» (không dùng khi gửi bằng pool nhiều tài khoản).'
+          : 'Đã lưu cấu hình node'
+      );
     }
   };
 
@@ -664,6 +691,12 @@ const CampaignBuilder = () => {
   const allowedDataNodeTypes = useMemo(
     () => getAllowedDataNodeTypesByCampaignType(campaignType),
     [campaignType]
+  );
+
+  /** Đang bật pool đa TK trên node «Chọn tài khoản Zalo» → ẩn / chặn node «Lấy danh sách bạn bè» */
+  const suppressGetAllFriendsPalette = useMemo(
+    () => campaignFlowHasZaloPoolMulti(nodes),
+    [nodes]
   );
 
   const addRunLog = (entry) => {
@@ -823,6 +856,7 @@ const CampaignBuilder = () => {
       filterNodes={filterNodes}
       allowedActionNodeTypes={allowedActionNodeTypes}
       allowedDataNodeTypes={allowedDataNodeTypes}
+      suppressGetAllFriendsPalette={suppressGetAllFriendsPalette}
       onDragStart={onDragStart}
       isResizingBuilderSidebar={isResizingBuilderSidebar}
       onBuilderSidebarResizeStart={handleBuilderSidebarResizeStart}

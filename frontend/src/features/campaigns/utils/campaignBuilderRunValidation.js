@@ -191,8 +191,18 @@ export const validateNodeForRun = (node) => {
     }
   }
 
-  if (nodeType === 'select_zalo_account' && !String(config.zaloAccountId || '').trim()) {
-    return { status: 'failed', message: 'Chưa chọn tài khoản Zalo' };
+  if (nodeType === 'select_zalo_account') {
+    const poolOn = Boolean(config.zaloPoolMultiAccountEnabled);
+    const poolIds = Array.isArray(config.zaloPoolAccountIds)
+      ? config.zaloPoolAccountIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    if (poolOn) {
+      if (poolIds.length === 0) {
+        return { status: 'failed', message: 'Chế độ pool: cần chọn ít nhất một tài khoản Zalo' };
+      }
+    } else if (!String(config.zaloAccountId || '').trim()) {
+      return { status: 'failed', message: 'Chưa chọn tài khoản Zalo' };
+    }
   }
 
   if (nodeType === 'get_all_friends') {

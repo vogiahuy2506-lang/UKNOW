@@ -211,6 +211,7 @@ export const createNodeConfigFormData = ({
   emailSteps: normalizeEmailSteps
     ? (config.emailSteps || []).map((item) => ({
         delayFrom: item.delayFrom || 'start',
+        enableLinkTracking: item.enableLinkTracking !== false,
         ...item,
       }))
     : config.emailSteps || [],
@@ -228,6 +229,14 @@ export const createNodeConfigFormData = ({
   saveMessageLog: config.saveMessageLog !== false,
   zaloAccountId: config.zaloAccountId || '',
   zaloAccountName: config.zaloAccountName || '',
+  /** Pool đa TK: cấu hình tại node «Chọn tài khoản Zalo» */
+  zaloPoolMultiAccountEnabled: Boolean(config.zaloPoolMultiAccountEnabled),
+  zaloPoolAccountIds: Array.isArray(config.zaloPoolAccountIds) ? config.zaloPoolAccountIds : [],
+  /** Legacy (trước khi chuyển pool sang node chọn TK) — vẫn đọc để tương thích khi chạy server */
+  zaloPersonalMultiAccountEnabled: Boolean(config.zaloPersonalMultiAccountEnabled),
+  zaloPersonalAccountIds: Array.isArray(config.zaloPersonalAccountIds) ? config.zaloPersonalAccountIds : [],
+  zaloFriendMultiAccountEnabled: Boolean(config.zaloFriendMultiAccountEnabled),
+  zaloFriendAccountIds: Array.isArray(config.zaloFriendAccountIds) ? config.zaloFriendAccountIds : [],
   zaloRecipientType: config.zaloRecipientType || 'phone',
   zaloRecipientSource: config.zaloRecipientSource || 'manual',
   zaloRecipientPhones: config.zaloRecipientPhones || '',
@@ -237,6 +246,7 @@ export const createNodeConfigFormData = ({
   zaloPersonalTemplateSteps: Array.isArray(config.zaloPersonalTemplateSteps)
     ? config.zaloPersonalTemplateSteps.map((item) => ({
         delayFrom: item.delayFrom || 'start',
+        enableLinkTracking: item.enableLinkTracking !== false,
         ...item,
       }))
     : [],
@@ -268,6 +278,7 @@ export const createNodeConfigFormData = ({
   zaloGroupTemplateSteps: Array.isArray(config.zaloGroupTemplateSteps)
     ? config.zaloGroupTemplateSteps.map((item) => ({
         delayFrom: item.delayFrom || 'start',
+        enableLinkTracking: item.enableLinkTracking !== false,
         ...item,
       }))
     : [],

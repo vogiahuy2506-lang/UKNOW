@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import path from 'path';
 import uploadController from './upload.controller.js';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
+import trackingShortLinkService from '../services/tracking/trackingShortLink.service.js';
 import emailSettingsCrudService from '../services/email/emailSettingsCrud.service.js';
 import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
 
@@ -127,7 +128,15 @@ class EmailSettingsController {
     return String(value).split(/[\n,;]+/g).map(v => v.trim()).filter(Boolean);
   }
 
-  buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId = null, customerId = null, runId = null) {
+  async buildTrackedHtml(
+    rawHtml,
+    trackingBaseUrl,
+    trackingToken,
+    campaignId = null,
+    customerId = null,
+    runId = null,
+    options = {}
+  ) {
     const input = String(rawHtml || '');
     if (!input.trim()) return input;
 
@@ -166,37 +175,63 @@ class EmailSettingsController {
       }
     };
 
-    let linkIndex = 0;
-    // Rewrite <a href="...">text</a> — thêm UTM parameters và wrap tracking
-    const withClickTracking = input.replace(
-      /<a(\s[^>]*)?\shref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi,
-      (_full, pre, quote, targetUrl, post, innerHtml) => {
-        // Skip already-tracked attachment URLs and file viewer URLs
-        if (
-          targetUrl.includes('/track/attachment/') ||
-          targetUrl.includes('/file/') ||
-          targetUrl.includes('/download/')
-        ) {
-          return _full;
-        }
-        
-        // Thêm UTM parameters vào target URL
-        const urlWithUtm = addUtmToUrl(targetUrl);
-        
-        // Extract plain-text label from anchor inner HTML (strip tags, trim, max 80 chars)
-        const textLabel = innerHtml
-          .replace(/<[^>]+>/g, '')
-          .replace(/&[a-z#0-9]+;/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 80);
-        linkIndex += 1;
-        const linkKey = `email-link-${linkIndex}`;
-        const labelParam = textLabel ? `&label=${encodeURIComponent(textLabel)}` : '';
-        const trackUrl = `${clickBaseUrl}?url=${encodeURIComponent(urlWithUtm)}&lk=${encodeURIComponent(linkKey)}${labelParam}`;
-        return `<a${pre || ''} href=${quote}${trackUrl}${quote}${post}>${innerHtml}</a>`;
+    const enableClickTracking = options?.enableClickTracking !== false;
+    const useShortLink = options?.useShortLinkForClickTracking !== false;
+    const anchorRegex = /<a(\s[^>]*)?\shref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi;
+
+    let withClickTracking = input;
+    if (enableClickTracking) {
+      const matches = Array.from(input.matchAll(anchorRegex));
+      if (matches.length > 0) {
+        const replacementHtmlList = await Promise.all(
+          matches.map(async (matched, index) => {
+            const fullAnchor = String(matched[0] || '');
+            const pre = matched[1] || '';
+            const quote = matched[2] || '"';
+            const targetUrl = String(matched[3] || '').trim();
+            const post = matched[4] || '';
+            const innerHtml = String(matched[5] || '');
+
+            // Skip already-tracked attachment URLs and file viewer URLs
+            if (
+              targetUrl.includes('/track/attachment/')
+              || targetUrl.includes('/file/')
+              || targetUrl.includes('/download/')
+            ) {
+              return fullAnchor;
+            }
+
+            const urlWithUtm = addUtmToUrl(targetUrl);
+            const textLabel = innerHtml
+              .replace(/<[^>]+>/g, '')
+              .replace(/&[a-z#0-9]+;/gi, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80);
+            const linkKey = `email-link-${index + 1}`;
+            const labelParam = textLabel ? `&label=${encodeURIComponent(textLabel)}` : '';
+            const trackingLongUrl = `${clickBaseUrl}?url=${encodeURIComponent(urlWithUtm)}&lk=${encodeURIComponent(linkKey)}${labelParam}`;
+            const finalTrackingUrl = useShortLink
+              ? await trackingShortLinkService.createShortTrackingUrl({
+                  trackingBaseUrl,
+                  destinationUrl: trackingLongUrl,
+                  channel: 'email',
+                  trackingToken,
+                  linkKey,
+                })
+              : trackingLongUrl;
+            return `<a${pre} href=${quote}${finalTrackingUrl}${quote}${post}>${innerHtml}</a>`;
+          })
+        );
+
+        withClickTracking = input;
+        matches.forEach((matched, index) => {
+          const fullAnchor = String(matched[0] || '');
+          if (!fullAnchor) return;
+          withClickTracking = withClickTracking.replace(fullAnchor, replacementHtmlList[index]);
+        });
       }
-    );
+    }
 
     const trackingPixel = `<img src="${openUrl}" width="1" height="1" alt="" style="width:1px;height:1px;border:0;opacity:0;display:block;" />`;
 
