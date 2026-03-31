@@ -910,7 +910,7 @@ class DashboardRepository {
    *
    * @param {object} filters
    * @param {number} [limit=10]
-   * @returns {Promise<Array<{campaignId: number, campaignName: string, campaignType: string, clickCount: number}>>}
+   * @returns {Promise<Array<{campaignId: number, campaignName: string, campaignType: string, clickCount: number, sentCount: number, openCount: number}>>}
    */
   async getTopCampaignsByClicks(filters, limit = 10) {
     const scope = this.buildCampaignScopeClause(filters);
@@ -927,14 +927,34 @@ class DashboardRepository {
          c.id AS campaign_id,
          c.campaign_name,
          c.campaign_type,
-         COUNT(*)::INTEGER AS click_count
+         COUNT(*)::INTEGER AS click_count,
+         (
+           SELECT COUNT(*)::INTEGER
+           FROM customer_journey cj2
+           WHERE cj2.id_campaign = c.id
+             AND cj2.event_at >= $${scoped.params.length + 1}
+             AND cj2.event_at <  $${scoped.params.length + 2}
+             AND (
+               (c.campaign_type = 'email' AND cj2.event_type = 'email_sent')
+               OR (c.campaign_type IN ('zalo', 'zalo_group') AND cj2.event_type = 'zalo_sent')
+             )
+         ) AS sent_count,
+         (
+           SELECT COUNT(*)::INTEGER
+           FROM customer_journey cj4
+           WHERE cj4.id_campaign = c.id
+             AND cj4.event_at >= $${scoped.params.length + 1}
+             AND cj4.event_at <  $${scoped.params.length + 2}
+             AND c.campaign_type = 'email'
+             AND cj4.event_type = 'email_opened'
+         ) AS open_count
        FROM customer_journey cj
        JOIN campaigns c ON c.id = cj.id_campaign
        WHERE ${scoped.clause}
        GROUP BY c.id, c.campaign_name, c.campaign_type
        ORDER BY click_count DESC
-       LIMIT $${scoped.params.length + 1}`,
-      [...scoped.params, limit]
+       LIMIT $${scoped.params.length + 3}`,
+      [...scoped.params, filters.startAt, filters.endExclusive, limit]
     );
 
     return (result.rows || []).map((row) => ({
@@ -942,6 +962,8 @@ class DashboardRepository {
       campaignName: row.campaign_name || `Campaign #${row.campaign_id}`,
       campaignType: row.campaign_type || '',
       clickCount: Number(row.click_count || 0),
+      sentCount: Number(row.sent_count || 0),
+      openCount: Number(row.open_count || 0),
     }));
   }
 }

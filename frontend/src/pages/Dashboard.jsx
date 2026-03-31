@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DashboardHeader from '../features/dashboard/components/DashboardHeader';
 import DashboardFilterPanel from '../features/dashboard/components/DashboardFilterPanel';
 import DashboardKpiCards from '../features/dashboard/components/DashboardKpiCards';
@@ -9,11 +9,35 @@ import DashboardOrdersListTable from '../features/dashboard/components/Dashboard
 import DashboardTopCharts from '../features/dashboard/components/DashboardTopCharts';
 import DashboardChannelBreakdownCharts from '../features/dashboard/components/DashboardChannelBreakdownCharts';
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
+import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
+import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
+import {
+  saveLatestDashboardInsight,
+  hasStoredDashboardInsight,
+  readLatestDashboardInsight,
+  normalizeDashboardInsightForUi,
+  extractInsightFromDashboardInsightsResponse,
+} from '../features/dashboard/utils/dashboardInsightStorage.util';
 
 /** Skeleton placeholder block */
 const Skeleton = ({ className = '' }) => (
   <div className={`bg-gray-100 rounded-xl animate-pulse ${className}`} />
 );
+
+/**
+ * Format thời gian lưu insight (hiển thị cho người dùng).
+ *
+ * @param {string} iso - Chuỗi ISO từ localStorage
+ * @returns {string}
+ */
+function formatInsightSavedAt(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  } catch {
+    return '';
+  }
+}
 
 /** Full-page skeleton while initial data loads */
 const DashboardSkeleton = () => (
@@ -127,12 +151,91 @@ const Dashboard = () => {
     loadOrdersPage,
   } = useDashboardAnalytics();
 
+  const [insights, setInsights] = useState(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [insightError, setInsightError] = useState('');
+  /** Có ít nhất một bản insight đã lưu trong localStorage (ghi đè mỗi lần phân tích). */
+  const [hasStoredInsight, setHasStoredInsight] = useState(false);
+  /** 'none' | 'live' (vừa gọi API) | 'stored' (đang xem bản lưu cục bộ). */
+  const [insightViewSource, setInsightViewSource] = useState('none');
+  const [storedInsightSavedAt, setStoredInsightSavedAt] = useState('');
+
+  /** Chỉ hydrate insight từ localStorage một lần sau khi dữ liệu dashboard tải xong (quay lại trang vẫn thấy bản lưu). */
+  const insightHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (insightHydratedRef.current) return;
+    insightHydratedRef.current = true;
+
+    const stored = readLatestDashboardInsight();
+    setHasStoredInsight(!!stored);
+    if (stored?.insights) {
+      setInsights(stored.insights);
+      setInsightViewSource('stored');
+      setStoredInsightSavedAt(stored.savedAt || '');
+    }
+  }, [isLoading]);
+
   if (isLoading) {
     return <DashboardSkeleton />;
   }
 
   const timeline = analytics?.timeline || [];
   const isMonthlyView = activeQuickKey?.endsWith('m') ?? false;
+
+  /**
+   * Gọi backend sinh insight bằng Gemini theo dữ liệu đang hiển thị.
+   *
+   * Luồng hoạt động:
+   * 1. Khóa nút trong lúc chạy để tránh spam request.
+   * 2. Gửi `overview + analytics + topListsData + filters` sang backend.
+   * 3. Nhận JSON insight và render dưới từng biểu đồ.
+   */
+  const handleGenerateInsights = async () => {
+    setIsGeneratingInsights(true);
+    setInsightError('');
+    try {
+      const response = await dashboardApiService.generateInsights({
+        overview,
+        analytics,
+        topListsData,
+        filters,
+      });
+      const data = extractInsightFromDashboardInsightsResponse(response);
+      // Chuẩn hóa giống khi đọc từ localStorage để tổng quan + insight từng biểu đồ khớp nhau
+      const normalized = normalizeDashboardInsightForUi(data);
+      setInsights(normalized);
+      // Chỉ lưu bản đủ dữ liệu (không lưu fallback "Không parse được JSON..." để tránh xem lại sai)
+      if (saveLatestDashboardInsight(normalized)) {
+        setHasStoredInsight(true);
+      } else {
+        setHasStoredInsight(hasStoredDashboardInsight());
+      }
+      setInsightViewSource('live');
+      setStoredInsightSavedAt('');
+    } catch (error) {
+      console.error('Generate dashboard insights error:', error);
+      setInsightError('Không thể phân tích insight lúc này. Vui lòng thử lại.');
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
+  /**
+   * Đọc insight gần nhất từ localStorage và hiển thị lại (không gọi API).
+   */
+  const handleLoadStoredInsight = () => {
+    const stored = readLatestDashboardInsight();
+    if (!stored?.insights) {
+      setHasStoredInsight(false);
+      return;
+    }
+    setInsights(stored.insights);
+    setInsightError('');
+    setInsightViewSource('stored');
+    setStoredInsightSavedAt(stored.savedAt || '');
+  };
 
   return (
     <div className="space-y-6">
@@ -141,6 +244,44 @@ const Dashboard = () => {
         filters={filters}
         onOpenFilter={() => setIsFilterPanelOpen(true)}
         isLoading={isLoading}
+        extraActions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-primary flex items-center gap-2 shadow-sm"
+              onClick={handleGenerateInsights}
+              disabled={isLoading || isGeneratingInsights}
+              title="Dùng Gemini để phân tích insight theo dữ liệu đang hiển thị"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+              {isGeneratingInsights ? 'Đang phân tích…' : 'Phân tích insight'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary flex items-center gap-2 shadow-sm"
+              onClick={handleLoadStoredInsight}
+              disabled={isLoading || !hasStoredInsight}
+              title="Hiển thị bản insight đã lưu gần nhất trên trình duyệt (không gọi lại API)"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                />
+              </svg>
+              Xem insight đã lưu
+            </button>
+          </div>
+        }
       />
 
       {/* Slide-over filter panel */}
@@ -168,25 +309,74 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Nhắc khi đang xem bản insight lưu cục bộ (có thể lệch với bộ lọc hiện tại) */}
+      {insightViewSource === 'stored' && insights && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-100 text-sm text-sky-900">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>
+            Đang hiển thị insight đã lưu trên trình duyệt
+            {storedInsightSavedAt ? ` (lúc ${formatInsightSavedAt(storedInsightSavedAt)})` : ''}. Bấm &quot;Phân tích
+            insight&quot; để tạo bản mới theo dữ liệu và bộ lọc hiện tại.
+          </span>
+        </div>
+      )}
+
       {/* KPI Cards — 6 cards, 3 columns */}
       <DashboardKpiCards overview={overview} />
 
+      {/* Overview insight — phân tích có cấu trúc + tóm tắt */}
+      <div className="card p-5 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900">Tổng quan insight</h3>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Phân tích chuyên sâu từ Gemini theo số liệu dashboard và bộ lọc hiện tại (kèm chỉ số, phễu, kênh, kế hoạch hành động)
+        </p>
+        <div className="mt-4">
+          <DashboardInsightOverview insights={insights} isLoading={isGeneratingInsights} error={insightError} />
+        </div>
+      </div>
+
       {/* Charts row — Orders chart + Channel engagement chart */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <DashboardOrdersChart timeline={timeline} isMonthlyView={isMonthlyView} />
+        <DashboardOrdersChart
+          timeline={timeline}
+          isMonthlyView={isMonthlyView}
+          insightText={insights?.charts?.ordersTrend || ''}
+          isInsightLoading={isGeneratingInsights}
+          insightError={insightError}
+        />
         <DashboardChannelTabs
           activeChannel={activeChannel}
           onChangeChannel={setActiveChannel}
           analytics={analytics}
           isMonthlyView={isMonthlyView}
+          insightText={insights?.charts?.channelEngagement || ''}
+          isInsightLoading={isGeneratingInsights}
+          insightError={insightError}
         />
       </div>
 
       {/* Channel breakdown donut charts — click / completed orders / pending orders by channel */}
-      <DashboardChannelBreakdownCharts overview={overview} />
+      <DashboardChannelBreakdownCharts
+        overview={overview}
+        insights={insights}
+        isInsightLoading={isGeneratingInsights}
+        insightError={insightError}
+      />
 
       {/* Top charts — top courses and campaigns by orders/clicks */}
-      <DashboardTopCharts topListsData={topListsData} />
+      <DashboardTopCharts
+        topListsData={topListsData}
+        insights={insights}
+        isInsightLoading={isGeneratingInsights}
+        insightError={insightError}
+      />
 
       {/* Runs table */}
       <DashboardRunsTable

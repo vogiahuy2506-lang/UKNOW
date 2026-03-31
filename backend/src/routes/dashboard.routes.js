@@ -24,4 +24,7 @@ router.get('/top-lists', dashboardController.getTopLists.bind(dashboardControlle
 // Compare campaigns
 router.get('/compare', dashboardController.compareCampaigns.bind(dashboardController));
 
+// Generate Gemini insights for dashboard
+router.post('/insights', dashboardController.generateInsights.bind(dashboardController));
+
 export default router;

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
+import DashboardInsightBlock from './DashboardInsightBlock';
 
 const CHANNEL_OPTIONS = [
   { id: 'all', label: 'Tất cả', color: 'gray' },
@@ -268,9 +269,20 @@ const buildChartConfig = (activeChannel) => {
  * @param {function} props.onChangeChannel
  * @param {object}  props.analytics
  * @param {boolean} props.isMonthlyView - Aggregate to monthly + use month-year axis when true
+ * @param {string}  [props.insightText] - Insight hiển thị dưới biểu đồ
+ * @param {boolean} [props.isInsightLoading]
+ * @param {string}  [props.insightError]
  * @returns {JSX.Element}
  */
-const DashboardChannelTabs = ({ activeChannel, onChangeChannel, analytics, isMonthlyView = false }) => {
+const DashboardChannelTabs = ({
+  activeChannel,
+  onChangeChannel,
+  analytics,
+  isMonthlyView = false,
+  insightText = '',
+  isInsightLoading = false,
+  insightError = '',
+}) => {
   const rawTimeline = analytics?.timeline || [];
   const timeline = isMonthlyView ? aggregateToMonthly(rawTimeline) : rawTimeline;
 
@@ -371,6 +383,13 @@ const DashboardChannelTabs = ({ activeChannel, onChangeChannel, analytics, isMon
           </ResponsiveContainer>
         </div>
       )}
+
+      <DashboardInsightBlock
+        title="Insight · Tương tác theo kênh"
+        text={insightText}
+        isLoading={isInsightLoading}
+        error={insightError}
+      />
     </div>
   );
 };

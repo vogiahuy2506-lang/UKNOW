@@ -37,6 +37,21 @@ export const dashboardApiService = {
   getTopLists(params = {}) {
     return api.get('/dashboard/top-lists', { params });
   },
+
+  /**
+   * Sinh insight dashboard bằng Gemini (backend gọi Gemini bằng API key server-side).
+   *
+   * @param {object} payload
+   * @param {object} payload.overview - dữ liệu từ getOverview
+   * @param {object} payload.analytics - dữ liệu từ getAnalytics
+   * @param {object} payload.topListsData - dữ liệu từ getTopLists
+   * @param {object} [payload.filters] - bộ lọc đang áp dụng (tùy chọn)
+   * @returns {Promise}
+   */
+  generateInsights(payload) {
+    // Insight Gemini + JSON dài có thể > 10s — tăng timeout cục bộ
+    return api.post('/dashboard/insights', payload, { timeout: 120000 });
+  },
 };
 
 export default dashboardApiService;
