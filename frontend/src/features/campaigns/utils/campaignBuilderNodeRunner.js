@@ -663,6 +663,46 @@ export const createCampaignNodeRunner = (deps) => {
         throw new Error('Chưa chọn tài khoản Zalo hoặc pool rỗng');
       }
       const selected = await resolveReadyZaloAccountForRun(selectedId, signal);
+      const allAccounts = poolOn && poolIds.length > 0
+        ? await fetchZaloAccounts(signal)
+        : [];
+      const accountById = new Map(
+        allAccounts.map((account) => [String(account?.id || '').trim(), account])
+      );
+      /**
+       * Khi bật pool đa tài khoản, trả đủ danh sách account đã chọn để bảng output Build hiển thị đúng.
+       * Vẫn giữ tài khoản đại diện ở dòng đầu để không làm thay đổi luồng xử lý hiện tại.
+       */
+      const poolOutputItems = poolOn && poolIds.length > 0
+        ? poolIds.map((id, index) => {
+            const normalizedId = String(id || '').trim();
+            const mappedAccount = accountById.get(normalizedId);
+            if (mappedAccount) {
+              return {
+                ...mappedAccount,
+                __zaloAccountSelected: index === 0,
+              };
+            }
+            if (index === 0) {
+              return {
+                ...selected,
+                id: normalizedId || selected.id,
+                __zaloAccountSelected: true,
+              };
+            }
+            return {
+              id: normalizedId,
+              displayName: normalizedId || 'Tài khoản Zalo',
+              status: 'unknown',
+              isActive: true,
+              isDefault: false,
+              __zaloAccountSelected: false,
+            };
+          })
+        : [{
+            ...selected,
+            __zaloAccountSelected: true,
+          }];
 
       ctx.selectedZaloAccount = selected;
       ctx.zaloPoolFromSelect = poolOn ? poolIds : null;
@@ -673,13 +713,11 @@ export const createCampaignNodeRunner = (deps) => {
           zaloPoolAccountIds: poolIds,
         },
         output: {
-          items: [
-            {
-              ...selected,
-              ...(poolOn && poolIds.length > 0 ? { __zaloPoolAccountIds: poolIds } : {}),
-            },
-          ],
-          schema: buildSchemaFromRows([selected]),
+          items: poolOutputItems.map((item) => ({
+            ...item,
+            ...(poolOn && poolIds.length > 0 ? { __zaloPoolAccountIds: poolIds } : {}),
+          })),
+          schema: buildSchemaFromRows(poolOutputItems),
           meta: {
             selected: true,
             poolEnabled: poolOn,

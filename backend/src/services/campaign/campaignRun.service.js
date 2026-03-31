@@ -2819,11 +2819,55 @@ class CampaignRunService {
             roleCode,
           });
           selectedZaloAccount = account;
-          const outputItems = [{
+          /**
+           * Với node chọn tài khoản ở chế độ pool:
+           * - Vẫn dùng account đầu tiên làm đại diện để giữ tương thích luồng gửi hiện tại.
+           * - Đồng thời xuất đủ danh sách tài khoản pool để UI Run hiển thị đúng toàn bộ tài khoản đã chọn.
+           */
+          let outputItems = [{
             ...account,
             __zaloAccountSelected: true,
-            ...(poolEnabled && poolIds.length > 0 ? { __zaloPoolAccountIds: poolIds } : {}),
           }];
+          if (poolEnabled && poolIds.length > 0) {
+            const resolvedPoolAccounts = await Promise.all(
+              poolIds.map(async (poolId, index) => {
+                const normalizedPoolId = String(poolId || '').trim();
+                if (!normalizedPoolId) return null;
+                if (index === 0) {
+                  return {
+                    ...account,
+                    id: normalizedPoolId || account.id,
+                    __zaloAccountSelected: true,
+                  };
+                }
+                try {
+                  const poolAccount = await campaignZaloSenderService.getCampaignZaloAccount({
+                    userId,
+                    accountId: normalizedPoolId,
+                    roleCode,
+                  });
+                  return {
+                    ...poolAccount,
+                    __zaloAccountSelected: false,
+                  };
+                } catch {
+                  return {
+                    id: normalizedPoolId,
+                    displayName: normalizedPoolId || 'Tài khoản Zalo',
+                    status: 'unknown',
+                    isActive: true,
+                    isDefault: false,
+                    __zaloAccountSelected: false,
+                  };
+                }
+              })
+            );
+            outputItems = resolvedPoolAccounts.filter(Boolean);
+          }
+          outputItems = outputItems.map((item) => ({
+            ...item,
+            ...(poolEnabled && poolIds.length > 0 ? { __zaloPoolAccountIds: poolIds } : {}),
+          }));
           nodeOutputs[String(node.id)] = outputItems;
           lastOutputItems = outputItems;
 
@@ -3820,12 +3864,53 @@ class CampaignRunService {
            * @returns {Promise<object>}
            */
           const pickMultiZaloPersonalAccount = async (recipient, rt) => {
+            const poolSet = new Set(multiAccountIds.map((x) => String(x)));
+            /**
+             * Map ghim account theo từng khách trong suốt node hiện tại:
+             * - Ưu tiên khóa theo customerId (nếu có)
+             * - fallback về SĐT chuẩn hóa (phone) hoặc UID
+             * Nhờ đó 3 step của cùng khách luôn đi qua cùng một tài khoản Zalo.
+             */
+            if (!ctx.zaloPersonalPoolByRecipient) {
+              ctx.zaloPersonalPoolByRecipient = new Map();
+            }
+            const recipientBindingMap = ctx.zaloPersonalPoolByRecipient;
+            const buildRecipientBindingKey = (entry = null) => {
+              const customerId = extractCustomerIdFromRow(entry);
+              if (customerId != null && String(customerId).trim()) {
+                return `customer:${String(customerId).trim()}`;
+              }
+              if (rt === 'phone') {
+                const normalizedPhone = zaloCampaignRecipientService.normalizePhone(recipient);
+                if (normalizedPhone) return `phone:${normalizedPhone}`;
+              }
+              const uidValue = String(
+                extractZaloUidFromRow(entry)
+                || recipient
+                || ''
+              ).trim().toLowerCase();
+              return uidValue ? `uid:${uidValue}` : '';
+            };
+            const bindingKey = buildRecipientBindingKey(
+              recipientEntryMap.get(String(recipient || '').trim())?.row || null
+            );
+            const pinnedAccountId = bindingKey ? String(recipientBindingMap.get(bindingKey) || '') : '';
+            if (pinnedAccountId && poolSet.has(pinnedAccountId)) {
+              return campaignZaloSenderService.getCampaignZaloAccount({
+                userId,
+                accountId: pinnedAccountId,
+                roleCode,
+              });
+            }
+
             if (rt === 'phone') {
               const normalized = zaloCampaignRecipientService.normalizePhone(recipient);
-              const poolSet = new Set(multiAccountIds.map((x) => String(x)));
               if (normalized) {
                 const bound = await zaloCampaignRecipientService.getBoundSenderAccountId(userId, normalized);
                 if (bound && poolSet.has(String(bound))) {
+                  if (bindingKey) {
+                    recipientBindingMap.set(bindingKey, String(bound));
+                  }
                   return campaignZaloSenderService.getCampaignZaloAccount({
                     userId,
                     accountId: bound,
@@ -3844,6 +3929,9 @@ class CampaignRunService {
               if (normalized) {
                 await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId);
               }
+              if (bindingKey) {
+                recipientBindingMap.set(bindingKey, String(pickedId));
+              }
               return campaignZaloSenderService.getCampaignZaloAccount({
                 userId,
                 accountId: pickedId,
@@ -3851,9 +3939,13 @@ class CampaignRunService {
               });
             }
             const uidOrder = shuffleMultiAccountIds([...multiAccountIds]);
+            const pickedUidAccountId = String(uidOrder[0] || '');
+            if (bindingKey && pickedUidAccountId) {
+              recipientBindingMap.set(bindingKey, pickedUidAccountId);
+            }
             return campaignZaloSenderService.getCampaignZaloAccount({
               userId,
-              accountId: uidOrder[0],
+              accountId: pickedUidAccountId,
               roleCode,
             });
           };
