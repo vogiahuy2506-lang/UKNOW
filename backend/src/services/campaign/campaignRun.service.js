@@ -3819,6 +3819,12 @@ class CampaignRunService {
             : [];
           const sendResults = [];
           /**
+           * Theo dõi template Zalo cá nhân: mỗi lần đổi `stepIndex` (template 1 → 2),
+           * chuỗi «Đã gửi X/Y» trong log chỉ đếm trong phạm vi template hiện tại (Y = số người nhận).
+           */
+          let lastZaloPersonalTemplateStepIndex = null;
+          let zaloPersonalStepProgressStart = 0;
+          /**
            * Chuẩn hóa payload execution cho node gửi Zalo cá nhân để UI log luôn tích lũy đúng.
            *
            * @param {object} payload kết quả gửi hiện tại
@@ -3903,7 +3909,11 @@ class CampaignRunService {
             if (rt === 'phone') {
               const normalized = zaloCampaignRecipientService.normalizePhone(recipient);
               if (normalized) {
-                const bound = await zaloCampaignRecipientService.getBoundSenderAccountId(userId, normalized);
+                const bound = await zaloCampaignRecipientService.getBoundSenderAccountId(
+                  userId,
+                  normalized,
+                  runId
+                );
                 if (bound && poolSet.has(String(bound))) {
                   if (bindingKey) {
                     recipientBindingMap.set(bindingKey, String(bound));
@@ -3924,7 +3934,7 @@ class CampaignRunService {
               const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
               const pickedId = tryOrder[0];
               if (normalized) {
-                await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId);
+                await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId, runId);
               }
               if (bindingKey) {
                 recipientBindingMap.set(bindingKey, String(pickedId));
@@ -3955,6 +3965,36 @@ class CampaignRunService {
             variables = {},
             entryRow = null,
           }) => {
+            /**
+             * Đồng bộ mốc đếm theo template: khi stepIndex đổi (template 1 → template 2),
+             * tiến độ hiển thị quay về 1/N trong phạm vi template hiện tại.
+             */
+            const syncZaloPersonalTemplateProgress = () => {
+              const si = stepMeta?.stepIndex;
+              if (si != null && dedupedRecipients.length > 0) {
+                if (lastZaloPersonalTemplateStepIndex !== si) {
+                  lastZaloPersonalTemplateStepIndex = si;
+                  zaloPersonalStepProgressStart = successfulSends + failedSends;
+                }
+              }
+            };
+            const buildZaloPersonalProgressMessage = () => {
+              const si = stepMeta?.stepIndex;
+              if (si != null && dedupedRecipients.length > 0) {
+                return `Đã gửi ${successfulSends + failedSends - zaloPersonalStepProgressStart}/${dedupedRecipients.length}`;
+              }
+              return `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+            };
+            const getZaloPersonalProgressForLog = () => {
+              const si = stepMeta?.stepIndex;
+              if (si != null && dedupedRecipients.length > 0) {
+                return {
+                  current: successfulSends + failedSends - zaloPersonalStepProgressStart,
+                  total: dedupedRecipients.length,
+                };
+              }
+              return { current: successfulSends + failedSends, total: totalRecipients };
+            };
             let zaloMessageId = null;
             let customerId = extractCustomerIdFromRow(entryRow);
             // Extract Zalo UID from entry row (available when source is a Zalo friends node)
@@ -3964,12 +4004,13 @@ class CampaignRunService {
             let workingAccount = account;
             let workingApi = api;
             try {
+              syncZaloPersonalTemplateProgress();
               if (recipientType === 'phone') {
                 // eslint-disable-next-line no-await-in-loop
                 const unreachable = await zaloCampaignRecipientService.isPhoneUnreachable(userId, recipient);
                 if (unreachable) {
                   successfulSends += 1;
-                  const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+                  const progressMessage = buildZaloPersonalProgressMessage();
                   const sentAt = toHoChiMinhIso();
                   const accForLog = workingAccount;
                   const senderName = resolveZaloSenderName(accForLog);
@@ -4003,15 +4044,18 @@ class CampaignRunService {
                     variables,
                   };
                   sendResults.push(skipPayload);
-                  await campaignExecutionLogService.logExecutionNode({
-                    campaignId,
-                    runId,
-                    node,
-                    status: 'success',
-                    progressCurrent: successfulSends + failedSends,
-                    progressTotal: totalRecipients,
-                    executionData: buildSendZaloPersonalExecutionData(skipPayload),
-                  });
+                  {
+                    const zpLog = getZaloPersonalProgressForLog();
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      status: 'success',
+                      progressCurrent: zpLog.current,
+                      progressTotal: zpLog.total,
+                      executionData: buildSendZaloPersonalExecutionData(skipPayload),
+                    });
+                  }
                   return { success: true, skippedUnreachable: true };
                 }
               }
@@ -4094,7 +4138,7 @@ class CampaignRunService {
               });
               successfulSends += 1;
               markZaloOutboundSuccess({ accountId: workingAccount.id, channel: 'zalo_personal' });
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = buildZaloPersonalProgressMessage();
               // UID resolved by Zalo API (always available after successful send)
               const resolvedUid = String(sendResult.uid || entryZaloUid || '').trim();
               const sentAt = toHoChiMinhIso();
@@ -4147,15 +4191,18 @@ class CampaignRunService {
                 trackingToken,
               });
               sendResults.push(resultPayload);
-              await campaignExecutionLogService.logExecutionNode({
-                campaignId,
-                runId,
-                node,
-                status: 'success',
-                progressCurrent: successfulSends + failedSends,
-                progressTotal: totalRecipients,
-                executionData: buildSendZaloPersonalExecutionData(resultPayload),
-              });
+              {
+                const zpLog = getZaloPersonalProgressForLog();
+                await campaignExecutionLogService.logExecutionNode({
+                  campaignId,
+                  runId,
+                  node,
+                  status: 'success',
+                  progressCurrent: zpLog.current,
+                  progressTotal: zpLog.total,
+                  executionData: buildSendZaloPersonalExecutionData(resultPayload),
+                });
+              }
               return { success: true };
             } catch (error) {
               if (error?.code === 'RUN_STOPPED') {
@@ -4188,9 +4235,14 @@ class CampaignRunService {
                 recipientType === 'phone'
                 && isZaloUnreachableRecipientError(error)
               ) {
-                await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, recipient, error);
+                await zaloCampaignRecipientService.markPhoneUnreachableFromError(
+                  userId,
+                  recipient,
+                  error,
+                  runId
+                );
                 successfulSends += 1;
-                const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+                const progressMessage = buildZaloPersonalProgressMessage();
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(workingAccount);
                 const zaloName = resolveZaloRecipientName({
@@ -4224,19 +4276,22 @@ class CampaignRunService {
                   variables,
                 };
                 sendResults.push(skipPayload);
-                await campaignExecutionLogService.logExecutionNode({
-                  campaignId,
-                  runId,
-                  node,
-                  status: 'success',
-                  progressCurrent: successfulSends + failedSends,
-                  progressTotal: totalRecipients,
-                  executionData: buildSendZaloPersonalExecutionData(skipPayload),
-                });
+                {
+                  const zpLog = getZaloPersonalProgressForLog();
+                  await campaignExecutionLogService.logExecutionNode({
+                    campaignId,
+                    runId,
+                    node,
+                    status: 'success',
+                    progressCurrent: zpLog.current,
+                    progressTotal: zpLog.total,
+                    executionData: buildSendZaloPersonalExecutionData(skipPayload),
+                  });
+                }
                 return { success: true, skippedUnreachable: true };
               }
               failedSends += 1;
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = buildZaloPersonalProgressMessage();
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(workingAccount);
               const zaloName = resolveZaloRecipientName({
@@ -4271,16 +4326,19 @@ class CampaignRunService {
                 error: error.message,
               });
               sendResults.push(failedPayload);
-              await campaignExecutionLogService.logExecutionNode({
-                campaignId,
-                runId,
-                node,
-                status: 'failed',
-                progressCurrent: successfulSends + failedSends,
-                progressTotal: totalRecipients,
-                errorMessage: error.message,
-                executionData: buildSendZaloPersonalExecutionData(failedPayload),
-              });
+              {
+                const zpLog = getZaloPersonalProgressForLog();
+                await campaignExecutionLogService.logExecutionNode({
+                  campaignId,
+                  runId,
+                  node,
+                  status: 'failed',
+                  progressCurrent: zpLog.current,
+                  progressTotal: zpLog.total,
+                  errorMessage: error.message,
+                  executionData: buildSendZaloPersonalExecutionData(failedPayload),
+                });
+              }
               return { success: false };
             }
           };
@@ -4822,7 +4880,11 @@ class CampaignRunService {
             const normalized = zaloCampaignRecipientService.normalizePhone(phone);
             const poolSet = new Set(friendMultiAccountIds.map((x) => String(x)));
             if (normalized) {
-              const bound = await zaloCampaignRecipientService.getBoundSenderAccountId(userId, normalized);
+              const bound = await zaloCampaignRecipientService.getBoundSenderAccountId(
+                userId,
+                normalized,
+                runId
+              );
               if (bound && poolSet.has(String(bound))) {
                 return campaignZaloSenderService.getCampaignZaloAccount({
                   userId,
@@ -4840,7 +4902,7 @@ class CampaignRunService {
             const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
             const pickedId = tryOrder[0];
             if (normalized) {
-              await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId);
+              await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId, runId);
             }
             return campaignZaloSenderService.getCampaignZaloAccount({
               userId,
@@ -5065,7 +5127,7 @@ class CampaignRunService {
                 throw error;
               }
               if (isZaloUnreachableRecipientError(error)) {
-                await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, phone, error);
+                await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, phone, error, runId);
                 successfulSends += 1;
                 const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
                 const skipPayload = {
