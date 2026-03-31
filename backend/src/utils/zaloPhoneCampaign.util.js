@@ -33,7 +33,12 @@ function buildZaloRecipientErrorProbe(error) {
       error.message,
       error.code,
       error.cause?.message,
-      error.cause?.code
+      error.cause?.code,
+      // Lỗi từ BullMQ / axios-style bọc ngoài — giữ nguyên thông điệp gốc để khớp "Không tìm thấy".
+      error.response?.data?.message,
+      error.response?.data?.error,
+      error.data?.message,
+      error.failedReason
     );
   }
   return parts
@@ -74,15 +79,18 @@ export function isZaloUnreachableRecipientError(error) {
     || probe.includes('khách hàng')
     || probe.includes('lượt chạy')
     || probe.includes('nhóm')
-    || probe.includes('tài khoản zalo đã chọn');
+    || probe.includes('tài khoản zalo đã chọn')
+    // Tránh nhầm lỗi tìm kiếm nội bộ khác (không liên quan tra SĐT Zalo).
+    || probe.includes('nhân viên')
+    || probe.includes('đơn hàng')
+    || probe.includes('khóa học')
+    || probe.includes('tệp tin')
+    || probe.includes('file không');
 
   if (probe.includes('không tìm thấy user zalo theo số')) return true;
   if (probe.includes('không tìm thấy') && (probe.includes('số') || probe.includes('user'))) return true;
-  // SDK đôi khi chỉ trả đúng cụm "Không tìm thấy" (kèm dấu câu) khi tra SĐT — coi là không có user Zalo.
-  if (
-    !excludeDomain
-    && /^không tìm thấy([\s.,!?…]*)$/.test(probe)
-  ) {
+  // Cụm "Không tìm thấy" đứng một mình hoặc sau tiền tố (queue/SDK) — vẫn là không có user Zalo theo SĐT.
+  if (!excludeDomain && /\bkhông tìm thấy\b/.test(probe)) {
     return true;
   }
   if (probe.includes('số điện thoại không hợp lệ')) return true;
