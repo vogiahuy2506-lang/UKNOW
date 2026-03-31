@@ -299,7 +299,7 @@ class EmailSettingsSmtpService {
       // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
       const trackedHtmlContent = shouldForcePreviewOnly
         ? rawHtml
-        : ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, normalizedRunId);
+        : await ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, normalizedRunId);
 
       const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
         ? await ctx.buildMailAttachments(attachments)

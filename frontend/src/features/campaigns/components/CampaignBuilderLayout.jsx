@@ -149,6 +149,8 @@ export const FlowCanvas = ({
   nodeDropOffsetY,
   nodeTypes,
   edgeTypes,
+  /** Khi flow đã bật pool đa TK Zalo — không cho thả node «Lấy danh sách bạn bè» lên canvas */
+  suppressGetAllFriendsPalette = false,
 }) => {
   const reactFlowWrapper = useRef(null);
   const { project } = useReactFlow();
@@ -177,6 +179,13 @@ export const FlowCanvas = ({
       }
       if (isRestrictedDataNode) {
         toast.error(`Loại chiến dịch ${campaignType?.toUpperCase()} không hỗ trợ node này`);
+        return;
+      }
+
+      if (nodeType === 'get_all_friends' && suppressGetAllFriendsPalette) {
+        toast.error(
+          'Đang bật gửi bằng pool nhiều tài khoản Zalo — không dùng node «Lấy danh sách bạn bè».'
+        );
         return;
       }
 
@@ -236,6 +245,7 @@ export const FlowCanvas = ({
       project,
       setEdges,
       setNodes,
+      suppressGetAllFriendsPalette,
     ]
   );
 

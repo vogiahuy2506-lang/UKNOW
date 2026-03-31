@@ -75,7 +75,14 @@ export const NodeConfigSendEmailSection = ({
     setFormData((prev) => ({
       ...prev,
       emailSteps: (prev.emailSteps || []).map((s, i) =>
-        i === index ? { ...s, templateId: id, templateMappings: nextMappings } : s
+        i === index
+          ? {
+              ...s,
+              templateId: id,
+              enableLinkTracking: s?.enableLinkTracking !== false,
+              templateMappings: nextMappings,
+            }
+          : s
       ),
     }));
   };
@@ -118,6 +125,7 @@ export const NodeConfigSendEmailSection = ({
           delayValue: 0,
           delayUnit: 'minutes',
           delayFrom: 'start',
+          enableLinkTracking: true,
           templateId: '',
           templateMappings: [],
         },
@@ -616,6 +624,18 @@ export const NodeConfigSendEmailSection = ({
                       onPreview={() => handlePreviewEmailTemplate(step.templateId)}
                     />
                   </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={step.enableLinkTracking !== false}
+                      onChange={(e) => handleEmailStepChange(idx, 'enableLinkTracking', e.target.checked)}
+                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                    />
+                    <span className="text-xs text-gray-700">
+                      Gửi link tracking click (tự rút gọn bằng short-link nội bộ)
+                    </span>
+                  </label>
 
                   {(step.templateMappings || []).length > 0 && (
                     <div className="space-y-3">

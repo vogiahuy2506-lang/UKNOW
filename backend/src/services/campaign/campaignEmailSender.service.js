@@ -452,6 +452,10 @@ class CampaignEmailSenderService {
       templateId = firstStep.templateId || templateId;
       templateMappings = firstStep.templateMappings || [];
     }
+    const firstStepConfig = Array.isArray(config.emailSteps) && config.emailSteps.length > 0
+      ? config.emailSteps[0]
+      : null;
+    const shouldEnableEmailClickTracking = firstStepConfig?.enableLinkTracking !== false;
 
     const template = await this.getTemplateByRunNodeCache({
       runId,
@@ -580,13 +584,17 @@ class CampaignEmailSenderService {
      * - Không chèn block link tài liệu đính kèm vào body nữa.
      * Tracking open/click link trong body vẫn được giữ qua buildTrackedHtml.
      */
-    const trackedHtmlContent = emailSettingsController.buildTrackedHtml(
+    const trackedHtmlContent = await emailSettingsController.buildTrackedHtml(
       htmlBody,
       trackingBaseUrl,
       trackingToken,
       campaign.id,
       customerId,
-      runId
+      runId,
+      {
+        enableClickTracking: shouldEnableEmailClickTracking,
+        useShortLinkForClickTracking: true,
+      }
     );
 
     const realMailAttachments = Array.isArray(attachments) && attachments.length > 0

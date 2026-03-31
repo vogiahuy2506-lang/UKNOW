@@ -22,6 +22,7 @@ import googleSheetsRoutes from './routes/googleSheets.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import downloadRoutes from './routes/download.routes.js';
 import trackingRoutes from './routes/tracking.routes.js';
+import trackingShortLinkRoutes from './routes/trackingShortLink.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
@@ -92,6 +93,7 @@ app.use('/api/attachments', attachmentsRoutes);    // presigned download for adm
 app.use('/file', downloadRoutes);// trang xem file: GET /file/:token, GET /file/:token/download
 app.use('/download', downloadRoutes);   // backward compat: cũ dùng /download/:token
 app.use('/track', trackingRoutes);      // attachment tracking: GET /track/attachment/:token
+app.use('/t', trackingShortLinkRoutes); // short tracking redirect: GET /t/:code
 app.use('/api/webhooks', webhookRoutes); // webhook WooCommerce: POST /api/webhooks/woocommerce/order
 app.use('/api/courses', coursesRoutes); // quản lý khóa học
 app.use('/api/zalo', zaloSettingsRoutes); // quản lý nhiều tài khoản Zalo

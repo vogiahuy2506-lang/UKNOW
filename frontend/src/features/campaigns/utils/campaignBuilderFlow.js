@@ -61,3 +61,24 @@ export const isTriggerNodeType = (nodeType) => {
   const value = nodeType || '';
   return value === 'manual_trigger' || value.includes('trigger') || value === 'start';
 };
+
+/**
+ * Flow có ít nhất một node «Chọn tài khoản Zalo» bật pool đa TK (có ít nhất 1 id trong pool).
+ * Dùng để ẩn / không chạy node «Lấy danh sách bạn bè» vì nguồn gửi không dùng danh sách bạn bè.
+ *
+ * @param {Array<{data?: {nodeType?: string, config?: object}}>} nodes danh sách node ReactFlow
+ * @returns {boolean}
+ */
+export const campaignFlowHasZaloPoolMulti = (nodes = []) => {
+  if (!Array.isArray(nodes)) return false;
+  for (const n of nodes) {
+    const nodeType = String(n?.data?.nodeType || n?.type || '').trim();
+    if (nodeType !== ZALO_ACCOUNT_NODE_TYPE) continue;
+    const cfg = n?.data?.config || {};
+    if (!cfg.zaloPoolMultiAccountEnabled) continue;
+    const ids = Array.isArray(cfg.zaloPoolAccountIds) ? cfg.zaloPoolAccountIds : [];
+    const has = ids.map((id) => String(id || '').trim()).filter(Boolean).length > 0;
+    if (has) return true;
+  }
+  return false;
+};

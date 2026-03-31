@@ -9,6 +9,7 @@ import { isAdminRole } from '../../utils/roleScope.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
+import trackingShortLinkService from '../tracking/trackingShortLink.service.js';
 
 class CampaignZaloSenderService {
   constructor() {
@@ -479,7 +480,7 @@ class CampaignZaloSenderService {
    * @param {object} input
    * @returns {string}
    */
-  buildTrackedMessageText({
+  async buildTrackedMessageText({
     message = '',
     trackingBaseUrl = '',
     trackingToken = '',
@@ -489,6 +490,8 @@ class CampaignZaloSenderService {
     customerId = null,
     zaloMessageId = null,
     zaloUid = null,
+    useShortLink = true,
+    includeLinkTargets = false,
   }) {
     const baseUrl = String(trackingBaseUrl || '').trim();
     const token = String(trackingToken || '').trim();
@@ -498,21 +501,47 @@ class CampaignZaloSenderService {
     const trackingRoot = baseUrl.replace(/\/+$/, '');
     const urlRegex = /(https?:\/\/[^\s<>"')\]]+)/gi;
 
-    let linkIndex = 0;
-    return sourceText.replace(urlRegex, (matchedUrl) => {
-      linkIndex += 1;
-      const linkKey = `zalo-link-${linkIndex}`;
-      const targetWithUtm = this.appendUtmToUrl(matchedUrl, {
-        utmSource,
-        utmCampaign: campaignId,
-        utmRunId: runId,
-        utmCustomer: customerId,
-        utmZaloMessageId: zaloMessageId,
-        utmZaloUid: zaloUid || null,
-      });
-      const encodedTarget = encodeURIComponent(targetWithUtm);
-      return `${trackingRoot}/api/customers/zalo-tracking/click/${token}?url=${encodedTarget}&lk=${encodeURIComponent(linkKey)}`;
+    const matches = Array.from(sourceText.matchAll(urlRegex));
+    if (!matches.length) return sourceText;
+
+    const linkTargets = {};
+    const replacements = await Promise.all(
+      matches.map(async (matched, index) => {
+        const matchedUrl = String(matched[0] || '').trim();
+        const linkKey = `zalo-link-${index + 1}`;
+        const targetWithUtm = this.appendUtmToUrl(matchedUrl, {
+          utmSource,
+          utmCampaign: campaignId,
+          utmRunId: runId,
+          utmCustomer: customerId,
+          utmZaloMessageId: zaloMessageId,
+          utmZaloUid: zaloUid || null,
+        });
+        const encodedTarget = encodeURIComponent(targetWithUtm);
+        const trackingLongUrl = `${trackingRoot}/api/customers/zalo-tracking/click/${token}?url=${encodedTarget}&lk=${encodeURIComponent(linkKey)}`;
+        linkTargets[linkKey] = targetWithUtm;
+        if (!useShortLink) return trackingLongUrl;
+        return trackingShortLinkService.createShortTrackingUrl({
+          trackingBaseUrl: trackingRoot,
+          destinationUrl: trackingLongUrl,
+          channel: 'zalo',
+          trackingToken: token,
+          linkKey,
+        });
+      })
+    );
+
+    let output = sourceText;
+    matches.forEach((matched, index) => {
+      const rawUrl = String(matched[0] || '').trim();
+      if (!rawUrl) return;
+      output = output.replace(rawUrl, replacements[index]);
     });
+    if (!includeLinkTargets) return output;
+    return {
+      message: output,
+      linkTargets,
+    };
   }
 
   /**

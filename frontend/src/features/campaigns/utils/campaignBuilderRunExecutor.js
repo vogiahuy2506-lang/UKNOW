@@ -1,3 +1,5 @@
+import { campaignFlowHasZaloPoolMulti } from './campaignBuilderFlow';
+
 /**
  * Execute preview campaign run with realtime node-log upsert behavior.
  *
@@ -100,6 +102,12 @@ export const executeCampaignRun = async (params) => {
     .map((e) => ({ ...e, source: String(e.source ?? ''), target: String(e.target ?? '') }))
     .filter((e) => nodeIdSet.has(String(e.source)) && nodeIdSet.has(String(e.target)));
   const executionOrder = buildExecutionOrder(normalizedNodes, normalizedEdges);
+  /** Pool đa TK: bỏ «Lấy danh sách bạn bè» khỏi preview — không gọi API và không hiện như bước chạy. */
+  const skipGetAllFriendsInPreview = campaignFlowHasZaloPoolMulti(normalizedNodes);
+  const previewExecutionOrder = skipGetAllFriendsInPreview
+    ? executionOrder.filter((n) => String(n?.data?.nodeType || n?.type || '').trim() !== 'get_all_friends')
+    : executionOrder;
+
   const ctx = {
     sheetRows: null,
     mapping: null,
@@ -217,7 +225,7 @@ export const executeCampaignRun = async (params) => {
     };
   };
 
-  for (const node of executionOrder) {
+  for (const node of previewExecutionOrder) {
     if (runTokenRef.current !== runToken) break;
 
     const shouldDelayBetweenZaloNodes = (
