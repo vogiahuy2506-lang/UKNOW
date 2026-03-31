@@ -86,24 +86,39 @@ class TrackingShortLinkService {
    * @returns {Promise<import('express').Response>}
    */
   async redirectByCode(req, res) {
-    const code = String(req.params.code || '').trim();
-    const fallbackUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    if (!code) return res.redirect(302, fallbackUrl);
+    const rawCode = String(req.params.code || '').trim();
+    const code = rawCode.replace(/[^0-9a-zA-Z]/g, '');
+    if (!code) {
+      return res.status(404).json({
+        success: false,
+        message: 'Link rút gọn không hợp lệ hoặc đã hết hạn.',
+      });
+    }
 
     try {
       const result = await db.query(
         `SELECT destination_url
          FROM tracking_short_links
          WHERE short_code = $1
+            OR LOWER(short_code) = LOWER($1)
+         ORDER BY CASE WHEN short_code = $1 THEN 0 ELSE 1 END
          LIMIT 1`,
         [code]
       );
       const destinationUrl = String(result.rows[0]?.destination_url || '').trim();
-      if (!destinationUrl) return res.redirect(302, fallbackUrl);
+      if (!destinationUrl) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy link rút gọn hoặc link đã hết hạn.',
+        });
+      }
       return res.redirect(302, destinationUrl);
     } catch (error) {
       console.error('Resolve tracking short code error:', error);
-      return res.redirect(302, fallbackUrl);
+      return res.status(500).json({
+        success: false,
+        message: 'Không thể xử lý link rút gọn lúc này.',
+      });
     }
   }
 }
