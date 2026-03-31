@@ -52,6 +52,15 @@ export const dashboardApiService = {
     // Insight Gemini + JSON dài có thể > 10s — tăng timeout cục bộ
     return api.post('/dashboard/insights', payload, { timeout: 120000 });
   },
+
+  /**
+   * Lấy insight đã lưu trên server (JSON trong bảng `dashboard_insights`).
+   *
+   * @returns {Promise<{ data: { success: boolean, data: { savedAt: string, insights: object } | null } }>}
+   */
+  getSavedInsight() {
+    return api.get('/dashboard/insights/saved');
+  },
 };
 
 export default dashboardApiService;

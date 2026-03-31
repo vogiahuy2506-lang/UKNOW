@@ -1,4 +1,6 @@
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
+import { isInsightPayloadUsable } from '../../utils/dashboardInsightPayload.util.js';
+import dashboardInsightRepository from '../../repositories/dashboard/dashboardInsight.repository.js';
 
 /**
  * Cắt bớt timeline để tránh prompt quá dài.
@@ -495,6 +497,43 @@ class DashboardInsightsService {
           'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.0-flash) và GEMINI_API_KEY.',
         ],
       }),
+    };
+  }
+
+  /**
+   * Lưu insight vào DB: xóa insight cũ của user, chèn bản mới (chỉ khi payload đủ dùng, không lưu fallback lỗi parse).
+   *
+   * Luồng:
+   * 1. Kiểm tra `userId` và `isInsightPayloadUsable(data)`.
+   * 2. Gọi repository `replaceForUser` trong transaction.
+   *
+   * @param {number} userId
+   * @param {object} data - Kết quả `normalizeInsightPayload` từ `generateInsights`
+   * @param {object|null|undefined} filtersSnapshot - Bộ lọc dashboard lúc phân tích
+   * @returns {Promise<boolean>} true nếu đã ghi DB
+   */
+  async persistInsightIfUsable(userId, data, filtersSnapshot) {
+    const uid = Number(userId);
+    if (!Number.isFinite(uid) || !data || typeof data !== 'object') return false;
+    if (!isInsightPayloadUsable(data)) return false;
+    await dashboardInsightRepository.replaceForUser(uid, data, filtersSnapshot ?? null);
+    return true;
+  }
+
+  /**
+   * Đọc insight đã lưu gần nhất của user (payload JSON đầy đủ cho UI).
+   *
+   * @param {number} userId
+   * @returns {Promise<{ savedAt: string, insights: object } | null>}
+   */
+  async getSavedInsightForUser(userId) {
+    const uid = Number(userId);
+    if (!Number.isFinite(uid)) return null;
+    const row = await dashboardInsightRepository.findLatestByUser(uid);
+    if (!row) return null;
+    return {
+      savedAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+      insights: row.payload,
     };
   }
 }

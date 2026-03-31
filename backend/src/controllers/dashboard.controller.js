@@ -264,12 +264,39 @@ class DashboardController {
   }
 
   /**
+   * Lấy insight dashboard đã lưu trên DB (jsonb) cho user hiện tại.
+   *
+   * Response:
+   * - `data`: `{ savedAt, insights }` hoặc `null` nếu chưa có bản lưu.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getSavedInsights(req, res) {
+    try {
+      const userId = req.user.id;
+      const data = await dashboardInsightsService.getSavedInsightForUser(userId);
+      this.setNoCacheHeaders(res);
+      return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      console.error('Get saved dashboard insights error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Lỗi server',
+      });
+    }
+  }
+
+  /**
    * Sinh insight dashboard bằng Gemini để hiển thị dưới các biểu đồ + tổng quan.
    *
    * Luồng hoạt động:
    * 1. Frontend gửi kèm dữ liệu thống kê đang hiển thị (đã theo bộ lọc).
    * 2. Backend gọi Gemini bằng API key trong env và ép response dạng JSON theo schema.
-   * 3. Trả về insight cho tổng quan + từng khu vực biểu đồ.
+   * 3. Trả về insight; nếu payload đủ dùng thì ghi DB (xóa insight cũ của user, chèn bản mới).
    *
    * Body:
    * - overview: payload từ GET /api/dashboard/overview
@@ -297,6 +324,12 @@ class DashboardController {
         topListsData,
         filters,
       });
+
+      try {
+        await dashboardInsightsService.persistInsightIfUsable(req.user.id, result.data, filters);
+      } catch (persistErr) {
+        console.error('Persist dashboard insight error:', persistErr);
+      }
 
       this.setNoCacheHeaders(res);
       return res.json(result);

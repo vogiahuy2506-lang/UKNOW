@@ -12,11 +12,9 @@ import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardA
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
 import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
 import {
-  saveLatestDashboardInsight,
-  hasStoredDashboardInsight,
-  readLatestDashboardInsight,
   normalizeDashboardInsightForUi,
   extractInsightFromDashboardInsightsResponse,
+  isInsightPayloadUsable,
 } from '../features/dashboard/utils/dashboardInsightStorage.util';
 
 /** Skeleton placeholder block */
@@ -27,7 +25,7 @@ const Skeleton = ({ className = '' }) => (
 /**
  * Format thời gian lưu insight (hiển thị cho người dùng).
  *
- * @param {string} iso - Chuỗi ISO từ localStorage
+ * @param {string} iso - Chuỗi ISO (từ DB)
  * @returns {string}
  */
 function formatInsightSavedAt(iso) {
@@ -154,13 +152,13 @@ const Dashboard = () => {
   const [insights, setInsights] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insightError, setInsightError] = useState('');
-  /** Có ít nhất một bản insight đã lưu trong localStorage (ghi đè mỗi lần phân tích). */
+  /** Có ít nhất một bản insight đã lưu trên DB (mỗi lần phân tích hợp lệ ghi đè). */
   const [hasStoredInsight, setHasStoredInsight] = useState(false);
-  /** 'none' | 'live' (vừa gọi API) | 'stored' (đang xem bản lưu cục bộ). */
+  /** 'none' | 'live' (vừa gọi API) | 'stored' (đang xem bản đã lưu). */
   const [insightViewSource, setInsightViewSource] = useState('none');
   const [storedInsightSavedAt, setStoredInsightSavedAt] = useState('');
 
-  /** Chỉ hydrate insight từ localStorage một lần sau khi dữ liệu dashboard tải xong (quay lại trang vẫn thấy bản lưu). */
+  /** Chỉ tải insight đã lưu từ API một lần sau khi dữ liệu dashboard sẵn sàng. */
   const insightHydratedRef = useRef(false);
 
   useEffect(() => {
@@ -168,13 +166,26 @@ const Dashboard = () => {
     if (insightHydratedRef.current) return;
     insightHydratedRef.current = true;
 
-    const stored = readLatestDashboardInsight();
-    setHasStoredInsight(!!stored);
-    if (stored?.insights) {
-      setInsights(stored.insights);
-      setInsightViewSource('stored');
-      setStoredInsightSavedAt(stored.savedAt || '');
-    }
+    (async () => {
+      try {
+        const res = await dashboardApiService.getSavedInsight();
+        const payload = res?.data?.data;
+        if (payload?.insights) {
+          const normalized = normalizeDashboardInsightForUi(payload.insights);
+          if (normalized && isInsightPayloadUsable(normalized)) {
+            setInsights(normalized);
+            setInsightViewSource('stored');
+            setStoredInsightSavedAt(payload.savedAt || '');
+            setHasStoredInsight(true);
+            return;
+          }
+        }
+        setHasStoredInsight(false);
+      } catch (e) {
+        console.error('Load saved dashboard insight error:', e);
+        setHasStoredInsight(false);
+      }
+    })();
   }, [isLoading]);
 
   if (isLoading) {
@@ -190,7 +201,7 @@ const Dashboard = () => {
    * Luồng hoạt động:
    * 1. Khóa nút trong lúc chạy để tránh spam request.
    * 2. Gửi `overview + analytics + topListsData + filters` sang backend.
-   * 3. Nhận JSON insight và render dưới từng biểu đồ.
+   * 3. Nhận JSON insight và render dưới từng biểu đồ (backend lưu DB nếu payload đủ dùng).
    */
   const handleGenerateInsights = async () => {
     setIsGeneratingInsights(true);
@@ -203,14 +214,10 @@ const Dashboard = () => {
         filters,
       });
       const data = extractInsightFromDashboardInsightsResponse(response);
-      // Chuẩn hóa giống khi đọc từ localStorage để tổng quan + insight từng biểu đồ khớp nhau
       const normalized = normalizeDashboardInsightForUi(data);
       setInsights(normalized);
-      // Chỉ lưu bản đủ dữ liệu (không lưu fallback "Không parse được JSON..." để tránh xem lại sai)
-      if (saveLatestDashboardInsight(normalized)) {
+      if (normalized && isInsightPayloadUsable(normalized)) {
         setHasStoredInsight(true);
-      } else {
-        setHasStoredInsight(hasStoredDashboardInsight());
       }
       setInsightViewSource('live');
       setStoredInsightSavedAt('');
@@ -223,18 +230,29 @@ const Dashboard = () => {
   };
 
   /**
-   * Đọc insight gần nhất từ localStorage và hiển thị lại (không gọi API).
+   * Tải lại insight đã lưu từ DB (đồng bộ với server).
    */
-  const handleLoadStoredInsight = () => {
-    const stored = readLatestDashboardInsight();
-    if (!stored?.insights) {
+  const handleLoadStoredInsight = async () => {
+    try {
+      const res = await dashboardApiService.getSavedInsight();
+      const payload = res?.data?.data;
+      if (!payload?.insights) {
+        setHasStoredInsight(false);
+        return;
+      }
+      const normalized = normalizeDashboardInsightForUi(payload.insights);
+      if (!normalized || !isInsightPayloadUsable(normalized)) {
+        setHasStoredInsight(false);
+        return;
+      }
+      setInsights(normalized);
+      setInsightError('');
+      setInsightViewSource('stored');
+      setStoredInsightSavedAt(payload.savedAt || '');
+    } catch (e) {
+      console.error('Load saved dashboard insight error:', e);
       setHasStoredInsight(false);
-      return;
     }
-    setInsights(stored.insights);
-    setInsightError('');
-    setInsightViewSource('stored');
-    setStoredInsightSavedAt(stored.savedAt || '');
   };
 
   return (
@@ -268,7 +286,7 @@ const Dashboard = () => {
               className="btn btn-secondary flex items-center gap-2 shadow-sm"
               onClick={handleLoadStoredInsight}
               disabled={isLoading || !hasStoredInsight}
-              title="Hiển thị bản insight đã lưu gần nhất trên trình duyệt (không gọi lại API)"
+              title="Tải và hiển thị bản insight đã lưu trên máy chủ"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -309,7 +327,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Nhắc khi đang xem bản insight lưu cục bộ (có thể lệch với bộ lọc hiện tại) */}
+      {/* Nhắc khi đang xem bản insight đã lưu (có thể lệch với bộ lọc hiện tại) */}
       {insightViewSource === 'stored' && insights && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-100 text-sm text-sky-900">
           <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -321,7 +339,7 @@ const Dashboard = () => {
             />
           </svg>
           <span>
-            Đang hiển thị insight đã lưu trên trình duyệt
+            Đang hiển thị insight đã lưu trong hệ thống
             {storedInsightSavedAt ? ` (lúc ${formatInsightSavedAt(storedInsightSavedAt)})` : ''}. Bấm &quot;Phân tích
             insight&quot; để tạo bản mới theo dữ liệu và bộ lọc hiện tại.
           </span>
