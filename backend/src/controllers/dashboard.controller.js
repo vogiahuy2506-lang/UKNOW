@@ -1,5 +1,6 @@
 import db from '../config/database.js';
 import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.service.js';
+import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
 
 class DashboardController {
   /**
@@ -164,7 +165,7 @@ class DashboardController {
    * Response:
    * - topCourses: [{ productName, pendingCount, completedCount, total }]
    * - topCampaignsByOrders: [{ campaignId, campaignName, campaignType, pendingCount, completedCount, total }]
-   * - topCampaignsByClicks: [{ campaignId, campaignName, campaignType, clickCount }]
+   * - topCampaignsByClicks: [{ campaignId, campaignName, campaignType, clickCount, sentCount, openCount }]
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
@@ -258,6 +259,52 @@ class DashboardController {
       res.status(500).json({
         success: false,
         message: 'Lỗi server'
+      });
+    }
+  }
+
+  /**
+   * Sinh insight dashboard bằng Gemini để hiển thị dưới các biểu đồ + tổng quan.
+   *
+   * Luồng hoạt động:
+   * 1. Frontend gửi kèm dữ liệu thống kê đang hiển thị (đã theo bộ lọc).
+   * 2. Backend gọi Gemini bằng API key trong env và ép response dạng JSON theo schema.
+   * 3. Trả về insight cho tổng quan + từng khu vực biểu đồ.
+   *
+   * Body:
+   * - overview: payload từ GET /api/dashboard/overview
+   * - analytics: payload từ GET /api/dashboard/analytics
+   * - topListsData: payload từ GET /api/dashboard/top-lists
+   * - filters: (tùy chọn) { startDate, endDate, campaignType, campaignIds }
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async generateInsights(req, res) {
+    try {
+      const { overview, analytics, topListsData, filters } = req.body || {};
+
+      if (!overview || !analytics || !topListsData) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu dữ liệu dashboard để phân tích (overview/analytics/topListsData)',
+        });
+      }
+
+      const result = await dashboardInsightsService.generateInsights({
+        overview,
+        analytics,
+        topListsData,
+        filters,
+      });
+
+      this.setNoCacheHeaders(res);
+      return res.json(result);
+    } catch (error) {
+      console.error('Generate dashboard insights error:', error);
+      return res.status(error?.status || 500).json({
+        success: false,
+        message: error?.message || 'Lỗi server',
       });
     }
   }

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
+import DashboardInsightBlock from './DashboardInsightBlock';
 
 const formatAxisDate = (value) => {
   const date = new Date(`${value}T00:00:00`);
@@ -151,9 +152,18 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode }) => {
  * @param {object}  props
  * @param {Array}   props.timeline       - Daily timeline data from analytics API
  * @param {boolean} props.isMonthlyView  - Aggregate to monthly + use month-year axis when true
+ * @param {string}  [props.insightText]  - Insight hiển thị dưới biểu đồ
+ * @param {boolean} [props.isInsightLoading]
+ * @param {string}  [props.insightError]
  * @returns {JSX.Element}
  */
-const DashboardOrdersChart = ({ timeline = [], isMonthlyView = false }) => {
+const DashboardOrdersChart = ({
+  timeline = [],
+  isMonthlyView = false,
+  insightText = '',
+  isInsightLoading = false,
+  insightError = '',
+}) => {
   const [viewMode, setViewMode] = useState('summary');
 
   const chartData   = isMonthlyView ? aggregateToMonthly(timeline) : timeline;
@@ -272,6 +282,13 @@ const DashboardOrdersChart = ({ timeline = [], isMonthlyView = false }) => {
           </ResponsiveContainer>
         </div>
       )}
+
+      <DashboardInsightBlock
+        title="Insight · Đơn hàng theo thời gian"
+        text={insightText}
+        isLoading={isInsightLoading}
+        error={insightError}
+      />
     </div>
   );
 };

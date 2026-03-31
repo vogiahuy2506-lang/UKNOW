@@ -1,4 +1,5 @@
 import { Cell, Label, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import DashboardInsightBlock from './DashboardInsightBlock';
 
 const CHANNEL_COLORS = {
   email: '#6366f1',
@@ -59,8 +60,18 @@ const buildChartData = (values) =>
  * @param {string} props.title
  * @param {{ email: number, zalo: number, zalo_group: number }} props.values
  * @param {string} props.accentColor - color for the total label in the donut center
+ * @param {string} [props.insightText]
+ * @param {boolean} [props.isInsightLoading]
+ * @param {string} [props.insightError]
  */
-const DonutCard = ({ title, values, accentColor }) => {
+const DonutCard = ({
+  title,
+  values,
+  accentColor,
+  insightText = '',
+  isInsightLoading = false,
+  insightError = '',
+}) => {
   const data = buildChartData(values);
   const total = Object.values(values).reduce((sum, v) => sum + v, 0);
 
@@ -148,6 +159,13 @@ const DonutCard = ({ title, values, accentColor }) => {
           </div>
         </>
       )}
+
+      <DashboardInsightBlock
+        title="Insight"
+        text={insightText}
+        isLoading={isInsightLoading}
+        error={insightError}
+      />
     </div>
   );
 };
@@ -164,9 +182,17 @@ const DonutCard = ({ title, values, accentColor }) => {
  *
  * @param {object} props
  * @param {object|null} props.overview - dashboard overview payload from API
+ * @param {object|null} [props.insights] - payload insight trả về từ API
+ * @param {boolean} [props.isInsightLoading]
+ * @param {string} [props.insightError]
  * @returns {JSX.Element}
  */
-const DashboardChannelBreakdownCharts = ({ overview }) => {
+const DashboardChannelBreakdownCharts = ({
+  overview,
+  insights = null,
+  isInsightLoading = false,
+  insightError = '',
+}) => {
   const channels = overview?.channels || {};
   const journeyEvents = overview?.journeyEvents || {};
 
@@ -195,16 +221,25 @@ const DashboardChannelBreakdownCharts = ({ overview }) => {
         title="Cơ cấu Click theo kênh"
         values={clickValues}
         accentColor="#6366f1"
+        insightText={insights?.charts?.channelBreakdown?.click || ''}
+        isInsightLoading={isInsightLoading}
+        insightError={insightError}
       />
       <DonutCard
         title="Cơ cấu Đã mua theo kênh"
         values={completedValues}
         accentColor="#22c55e"
+        insightText={insights?.charts?.channelBreakdown?.completed || ''}
+        isInsightLoading={isInsightLoading}
+        insightError={insightError}
       />
       <DonutCard
         title="Cơ cấu Đơn chờ theo kênh"
         values={pendingValues}
         accentColor="#f97316"
+        insightText={insights?.charts?.channelBreakdown?.pending || ''}
+        isInsightLoading={isInsightLoading}
+        insightError={insightError}
       />
     </div>
   );
