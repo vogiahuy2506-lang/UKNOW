@@ -2357,29 +2357,29 @@ class CampaignRunService {
       let totalRecipients = 0;
       let successfulSends = 0;
       let failedSends = 0;
-      let hasPendingEmailRetry = false;
-      let pendingEmailRetryCount = 0;
-      /** Số bản ghi (trong các dòng chờ nextDueAt) còn `meta.retryCount` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
-      let pendingEmailWithRetryMetaInLedger = null;
+      let hasPendingRecipientDue = false;
+      let pendingRecipientDueCount = 0;
+      /** Số bản ghi còn `meta.retryCount` trong nhóm đang chờ `nextDueAt` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
+      let pendingRecipientWithRetryMetaInLedger = null;
       let selectedZaloAccount = null;
       /** Cấu hình node «Chọn tài khoản Zalo» gần nhất trên luồng thực thi (pool / một TK). */
       let lastSelectZaloAccountConfig = null;
       const zaloTemplateContentCache = new Map();
       const zaloTemplateAttachmentSourceCache = new Map();
       /**
-       * Đồng bộ trạng thái “còn chờ mốc gửi email” từ ledger trước khi finalize run.
+       * Đồng bộ trạng thái “còn recipient chờ mốc nextDueAt” từ ledger trước khi finalize run.
        *
        * Luồng hoạt động:
        * 1. Chỉ kiểm tra cho run one-shot khi chưa có cờ pending trong cycle hiện tại.
-       * 2. Đếm recipient email chưa hoàn tất có `nextDueAt` trong tương lai — gồm cả lịch template/bước kế
-       *    (multi-step, sendMode schedule) và mốc gửi lại sau rate-limit SMTP (cùng lưu `nextDueAt`).
-       * 3. Đếm thêm (con) các dòng còn `meta.retryCount` > 0 để phân biệt nhánh đang theo dõi retry SMTP.
+       * 2. Đếm toàn bộ recipient chưa hoàn tất ở mọi channel có `nextDueAt` trong tương lai
+       *    (ví dụ: template step kế tiếp, lịch schedule, hoặc retry theo chính sách từng kênh).
+       * 3. Đếm thêm (con) các dòng còn `meta.retryCount` > 0 để phục vụ chẩn đoán retry SMTP.
        * 4. Nếu có ít nhất 1 bản ghi chờ `nextDueAt`, giữ run `running` tới khi scheduler/resume xử lý.
        *
        * @returns {Promise<void>}
        */
       const syncPendingEmailRetryFromLedger = async () => {
-        if (isContinuousMode || hasPendingEmailRetry || !isRecipientLedgerTableAvailable) return;
+        if (isContinuousMode || hasPendingRecipientDue || !isRecipientLedgerTableAvailable) return;
         try {
           const pendingRetryResult = await db.query(
             `SELECT
@@ -2392,7 +2392,6 @@ class CampaignRunService {
                )::int AS pending_with_retry_meta
              FROM campaign_run_recipient_steps
              WHERE id_run = $1
-               AND channel = 'email'
                AND COALESCE(is_fully_completed, FALSE) = FALSE
                AND NULLIF(TRIM(COALESCE(meta->>'nextDueAt', '')), '') IS NOT NULL
                AND (meta->>'nextDueAt')::timestamptz > NOW()`,
@@ -2404,9 +2403,9 @@ class CampaignRunService {
             10
           ) || 0;
           if (pendingCount > 0) {
-            hasPendingEmailRetry = true;
-            pendingEmailRetryCount = Math.max(pendingEmailRetryCount, pendingCount);
-            pendingEmailWithRetryMetaInLedger = pendingWithRetryMeta;
+            hasPendingRecipientDue = true;
+            pendingRecipientDueCount = Math.max(pendingRecipientDueCount, pendingCount);
+            pendingRecipientWithRetryMetaInLedger = pendingWithRetryMeta;
           }
         } catch (pendingCheckError) {
           if (String(pendingCheckError?.code || '') === '42P01' || String(pendingCheckError?.code || '') === '42703') {
@@ -3855,6 +3854,8 @@ class CampaignRunService {
             }
             return arr;
           };
+          // Lưu binding account theo recipient trong phạm vi node hiện tại để các step kế tiếp dùng ổn định.
+          const recipientBindingMap = new Map();
 
           /**
            * Chọn tài khoản Zalo gửi khi bật đa tài khoản: ưu tiên binding theo SĐT; UID thì xáo trộn pool (không lưu DB).
@@ -3871,10 +3872,6 @@ class CampaignRunService {
              * - fallback về SĐT chuẩn hóa (phone) hoặc UID
              * Nhờ đó 3 step của cùng khách luôn đi qua cùng một tài khoản Zalo.
              */
-            if (!ctx.zaloPersonalPoolByRecipient) {
-              ctx.zaloPersonalPoolByRecipient = new Map();
-            }
-            const recipientBindingMap = ctx.zaloPersonalPoolByRecipient;
             const buildRecipientBindingKey = (entry = null) => {
               const customerId = extractCustomerIdFromRow(entry);
               if (customerId != null && String(customerId).trim()) {
@@ -5984,7 +5981,7 @@ class CampaignRunService {
       await syncPendingEmailRetryFromLedger();
 
       await db.query(
-        hasPendingEmailRetry && !isContinuousMode
+        hasPendingRecipientDue && !isContinuousMode
           ? `UPDATE campaign_runs SET
              status = 'running',
              completed_at = NULL,
@@ -6012,14 +6009,14 @@ class CampaignRunService {
         [successfulSends, campaignId]
       );
 
-      if (hasPendingEmailRetry && !isContinuousMode) {
-        const ledgerRetryHint = pendingEmailWithRetryMetaInLedger !== null
-          ? ` Trong số đó (theo ledger) ${pendingEmailWithRetryMetaInLedger} bản ghi còn meta.retryCount (thường là chờ gửi lại sau rate-limit SMTP).`
+      if (hasPendingRecipientDue && !isContinuousMode) {
+        const ledgerRetryHint = pendingRecipientWithRetryMetaInLedger !== null
+          ? ` Trong số đó (theo ledger) ${pendingRecipientWithRetryMetaInLedger} bản ghi còn meta.retryCount (thường là chờ gửi lại sau rate-limit SMTP).`
           : '';
         console.log(
           `[Campaign ${campaignId}] Run ${runId} giữ trạng thái running: `
-          + `${pendingEmailRetryCount} recipient email chưa hoàn tất và có nextDueAt trong tương lai`
-          + ' (gồm lịch bước/template kế hoặc hẹn gửi lại sau giới hạn SMTP — không bắt buộc phải có meta.retryCount).'
+          + `${pendingRecipientDueCount} recipient chưa hoàn tất và có nextDueAt trong tương lai`
+          + ' (gồm lịch bước/template kế, lịch schedule hoặc hẹn gửi lại theo chính sách retry — không bắt buộc phải có meta.retryCount).'
           + ledgerRetryHint
         );
       } else {
