@@ -24,7 +24,10 @@ router.get('/top-lists', dashboardController.getTopLists.bind(dashboardControlle
 // Compare campaigns
 router.get('/compare', dashboardController.compareCampaigns.bind(dashboardController));
 
-// Generate Gemini insights for dashboard
+// Insight đã lưu (JSON trên DB) — đặt trước route POST /insights để không nhầm path
+router.get('/insights/saved', dashboardController.getSavedInsights.bind(dashboardController));
+
+// Generate Gemini insights for dashboard (thành công + payload hợp lệ thì ghi đè DB)
 router.post('/insights', dashboardController.generateInsights.bind(dashboardController));
 
 export default router;
