@@ -21,6 +21,7 @@ import CampaignCustomers from './pages/customers/CampaignCustomers';
 import EmailSettings from './pages/settings/EmailSettings';
 import ZaloSettings from './pages/settings/ZaloSettings';
 import EmployeeManagement from './pages/settings/EmployeeManagement';
+import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
 import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
@@ -175,6 +176,14 @@ function App() {
             element={(
               <AdminRoute>
                 <EmployeeManagement />
+              </AdminRoute>
+            )}
+          />
+          <Route
+            path="settings/landing-featured-courses"
+            element={(
+              <AdminRoute>
+                <LandingFeaturedCoursesPage />
               </AdminRoute>
             )}
           />

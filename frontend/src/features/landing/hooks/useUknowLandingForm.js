@@ -42,12 +42,6 @@ export function useUknowLandingForm(locale = 'vi') {
     if (!phone || phone.replace(/\D/g, '').length < 8) {
       return v.phone;
     }
-    if (!String(form.occupation).trim()) {
-      return v.occupation;
-    }
-    if (!String(form.interestArea).trim()) {
-      return v.interest;
-    }
     if (!form.marketingConsent) {
       return v.consent;
     }
@@ -69,8 +63,8 @@ export function useUknowLandingForm(locale = 'vi') {
         firstName: String(form.firstName).trim(),
         email: String(form.email).trim().toLowerCase(),
         phone,
-        occupation: String(form.occupation).trim(),
-        interestArea: String(form.interestArea).trim(),
+        occupation: String(form.occupation ?? '').trim(),
+        interestArea: String(form.interestArea ?? '').trim(),
         marketingConsent: Boolean(form.marketingConsent),
       });
       setSuccess(true);

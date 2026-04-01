@@ -81,16 +81,7 @@ class LeadService {
       err.statusCode = 400;
       throw err;
     }
-    if (!occupation) {
-      const err = new Error('Vui lòng chọn nghề nghiệp');
-      err.statusCode = 400;
-      throw err;
-    }
-    if (!interestArea) {
-      const err = new Error('Vui lòng chọn lĩnh vực quan tâm');
-      err.statusCode = 400;
-      throw err;
-    }
+    // Nghề nghiệp / lĩnh vực có thể để trống (khớp form landing công khai); DB vẫn nhận chuỗi rỗng (NOT NULL varchar).
     if (!marketingConsent) {
       const err = new Error('Cần đồng ý nhận thông tin từ UKnow');
       err.statusCode = 400;

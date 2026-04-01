@@ -14,7 +14,7 @@ export function UknowLandingPolicyTeaser({ policyTeaser }) {
         <h2 className="text-xl font-black text-uknow-ink sm:text-2xl">{policyTeaser.title}</h2>
         <p className="mt-4 text-sm leading-relaxed text-uknow-muted sm:text-base">{policyTeaser.body}</p>
         <Link
-          to="/privacy-policy"
+          to="/private-policy"
           className="mt-6 inline-flex rounded-xl bg-uknow-ink px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#0d6e6e]"
         >
           {policyTeaser.link}
