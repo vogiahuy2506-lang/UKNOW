@@ -143,6 +143,8 @@ class EmailSettingsController {
     const openUrl = `${trackingBaseUrl}/api/customers/email-tracking/open/${trackingToken}`;
     const clickBaseUrl = `${trackingBaseUrl}/api/customers/email-tracking/click/${trackingToken}`;
     const unsubscribeUrl = `${trackingBaseUrl}/api/customers/email-tracking/unsubscribe/${trackingToken}`;
+    const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
+      || 'https://security.digiso.vn/privacy-policy';
 
     // Helper function để thêm UTM parameters vào URL
     const addUtmToUrl = (url) => {
@@ -235,9 +237,18 @@ class EmailSettingsController {
 
     const trackingPixel = `<img src="${openUrl}" width="1" height="1" alt="" style="width:1px;height:1px;border:0;opacity:0;display:block;" />`;
 
-    // Footer hủy đăng ký — hiển thị nhỏ ở cuối email
-    const unsubscribeFooter = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">
-  Nếu bạn không muốn nhận email này nữa, <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">hủy đăng ký tại đây</a>.
+    // Footer email song ngữ gồm cả link hủy đăng ký và chính sách bảo mật.
+    const unsubscribeFooter = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;line-height:1.6;color:#9ca3af;font-family:Arial,sans-serif;">
+  <div style="margin-bottom:4px;">
+    Nếu bạn không muốn nhận email này nữa, <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">hủy đăng ký tại đây</a>.
+    &nbsp;|&nbsp;
+    <a href="${privacyPolicyUrl}" style="color:#6b7280;text-decoration:underline;">Chính sách bảo mật</a>.
+  </div>
+  <div>
+    If you no longer wish to receive these emails, <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">unsubscribe here</a>.
+    &nbsp;|&nbsp;
+    <a href="${privacyPolicyUrl}" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>.
+  </div>
 </div>`;
 
     if (/<\/body>/i.test(withClickTracking)) {

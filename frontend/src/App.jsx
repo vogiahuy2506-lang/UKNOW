@@ -25,6 +25,7 @@ import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
+import PrivacyPolicy from './pages/public/PrivacyPolicy';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -137,6 +138,7 @@ function App() {
             </AuthLayout>
           </PublicRoute>
         } />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
         {/* Protected Routes */}
         <Route path="/" element={

@@ -147,26 +147,59 @@ class CustomerEmailTrackingService {
     const client = await db.getClient();
     const token = String(req.params.token || '').trim();
 
+    /**
+     * Render trang phản hồi hủy đăng ký song ngữ Việt/Anh.
+     *
+     * Luồng hoạt động:
+     * 1. In đồng thời nội dung tiếng Việt và tiếng Anh để người nhận tự đọc theo ngôn ngữ phù hợp.
+     * 2. Giữ giao diện tối giản, không dùng icon để đồng bộ phong cách trang privacy mới.
+     * 3. Thêm link chính sách bảo mật để người dùng truy cập nhanh từ trang unsubscribe.
+     *
+     * @param {string} title tiêu đề trang
+     * @param {{headingVi: string, textVi: string, headingEn: string, textEn: string}} body nội dung song ngữ
+     * @returns {string} HTML response
+     */
     const confirmHtml = (title, body) => `<!DOCTYPE html>
 <html lang="vi">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>
 <style>
-  body{font-family:Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-  .card{background:#fff;border-radius:8px;padding:40px 48px;max-width:480px;width:100%;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-  h1{font-size:22px;margin-bottom:12px;color:#1a1a1a}
+  body{font-family:Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px}
+  .card{background:#fff;border-radius:8px;padding:28px;max-width:560px;width:100%;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+  h1{font-size:22px;margin:0 0 8px 0;color:#1a1a1a}
   p{color:#555;font-size:15px;line-height:1.6;margin:0}
-  .icon{font-size:48px;margin-bottom:16px}
+  .block{padding:12px 0}
+  .block + .block{border-top:1px solid #e5e7eb}
+  .lang-label{display:inline-block;font-size:12px;font-weight:700;color:#6b7280;margin-bottom:6px}
+  .helper{margin-top:14px;font-size:13px;color:#6b7280}
+  .helper a{color:#4b5563;text-decoration:underline}
 </style>
 </head>
-<body><div class="card"><div class="icon">${body.icon}</div><h1>${body.heading}</h1><p>${body.text}</p></div></body>
+<body>
+  <div class="card">
+    <div class="block">
+      <span class="lang-label">Tiếng Việt</span>
+      <h1>${body.headingVi}</h1>
+      <p>${body.textVi}</p>
+    </div>
+    <div class="block">
+      <span class="lang-label">English</span>
+      <h1>${body.headingEn}</h1>
+      <p>${body.textEn}</p>
+    </div>
+    <p class="helper">
+      <a href="https://security.digiso.vn/privacy-policy">Chính sách bảo mật / Privacy Policy</a>
+    </p>
+  </div>
+</body>
 </html>`;
 
     if (!token) {
-      return res.status(400).send(confirmHtml('Lỗi', {
-        icon: '⚠️',
-        heading: 'Liên kết không hợp lệ',
-        text: 'Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.',
+      return res.status(400).send(confirmHtml('Liên kết không hợp lệ', {
+        headingVi: 'Liên kết không hợp lệ',
+        textVi: 'Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.',
+        headingEn: 'Invalid link',
+        textEn: 'The unsubscribe link is invalid or has expired.',
       }));
     }
 
@@ -184,9 +217,10 @@ class CustomerEmailTrackingService {
       if (messageResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.send(confirmHtml('Đã hủy đăng ký', {
-          icon: '✅',
-          heading: 'Đã hủy đăng ký nhận email',
-          text: 'Bạn sẽ không nhận được email từ chúng tôi nữa.',
+          headingVi: 'Đã hủy đăng ký nhận email',
+          textVi: 'Bạn sẽ không nhận được email từ chúng tôi nữa.',
+          headingEn: 'Unsubscribed successfully',
+          textEn: 'You will no longer receive emails from us.',
         }));
       }
 
@@ -249,9 +283,10 @@ class CustomerEmailTrackingService {
     }
 
     return res.send(confirmHtml('Đã hủy đăng ký', {
-      icon: '✅',
-      heading: 'Đã hủy đăng ký nhận email',
-      text: 'Yêu cầu của bạn đã được ghi nhận. Bạn sẽ không nhận được email từ chúng tôi nữa.',
+      headingVi: 'Đã hủy đăng ký nhận email',
+      textVi: 'Yêu cầu của bạn đã được ghi nhận. Bạn sẽ không nhận được email từ chúng tôi nữa.',
+      headingEn: 'Unsubscribed successfully',
+      textEn: 'Your request has been recorded. You will no longer receive emails from us.',
     }));
   }
 
