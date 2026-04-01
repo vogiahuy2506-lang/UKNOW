@@ -28,6 +28,8 @@ import webhookRoutes from './routes/webhook.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
 import zaloSettingsRoutes from './routes/zaloSettings.routes.js';
 import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
+import publicRoutes from './routes/public.routes.js';
+import leadRoutes from './routes/lead.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -98,6 +100,8 @@ app.use('/api/webhooks', webhookRoutes); // webhook WooCommerce: POST /api/webho
 app.use('/api/courses', coursesRoutes); // quản lý khóa học
 app.use('/api/zalo', zaloSettingsRoutes); // quản lý nhiều tài khoản Zalo
 app.use('/api/zalo-templates', zaloTemplateRoutes); // quản lý template Zalo
+app.use('/api/public', publicRoutes); // landing lead: POST /api/public/leads
+app.use('/api/leads', leadRoutes); // GET /api/leads/preview (auth)
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -39,6 +39,7 @@ import {
   NodeConfigReadInterestedCustomersSection,
   NodeConfigReadSheetSection,
 } from './NodeConfigModalReadSections';
+import { NodeConfigReadLandingLeadsSection } from './NodeConfigReadLandingLeadsSection';
 import { NodeConfigSelectZaloAccountSection } from './NodeConfigModalSelectZaloAccountSection';
 
 const NodeConfigModal = ({
@@ -507,6 +508,8 @@ const NodeConfigModal = ({
             coursesPreviewItems={coursesPreviewItems}
           />
         );
+      case 'read_landing_leads':
+        return <NodeConfigReadLandingLeadsSection formData={formData} setFormData={setFormData} />;
       case 'save_customer':
         return (
           <NodeConfigSaveCustomerSection

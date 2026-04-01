@@ -32,10 +32,20 @@ export default {
           800: '#3a4253',
           900: '#333947',
           950: '#22262f',
-        }
+        },
+        uknow: {
+          teal: '#0d6e6e',
+          'teal-light': '#12a0a0',
+          gold: '#e8a020',
+          ink: '#0a0a14',
+          cream: '#faf8f4',
+          muted: '#6b6860',
+          border: '#e0dbd2',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        uknow: ['"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
       },
     },
   },

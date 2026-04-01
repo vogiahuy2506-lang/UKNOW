@@ -1,3 +1,5 @@
+import { LANDING_LEADS_MAX_RECORDS } from '../constants/landingLeadsNodeLimits.js';
+
 /**
  * Build execution order from flow graph with trigger-rooted traversal.
  * Only nodes reachable from trigger/start nodes are returned.
@@ -169,6 +171,29 @@ export const validateNodeForRun = (node) => {
     const selectedIds = Array.isArray(config.coursesDbSelectedIds) ? config.coursesDbSelectedIds : [];
     if (selectedIds.length === 0) {
       return { status: 'failed', message: 'Chưa chọn khóa học' };
+    }
+  }
+
+  if (nodeType === 'read_landing_leads') {
+    const limit = parseInt(config.landingLeadsLimit, 10);
+    if (Number.isFinite(limit) && limit < 1) {
+      return { status: 'failed', message: 'Số bản ghi tối đa không hợp lệ' };
+    }
+    if (Number.isFinite(limit) && limit > LANDING_LEADS_MAX_RECORDS) {
+      return {
+        status: 'failed',
+        message: `Số bản ghi tối đa không được vượt quá ${LANDING_LEADS_MAX_RECORDS.toLocaleString('vi-VN')}`,
+      };
+    }
+    if (config.landingLeadsUseDateRange) {
+      const from = String(config.landingLeadsDateFrom || '').trim();
+      const to = String(config.landingLeadsDateTo || '').trim();
+      if (!from || !to) {
+        return { status: 'failed', message: 'Chọn đủ «Từ ngày» và «Đến ngày» khi bật lọc theo ngày' };
+      }
+      if (from > to) {
+        return { status: 'failed', message: '«Từ ngày» phải trước hoặc bằng «Đến ngày»' };
+      }
     }
   }
 

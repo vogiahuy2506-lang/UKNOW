@@ -146,6 +146,8 @@ class CustomerEmailTrackingService {
   async trackEmailUnsubscribe(req, res) {
     const client = await db.getClient();
     const token = String(req.params.token || '').trim();
+    const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
+      || 'https://campaign.digiso.vn/privacy-policy';
 
     /**
      * Render trang phản hồi hủy đăng ký song ngữ Việt/Anh.
@@ -153,7 +155,7 @@ class CustomerEmailTrackingService {
      * Luồng hoạt động:
      * 1. In đồng thời nội dung tiếng Việt và tiếng Anh để người nhận tự đọc theo ngôn ngữ phù hợp.
      * 2. Giữ giao diện tối giản, không dùng icon để đồng bộ phong cách trang privacy mới.
-     * 3. Thêm link chính sách bảo mật để người dùng truy cập nhanh từ trang unsubscribe.
+    * 3. Thêm link chính sách bảo mật ưu tiên từ biến môi trường để dễ cấu hình theo domain triển khai.
      *
      * @param {string} title tiêu đề trang
      * @param {{headingVi: string, textVi: string, headingEn: string, textEn: string}} body nội dung song ngữ
@@ -188,7 +190,7 @@ class CustomerEmailTrackingService {
       <p>${body.textEn}</p>
     </div>
     <p class="helper">
-      <a href="https://security.digiso.vn/privacy-policy">Chính sách bảo mật / Privacy Policy</a>
+      <a href="${privacyPolicyUrl}">Chính sách bảo mật / Privacy Policy</a>
     </p>
   </div>
 </body>

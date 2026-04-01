@@ -144,7 +144,7 @@ class EmailSettingsController {
     const clickBaseUrl = `${trackingBaseUrl}/api/customers/email-tracking/click/${trackingToken}`;
     const unsubscribeUrl = `${trackingBaseUrl}/api/customers/email-tracking/unsubscribe/${trackingToken}`;
     const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
-      || 'https://security.digiso.vn/privacy-policy';
+      || 'https://campaign.digiso.vn/privacy-policy';
 
     // Helper function để thêm UTM parameters vào URL
     const addUtmToUrl = (url) => {

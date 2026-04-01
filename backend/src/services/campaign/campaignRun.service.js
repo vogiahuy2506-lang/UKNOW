@@ -858,6 +858,13 @@ class CampaignRunService {
           const phone = String(row.phone || row.dien_thoai || '').trim();
           if (email || phone) return `sheet_contact:${email}|${phone}`;
         }
+        if (subtype === 'read_landing_leads') {
+          const leadId = row.leadId ?? row.id ?? row.lead_id;
+          if (leadId != null && String(leadId).trim()) return `lead:${String(leadId).trim()}`;
+          const email = String(row.email || '').trim().toLowerCase();
+          const phone = String(row.phone || '').trim();
+          if (email || phone) return `lead_contact:${email}|${phone}`;
+        }
         return `raw:${stringifyComparableItem(row)}`;
       };
       /**
@@ -2538,6 +2545,7 @@ class CampaignRunService {
           'read_interested_customers',
           'interested_customers',
           'read_courses_db',
+          'read_landing_leads',
           'save_customer',
           'customer_segment',
         ]);
@@ -2697,7 +2705,7 @@ class CampaignRunService {
               continue;
             }
 
-        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db'].includes(nodeSubtype)) {
+        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_landing_leads'].includes(nodeSubtype)) {
           const nodeCustomers = await executeWithTimeoutRetry({
             operationName: `data_node_${nodeSubtype || 'read_data'}`,
             operation: () => campaignNodeDataService.getCustomersFromDataNode(node, userId, nodes),

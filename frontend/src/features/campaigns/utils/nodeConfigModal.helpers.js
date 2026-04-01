@@ -303,6 +303,12 @@ export const createNodeConfigFormData = ({
   applyFields: config.applyFields || ['Hợp đồng'],
   logicType: config.logicType || 'AND',
   conditions: config.conditions || [{ field: 'Hợp đồng', operator: 'not_empty', value: '' }],
+  landingLeadsUseDateRange: Boolean(config.landingLeadsUseDateRange),
+  landingLeadsDateFrom: config.landingLeadsDateFrom || '',
+  landingLeadsDateTo: config.landingLeadsDateTo || '',
+  landingLeadsOccupations: Array.isArray(config.landingLeadsOccupations) ? config.landingLeadsOccupations : [],
+  landingLeadsInterests: Array.isArray(config.landingLeadsInterests) ? config.landingLeadsInterests : [],
+  landingLeadsLimit: config.landingLeadsLimit || 1000,
 });
 
 /**
@@ -495,6 +501,30 @@ export const handleNodeConfigSaveClick = async ({
 
   if (nodeType === 'read_courses_db') {
     onSave(formData);
+    return;
+  }
+
+  if (nodeType === 'read_landing_leads') {
+    try {
+      setIsLoadingTestPreview(true);
+      const response = await campaignBuilderApiService.previewLandingLeads({
+        landingLeadsUseDateRange: formData.landingLeadsUseDateRange,
+        landingLeadsDateFrom: formData.landingLeadsDateFrom,
+        landingLeadsDateTo: formData.landingLeadsDateTo,
+        landingLeadsOccupations: JSON.stringify(formData.landingLeadsOccupations || []),
+        landingLeadsInterests: JSON.stringify(formData.landingLeadsInterests || []),
+        landingLeadsLimit: 50,
+      });
+      const total = response?.data?.data?.pagination?.total ?? 0;
+      toastNotifier.success(`Kết nối OK. Có ${total} lead phù hợp (xem trước tối đa 50 dòng)`);
+      onSave(formData);
+    } catch (error) {
+      console.error('Landing leads preview error:', error);
+      const msg = error.response?.data?.message || error.message || 'Không thể kiểm tra cấu hình';
+      toastNotifier.error(typeof msg === 'string' ? msg : 'Không thể kiểm tra cấu hình');
+    } finally {
+      setIsLoadingTestPreview(false);
+    }
     return;
   }
 

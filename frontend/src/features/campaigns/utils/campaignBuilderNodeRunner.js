@@ -1,3 +1,5 @@
+import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
+
 /**
  * Create node runner helpers used by Campaign Builder preview execution.
  *
@@ -644,6 +646,39 @@ export const createCampaignNodeRunner = (deps) => {
             limit: config.coursesDbLimit || 1000,
             statuses: selectedStatuses,
             filtered: selectedCourseIds.length > 0,
+          },
+        },
+      };
+    }
+
+    if (nodeType === 'read_landing_leads') {
+      const limit = clampLandingLeadsLimitUi(config.landingLeadsLimit, 1000);
+      const params = {
+        landingLeadsUseDateRange:
+          config.landingLeadsUseDateRange === true || config.landingLeadsUseDateRange === 'true',
+        landingLeadsDateFrom: config.landingLeadsDateFrom || '',
+        landingLeadsDateTo: config.landingLeadsDateTo || '',
+        landingLeadsOccupations: JSON.stringify(Array.isArray(config.landingLeadsOccupations) ? config.landingLeadsOccupations : []),
+        landingLeadsInterests: JSON.stringify(Array.isArray(config.landingLeadsInterests) ? config.landingLeadsInterests : []),
+        landingLeadsLimit: limit,
+      };
+      const response = await apiService.previewLandingLeads(params, { signal });
+      const data = response.data?.data;
+      const rows = Array.isArray(data?.items) ? data.items : [];
+      ctx.sheetRows = rows;
+      return {
+        input: {
+          operation: 'Get Landing Page Leads',
+          ...params,
+        },
+        output: {
+          ok: true,
+          items: rows,
+          schema: buildSchemaFromRows(rows),
+          meta: {
+            totalItems: data?.pagination?.total ?? rows.length,
+            fetched: rows.length,
+            limit,
           },
         },
       };
