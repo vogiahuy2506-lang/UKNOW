@@ -2359,6 +2359,15 @@ class CampaignRunService {
       let failedSends = 0;
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
+      /**
+       * Theo dõi trong phiên chạy: có recipient được hẹn retry do SMTP rate-limit (SendGrid).
+       * Bắt buộc khai báo trước — `markRunHasPendingEmailRetry` gán giá trị; thiếu `let` sẽ gây ReferenceError (strict) và chặn cả lưu ledger.
+       */
+      let hasPendingEmailRetry = false;
+      let pendingEmailRetryCount = 0;
+      let emailRateLimitPausedUntilMs = null;
+      // SMTP bị provider limit thì khóa campaign 12 giờ trước khi quét/gửi lại.
+      const EMAIL_RATE_LIMIT_PAUSE_MS = 12 * 60 * 60 * 1000;
       /** Số bản ghi còn `meta.retryCount` trong nhóm đang chờ `nextDueAt` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
       let pendingRecipientWithRetryMetaInLedger = null;
       let selectedZaloAccount = null;
@@ -2625,11 +2634,25 @@ class CampaignRunService {
       while (true) {
         nextContinuousWakeAtMs = null;
         let shouldPauseUntilNextContinuousCycle = false;
+        const isEmailRateLimitCooldownActive = (
+          isContinuousMode
+          && Number.isFinite(emailRateLimitPausedUntilMs)
+          && emailRateLimitPausedUntilMs > Date.now()
+        );
+        if (isEmailRateLimitCooldownActive) {
+          shouldPauseUntilNextContinuousCycle = true;
+          registerNextContinuousWakeAt(emailRateLimitPausedUntilMs);
+        }
         // Chiếm worker slot trước khi xử lý nodes trong chu kỳ này.
         // Sleeping campaigns không giữ slot → cho phép 50-100 campaigns đăng ký
         // nhưng chỉ MAX_CONTINUOUS_WORKERS campaigns xử lý đồng thời.
-        if (isContinuousMode) await this._acquireContinuousWorker(runKey);
+        let hasContinuousWorker = false;
+        if (isContinuousMode && !isEmailRateLimitCooldownActive) {
+          await this._acquireContinuousWorker(runKey);
+          hasContinuousWorker = true;
+        }
         for (const node of orderedNodes) {
+          if (isEmailRateLimitCooldownActive) break;
           await this.ensureRunStillRunning(runId);
           const nodeSubtype = String(node.node_subtype || '').toLowerCase();
           const nodeType = String(node.node_type || '').toLowerCase();
@@ -2973,6 +2996,11 @@ class CampaignRunService {
            */
           const buildSendEmailExecutionData = (payload = {}) => {
             const item = { ...payload };
+            const sentAtTimestamp = Date.parse(String(item?.sentAt || '').trim());
+            if (Number.isFinite(sentAtTimestamp)) {
+              // Đồng bộ timezone cho riêng log node email: luôn hiển thị mốc gửi theo UTC+7.
+              item.sentAt = toHoChiMinhIso(sentAtTimestamp);
+            }
             const attempted = successfulSends + failedSends;
             const sent = successfulSends;
             const failed = failedSends;
@@ -3017,6 +3045,26 @@ class CampaignRunService {
           const markRunHasPendingEmailRetry = () => {
             hasPendingEmailRetry = true;
             pendingEmailRetryCount += 1;
+          };
+          /**
+           * Đánh dấu campaign cần tạm dừng 24h khi SMTP account bị provider limit.
+           *
+           * Luồng hoạt động:
+           * 1. Set cờ pending để run không bị finalize completed sai trong cùng phiên.
+           * 2. Lưu mốc resume tuyệt đối sau 24h để vòng continuous không quét thêm khách mới.
+           * 3. Ưu tiên mốc sớm nhất nếu nhiều recipient cùng báo limit trong một cycle.
+           *
+           * @returns {number} timestamp (ms) thời điểm resume
+           */
+          const markCampaignPausedByEmailRateLimit = () => {
+            const pauseUntilMs = Date.now() + EMAIL_RATE_LIMIT_PAUSE_MS;
+            hasPendingRecipientDue = true;
+            pendingRecipientDueCount = Math.max(1, pendingRecipientDueCount);
+            if (!Number.isFinite(emailRateLimitPausedUntilMs) || pauseUntilMs < emailRateLimitPausedUntilMs) {
+              emailRateLimitPausedUntilMs = pauseUntilMs;
+            }
+            registerNextContinuousWakeAt(emailRateLimitPausedUntilMs);
+            return emailRateLimitPausedUntilMs;
           };
           const sendEmailWithLogging = async ({
             customer,
@@ -3129,11 +3177,25 @@ class CampaignRunService {
                 if (!isRateLimitedRetryScheduled) {
                   failedSends += 1;
                 }
+                if (isRateLimitedRetryScheduled) {
+                  const pauseUntilMs = markCampaignPausedByEmailRateLimit();
+                  markRunHasPendingEmailRetry();
+                  return {
+                    success: false,
+                    stopRemainingStepsForRecipient: true,
+                    preservePendingStep: true,
+                    pauseCampaignForRateLimit: true,
+                    // Luôn đồng bộ theo cooldown campaign để tránh lệch lịch do worker trả về mốc khác.
+                    retryScheduledAt: toHoChiMinhIso(pauseUntilMs),
+                    retryAttemptCount: Math.max(
+                      0,
+                      Number.parseInt(sendResult?.retryAttemptCount, 10) || 0
+                    ),
+                  };
+                }
                 const failedMessage = sendResult.errorType === 'smtp_config'
                   ? `Lỗi cấu hình SMTP: ${sendResult.error || 'Xác thực email gửi không hợp lệ'}`
-                  : (sendResult.errorType === 'smtp_rate_limited_retry_scheduled'
-                    ? (sendResult.error || 'SendGrid đang giới hạn gửi, đã lên lịch gửi lại')
-                    : (sendResult.error || 'Gửi email thất bại'));
+                  : (sendResult.error || 'Gửi email thất bại');
                 const failedPayload = {
                   ...sendResult,
                   message: failedMessage,
@@ -3154,19 +3216,6 @@ class CampaignRunService {
                   errorMessage: failedMessage,
                   executionData: buildSendEmailExecutionData(failedPayload),
                 });
-                if (isRateLimitedRetryScheduled) {
-                  markRunHasPendingEmailRetry();
-                  return {
-                    success: false,
-                    stopRemainingStepsForRecipient: true,
-                    preservePendingStep: true,
-                    retryScheduledAt: sendResult.retryScheduledAt || null,
-                    retryAttemptCount: Math.max(
-                      0,
-                      Number.parseInt(sendResult?.retryAttemptCount, 10) || 0
-                    ),
-                  };
-                }
                 return {
                   success: false,
                   stopRemainingStepsForRecipient: true,
@@ -3250,6 +3299,7 @@ class CampaignRunService {
               items: dedupedRecipients,
               concurrency: this.CONTINUOUS_EMAIL_BATCH_SIZE,
               handler: async (customer) => {
+                if (shouldPauseUntilNextContinuousCycle) return;
                 const customerKey = String(customer?.email || '').trim().toLowerCase();
                 if (!customerKey) return;
                 try {
@@ -3325,6 +3375,9 @@ class CampaignRunService {
                       });
                       registerNextContinuousWakeAt(Date.parse(retryScheduledAt));
                     }
+                    if (sendOutcome?.pauseCampaignForRateLimit) {
+                      shouldPauseUntilNextContinuousCycle = true;
+                    }
                   } else if (sendOutcome?.stopRemainingStepsForRecipient) {
                     const completedAtIso = toHoChiMinhIso();
                     await upsertRecipientProgress({
@@ -3359,6 +3412,9 @@ class CampaignRunService {
                WHERE id = $4`,
               [totalRecipients, successfulSends, failedSends, runId]
             );
+            if (shouldPauseUntilNextContinuousCycle) {
+              break;
+            }
             continue;
           }
 
@@ -6006,12 +6062,14 @@ class CampaignRunService {
         }
         // Giải phóng worker slot trước khi sleep để campaign khác có thể xử lý.
         // Sleeping campaigns không chiếm slot → hỗ trợ 50-100 campaigns chạy đồng thời.
-        if (isContinuousMode) this._releaseContinuousWorker(runKey);
+        if (isContinuousMode && hasContinuousWorker) this._releaseContinuousWorker(runKey);
 
         if (!isContinuousMode) break;
         if (shouldPauseUntilNextContinuousCycle) {
           console.log(
-            `[CampaignRun][Continuous] run=${runId} pause_until_next_cycle reason=timeout_retry_exhausted`
+            isEmailRateLimitCooldownActive
+              ? `[CampaignRun][Continuous] run=${runId} pause_until_next_cycle reason=email_sender_cooldown wake_at=${emailRateLimitPausedUntilMs}`
+              : `[CampaignRun][Continuous] run=${runId} pause_until_next_cycle reason=timeout_retry_exhausted`
           );
         }
         continuousCycleIndex += 1;

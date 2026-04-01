@@ -11,6 +11,7 @@ import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRu
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
 import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
 import {
+  buildDelayedRunDate,
   buildCronExpression,
   getScheduleStatusClassName,
   getScheduleStatusLabel,
@@ -79,6 +80,10 @@ const CampaignRun = () => {
     scheduleDate: '',
     scheduleTime: '',
     weeklyDay: '1',
+    customIntervalDays: '2',
+    delayValue: '30',
+    delayUnit: 'minutes',
+    delayPreviewAt: null,
     cronExpression: '',
     enabled: true,
   });
@@ -604,6 +609,10 @@ const CampaignRun = () => {
       scheduleDate: '',
       scheduleTime: '',
       weeklyDay: '1',
+      customIntervalDays: '2',
+      delayValue: '30',
+      delayUnit: 'minutes',
+      delayPreviewAt: null,
       cronExpression: '',
       enabled: true,
     });
@@ -626,7 +635,7 @@ const CampaignRun = () => {
       return;
     }
 
-    if (!scheduleForm.scheduleTime) {
+    if (scheduleForm.scheduleType !== 'after_delay' && !scheduleForm.scheduleTime) {
       toast.error('Vui lòng chọn thời gian chạy');
       return;
     }
@@ -641,6 +650,19 @@ const CampaignRun = () => {
       return;
     }
 
+    if (scheduleForm.scheduleType === 'custom') {
+      const intervalDays = Number.parseInt(scheduleForm.customIntervalDays, 10);
+      if (!Number.isFinite(intervalDays) || intervalDays <= 0) {
+        toast.error('Vui lòng nhập số ngày lặp lại hợp lệ');
+        return;
+      }
+    }
+
+    if (scheduleForm.scheduleType === 'after_delay' && !scheduleForm.delayPreviewAt) {
+      toast.error('Vui lòng nhập thời gian trễ hợp lệ');
+      return;
+    }
+
     const cronExpression = buildCronExpression(scheduleForm);
     
     if (!cronExpression) {
@@ -652,7 +674,7 @@ const CampaignRun = () => {
       await campaignRunApiService.createCampaignSchedule({
         campaignId: selectedCampaign.id,
         scheduleName: scheduleForm.scheduleName.trim(),
-        scheduleType: scheduleForm.scheduleType,
+        scheduleType: scheduleForm.scheduleType === 'after_delay' ? 'once' : scheduleForm.scheduleType,
         cronExpression,
         enabled: scheduleForm.enabled,
       });
@@ -664,6 +686,27 @@ const CampaignRun = () => {
       toast.error(error.response?.data?.message || 'Không thể tạo lịch chạy');
     }
   };
+
+  useEffect(() => {
+    if (scheduleForm.scheduleType !== 'after_delay') {
+      if (scheduleForm.delayPreviewAt !== null) {
+        setScheduleForm((prev) => ({ ...prev, delayPreviewAt: null }));
+      }
+      return;
+    }
+    const previewAt = buildDelayedRunDate(scheduleForm.delayValue, scheduleForm.delayUnit);
+    const normalizedPreview = previewAt ? previewAt.toISOString() : null;
+    if (normalizedPreview === scheduleForm.delayPreviewAt) return;
+    setScheduleForm((prev) => ({
+      ...prev,
+      delayPreviewAt: normalizedPreview,
+    }));
+  }, [
+    scheduleForm.scheduleType,
+    scheduleForm.delayValue,
+    scheduleForm.delayUnit,
+    scheduleForm.delayPreviewAt,
+  ]);
 
   const handleDeleteSchedule = async (scheduleId) => {
     if (!confirm('Bạn có chắc chắn muốn xóa lịch chạy này?')) {

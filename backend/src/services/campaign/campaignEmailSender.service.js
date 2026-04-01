@@ -26,8 +26,8 @@ class CampaignEmailSenderService {
     // State rate-limit in-memory cho email theo SMTP account.
     this.rateLimitStateMap = new Map();
     this.RATE_LIMIT_STATE_TTL_MS = 90 * 60 * 1000;
-    // Chuẩn hoá retry email tối thiểu 3 giờ để tránh gửi lại quá sớm khi provider đang giới hạn.
-    this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS = 3 * 60 * 60 * 1000;
+    // Khoảng cách tối thiểu (và mặc định khi không set env) giữa các lần retry khi provider rate-limit: 10 giờ.
+    this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS = 24 * 60 * 60 * 1000;
   }
 
   /**
@@ -83,8 +83,8 @@ class CampaignEmailSenderService {
    * Lấy cấu hình retry khi gặp giới hạn gửi từ provider SMTP.
    *
    * Luồng:
-   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (tối thiểu 3 giờ theo `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`).
-   * 2. Đọc `SENDGRID_LIMIT_MAX_RETRIES` — mặc định 30 lần nếu không set env.
+   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (mặc định = `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`, hiện 10 giờ).
+   * 2. Đọc `SENDGRID_LIMIT_MAX_RETRIES` — mặc định 50 lần nếu không set env.
    *
    * @returns {{delayMs: number, maxRetries: number}}
    */
@@ -96,7 +96,7 @@ class CampaignEmailSenderService {
     return {
       delayMs: Math.max(this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS, configuredDelayMs),
       // Trần số lần thử lại khi SMTP/SendGrid báo rate-limit (override bằng SENDGRID_LIMIT_MAX_RETRIES).
-      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 30),
+      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 60),
     };
   }
 
@@ -626,10 +626,8 @@ class CampaignEmailSenderService {
       const bounceReason = String(smtpError?.message || '').slice(0, 500);
       const shortBounceReason = bounceReason.slice(0, 180);
       if (providerRateLimitError) {
-        console.warn(
-          `[CampaignRun][Email] smtp_rate_limited run=${runId} to=${customer.email} `
-          + `reason=${shortBounceReason}`
-        );
+        // Không ghi log rate-limit theo yêu cầu nghiệp vụ:
+        // campaignRun sẽ tự xử lý đóng băng run 24h và chạy lại sau.
       } else if (smtpConfigError) {
         console.warn(
           `[CampaignRun][Email] smtp_config_error run=${runId} to=${customer.email} `
