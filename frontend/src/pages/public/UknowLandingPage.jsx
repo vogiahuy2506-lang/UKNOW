@@ -9,6 +9,7 @@ import { UknowLandingTestimonials } from '../../features/landing/components/Ukno
 import { UknowLandingAbout } from '../../features/landing/components/UknowLandingAbout.jsx';
 import { useLandingLocale } from '../../features/landing/hooks/useLandingLocale.js';
 import { useLandingFeaturedCourses } from '../../features/landing/hooks/useLandingFeaturedCourses.js';
+import { useLandingTestimonials } from '../../features/landing/hooks/useLandingTestimonials.js';
 import { useUknowLandingForm } from '../../features/landing/hooks/useUknowLandingForm.js';
 
 /**
@@ -19,6 +20,7 @@ export default function UknowLandingPage() {
   const { locale, setLocale, copy } = useLandingLocale();
   const { form, setField, submitting, error, success, submit } = useUknowLandingForm(locale);
   const { courseItems } = useLandingFeaturedCourses(locale, copy.courses.items);
+  const { testimonialItems } = useLandingTestimonials(locale, copy.testimonials.items);
 
   return (
     <div
@@ -54,7 +56,7 @@ export default function UknowLandingPage() {
       <UknowLandingAbout about={copy.about} />
       <UknowLandingBenefits benefits={copy.benefits} />
       <UknowLandingCoursesHighlight courses={copy.courses} items={courseItems} />
-      <UknowLandingTestimonials testimonials={copy.testimonials} />
+      <UknowLandingTestimonials testimonials={copy.testimonials} items={testimonialItems} />
       <UknowLandingFinalCta finalCta={copy.finalCta} />
       <UknowLandingFooter footer={copy.footer} />
     </div>

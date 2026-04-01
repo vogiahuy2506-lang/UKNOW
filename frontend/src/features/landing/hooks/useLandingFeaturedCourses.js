@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchPublicLandingFeaturedCourses } from '../services/landingFeaturedCoursesApi.service.js';
+import { normalizePublicFileUrlForEmbed } from '../utils/publicFileUrl.js';
 
 /**
  * Map một dòng API sang thẻ hiển thị theo locale.
@@ -12,7 +13,7 @@ function mapApiRowToCard(r, locale) {
   return {
     tag: isEn ? r.tagEn : r.tagVi,
     title: isEn ? r.titleEn : r.titleVi,
-    imageUrl: r.imageUrl || null,
+    imageUrl: r.imageUrl ? normalizePublicFileUrlForEmbed(r.imageUrl) : null,
     linkUrl: r.linkUrl,
   };
 }

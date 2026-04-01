@@ -8,4 +8,9 @@ router.use(authMiddleware);
 
 router.get('/preview', leadController.preview.bind(leadController));
 
+/**
+ * GET /api/leads — danh sách lead landing (phân trang + lọc). Đặt sau /preview để không đụng path.
+ */
+router.get('/', leadController.list.bind(leadController));
+
 export default router;

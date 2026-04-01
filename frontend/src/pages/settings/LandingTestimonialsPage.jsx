@@ -2,42 +2,45 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil } from 'react-icons/hi';
 import {
-  createLandingFeaturedCourse,
-  deleteLandingFeaturedCourse,
-  fetchAdminLandingFeaturedCourses,
-  updateLandingFeaturedCourse,
-} from '../../features/landing/services/landingFeaturedCoursesApi.service.js';
+  createLandingTestimonial,
+  deleteLandingTestimonial,
+  fetchAdminLandingTestimonials,
+  updateLandingTestimonial,
+} from '../../features/landing/services/landingTestimonialsApi.service.js';
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service.js';
 import { normalizePublicFileUrlForEmbed } from '../../features/landing/utils/publicFileUrl.js';
 
 const emptyForm = () => ({
-  titleVi: '',
-  titleEn: '',
-  tagVi: '',
-  tagEn: '',
+  quoteVi: '',
+  quoteEn: '',
+  starRating: 5,
+  nameVi: '',
+  nameEn: '',
+  roleVi: '',
+  roleEn: '',
+  locationVi: '',
+  locationEn: '',
   imageUrl: '',
-  linkUrl: '',
   isActive: true,
 });
 
 /**
- * Trang admin — chỉnh khóa học nổi bật trên landing `/l` (lưu DB, hiển thị công khai).
+ * Trang admin — chỉnh đánh giá (testimonials) trên landing `/l` (lưu DB, ảnh qua upload hoặc URL).
  *
  * Luồng hoạt động:
- * 1. Tải danh sách từ GET `/api/admin/landing-featured-courses`.
- * 2. Thêm / sửa / xóa qua API; ảnh upload tạm `/api/uploads/temp` rồi lưu như testimonials; xóa bản ghi xóa file uploads.
+ * 1. Tải danh sách từ GET `/api/admin/landing-testimonials`.
+ * 2. Thêm / sửa / xóa; upload ảnh tạm qua POST `/api/uploads/temp`, lưu bản ghi kèm `imageTempId` + `imageOriginalName`.
  */
-const LandingFeaturedCoursesPage = () => {
+const LandingTestimonialsPage = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  /** Giữ `sort_order` khi sửa (API vẫn cần); không hiển thị ô nhập — tạo mới luôn 0. */
   const [editingSortOrder, setEditingSortOrder] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  /** File ảnh vừa upload tạm — bấm Lưu mới chuyển vào uploads. */
+  /** File vừa upload tạm (chưa ghi DB) — khi lưu sẽ chuyển vào thư mục uploads. */
   const [pendingImage, setPendingImage] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   /** Sao lưu URL ảnh trước khi chọn upload để khôi phục khi bấm bỏ chọn ảnh. */
@@ -47,7 +50,7 @@ const LandingFeaturedCoursesPage = () => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const list = await fetchAdminLandingFeaturedCourses();
+      const list = await fetchAdminLandingTestimonials();
       setRows(list);
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Không thể tải danh sách');
@@ -74,12 +77,16 @@ const LandingFeaturedCoursesPage = () => {
     setEditingId(row.id);
     setEditingSortOrder(row.sortOrder ?? 0);
     setForm({
-      titleVi: row.titleVi || '',
-      titleEn: row.titleEn || '',
-      tagVi: row.tagVi || '',
-      tagEn: row.tagEn || '',
+      quoteVi: row.quoteVi || '',
+      quoteEn: row.quoteEn || '',
+      starRating: Number(row.starRating) || 5,
+      nameVi: row.nameVi || '',
+      nameEn: row.nameEn || '',
+      roleVi: row.roleVi || '',
+      roleEn: row.roleEn || '',
+      locationVi: row.locationVi || '',
+      locationEn: row.locationEn || '',
       imageUrl: row.imageUrl || '',
-      linkUrl: row.linkUrl || '',
       isActive: row.isActive !== false,
     });
     setPendingImage(null);
@@ -102,6 +109,9 @@ const LandingFeaturedCoursesPage = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  /**
+   * Chọn file ảnh → upload tạm; URL cuối được backend tạo khi lưu bản ghi.
+   */
   const onPickImage = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -126,7 +136,7 @@ const LandingFeaturedCoursesPage = () => {
       });
       setPendingImage({ tempId: tempData.tempId, originalName: tempData.originalName || file.name });
       toast.success('Đã tải ảnh lên — bấm Lưu để áp dụng');
-    } catch {
+    } catch (err) {
       toast.error('Upload ảnh thất bại');
     } finally {
       setUploadingFile(false);
@@ -145,36 +155,40 @@ const LandingFeaturedCoursesPage = () => {
   const onSubmit = async (e) => {
     e.preventDefault();
     const payload = {
-      titleVi: String(form.titleVi).trim(),
-      titleEn: String(form.titleEn).trim(),
-      tagVi: String(form.tagVi).trim(),
-      tagEn: String(form.tagEn).trim(),
-      linkUrl: String(form.linkUrl).trim(),
+      quoteVi: String(form.quoteVi).trim(),
+      quoteEn: String(form.quoteEn).trim(),
+      starRating: Number(form.starRating) || 5,
+      nameVi: String(form.nameVi).trim(),
+      nameEn: String(form.nameEn).trim(),
+      roleVi: String(form.roleVi).trim(),
+      roleEn: String(form.roleEn).trim(),
+      locationVi: String(form.locationVi).trim(),
+      locationEn: String(form.locationEn).trim(),
       sortOrder: editingId ? Number(editingSortOrder) || 0 : 0,
       isActive: Boolean(form.isActive),
     };
+    if (!payload.quoteVi || !payload.quoteEn) {
+      toast.error('Nội dung (VI) và (EN) là bắt buộc');
+      return;
+    }
+    if (!payload.nameVi || !payload.nameEn) {
+      toast.error('Tên (VI) và (EN) là bắt buộc');
+      return;
+    }
     if (pendingImage?.tempId && pendingImage?.originalName) {
       payload.imageTempId = pendingImage.tempId;
       payload.imageOriginalName = pendingImage.originalName;
     } else {
       payload.imageUrl = String(form.imageUrl).trim() || null;
     }
-    if (!payload.titleVi || !payload.titleEn) {
-      toast.error('Tiêu đề (VI) và (EN) là bắt buộc');
-      return;
-    }
-    if (!payload.linkUrl) {
-      toast.error('Link khóa học là bắt buộc (http/https)');
-      return;
-    }
     try {
       setSaving(true);
       if (editingId) {
-        await updateLandingFeaturedCourse(editingId, payload);
+        await updateLandingTestimonial(editingId, payload);
         toast.success('Đã cập nhật');
       } else {
-        await createLandingFeaturedCourse(payload);
-        toast.success('Đã thêm khóa học');
+        await createLandingTestimonial(payload);
+        toast.success('Đã thêm đánh giá');
       }
       closeModal();
       await load(true);
@@ -186,9 +200,9 @@ const LandingFeaturedCoursesPage = () => {
   };
 
   const onDelete = async (row) => {
-    if (!window.confirm(`Xóa khóa học: "${row.titleVi}"?`)) return;
+    if (!window.confirm(`Xóa đánh giá của "${row.nameVi}"?`)) return;
     try {
-      await deleteLandingFeaturedCourse(row.id);
+      await deleteLandingTestimonial(row.id);
       toast.success('Đã xóa');
       await load(true);
     } catch (err) {
@@ -200,9 +214,9 @@ const LandingFeaturedCoursesPage = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Landing — khóa học nổi bật</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Landing — đánh giá (testimonials)</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Quản lý thẻ khóa học trên trang <code className="text-xs bg-gray-100 px-1 rounded">/l</code> — ảnh bấm mở link.
+            Quản lý thẻ cảm nhận trên <code className="text-xs bg-gray-100 px-1 rounded">/l</code> — nội dung, sao, tên, chức vụ, vị trí, ảnh (URL hoặc upload).
           </p>
         </div>
         <div className="flex gap-2">
@@ -221,7 +235,7 @@ const LandingFeaturedCoursesPage = () => {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
           >
             <HiOutlinePlus />
-            Thêm khóa học
+            Thêm đánh giá
           </button>
         </div>
       </div>
@@ -233,9 +247,10 @@ const LandingFeaturedCoursesPage = () => {
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Tiêu đề (VI)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Link</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">Ảnh</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">Tên (VI)</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700">Sao</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 max-w-xs">Nội dung (rút gọn)</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">Ảnh MC</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700">Hiển thị</th>
                 <th className="px-3 py-2 text-right font-semibold text-gray-700">Thao tác</th>
               </tr>
@@ -243,19 +258,16 @@ const LandingFeaturedCoursesPage = () => {
             <tbody className="divide-y divide-gray-100 bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
                     Chưa có bản ghi — trang landing dùng nội dung mặc định trong code.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="px-3 py-2 text-gray-900 max-w-xs truncate">{r.titleVi}</td>
-                    <td className="px-3 py-2 max-w-xs truncate">
-                      <a href={r.linkUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
-                        {r.linkUrl}
-                      </a>
-                    </td>
+                    <td className="px-3 py-2 text-gray-900 max-w-[140px] truncate">{r.nameVi}</td>
+                    <td className="px-3 py-2 text-center text-amber-600">{r.starRating}★</td>
+                    <td className="px-3 py-2 text-gray-600 max-w-md truncate">{r.quoteVi}</td>
                     <td className="px-3 py-2 text-center align-middle">
                       {r.imageUrl ? (
                         <a
@@ -263,7 +275,7 @@ const LandingFeaturedCoursesPage = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block"
-                          title="Xem ảnh"
+                          title="Xem ảnh minh chứng"
                         >
                           <img
                             src={normalizePublicFileUrlForEmbed(r.imageUrl)}
@@ -303,49 +315,103 @@ const LandingFeaturedCoursesPage = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? 'Sửa khóa học' : 'Thêm khóa học'}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? 'Sửa đánh giá' : 'Thêm đánh giá'}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block sm:col-span-2">
+                  <span className="text-xs font-medium text-gray-600">Nội dung (VI) *</span>
+                  <textarea
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
+                    value={form.quoteVi}
+                    onChange={(e) => setField('quoteVi', e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="text-xs font-medium text-gray-600">Nội dung (EN) *</span>
+                  <textarea
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
+                    value={form.quoteEn}
+                    onChange={(e) => setField('quoteEn', e.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Số sao (1–5)</span>
+                <select
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={form.starRating}
+                  onChange={(e) => setField('starRating', Number(e.target.value))}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n} sao
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tiêu đề (VI) *</span>
+                  <span className="text-xs font-medium text-gray-600">Tên (VI) *</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={form.titleVi}
-                    onChange={(e) => setField('titleVi', e.target.value)}
+                    value={form.nameVi}
+                    onChange={(e) => setField('nameVi', e.target.value)}
                     required
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tiêu đề (EN) *</span>
+                  <span className="text-xs font-medium text-gray-600">Tên (EN) *</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={form.titleEn}
-                    onChange={(e) => setField('titleEn', e.target.value)}
+                    value={form.nameEn}
+                    onChange={(e) => setField('nameEn', e.target.value)}
                     required
                   />
                 </label>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Nhãn (VI)</span>
+                  <span className="text-xs font-medium text-gray-600">Chức vụ / vai trò (VI)</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={form.tagVi}
-                    onChange={(e) => setField('tagVi', e.target.value)}
+                    value={form.roleVi}
+                    onChange={(e) => setField('roleVi', e.target.value)}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Nhãn (EN)</span>
+                  <span className="text-xs font-medium text-gray-600">Chức vụ / vai trò (EN)</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={form.tagEn}
-                    onChange={(e) => setField('tagEn', e.target.value)}
+                    value={form.roleEn}
+                    onChange={(e) => setField('roleEn', e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-600">Vị trí / địa điểm (VI)</span>
+                  <input
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={form.locationVi}
+                    onChange={(e) => setField('locationVi', e.target.value)}
+                    placeholder="VD: Hà Nội"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-600">Vị trí / địa điểm (EN)</span>
+                  <input
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={form.locationEn}
+                    onChange={(e) => setField('locationEn', e.target.value)}
+                    placeholder="e.g. Hanoi"
                   />
                 </label>
               </div>
               <label className="block">
                 <span className="text-xs font-medium text-gray-600">
-                  URL ảnh (http/https, tùy chọn — hoặc upload bên dưới; để trống = không ảnh)
+                  URL ảnh minh chứng (http/https, tùy chọn — hoặc upload bên dưới)
                 </span>
                 <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
                   <span className="block">
@@ -370,7 +436,7 @@ const LandingFeaturedCoursesPage = () => {
               </label>
               <div className="rounded-lg border border-dashed border-gray-300 p-3">
                 <p className="text-xs text-gray-600 mb-2">
-                  Upload ảnh (lưu vào thư mục uploads khi bấm Lưu; xóa bản ghi sẽ xóa file nếu là ảnh upload hệ thống)
+                  Upload ảnh minh chứng (lưu vào thư mục uploads khi bấm Lưu; xóa bản ghi sẽ xóa file tương ứng)
                 </p>
                 <input type="file" accept="image/*" onChange={onPickImage} disabled={uploadingFile} className="text-sm" />
                 {pendingImage && (
@@ -386,16 +452,6 @@ const LandingFeaturedCoursesPage = () => {
                   </div>
                 )}
               </div>
-              <label className="block">
-                <span className="text-xs font-medium text-gray-600">Link khóa học * (http/https)</span>
-                <input
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  value={form.linkUrl}
-                  onChange={(e) => setField('linkUrl', e.target.value)}
-                  placeholder="https://uknow.edu.vn/..."
-                  required
-                />
-              </label>
               <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -428,4 +484,4 @@ const LandingFeaturedCoursesPage = () => {
   );
 };
 
-export default LandingFeaturedCoursesPage;
+export default LandingTestimonialsPage;

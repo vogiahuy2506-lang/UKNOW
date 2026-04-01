@@ -1,19 +1,10 @@
 import landingFeaturedCourseRepository from '../../repositories/landingFeaturedCourse.repository.js';
-
-/**
- * Chuẩn hóa chuỗi URL ảnh: cho phép http(s) hoặc rỗng (null).
- *
- * @param {string|null|undefined} raw
- * @returns {string|null}
- */
-function normalizeImageUrl(raw) {
-  const s = String(raw ?? '').trim();
-  if (!s) return null;
-  if (/^https?:\/\//i.test(s)) return s;
-  const err = new Error('imageUrl phải là URL http(s) hoặc để trống');
-  err.statusCode = 400;
-  throw err;
-}
+import {
+  deleteUploadedFileIfAny,
+  extractStorageKeyFromImageUrl,
+  moveTempUploadToPermanent,
+  normalizeOptionalHttpImageUrl,
+} from './landingImageAsset.helper.js';
 
 /**
  * Kiểm tra link_url bắt buộc và hợp lệ (http/https).
@@ -37,24 +28,6 @@ function assertHttpUrl(raw, fieldLabel = 'linkUrl') {
   return s;
 }
 
-/**
- * Gộp payload ghi DB sau khi đã validate.
- *
- * @param {object} p
- */
-function toRowPayload(p) {
-  return {
-    sortOrder: Number(p.sortOrder) || 0,
-    titleVi: String(p.titleVi ?? '').trim(),
-    titleEn: String(p.titleEn ?? '').trim(),
-    tagVi: String(p.tagVi ?? '').trim(),
-    tagEn: String(p.tagEn ?? '').trim(),
-    imageUrl: normalizeImageUrl(p.imageUrl),
-    linkUrl: assertHttpUrl(p.linkUrl),
-    isActive: p.isActive !== false,
-  };
-}
-
 class LandingFeaturedCourseService {
   async listPublic() {
     return landingFeaturedCourseRepository.findActiveOrdered();
@@ -66,37 +39,69 @@ class LandingFeaturedCourseService {
 
   /**
    * @param {object} body
+   * @param {number} userId
    */
-  async create(body) {
+  async create(body, userId) {
     const b = body && typeof body === 'object' ? body : {};
-    const row = toRowPayload({
-      sortOrder: b.sortOrder,
-      titleVi: b.titleVi,
-      titleEn: b.titleEn,
-      tagVi: b.tagVi,
-      tagEn: b.tagEn,
-      imageUrl: b.imageUrl,
-      linkUrl: b.linkUrl,
-      isActive: b.isActive,
-    });
-    if (!row.titleVi) {
+    const titleVi = String(b.titleVi ?? '').trim();
+    const titleEn = String(b.titleEn ?? '').trim();
+    if (!titleVi) {
       const err = new Error('titleVi là bắt buộc');
       err.statusCode = 400;
       throw err;
     }
-    if (!row.titleEn) {
+    if (!titleEn) {
       const err = new Error('titleEn là bắt buộc');
       err.statusCode = 400;
       throw err;
     }
-    return landingFeaturedCourseRepository.insert(row);
+    const linkUrl = assertHttpUrl(b.linkUrl);
+
+    const tempId = String(b.imageTempId ?? '').trim();
+    const orig = String(b.imageOriginalName ?? '').trim();
+    const hasTemp = Boolean(tempId && orig);
+
+    const payloadBase = {
+      sortOrder: Number(b.sortOrder) || 0,
+      titleVi,
+      titleEn,
+      tagVi: String(b.tagVi ?? '').trim(),
+      tagEn: String(b.tagEn ?? '').trim(),
+      linkUrl,
+      isActive: b.isActive !== false,
+    };
+
+    if (hasTemp) {
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      if (!newUrl) {
+        const err = new Error('Không thể lưu file ảnh');
+        err.statusCode = 500;
+        throw err;
+      }
+      try {
+        return await landingFeaturedCourseRepository.insert({
+          ...payloadBase,
+          imageUrl: newUrl,
+        });
+      } catch (dbErr) {
+        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingFeaturedCourseRollback');
+        throw dbErr;
+      }
+    }
+
+    const imageUrl = normalizeOptionalHttpImageUrl(b.imageUrl);
+    return landingFeaturedCourseRepository.insert({
+      ...payloadBase,
+      imageUrl,
+    });
   }
 
   /**
    * @param {number|string} id
    * @param {object} body
+   * @param {number} userId
    */
-  async update(id, body) {
+  async update(id, body, userId) {
     const existing = await landingFeaturedCourseRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy khóa học nổi bật');
@@ -104,39 +109,92 @@ class LandingFeaturedCourseService {
       throw err;
     }
     const b = body && typeof body === 'object' ? body : {};
-    const merged = {
-      sortOrder: b.sortOrder !== undefined ? b.sortOrder : existing.sortOrder,
-      titleVi: b.titleVi !== undefined ? b.titleVi : existing.titleVi,
-      titleEn: b.titleEn !== undefined ? b.titleEn : existing.titleEn,
-      tagVi: b.tagVi !== undefined ? b.tagVi : existing.tagVi,
-      tagEn: b.tagEn !== undefined ? b.tagEn : existing.tagEn,
-      imageUrl: b.imageUrl !== undefined ? b.imageUrl : existing.imageUrl,
-      linkUrl: b.linkUrl !== undefined ? b.linkUrl : existing.linkUrl,
-      isActive: b.isActive !== undefined ? b.isActive : existing.isActive,
-    };
-    const row = toRowPayload(merged);
-    if (!row.titleVi) {
+    const titleVi = b.titleVi !== undefined ? String(b.titleVi).trim() : existing.titleVi;
+    const titleEn = b.titleEn !== undefined ? String(b.titleEn).trim() : existing.titleEn;
+    if (!titleVi) {
       const err = new Error('titleVi là bắt buộc');
       err.statusCode = 400;
       throw err;
     }
-    if (!row.titleEn) {
+    if (!titleEn) {
       const err = new Error('titleEn là bắt buộc');
       err.statusCode = 400;
       throw err;
     }
-    return landingFeaturedCourseRepository.updateById(id, row);
+
+    const tempId = String(b.imageTempId ?? '').trim();
+    const orig = String(b.imageOriginalName ?? '').trim();
+    const hasTemp = Boolean(tempId && orig);
+
+    const linkUrl =
+      b.linkUrl !== undefined ? assertHttpUrl(b.linkUrl) : existing.linkUrl;
+
+    const oldKey = extractStorageKeyFromImageUrl(existing.imageUrl);
+
+    const mergePayload = (imageUrl) => ({
+      sortOrder: b.sortOrder !== undefined ? Number(b.sortOrder) || 0 : existing.sortOrder,
+      titleVi,
+      titleEn,
+      tagVi: b.tagVi !== undefined ? String(b.tagVi).trim() : existing.tagVi,
+      tagEn: b.tagEn !== undefined ? String(b.tagEn).trim() : existing.tagEn,
+      imageUrl,
+      linkUrl,
+      isActive: b.isActive !== undefined ? b.isActive : existing.isActive,
+    });
+
+    if (hasTemp) {
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      if (!newUrl) {
+        const err = new Error('Không thể lưu file ảnh');
+        err.statusCode = 500;
+        throw err;
+      }
+      try {
+        const row = await landingFeaturedCourseRepository.updateById(id, mergePayload(newUrl));
+        const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
+        if (oldKey && oldKey !== newKey) {
+          await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
+        }
+        return row;
+      } catch (dbErr) {
+        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingFeaturedCourseRollback');
+        throw dbErr;
+      }
+    }
+
+    let imageUrl = existing.imageUrl;
+    if (b.imageUrl !== undefined) {
+      imageUrl = normalizeOptionalHttpImageUrl(b.imageUrl);
+    }
+    const row = await landingFeaturedCourseRepository.updateById(id, mergePayload(imageUrl));
+    const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
+    if (oldKey && oldKey !== newKey) {
+      await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
+    }
+    return row;
   }
 
   /**
+   * Xóa bản ghi và file ảnh trên `uploads/` nếu URL trỏ về file nội bộ.
+   *
    * @param {number|string} id
    */
   async remove(id) {
+    const existing = await landingFeaturedCourseRepository.findById(id);
+    if (!existing) {
+      const err = new Error('Không tìm thấy khóa học nổi bật');
+      err.statusCode = 404;
+      throw err;
+    }
+    const fileKey = extractStorageKeyFromImageUrl(existing.imageUrl);
     const ok = await landingFeaturedCourseRepository.deleteById(id);
     if (!ok) {
       const err = new Error('Không tìm thấy khóa học nổi bật');
       err.statusCode = 404;
       throw err;
+    }
+    if (fileKey) {
+      await deleteUploadedFileIfAny(fileKey, 'landingFeaturedCourse');
     }
     return true;
   }

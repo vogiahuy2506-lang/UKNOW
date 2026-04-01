@@ -32,6 +32,10 @@ class DownloadController {
       res.setHeader('Content-Type', mimeType);
     }
     res.setHeader('Content-Disposition', disposition);
+    /** Ảnh nhúng từ trang frontend khác origin — bổ sung CORP để chắc chắn không bị chặn (nginx/proxy có thể ghi đè Helmet). */
+    if (preview) {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
     res.sendFile(filePath);
     return true;
   }

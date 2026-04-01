@@ -23,6 +23,8 @@ import {
   HiOutlineClipboardList,
   HiOutlineUserGroup,
   HiOutlinePhotograph,
+  HiOutlineStar,
+  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
@@ -49,6 +51,12 @@ const menuItems = [
         icon: HiOutlinePhotograph,
         adminOnly: true,
       },
+      {
+        name: 'Landing — đánh giá',
+        path: '/settings/landing-testimonials',
+        icon: HiOutlineStar,
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -69,6 +77,11 @@ const menuItems = [
     name: 'Đơn hàng',
     path: '/orders',
     icon: HiOutlineClipboardList,
+  },
+  {
+    name: 'Danh sách khách landing page',
+    path: '/landing-leads',
+    icon: HiOutlineGlobeAlt,
   },
   {
     name: 'Quản lý nhân viên',

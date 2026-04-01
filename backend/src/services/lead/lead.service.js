@@ -146,6 +146,65 @@ class LeadService {
     const items = rows.map(mapLeadRowToCampaignItem);
     return { items, total };
   }
+
+  /**
+   * Danh sách lead landing cho trang quản trị: lọc giống node/read_landing_leads, có phân trang offset.
+   *
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa khoảng ngày / nghề / lĩnh vực từ query.
+   * 2. Đếm tổng bản ghi khớp filter (không LIMIT).
+   * 3. SELECT một trang với LIMIT + OFFSET.
+   *
+   * @param {object} config
+   * @param {boolean} config.landingLeadsUseDateRange
+   * @param {string} config.landingLeadsDateFrom
+   * @param {string} config.landingLeadsDateTo
+   * @param {string[]} config.landingLeadsOccupations
+   * @param {string[]} config.landingLeadsInterests
+   * @param {number} config.page Trang (1-based)
+   * @param {number} config.pageSize Số dòng mỗi trang (đã clamp ở controller)
+   * @returns {Promise<{ items: object[], total: number, page: number, pageSize: number, totalPages: number }>}
+   */
+  async listAdminPaginated(config = {}) {
+    const useDateRange = Boolean(config.landingLeadsUseDateRange);
+    const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
+    const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
+    const occupations = Array.isArray(config.landingLeadsOccupations)
+      ? config.landingLeadsOccupations.map((x) => String(x || '').trim()).filter(Boolean)
+      : [];
+    const interests = Array.isArray(config.landingLeadsInterests)
+      ? config.landingLeadsInterests.map((x) => String(x || '').trim()).filter(Boolean)
+      : [];
+    const page = Math.max(1, parseInt(String(config.page), 10) || 1);
+    const pageSize = Math.max(1, parseInt(String(config.pageSize), 10) || 20);
+    const offset = (page - 1) * pageSize;
+    const limit = clampLandingLeadsLimit(pageSize, 100);
+
+    const filterBase = {
+      useDateRange,
+      dateFrom,
+      dateTo,
+      occupations,
+      interests,
+      limit,
+      offset,
+    };
+
+    const [rows, total] = await Promise.all([
+      leadRepository.findFiltered(filterBase),
+      leadRepository.countFiltered({
+        useDateRange,
+        dateFrom,
+        dateTo,
+        occupations,
+        interests,
+      }),
+    ]);
+
+    const items = rows.map(mapLeadRowToCampaignItem);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    return { items, total, page, pageSize, totalPages };
+  }
 }
 
 export default new LeadService();
