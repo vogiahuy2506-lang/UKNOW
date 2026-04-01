@@ -1,54 +1,155 @@
+import { useCallback, useRef } from 'react';
+import { HiOutlineAcademicCap, HiOutlineChartBar, HiOutlinePaintBrush } from 'react-icons/hi2';
+import { LANDING_SURFACE, LANDING_CARD, LANDING_GOLD, LANDING_MUTED } from '../constants/landingTheme.js';
+
+/** Icon fallback khi chưa có ảnh (cùng bộ Heroicons outline). */
+const FALLBACK_ICONS = [HiOutlineAcademicCap, HiOutlineChartBar, HiOutlinePaintBrush];
+
 /**
- * Thẻ khóa học tiêu biểu (gradient + badge).
+ * Khóa học nổi bật — carousel ngang (mũi tên + snap), ảnh lớn, nút «Xem chi tiết» trỏ `linkUrl`.
+ *
+ * Luồng hoạt động:
+ * 1. `overflow-x-auto` + `scroll-snap` giống testimonials.
+ * 2. Nút trái/phải `scrollBy` theo bề rộng một thẻ + gap.
+ * 3. Ảnh chỉ hiển thị; link nằm ở nút CTA.
  *
  * @param {object} props
- * @param {import('../constants/landingCopy.js').LANDING_COPY.vi.courses} props.courses
+ * @param {Pick<import('../constants/landingCopy.js').LANDING_COPY.vi.courses, 'eyebrow' | 'title' | 'subtitle' | 'linkLabel' | 'carouselPrevAria' | 'carouselNextAria' | 'detailCtaLabel'>} props.courses
+ * @param {{ tag: string, title: string, imageUrl: string|null, linkUrl: string }[]} props.items
  */
-export function UknowLandingCoursesHighlight({ courses }) {
+export function UknowLandingCoursesHighlight({ courses, items }) {
+  const scrollerRef = useRef(null);
+
   const grads = [
-    'from-[#0d6e6e] to-[#12a0a0]',
-    'from-[#8a5a00] to-uknow-gold',
-    'from-[#4a1020] to-[#c84b2f]',
+    'from-[#148C94] to-[#1DA1AB]',
+    'from-[#B8860B] to-[#DAA520]',
+    'from-[#8B0000] to-[#B22222]',
   ];
-  const emojis = ['🤖', '📊', '💼'];
+
+  const list = Array.isArray(items) && items.length > 0 ? items : [];
+
+  const scrollByDir = useCallback((dir) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const card = el.querySelector('[data-course-card]');
+    const gap = 20;
+    const w = card ? card.getBoundingClientRect().width + gap : 560;
+    el.scrollBy({ left: dir * w, behavior: 'smooth' });
+  }, []);
 
   return (
-    <section className="bg-gradient-to-b from-uknow-cream to-white px-[6%] py-20 sm:px-[8%]">
-      <p className="mb-2 text-[0.72rem] font-bold uppercase tracking-widest text-[#0d6e6e]">{courses.eyebrow}</p>
-      <h2 className="max-w-3xl text-[clamp(1.45rem,3vw,2rem)] font-black leading-tight text-uknow-ink">{courses.title}</h2>
-      <p className="mt-3 max-w-2xl text-base leading-relaxed text-uknow-muted">{courses.subtitle}</p>
-      <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-        {courses.items.map((c, i) => (
-          <div
-            key={c.title}
-            className="overflow-hidden rounded-2xl border border-uknow-border bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-          >
-            <div
-              className={`relative flex h-[130px] items-center justify-center bg-gradient-to-br ${grads[i] ?? grads[0]} text-5xl`}
+    <section
+      className="px-[6%] py-24 text-white sm:px-[8%] sm:py-[100px]"
+      style={{
+        backgroundColor: LANDING_SURFACE,
+        colorScheme: 'dark',
+      }}
+    >
+      <p className="mb-3 text-[0.68rem] font-bold uppercase tracking-[2px]" style={{ color: LANDING_GOLD }}>
+        {courses.eyebrow}
+      </p>
+
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-display max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-white">
+            {courses.title}
+          </h2>
+          <p className="mt-3 max-w-[520px] text-[0.97rem] font-light leading-[1.75]" style={{ color: LANDING_MUTED }}>
+            {courses.subtitle}
+          </p>
+        </div>
+        {list.length > 1 ? (
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => scrollByDir(-1)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition hover:bg-white/15"
+              aria-label={courses.carouselPrevAria}
             >
-              <span aria-hidden>{emojis[i] ?? '✨'}</span>
-            </div>
-            <div className="p-5">
-                <p className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-wider text-[#0d6e6e]">{c.tag}</p>
-              <h3 className="mb-3 text-[0.95rem] font-bold leading-snug text-uknow-ink">{c.title}</h3>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[0.78rem] text-uknow-muted">
-                <span>{c.meta}</span>
-                <span className="rounded-full border border-uknow-gold/40 bg-uknow-gold/10 px-2.5 py-0.5 text-[0.7rem] font-semibold text-[#8a5a00]">
-                  {c.badge}
-                </span>
-              </div>
-            </div>
+              <span className="text-lg" aria-hidden>
+                ←
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollByDir(1)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition hover:bg-white/15"
+              aria-label={courses.carouselNextAria}
+            >
+              <span className="text-lg" aria-hidden>
+                →
+              </span>
+            </button>
           </div>
-        ))}
+        ) : null}
       </div>
+
+      <div
+        ref={scrollerRef}
+        className="-mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth pb-2 pt-1 [scrollbar-width:none] [-ms-overflow-style:none] sm:mx-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {list.map((c, i) => {
+          const grad = grads[i % grads.length];
+          const Icon = FALLBACK_ICONS[i % FALLBACK_ICONS.length];
+          const href = String(c.linkUrl || '').trim() || 'https://uknow.edu.vn/';
+          const hasImage = Boolean(c.imageUrl && String(c.imageUrl).trim());
+
+          return (
+            <article
+              key={`${c.title}-${i}`}
+              data-course-card
+              className="w-[min(100%,560px)] shrink-0 snap-start overflow-hidden rounded-2xl border border-white/10 transition hover:-translate-y-0.5 sm:w-[520px] md:w-[560px]"
+              style={{
+                backgroundColor: LANDING_CARD,
+                colorScheme: 'dark',
+              }}
+            >
+              {/* Ảnh lớn — không bọc link; chi tiết qua nút bên dưới */}
+              <div
+                className={`relative block w-full overflow-hidden ${!hasImage ? `flex min-h-[220px] items-center justify-center bg-gradient-to-br sm:min-h-[260px] md:min-h-[280px] ${grad} text-white` : 'min-h-[220px] bg-black/20 sm:min-h-[260px] md:min-h-[280px]'}`}
+              >
+                {hasImage ? (
+                  <img
+                    src={c.imageUrl}
+                    alt={c.title}
+                    className="h-full min-h-[220px] w-full object-cover sm:min-h-[260px] md:min-h-[280px]"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <span className="flex h-full min-h-[220px] w-full items-center justify-center sm:min-h-[260px] md:min-h-[280px]" aria-hidden>
+                    <Icon className="h-16 w-16 opacity-95 sm:h-[4.5rem] sm:w-[4.5rem]" strokeWidth={1.5} />
+                  </span>
+                )}
+              </div>
+              <div className="px-5 py-5" style={{ backgroundColor: LANDING_CARD }}>
+                <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wide" style={{ color: LANDING_GOLD }}>
+                  {c.tag}
+                </p>
+                <h3 className="mb-4 text-[0.95rem] font-semibold leading-snug text-white">{c.title}</h3>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-amber-400/70 bg-white/[0.06] px-4 py-2.5 text-[0.88rem] font-semibold text-amber-200 transition hover:border-amber-300 hover:bg-white/10 hover:text-white sm:w-auto"
+                >
+                  {courses.detailCtaLabel}
+                </a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
       <div className="mt-10 text-center">
         <a
           href="https://uknow.edu.vn/"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm font-bold text-[#0d6e6e] underline-offset-4 hover:underline"
+          className="inline-flex items-center gap-2 text-sm font-bold underline-offset-4 transition hover:text-amber-300 hover:underline"
+          style={{ color: LANDING_GOLD }}
         >
-          uknow.edu.vn →
+          {courses.linkLabel}
         </a>
       </div>
     </section>

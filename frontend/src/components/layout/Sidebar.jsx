@@ -22,6 +22,7 @@ import {
   HiOutlineX,
   HiOutlineClipboardList,
   HiOutlineUserGroup,
+  HiOutlinePhotograph,
 } from 'react-icons/hi';
 import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
@@ -42,6 +43,12 @@ const menuItems = [
       { name: 'Quản lý Zalo', path: '/settings/zalo', icon: HiOutlineChat },
       { name: 'Mẫu Zalo', path: '/settings/zalo-templates', icon: HiOutlineTemplate },
       { name: 'Khóa học', path: '/courses', icon: HiOutlineAcademicCap },
+      {
+        name: 'Landing — khóa học nổi bật',
+        path: '/settings/landing-featured-courses',
+        icon: HiOutlinePhotograph,
+        adminOnly: true,
+      },
     ],
   },
   {
