@@ -267,6 +267,8 @@ const CampaignRunModals = ({
                 <option value="daily">Hàng ngày</option>
                 <option value="weekly">Hàng tuần</option>
                 <option value="monthly">Hàng tháng (Ngày 1)</option>
+                <option value="custom">Tùy chỉnh: Mỗi N ngày</option>
+                <option value="after_delay">Tùy chỉnh: Chạy sau N thời gian</option>
               </select>
             </div>
 
@@ -304,17 +306,75 @@ const CampaignRunModals = ({
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Thời gian chạy
-              </label>
-              <input
-                type="time"
-                value={scheduleForm.scheduleTime}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleTime: e.target.value })}
-                className="input"
-              />
-            </div>
+            {(scheduleForm.scheduleType === 'custom') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cứ cách bao nhiêu ngày thì chạy lại
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={scheduleForm.customIntervalDays}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, customIntervalDays: e.target.value })}
+                  className="input"
+                  placeholder="Ví dụ: 2"
+                />
+              </div>
+            )}
+
+            {(scheduleForm.scheduleType === 'after_delay') && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Chạy sau bao lâu kể từ hiện tại
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={scheduleForm.delayValue}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, delayValue: e.target.value })}
+                      className="input"
+                      placeholder="Ví dụ: 2"
+                    />
+                    <select
+                      value={scheduleForm.delayUnit}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, delayUnit: e.target.value })}
+                      className="input"
+                    >
+                      <option value="minutes">Phút</option>
+                      <option value="hours">Giờ</option>
+                      <option value="days">Ngày</option>
+                    </select>
+                  </div>
+                </div>
+                {scheduleForm.delayPreviewAt ? (
+                  <p className="text-xs text-gray-500">
+                    Dự kiến chạy lúc: {formatCampaignDateTime(scheduleForm.delayPreviewAt)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    Nhập số lượng thời gian hợp lệ để xem thời điểm chạy dự kiến.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {scheduleForm.scheduleType !== 'after_delay' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Thời gian chạy
+                </label>
+                <input
+                  type="time"
+                  value={scheduleForm.scheduleTime}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleTime: e.target.value })}
+                  className="input"
+                />
+              </div>
+            )}
 
             <div className="flex items-center">
               <input
