@@ -297,9 +297,20 @@ class EmailSettingsSmtpService {
       const plainTextContent = content || 'Đây là email từ hệ thống UKNOW';
       const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
       // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
-      const trackedHtmlContent = shouldForcePreviewOnly
-        ? rawHtml
-        : await ctx.buildTrackedHtml(rawHtml, trackingBaseUrl, trackingToken, campaignId, customerId, normalizedRunId);
+      /**
+       * Luôn thêm footer hủy đăng ký/chính sách bảo mật cho cả Build và Run để email nhất quán.
+       * - Build/preview: chỉ thêm footer, tắt rewrite click tracking.
+       * - Run thật: giữ đầy đủ tracking open/click như hiện tại.
+       */
+      const trackedHtmlContent = await ctx.buildTrackedHtml(
+        rawHtml,
+        trackingBaseUrl,
+        trackingToken,
+        campaignId,
+        customerId,
+        normalizedRunId,
+        { enableClickTracking: !shouldForcePreviewOnly }
+      );
 
       const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
         ? await ctx.buildMailAttachments(attachments)
