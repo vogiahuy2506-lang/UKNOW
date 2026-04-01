@@ -384,6 +384,14 @@ const buildNodeSuccessValidation = (nodeType, result) => {
       message: `Lấy khóa học đã chọn thành công (${fetched} khóa học)`,
     };
   }
+  if (nodeType === 'read_landing_leads') {
+    const fetched = result?.output?.meta?.fetched || 0;
+    const total = result?.output?.meta?.totalItems ?? fetched;
+    return {
+      status: 'success',
+      message: `Lấy dữ liệu landing page thành công (${fetched} lead, tổng khớp ${total})`,
+    };
+  }
   if (nodeType === 'send_email') {
     const attempted = result?.output?.meta?.attempted || 0;
     const totalAttempts = result?.output?.meta?.totalAttempts || attempted;
@@ -469,17 +477,19 @@ const getNodeFailureMessage = (nodeType, error) => (
       ? 'Không thể lấy dữ liệu khách'
       : nodeType === 'read_courses_db'
         ? 'Không thể lấy dữ liệu khóa học'
-        : nodeType === 'get_all_friends'
-          ? 'Không thể lấy danh sách bạn bè Zalo'
-          : nodeType === 'get_all_groups'
-            ? 'Không thể lấy thông tin nhóm Zalo'
-      : nodeType === 'send_zalo_personal'
-        ? 'Không thể gửi tin Zalo cá nhân'
-        : nodeType === 'send_zalo_friend_request'
-          ? 'Không thể gửi lời mời kết bạn'
-          : nodeType === 'send_zalo_group'
-            ? 'Không thể gửi tin nhắn nhóm Zalo'
-        : 'Thực thi thất bại')
+        : nodeType === 'read_landing_leads'
+          ? 'Không thể lấy dữ liệu landing page'
+          : nodeType === 'get_all_friends'
+            ? 'Không thể lấy danh sách bạn bè Zalo'
+            : nodeType === 'get_all_groups'
+              ? 'Không thể lấy thông tin nhóm Zalo'
+              : nodeType === 'send_zalo_personal'
+                ? 'Không thể gửi tin Zalo cá nhân'
+                : nodeType === 'send_zalo_friend_request'
+                  ? 'Không thể gửi lời mời kết bạn'
+                  : nodeType === 'send_zalo_group'
+                    ? 'Không thể gửi tin nhắn nhóm Zalo'
+                    : 'Thực thi thất bại')
 );
 
 const ZALO_NODE_TYPES = new Set([

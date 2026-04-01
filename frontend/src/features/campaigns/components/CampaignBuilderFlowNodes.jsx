@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
-import { HiOutlineChat, HiOutlineDocumentText, HiOutlineMail, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineChat, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
 
 const NODE_CARD_CONTAINER_CLASS =
   'relative w-[148px] sm:w-[160px] md:w-[172px] bg-white rounded-xl shadow-sm border-2 transition-all duration-200 group';
@@ -79,6 +79,14 @@ export const nodeConfigs = {
       bgColor: '#FFF8E1',
       iconColor: '#F57F17',
       description: 'Lấy dữ liệu khách hàng từ hệ thống',
+    },
+    {
+      type: 'read_landing_leads',
+      name: 'Dữ liệu landing page',
+      icon: HiOutlineGlobe,
+      bgColor: '#E0F2F1',
+      iconColor: '#0D6E6E',
+      description: 'Lead từ form landing UKnow (lọc ngày, nghề, lĩnh vực)',
     },
     {
       type: 'select_zalo_account',

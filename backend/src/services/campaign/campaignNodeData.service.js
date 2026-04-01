@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import leadService from '../lead/lead.service.js';
 import campaignFlowService from './campaignFlow.service.js';
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
 import customerInterestedService from '../customer/customerInterested.service.js';
@@ -144,6 +145,11 @@ class CampaignNodeDataService {
           });
         }
         return this.fetchGoogleSheetCustomersFromConfig(config);
+      }
+
+      case 'read_landing_leads': {
+        const { items } = await leadService.getLeadsForCampaignConfig(config);
+        return items;
       }
 
       case 'read_courses_db': {

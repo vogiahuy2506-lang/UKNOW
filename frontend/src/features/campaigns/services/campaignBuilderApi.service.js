@@ -44,6 +44,25 @@ const campaignBuilderApiService = {
     return api.get('/courses', { params, ...options });
   },
 
+  /**
+   * Preview lead landing (GET /api/leads/preview) — dùng cho node read_landing_leads trong Builder.
+   *
+   * @param {object} params query (occupations/interests JSON string)
+   * @param {object} options axios options
+   */
+  previewLandingLeads(params = {}, options = {}) {
+    const q = {
+      ...params,
+      landingLeadsUseDateRange:
+        params.landingLeadsUseDateRange === true
+        || params.landingLeadsUseDateRange === 'true'
+        || params.landingLeadsUseDateRange === '1'
+          ? 'true'
+          : 'false',
+    };
+    return api.get('/leads/preview', { params: q, ...options });
+  },
+
   previewGoogleSheet(payload, options = {}) {
     return api.post('/google-sheets/preview', payload, options);
   },

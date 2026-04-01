@@ -16,6 +16,8 @@ services:
     volumes:
       # Frontend vẫn cần file .env trong container theo yêu cầu vận hành.
       - ./.env:/usr/share/nginx/html/.env
+      # Luôn mount nginx.conf để container dùng đúng config domain mới nhất.
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # Mount chứng chỉ SSL từ VPS (Let's Encrypt).
       - /etc/letsencrypt:/etc/letsencrypt:ro
     # Giới hạn log: mỗi file tối đa 5MB, giữ tối đa 3 file xoay vòng (~15MB tổng)

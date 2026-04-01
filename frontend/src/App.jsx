@@ -25,7 +25,8 @@ import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
-import PrivacyPolicy from './pages/public/PrivacyPolicy';
+import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
+import UknowLandingPage from './pages/public/UknowLandingPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -138,7 +139,13 @@ function App() {
             </AuthLayout>
           </PublicRoute>
         } />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
+        <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+        {/* Alias công khai: một số link/email dùng chữ "private" thay vì "privacy" — phải khai báo riêng để không rơi catch-all → / → bắt đăng nhập */}
+        <Route path="/private-policy" element={<PublicDataPolicyPage />} />
+        <Route path="/private-policy/" element={<PublicDataPolicyPage />} />
+        <Route path="/l" element={<UknowLandingPage />} />
+        <Route path="/l/" element={<UknowLandingPage />} />
 
         {/* Protected Routes */}
         <Route path="/" element={

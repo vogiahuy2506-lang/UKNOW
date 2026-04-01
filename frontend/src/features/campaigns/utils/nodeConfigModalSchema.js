@@ -64,6 +64,22 @@ export const getSchemaForNodeId = ({ nodeId, runLogMap = {}, nodes = [], buildSc
     ];
   }
 
+  if (nodeType === 'read_landing_leads') {
+    return [
+      { key: 'leadId', type: 'number' },
+      { key: 'id', type: 'number' },
+      { key: 'fullName', type: 'string' },
+      { key: 'lastName', type: 'string' },
+      { key: 'firstName', type: 'string' },
+      { key: 'email', type: 'string' },
+      { key: 'phone', type: 'string' },
+      { key: 'occupation', type: 'string' },
+      { key: 'interestArea', type: 'string' },
+      { key: 'marketingConsent', type: 'boolean' },
+      { key: 'createdAt', type: 'string' },
+    ];
+  }
+
   if (nodeType === 'read_interested_customers') {
     return [
       { key: 'customerId', type: 'number' },
