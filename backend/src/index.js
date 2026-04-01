@@ -31,6 +31,7 @@ import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
+import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -56,7 +57,13 @@ const envAllowedOrigins = [
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
 
 // Middleware
-app.use(helmet());
+// Cho phép nhúng ảnh/file từ domain khác (`<img src="https://api.../file/...">`).
+// Helmet mặc định CORP `same-origin` khiến trình duyệt chặn hiển thị ảnh cross-origin (mở URL trực tiếp vẫn được).
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -101,9 +108,10 @@ app.use('/api/webhooks', webhookRoutes); // webhook WooCommerce: POST /api/webho
 app.use('/api/courses', coursesRoutes); // quản lý khóa học
 app.use('/api/zalo', zaloSettingsRoutes); // quản lý nhiều tài khoản Zalo
 app.use('/api/zalo-templates', zaloTemplateRoutes); // quản lý template Zalo
-app.use('/api/public', publicRoutes); // landing lead: POST /api/public/leads; GET /api/public/landing-featured-courses
+app.use('/api/public', publicRoutes); // landing lead, landing-featured-courses, landing-testimonials
 app.use('/api/admin/landing-featured-courses', adminLandingFeaturedCourseRoutes);
-app.use('/api/leads', leadRoutes); // GET /api/leads/preview (auth)
+app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);
+app.use('/api/leads', leadRoutes); // GET /api/leads (auth), GET /api/leads/preview (auth)
 
 // Health check
 app.get('/api/health', (req, res) => {

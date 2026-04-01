@@ -65,6 +65,7 @@ class LeadRepository {
    * @param {string[]} filters.occupations
    * @param {string[]} filters.interests
    * @param {number} filters.limit
+   * @param {number} [filters.offset] Bỏ qua bản ghi đầu (phân trang), mặc định 0.
    * @returns {Promise<object[]>}
    */
   async findFiltered(filters) {
@@ -74,6 +75,8 @@ class LeadRepository {
     const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
     const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
     const limit = clampLandingLeadsLimit(filters.limit, 1000);
+    const offsetRaw = Number(filters.offset);
+    const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
 
     const conditions = [];
     const params = [];
@@ -102,6 +105,7 @@ class LeadRepository {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
+    params.push(offset);
 
     const result = await db.query(
       `SELECT
@@ -117,7 +121,7 @@ class LeadRepository {
        FROM leads
        ${whereClause}
        ORDER BY created_at DESC
-       LIMIT $${idx}`,
+       LIMIT $${idx} OFFSET $${idx + 1}`,
       params
     );
     return result.rows;

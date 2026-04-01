@@ -22,10 +22,12 @@ import EmailSettings from './pages/settings/EmailSettings';
 import ZaloSettings from './pages/settings/ZaloSettings';
 import EmployeeManagement from './pages/settings/EmployeeManagement';
 import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
+import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
+import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import UknowLandingPage from './pages/public/UknowLandingPage';
 
@@ -187,6 +189,14 @@ function App() {
               </AdminRoute>
             )}
           />
+          <Route
+            path="settings/landing-testimonials"
+            element={(
+              <AdminRoute>
+                <LandingTestimonialsPage />
+              </AdminRoute>
+            )}
+          />
           <Route path="settings/email-templates" element={<EmailTemplates />} />
           <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
           
@@ -195,6 +205,9 @@ function App() {
 
           {/* Orders */}
           <Route path="orders" element={<Orders />} />
+
+          {/* Lead landing (form /l) */}
+          <Route path="landing-leads" element={<LandingLeadsListPage />} />
         </Route>
 
         {/* 404 */}

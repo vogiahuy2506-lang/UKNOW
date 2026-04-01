@@ -87,15 +87,24 @@ class UploadController {
     return resolvedPath;
   }
 
-  buildDownloadUrlByKey(storageKey, { download = false, baseUrl = '' } = {}) {
+  /**
+   * @param {{ download?: boolean, preview?: boolean, baseUrl?: string }} [opts]
+   * - `preview: true` → `/file/:token/download?preview=true` (bytes file, dùng cho `<img src>`).
+   * - Mặc định không preview → `/file/:token` (trang HTML viewer — không dùng làm URL ảnh).
+   */
+  buildDownloadUrlByKey(storageKey, { download = false, preview = false, baseUrl = '' } = {}) {
     const key = this.normalizeStorageKey(storageKey);
     if (!key) return '';
     const token = generateFileToken(key, null, null, null);
     const root = String(baseUrl || this.getPublicBaseUrlFromEnv()).replace(/\/+$/, '');
     const encodedToken = encodeURIComponent(token);
-    return download
-      ? `${root}/file/${encodedToken}/download`
-      : `${root}/file/${encodedToken}`;
+    if (preview) {
+      return `${root}/file/${encodedToken}/download?preview=true`;
+    }
+    if (download) {
+      return `${root}/file/${encodedToken}/download`;
+    }
+    return `${root}/file/${encodedToken}`;
   }
   // Lưu file tạm thời, chưa upload lên S3
   /**
@@ -174,7 +183,8 @@ class UploadController {
 
         await fs.mkdir(path.dirname(targetPath), { recursive: true });
         await fs.writeFile(targetPath, fileBuffer);
-        const signedUrl = this.buildDownloadUrlByKey(key);
+        /** URL dùng nhúng ảnh / tải nội dung — không dùng `/file/:token` (HTML viewer). */
+        const signedUrl = this.buildDownloadUrlByKey(key, { preview: true });
         
         results.push({
           tempId: tempFile.tempId,

@@ -130,6 +130,10 @@ export const LANDING_COPY = {
       title: 'Kết quả thực tế từ cộng đồng UKnow',
       carouselPrevAria: 'Xem đánh giá trước',
       carouselNextAria: 'Xem đánh giá tiếp',
+      /** Nhãn ảnh minh chứng (không phải avatar) */
+      proofImageTapHint: 'Bấm để xem lớn',
+      /** Đóng xem ảnh phóng to */
+      lightboxCloseAria: 'Đóng',
       items: [
         {
           id: 't1',
@@ -374,6 +378,8 @@ export const LANDING_COPY = {
       title: 'Real outcomes from the UKnow community',
       carouselPrevAria: 'Previous testimonials',
       carouselNextAria: 'Next testimonials',
+      proofImageTapHint: 'Tap to enlarge',
+      lightboxCloseAria: 'Close',
       items: [
         {
           id: 't1',

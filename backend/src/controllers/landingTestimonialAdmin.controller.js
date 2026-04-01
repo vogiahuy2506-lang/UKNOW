@@ -1,11 +1,11 @@
-import landingFeaturedCourseService from '../services/landing/landingFeaturedCourse.service.js';
+import landingTestimonialService from '../services/landing/landingTestimonial.service.js';
 
 /**
- * API quản trị — CRUD khóa học nổi bật landing (auth + admin).
+ * API quản trị — CRUD đánh giá landing (auth + admin).
  */
-class LandingFeaturedCourseAdminController {
+class LandingTestimonialAdminController {
   /**
-   * GET /api/admin/landing-featured-courses
+   * GET /api/admin/landing-testimonials
    *
    * Mục đích: trả về tất cả bản ghi (kèm inactive) để chỉnh sửa trên CMS.
    * Response: `{ success, data: [...] }`.
@@ -16,10 +16,10 @@ class LandingFeaturedCourseAdminController {
    */
   async list(req, res) {
     try {
-      const rows = await landingFeaturedCourseService.listAdmin();
+      const rows = await landingTestimonialService.listAdmin();
       return res.json({ success: true, data: rows });
     } catch (error) {
-      console.error('[LandingFeaturedCourseAdminController.list]', error);
+      console.error('[LandingTestimonialAdminController.list]', error);
       return res.status(500).json({
         success: false,
         message: 'Không thể tải danh sách',
@@ -28,9 +28,11 @@ class LandingFeaturedCourseAdminController {
   }
 
   /**
-   * POST /api/admin/landing-featured-courses
+   * POST /api/admin/landing-testimonials
    *
-   * Body JSON: titleVi, titleEn, linkUrl (bắt buộc http(s)); tagVi, tagEn; imageUrl (http(s) hoặc rỗng) hoặc imageTempId + imageOriginalName sau POST `/api/uploads/temp`; sortOrder, isActive.
+   * Body JSON: quoteVi, quoteEn, nameVi, nameEn (bắt buộc); starRating 1–5; roleVi, roleEn, locationVi, locationEn;
+   * imageUrl (http(s) hoặc rỗng) hoặc imageTempId + imageOriginalName sau khi POST `/api/uploads/temp`;
+   * sortOrder, isActive.
    * Response: `{ success, data: { ... } }` — bản ghi mới.
    *
    * @param {import('express').Request} req
@@ -43,11 +45,11 @@ class LandingFeaturedCourseAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingFeaturedCourseService.create(req.body || {}, userId);
+      const row = await landingTestimonialService.create(req.body || {}, userId);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingFeaturedCourseAdminController.create]', error);
+      if (status >= 500) console.error('[LandingTestimonialAdminController.create]', error);
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể tạo bản ghi',
@@ -56,7 +58,7 @@ class LandingFeaturedCourseAdminController {
   }
 
   /**
-   * PUT /api/admin/landing-featured-courses/:id
+   * PUT /api/admin/landing-testimonials/:id
    *
    * Body JSON: các trường cần cập nhật (merge với bản ghi hiện có).
    * Response: `{ success, data: { ... } }`.
@@ -71,11 +73,11 @@ class LandingFeaturedCourseAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingFeaturedCourseService.update(req.params.id, req.body || {}, userId);
+      const row = await landingTestimonialService.update(req.params.id, req.body || {}, userId);
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingFeaturedCourseAdminController.update]', error);
+      if (status >= 500) console.error('[LandingTestimonialAdminController.update]', error);
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể cập nhật',
@@ -84,7 +86,7 @@ class LandingFeaturedCourseAdminController {
   }
 
   /**
-   * DELETE /api/admin/landing-featured-courses/:id
+   * DELETE /api/admin/landing-testimonials/:id
    *
    * Response: `{ success: true }`.
    *
@@ -94,11 +96,11 @@ class LandingFeaturedCourseAdminController {
    */
   async remove(req, res) {
     try {
-      await landingFeaturedCourseService.remove(req.params.id);
+      await landingTestimonialService.remove(req.params.id);
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingFeaturedCourseAdminController.remove]', error);
+      if (status >= 500) console.error('[LandingTestimonialAdminController.remove]', error);
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể xóa',
@@ -107,4 +109,4 @@ class LandingFeaturedCourseAdminController {
   }
 }
 
-export default new LandingFeaturedCourseAdminController();
+export default new LandingTestimonialAdminController();
