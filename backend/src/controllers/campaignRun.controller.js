@@ -39,8 +39,25 @@ class CampaignRunController {
       const isAdmin = isAdminRole(req.user.role_code);
       const { campaignId, scheduleId, limit = 50 } = req.query;
 
+      // `timestamp without time zone` trong DB mang nghĩa giờ VN; ép sang timestamptz để node-pg/JSON không lệch khi máy chủ chạy UTC.
       let query = `
-        SELECT cr.*, c.campaign_name, cs.schedule_name
+        SELECT
+          cr.id,
+          cr.id_campaign,
+          cr.id_schedule,
+          cr.run_type,
+          cr.status,
+          cr.started_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS started_at,
+          cr.completed_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS completed_at,
+          cr.total_recipients,
+          cr.successful_sends,
+          cr.failed_sends,
+          cr.error_message,
+          cr.run_metadata,
+          cr.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+          cr.run_name,
+          c.campaign_name,
+          cs.schedule_name
         FROM campaign_runs cr
         JOIN campaigns c ON cr.id_campaign = c.id
         LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
@@ -148,7 +165,23 @@ class CampaignRunController {
           : null;
 
       const result = await db.query(
-        `SELECT cr.*, c.campaign_name, cs.schedule_name
+        `SELECT
+           cr.id,
+           cr.id_campaign,
+           cr.id_schedule,
+           cr.run_type,
+           cr.status,
+           cr.started_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS started_at,
+           cr.completed_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS completed_at,
+           cr.total_recipients,
+           cr.successful_sends,
+           cr.failed_sends,
+           cr.error_message,
+           cr.run_metadata,
+           cr.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+           cr.run_name,
+           c.campaign_name,
+           cs.schedule_name
          FROM campaign_runs cr
          JOIN campaigns c ON cr.id_campaign = c.id
          LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
@@ -199,7 +232,26 @@ class CampaignRunController {
 
       if (!useIncrementalLogQuery) {
         const executionResult = await db.query(
-          `SELECT ce.*
+          `SELECT
+             ce.id,
+             ce.id_campaign,
+             ce.id_run,
+             ce.id_customer,
+             ce.status,
+             ce.action_type,
+             ce.path_taken,
+             ce.execution_data,
+             ce.error_message,
+             ce.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+             ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS updated_at,
+             ce.node_id,
+             ce.node_name,
+             ce.node_type,
+             ce.node_subtype,
+             ce.node_order,
+             ce.progress_current,
+             ce.progress_total,
+             ce.node_result_json
            FROM campaign_executions ce
            WHERE ce.id_run = $1
            ORDER BY ce.node_order ASC NULLS LAST, ce.created_at ASC, ce.id ASC`,
@@ -209,11 +261,33 @@ class CampaignRunController {
       } else {
         const fetchSize = pageLimit + 1;
         const executionResult = await db.query(
-          `SELECT ce.*
+          `SELECT
+             ce.id,
+             ce.id_campaign,
+             ce.id_run,
+             ce.id_customer,
+             ce.status,
+             ce.action_type,
+             ce.path_taken,
+             ce.execution_data,
+             ce.error_message,
+             ce.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+             ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS updated_at,
+             ce.node_id,
+             ce.node_name,
+             ce.node_type,
+             ce.node_subtype,
+             ce.node_order,
+             ce.progress_current,
+             ce.progress_total,
+             ce.node_result_json
            FROM campaign_executions ce
            WHERE ce.id_run = $1
              AND ($2::BIGINT IS NULL OR ce.id > $2)
-             AND ($3::TIMESTAMPTZ IS NULL OR ce.updated_at > $3::TIMESTAMPTZ)
+             AND (
+               $3::TIMESTAMPTZ IS NULL
+               OR (ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh') > $3::TIMESTAMPTZ
+             )
            ORDER BY ce.id ASC
            LIMIT $4`,
           [id, safeAfterId, updatedAfterIso, fetchSize]

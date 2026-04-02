@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import customerApiService from '../../customers/services/customerApi.service';
 import {
   decodeHtmlEntities,
+  formatDateOnly,
   formatDateTime,
   getCustomerDisplayName,
 } from '../../customers/utils/customerDisplay.helpers';
@@ -16,13 +17,6 @@ const formatCurrency = (amount, currency = 'VND') => {
   const num = Number(amount || 0);
   if (currency === 'VND') return `${num.toLocaleString('vi-VN')}đ`;
   return `${num.toLocaleString('vi-VN')} ${currency}`;
-};
-
-const formatDate = (value) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 // ─── Config maps ──────────────────────────────────────────────────────────────
@@ -522,7 +516,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
                 </span>
               </DetailRow>
               {order.paymentMethod && <DetailRow label="Phương thức thanh toán" value={order.paymentMethod} />}
-              <DetailRow label="Ngày đặt" value={formatDate(order.orderDate)} />
+              <DetailRow label="Ngày đặt" value={formatDateOnly(order.orderDate)} />
             </div>
           </section>
 
@@ -1118,7 +1112,7 @@ const DashboardOrdersListTable = ({
 
                       {/* Ngày */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-500 whitespace-nowrap">
-                        {formatDate(item.orderDate)}
+                        {formatDateOnly(item.orderDate)}
                       </td>
                     </tr>
                   );

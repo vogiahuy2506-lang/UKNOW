@@ -12,6 +12,7 @@ import {
   HiOutlineXCircle,
 } from 'react-icons/hi';
 import api from '../../services/api';
+import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 
 /**
  * Chuẩn hóa dữ liệu tài khoản Zalo trả về từ API
@@ -402,7 +403,8 @@ const ZaloSettings = () => {
                         Người tạo: {account?.createdBy?.name || account?.creatorName || 'Không xác định'}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Cập nhật: {account.updatedAt ? new Date(account.updatedAt).toLocaleString('vi-VN') : 'N/A'}
+                        {/* Hiển thị theo Asia/Ho_Chi_Minh, khớp dữ liệu từ API (ISO/UTC). */}
+                        Cập nhật: {account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}
                       </p>
                     </div>
 

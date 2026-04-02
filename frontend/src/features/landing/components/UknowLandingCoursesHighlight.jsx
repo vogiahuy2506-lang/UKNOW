@@ -51,7 +51,7 @@ export function UknowLandingCoursesHighlight({ courses, items }) {
 
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="font-display max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-white">
+          <h2 className="font-landing max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-white">
             {courses.title}
           </h2>
           <p className="mt-3 max-w-[520px] text-[0.97rem] font-light leading-[1.75]" style={{ color: LANDING_MUTED }}>

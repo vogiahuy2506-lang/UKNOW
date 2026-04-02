@@ -24,12 +24,12 @@ export function UknowLandingHero({ hero }) {
       </div>
 
       <h1
-        className="font-display text-[clamp(2.2rem,4.2vw,3.8rem)] font-black leading-[1.08] tracking-[-1.5px] text-uknow-ink animate-uknow-fade-up"
+        className="font-landing text-[clamp(2.2rem,4.2vw,3.8rem)] font-black leading-[1.08] tracking-[-1.5px] text-uknow-ink animate-uknow-fade-up"
         style={{ animationDelay: '0.2s' }}
       >
         {hero.titleLine1}
         <br />
-        <span className="relative inline-block font-display italic text-uknow-teal">
+        <span className="relative inline-block font-landing italic text-uknow-teal">
           {hero.titleHighlight}
           <span
             className="pointer-events-none absolute bottom-[3px] left-0 right-0 h-1 rounded-sm bg-uknow-gold-light/60"
@@ -82,7 +82,7 @@ export function UknowLandingHero({ hero }) {
           <Fragment key={s.label}>
             {i > 0 ? <div className="mx-3 hidden h-10 w-px self-center bg-uknow-border sm:block" aria-hidden /> : null}
             <div className="flex flex-col pr-4">
-              <span className="font-display text-[2rem] font-black leading-none text-uknow-ink">
+              <span className="font-landing text-[2rem] font-black leading-none text-uknow-ink">
                 {s.value}
                 <sup className="text-[1.2rem] text-uknow-gold">{s.sup}</sup>
               </span>

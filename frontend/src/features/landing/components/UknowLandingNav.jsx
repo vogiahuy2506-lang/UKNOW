@@ -11,7 +11,7 @@ import { INSTRUCTOR_PHOTO_SRC } from '../constants/landingAssets.js';
 export function UknowLandingNav({ nav, locale, setLocale }) {
   return (
     <nav className="fixed left-0 right-0 top-0 z-[200] flex h-[68px] items-center justify-between border-b border-uknow-border bg-[rgba(250,248,243,0.95)] px-[5%] backdrop-blur-[16px] sm:px-[6%]">
-      <a href="#top" className="font-display text-[1.6rem] font-black tracking-[-0.5px] text-uknow-teal">
+      <a href="#top" className="font-landing text-[1.6rem] font-black tracking-[-0.5px] text-uknow-teal">
         U<span className="text-uknow-gold">Know</span>
         <span className="hidden sm:inline">.edu.vn</span>
       </a>

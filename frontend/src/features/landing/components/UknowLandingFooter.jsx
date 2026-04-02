@@ -18,7 +18,7 @@ export function UknowLandingFooter({ footer }) {
     >
       <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-10 lg:flex-row lg:items-center">
         <div className="min-w-0">
-          <div className="font-display text-[1.3rem] font-black leading-tight">
+          <div className="font-landing text-[1.3rem] font-black leading-tight">
             <span className="text-white">U</span>
             <span style={{ color: FOOTER_ACCENT }}>Know</span>
             <span className="text-white">.edu.vn</span>
@@ -41,7 +41,7 @@ export function UknowLandingFooter({ footer }) {
 
         <div className="flex w-full flex-col items-stretch gap-4 lg:w-auto lg:items-end">
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-[0.82rem] font-medium text-[#94a3b8] lg:justify-end">
-            <Link to="/private-policy" className="transition hover:text-white">
+            <Link to="/privacy-policy" className="transition hover:text-white">
               {footer.privacy}
             </Link>
           </div>

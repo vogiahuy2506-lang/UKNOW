@@ -11,7 +11,7 @@ export function UknowLandingFinalCta({ finalCta }) {
         className="pointer-events-none absolute -right-[150px] -top-[250px] h-[600px] w-[600px] rounded-full bg-white/[0.03]"
         aria-hidden
       />
-      <h2 className="relative font-display text-[clamp(1.8rem,3vw,2.8rem)] font-black tracking-[-0.5px]">
+      <h2 className="relative font-landing text-[clamp(1.8rem,3vw,2.8rem)] font-black tracking-[-0.5px]">
         {finalCta.title}
         <br />
         {finalCta.titleLine2}

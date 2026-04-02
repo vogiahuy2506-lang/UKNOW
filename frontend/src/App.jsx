@@ -144,9 +144,9 @@ function App() {
         } />
         <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
         <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
-        {/* Alias công khai: một số link/email dùng chữ "private" thay vì "privacy" — phải khai báo riêng để không rơi catch-all → / → bắt đăng nhập */}
-        <Route path="/private-policy" element={<PublicDataPolicyPage />} />
-        <Route path="/private-policy/" element={<PublicDataPolicyPage />} />
+        {/* Chuyển hướng URL cũ (sai chính tả) sang đường dẫn chuẩn — tránh 404 và không rơi catch-all */}
+        <Route path="/private-policy" element={<Navigate to="/privacy-policy" replace />} />
+        <Route path="/private-policy/" element={<Navigate to="/privacy-policy" replace />} />
         <Route path="/l" element={<UknowLandingPage />} />
         <Route path="/l/" element={<UknowLandingPage />} />
 

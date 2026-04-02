@@ -35,7 +35,7 @@ export function UknowLandingAbout({ about }) {
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" aria-hidden />
               <div className="absolute bottom-0 left-0 right-0 z-[2] px-4 pb-5 pt-12 text-center">
-                <div className="font-display text-[1.1rem] font-bold text-white drop-shadow-sm">{about.photoName}</div>
+                <div className="font-landing text-[1.1rem] font-bold text-white drop-shadow-sm">{about.photoName}</div>
                 <div className="mt-1 text-[0.78rem] text-uknow-gold-light">{about.photoDegree}</div>
               </div>
             </div>
@@ -83,7 +83,7 @@ export function UknowLandingAbout({ about }) {
 
         <div>
           <p className="mb-3.5 text-[0.68rem] font-bold uppercase tracking-[2px] text-uknow-gold-light">{about.label}</p>
-          <h2 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-black leading-tight tracking-[-1px]">{about.name}</h2>
+          <h2 className="font-landing text-[clamp(2rem,3.5vw,3rem)] font-black leading-tight tracking-[-1px]">{about.name}</h2>
           <p className="mt-2 text-[0.9rem] font-medium text-uknow-gold-light">{about.degree}</p>
           <div className="mt-5 space-y-4 text-[0.95rem] font-light leading-[1.8] text-white/75">
             {about.bioParagraphs.map((p) => (
@@ -105,7 +105,7 @@ export function UknowLandingAbout({ about }) {
           <div className="mt-8 grid grid-cols-3 gap-4 border-t border-white/10 pt-7">
             {about.stats.map((s) => (
               <div key={s.label}>
-                <div className="font-display text-[2rem] font-black leading-none text-uknow-gold-light">{s.value}</div>
+                <div className="font-landing text-[2rem] font-black leading-none text-uknow-gold-light">{s.value}</div>
                 <div className="mt-1 text-[0.72rem] leading-snug text-white/50">{s.label}</div>
               </div>
             ))}
