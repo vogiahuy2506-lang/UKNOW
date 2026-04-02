@@ -10,9 +10,20 @@ class CampaignScheduleController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role_code);
 
+      // Ép timestamptz để node-pg không parse naive timestamp theo TZ tiến trình (UTC).
       const result = await db.query(
         `SELECT
-           cs.*,
+           cs.id,
+           cs.id_campaign,
+           cs.schedule_name,
+           cs.schedule_type,
+           cs.cron_expression,
+           cs.enabled,
+           cs.last_run_at::timestamptz AS last_run_at,
+           cs.next_run_at::timestamptz AS next_run_at,
+           cs.run_count,
+           cs.created_at::timestamptz AS created_at,
+           cs.updated_at::timestamptz AS updated_at,
            c.campaign_name AS campaign_name,
            lr.status AS last_run_status
          FROM campaign_schedules cs
@@ -63,7 +74,17 @@ class CampaignScheduleController {
 
       const result = await db.query(
         `SELECT
-           cs.*,
+           cs.id,
+           cs.id_campaign,
+           cs.schedule_name,
+           cs.schedule_type,
+           cs.cron_expression,
+           cs.enabled,
+           cs.last_run_at::timestamptz AS last_run_at,
+           cs.next_run_at::timestamptz AS next_run_at,
+           cs.run_count,
+           cs.created_at::timestamptz AS created_at,
+           cs.updated_at::timestamptz AS updated_at,
            c.campaign_name AS campaign_name,
            lr.status AS last_run_status
          FROM campaign_schedules cs
@@ -155,7 +176,12 @@ class CampaignScheduleController {
         `INSERT INTO campaign_schedules 
          (id_campaign, schedule_name, schedule_type, cron_expression, enabled)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
+         RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
+           last_run_at::timestamptz AS last_run_at,
+           next_run_at::timestamptz AS next_run_at,
+           run_count,
+           created_at::timestamptz AS created_at,
+           updated_at::timestamptz AS updated_at`,
         [campaignId, scheduleName, scheduleType, cronExpression, enabled !== false]
       );
 
@@ -197,7 +223,7 @@ class CampaignScheduleController {
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
       const scheduleCheck = await db.query(
-        `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.run_count, cs.last_run_at FROM campaign_schedules cs
+        `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.run_count, cs.last_run_at::timestamptz AS last_run_at FROM campaign_schedules cs
          JOIN campaigns c ON cs.id_campaign = c.id
          WHERE cs.id = $1
            AND ($2::boolean = TRUE OR c.id_user = $3)`,
@@ -249,7 +275,12 @@ class CampaignScheduleController {
          enabled = COALESCE($4, enabled),
          updated_at = CURRENT_TIMESTAMP
          WHERE id = $5
-         RETURNING *`,
+         RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
+           last_run_at::timestamptz AS last_run_at,
+           next_run_at::timestamptz AS next_run_at,
+           run_count,
+           created_at::timestamptz AS created_at,
+           updated_at::timestamptz AS updated_at`,
         [scheduleName, scheduleType, cronExpression, enabled, id]
       );
 

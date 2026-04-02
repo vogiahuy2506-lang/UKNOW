@@ -13,11 +13,15 @@ class CampaignCrudService {
     const offset = (page - 1) * limit;
     const isAdmin = isAdminRole(roleCode);
 
+    // Ép `timestamp without time zone` → `timestamptz` theo session TIME ZONE (Asia/Ho_Chi_Minh trong pool)
+    // để node-pg nhận đúng instant UTC; tránh parse theo TZ tiến trình Node (thường UTC) gây +7h trên UI.
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
-             c.start_date, c.end_date, c.total_customers, c.total_sent, c.total_delivered,
+             c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
+             c.total_customers, c.total_sent, c.total_delivered,
              c.total_opened, c.total_clicked, c.total_converted, c.total_revenue,
-             c.created_at, c.updated_at, c.published_at, c.last_run_at,
+             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
              c.id_user,
              COALESCE(u.full_name, u.username) AS creator_name,
              COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
@@ -120,7 +124,16 @@ class CampaignCrudService {
   async getCampaignById({ userId, roleCode, campaignId }) {
     const isAdmin = isAdminRole(roleCode);
     const params = [campaignId];
-    let query = 'SELECT * FROM campaigns WHERE id = $1';
+    let query = `
+      SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+             c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
+             c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
+             c.timezone,
+             c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
+             c.total_converted, c.total_revenue,
+             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+      FROM campaigns c WHERE c.id = $1`;
     if (!isAdmin) {
       params.push(userId);
       query += ` AND id_user = $${params.length}`;
@@ -195,7 +208,16 @@ class CampaignCrudService {
       const isAdmin = isAdminRole(roleCode);
 
       const campaignParams = [campaignId];
-      let campaignQuery = 'SELECT * FROM campaigns WHERE id = $1';
+      let campaignQuery = `
+        SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+               c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
+               c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
+               c.timezone,
+               c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
+               c.total_converted, c.total_revenue,
+               c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+        FROM campaigns c WHERE c.id = $1`;
       if (!isAdmin) {
         campaignParams.push(userId);
         campaignQuery += ` AND id_user = $${campaignParams.length}`;

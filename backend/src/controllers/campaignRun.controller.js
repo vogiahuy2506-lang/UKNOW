@@ -39,7 +39,11 @@ class CampaignRunController {
       const isAdmin = isAdminRole(req.user.role_code);
       const { campaignId, scheduleId, limit = 50 } = req.query;
 
-      // `timestamp without time zone` trong DB mang nghĩa giờ VN; ép sang timestamptz để node-pg/JSON không lệch khi máy chủ chạy UTC.
+      // Ép sang `timestamptz` để node-pg trả về instant UTC đúng trong JSON.
+      // Dùng `::timestamptz` (theo session TIME ZONE đã set Asia/Ho_Chi_Minh trong `database.js`) thay vì
+      // `... AT TIME ZONE 'Asia/Ho_Chi_Minh'`: nếu cột thực tế là `timestamptz`, overload thứ hai của
+      // `AT TIME ZONE` sẽ strip về `timestamp` không múi → postgres-date coi là giờ máy chủ (thường UTC)
+      // và hiển thị VN bị cộng thêm +7h.
       let query = `
         SELECT
           cr.id,
@@ -47,14 +51,14 @@ class CampaignRunController {
           cr.id_schedule,
           cr.run_type,
           cr.status,
-          cr.started_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS started_at,
-          cr.completed_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS completed_at,
+          cr.started_at::timestamptz AS started_at,
+          cr.completed_at::timestamptz AS completed_at,
           cr.total_recipients,
           cr.successful_sends,
           cr.failed_sends,
           cr.error_message,
           cr.run_metadata,
-          cr.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+          cr.created_at::timestamptz AS created_at,
           cr.run_name,
           c.campaign_name,
           cs.schedule_name
@@ -171,14 +175,14 @@ class CampaignRunController {
            cr.id_schedule,
            cr.run_type,
            cr.status,
-           cr.started_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS started_at,
-           cr.completed_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS completed_at,
+           cr.started_at::timestamptz AS started_at,
+           cr.completed_at::timestamptz AS completed_at,
            cr.total_recipients,
            cr.successful_sends,
            cr.failed_sends,
            cr.error_message,
            cr.run_metadata,
-           cr.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
+           cr.created_at::timestamptz AS created_at,
            cr.run_name,
            c.campaign_name,
            cs.schedule_name
@@ -242,8 +246,8 @@ class CampaignRunController {
              ce.path_taken,
              ce.execution_data,
              ce.error_message,
-             ce.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
-             ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS updated_at,
+             ce.created_at::timestamptz AS created_at,
+             ce.updated_at::timestamptz AS updated_at,
              ce.node_id,
              ce.node_name,
              ce.node_type,
@@ -271,8 +275,8 @@ class CampaignRunController {
              ce.path_taken,
              ce.execution_data,
              ce.error_message,
-             ce.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS created_at,
-             ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh' AS updated_at,
+             ce.created_at::timestamptz AS created_at,
+             ce.updated_at::timestamptz AS updated_at,
              ce.node_id,
              ce.node_name,
              ce.node_type,
@@ -286,7 +290,7 @@ class CampaignRunController {
              AND ($2::BIGINT IS NULL OR ce.id > $2)
              AND (
                $3::TIMESTAMPTZ IS NULL
-               OR (ce.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh') > $3::TIMESTAMPTZ
+               OR ce.updated_at::timestamptz > $3::TIMESTAMPTZ
              )
            ORDER BY ce.id ASC
            LIMIT $4`,

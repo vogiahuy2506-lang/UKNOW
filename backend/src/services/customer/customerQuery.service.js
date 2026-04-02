@@ -128,6 +128,7 @@ class CustomerQueryService {
       ? `(SELECT cc2.email_received_count FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
       : 'NULL';
 
+    // Ép timestamptz để API trả instant đúng; tránh node-pg parse `timestamp` theo TZ tiến trình.
     let query = `
       SELECT c.id, c.email, c.phone, c.full_name, c.customer_source,
              c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
@@ -139,7 +140,7 @@ class CustomerQueryService {
                  AND cp.id_user = c.id_user
              ), 0)::INTEGER AS campaign_count,
              (
-               SELECT MAX(cc.last_activity_at)
+               SELECT MAX(cc.last_activity_at)::timestamptz
                FROM campaign_customers cc
                JOIN campaigns cp ON cp.id = cc.id_campaign
                WHERE cc.id_customer = c.id
@@ -150,7 +151,7 @@ class CustomerQueryService {
              ${campaignInteractionExpr} AS campaign_has_clicked,
              ${campaignOpenedExpr} AS campaign_has_opened,
              ${campaignReceivedExpr} AS campaign_email_received_count,
-             c.created_at, c.updated_at
+             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at
       FROM customers c
       WHERE c.id_user = $1
     `;
