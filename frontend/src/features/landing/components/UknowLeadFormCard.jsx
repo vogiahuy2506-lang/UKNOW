@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { getOptionLabel, UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../constants/uknowLandingOptions.js';
 
 /**
- * Thẻ form đăng ký lead — khớp mock `.form-card`; link chính sách nội bộ `/private-policy`.
+ * Thẻ form đăng ký lead — khớp mock `.form-card`; link chính sách nội bộ `/privacy-policy`.
  *
  * @param {object} props
  * @param {'vi' | 'en'} props.locale
@@ -45,7 +45,7 @@ export function UknowLeadFormCard({ locale, formCopy, form, setField, submitting
         <p className="mb-2 flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-[1.5px] text-uknow-teal">
           <span aria-hidden>🎁</span> {formCopy.cardEyebrow}
         </p>
-        <h2 className="font-display text-[1.4rem] font-black leading-tight tracking-[-0.3px] text-uknow-ink">
+        <h2 className="font-landing text-[1.4rem] font-black leading-tight tracking-[-0.3px] text-uknow-ink">
           {formCopy.cardTitleLine1}
           <br />
           {formCopy.cardTitleLine2}
@@ -173,7 +173,7 @@ export function UknowLeadFormCard({ locale, formCopy, form, setField, submitting
           />
           <label htmlFor="uknow-agree" className="cursor-pointer text-[0.78rem] leading-relaxed text-uknow-muted">
             {formCopy.consentPrefix}{' '}
-            <Link to="/private-policy" className="font-medium text-uknow-teal underline underline-offset-2">
+            <Link to="/privacy-policy" className="font-medium text-uknow-teal underline underline-offset-2">
               {formCopy.privacyLink}
             </Link>
             .

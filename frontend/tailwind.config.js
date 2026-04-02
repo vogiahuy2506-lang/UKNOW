@@ -74,6 +74,8 @@ export default {
       fontFamily: {
         sans: ['Lexend', 'Inter', 'system-ui', 'sans-serif'],
         uknow: ['Lexend', '"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
+        /** Trang landing `/l` — toàn bộ UI dùng Roboto */
+        landing: ['Roboto', 'system-ui', 'sans-serif'],
         display: ['Fraunces', 'Georgia', 'serif'],
       },
       keyframes: {

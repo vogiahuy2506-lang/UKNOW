@@ -10,6 +10,7 @@ import {
   HiOutlineChevronLeft,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
+import { formatDateOnly } from '../../features/customers/utils/customerDisplay.helpers';
 
 const STATUS_MAP = {
   active: { label: 'Đang hoạt động', cls: 'badge-success' },
@@ -21,12 +22,6 @@ const STATUS_MAP = {
 const StatusBadge = ({ status }) => {
   const s = STATUS_MAP[status] || { label: status || '--', cls: 'badge-gray' };
   return <span className={`badge ${s.cls}`}>{s.label}</span>;
-};
-
-const formatDate = (v) => {
-  if (!v) return '--';
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN');
 };
 
 const Customers = () => {
@@ -146,7 +141,7 @@ const Customers = () => {
                     })()}
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
-                    <span>Tạo lúc {formatDate(c.createdAt)}</span>
+                    <span>Tạo lúc {formatDateOnly(c.createdAt)}</span>
                     <span>Người tạo: {c?.createdBy?.name || c?.creatorName || 'Không xác định'}</span>
                     <span className="flex items-center gap-1">
                       <HiOutlineUsers className="w-4 h-4" />

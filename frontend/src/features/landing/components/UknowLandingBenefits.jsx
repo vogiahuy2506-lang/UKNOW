@@ -30,7 +30,7 @@ export function UknowLandingBenefits({ benefits }) {
   return (
     <section className="px-[6%] py-24 sm:px-[8%] sm:py-[100px]">
       <p className="mb-3 text-[0.68rem] font-bold uppercase tracking-[2px] text-uknow-teal">{benefits.eyebrow}</p>
-      <h2 className="font-display max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-uknow-ink">
+      <h2 className="font-landing max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-uknow-ink">
         {benefits.title}
         <br />
         {benefits.titleLine2}

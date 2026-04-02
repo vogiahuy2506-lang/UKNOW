@@ -57,7 +57,7 @@ export function UknowLandingTestimonials({ testimonials, items }) {
     <section className="relative bg-uknow-paper px-[6%] py-24 sm:px-[8%] sm:py-[100px]">
       <p className="mb-3 text-[0.68rem] font-bold uppercase tracking-[2px] text-uknow-teal">{testimonials.eyebrow}</p>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="font-display max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-uknow-ink">
+        <h2 className="font-landing max-w-3xl text-[clamp(1.8rem,3vw,2.8rem)] font-black leading-tight tracking-[-0.5px] text-uknow-ink">
           {testimonials.title}
         </h2>
         <div className="flex shrink-0 gap-2">
@@ -113,7 +113,7 @@ export function UknowLandingTestimonials({ testimonials, items }) {
               </figcaption>
 
               <div className="relative z-[1]">
-                <span className="pointer-events-none absolute left-0 top-0 font-display text-[4rem] leading-[0.8] text-uknow-teal/12">
+                <span className="pointer-events-none absolute left-0 top-0 font-landing text-[4rem] leading-[0.8] text-uknow-teal/12">
                   &ldquo;
                 </span>
                 <div className="mb-2.5 pt-5 text-[0.8rem] text-uknow-gold" aria-hidden>

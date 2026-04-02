@@ -15,6 +15,7 @@ import { useUknowLandingForm } from '../../features/landing/hooks/useUknowLandin
 /**
  * Trang landing công khai UKnow — layout bám mock `uknow-landing-v2.html`, song ngữ VI/EN.
  * Route: `/l`, `/l/`
+ * Phông chữ: Roboto (`font-landing`) cho toàn trang.
  */
 export default function UknowLandingPage() {
   const { locale, setLocale, copy } = useLandingLocale();
@@ -25,7 +26,7 @@ export default function UknowLandingPage() {
   return (
     <div
       id="top"
-      className="min-h-screen scroll-smooth bg-uknow-cream font-uknow text-uknow-ink antialiased selection:bg-uknow-teal/30"
+      className="min-h-screen scroll-smooth bg-uknow-cream font-landing text-uknow-ink antialiased selection:bg-uknow-teal/30"
     >
       <UknowLandingNav nav={copy.nav} locale={locale} setLocale={setLocale} />
 

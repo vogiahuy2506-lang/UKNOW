@@ -17,6 +17,7 @@ import {
   HiOutlineChat,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
+import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { useAuthStore } from '../../stores/authStore';
 
 const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
@@ -378,23 +379,12 @@ const Campaigns = () => {
                         <span className="text-sm">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
                       </div>
                     </td>
+                    {/* Dùng formatCampaignDateTime để luôn hiển thị theo Asia/Ho_Chi_Minh, khớp dữ liệu DB/API (ISO/UTC). */}
                     <td className="text-sm text-gray-500">
-                      {new Date(campaign.createdAt).toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatCampaignDateTime(campaign.createdAt)}
                     </td>
                     <td className="text-sm text-gray-500">
-                      {new Date(campaign.updatedAt).toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatCampaignDateTime(campaign.updatedAt)}
                     </td>
                     <td className="text-center">{campaign.completedCount ?? 0}</td>
                     <td>

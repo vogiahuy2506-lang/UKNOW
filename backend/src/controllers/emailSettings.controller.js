@@ -237,7 +237,7 @@ class EmailSettingsController {
 
     const trackingPixel = `<img src="${openUrl}" width="1" height="1" alt="" style="width:1px;height:1px;border:0;opacity:0;display:block;" />`;
 
-    // Footer email song ngữ gồm cả link hủy đăng ký và chính sách bảo mật.
+    // Footer email: unsubscribe + chính sách, sau đó khối pháp lý (tiêu đề tên công ty song ngữ, tên pháp lý + địa chỉ).
     const unsubscribeFooter = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;line-height:1.6;color:#9ca3af;font-family:Arial,sans-serif;">
   <div style="margin-bottom:4px;">
     Nếu bạn không muốn nhận email này nữa, <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">hủy đăng ký tại đây</a>.
@@ -248,6 +248,13 @@ class EmailSettingsController {
     If you no longer wish to receive these emails, <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">unsubscribe here</a>.
     &nbsp;|&nbsp;
     <a href="${privacyPolicyUrl}" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>.
+  </div>
+  <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;line-height:1.65;color:#6b7280;">
+    <div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Tên công ty · Company name</div>
+    <div style="font-weight:600;color:#374151;margin-bottom:6px;">CÔNG TY TNHH GIẢI PHÁP SỐ DIGISO</div>
+    <div style="margin-bottom:2px;">DIGISO DIGITAL SOLUTION COMPANY LIMITED</div>
+    <div style="margin-top:8px;margin-bottom:3px;">Địa chỉ: Đ. Võ Trường Toản, Phường Linh Trung, Linh Xuân, Hồ Chí Minh</div>
+    <div>Address: Vo Truong Toan Street, Linh Trung Ward, Linh Xuan, Ho Chi Minh City, Vietnam</div>
   </div>
 </div>`;
 

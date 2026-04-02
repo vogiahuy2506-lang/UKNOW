@@ -15,19 +15,38 @@ export const getCustomerDisplayName = (customer) => {
   );
 };
 
+/** Múi giờ hiển thị cố định cho người dùng Việt Nam (UTC+7, không DST). */
+const DISPLAY_TZ = 'Asia/Ho_Chi_Minh';
+
+/**
+ * Chỉ lấy phần ngày (dd/mm/yyyy) theo giờ Việt Nam.
+ *
+ * Luồng hoạt động:
+ * 1. Parse instant từ API (thường là ISO UTC hoặc timestamptz).
+ * 2. Format theo lịch ngày tại Asia/Ho_Chi_Minh để "Ngày đặt" khớp giờ địa phương.
+ *
+ * @param {string|number|Date|null|undefined} value Thời điểm đầu vào.
+ * @returns {string} Ngày hiển thị hoặc `--`.
+ */
 export const formatDateOnly = (value) => {
   if (!value) return '--';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '--' : date.toLocaleDateString('vi-VN');
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleDateString('vi-VN', {
+    timeZone: DISPLAY_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 };
 
 /**
- * Format thời gian hiển thị trên màn hình khách hàng theo chuẩn UTC.
+ * Format ngày giờ hiển thị cho màn khách hàng / đơn hàng theo giờ Việt Nam.
  *
  * Luồng hoạt động:
- * 1. Kiểm tra dữ liệu đầu vào có hợp lệ hay không.
- * 2. Parse sang Date và chặn giá trị không hợp lệ.
- * 3. Format theo `vi-VN` nhưng cố định `UTC` để tránh bị cộng thêm lệch +7 giờ.
+ * 1. Kiểm tra và parse chuỗi hoặc timestamp từ backend.
+ * 2. Hiển thị bằng `toLocaleString` với `timeZone: Asia/Ho_Chi_Minh` để đồng nhất,
+ *    không phụ thuộc múi giờ trình duyệt của máy người xem.
  *
  * @param {string|number|Date|null|undefined} value Giá trị thời gian đầu vào.
  * @returns {string} Chuỗi thời gian hiển thị hoặc `--` nếu không hợp lệ.
@@ -39,7 +58,7 @@ export const formatDateTime = (value) => {
     ? '--'
     : date.toLocaleString('vi-VN', {
       hour12: false,
-      timeZone: 'UTC',
+      timeZone: DISPLAY_TZ,
     });
 };
 
