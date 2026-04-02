@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import db from './config/database.js';
+import { formatUtcAndVietnamForLog } from './utils/vnTimeFormat.util.js';
 import uploadController from './controllers/upload.controller.js';
 
 
@@ -147,7 +148,9 @@ const testDBConnection = async () => {
   try {
     const client = await db.getClient();
     const result = await client.query('SELECT NOW()');
-    console.log(`Database connected successfully at ${result.rows[0].now}`);
+    console.log(
+      `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
+    );
     // Lazy migration: đảm bảo cột uknow_status tồn tại
     await client.query(
       `ALTER TABLE campaign_customers ADD COLUMN IF NOT EXISTS uknow_status VARCHAR(20) DEFAULT NULL`

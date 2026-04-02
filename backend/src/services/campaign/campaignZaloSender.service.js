@@ -1326,6 +1326,12 @@ class CampaignZaloSenderService {
    * @returns {object}
    */
   mapCampaignZaloAccount(account) {
+    const perHourRaw = account.zalo_personal_outbound_per_hour_limit;
+    const delayMinRaw = account.zalo_personal_outbound_delay_min_ms;
+    const delayMaxRaw = account.zalo_personal_outbound_delay_max_ms;
+    const perHour = Number.parseInt(perHourRaw, 10);
+    const delayMin = Number.parseInt(delayMinRaw, 10);
+    const delayMax = Number.parseInt(delayMaxRaw, 10);
     return {
       id: String(account.id),
       userId: Number.isFinite(Number(account.id_user)) ? Number(account.id_user) : null,
@@ -1333,6 +1339,18 @@ class CampaignZaloSenderService {
       status: account.status,
       isActive: account.is_active === true,
       isDefault: account.is_default === true,
+      /** Số tin Zalo cá nhân / cửa sổ (1h) riêng cho TK; undefined nếu NULL trong DB → dùng env chung. */
+      ...(Number.isFinite(perHour) && perHour > 0
+        ? { zaloPersonalOutboundPerHourLimit: perHour }
+        : {}),
+      /** Delay tối thiểu (ms) giữa 2 tin cá nhân trên TK; undefined nếu không cấu hình. */
+      ...(Number.isFinite(delayMin) && delayMin >= 0
+        ? { zaloPersonalOutboundDelayMinMs: delayMin }
+        : {}),
+      /** Delay tối đa (ms) giữa 2 tin cá nhân trên TK; undefined nếu không cấu hình. */
+      ...(Number.isFinite(delayMax) && delayMax >= 0
+        ? { zaloPersonalOutboundDelayMaxMs: delayMax }
+        : {}),
     };
   }
 
@@ -1352,7 +1370,10 @@ class CampaignZaloSenderService {
     }
 
     const accountResult = await db.query(
-      `SELECT id, id_user, display_name, status, is_active, is_default, cookie_text
+      `SELECT id, id_user, display_name, status, is_active, is_default, cookie_text,
+              zalo_personal_outbound_per_hour_limit,
+              zalo_personal_outbound_delay_min_ms,
+              zalo_personal_outbound_delay_max_ms
        FROM zalo_settings
        WHERE id = $1
          ${isAdmin ? '' : 'AND id_user = $2'}

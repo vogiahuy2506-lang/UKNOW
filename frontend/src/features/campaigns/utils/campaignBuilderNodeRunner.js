@@ -430,6 +430,86 @@ export const createCampaignNodeRunner = (deps) => {
   };
 
   /**
+   * Khóa gắn recipient ↔ TK trong preview (giống backend: ưu tiên customerId, rồi SĐT, rồi uid).
+   *
+   * @param {object} input
+   * @param {object|null} input.entry
+   * @param {string} input.recipient
+   * @param {'phone'|'uid'} input.recipientType
+   * @returns {string}
+   */
+  const buildPreviewZaloPoolBindingKey = ({ entry, recipient, recipientType }) => {
+    const row = entry?.row || null;
+    const cid = row?.customerId ?? row?.id_customer ?? row?.id;
+    if (cid != null && String(cid).trim()) {
+      return `customer:${String(cid).trim()}`;
+    }
+    if (recipientType === 'phone') {
+      const digits = String(recipient || '').replace(/\D/g, '');
+      if (digits) return `phone:${digits}`;
+    }
+    const uid = String(recipient || '').trim().toLowerCase();
+    return uid ? `uid:${uid}` : '';
+  };
+
+  const shufflePreviewZaloPoolIds = (ids) => {
+    const copy = [...ids];
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+
+  /**
+   * Chọn TK gửi cho preview Zalo cá nhân khi bật pool: mỗi recipient giữ một TK cố định trong phiên preview.
+   *
+   * @param {object} ctx
+   * @param {object} input
+   * @returns {object} account giống shape `ensureSelectedZaloAccount`
+   */
+  const pickZaloAccountForPreviewPersonal = (ctx, { recipient, entry, recipientType }) => {
+    const poolIds = ctx.zaloPoolFromSelect;
+    const byId = ctx.zaloPoolAccountById;
+    if (!Array.isArray(poolIds) || poolIds.length <= 1 || !(byId instanceof Map)) {
+      return ensureSelectedZaloAccount(ctx);
+    }
+    if (!ctx.zaloPreviewPoolBinding) {
+      ctx.zaloPreviewPoolBinding = new Map();
+    }
+    const bindingKey = buildPreviewZaloPoolBindingKey({ entry, recipient, recipientType });
+    if (bindingKey && ctx.zaloPreviewPoolBinding.has(bindingKey)) {
+      const pinnedId = String(ctx.zaloPreviewPoolBinding.get(bindingKey) || '').trim();
+      const mapped = byId.get(pinnedId);
+      if (mapped?.id) {
+        return {
+          id: String(mapped.id),
+          displayName: String(mapped.displayName || mapped.name || 'Tài khoản Zalo'),
+          status: String(mapped.status || 'connected'),
+          isActive: mapped.isActive !== false,
+          isDefault: mapped.isDefault === true,
+        };
+      }
+    }
+    const order = shufflePreviewZaloPoolIds(poolIds.map((id) => String(id || '').trim()).filter(Boolean));
+    const pickedId = String(order[0] || '').trim();
+    if (bindingKey && pickedId) {
+      ctx.zaloPreviewPoolBinding.set(bindingKey, pickedId);
+    }
+    const mapped = pickedId ? byId.get(pickedId) : null;
+    if (mapped?.id) {
+      return {
+        id: String(mapped.id),
+        displayName: String(mapped.displayName || mapped.name || 'Tài khoản Zalo'),
+        status: String(mapped.status || 'connected'),
+        isActive: mapped.isActive !== false,
+        isDefault: mapped.isDefault === true,
+      };
+    }
+    return ensureSelectedZaloAccount(ctx);
+  };
+
+  /**
    * Resolve template variables for one Zalo recipient/group entry.
    *
    * @param {object} ctx runtime context
@@ -741,6 +821,14 @@ export const createCampaignNodeRunner = (deps) => {
 
       ctx.selectedZaloAccount = selected;
       ctx.zaloPoolFromSelect = poolOn ? poolIds : null;
+      ctx.zaloPoolOutputItems = poolOn ? poolOutputItems : null;
+      ctx.zaloPoolAccountById = poolOn && poolIds.length > 0
+        ? new Map(
+          poolOutputItems.map((item) => [String(item?.id || '').trim(), item])
+        )
+        : null;
+      ctx.zaloPreviewPoolBinding = new Map();
+
       return {
         input: {
           zaloAccountId: selected.id,
@@ -1514,6 +1602,11 @@ export const createCampaignNodeRunner = (deps) => {
       const zaloProgressMap = getNodeRecipientProgressMap(ctx, node.id, 'zalo_personal');
       const templateSteps = Array.isArray(config.zaloPersonalTemplateSteps) ? config.zaloPersonalTemplateSteps : [];
       const sendMode = String(config.zaloPersonalSendMode || 'all').trim();
+      /** Pool đa TK: số request song song tối đa mỗi wave = số tài khoản trong pool. */
+      const zaloPreviewPoolParallel =
+        Array.isArray(ctx.zaloPoolFromSelect) && ctx.zaloPoolFromSelect.length > 1
+          ? ctx.zaloPoolFromSelect.length
+          : 1;
       const unitToMs = (unit) => {
         if (unit === 'hours') return 60 * 60 * 1000;
         if (unit === 'days') return 24 * 60 * 60 * 1000;
@@ -1546,7 +1639,12 @@ export const createCampaignNodeRunner = (deps) => {
             status: latest?.status === 'failed' ? 'warning' : 'info',
             message: `Đang gửi tin Zalo cá nhân (${current}/${totalAttempts})`,
             result: {
-              input: { accountId: selectedAccount.id },
+              input: {
+                accountId: selectedAccount.id,
+                ...(zaloPreviewPoolParallel > 1
+                  ? { zaloPoolMulti: true, zaloPoolAccountIds: ctx.zaloPoolFromSelect }
+                  : {}),
+              },
               output: {
                 items: [...results],
                 schema: buildSchemaFromRows(results),
@@ -1563,6 +1661,11 @@ export const createCampaignNodeRunner = (deps) => {
           const { skipApiDelay = false } = options;
           const entry = recipientEntries.find((item) => String(item?.value || '').trim() === recipient) || null;
           if (!entry) return;
+          const accountForSend = pickZaloAccountForPreviewPersonal(ctx, {
+            recipient,
+            entry,
+            recipientType,
+          });
           const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
           const renderedMessage = mappings.length > 0
             ? renderZaloTemplateMessage({
@@ -1580,7 +1683,7 @@ export const createCampaignNodeRunner = (deps) => {
           }
           // eslint-disable-next-line no-await-in-loop
           const response = await apiService.sendPreviewZaloPersonal({
-            accountId: selectedAccount.id,
+            accountId: accountForSend.id,
             recipients: [recipient],
             recipientType,
             message: renderedMessage,
@@ -1596,7 +1699,7 @@ export const createCampaignNodeRunner = (deps) => {
           stepItems.forEach((item) => {
             const meta = buildPreviewZaloLogMeta({
               item,
-              account: selectedAccount,
+              account: accountForSend,
               entry,
               fallbackRecipient: recipient,
             });
@@ -1644,12 +1747,12 @@ export const createCampaignNodeRunner = (deps) => {
         };
 
         /**
-         * Gửi một step Zalo cá nhân theo thứ tự và giãn cách 5-10 giây.
+         * Gửi một step Zalo cá nhân: một TK thì tuần tự + delay giữa các SĐT; pool nhiều TK thì song song theo lô bằng số TK.
          *
          * Luồng hoạt động:
          * 1. Lấy danh sách recipient còn cần chạy step hiện tại.
-         * 2. Gửi tuần tự từng recipient để tránh bắn dồn quá nhanh.
-         * 3. Chèn delay ngẫu nhiên 5-10 giây giữa các lần gửi trong cùng step.
+         * 2. Nếu pool: chia lô `zaloPreviewPoolParallel`, mỗi lô `Promise.all`.
+         * 3. Nếu một TK: giữ delay ngẫu nhiên giữa các lần gửi trong cùng step.
          *
          * @param {object} step cấu hình step hiện tại
          * @param {number} stepIndex chỉ số step
@@ -1660,6 +1763,16 @@ export const createCampaignNodeRunner = (deps) => {
             (recipient) => getRecipientNextStepIndex(zaloProgressMap, recipient) <= stepIndex
           );
           if (recipientsForStep.length <= 0) return;
+          if (zaloPreviewPoolParallel > 1) {
+            for (let offset = 0; offset < recipientsForStep.length; offset += zaloPreviewPoolParallel) {
+              const batch = recipientsForStep.slice(offset, offset + zaloPreviewPoolParallel);
+              // eslint-disable-next-line no-await-in-loop
+              await Promise.all(
+                batch.map((rec) => runStepForRecipient(step, stepIndex, rec, { skipApiDelay: true }))
+              );
+            }
+            return;
+          }
           for (let index = 0; index < recipientsForStep.length; index += 1) {
             if (index > 0) {
               // eslint-disable-next-line no-await-in-loop
@@ -1695,6 +1808,9 @@ export const createCampaignNodeRunner = (deps) => {
           input: {
             accountId: selectedAccount.id,
             accountName: selectedAccount.displayName,
+            ...(zaloPreviewPoolParallel > 1
+              ? { zaloPoolMultiAccountEnabled: true, zaloPoolAccountIds: ctx.zaloPoolFromSelect }
+              : {}),
             recipientType,
             recipientSource: config.zaloRecipientSource || 'manual',
             recipientPhones: config.zaloRecipientSource === 'manual' ? config.zaloRecipientPhones || '' : null,
@@ -1723,55 +1839,128 @@ export const createCampaignNodeRunner = (deps) => {
       const pendingRecipients = uniqueRecipients.filter(
         (recipient) => getRecipientNextStepIndex(zaloProgressMap, recipient) < 1
       );
-      const response = await apiService.sendPreviewZaloPersonal({
-        accountId: selectedAccount.id,
-        recipients: pendingRecipients,
-        recipientType,
-        message,
-      }, { signal });
-      const allItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
       const results = [];
-      for (let idx = 0; idx < allItems.length; idx += 1) {
-        const item = allItems[idx];
-        const fallbackRecipient = String(item?.recipient || item?.to || pendingRecipients[idx] || '').trim();
-        const entry = recipientEntries.find(
-          (entryItem) => String(entryItem?.value || '').trim() === fallbackRecipient
-        ) || null;
-        const meta = buildPreviewZaloLogMeta({
-          item,
-          account: selectedAccount,
-          entry,
-          fallbackRecipient,
-        });
-        results.push({
-          ...item,
-          ...meta,
-        });
-        if (item?.status === 'success') {
-          markRecipientStepCompleted(
-            zaloProgressMap,
-            String(item?.recipient || item?.to || pendingRecipients[idx] || '').trim(),
-            1
-          );
-        }
-        if (onProgress) {
-          onProgress({
-            status: item?.status === 'failed' ? 'warning' : 'info',
-            message: `Đang gửi tin Zalo cá nhân (${idx + 1}/${allItems.length})`,
-            result: {
-              input: {
-                accountId: selectedAccount.id,
-              },
-              output: {
-                items: [...results],
-                schema: buildSchemaFromRows(results),
-                meta: {
-                  attempted: idx + 1,
-                  totalItems: allItems.length,
+      const pushItemsFromResponse = (response, accountForSend, expectedRecipient) => {
+        const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+        stepItems.forEach((item) => {
+          const fallbackRecipient = String(
+            item?.recipient || item?.to || expectedRecipient || ''
+          ).trim();
+          const entry = recipientEntries.find(
+            (entryItem) => String(entryItem?.value || '').trim() === fallbackRecipient
+          ) || null;
+          const meta = buildPreviewZaloLogMeta({
+            item,
+            account: accountForSend,
+            entry,
+            fallbackRecipient,
+          });
+          results.push({
+            ...item,
+            ...meta,
+          });
+          if (item?.status === 'success') {
+            markRecipientStepCompleted(zaloProgressMap, fallbackRecipient, 1);
+          }
+          if (onProgress) {
+            onProgress({
+              status: item?.status === 'failed' ? 'warning' : 'info',
+              message: `Đang gửi tin Zalo cá nhân (${results.length}/${pendingRecipients.length})`,
+              result: {
+                input: {
+                  accountId: selectedAccount.id,
+                  ...(zaloPreviewPoolParallel > 1
+                    ? { zaloPoolMulti: true, zaloPoolAccountIds: ctx.zaloPoolFromSelect }
+                    : {}),
+                },
+                output: {
+                  items: [...results],
+                  schema: buildSchemaFromRows(results),
+                  meta: {
+                    attempted: results.length,
+                    totalItems: pendingRecipients.length,
+                  },
                 },
               },
-            },
+            });
+          }
+        });
+      };
+
+      if (zaloPreviewPoolParallel > 1) {
+        for (let offset = 0; offset < pendingRecipients.length; offset += zaloPreviewPoolParallel) {
+          const batch = pendingRecipients.slice(offset, offset + zaloPreviewPoolParallel);
+          // eslint-disable-next-line no-await-in-loop
+          await Promise.all(
+            batch.map(async (recipient) => {
+              const entry = recipientEntries.find(
+                (entryItem) => String(entryItem?.value || '').trim() === recipient
+              ) || null;
+              const accountForSend = pickZaloAccountForPreviewPersonal(ctx, {
+                recipient,
+                entry,
+                recipientType,
+              });
+              const response = await apiService.sendPreviewZaloPersonal({
+                accountId: accountForSend.id,
+                recipients: [recipient],
+                recipientType,
+                message,
+              }, { signal });
+              pushItemsFromResponse(response, accountForSend, recipient);
+            })
+          );
+        }
+      } else {
+        const response = await apiService.sendPreviewZaloPersonal({
+          accountId: selectedAccount.id,
+          recipients: pendingRecipients,
+          recipientType,
+          message,
+        }, { signal });
+        const allItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+        for (let idx = 0; idx < allItems.length; idx += 1) {
+          const item = allItems[idx];
+          const fallbackRecipient = String(item?.recipient || item?.to || pendingRecipients[idx] || '').trim();
+          const entry = recipientEntries.find(
+            (entryItem) => String(entryItem?.value || '').trim() === fallbackRecipient
+          ) || null;
+          const meta = buildPreviewZaloLogMeta({
+            item,
+            account: selectedAccount,
+            entry,
+            fallbackRecipient,
           });
+          results.push({
+            ...item,
+            ...meta,
+          });
+          if (item?.status === 'success') {
+            markRecipientStepCompleted(
+              zaloProgressMap,
+              String(item?.recipient || item?.to || pendingRecipients[idx] || '').trim(),
+              1
+            );
+          }
+          if (onProgress) {
+            onProgress({
+              status: item?.status === 'failed' ? 'warning' : 'info',
+              message: `Đang gửi tin Zalo cá nhân (${idx + 1}/${allItems.length})`,
+              result: {
+                input: {
+                  accountId: selectedAccount.id,
+                },
+                output: {
+                  items: [...results],
+                  schema: buildSchemaFromRows(results),
+                  meta: {
+                    attempted: idx + 1,
+                    totalItems: allItems.length,
+                  },
+                },
+              },
+            });
+          }
         }
       }
 
@@ -1779,6 +1968,9 @@ export const createCampaignNodeRunner = (deps) => {
         input: {
           accountId: selectedAccount.id,
           accountName: selectedAccount.displayName,
+          ...(zaloPreviewPoolParallel > 1
+            ? { zaloPoolMultiAccountEnabled: true, zaloPoolAccountIds: ctx.zaloPoolFromSelect }
+            : {}),
           recipientType,
           recipientSource: config.zaloRecipientSource || 'manual',
           recipientPhones: config.zaloRecipientSource === 'manual' ? config.zaloRecipientPhones || '' : null,

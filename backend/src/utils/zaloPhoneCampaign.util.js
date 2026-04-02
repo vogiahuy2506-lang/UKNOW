@@ -53,7 +53,7 @@ function buildZaloRecipientErrorProbe(error) {
  * Luồng hoạt động:
  * 1. Đọc mã lỗi (code) nếu SDK gắn sẵn (vd. zalo_unreachable_contact).
  * 2. Gom message + cause để khớp cả thông điệp tiếng Việt/Anh từ findUser và từ API gửi tin.
- * 3. Khớp thêm các lỗi phổ biến khi gửi: tham số không hợp lệ; chặn tin từ người lạ; vi phạm chính sách.
+ * 3. Khớp thêm các lỗi phổ biến khi gửi: tham số không hợp lệ; chặn tin từ người lạ; không thể nhận tin từ bạn; vi phạm chính sách.
  * 4. Tránh khớp nhầm lỗi domain khác bằng từ khóa loại trừ ngắn (chỉ áp cho nhánh “không tìm thấy” chung).
  *
  * @param {unknown} error
@@ -83,6 +83,8 @@ export function isZaloUnreachableRecipientError(error) {
   ) {
     return true;
   }
+  // Người nhận chặn OA / tài khoản gửi hoặc Zalo báo không thể nhận tin từ bạn (khác cụm "người lạ").
+  if (probe.includes('không thể nhận tin nhắn từ bạn')) return true;
   // Tài khoản Zalo người nhận bị hạn chế theo chính sách nền tảng.
   if (probe.includes('vi phạm chính sách') && probe.includes('zalo')) return true;
   if (probe.includes('người dùng này đã bị chặn') && probe.includes('vi phạm')) return true;
@@ -146,6 +148,7 @@ export function inferZaloUnreachableReason(error) {
   ) {
     return 'stranger_blocked';
   }
+  if (msg.includes('không thể nhận tin nhắn từ bạn')) return 'sender_blocked';
   if (
     (msg.includes('vi phạm chính sách') && msg.includes('zalo'))
     || (msg.includes('người dùng này đã bị chặn') && msg.includes('vi phạm'))

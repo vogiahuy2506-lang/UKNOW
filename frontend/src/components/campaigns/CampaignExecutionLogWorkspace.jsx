@@ -39,6 +39,14 @@ const formatLogCellValue = (columnKey, value) => {
   const normalizedKey = String(columnKey || '').trim();
   const shouldFormatDateTime = DATE_TIME_COLUMN_PATTERN.test(normalizedKey)
     || CAMEL_DATE_TIME_COLUMN_PATTERN.test(normalizedKey);
+  // Object/array: hiển thị JSON để tránh "[object Object]" trên bảng log.
+  if (!shouldFormatDateTime && typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '[Không hiển thị]';
+    }
+  }
   if (!shouldFormatDateTime) return String(value);
 
   const formatted = formatCampaignDateTime(value, '');
