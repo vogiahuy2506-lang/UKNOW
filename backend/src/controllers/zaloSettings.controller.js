@@ -1579,9 +1579,11 @@ class ZaloSettingsController {
     try {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user?.role_code);
+      // Ép timestamptz để đồng bộ instant với session Asia/Ho_Chi_Minh (tránh +7h khi Node chạy TZ=UTC).
       const result = await db.query(
         `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
-                zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes, zs.updated_at, zs.last_connected_at,
+                zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes,
+                zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
                 COALESCE(u.full_name, u.username) AS creator_name
          FROM zalo_settings zs
          LEFT JOIN users u ON zs.id_user = u.id

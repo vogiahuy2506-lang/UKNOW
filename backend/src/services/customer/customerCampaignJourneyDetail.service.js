@@ -116,19 +116,19 @@ class CustomerCampaignJourneyDetailService {
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
     const participationResult = await db.query(
-      `SELECT joined_at,
+      `SELECT joined_at::timestamptz AS joined_at,
               email_received_count,
               email_opened_count,
               email_clicked_count,
               has_opened,
               has_clicked,
-              first_email_sent_at,
-              last_email_sent_at,
-              first_email_opened_at,
-              last_email_opened_at,
-              first_email_clicked_at,
-              last_email_clicked_at,
-              last_activity_at
+              first_email_sent_at::timestamptz AS first_email_sent_at,
+              last_email_sent_at::timestamptz AS last_email_sent_at,
+              first_email_opened_at::timestamptz AS first_email_opened_at,
+              last_email_opened_at::timestamptz AS last_email_opened_at,
+              first_email_clicked_at::timestamptz AS first_email_clicked_at,
+              last_email_clicked_at::timestamptz AS last_email_clicked_at,
+              last_activity_at::timestamptz AS last_activity_at
        FROM campaign_customers
        WHERE id_customer = $1 AND id_campaign = $2
        LIMIT 1`,
@@ -148,16 +148,16 @@ class CustomerCampaignJourneyDetailService {
               em.recipient_email,
               em.recipient_name,
               em.status,
-              em.sent_at,
-              em.delivered_at,
-              em.first_opened_at,
-              em.last_opened_at,
+              em.sent_at::timestamptz AS sent_at,
+              em.delivered_at::timestamptz AS delivered_at,
+              em.first_opened_at::timestamptz AS first_opened_at,
+              em.last_opened_at::timestamptz AS last_opened_at,
               em.open_count,
-              em.first_clicked_at,
+              em.first_clicked_at::timestamptz AS first_clicked_at,
               em.click_count,
               em.body_html,
               em.body_text,
-              em.created_at,
+              em.created_at::timestamptz AS created_at,
               et.attachments AS template_attachments
        FROM email_messages em
        LEFT JOIN email_templates et ON et.id = em.id_email_template
@@ -170,7 +170,11 @@ class CustomerCampaignJourneyDetailService {
     );
 
     const journeyEventsResult = await db.query(
-      `SELECT cj.*, cp.campaign_name, cr.run_name
+      `SELECT cj.id, cj.id_customer, cj.id_campaign, cj.event_type, cj.event_channel,
+              cj.id_node, cj.id_email_message, cj.id_zalo_message, cj.event_data,
+              cj.ip_address, cj.user_agent, cj.device_type, cj.country, cj.city,
+              cj.event_at::timestamptz AS event_at, cj.id_run,
+              cp.campaign_name, cr.run_name
        FROM customer_journey cj
        LEFT JOIN campaigns cp ON cp.id = cj.id_campaign
        LEFT JOIN campaign_runs cr ON cr.id = cj.id_run
@@ -180,7 +184,12 @@ class CustomerCampaignJourneyDetailService {
     );
 
     const campaignPurchasesResult = await db.query(
-      `SELECT cp.*,
+      `SELECT cp.id, cp.id_customer, cp.id_course, cp.id_campaign, cp.product_name, cp.product_type,
+              cp.amount, cp.currency,
+              cp.purchase_date::timestamptz AS purchase_date,
+              cp.order_id, cp.payment_method,
+              cp.created_at::timestamptz AS created_at,
+              cp.id_email_message, cp.id_run, cp.id_zalo_message,
               c.course_name,
               c.course_code,
               cr.run_name,
@@ -229,9 +238,9 @@ class CustomerCampaignJourneyDetailService {
                 zm.account_name,
                 zm.message_text,
                 zm.click_count,
-                zm.first_clicked_at,
-                zm.last_clicked_at,
-                zm.sent_at,
+                zm.first_clicked_at::timestamptz AS first_clicked_at,
+                zm.last_clicked_at::timestamptz AS last_clicked_at,
+                zm.sent_at::timestamptz AS sent_at,
                 zm.tracking_metadata
          FROM zalo_messages zm
          LEFT JOIN campaign_runs cr ON cr.id = zm.id_run
@@ -265,9 +274,9 @@ class CustomerCampaignJourneyDetailService {
                 zm.account_name,
                 zm.message_text,
                 zm.click_count,
-                zm.first_clicked_at,
-                zm.last_clicked_at,
-                zm.sent_at,
+                zm.first_clicked_at::timestamptz AS first_clicked_at,
+                zm.last_clicked_at::timestamptz AS last_clicked_at,
+                zm.sent_at::timestamptz AS sent_at,
                 zm.tracking_metadata
          FROM zalo_messages zm
          LEFT JOIN campaign_runs cr ON cr.id = zm.id_run
@@ -450,7 +459,10 @@ class CustomerCampaignJourneyDetailService {
     let runs = [];
     if (runIds.length > 0) {
       const runResult = await db.query(
-        `SELECT id, run_name, status, started_at, completed_at, run_type, run_metadata
+        `SELECT id, run_name, status,
+                started_at::timestamptz AS started_at,
+                completed_at::timestamptz AS completed_at,
+                run_type, run_metadata
          FROM campaign_runs
          WHERE id = ANY($1::int[])
          ORDER BY started_at DESC NULLS LAST, id DESC`,
