@@ -48,12 +48,13 @@ function buildZaloRecipientErrorProbe(error) {
 }
 
 /**
- * Lỗi Zalo coi là SĐT không dùng được (không tìm thấy / không hợp lệ) — ghi blocklist, không tốn slot.
+ * Lỗi Zalo coi là SĐT không dùng được (không tìm thấy / không hợp lệ / chặn gửi) — ghi blocklist, không tốn slot.
  *
  * Luồng hoạt động:
  * 1. Đọc mã lỗi (code) nếu SDK gắn sẵn (vd. zalo_unreachable_contact).
- * 2. Gom message + cause để khớp cả thông điệp tiếng Việt/Anh từ findUser.
- * 3. Tránh khớp nhầm lỗi domain khác bằng từ khóa loại trừ ngắn.
+ * 2. Gom message + cause để khớp cả thông điệp tiếng Việt/Anh từ findUser và từ API gửi tin.
+ * 3. Khớp thêm các lỗi phổ biến khi gửi: tham số không hợp lệ; chặn tin từ người lạ; vi phạm chính sách.
+ * 4. Tránh khớp nhầm lỗi domain khác bằng từ khóa loại trừ ngắn (chỉ áp cho nhánh “không tìm thấy” chung).
  *
  * @param {unknown} error
  * @returns {boolean}
@@ -71,6 +72,20 @@ export function isZaloUnreachableRecipientError(error) {
 
   const probe = buildZaloRecipientErrorProbe(error);
   if (!probe) return false;
+
+  // API gửi tin Zalo: tham số không hợp lệ — không gửi được cho SĐT/recipient hiện tại.
+  if (probe.includes('tham số không hợp lệ')) return true;
+  // Người nhận không nhận tin từ người lạ (cài đặt quyền riêng tư / chặn inbox người lạ).
+  if (
+    probe.includes('chặn không nhận tin nhắn từ người lạ')
+    || probe.includes('không nhận tin nhắn từ người lạ')
+    || (probe.includes('bạn chưa thể gửi tin nhắn') && probe.includes('người lạ'))
+  ) {
+    return true;
+  }
+  // Tài khoản Zalo người nhận bị hạn chế theo chính sách nền tảng.
+  if (probe.includes('vi phạm chính sách') && probe.includes('zalo')) return true;
+  if (probe.includes('người dùng này đã bị chặn') && probe.includes('vi phạm')) return true;
 
   const excludeDomain =
     probe.includes('chiến dịch')
@@ -102,7 +117,12 @@ export function isZaloUnreachableRecipientError(error) {
 }
 
 /**
- * Suy ra mã reason ngắn để lưu DB từ message lỗi.
+ * Suy ra mã reason ngắn (tối đa 50 ký tự cột `reason`) để lưu DB từ message lỗi.
+ *
+ * Luồng hoạt động:
+ * 1. Ưu tiên mã lỗi chuẩn từ SDK.
+ * 2. Phân nhánh theo cụm tiếng Việt đặc trưng (chặn người lạ, vi phạm chính sách, tham số).
+ * 3. Fallback: không hợp lệ / không tìm thấy / mặc định not_found.
  *
  * @param {unknown} error
  * @returns {string}
@@ -118,6 +138,23 @@ export function inferZaloUnreachableReason(error) {
   if (code === 'zalo_unreachable_contact') return 'not_found';
 
   const msg = buildZaloRecipientErrorProbe(error) || String(error?.message ?? error ?? '').trim().toLowerCase();
+
+  if (
+    msg.includes('chặn không nhận tin nhắn từ người lạ')
+    || msg.includes('không nhận tin nhắn từ người lạ')
+    || (msg.includes('bạn chưa thể gửi tin nhắn') && msg.includes('người lạ'))
+  ) {
+    return 'stranger_blocked';
+  }
+  if (
+    (msg.includes('vi phạm chính sách') && msg.includes('zalo'))
+    || (msg.includes('người dùng này đã bị chặn') && msg.includes('vi phạm'))
+  ) {
+    return 'policy_violation';
+  }
+  // “Tham số không hợp lệ” tách khỏi lỗi định dạng SĐT chung.
+  if (msg.includes('tham số không hợp lệ')) return 'invalid_parameter';
+
   if (msg.includes('không hợp lệ') || msg.includes('invalid')) return 'invalid_format';
   if (msg.includes('không tìm thấy') || msg.includes('not found')) return 'not_found';
   return 'not_found';

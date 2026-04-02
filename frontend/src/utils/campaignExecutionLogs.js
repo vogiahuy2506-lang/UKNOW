@@ -192,30 +192,33 @@ const normalizeSendNodeItem = (nodeSubtype, payload = {}) => {
   if (String(nodeSubtype || '').trim().toLowerCase() === 'send_email') {
     return normalizeSendEmailItem(payload);
   }
-  const senderName = payload?.senderName
-    ?? payload?.accountName
-    ?? payload?.fromName
+  // Bỏ messageText khỏi từng dòng: backend nhắc tiến độ ("Đã gửi 1/N") vào item để log; cột này trùng thông tin và làm bảng rối.
+  const { messageText: _omitProgressMessageText, ...payloadRest } =
+    payload && typeof payload === 'object' ? payload : {};
+  const senderName = payloadRest?.senderName
+    ?? payloadRest?.accountName
+    ?? payloadRest?.fromName
     ?? null;
-  const zaloName = payload?.zaloName
-    ?? payload?.recipientName
-    ?? payload?.displayName
-    ?? payload?.name
+  const zaloName = payloadRest?.zaloName
+    ?? payloadRest?.recipientName
+    ?? payloadRest?.displayName
+    ?? payloadRest?.name
     ?? null;
-  const groupName = payload?.groupName
-    ?? payload?.group_name
+  const groupName = payloadRest?.groupName
+    ?? payloadRest?.group_name
     ?? null;
-  const sentAt = payload?.sentAt
-    ?? payload?.sent_at
-    ?? payload?.createdAt
-    ?? payload?.created_at
+  const sentAt = payloadRest?.sentAt
+    ?? payloadRest?.sent_at
+    ?? payloadRest?.createdAt
+    ?? payloadRest?.created_at
     ?? null;
   return {
-    ...payload,
+    ...payloadRest,
     senderName,
     zaloName,
     groupName,
     sentAt,
-    status: payload?.status || (payload?.error ? 'failed' : 'success'),
+    status: payloadRest?.status || (payloadRest?.error ? 'failed' : 'success'),
   };
 };
 
@@ -337,6 +340,9 @@ const buildSendNodeMetaStats = (items = []) => {
   };
 };
 
+/** Đồng bộ với campaignBuilderRuntime: không hiển thị cột tiến độ messageText trong bảng kết quả. */
+const KEYS_OMIT_FROM_EXECUTION_SCHEMA = new Set(['messageText']);
+
 /**
  * Build schema rows from tabular items.
  *
@@ -346,10 +352,12 @@ const buildSendNodeMetaStats = (items = []) => {
 const buildSchemaFromRows = (rows = []) => {
   const first = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   if (!first || typeof first !== 'object') return [];
-  return Object.keys(first).map((key) => ({
-    key,
-    type: Array.isArray(first[key]) ? 'array' : typeof first[key],
-  }));
+  return Object.keys(first)
+    .filter((key) => !KEYS_OMIT_FROM_EXECUTION_SCHEMA.has(key))
+    .map((key) => ({
+      key,
+      type: Array.isArray(first[key]) ? 'array' : typeof first[key],
+    }));
 };
 
 /**
@@ -425,7 +433,10 @@ export function buildWorkspaceLogsFromExecution(executionLogs = [], options = {}
             : parsedPayload.items;
         group.aggregatedItems = mergeAggregatedItems(group.aggregatedItems, nextItems);
         if (Array.isArray(parsedPayload.schema) && parsedPayload.schema.length > 0) {
-          group.aggregatedSchema = parsedPayload.schema;
+          const schemaSansMessageText = parsedPayload.schema.filter(
+            (col) => col && String(col.key) !== 'messageText'
+          );
+          group.aggregatedSchema = schemaSansMessageText;
         }
       } else if (isSendNodeSubtype(normalizedNodeSubtype)) {
         group.aggregatedItems = mergeAggregatedItems(group.aggregatedItems, [
