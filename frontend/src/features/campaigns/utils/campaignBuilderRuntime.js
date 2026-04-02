@@ -8,13 +8,18 @@ export const inferValueType = (value) => {
   return typeof value;
 };
 
+/** Không tạo cột auto-schema cho các key chỉ phục vụ tiến độ log (trùng message tổng). */
+const KEYS_OMIT_FROM_AUTO_SCHEMA = new Set(['messageText']);
+
 export const buildSchemaFromRows = (rows) => {
   const first = Array.isArray(rows) && rows.length ? rows[0] : null;
   if (!first || typeof first !== 'object') return [];
-  return Object.keys(first).map((key) => ({
-    key,
-    type: inferValueType(first[key]),
-  }));
+  return Object.keys(first)
+    .filter((key) => !KEYS_OMIT_FROM_AUTO_SCHEMA.has(key))
+    .map((key) => ({
+      key,
+      type: inferValueType(first[key]),
+    }));
 };
 
 export const normalizeKey = (key) => String(key || '').trim();
