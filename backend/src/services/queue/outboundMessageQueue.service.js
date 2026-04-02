@@ -273,7 +273,7 @@ class OutboundMessageQueueService {
 
     try {
       const attempts = Number.parseInt(process.env.BULLMQ_JOB_ATTEMPTS || '4', 10);
-      const defaultWaitMs = Number.parseInt(process.env.BULLMQ_WAIT_RESULT_TIMEOUT_MS || '300000', 10);
+      const defaultWaitMs = Number.parseInt(process.env.BULLMQ_WAIT_RESULT_TIMEOUT_MS || '60000', 10);
       const effectiveWaitMs = Number.isFinite(Number(waitTimeoutMs))
         ? Number(waitTimeoutMs)
         : defaultWaitMs;
@@ -287,7 +287,7 @@ class OutboundMessageQueueService {
       await this.logQueueMetrics('enqueue', normalizedType, job?.id);
       return job.waitUntilFinished(
         this.queueEvents,
-        Number.isFinite(effectiveWaitMs) ? Math.max(1000, effectiveWaitMs) : 300000
+        Number.isFinite(effectiveWaitMs) ? Math.max(1000, effectiveWaitMs) : 60000
       );
     } catch (error) {
       await this.logQueueMetrics('enqueue_error', normalizedType);
