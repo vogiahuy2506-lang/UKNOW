@@ -4,6 +4,7 @@ import { useLocalStorageState } from '../../hooks/useLocalStorageState';
 import { addEdge, useNodesState, useEdgesState } from 'reactflow';
 import 'reactflow/dist/style.css';
 import campaignBuilderApiService from '../../features/campaigns/services/campaignBuilderApi.service';
+import fetchAllTemplateListPages from '../../features/templates/utils/fetchAllTemplateListPages';
 import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
 import useBrowserRouterBlocker from '../../features/campaigns/hooks/useBrowserRouterBlocker';
 import {
@@ -177,11 +178,10 @@ const CampaignBuilder = () => {
   useEffect(() => {
     const fetchZaloTemplates = async () => {
       try {
-        const response = await campaignBuilderApiService.getZaloTemplates({
-          params: { page: 1, limit: 100 },
-        });
-        const items = response.data?.data?.items;
-        setZaloTemplates(Array.isArray(items) ? items : []);
+        const items = await fetchAllTemplateListPages((params) =>
+          campaignBuilderApiService.getZaloTemplates({ params })
+        );
+        setZaloTemplates(items);
       } catch (error) {
         console.error('Failed to fetch zalo templates:', error);
       }
@@ -278,9 +278,10 @@ const CampaignBuilder = () => {
   useEffect(() => {
     const fetchEmailTemplates = async () => {
       try {
-        const response = await campaignBuilderApiService.getEmailTemplates();
-        const items = response.data?.data?.items;
-        setEmailTemplates(Array.isArray(items) ? items : []);
+        const items = await fetchAllTemplateListPages((params) =>
+          campaignBuilderApiService.getEmailTemplates({ params })
+        );
+        setEmailTemplates(items);
       } catch (error) {
         console.error('Failed to fetch email templates:', error);
       }

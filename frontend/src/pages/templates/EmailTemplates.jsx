@@ -7,6 +7,7 @@ import EmailTemplateAttachmentsModal from '../../features/templates/components/E
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service';
+import fetchAllTemplateListPages from '../../features/templates/utils/fetchAllTemplateListPages';
 import useEmailTemplateDerivedData from '../../features/templates/hooks/useEmailTemplateDerivedData';
 import FullScreenOverlay from '../../components/FullScreenOverlay';
 import {
@@ -92,11 +93,15 @@ const EmailTemplates = ({ isZaloTemplate = false }) => {
     previewTemplate,
   });
 
+  /**
+   * Tải toàn bộ template (email hoặc Zalo): API mặc định limit nhỏ nên gom đủ trang qua util dùng chung.
+   */
   const fetchTemplates = async () => {
     try {
-      const response = await templateApiService.getTemplates();
-      const items = response.data?.data?.items;
-      setTemplates(Array.isArray(items) ? items : []);
+      const aggregated = await fetchAllTemplateListPages((params) =>
+        templateApiService.getTemplates(params)
+      );
+      setTemplates(aggregated);
     } catch (error) {
       setTemplates([]);
       toast.error('Không thể tải danh sách template');
