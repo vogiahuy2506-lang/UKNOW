@@ -145,8 +145,9 @@ registerOutboundMessageProcessors();
 
 // Test database connection
 const testDBConnection = async () => {
+  let client;
   try {
-    const client = await db.getClient();
+    client = await db.getClient();
     const result = await client.query('SELECT NOW()');
     console.log(
       `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
@@ -155,9 +156,10 @@ const testDBConnection = async () => {
     await client.query(
       `ALTER TABLE campaign_customers ADD COLUMN IF NOT EXISTS uknow_status VARCHAR(20) DEFAULT NULL`
     );
-    client.release();
   } catch (error) {
     console.error('Database connection failed:', error.message);
+  } finally {
+    if (client) client.release();
   }
 };
 // Setup cleanup task để dọn dẹp temp files
@@ -187,9 +189,14 @@ const gracefulShutdown = async (signal) => {
     await outboundMessageQueueService.close();
   } catch (error) {
     console.error(`[Server] Lỗi khi đóng BullMQ: ${error?.message || error}`);
-  } finally {
-    process.exit(0);
   }
+  try {
+    await db.pool.end();
+    console.info('[Server] Đã đóng pool PostgreSQL.');
+  } catch (error) {
+    console.error(`[Server] Lỗi khi đóng pool PostgreSQL: ${error?.message || error}`);
+  }
+  process.exit(0);
 };
 
 process.on('SIGINT', () => {
