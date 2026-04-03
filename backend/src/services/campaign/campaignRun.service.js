@@ -9,6 +9,8 @@ import { isZaloUnreachableRecipientError } from '../../utils/zaloPhoneCampaign.u
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
+import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
+import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
 
 class CampaignRunService {
   constructor() {
@@ -1792,6 +1794,62 @@ class CampaignRunService {
           removeZaloFailureFromMeta: zaloChannels.has(String(channel || '').trim()),
         });
       };
+      /**
+       * Nếu email_messages đã có bản ghi gửi thành công cho cùng run + chiến dịch + bước + người nhận
+       * nhưng ledger (campaign_run_recipient_steps) chưa kịp cập nhật: chỉ đồng bộ ledger, không gửi SMTP lại.
+       *
+       * Luồng hoạt động:
+       * 1. Tra cứu email_messages theo id_run, id_campaign, email_step, recipient (không lọc id_node).
+       * 2. Nếu có → gọi markRecipientStepCompleted cho đúng node hiện tại (ledger vẫn theo id_node).
+       * 3. Trả về true để caller bỏ qua sendEmailWithLogging.
+       *
+       * @param {object} input
+       * @param {number|string} input.nodeId id node send_email
+       * @param {string} input.recipientEmail email người nhận (đã lowercase tốt nhất)
+       * @param {number} input.emailStepOneBased thứ tự bước 1-based
+       * @param {number} input.totalSteps tổng bước trong node
+       * @param {object|null} input.progress tiến độ ledger hiện tại
+       * @param {Array<object>} input.scheduleSteps mảng bước (delay lịch)
+       * @param {string} input.sendMode chế độ gửi node
+       * @returns {Promise<boolean>} true nếu đã đồng bộ và cần bỏ qua gửi
+       */
+      const trySyncLedgerFromExistingEmailMessage = async ({
+        nodeId,
+        recipientEmail,
+        emailStepOneBased,
+        totalSteps,
+        progress,
+        scheduleSteps,
+        sendMode,
+      }) => {
+        const nid = Number.parseInt(nodeId, 10);
+        const step = Math.max(1, Number.parseInt(emailStepOneBased, 10) || 1);
+        const safeTotal = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
+        const emailKey = String(recipientEmail || '').trim().toLowerCase();
+        if (!Number.isFinite(nid) || !emailKey || !runId || !campaignId) return false;
+        const existing = await emailSettingsRepository.findExistingSentCampaignEmail({
+          runId,
+          campaignId,
+          recipientEmail: emailKey,
+          emailStep: step,
+        });
+        if (!existing) return false;
+        await markRecipientStepCompleted({
+          nodeId: nid,
+          channel: 'email',
+          recipientKey: emailKey,
+          completedStep: step,
+          totalSteps: safeTotal,
+          progress,
+          steps: Array.isArray(scheduleSteps) ? scheduleSteps : [],
+          sendMode: String(sendMode || 'all').trim(),
+        });
+        console.info(
+          `[CampaignRun][EmailDedupe] run=${runId} node=${nid} email=${emailKey} step=${step} `
+          + `id_email_message=${existing.id} — đồng bộ ledger, bỏ qua gửi lại`
+        );
+        return true;
+      };
       const resolveTemplateVariablesFromMappings = ({
         mappings = [],
         entry = null,
@@ -2765,7 +2823,7 @@ class CampaignRunService {
           'customer_segment',
         ]);
         if (!supportedRefreshSubtypes.has(sourceSubtype)) return;
-        const refreshedItems = await executeWithTimeoutRetry({
+        const refreshedPack = await executeWithTimeoutRetry({
           operationName: `refresh_source_node_${sourceSubtype || 'data'}`,
           operation: () => campaignNodeDataService.getCustomersFromDataNode(
             { ...sourceNode, config: campaignFlowService.normalizeNodeReferenceConfig(sourceNode.config || {}, resolveNodeId) },
@@ -2779,7 +2837,8 @@ class CampaignRunService {
             );
           },
         });
-        nodeOutputs[safeSourceNodeId] = Array.isArray(refreshedItems) ? refreshedItems : [];
+        const refreshedItems = Array.isArray(refreshedPack?.items) ? refreshedPack.items : [];
+        nodeOutputs[safeSourceNodeId] = refreshedItems;
       };
       const refreshUpstreamDataNodesBefore = async (targetNodeId) => {
         const safeTargetNodeId = String(targetNodeId || '').trim();
@@ -2921,7 +2980,7 @@ class CampaignRunService {
             }
 
         if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_landing_leads'].includes(nodeSubtype)) {
-          const nodeCustomers = await executeWithTimeoutRetry({
+          const nodeDataPack = await executeWithTimeoutRetry({
             operationName: `data_node_${nodeSubtype || 'read_data'}`,
             operation: () => campaignNodeDataService.getCustomersFromDataNode(node, userId, nodes),
             onRetry: ({ attempt, maxAttempts, delayMs }) => {
@@ -2931,7 +2990,10 @@ class CampaignRunService {
               );
             },
           });
-          const fetchedItems = Array.isArray(nodeCustomers) ? nodeCustomers : [];
+          const dataLoadMeta = nodeDataPack?.dataLoadMeta && typeof nodeDataPack.dataLoadMeta === 'object'
+            ? nodeDataPack.dataLoadMeta
+            : {};
+          const fetchedItems = Array.isArray(nodeDataPack?.items) ? nodeDataPack.items : [];
           const mergedNodeData = isContinuousMode
             ? mergeContinuousNodeItems({
                 nodeId: node.id,
@@ -2952,6 +3014,8 @@ class CampaignRunService {
           nodeOutputs[String(node.id)] = mergedNodeData.allItems;
           lastOutputItems = mergedNodeData.allItems;
 
+          const accumulatedPayloadBytesUtf8 = measureJsonUtf8Bytes(mergedNodeData.allItems);
+
           await campaignExecutionLogService.logExecutionNode({
             campaignId,
             runId,
@@ -2967,6 +3031,8 @@ class CampaignRunService {
                 fetched,
                 totalItems,
                 previewed: previewItems.length,
+                accumulatedPayloadBytesUtf8,
+                dataLoadMeta,
                 ...(isContinuousMode
                   ? { newItems: fetched, accumulatedItems: totalItems, continuousMode: true }
                   : {}),
@@ -3296,6 +3362,7 @@ class CampaignRunService {
             progress = null,
             applyRandomDelay = true,
           }) => {
+            const recipientEmailForLog = String(customer?.email || '').trim() || null;
             if (applyRandomDelay) {
               // eslint-disable-next-line no-await-in-loop
               await waitRandomApiDelay(`email_send_step_${stepMeta?.stepIndex || 1}`);
@@ -3313,6 +3380,9 @@ class CampaignRunService {
                 ...(retryCountFromProgress > 0 ? { sendgridLimitRetryCount: retryCountFromProgress } : {}),
                 ...(scheduledRetryAtFromProgress ? { scheduledRetryAt: scheduledRetryAtFromProgress } : {}),
               };
+              const emailSendMeta = {
+                emailStep: Math.max(1, Number.parseInt(stepMeta?.stepIndex, 10) || 1),
+              };
               const sendResult = await executeWithTimeoutRetry({
                 operationName: 'send_email_node',
                 operation: () => campaignEmailSenderService.sendEmailToCustomer(
@@ -3320,7 +3390,8 @@ class CampaignRunService {
                   customer,
                   campaign,
                   runId,
-                  Object.keys(retryMeta).length > 0 ? retryMeta : null
+                  Object.keys(retryMeta).length > 0 ? retryMeta : null,
+                  emailSendMeta
                 ),
                 onRetry: ({ attempt, maxAttempts, delayMs }) => {
                   console.warn(
@@ -3350,6 +3421,7 @@ class CampaignRunService {
                   runId,
                   node,
                   customerId: customer.id || null,
+                  recipientEmail: recipientEmailForLog,
                   status: 'warning',
                   progressCurrent: successfulSends + failedSends,
                   progressTotal: totalRecipients,
@@ -3381,6 +3453,7 @@ class CampaignRunService {
                   runId,
                   node,
                   customerId: customer.id || null,
+                  recipientEmail: recipientEmailForLog,
                   status: 'failed',
                   progressCurrent: successfulSends + failedSends,
                   progressTotal: totalRecipients,
@@ -3433,6 +3506,7 @@ class CampaignRunService {
                   runId,
                   node,
                   customerId: customer.id || null,
+                  recipientEmail: recipientEmailForLog,
                   status: isRateLimitedRetryScheduled ? 'warning' : 'failed',
                   progressCurrent: successfulSends + failedSends,
                   progressTotal: totalRecipients,
@@ -3461,6 +3535,7 @@ class CampaignRunService {
                 runId,
                 node,
                 customerId: customer.id || null,
+                recipientEmail: recipientEmailForLog,
                 status: 'success',
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
@@ -3486,6 +3561,7 @@ class CampaignRunService {
                 runId,
                 node,
                 customerId: customer.id || null,
+                recipientEmail: recipientEmailForLog,
                 status: 'failed',
                 progressCurrent: successfulSends + failedSends,
                 progressTotal: totalRecipients,
@@ -3536,6 +3612,28 @@ class CampaignRunService {
                   const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
                   if (!dueStatus.isDueNow) {
                     registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
+                    return;
+                  }
+                  const syncedFromExistingEmail = await trySyncLedgerFromExistingEmailMessage({
+                    nodeId: node.id,
+                    recipientEmail: customerKey,
+                    emailStepOneBased: nextStepIndex + 1,
+                    totalSteps: loopEmailSteps.length,
+                    progress,
+                    scheduleSteps: loopEmailSteps,
+                    sendMode: loopEmailSendMode,
+                  });
+                  if (syncedFromExistingEmail) {
+                    const completedAtIso = toHoChiMinhIso();
+                    const firstSentAt = progress.firstSentAt || completedAtIso;
+                    const nextDueAtDeduped = computeStepDueAt({
+                      steps: loopEmailSteps,
+                      completedStep: nextStepIndex + 1,
+                      firstSentAt,
+                      lastCompletedAt: completedAtIso,
+                      sendMode: loopEmailSendMode,
+                    });
+                    registerNextContinuousWakeAt(nextDueAtDeduped ? Date.parse(nextDueAtDeduped) : null);
                     return;
                   }
                   const step = loopEmailSteps[nextStepIndex];
@@ -3673,6 +3771,19 @@ class CampaignRunService {
                 })) {
                   continue;
                 }
+                // eslint-disable-next-line no-await-in-loop
+                const dedupedEmailLedger = await trySyncLedgerFromExistingEmailMessage({
+                  nodeId: node.id,
+                  recipientEmail: customerKey,
+                  emailStepOneBased: stepIndex + 1,
+                  totalSteps: emailSteps.length,
+                  progress,
+                  scheduleSteps: emailSteps,
+                  sendMode: emailSendMode,
+                });
+                if (dedupedEmailLedger) {
+                  continue;
+                }
                 const runtimeNode = {
                   ...node,
                   config: {
@@ -3765,6 +3876,19 @@ class CampaignRunService {
                 stepIndex: 0,
                 totalSteps: 1,
               })) {
+                continue;
+              }
+              // eslint-disable-next-line no-await-in-loop
+              const dedupedSingleStepEmail = await trySyncLedgerFromExistingEmailMessage({
+                nodeId: node.id,
+                recipientEmail: customerKey,
+                emailStepOneBased: 1,
+                totalSteps: 1,
+                progress,
+                scheduleSteps: [{ templateId: config.emailTemplateId || null }],
+                sendMode: 'all',
+              });
+              if (dedupedSingleStepEmail) {
                 continue;
               }
               // eslint-disable-next-line no-await-in-loop

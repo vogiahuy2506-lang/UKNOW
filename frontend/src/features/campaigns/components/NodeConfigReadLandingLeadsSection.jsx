@@ -1,6 +1,8 @@
 import { memo, startTransition, useCallback, useMemo } from 'react';
 import { UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../../landing/constants/uknowLandingOptions.js';
 import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
+import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
+import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách riêng để React bỏ qua re-render khi prop ổn định.
@@ -186,6 +188,15 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
       </div>
+
+      <NodeConfigDataColumnPicker
+        title="Chỉ giữ các trường lead cần dùng"
+        options={LANDING_LEAD_COLUMN_OPTIONS}
+        selectedKeys={Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : []}
+        setFormData={setFormData}
+        formField="dataSelectedColumns"
+        hint="Truy vấn DB vẫn lấy đủ cột; server chỉ giữ các trường đã chọn khi chạy flow. Luôn giữ thêm leadId và id."
+      />
     </div>
   );
 }

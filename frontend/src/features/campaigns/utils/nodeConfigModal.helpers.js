@@ -162,6 +162,13 @@ export const createNodeConfigFormData = ({
   headerRow: config.headerRow || 1,
   dataStartRow: config.dataStartRow || 2,
   columns: config.columns || [],
+  /** Danh sách tên cột giữ lại khi chạy node (rỗng = giữ tất cả) */
+  dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
+  /**
+   * Giới hạn dòng khi chạy thử read_sheet trên Builder (preview API).
+   * Rỗng = mặc định 100 dòng; `all` = tối đa theo server.
+   */
+  builderSheetPreviewRowLimit: config.builderSheetPreviewRowLimit ?? '',
   interestedLimit: config.interestedLimit || 1000,
   interestedCourseIds: Array.isArray(config.interestedCourseIds) ? config.interestedCourseIds : [],
   interestedCourseStatuses: Array.isArray(config.interestedCourseStatuses) ? config.interestedCourseStatuses : [],

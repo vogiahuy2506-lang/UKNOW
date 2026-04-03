@@ -26,7 +26,8 @@ export const registerOutboundMessageProcessors = () => {
       payload?.customer,
       payload?.campaign,
       payload?.runId,
-      payload?.retryMeta
+      payload?.retryMeta,
+      payload?.sendMeta
     )
   );
 

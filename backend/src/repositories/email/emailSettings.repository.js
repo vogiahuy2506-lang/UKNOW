@@ -210,8 +210,8 @@ class EmailSettingsRepository {
       `INSERT INTO email_messages
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
-         body_html, body_text, status, sent_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15)
+         body_html, body_text, status, sent_at, id_node, email_step)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17)
        RETURNING id`,
       [
         payload.campaignId,
@@ -229,9 +229,50 @@ class EmailSettingsRepository {
         payload.bodyHtml,
         payload.bodyText,
         payload.sentAt,
+        Number.isFinite(Number.parseInt(payload.idNode, 10)) ? Number.parseInt(payload.idNode, 10) : null,
+        Number.isFinite(Number.parseInt(payload.emailStep, 10)) ? Number.parseInt(payload.emailStep, 10) : null,
       ]
     );
     return result.rows[0]?.id || null;
+  }
+
+  /**
+   * Tìm bản ghi email đã gửi thành công cho cùng run + chiến dịch + bước + người nhận.
+   * Không lọc theo id_node (giả định một chiến dịch chỉ có một node gửi email trong luồng này).
+   * Dùng trước khi gửi SMTP để tránh gửi trùng khi ledger chưa kịp ghi.
+   *
+   * Luồng hoạt động:
+   * 1. Khớp id_run, id_campaign, email_step (1-based), recipient_email (không phân biệt hoa thường).
+   * 2. Chỉ coi các trạng thái đã phát đi thực tế (sent / delivered / opened / clicked).
+   *
+   * @param {object} input
+   * @param {number} input.runId
+   * @param {number} input.campaignId
+   * @param {string} input.recipientEmail email người nhận
+   * @param {number} input.emailStep thứ tự bước trong node (1-based)
+   * @returns {Promise<{id: number, sent_at: Date, status: string}|null>}
+   */
+  async findExistingSentCampaignEmail({ runId, campaignId, recipientEmail, emailStep }) {
+    const safeRun = Number.parseInt(runId, 10);
+    const safeCampaign = Number.parseInt(campaignId, 10);
+    const safeStep = Number.parseInt(emailStep, 10);
+    const email = String(recipientEmail || '').trim();
+    if (!Number.isFinite(safeRun) || !Number.isFinite(safeCampaign) || !Number.isFinite(safeStep) || !email) {
+      return null;
+    }
+    const result = await db.query(
+      `SELECT id, sent_at, status
+       FROM email_messages
+       WHERE id_run = $1
+         AND id_campaign = $2
+         AND email_step = $3
+         AND LOWER(TRIM(recipient_email)) = LOWER(TRIM($4))
+         AND status IN ('sent', 'delivered', 'opened', 'clicked')
+       ORDER BY id DESC
+       LIMIT 1`,
+      [safeRun, safeCampaign, safeStep, email]
+    );
+    return result.rows[0] || null;
   }
 
   async updateCustomerLastEmailSent(client, sentAt, customerId, userId) {

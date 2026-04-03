@@ -425,9 +425,9 @@ const CampaignBuilderPageLayout = ({
         }`}
         style={showRunLogs ? { height: `${runLogHeight}px` } : undefined}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="font-medium text-gray-900">Log chạy chiến dịch</div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               onClick={() => setShowRunLogs((prev) => !prev)}
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"

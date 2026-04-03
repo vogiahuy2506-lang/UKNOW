@@ -1,4 +1,8 @@
 import { campaignFlowHasZaloPoolMulti } from './campaignBuilderFlow';
+import {
+  cloneResultForBuilderLogDisplay,
+  resolveEffectiveBuilderLogItemsMode,
+} from './builderLogItems.util.js';
 
 /**
  * Execute preview campaign run with realtime node-log upsert behavior.
@@ -9,6 +13,7 @@ import { campaignFlowHasZaloPoolMulti } from './campaignBuilderFlow';
  * - run-level start/end (or cancel) logs
  *
  * @param {Object} params execution dependencies and mutable refs
+ * @param {string} [params.logItemsMode] `'100'` (mặc định) cắt `output.items` trên log UI; `'all'` giữ nguyên
  * @returns {Promise<void>}
  */
 export const executeCampaignRun = async (params) => {
@@ -35,6 +40,7 @@ export const executeCampaignRun = async (params) => {
     isZaloNode,
     nodeFailureRetryCount = 1,
     nodeFailureRetryDelayMs = 800,
+    logItemsMode = '100',
   } = params;
 
   if (isRunning) return;
@@ -145,12 +151,21 @@ export const executeCampaignRun = async (params) => {
   const runNodeWithRetry = async ({ node, ctx, nodeType, nodeName, nodeLogId, runToken }) => {
     const maxAttempts = maxNodeRetryCount + 1;
     let lastError = null;
+    /** Cắt `items` trên log realtime giống bản ghi cuối — tránh treo UI khi node gửi nhiều dòng. */
+    const effectiveProgressLogMode = resolveEffectiveBuilderLogItemsMode(
+      nodeType,
+      node.data?.config,
+      logItemsMode
+    );
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const result = await buildRunResultForNode(node, ctx, {
           onProgress: (progressData) => {
             if (runTokenRef.current !== runToken) return;
+            const progressResult = progressData?.result
+              ? cloneResultForBuilderLogDisplay(progressData.result, effectiveProgressLogMode)
+              : null;
             upsertRunLog(
               buildNodeRealtimeLog({
                 id: nodeLogId,
@@ -159,7 +174,7 @@ export const executeCampaignRun = async (params) => {
                 nodeType,
                 nodeName,
                 message: progressData?.message || `Đang chạy node ${nodeName}`,
-                result: progressData?.result || null,
+                result: progressResult,
               })
             );
             // Auto focus current node log so realtime item rows are visible while running.
@@ -297,6 +312,13 @@ export const executeCampaignRun = async (params) => {
         };
       }
     }
+    // Log UI: cắt `output.items` theo chế độ hiệu dụng (node Sheet có thể yêu cầu >100 dòng); `ctx` giữ `result` đầy đủ.
+    const effectiveLogMode = resolveEffectiveBuilderLogItemsMode(
+      nodeType,
+      node.data?.config,
+      logItemsMode
+    );
+    const resultForLog = cloneResultForBuilderLogDisplay(result, effectiveLogMode);
     const logEntry = {
       id: nodeLogId,
       status: validation.status,
@@ -305,7 +327,7 @@ export const executeCampaignRun = async (params) => {
       nodeName,
       message: validation.message,
       timestamp: new Date(),
-      result,
+      result: resultForLog,
     };
     upsertRunLog(buildNodeRealtimeLog(logEntry));
     setSelectedRunLogId(logEntry.id);

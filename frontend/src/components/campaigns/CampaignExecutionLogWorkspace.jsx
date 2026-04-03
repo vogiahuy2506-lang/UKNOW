@@ -3,6 +3,7 @@ import {
   formatCampaignDateTime,
   formatCampaignTime,
 } from '../../features/campaigns/utils/campaignDateTime.helpers';
+import { formatDataPayloadBytes } from '../../features/campaigns/utils/dataColumnSelection';
 
 const statusStyles = {
   success: 'bg-green-100 text-green-700',
@@ -157,6 +158,19 @@ const CampaignExecutionLogWorkspace = ({
       sentCount: Number.isFinite(sentCount) ? sentCount : 0,
       failedCount: Number.isFinite(failedCount) ? failedCount : 0,
     };
+  }, [outputData]);
+
+  /** Meta dung lượng JSON (UTF-8) cho node dữ liệu có `dataSelectedColumns` */
+  const dataPayloadMeta = useMemo(() => {
+    const meta = outputData?.meta;
+    if (!meta || typeof meta !== 'object') return null;
+    const acc = Number(meta.accumulatedPayloadBytesUtf8);
+    const dlm = meta.dataLoadMeta;
+    const savings = dlm && Number(dlm.batchEstimatedSavingsBytes);
+    const hasAcc = Number.isFinite(acc) && acc >= 0;
+    const hasSavings = Number.isFinite(savings) && savings > 0 && dlm?.columnSelectionActive;
+    if (!hasAcc && !hasSavings) return null;
+    return { acc, hasAcc, savings, hasSavings };
   }, [outputData]);
 
   const schema = useMemo(
@@ -331,8 +345,26 @@ const CampaignExecutionLogWorkspace = ({
                           </span>
                         </>
                       )}
-                      <div className="text-xs text-gray-500">
-                        {outputData?.meta?.totalItems ? `${outputData.meta.totalItems} items` : `${items.length} items`}
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-gray-500">
+                        <span>
+                          {outputData?.meta?.totalItems ? `${outputData.meta.totalItems} items` : `${items.length} items`}
+                        </span>
+                        {dataPayloadMeta?.hasAcc ? (
+                          <span
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                            title="Ước lượng kích thước JSON.stringify(items) theo UTF-8 (tích lũy trong log run)"
+                          >
+                            Payload ~{formatDataPayloadBytes(dataPayloadMeta.acc)}
+                          </span>
+                        ) : null}
+                        {dataPayloadMeta?.hasSavings ? (
+                          <span
+                            className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800"
+                            title="So sánh batch: kích thước nếu giữ đủ cột vs sau khi lọc cột"
+                          >
+                            Tiết kiệm batch ~{formatDataPayloadBytes(dataPayloadMeta.savings)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>

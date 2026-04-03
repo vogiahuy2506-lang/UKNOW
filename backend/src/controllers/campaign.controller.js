@@ -908,11 +908,12 @@ class CampaignController {
   }
 
   /**
-   * Lấy danh sách customers từ data node
-   * @param {object} node 
-   * @param {number} userId 
+   * Lấy danh sách customers từ data node (sau lọc cột `dataSelectedColumns` nếu có).
+   *
+   * @param {object} node
+   * @param {number} userId
    * @param {Array} allNodes - Tất cả nodes trong campaign (dùng cho save_customer)
-   * @returns {Promise<Array>}
+   * @returns {Promise<{ items: Array<object>, dataLoadMeta: object }>}
    */
   async getCustomersFromDataNode(node, userId, allNodes = []) {
     return campaignNodeDataService.getCustomersFromDataNode(node, userId, allNodes);

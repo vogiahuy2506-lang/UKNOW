@@ -97,6 +97,8 @@ class EmailSettingsSmtpService {
         bodyHtml: payload.trackedHtmlContent || null,
         bodyText: payload.plainTextContent || null,
         sentAt: payload.sentAt,
+        idNode: payload.nodeId ?? null,
+        emailStep: payload.emailStep ?? null,
       });
 
       if (resolvedCustomerId) {
