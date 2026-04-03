@@ -99,7 +99,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={activeCampaignSearch}
                 onChange={(e) => onActiveCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên chiến dịch"
+                placeholder="Tìm theo tên chiến dịch hoặc ID"
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -119,6 +119,9 @@ const CampaignRunMainTabs = ({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                    ID chiến dịch
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tên chiến dịch
                   </th>
@@ -151,6 +154,9 @@ const CampaignRunMainTabs = ({
 
                   return (
                     <tr key={campaign.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">
+                        {campaign.id != null ? String(campaign.id) : '—'}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <div>
@@ -267,7 +273,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={scheduledCampaignSearch}
                 onChange={(e) => onScheduledCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên lịch hoặc tên chiến dịch"
+                placeholder="Tìm theo tên lịch, tên chiến dịch hoặc ID chiến dịch"
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -287,6 +293,7 @@ const CampaignRunMainTabs = ({
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên lịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chiến dịch</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">ID chiến dịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại lịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cron</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
@@ -301,6 +308,9 @@ const CampaignRunMainTabs = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{schedule.campaignName}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">
+                      {schedule.campaignId != null ? String(schedule.campaignId) : '—'}
                     </td>
                     <td className="px-6 py-4">
                       <span className="badge badge-info">
@@ -369,7 +379,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={pausedCampaignSearch}
                 onChange={(e) => onPausedCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên chiến dịch"
+                placeholder="Tìm theo tên chiến dịch hoặc ID"
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -389,6 +399,7 @@ const CampaignRunMainTabs = ({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">ID chiến dịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên chiến dịch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Người tạo</th>
@@ -401,6 +412,9 @@ const CampaignRunMainTabs = ({
                   const isActivating = activatingCampaignIds.has(campaign.id);
                   return (
                     <tr key={campaign.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">
+                        {campaign.id != null ? String(campaign.id) : '—'}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-900">{campaign.campaignName}</div>
                         {campaign.description && (
