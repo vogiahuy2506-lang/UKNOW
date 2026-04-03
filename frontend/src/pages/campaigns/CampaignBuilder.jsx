@@ -88,6 +88,8 @@ const CampaignBuilder = () => {
   const [runLogs, setRunLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showRunLogs, setShowRunLogs] = useLocalStorageState('uknow_builder_showRunLogs', true);
+  /** Chế độ cắt log/preview trên Builder: luôn `100` (node Sheet có thể ghi đè trong cấu hình). */
+  const builderLogItemsMode = '100';
   const [selectedRunLogId, setSelectedRunLogId] = useState(null);
   const runTokenRef = useRef(0);
   const runAbortControllerRef = useRef(null);
@@ -775,6 +777,7 @@ const CampaignBuilder = () => {
     toastNotifier: toast,
     isRunCancelledError,
     sleep,
+    logItemsMode: builderLogItemsMode,
   });
 
   const handleRunCampaign = async () => {
@@ -799,6 +802,7 @@ const CampaignBuilder = () => {
       sleep,
       interZaloNodeDelayMs: ADJACENT_ZALO_NODE_DELAY_MS,
       isZaloNode: isZaloExecutionNode,
+      logItemsMode: builderLogItemsMode,
     });
   };
 

@@ -4,6 +4,7 @@ import {
   HiOutlineLink,
   HiOutlineTable,
 } from 'react-icons/hi';
+import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
 /**
  * Section UI for read-sheet node configuration.
@@ -145,6 +146,40 @@ export const NodeConfigReadSheetSection = ({
                 <strong>Mẹo:</strong> Nếu tiêu đề ở dòng 1 và dữ liệu bắt đầu từ dòng 2, hãy đặt dòng tiêu đề = 1, dòng bắt đầu dữ liệu = 2.
               </p>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Số dòng tối đa khi chạy thử trên Builder
+              </label>
+              <select
+                value={
+                  formData.builderSheetPreviewRowLimit === undefined || formData.builderSheetPreviewRowLimit === null
+                    ? ''
+                    : String(formData.builderSheetPreviewRowLimit)
+                }
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    builderSheetPreviewRowLimit: e.target.value,
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+              >
+                <option value="">
+                  Mặc định Builder: 100 dòng (chọn số khác hoặc «Toàn bộ» để xem nhiều hơn khi chạy thử)
+                </option>
+                <option value="100">100 dòng</option>
+                <option value="500">500 dòng</option>
+                <option value="2000">2.000 dòng</option>
+                <option value="5000">5.000 dòng</option>
+                <option value="10000">10.000 dòng</option>
+                <option value="all">Toàn bộ (tối đa 20.000 dòng — có thể chậm / nặng RAM trình duyệt)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Chỉ áp dụng khi bấm «Chạy» trên Builder. Chạy thật từ trang «Chạy chiến dịch» vẫn đọc đủ dòng Sheet
+                (theo backend), không phụ thuộc tùy chọn này.
+              </p>
+            </div>
           </div>
         );
 
@@ -191,6 +226,18 @@ export const NodeConfigReadSheetSection = ({
                 <p className="text-xs text-gray-400 mt-1">Nhấn "Kiểm tra kết nối" để tải danh sách cột</p>
               </div>
             )}
+
+            <NodeConfigDataColumnPicker
+              title="Chỉ đọc các cột đã chọn (tối ưu bộ nhớ / log)"
+              options={(Array.isArray(formData.columns) ? formData.columns : []).map((c) => ({
+                key: String(c || '').trim(),
+                label: String(c || '').trim(),
+              })).filter((o) => o.key)}
+              selectedKeys={Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : []}
+              setFormData={setFormData}
+              formField="dataSelectedColumns"
+              hint="Google vẫn tải file CSV đầy đủ; server chỉ giữ các cột chọn trong object để giảm RAM và kích thước log. Để trống = giữ mọi cột như trước."
+            />
 
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-sm text-green-700">

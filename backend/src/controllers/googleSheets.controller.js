@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Papa from 'papaparse';
 import { getReadSheetFetchTimeoutMs } from '../utils/readSheetConfig.util.js';
+import { applyDataColumnSelectionToItems } from '../utils/dataColumnSelection.util.js';
 
 function extractSpreadsheetId(sheetUrl) {
   if (!sheetUrl || typeof sheetUrl !== 'string') return null;
@@ -188,8 +189,10 @@ class GoogleSheetsController {
   }
 
   /**
-   * Xem trước dữ liệu từ Google Sheet (tối đa 500 dòng).
-   * @param {import('express').Request} req - body: { sheetUrl, sheetName?, headerRow?, dataStartRow?, limit? }
+   * Xem trước dữ liệu từ Google Sheet.
+   * Tham số `limit` bị clamp an toàn (mặc định tối đa 20.000) để Builder có thể xem nhiều dòng; CSV vẫn tải đủ rồi cắt theo limit.
+   *
+   * @param {import('express').Request} req - body: { sheetUrl, sheetName?, headerRow?, dataStartRow?, limit?, dataSelectedColumns? }
    * @param {import('express').Response} res
    */
   async preview(req, res) {
@@ -200,6 +203,7 @@ class GoogleSheetsController {
         headerRow = 1,
         dataStartRow = 2,
         limit = 25,
+        dataSelectedColumns,
       } = req.body || {};
       const normalizedSheetName = String(sheetName || 'Sheet1').trim() || 'Sheet1';
 
@@ -220,7 +224,9 @@ class GoogleSheetsController {
 
       const headerRowNum = Math.max(1, toInt(headerRow, 1));
       const dataStartRowNum = Math.max(1, toInt(dataStartRow, 2));
-      const limitNum = Math.min(500, Math.max(1, toInt(limit, 25)));
+      /** Trần số dòng preview — đồng bộ với `GOOGLE_SHEET_PREVIEW_SERVER_MAX` phía frontend Builder. */
+      const PREVIEW_LIMIT_MAX = 20000;
+      const limitNum = Math.min(PREVIEW_LIMIT_MAX, Math.max(1, toInt(limit, 25)));
       const sheetNameExists = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
       if (!sheetNameExists) {
         return res.status(400).json({
@@ -304,18 +310,25 @@ class GoogleSheetsController {
         items.push(obj);
       }
 
+      const { items: filteredItems, dataLoadMeta } = applyDataColumnSelectionToItems(
+        items,
+        dataSelectedColumns,
+        'sheet'
+      );
+
       return res.json({
         success: true,
         data: {
-          items,
+          items: filteredItems,
           meta: {
             spreadsheetId,
             sheetName: normalizedSheetName,
             headerRow: headerRowNum,
             dataStartRow: dataStartRowNum,
             csvUrl,
-            fetched: items.length,
+            fetched: filteredItems.length,
             columns: namedHeaderColumns,
+            dataLoadMeta,
           },
         },
       });

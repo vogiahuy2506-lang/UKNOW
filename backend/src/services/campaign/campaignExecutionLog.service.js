@@ -140,19 +140,58 @@ class CampaignExecutionLogService {
   }
 
   /**
+   * Chuẩn hóa id_customer cho campaign_executions (FK → customers.id):
+   * 1) Ưu tiên tra `customers.id` theo email người nhận — khách hàng là dữ liệu toàn hệ thống, không lọc theo id_user.
+   * 2) Nếu không có email hoặc không tìm thấy, mới dùng id thô nếu là PK hợp lệ trong `customers`.
+   *
+   * Luồng hoạt động:
+   * 1. Có `recipientEmail` → SELECT customers theo LOWER(TRIM(email)) (ORDER BY id để ổn định nếu trùng email).
+   * 2. Fallback: rawCustomerId là PK tồn tại.
+   *
+   * @param {object} input
+   * @param {unknown} input.rawCustomerId id từ sheet/node (có thể sai)
+   * @param {string|null|undefined} input.recipientEmail email người nhận (ưu tiên để map DB)
+   * @returns {Promise<number|null>}
+   */
+  async resolveCustomerIdForExecutionLog({ rawCustomerId, recipientEmail }) {
+    const email = String(recipientEmail || '').trim().toLowerCase();
+    if (email) {
+      try {
+        const byEmail = await db.query(
+          `SELECT id FROM customers WHERE LOWER(TRIM(email)) = $1 ORDER BY id ASC LIMIT 1`,
+          [email]
+        );
+        if (byEmail.rows[0]?.id != null) return byEmail.rows[0].id;
+      } catch {
+        // Fallback sang id thô
+      }
+    }
+    const parsed = Number.parseInt(rawCustomerId, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    try {
+      const result = await db.query('SELECT id FROM customers WHERE id = $1 LIMIT 1', [parsed]);
+      return result.rows.length > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Ghi hoặc cập nhật một dòng log execution cho node trong lần chạy chiến dịch.
    *
    * Luồng hoạt động:
    * 1. Với mọi loại run, nếu có `node.id` thì coi khóa ổn định là `(id_run, node_id)`.
    * 2. Đã có bản ghi: UPDATE bản mới nhất (ORDER BY id DESC), merge `execution_data` để giữ items tiến độ và tránh trùng.
    * 3. Chưa có: INSERT hàng mới. Không có `node_id` thì luôn INSERT (không đủ khóa upsert).
-   * 4. `created_at` giữ nguyên khi UPDATE; `updated_at` luôn cập nhật.
+   * 4. `id_customer` được chuẩn hóa: ưu tiên tra theo email (toàn hệ thống), sau đó PK từ payload; không có thì NULL.
+   * 5. `created_at` giữ nguyên khi UPDATE; `updated_at` luôn cập nhật.
    *
    * @param {object} input
    * @param {number|null} input.campaignId id chiến dịch
    * @param {number|null} input.runId id lượt chạy
    * @param {object} input.node metadata node (id, node_name, node_type, …)
    * @param {number|null} [input.customerId]
+   * @param {string|null} [input.recipientEmail] email người nhận để map customers.id trong DB khi id thô sai
    * @param {string} [input.status]
    * @param {unknown} [input.executionData] payload log (object hoặc JSON string)
    * @param {string|null} [input.errorMessage]
@@ -165,6 +204,7 @@ class CampaignExecutionLogService {
     runId,
     node,
     customerId = null,
+    recipientEmail = null,
     status = 'success',
     executionData = null,
     errorMessage = null,
@@ -172,6 +212,10 @@ class CampaignExecutionLogService {
     progressTotal = null,
   }) {
     if (!runId || !node) return;
+    const safeCustomerId = await this.resolveCustomerIdForExecutionLog({
+      rawCustomerId: customerId,
+      recipientEmail,
+    });
     const nodeId = node.id || null;
     const nodeName = node.node_name || null;
     const nodeType = node.node_type || null;
@@ -225,7 +269,7 @@ class CampaignExecutionLogService {
            WHERE id = $14`,
           [
             campaignId,
-            customerId,
+            safeCustomerId,
             status,
             nodeSubtype || nodeType,
             nodeName,
@@ -251,7 +295,7 @@ class CampaignExecutionLogService {
       [
         campaignId,
         runId,
-        customerId,
+        safeCustomerId,
         status,
         nodeSubtype || nodeType,
         nodeId,

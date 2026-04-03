@@ -5,8 +5,11 @@ import {
   HiOutlineDocumentText,
   HiOutlinePlay,
   HiOutlineSearch,
+  HiOutlineTable,
 } from 'react-icons/hi';
 import { fetchInterestedCustomerCoursesLocal } from '../utils/nodeConfigModal.helpers';
+import { INTERESTED_CUSTOMER_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions';
+import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
 const INTERESTED_COURSE_STATUS_LABELS = {
   publish: 'Publish (Công khai)',
@@ -133,6 +136,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
     .map((item) => parseInt(item.courseId, 10))
     .filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx);
 
+  const selectedDataCols = Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : [];
+
   const readInterestedCustomersSections = [
     { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
     {
@@ -141,6 +146,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
       icon: HiOutlineSearch,
       badge: selectedCourseIds.length > 0,
       badgeLabel: selectedCourseIds.length,
+    },
+    {
+      id: 'columns',
+      name: 'Cột dữ liệu',
+      icon: HiOutlineTable,
+      badge: selectedDataCols.length > 0,
+      badgeLabel: selectedDataCols.length,
     },
     {
       id: 'test',
@@ -496,6 +508,20 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 <strong>Mẹo:</strong> Sử dụng bộ lọc khóa học để thu hẹp đối tượng nhận email hoặc tin nhắn, giúp nội dung phù hợp hơn với từng nhóm khách hàng.
               </p>
             </div>
+          </div>
+        );
+
+      case 'columns':
+        return (
+          <div className="space-y-4">
+            <NodeConfigDataColumnPicker
+              title="Chỉ giữ các trường khách cần dùng"
+              options={INTERESTED_CUSTOMER_COLUMN_OPTIONS}
+              selectedKeys={selectedDataCols}
+              setFormData={setFormData}
+              formField="dataSelectedColumns"
+              hint="API/DB vẫn trả đủ cột; server chỉ giữ các trường đã chọn trong bộ nhớ và log. Luôn giữ thêm customerId và id. Hãy chọn email/phone nếu node sau cần gửi tin."
+            />
           </div>
         );
 

@@ -13,6 +13,13 @@ import {
   getReadSheetParseYieldEveryRows,
   shouldReadSheetUseBullMq,
 } from '../../utils/readSheetConfig.util.js';
+import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
+
+/**
+ * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
+ * Giảm thời gian giữ lock và áp lực WAL trên VPS nhỏ; không dùng biến môi trường.
+ */
+const SAVE_CUSTOMERS_DB_CHUNK_SIZE = 500;
 
 const decodeJsQuotedString = (value = '') => {
   try {
@@ -57,16 +64,24 @@ const logApiCall = (source, endpoint) => {
 
 class CampaignNodeDataService {
   /**
-   * Load items from a data node.
+   * Load items from a data node (có lọc cột `dataSelectedColumns` khi cấu hình).
+   *
+   * Luồng hoạt động:
+   * 1. Nạp dữ liệu thô theo loại node (sheet, DB, landing, ...).
+   * 2. Áp dụng `applyDataColumnSelectionToItems` để giảm kích thước object lưu trong RAM / log.
+   * 3. Trả `{ items, dataLoadMeta }` — meta phục vụ hiển thị dung lượng ước lượng tiết kiệm theo batch.
    *
    * @param {object} node
    * @param {number} userId
    * @param {Array<object>} allNodes
-   * @returns {Promise<Array>}
+   * @returns {Promise<{ items: Array<object>, dataLoadMeta: object }>}
    */
   async getCustomersFromDataNode(node, userId, allNodes = []) {
     const config = node.config || {};
     const subtype = node.node_subtype;
+
+    /** Meta mặc định khi không có dòng dữ liệu */
+    const emptyResult = (kind) => applyDataColumnSelectionToItems([], config.dataSelectedColumns, kind);
 
     switch (subtype) {
       case 'read_interested_customers':
@@ -128,28 +143,32 @@ class CampaignNodeDataService {
           const excludedSet = new Set(excludedCustomerIds);
           items = items.filter((row) => !excludedSet.has(parseInt(row.customerId, 10)));
         }
-        return items;
+        return applyDataColumnSelectionToItems(items, config.dataSelectedColumns, 'interested');
       }
 
       case 'read_sheet':
       case 'google_sheet': {
         if (!config.sheetUrl) {
-          return [];
+          return emptyResult('sheet');
         }
         const queueFeatureOn = outboundMessageQueueService.isQueueFeatureEnabled();
+        let rawSheetItems;
         if (shouldReadSheetUseBullMq(queueFeatureOn)) {
-          return outboundMessageQueueService.enqueueAndWait({
+          rawSheetItems = await outboundMessageQueueService.enqueueAndWait({
             type: OUTBOUND_MESSAGE_JOB_TYPES.GOOGLE_SHEET_FETCH,
             payload: { config },
             waitTimeoutMs: getReadSheetBullmqWaitTimeoutMs(),
           });
+        } else {
+          rawSheetItems = await this.fetchGoogleSheetCustomersFromConfig(config);
         }
-        return this.fetchGoogleSheetCustomersFromConfig(config);
+        const sheetList = Array.isArray(rawSheetItems) ? rawSheetItems : [];
+        return applyDataColumnSelectionToItems(sheetList, config.dataSelectedColumns, 'sheet');
       }
 
       case 'read_landing_leads': {
-        const { items } = await leadService.getLeadsForCampaignConfig(config);
-        return items;
+        const { items: landingItems } = await leadService.getLeadsForCampaignConfig(config);
+        return applyDataColumnSelectionToItems(landingItems, config.dataSelectedColumns, 'landing');
       }
 
       case 'read_courses_db': {
@@ -158,7 +177,7 @@ class CampaignNodeDataService {
           : [];
 
         if (selectedCourseIds.length === 0) {
-          return [];
+          return emptyResult('courses_db');
         }
 
         const rawLimit = Number.isFinite(parseInt(config.coursesDbLimit, 10))
@@ -205,27 +224,27 @@ class CampaignNodeDataService {
           queryParams
         );
 
-        return courseResult.rows;
+        return applyDataColumnSelectionToItems(courseResult.rows, config.dataSelectedColumns, 'courses_db');
       }
 
       case 'manual_upload':
-        return [];
+        return emptyResult('sheet');
 
       case 'save_customer':
       case 'customer_segment': {
         const sourceNodeId = config.saveCustomerNodeId;
         if (!sourceNodeId) {
-          return [];
+          return emptyResult('sheet');
         }
         const sourceNode = allNodes.find((n) => String(n.id) === String(sourceNodeId));
         if (!sourceNode) {
-          return [];
+          return emptyResult('sheet');
         }
         return this.getCustomersFromDataNode(sourceNode, userId, allNodes);
       }
 
       default:
-        return [];
+        return emptyResult('sheet');
     }
   }
 
@@ -399,12 +418,14 @@ class CampaignNodeDataService {
    * Lưu khách hàng trực tiếp vào database với cơ chế dedupe + upsert.
    * Hàm này được worker BullMQ gọi để xử lý dữ liệu thật của một job.
    *
-   * Luồng hoạt động (tối ưu timeout):
-   * 1. Mở transaction và `SET LOCAL statement_timeout` (mặc định 10 phút, xem env bên dưới).
-   * 2. Preload một lần các bản ghi `customers` của `id_user` khớp email/phone trong batch (giảm N+1).
-   * 3. Với từng khách: tra map bộ nhớ (cùng thứ tự ưu tiên trùng như SELECT cũ), UPDATE/INSERT, cập nhật map nếu cần.
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa + gộp trùng (email/phone) trong bộ nhớ — không giữ connection DB.
+   * 2. Chia danh sách đã dedupe thành từng cụm tối đa `SAVE_CUSTOMERS_DB_CHUNK_SIZE` (500) khách.
+   * 3. Mỗi cụm: `BEGIN` → `SET LOCAL statement_timeout` → preload email/phone của cụm → UPDATE/INSERT từng dòng trong cụm → `COMMIT`.
+   *    Cụm sau thấy dữ liệu cụm trước đã commit (tra DB qua preload + map trong transaction).
+   * 4. Nếu một cụm lỗi: `ROLLBACK` cụm đó và ném lỗi — các cụm đã commit trước đó vẫn giữ (không còn một transaction duy nhất cho cả job).
    *
-   * Biến môi trường: `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` — thời gian tối đa mỗi câu lệnh SQL trong transaction (ms).
+   * Biến môi trường: `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` — thời gian tối đa mỗi câu lệnh SQL trong từng transaction cụm (ms).
    * Đặt `0` để tắt giới hạn (chỉ nên dùng khi tin tưởng batch). Mặc định khi không khai báo: 600000.
    *
    * @param {Array<object>} customers
@@ -415,228 +436,237 @@ class CampaignNodeDataService {
    * @returns {Promise<{saved:number,updated:number,skipped:number,unchanged:number}>}
    */
   async saveCustomersFromCampaignDirect(customers, campaignId, userId, saveNode, runId = null) {
+    /**
+     * Pool mặc định đặt `statement_timeout` 30s (`database.js`), trong khi batch lưu khách
+     * có thể kéo dài. Nới hạn **trong từng transaction cụm** bằng `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` (ms), 0 = tắt giới hạn.
+     */
+    const saveCustomersStmtTimeoutMs = (() => {
+      const raw = process.env.SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS;
+      if (raw === undefined || raw === '') return 600_000;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) && n >= 0 ? n : 600_000;
+    })();
+
+    const config = saveNode?.config || {};
+    const fieldMap = config.saveCustomerFieldMap || {};
+    const normalizeValue = (value) => {
+      if (value == null) return null;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed === '' ? null : trimmed;
+      }
+      return value;
+    };
+    const normalizeEmail = (value) => {
+      const normalized = normalizeValue(value);
+      return normalized ? String(normalized).toLowerCase() : null;
+    };
+    /** Chuẩn hóa chuỗi để so sánh với cột text trong DB (trim, rỗng → null). */
+    const normText = (value) => {
+      if (value == null) return null;
+      const s = String(value).trim();
+      return s === '' ? null : s;
+    };
+    /** Email khi so sánh: luôn lowercase. */
+    const normEmailKey = (value) => {
+      const t = normText(value);
+      return t ? t.toLowerCase() : null;
+    };
+    /** So sánh gender / customer_source không phân biệt hoa thường. */
+    const normLower = (value) => {
+      const t = normText(value);
+      return t ? t.toLowerCase() : null;
+    };
+    /**
+     * Trùng khớp trạng thái sau UPDATE (cùng semantics COALESCE như câu SQL) với dữ liệu hiện có.
+     * Nếu true thì không cần chạy UPDATE — tránh cập nhật `updated_at` oan.
+     *
+     * @param {object} row bản ghi `customers` từ DB (snake_case)
+     * @param {object} incoming các trường đã map từ campaign (đã chuẩn hóa)
+     */
+    const isCustomerRowUnchanged = (row, incoming) => {
+      const {
+        email: inEmail,
+        phone: inPhone,
+        fullName: inFullName,
+        gender: inGender,
+        customerSource: inCustomerSource,
+        notes: inNotes,
+      } = incoming;
+      const effEmail = inEmail != null ? inEmail : normEmailKey(row.email);
+      const effPhone = inPhone != null ? inPhone : normText(row.phone);
+      const effFullName = inFullName != null ? inFullName : normText(row.full_name);
+      const effGender = inGender != null ? normLower(inGender) : normLower(row.gender);
+      const effSource = normLower(inCustomerSource);
+      const effNotes = inNotes != null ? normText(inNotes) : normText(row.notes);
+
+      return (
+        effEmail === normEmailKey(row.email)
+        && effPhone === normText(row.phone)
+        && effFullName === normText(row.full_name)
+        && effGender === normLower(row.gender)
+        && effSource === normLower(row.customer_source)
+        && effNotes === normText(row.notes)
+      );
+    };
+    const pairKey = (email, phone) => `${String(email || '')}|${String(phone || '')}`;
+
+    const dedupedMap = new Map();
+    for (const customerData of customers || []) {
+      const mapped = {
+        email: normalizeEmail(campaignFlowService.getFieldValue(customerData, fieldMap.email)),
+        phone: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.phone)),
+        fullName: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.fullName)),
+        gender: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.gender)),
+        customerSource: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.customerSource)) || 'campaign',
+        notes: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.notes)),
+      };
+      if (!mapped.email && !mapped.phone) continue;
+      const key = pairKey(mapped.email, mapped.phone);
+      const prev = dedupedMap.get(key) || {};
+      dedupedMap.set(key, {
+        email: mapped.email || prev.email || null,
+        phone: mapped.phone || prev.phone || null,
+        fullName: mapped.fullName || prev.fullName || null,
+        gender: mapped.gender || prev.gender || null,
+        customerSource: mapped.customerSource || prev.customerSource || 'campaign',
+        notes: mapped.notes || prev.notes || null,
+      });
+    }
+    const normalizedCustomers = Array.from(dedupedMap.values());
+
+    if (normalizedCustomers.length === 0) {
+      return { saved: 0, updated: 0, skipped: 0, unchanged: 0 };
+    }
+
+    let saved = 0;
+    let updated = 0;
+    let skipped = 0;
+    let unchanged = 0;
+
     const client = await db.getClient();
     try {
-      await client.query('BEGIN');
+      const chunkSize = SAVE_CUSTOMERS_DB_CHUNK_SIZE;
 
-      /**
-       * Pool mặc định đặt `statement_timeout` 30s (`database.js`), trong khi batch lưu khách
-       * có thể kéo dài (nhiều UPDATE/INSERT + participation). Nới hạn **chỉ trong transaction này**
-       * để tránh lỗi 57014; có thể cấu hình bằng `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` (ms), 0 = tắt giới hạn.
-       */
-      const saveCustomersStmtTimeoutMs = (() => {
-        const raw = process.env.SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS;
-        if (raw === undefined || raw === '') return 600_000;
-        const n = Number.parseInt(String(raw), 10);
-        return Number.isFinite(n) && n >= 0 ? n : 600_000;
-      })();
-      if (saveCustomersStmtTimeoutMs > 0) {
-        await client.query(`SET LOCAL statement_timeout = ${saveCustomersStmtTimeoutMs}`);
-      } else {
-        await client.query('SET LOCAL statement_timeout = 0');
-      }
+      for (let offset = 0; offset < normalizedCustomers.length; offset += chunkSize) {
+        const chunk = normalizedCustomers.slice(offset, offset + chunkSize);
 
-      const config = saveNode?.config || {};
-      const fieldMap = config.saveCustomerFieldMap || {};
-      const normalizeValue = (value) => {
-        if (value == null) return null;
-        if (typeof value === 'string') {
-          const trimmed = value.trim();
-          return trimmed === '' ? null : trimmed;
-        }
-        return value;
-      };
-      const normalizeEmail = (value) => {
-        const normalized = normalizeValue(value);
-        return normalized ? String(normalized).toLowerCase() : null;
-      };
-      /** Chuẩn hóa chuỗi để so sánh với cột text trong DB (trim, rỗng → null). */
-      const normText = (value) => {
-        if (value == null) return null;
-        const s = String(value).trim();
-        return s === '' ? null : s;
-      };
-      /** Email khi so sánh: luôn lowercase. */
-      const normEmailKey = (value) => {
-        const t = normText(value);
-        return t ? t.toLowerCase() : null;
-      };
-      /** So sánh gender / customer_source không phân biệt hoa thường. */
-      const normLower = (value) => {
-        const t = normText(value);
-        return t ? t.toLowerCase() : null;
-      };
-      /**
-       * Trùng khớp trạng thái sau UPDATE (cùng semantics COALESCE như câu SQL) với dữ liệu hiện có.
-       * Nếu true thì không cần chạy UPDATE — tránh cập nhật `updated_at` oan.
-       *
-       * @param {object} row bản ghi `customers` từ DB (snake_case)
-       * @param {object} incoming các trường đã map từ campaign (đã chuẩn hóa)
-       */
-      const isCustomerRowUnchanged = (row, incoming) => {
-        const {
-          email: inEmail,
-          phone: inPhone,
-          fullName: inFullName,
-          gender: inGender,
-          customerSource: inCustomerSource,
-          notes: inNotes,
-        } = incoming;
-        const effEmail = inEmail != null ? inEmail : normEmailKey(row.email);
-        const effPhone = inPhone != null ? inPhone : normText(row.phone);
-        const effFullName = inFullName != null ? inFullName : normText(row.full_name);
-        const effGender = inGender != null ? normLower(inGender) : normLower(row.gender);
-        const effSource = normLower(inCustomerSource);
-        const effNotes = inNotes != null ? normText(inNotes) : normText(row.notes);
-
-        return (
-          effEmail === normEmailKey(row.email)
-          && effPhone === normText(row.phone)
-          && effFullName === normText(row.full_name)
-          && effGender === normLower(row.gender)
-          && effSource === normLower(row.customer_source)
-          && effNotes === normText(row.notes)
-        );
-      };
-      const pairKey = (email, phone) => `${String(email || '')}|${String(phone || '')}`;
-
-      const dedupedMap = new Map();
-      for (const customerData of customers || []) {
-        const mapped = {
-          email: normalizeEmail(campaignFlowService.getFieldValue(customerData, fieldMap.email)),
-          phone: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.phone)),
-          fullName: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.fullName)),
-          gender: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.gender)),
-          customerSource: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.customerSource)) || 'campaign',
-          notes: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.notes)),
-        };
-        if (!mapped.email && !mapped.phone) continue;
-        const key = pairKey(mapped.email, mapped.phone);
-        const prev = dedupedMap.get(key) || {};
-        dedupedMap.set(key, {
-          email: mapped.email || prev.email || null,
-          phone: mapped.phone || prev.phone || null,
-          fullName: mapped.fullName || prev.fullName || null,
-          gender: mapped.gender || prev.gender || null,
-          customerSource: mapped.customerSource || prev.customerSource || 'campaign',
-          notes: mapped.notes || prev.notes || null,
-        });
-      }
-      const normalizedCustomers = Array.from(dedupedMap.values());
-
-      // --- Preload: một (hoặc vài) query thay cho N+1 SELECT; map bộ nhớ giữ đúng thứ tự ưu tiên trùng như cũ ---
-      const emailSet = new Set();
-      const phoneSet = new Set();
-      for (const c of normalizedCustomers) {
-        if (c.email) emailSet.add(c.email);
-        if (c.phone) phoneSet.add(c.phone);
-      }
-      const preloadEmails = Array.from(emailSet);
-      const preloadPhones = Array.from(phoneSet);
-
-      const byEmailPhone = new Map();
-      const byEmail = new Map();
-      const byPhone = new Map();
-
-      /** Gỡ một bản ghi khỏi các map tra cứu (trước khi đổi email/phone hoặc trùng lặp key). */
-      const unindexCustomerRow = (row) => {
-        const e = normEmailKey(row.email);
-        const p = normText(row.phone);
-        if (e && p) byEmailPhone.delete(pairKey(e, p));
-        if (e && byEmail.get(e) === row) byEmail.delete(e);
-        if (p && byPhone.get(p) === row) byPhone.delete(p);
-      };
-
-      /** Đưa bản ghi vào map; mỗi key chỉ giữ bản đầu tiên (tương đương LIMIT 1 không ORDER BY). */
-      const indexCustomerRow = (row) => {
-        const e = normEmailKey(row.email);
-        const p = normText(row.phone);
-        if (e && p) {
-          const k = pairKey(e, p);
-          if (!byEmailPhone.has(k)) byEmailPhone.set(k, row);
-        }
-        if (e && !byEmail.has(e)) byEmail.set(e, row);
-        if (p && !byPhone.has(p)) byPhone.set(p, row);
-      };
-
-      /**
-       * Tìm bản ghi hiện có giống chuỗi SELECT cũ: ưu tiên khớp email+phone, rồi email, rồi phone.
-       *
-       * @param {string|null} email
-       * @param {string|null} phone
-       * @returns {object|null}
-       */
-      const resolveExistingCustomerRow = (email, phone) => {
-        if (email && phone) {
-          const exact = byEmailPhone.get(pairKey(email, phone));
-          if (exact) return exact;
-          const byE = byEmail.get(email);
-          if (byE) return byE;
-          const byP = byPhone.get(phone);
-          if (byP) return byP;
-          return null;
-        }
-        if (email) return byEmail.get(email) || null;
-        if (phone) return byPhone.get(phone) || null;
-        return null;
-      };
-
-      if (preloadEmails.length > 0 || preloadPhones.length > 0) {
-        const parts = [];
-        const params = [userId];
-        let pi = 2;
-        if (preloadEmails.length > 0) {
-          parts.push(`LOWER(email) = ANY($${pi}::text[])`);
-          params.push(preloadEmails);
-          pi += 1;
-        }
-        if (preloadPhones.length > 0) {
-          parts.push(`phone = ANY($${pi}::text[])`);
-          params.push(preloadPhones);
-          pi += 1;
-        }
-        const preloadSql = `SELECT * FROM customers WHERE id_user = $1 AND (${parts.join(' OR ')})`;
-        const { rows: preloadRows } = await client.query(preloadSql, params);
-        for (const row of preloadRows) {
-          indexCustomerRow(row);
-        }
-      }
-
-      let saved = 0;
-      let updated = 0;
-      let skipped = 0;
-      let unchanged = 0;
-
-      for (const customerData of normalizedCustomers) {
-        const email = customerData.email;
-        const phone = customerData.phone;
-        const fullName = customerData.fullName;
-        const gender = customerData.gender;
-        const customerSource = customerData.customerSource || 'campaign';
-        const notes = customerData.notes;
-
-        if (!email && !phone) {
-          skipped += 1;
-          continue;
-        }
-
-        const existingRow = resolveExistingCustomerRow(email, phone);
-
-        if (existingRow?.id) {
-          const incomingForCompare = {
-            email,
-            phone,
-            fullName,
-            gender,
-            customerSource,
-            notes,
-          };
-          if (isCustomerRowUnchanged(existingRow, incomingForCompare)) {
-            unchanged += 1;
+        try {
+          await client.query('BEGIN');
+          if (saveCustomersStmtTimeoutMs > 0) {
+            await client.query(`SET LOCAL statement_timeout = ${saveCustomersStmtTimeoutMs}`);
           } else {
-            unindexCustomerRow(existingRow);
-            await client.query(
-              `UPDATE customers SET
+            await client.query('SET LOCAL statement_timeout = 0');
+          }
+
+          // --- Preload theo cụm: giảm N+1; cụm sau nhìn thấy bản ghi cụm trước đã commit ---
+          const emailSet = new Set();
+          const phoneSet = new Set();
+          for (const c of chunk) {
+            if (c.email) emailSet.add(c.email);
+            if (c.phone) phoneSet.add(c.phone);
+          }
+          const preloadEmails = Array.from(emailSet);
+          const preloadPhones = Array.from(phoneSet);
+
+          const byEmailPhone = new Map();
+          const byEmail = new Map();
+          const byPhone = new Map();
+
+          /** Gỡ một bản ghi khỏi các map tra cứu (trước khi đổi email/phone hoặc trùng lặp key). */
+          const unindexCustomerRow = (row) => {
+            const e = normEmailKey(row.email);
+            const p = normText(row.phone);
+            if (e && p) byEmailPhone.delete(pairKey(e, p));
+            if (e && byEmail.get(e) === row) byEmail.delete(e);
+            if (p && byPhone.get(p) === row) byPhone.delete(p);
+          };
+
+          /** Đưa bản ghi vào map; mỗi key chỉ giữ bản đầu tiên (tương đương LIMIT 1 không ORDER BY). */
+          const indexCustomerRow = (row) => {
+            const e = normEmailKey(row.email);
+            const p = normText(row.phone);
+            if (e && p) {
+              const k = pairKey(e, p);
+              if (!byEmailPhone.has(k)) byEmailPhone.set(k, row);
+            }
+            if (e && !byEmail.has(e)) byEmail.set(e, row);
+            if (p && !byPhone.has(p)) byPhone.set(p, row);
+          };
+
+          /**
+           * Tìm bản ghi hiện có giống chuỗi SELECT cũ: ưu tiên khớp email+phone, rồi email, rồi phone.
+           *
+           * @param {string|null} email
+           * @param {string|null} phone
+           * @returns {object|null}
+           */
+          const resolveExistingCustomerRow = (email, phone) => {
+            if (email && phone) {
+              const exact = byEmailPhone.get(pairKey(email, phone));
+              if (exact) return exact;
+              const byE = byEmail.get(email);
+              if (byE) return byE;
+              const byP = byPhone.get(phone);
+              if (byP) return byP;
+              return null;
+            }
+            if (email) return byEmail.get(email) || null;
+            if (phone) return byPhone.get(phone) || null;
+            return null;
+          };
+
+          if (preloadEmails.length > 0 || preloadPhones.length > 0) {
+            const parts = [];
+            const params = [userId];
+            let pi = 2;
+            if (preloadEmails.length > 0) {
+              parts.push(`LOWER(email) = ANY($${pi}::text[])`);
+              params.push(preloadEmails);
+              pi += 1;
+            }
+            if (preloadPhones.length > 0) {
+              parts.push(`phone = ANY($${pi}::text[])`);
+              params.push(preloadPhones);
+              pi += 1;
+            }
+            const preloadSql = `SELECT * FROM customers WHERE id_user = $1 AND (${parts.join(' OR ')})`;
+            const { rows: preloadRows } = await client.query(preloadSql, params);
+            for (const row of preloadRows) {
+              indexCustomerRow(row);
+            }
+          }
+
+          for (const customerData of chunk) {
+            const email = customerData.email;
+            const phone = customerData.phone;
+            const fullName = customerData.fullName;
+            const gender = customerData.gender;
+            const customerSource = customerData.customerSource || 'campaign';
+            const notes = customerData.notes;
+
+            if (!email && !phone) {
+              skipped += 1;
+              continue;
+            }
+
+            const existingRow = resolveExistingCustomerRow(email, phone);
+
+            if (existingRow?.id) {
+              const incomingForCompare = {
+                email,
+                phone,
+                fullName,
+                gender,
+                customerSource,
+                notes,
+              };
+              if (isCustomerRowUnchanged(existingRow, incomingForCompare)) {
+                unchanged += 1;
+              } else {
+                unindexCustomerRow(existingRow);
+                await client.query(
+                  `UPDATE customers SET
               email = COALESCE($1, email),
               phone = COALESCE($2, phone),
               full_name = COALESCE($3, full_name),
@@ -645,41 +675,48 @@ class CampaignNodeDataService {
               notes = COALESCE($6, notes),
               updated_at = CURRENT_TIMESTAMP
              WHERE id = $7 AND id_user = $8`,
-              [email, phone, fullName, gender, customerSource, notes, existingRow.id, userId]
-            );
-            // Đồng bộ object + map để lượt sau trong cùng transaction thấy đúng COALESCE như DB
-            existingRow.email = email != null ? email : existingRow.email;
-            existingRow.phone = phone != null ? phone : existingRow.phone;
-            existingRow.full_name = fullName != null ? fullName : existingRow.full_name;
-            existingRow.gender = gender != null ? gender : existingRow.gender;
-            existingRow.customer_source = customerSource != null ? customerSource : existingRow.customer_source;
-            existingRow.notes = notes != null ? notes : existingRow.notes;
-            indexCustomerRow(existingRow);
-            updated += 1;
-          }
-          await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, existingRow.id, runId);
-        } else {
-          const insertResult = await client.query(
-            `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, notes)
+                  [email, phone, fullName, gender, customerSource, notes, existingRow.id, userId]
+                );
+                // Đồng bộ object + map để lượt sau trong cùng transaction thấy đúng COALESCE như DB
+                existingRow.email = email != null ? email : existingRow.email;
+                existingRow.phone = phone != null ? phone : existingRow.phone;
+                existingRow.full_name = fullName != null ? fullName : existingRow.full_name;
+                existingRow.gender = gender != null ? gender : existingRow.gender;
+                existingRow.customer_source = customerSource != null ? customerSource : existingRow.customer_source;
+                existingRow.notes = notes != null ? notes : existingRow.notes;
+                indexCustomerRow(existingRow);
+                updated += 1;
+              }
+              await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, existingRow.id, runId);
+            } else {
+              const insertResult = await client.query(
+                `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, notes)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
-            [userId, email, phone, fullName, gender, customerSource, notes]
-          );
-          const insertedRow = insertResult.rows[0];
-          saved += 1;
-          if (insertedRow?.id) {
-            indexCustomerRow(insertedRow);
-            await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, insertedRow.id, runId);
+                [userId, email, phone, fullName, gender, customerSource, notes]
+              );
+              const insertedRow = insertResult.rows[0];
+              saved += 1;
+              if (insertedRow?.id) {
+                indexCustomerRow(insertedRow);
+                await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, insertedRow.id, runId);
+              }
+            }
           }
+
+          await client.query('COMMIT');
+        } catch (chunkError) {
+          try {
+            await client.query('ROLLBACK');
+          } catch {
+            /* connection có thể đã ở trạng thái lỗi; bỏ qua lỗi rollback phụ */
+          }
+          console.error('[saveCustomersFromCampaignDirect] Error:', chunkError);
+          throw chunkError;
         }
       }
 
-      await client.query('COMMIT');
       return { saved, updated, skipped, unchanged };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('[saveCustomersFromCampaignDirect] Error:', error);
-      throw error;
     } finally {
       client.release();
     }

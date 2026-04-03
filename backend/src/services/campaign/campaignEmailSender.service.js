@@ -393,9 +393,10 @@ class CampaignEmailSenderService {
    * @param {object} customer
    * @param {object} campaign
    * @param {number} runId
+   * @param {object|null} [sendMeta] metadata ghi DB: `emailStep` (1-based) cho cột email_messages.email_step
    * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string, retryScheduledAt?: string|null}>}
    */
-  async sendEmailToCustomer(actionNode, customer, campaign, runId, retryMeta = null) {
+  async sendEmailToCustomer(actionNode, customer, campaign, runId, retryMeta = null, sendMeta = null) {
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.EMAIL_SEND,
       payload: {
@@ -404,6 +405,7 @@ class CampaignEmailSenderService {
         campaign,
         runId,
         retryMeta,
+        sendMeta,
       },
     });
   }
@@ -422,9 +424,10 @@ class CampaignEmailSenderService {
    * @param {object} campaign
    * @param {number} runId
    * @param {object|null} retryMeta metadata retry nội bộ cho job delay
+   * @param {object|null} [sendMeta] `{ emailStep }` bước email trong node (1-based) để ghi email_messages
    * @returns {Promise<{status: 'success'|'skipped'|'bounced'|'failed', to: string, reason?: string, bounceType?: string, errorType?: string, error?: string, retryScheduledAt?: string|null}>}
    */
-  async sendEmailToCustomerDirect(actionNode, customer, campaign, runId, retryMeta = null) {
+  async sendEmailToCustomerDirect(actionNode, customer, campaign, runId, retryMeta = null, sendMeta = null) {
     const retryScheduleGuard = this.resolveRetryScheduleGuard(retryMeta);
     if (retryScheduleGuard.remainingDelayMs > 0) {
       const retryDelayLabel = this.formatRetryDelayLabel(this.resolveProviderRateLimitRetryConfig().delayMs);
@@ -443,6 +446,10 @@ class CampaignEmailSenderService {
 
     const config = actionNode.config || {};
     const nodeId = actionNode?.id || 'unknown';
+    const parsedLogNodeId = Number.parseInt(String(actionNode?.id ?? '').trim(), 10);
+    const parsedLogEmailStep = Number.parseInt(String(sendMeta?.emailStep ?? '').trim(), 10);
+    const logNodeIdForDb = Number.isFinite(parsedLogNodeId) ? parsedLogNodeId : null;
+    const logEmailStepForDb = Number.isFinite(parsedLogEmailStep) ? parsedLogEmailStep : null;
 
     let templateId = config.emailTemplateId || config.templateId;
     let templateMappings = [];
@@ -708,6 +715,8 @@ class CampaignEmailSenderService {
             sentAt: failedAt,
             setting: settings,
             runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
           });
           await db.query(
             `UPDATE email_messages
@@ -747,6 +756,8 @@ class CampaignEmailSenderService {
             sentAt: failedAt,
             setting: settings,
             runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
           });
           await db.query(
             `UPDATE email_messages
@@ -794,6 +805,8 @@ class CampaignEmailSenderService {
           sentAt: bouncedAt,
           setting: settings,
           runId,
+          nodeId: logNodeIdForDb,
+          emailStep: logEmailStepForDb,
         });
         // Cập nhật email_message vừa insert sang status bounced
         await db.query(
@@ -841,6 +854,8 @@ class CampaignEmailSenderService {
           sentAt,
           setting: settings,
           runId,
+          nodeId: logNodeIdForDb,
+          emailStep: logEmailStepForDb,
         });
       } catch (logError) {
         console.error('[sendEmailToCustomer] Lỗi lưu log:', logError.message);

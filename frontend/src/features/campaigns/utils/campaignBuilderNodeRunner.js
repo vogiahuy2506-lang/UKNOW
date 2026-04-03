@@ -1,4 +1,10 @@
 import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
+import { applyDataColumnSelectionToItems, measureJsonUtf8Bytes } from './dataColumnSelection.js';
+import {
+  BUILDER_LOG_ITEMS_CAP,
+  resolveEffectiveBuilderLogItemsMode,
+  resolveSheetPreviewApiLimit,
+} from './builderLogItems.util.js';
 
 /**
  * Create node runner helpers used by Campaign Builder preview execution.
@@ -17,6 +23,7 @@ import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js
  * @param {Object} deps.toastNotifier toast object with error method
  * @param {Function} deps.isRunCancelledError cancellation detector
  * @param {Function} deps.sleep async delay helper
+ * @param {string} [deps.logItemsMode] `'100'` | `'all'` — giới hạn preview Sheet khi node không đặt `builderSheetPreviewRowLimit`; log có thể cắt thêm ở executor
  * @returns {{checkSheetConnection: Function, buildRunResultForNode: Function}}
  */
 export const createCampaignNodeRunner = (deps) => {
@@ -34,18 +41,22 @@ export const createCampaignNodeRunner = (deps) => {
     toastNotifier,
     isRunCancelledError,
     sleep,
+    logItemsMode = '100',
   } = deps;
 
   const fetchSheetPreview = async (config, signal) => {
     const normalizedSheetName = String(config.sheetName || 'Sheet1').trim() || 'Sheet1';
     const parsedHeaderRow = Number.parseInt(config.headerRow, 10);
     const parsedDataStartRow = Number.parseInt(config.dataStartRow, 10);
+    /** Ưu tiên `builderSheetPreviewRowLimit` trên node, sau đó `logItemsMode` từ Builder. */
+    const previewLimit = resolveSheetPreviewApiLimit(config, logItemsMode);
     const payload = {
       sheetUrl: config.sheetUrl,
       sheetName: normalizedSheetName,
       headerRow: Number.isFinite(parsedHeaderRow) ? Math.max(1, parsedHeaderRow) : 1,
       dataStartRow: Number.isFinite(parsedDataStartRow) ? Math.max(1, parsedDataStartRow) : 2,
-      limit: 100,
+      limit: previewLimit,
+      dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
     };
     const response = await apiService.previewGoogleSheet(payload, { signal });
     return response.data?.data;
@@ -591,6 +602,13 @@ export const createCampaignNodeRunner = (deps) => {
       const data = await fetchSheetPreview(config, signal);
       const rows = Array.isArray(data?.items) ? data.items : [];
       ctx.sheetRows = rows;
+      /** Để node mapping_data biết có mở rộng preview theo cấu hình Sheet hay không */
+      ctx.builderPreviewLogMode = resolveEffectiveBuilderLogItemsMode('read_sheet', config, logItemsMode);
+      const previewAccumulatedBytes = measureJsonUtf8Bytes(rows);
+      const sheetDataLoadMeta = data?.meta?.dataLoadMeta && typeof data.meta.dataLoadMeta === 'object'
+        ? data.meta.dataLoadMeta
+        : {};
+      const previewApiLimit = resolveSheetPreviewApiLimit(config, logItemsMode);
       return {
         input: {
           operation: 'Get Row(s)',
@@ -600,15 +618,20 @@ export const createCampaignNodeRunner = (deps) => {
           dataStartRow: config.dataStartRow || 2,
           recipientColumn: config.recipientColumn || '',
           mapping: config.mapping || {},
+          dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
+          builderSheetPreviewRowLimit: config.builderSheetPreviewRowLimit ?? '',
         },
         output: {
           items: rows,
           schema: buildSchemaFromRows(rows),
           meta: {
             fetched: rows.length,
+            previewApiLimit,
             spreadsheetId: data?.meta?.spreadsheetId,
             sheetName: data?.meta?.sheetName,
             csvUrl: data?.meta?.csvUrl,
+            accumulatedPayloadBytesUtf8: previewAccumulatedBytes,
+            dataLoadMeta: sheetDataLoadMeta,
           },
         },
       };
@@ -643,7 +666,12 @@ export const createCampaignNodeRunner = (deps) => {
         });
       }
 
-      ctx.sheetRows = rows;
+      const { items: slimRows, dataLoadMeta: interestedDataLoadMeta } = applyDataColumnSelectionToItems(
+        rows,
+        config.dataSelectedColumns,
+        'interested'
+      );
+      ctx.sheetRows = slimRows;
       return {
         input: {
           operation: 'Get Interested Customers',
@@ -659,17 +687,20 @@ export const createCampaignNodeRunner = (deps) => {
           selectedCustomerIds,
           excludedCustomerIds,
           selectionMode,
+          dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
         },
         output: {
           ok: true,
-          items: rows,
-          schema: buildSchemaFromRows(rows),
+          items: slimRows,
+          schema: buildSchemaFromRows(slimRows),
           meta: {
             totalItems: data?.pagination?.total || 0,
-            fetched: rows.length,
-            limit: data?.pagination?.limit || rows.length,
+            fetched: slimRows.length,
+            limit: data?.pagination?.limit || slimRows.length,
             filtered: (selectionMode === 'fixed' && selectedCustomerIds.length > 0)
               || (selectionMode === 'all_exclude' && excludedCustomerIds.length > 0),
+            accumulatedPayloadBytesUtf8: measureJsonUtf8Bytes(slimRows),
+            dataLoadMeta: interestedDataLoadMeta,
           },
         },
       };
@@ -745,20 +776,28 @@ export const createCampaignNodeRunner = (deps) => {
       const response = await apiService.previewLandingLeads(params, { signal });
       const data = response.data?.data;
       const rows = Array.isArray(data?.items) ? data.items : [];
-      ctx.sheetRows = rows;
+      const { items: slimLandingRows, dataLoadMeta: landingDataLoadMeta } = applyDataColumnSelectionToItems(
+        rows,
+        config.dataSelectedColumns,
+        'landing'
+      );
+      ctx.sheetRows = slimLandingRows;
       return {
         input: {
           operation: 'Get Landing Page Leads',
           ...params,
+          dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
         },
         output: {
           ok: true,
-          items: rows,
-          schema: buildSchemaFromRows(rows),
+          items: slimLandingRows,
+          schema: buildSchemaFromRows(slimLandingRows),
           meta: {
-            totalItems: data?.pagination?.total ?? rows.length,
-            fetched: rows.length,
+            totalItems: data?.pagination?.total ?? slimLandingRows.length,
+            fetched: slimLandingRows.length,
             limit,
+            accumulatedPayloadBytesUtf8: measureJsonUtf8Bytes(slimLandingRows),
+            dataLoadMeta: landingDataLoadMeta,
           },
         },
       };
@@ -943,7 +982,10 @@ export const createCampaignNodeRunner = (deps) => {
     if (nodeType === 'mapping_data') {
       const rows = Array.isArray(ctx.sheetRows) ? ctx.sheetRows : [];
       const mappings = config.mappings || [];
-      const previewRows = rows.slice(0, 100).map((row, idx) => ({
+      /** Ưu tiên chế độ đã áp dụng khi đọc Sheet (node có thể yêu cầu >100 dòng). */
+      const previewLogMode = ctx.builderPreviewLogMode != null ? ctx.builderPreviewLogMode : logItemsMode;
+      const mappingPreviewCap = previewLogMode === 'all' ? rows.length : BUILDER_LOG_ITEMS_CAP;
+      const previewRows = rows.slice(0, mappingPreviewCap).map((row, idx) => ({
         __row: idx + 1,
         ...applyMappingsForRow(row, mappings),
       }));
@@ -1107,7 +1149,8 @@ export const createCampaignNodeRunner = (deps) => {
           campaignId: campaignIdNum,
         },
         output: {
-          items: mappedCustomers.slice(0, 100),
+          // Đủ mảng cho node sau; log Builder có thể cắt 100 dòng ở `executeCampaignRun`.
+          items: mappedCustomers,
           schema: buildSchemaFromRows(mappedCustomers.slice(0, 1)),
           meta: {
             totalItems: mappedCustomers.length,
