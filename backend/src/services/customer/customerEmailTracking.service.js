@@ -144,7 +144,6 @@ class CustomerEmailTrackingService {
    * @param {import('express').Response} res
    */
   async trackEmailUnsubscribe(req, res) {
-    const client = await db.getClient();
     const token = String(req.params.token || '').trim();
     const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
       || 'https://campaign.digiso.vn/privacy-policy';
@@ -205,6 +204,8 @@ class CustomerEmailTrackingService {
       }));
     }
 
+    // Chỉ checkout client sau khi token hợp lệ — tránh rò rỉ kết nối khi return sớm ở trên.
+    const client = await db.getClient();
     try {
       await client.query('BEGIN');
 
