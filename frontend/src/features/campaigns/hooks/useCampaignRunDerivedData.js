@@ -83,18 +83,28 @@ const useCampaignRunDerivedData = ({
 
     const keyword = activeCampaignSearch.trim().toLowerCase();
     if (!keyword) return campaigns;
-    return campaigns.filter((campaign) =>
-      String(campaign?.campaignName || '').toLowerCase().includes(keyword)
-    );
+    // Khớp theo tên hoặc theo chuỗi con của ID (gõ một phần số vẫn lọc được)
+    return campaigns.filter((campaign) => {
+      const name = String(campaign?.campaignName || '').toLowerCase();
+      const idStr = campaign?.id != null ? String(campaign.id).toLowerCase() : '';
+      return name.includes(keyword) || (idStr && idStr.includes(keyword));
+    });
   }, [campaigns, activeCampaignSearch, selectedLogCampaignId]);
 
   const filteredSchedules = useMemo(() => {
     const keyword = scheduledCampaignSearch.trim().toLowerCase();
     if (!keyword) return schedules;
+    // Cho phép lọc thêm theo ID chiến dịch gắn với lịch
     return schedules.filter((schedule) => {
       const scheduleName = String(schedule?.scheduleName || '').toLowerCase();
       const campaignName = String(schedule?.campaignName || '').toLowerCase();
-      return scheduleName.includes(keyword) || campaignName.includes(keyword);
+      const campaignIdStr =
+        schedule?.campaignId != null ? String(schedule.campaignId).toLowerCase() : '';
+      return (
+        scheduleName.includes(keyword) ||
+        campaignName.includes(keyword) ||
+        (campaignIdStr && campaignIdStr.includes(keyword))
+      );
     });
   }, [schedules, scheduledCampaignSearch]);
 
@@ -107,9 +117,12 @@ const useCampaignRunDerivedData = ({
 
     const keyword = pausedCampaignSearch.trim().toLowerCase();
     if (!keyword) return pausedCampaigns;
-    return pausedCampaigns.filter((campaign) =>
-      String(campaign?.campaignName || '').toLowerCase().includes(keyword)
-    );
+    // Giống tab đang hoạt động: tên hoặc chuỗi con ID
+    return pausedCampaigns.filter((campaign) => {
+      const name = String(campaign?.campaignName || '').toLowerCase();
+      const idStr = campaign?.id != null ? String(campaign.id).toLowerCase() : '';
+      return name.includes(keyword) || (idStr && idStr.includes(keyword));
+    });
   }, [pausedCampaigns, pausedCampaignSearch, selectedLogCampaignId]);
 
   return {
