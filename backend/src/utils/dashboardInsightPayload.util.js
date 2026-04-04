@@ -71,7 +71,28 @@ export function isInsightPayloadUsable(payload) {
 
   const c = payload.charts;
   if (!c || typeof c !== 'object') return false;
-  if (hasNonEmptyInsightText(c.ordersTrend) || hasNonEmptyInsightText(c.channelEngagement)) return true;
+  const ot = c.ordersTrend;
+  if (typeof ot === 'string' && hasNonEmptyInsightText(ot)) {
+    return true;
+  }
+  if (ot && typeof ot === 'object' && !Array.isArray(ot)) {
+    if (hasNonEmptyInsightText(ot.summary) || hasNonEmptyInsightText(ot.compare)) {
+      return true;
+    }
+  }
+  if (hasNonEmptyInsightText(c.landingTopPages)) {
+    return true;
+  }
+  const ce = c.channelEngagement;
+  if (typeof ce === 'string' && hasNonEmptyInsightText(ce)) {
+    return true;
+  }
+  if (ce && typeof ce === 'object') {
+    const keys = ['all', 'email', 'zalo', 'zalo_group'];
+    if (keys.some((k) => hasNonEmptyInsightText(ce[k]))) {
+      return true;
+    }
+  }
   const cb = c.channelBreakdown;
   if (
     cb &&

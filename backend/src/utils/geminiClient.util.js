@@ -7,10 +7,10 @@
  *
  * Ghi chú model:
  * - Một số tên model cũ (ví dụ `gemini-1.5-flash` không suffix) có thể trả 404 trên v1beta.
- * - Mặc định dùng `gemini-2.0-flash`; có thể override bằng `GEMINI_MODEL`.
+ * - Mặc định dùng `gemini-2.0-flash`; có thể override bằng `GEMINI_MODEL` (vd `gemini-2.5-flash` — trần output token cao hơn, phù hợp JSON insight dài).
  */
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 /**
  * Gọi Gemini để sinh nội dung từ prompt (text).
@@ -25,7 +25,7 @@ const DEFAULT_MODEL = 'gemini-2.0-flash';
  * @param {number} [input.timeoutMs=120000] Timeout request (ms) — insight JSON dài cần thời gian hơn.
  * @param {boolean} [input.jsonMode=false] Bật `responseMimeType: application/json` để giảm lỗi JSON bị cắt/thừa text.
  * @param {number} [input.maxOutputTokens=8192] Giới hạn token đầu ra (JSON phân tích dài).
- * @returns {Promise<string>} text output từ Gemini
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string }>} text + lý do kết thúc (debug / retry)
  */
 export async function generateGeminiText({
   prompt,
@@ -79,6 +79,10 @@ export async function generateGeminiText({
     }
 
     const data = await response.json();
+    const firstCand = data?.candidates?.[0];
+    const finishReason = String(firstCand?.finishReason || '').trim();
+    const blockReason = String(data?.promptFeedback?.blockReason || '').trim();
+
     const text = (data?.candidates || [])
       .flatMap((c) => c?.content?.parts || [])
       .map((p) => p?.text)
@@ -86,7 +90,7 @@ export async function generateGeminiText({
       .join('\n')
       .trim();
 
-    return text;
+    return { text, finishReason, blockReason };
   } catch (error) {
     if (error?.name === 'AbortError') {
       const err = new Error('Gemini API quá thời gian xử lý, vui lòng thử lại');

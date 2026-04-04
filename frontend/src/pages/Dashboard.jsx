@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import DashboardHeader from '../features/dashboard/components/DashboardHeader';
 import DashboardFilterPanel from '../features/dashboard/components/DashboardFilterPanel';
 import DashboardKpiCards from '../features/dashboard/components/DashboardKpiCards';
@@ -8,6 +9,9 @@ import DashboardRunsTable from '../features/dashboard/components/DashboardRunsTa
 import DashboardOrdersListTable from '../features/dashboard/components/DashboardOrdersListTable';
 import DashboardTopCharts from '../features/dashboard/components/DashboardTopCharts';
 import DashboardChannelBreakdownCharts from '../features/dashboard/components/DashboardChannelBreakdownCharts';
+import DashboardPrintLayout from '../features/dashboard/components/DashboardPrintLayout';
+import DashboardLandingPagesStats from '../features/dashboard/components/DashboardLandingPagesStats';
+import LandingPagesAdminStatsCharts from '../features/landing-pages/components/LandingPagesAdminStatsCharts.jsx';
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
 import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
@@ -15,6 +19,8 @@ import {
   normalizeDashboardInsightForUi,
   extractInsightFromDashboardInsightsResponse,
   isInsightPayloadUsable,
+  getChannelEngagementInsightForChannel,
+  getOrdersTrendInsightForMode,
 } from '../features/dashboard/utils/dashboardInsightStorage.util';
 
 /** Skeleton placeholder block */
@@ -121,7 +127,14 @@ const DashboardSkeleton = () => (
  * @returns {JSX.Element}
  */
 const Dashboard = () => {
+  const printRef = useRef(null);
+  /** Giữ tiêu đề tab gốc để khôi phục sau in — giảm chữ trên chân trang PDF khi trình duyệt bật đầu/cuối trang */
+  const documentTitleForPrintRef = useRef(
+    typeof document !== 'undefined' ? document.title : ''
+  );
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  /** Đồng bộ insight «Đơn hàng theo thời gian» với tab Tổng hợp / So sánh kênh */
+  const [ordersChartViewMode, setOrdersChartViewMode] = useState('summary');
 
   // Lifted from DashboardFilterPanel so state survives skeleton re-mounts during data loading
   const [dateMode, setDateMode] = useState('quick');
@@ -147,7 +160,44 @@ const Dashboard = () => {
     errorMessage,
     loadRunsPage,
     loadOrdersPage,
+    landingPageStats,
   } = useDashboardAnalytics();
+
+  /**
+   * In qua iframe: clone giữ nguyên `absolute left:-14000px` của vùng ẩn màn hình → preview trắng.
+   * Reset vị trí chỉ trong stylesheet của iframe (pageStyle), không ảnh hưởng Ctrl+P trang chính.
+   */
+  /**
+   * documentTitle rỗng để Chrome/Edge không chèn tên file dạng Dashboard-... vào chân trang khi bật «Đầu trang và chân trang».
+   * Vẫn nên tắt tùy chọn đó trong hộp thoại in để ẩn URL, ngày, số trang.
+   */
+  const handlePrintDashboard = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: () => '',
+    pageStyle: `
+      @page { margin: 12mm; }
+      @media print {
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .dashboard-print-root {
+          position: static !important;
+          left: auto !important;
+          top: auto !important;
+          width: 100% !important;
+        }
+      }
+    `,
+    // react-to-print v3 luôn gọi onBeforePrint().then(...); bắt buộc trả Promise, không được undefined.
+    onBeforePrint: async () => {
+      documentTitleForPrintRef.current = document.title;
+      document.title = '';
+    },
+    onAfterPrint: () => {
+      document.title = documentTitleForPrintRef.current || '';
+    },
+  });
 
   const [insights, setInsights] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
@@ -196,11 +246,11 @@ const Dashboard = () => {
   const isMonthlyView = activeQuickKey?.endsWith('m') ?? false;
 
   /**
-   * Gọi backend sinh insight bằng Gemini theo dữ liệu đang hiển thị.
+   * Gọi backend sinh insight bằng Gemini theo dữ liệu đang hiển thị (chiến lược Email / Zalo / Zalo Group).
    *
    * Luồng hoạt động:
    * 1. Khóa nút trong lúc chạy để tránh spam request.
-   * 2. Gửi `overview + analytics + topListsData + filters` sang backend.
+   * 2. Gửi `overview + analytics + topListsData + landingPageStats + filters` sang backend.
    * 3. Nhận JSON insight và render dưới từng biểu đồ (backend lưu DB nếu payload đủ dùng).
    */
   const handleGenerateInsights = async () => {
@@ -211,6 +261,7 @@ const Dashboard = () => {
         overview,
         analytics,
         topListsData,
+        landingPageStats,
         filters,
       });
       const data = extractInsightFromDashboardInsightsResponse(response);
@@ -256,6 +307,7 @@ const Dashboard = () => {
   };
 
   return (
+    <div className="relative">
     <div className="space-y-6">
       {/* Page header */}
       <DashboardHeader
@@ -269,7 +321,7 @@ const Dashboard = () => {
               className="btn btn-primary flex items-center gap-2 shadow-sm"
               onClick={handleGenerateInsights}
               disabled={isLoading || isGeneratingInsights}
-              title="Dùng Gemini để phân tích insight theo dữ liệu đang hiển thị"
+              title="Phân tích chiến lược marketing đa kênh (Email, Zalo, Zalo Group): đơn theo thời gian, tương tác, phễu và gợi ý hành động — theo dữ liệu dashboard đang lọc."
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -280,6 +332,23 @@ const Dashboard = () => {
                 />
               </svg>
               {isGeneratingInsights ? 'Đang phân tích…' : 'Phân tích insight'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary flex items-center gap-2 shadow-sm"
+              onClick={() => handlePrintDashboard()}
+              disabled={isLoading}
+              title="In / PDF: chọn «Lưu dưới dạng PDF». Bắt buộc bỏ chọn «Đầu trang và chân trang» (Chrome/Edge) để ẩn URL, ngày/giờ và tiêu đề — trình duyệt không cho tắt bằng CSS."
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                />
+              </svg>
+              In / PDF
             </button>
             <button
               type="button"
@@ -353,7 +422,7 @@ const Dashboard = () => {
       <div className="card p-5 md:p-6">
         <h3 className="text-base font-semibold text-gray-900">Tổng quan insight</h3>
         <p className="text-xs text-gray-400 mt-0.5">
-          Phân tích chuyên sâu từ Gemini theo số liệu dashboard và bộ lọc hiện tại (kèm chỉ số, phễu, kênh, kế hoạch hành động)
+          Nhận xét chiến lược gửi Email, Zalo và Zalo Group; đối chiếu timeline gửi với đơn; phát hiện mâu thuẫn tổng quan vs biểu đồ khi có — theo số liệu và bộ lọc hiện tại.
         </p>
         <div className="mt-4">
           <DashboardInsightOverview insights={insights} isLoading={isGeneratingInsights} error={insightError} />
@@ -365,7 +434,9 @@ const Dashboard = () => {
         <DashboardOrdersChart
           timeline={timeline}
           isMonthlyView={isMonthlyView}
-          insightText={insights?.charts?.ordersTrend || ''}
+          viewMode={ordersChartViewMode}
+          onViewModeChange={setOrdersChartViewMode}
+          insightText={getOrdersTrendInsightForMode(insights?.charts, ordersChartViewMode)}
           isInsightLoading={isGeneratingInsights}
           insightError={insightError}
         />
@@ -374,7 +445,7 @@ const Dashboard = () => {
           onChangeChannel={setActiveChannel}
           analytics={analytics}
           isMonthlyView={isMonthlyView}
-          insightText={insights?.charts?.channelEngagement || ''}
+          insightText={getChannelEngagementInsightForChannel(insights?.charts, activeChannel)}
           isInsightLoading={isGeneratingInsights}
           insightError={insightError}
         />
@@ -396,6 +467,17 @@ const Dashboard = () => {
         insightError={insightError}
       />
 
+      <LandingPagesAdminStatsCharts
+        rows={landingPageStats?.rows}
+        topN={10}
+        scopeAllTime
+        showInsight
+        insightText={insights?.charts?.landingTopPages || ''}
+        isInsightLoading={isGeneratingInsights}
+        insightError={insightError}
+      />
+      <DashboardLandingPagesStats data={landingPageStats} />
+
       {/* Runs table */}
       <DashboardRunsTable
         runsData={runsData}
@@ -410,6 +492,26 @@ const Dashboard = () => {
         ordersStatusFilter={ordersStatusFilter}
         onChangePage={loadOrdersPage}
       />
+    </div>
+
+    <div
+      ref={printRef}
+      className="dashboard-print-root absolute left-[-14000px] top-0 w-[1180px] bg-white"
+      aria-hidden
+    >
+      <DashboardPrintLayout
+        filters={filters}
+        overview={overview}
+        insights={insights}
+        isGeneratingInsights={isGeneratingInsights}
+        insightError={insightError}
+        timeline={timeline}
+        isMonthlyView={isMonthlyView}
+        analytics={analytics}
+        topListsData={topListsData}
+        landingPageStats={landingPageStats}
+      />
+    </div>
     </div>
   );
 };

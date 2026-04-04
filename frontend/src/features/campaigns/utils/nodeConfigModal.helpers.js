@@ -315,6 +315,7 @@ export const createNodeConfigFormData = ({
   landingLeadsDateTo: config.landingLeadsDateTo || '',
   landingLeadsOccupations: Array.isArray(config.landingLeadsOccupations) ? config.landingLeadsOccupations : [],
   landingLeadsInterests: Array.isArray(config.landingLeadsInterests) ? config.landingLeadsInterests : [],
+  landingLeadsSlugs: Array.isArray(config.landingLeadsSlugs) ? config.landingLeadsSlugs : [],
   landingLeadsLimit: config.landingLeadsLimit || 1000,
 });
 
@@ -520,6 +521,7 @@ export const handleNodeConfigSaveClick = async ({
         landingLeadsDateTo: formData.landingLeadsDateTo,
         landingLeadsOccupations: JSON.stringify(formData.landingLeadsOccupations || []),
         landingLeadsInterests: JSON.stringify(formData.landingLeadsInterests || []),
+        landingLeadsSlugs: JSON.stringify(formData.landingLeadsSlugs || []),
         landingLeadsLimit: 50,
       });
       const total = response?.data?.data?.pagination?.total ?? 0;

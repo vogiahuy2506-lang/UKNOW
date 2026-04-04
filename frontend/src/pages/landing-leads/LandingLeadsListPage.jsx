@@ -26,7 +26,7 @@ function formatDateTimeVi(raw) {
  *
  * Luồng hoạt động:
  * 1. Hook `useLandingLeadsList` gọi GET `/api/leads` khi đổi trang hoặc áp dụng lọc.
- * 2. Bảng hiển thị dữ liệu đã map từ backend (họ tên, liên hệ, nghề, lĩnh vực, đồng ý marketing, thời gian).
+ * 2. Bảng hiển thị dữ liệu đã map từ backend (họ tên, liên hệ, slug landing, nghề, lĩnh vực, đồng ý marketing, thời gian).
  */
 const LandingLeadsListPage = () => {
   const {
@@ -42,6 +42,8 @@ const LandingLeadsListPage = () => {
     applyFilters,
     resetFilters,
     reload,
+    exportToExcel,
+    isExporting,
   } = useLandingLeadsList();
 
   const totalPages = pagination.totalPages || 1;
@@ -55,8 +57,8 @@ const LandingLeadsListPage = () => {
             Danh sách khách landing page
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Người đăng ký qua form trên trang landing công khai. Dùng bộ lọc bên dưới để thu hẹp theo thời gian,
-            nghề nghiệp và lĩnh vực quan tâm.
+            Người đăng ký qua form landing công khai. Dùng bộ lọc để thu hẹp theo thời gian, slug landing, nghề
+            nghiệp và lĩnh vực quan tâm.
           </p>
         </div>
         <button
@@ -75,6 +77,8 @@ const LandingLeadsListPage = () => {
         setDraftFilters={setDraftFilters}
         onApply={applyFilters}
         onReset={resetFilters}
+        onExportExcel={exportToExcel}
+        isExporting={isExporting}
       />
 
       {errorMessage ? (
@@ -114,6 +118,9 @@ const LandingLeadsListPage = () => {
                   Điện thoại
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Landing / slug
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nghề
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -130,14 +137,14 @@ const LandingLeadsListPage = () => {
             <tbody className="bg-white divide-y divide-gray-100">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-500">
                     Đang tải...
                   </td>
                 </tr>
               ) : null}
               {!isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-500">
                     Không có bản ghi phù hợp bộ lọc.
                   </td>
                 </tr>
@@ -151,6 +158,9 @@ const LandingLeadsListPage = () => {
                     {row.email || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.phone || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 font-mono text-xs whitespace-nowrap">
+                    {row.landingPageSlug || '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600 max-w-[160px]">
                     {row.occupation || '—'}
                   </td>

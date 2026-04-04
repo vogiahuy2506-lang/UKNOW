@@ -1,0 +1,74 @@
+### Public — lấy HTML landing đã publish (JSON)
+# @base = http://localhost:5001/api
+GET {{base}}/public/landing-pages/my-slug
+
+### Public — ghi view
+POST {{base}}/public/landing-analytics/view
+Content-Type: application/json
+
+{
+  "slug": "my-slug",
+  "visitorId": "optional-uuid",
+  "referrer": "https://example.com"
+}
+
+### Public — redirect có log click (mở trên trình duyệt; u = encodeURIComponent(URL đích http/https bất kỳ))
+# GET {{base}}/public/landing-track/go?slug=my-slug&u=https%3A%2F%2Fuknow.edu.vn%2F
+
+### Public — tạo lead (thêm attribution tùy chọn)
+POST {{base}}/public/leads
+Content-Type: application/json
+
+{
+  "lastName": "Nguyễn",
+  "firstName": "Văn A",
+  "email": "a@example.com",
+  "phone": "0901234567",
+  "occupation": "",
+  "interestArea": "",
+  "marketingConsent": true,
+  "landingPageSlug": "my-slug",
+  "utmSource": "fb",
+  "utmMedium": "cpc"
+}
+
+### Admin — danh sách landing pages (cần Bearer token + role admin)
+GET {{base}}/admin/landing-pages
+Authorization: Bearer {{token}}
+
+### Admin — chi tiết
+GET {{base}}/admin/landing-pages/1
+Authorization: Bearer {{token}}
+
+### Admin — tạo (htmlContent chuẩn hóa khi lưu: gỡ khối UKnow cũ, href http(s)→tracking, chèn lp-track.js — iframe form admin dán tay)
+POST {{base}}/admin/landing-pages
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "slug": "my-slug",
+  "title": "Tiêu đề",
+  "htmlContent": "<html><body><h1>Hello</h1></body></html>",
+  "isPublished": true
+}
+
+### Admin — cập nhật (chuẩn hóa htmlContent như POST)
+PUT {{base}}/admin/landing-pages/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "slug": "my-slug",
+  "title": "Tiêu đề mới",
+  "htmlContent": "<html><body></body></html>",
+  "isPublished": true
+}
+
+### Dashboard — thống kê landing (cần Bearer)
+# Response rows: gồm mọi slug landing_pages đã publish (kể cả chưa có event) + slug có event; title, viewCount, clickCount, submitCount, CTR %...
+GET {{base}}/dashboard/landing-pages-stats?startDate=2026-01-01&endDate=2026-04-30
+Authorization: Bearer {{token}}
+
+# Toàn thời gian (không lọc theo ngày) — dùng cho dashboard / bảng admin
+GET {{base}}/dashboard/landing-pages-stats?allTime=1
+Authorization: Bearer {{token}}

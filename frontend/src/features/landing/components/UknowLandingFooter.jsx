@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { FOOTER_ACCENT, LANDING_SURFACE } from '../constants/landingTheme.js';
 
 /**
@@ -41,9 +40,14 @@ export function UknowLandingFooter({ footer }) {
 
         <div className="flex w-full flex-col items-stretch gap-4 lg:w-auto lg:items-end">
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-[0.82rem] font-medium text-[#94a3b8] lg:justify-end">
-            <Link to="/privacy-policy" className="transition hover:text-white">
+            <a
+              href="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition hover:text-white"
+            >
               {footer.privacy}
-            </Link>
+            </a>
           </div>
           <a
             href="https://ngohuuthong.com"

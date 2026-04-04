@@ -6,6 +6,12 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+// Thống kê landing page (view/click/submit theo slug) — cùng bộ lọc ngày với dashboard
+router.get(
+  '/landing-pages-stats',
+  dashboardController.getLandingPageStats.bind(dashboardController)
+);
+
 // Get overview
 router.get('/overview', dashboardController.getOverview.bind(dashboardController));
 

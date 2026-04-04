@@ -309,3 +309,15 @@ input[type='password']::-ms-clear {
 .animate-slide-in-right {
   animation: slideInRight 0.22s ease-out forwards;
 }
+
+/* Ngắt trang khi in / «Lưu dưới dạng PDF» từ hộp thoại in trình duyệt */
+@media print {
+  .pdf-print-page {
+    break-after: page;
+    page-break-after: always;
+  }
+  .pdf-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

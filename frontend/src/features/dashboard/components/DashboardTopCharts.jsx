@@ -250,6 +250,7 @@ const SortToggle = ({ active, options, onChange }) => (
  * @param {boolean} [props.isInsightLoading]
  * @param {'default'|'campaignClickSent'} [props.chartKind] - campaignClickSent: 2 thanh số (click + đã gửi), cùng thang; nhãn có % click/gửi
  * @param {string} [props.insightError]
+ * @param {boolean} [props.hideInsight] Ẩn khối insight phía dưới (dùng bản in PDF cho biểu đồ top click)
  * @returns {JSX.Element}
  */
 const TopHorizontalChart = ({
@@ -266,6 +267,7 @@ const TopHorizontalChart = ({
   insightText = '',
   isInsightLoading = false,
   insightError = '',
+  hideInsight = false,
 }) => {
   const [sortKey, setSortKey] = useState(defaultSortKey || bars[0]?.key || 'total');
   const isMobile = useIsMobile();
@@ -490,12 +492,14 @@ const TopHorizontalChart = ({
         </div>
       )}
 
-      <DashboardInsightBlock
-        title="Insight"
-        text={insightText}
-        isLoading={isInsightLoading}
-        error={insightError}
-      />
+      {!hideInsight && (
+        <DashboardInsightBlock
+          title="Insight"
+          text={insightText}
+          isLoading={isInsightLoading}
+          error={insightError}
+        />
+      )}
     </div>
   );
 };
@@ -592,4 +596,76 @@ const DashboardTopCharts = ({
   );
 };
 
+/**
+ * Khối biểu đồ top dùng riêng cho bản in PDF (ngắt trang + ẩn insight biểu đồ click).
+ *
+ * @param {object} props
+ * @param {object} props.topListsData
+ * @param {object|null} [props.insights]
+ * @param {boolean} [props.isInsightLoading]
+ * @param {string} [props.insightError]
+ */
+export function DashboardTopChartsPrintSection({
+  topListsData,
+  insights = null,
+  isInsightLoading = false,
+  insightError = '',
+}) {
+  const topCourses = topListsData?.topCourses || [];
+  const topCampaignsByOrders = topListsData?.topCampaignsByOrders || [];
+  const topCampaignsByClicks = topListsData?.topCampaignsByClicks || [];
+  const topCampaignsRate = useMemo(() => mapCampaignsToRates(topCampaignsByClicks), [topCampaignsByClicks]);
+
+  return (
+    <>
+      <div className="pdf-print-page space-y-4">
+        <TopHorizontalChart
+          title="Top khóa học có nhiều đơn"
+          subtitle="Top 5"
+          data={topCourses}
+          nameKey="productName"
+          bars={ORDER_BARS}
+          sortable
+          sortOptions={ORDER_SORT_OPTIONS}
+          defaultSortKey="completedCount"
+          insightText={insights?.charts?.topLists?.topCourses || ''}
+          isInsightLoading={isInsightLoading}
+          insightError={insightError}
+        />
+      </div>
+      <div className="pdf-print-page space-y-4">
+        <TopHorizontalChart
+          title="Top chiến dịch có nhiều đơn"
+          subtitle="Top 5"
+          data={topCampaignsByOrders}
+          nameKey="campaignName"
+          bars={ORDER_BARS}
+          sortable
+          sortOptions={ORDER_SORT_OPTIONS}
+          defaultSortKey="completedCount"
+          insightText={insights?.charts?.topLists?.topCampaignsByOrders || ''}
+          isInsightLoading={isInsightLoading}
+          insightError={insightError}
+        />
+      </div>
+      <div className="pdf-print-page space-y-4">
+        <TopHorizontalChart
+          title="Top chiến dịch có nhiều click"
+          subtitle="Top 5 · Trục dọc kèm kênh (Email / Zalo / Zalo nhóm). Trên = click, dưới = đã gửi; nhãn có % click/gửi"
+          data={topCampaignsRate}
+          nameKey="campaignName"
+          bars={CAMPAIGN_CLICK_SENT_BARS}
+          chartKind="campaignClickSent"
+          defaultSortKey="clickCount"
+          showChannelCell
+          insightText={insights?.charts?.topLists?.topCampaignsByClicks || ''}
+          isInsightLoading={isInsightLoading}
+          insightError={insightError}
+        />
+      </div>
+    </>
+  );
+}
+
+export { TopHorizontalChart };
 export default DashboardTopCharts;

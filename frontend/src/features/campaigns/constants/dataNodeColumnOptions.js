@@ -39,5 +39,6 @@ export const LANDING_LEAD_COLUMN_OPTIONS = [
   { key: 'occupation', label: 'occupation' },
   { key: 'interestArea', label: 'interestArea' },
   { key: 'marketingConsent', label: 'marketingConsent' },
+  { key: 'landingPageSlug', label: 'landingPageSlug (nguồn landing)' },
   { key: 'createdAt', label: 'createdAt' },
 ];

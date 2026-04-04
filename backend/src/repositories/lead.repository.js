@@ -1,5 +1,6 @@
 import db from '../config/database.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
+import { expandLandingSlugsForSqlFilter } from '../utils/landingPageSlugCanonical.util.js';
 
 /**
  * Repository truy vấn bảng `leads` (form landing công khai).
@@ -25,8 +26,9 @@ class LeadRepository {
   async insertLead(payload) {
     const result = await db.query(
       `INSERT INTO leads (
-         last_name, first_name, email, phone, occupation, interest_area, marketing_consent
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         last_name, first_name, email, phone, occupation, interest_area, marketing_consent,
+         landing_page_slug, utm_source, utm_medium, utm_campaign, utm_content, utm_term
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING
          id,
          last_name AS "lastName",
@@ -36,6 +38,12 @@ class LeadRepository {
          occupation,
          interest_area AS "interestArea",
          marketing_consent AS "marketingConsent",
+         landing_page_slug AS "landingPageSlug",
+         utm_source AS "utmSource",
+         utm_medium AS "utmMedium",
+         utm_campaign AS "utmCampaign",
+         utm_content AS "utmContent",
+         utm_term AS "utmTerm",
          created_at AS "createdAt"`,
       [
         payload.lastName,
@@ -45,6 +53,12 @@ class LeadRepository {
         payload.occupation,
         payload.interestArea,
         payload.marketingConsent,
+        payload.landingPageSlug ?? null,
+        payload.utmSource ?? null,
+        payload.utmMedium ?? null,
+        payload.utmCampaign ?? null,
+        payload.utmContent ?? null,
+        payload.utmTerm ?? null,
       ]
     );
     return result.rows[0] || null;
@@ -74,6 +88,9 @@ class LeadRepository {
     const dateTo = String(filters.dateTo || '').trim();
     const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
     const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
+    const landingSlugs = Array.isArray(filters.landingSlugs)
+      ? filters.landingSlugs.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+      : [];
     const limit = clampLandingLeadsLimit(filters.limit, 1000);
     const offsetRaw = Number(filters.offset);
     const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
@@ -102,6 +119,13 @@ class LeadRepository {
       params.push(interests);
       idx += 1;
     }
+    if (landingSlugs.length > 0) {
+      // Mở rộng alias: lọc `l` vẫn khớp bản ghi lưu `/l` hoặc `/` (legacy / nhập sai)
+      const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
+      conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
+      params.push(slugVariants);
+      idx += 1;
+    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
@@ -117,6 +141,7 @@ class LeadRepository {
          occupation,
          interest_area AS "interestArea",
          marketing_consent AS "marketingConsent",
+         landing_page_slug AS "landingPageSlug",
          created_at AS "createdAt"
        FROM leads
        ${whereClause}
@@ -139,6 +164,9 @@ class LeadRepository {
     const dateTo = String(filters.dateTo || '').trim();
     const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
     const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
+    const landingSlugs = Array.isArray(filters.landingSlugs)
+      ? filters.landingSlugs.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+      : [];
 
     const conditions = [];
     const params = [];
@@ -164,10 +192,51 @@ class LeadRepository {
       params.push(interests);
       idx += 1;
     }
+    if (landingSlugs.length > 0) {
+      const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
+      conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
+      params.push(slugVariants);
+      idx += 1;
+    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await db.query(`SELECT COUNT(*)::bigint AS c FROM leads ${whereClause}`, params);
     return Number(result.rows[0]?.c || 0);
+  }
+
+  /**
+   * Đếm lead submit theo landing_page_slug trong khoảng ngày (dashboard LP).
+   *
+   * @param {string|null} dateFrom
+   * @param {string|null} dateTo
+   * @returns {Promise<{ slug: string, submitCount: number }[]>}
+   */
+  async aggregateSubmitsBySlug(dateFrom, dateTo) {
+    const conditions = [`landing_page_slug IS NOT NULL`, `TRIM(landing_page_slug) <> ''`];
+    const params = [];
+    let idx = 1;
+    if (dateFrom) {
+      conditions.push(`created_at >= $${idx}::timestamptz`);
+      params.push(`${dateFrom}T00:00:00.000Z`);
+      idx += 1;
+    }
+    if (dateTo) {
+      conditions.push(`created_at <= $${idx}::timestamptz`);
+      params.push(`${dateTo}T23:59:59.999Z`);
+      idx += 1;
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const result = await db.query(
+      `SELECT landing_page_slug AS slug, COUNT(*)::bigint AS "submitCount"
+       FROM leads
+       ${where}
+       GROUP BY landing_page_slug`,
+      params
+    );
+    return result.rows.map((r) => ({
+      slug: r.slug,
+      submitCount: Number(r.submitCount || 0),
+    }));
   }
 }
 

@@ -33,6 +33,7 @@ import publicRoutes from './routes/public.routes.js';
 import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
 import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
+import adminLandingPageRoutes from './routes/adminLandingPage.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -70,6 +71,8 @@ app.use(
     origin: (origin, callback) => {
       // Allow non-browser tools (Postman/curl) and same-origin requests with no Origin header.
       if (!origin) return callback(null, true);
+      // iframe sandbox (srcDoc) gửi Origin: null — cần cho form/embed landing từ HTML tĩnh
+      if (origin === 'null') return callback(null, true);
       if (allowedOrigins.has(origin)) return callback(null, true);
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
@@ -112,6 +115,7 @@ app.use('/api/zalo-templates', zaloTemplateRoutes); // quản lý template Zalo
 app.use('/api/public', publicRoutes); // landing lead, landing-featured-courses, landing-testimonials
 app.use('/api/admin/landing-featured-courses', adminLandingFeaturedCourseRoutes);
 app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);
+app.use('/api/admin/landing-pages', adminLandingPageRoutes);
 app.use('/api/leads', leadRoutes); // GET /api/leads (auth), GET /api/leads/preview (auth)
 
 // Health check

@@ -11,6 +11,7 @@ import { useLandingLocale } from '../../features/landing/hooks/useLandingLocale.
 import { useLandingFeaturedCourses } from '../../features/landing/hooks/useLandingFeaturedCourses.js';
 import { useLandingTestimonials } from '../../features/landing/hooks/useLandingTestimonials.js';
 import { useUknowLandingForm } from '../../features/landing/hooks/useUknowLandingForm.js';
+import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
 
 /**
  * Trang landing công khai UKnow — layout bám mock `uknow-landing-v2.html`, song ngữ VI/EN.
@@ -19,7 +20,10 @@ import { useUknowLandingForm } from '../../features/landing/hooks/useUknowLandin
  */
 export default function UknowLandingPage() {
   const { locale, setLocale, copy } = useLandingLocale();
-  const { form, setField, submitting, error, success, submit } = useUknowLandingForm(locale);
+  useRecordLandingView('l');
+  const { form, setField, submitting, error, success, submit } = useUknowLandingForm(locale, {
+    landingPageSlug: 'l',
+  });
   const { courseItems } = useLandingFeaturedCourses(locale, copy.courses.items);
   const { testimonialItems } = useLandingTestimonials(locale, copy.testimonials.items);
 
@@ -56,7 +60,7 @@ export default function UknowLandingPage() {
 
       <UknowLandingAbout about={copy.about} />
       <UknowLandingBenefits benefits={copy.benefits} />
-      <UknowLandingCoursesHighlight courses={copy.courses} items={courseItems} />
+      <UknowLandingCoursesHighlight courses={copy.courses} items={courseItems} landingSlug="l" />
       <UknowLandingTestimonials testimonials={copy.testimonials} items={testimonialItems} />
       <UknowLandingFinalCta finalCta={copy.finalCta} />
       <UknowLandingFooter footer={copy.footer} />
