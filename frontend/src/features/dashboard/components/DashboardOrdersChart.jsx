@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
 import DashboardInsightBlock from './DashboardInsightBlock';
+import DashboardRechartsLegend from './DashboardRechartsLegend';
 
 const formatAxisDate = (value) => {
   const date = new Date(`${value}T00:00:00`);
@@ -155,6 +156,9 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode }) => {
  * @param {string}  [props.insightText]  - Insight hiển thị dưới biểu đồ
  * @param {boolean} [props.isInsightLoading]
  * @param {string}  [props.insightError]
+ * @param {'summary'|'compare'} [props.viewMode] - Tab điều khiển từ ngoài (đồng bộ insight)
+ * @param {function} [props.onViewModeChange]
+ * @param {'summary'|'compare'|null} [props.lockedViewMode] - Bản in: cố định tab, ẩn nút chuyển
  * @returns {JSX.Element}
  */
 const DashboardOrdersChart = ({
@@ -163,8 +167,20 @@ const DashboardOrdersChart = ({
   insightText = '',
   isInsightLoading = false,
   insightError = '',
+  viewMode: viewModeProp,
+  onViewModeChange,
+  lockedViewMode = null,
 }) => {
-  const [viewMode, setViewMode] = useState('summary');
+  const [internalViewMode, setInternalViewMode] = useState('summary');
+  const isControlled =
+    lockedViewMode == null && viewModeProp != null && typeof onViewModeChange === 'function';
+  /** In PDF: khóa tab; màn hình controlled khi có cả viewMode + onViewModeChange */
+  const viewMode = lockedViewMode || (isControlled ? viewModeProp : internalViewMode);
+  const setViewMode = (id) => {
+    if (lockedViewMode) return;
+    if (isControlled) onViewModeChange(id);
+    else setInternalViewMode(id);
+  };
 
   const chartData   = isMonthlyView ? aggregateToMonthly(timeline) : timeline;
   const activeLines = viewMode === 'compare' ? COMPARE_LINES : SUMMARY_LINES;
@@ -191,23 +207,25 @@ const DashboardOrdersChart = ({
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {/* View mode tabs */}
-          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100">
-            {VIEW_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setViewMode(tab.id)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === tab.id
-                    ? 'bg-white text-gray-800 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* View mode tabs — ẩn khi in PDF (lockedViewMode) */}
+          {!lockedViewMode && (
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100">
+              {VIEW_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setViewMode(tab.id)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                    viewMode === tab.id
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Summary badges */}
           <div className="flex items-center gap-2">
@@ -260,11 +278,7 @@ const DashboardOrdersChart = ({
                   <OrdersTooltip isMonthlyView={isMonthlyView} viewMode={viewMode} />
                 }
               />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                wrapperStyle={{ fontSize: '12px', paddingTop: '12px', color: '#64748b' }}
-              />
+              <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
               {activeLines.map((line) => (
                 <Line
                   key={line.key}

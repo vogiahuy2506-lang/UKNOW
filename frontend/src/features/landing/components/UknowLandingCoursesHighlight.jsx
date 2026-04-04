@@ -1,6 +1,7 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { HiOutlineAcademicCap, HiOutlineChartBar, HiOutlinePaintBrush } from 'react-icons/hi2';
 import { LANDING_SURFACE, LANDING_CARD, LANDING_GOLD, LANDING_MUTED } from '../constants/landingTheme.js';
+import { buildLandingTrackGoUrl } from '../../landing-pages/utils/buildLandingTrackGoUrl.js';
 
 /** Icon fallback khi chưa có ảnh (cùng bộ Heroicons outline). */
 const FALLBACK_ICONS = [HiOutlineAcademicCap, HiOutlineChartBar, HiOutlinePaintBrush];
@@ -16,9 +17,21 @@ const FALLBACK_ICONS = [HiOutlineAcademicCap, HiOutlineChartBar, HiOutlinePaintB
  * @param {object} props
  * @param {Pick<import('../constants/landingCopy.js').LANDING_COPY.vi.courses, 'eyebrow' | 'title' | 'subtitle' | 'linkLabel' | 'carouselPrevAria' | 'carouselNextAria' | 'detailCtaLabel'>} props.courses
  * @param {{ tag: string, title: string, imageUrl: string|null, linkUrl: string }[]} props.items
+ * @param {string} [props.landingSlug] slug ghi nhận click (mặc định `l`)
  */
-export function UknowLandingCoursesHighlight({ courses, items }) {
+export function UknowLandingCoursesHighlight({ courses, items, landingSlug = 'l' }) {
   const scrollerRef = useRef(null);
+  const slug = String(landingSlug || 'l').trim().toLowerCase() || 'l';
+
+  const tracked = useCallback(
+    (targetUrl) => {
+      const raw = String(targetUrl || '').trim() || 'https://uknow.edu.vn/';
+      return buildLandingTrackGoUrl(slug, raw);
+    },
+    [slug]
+  );
+
+  const catalogHref = useMemo(() => tracked('https://uknow.edu.vn/'), [tracked]);
 
   const grads = [
     'from-[#148C94] to-[#1DA1AB]',
@@ -91,7 +104,7 @@ export function UknowLandingCoursesHighlight({ courses, items }) {
         {list.map((c, i) => {
           const grad = grads[i % grads.length];
           const Icon = FALLBACK_ICONS[i % FALLBACK_ICONS.length];
-          const href = String(c.linkUrl || '').trim() || 'https://uknow.edu.vn/';
+          const href = tracked(String(c.linkUrl || '').trim() || 'https://uknow.edu.vn/');
           const hasImage = Boolean(c.imageUrl && String(c.imageUrl).trim());
 
           return (
@@ -143,7 +156,7 @@ export function UknowLandingCoursesHighlight({ courses, items }) {
 
       <div className="mt-10 text-center">
         <a
-          href="https://uknow.edu.vn/"
+          href={catalogHref}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm font-bold underline-offset-4 transition hover:text-amber-300 hover:underline"

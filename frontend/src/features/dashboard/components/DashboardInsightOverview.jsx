@@ -1,4 +1,5 @@
 import { normalizeDashboardInsightForUi } from '../utils/dashboardInsightStorage.util';
+import InsightMarkdownBody, { renderBoldSegments } from './InsightMarkdownBody';
 
 /**
  * Hiển thị khối insight tổng quan có cấu trúc (sau khi Gemini trả JSON đầy đủ).
@@ -7,6 +8,7 @@ import { normalizeDashboardInsightForUi } from '../utils/dashboardInsightStorage
  * - Chuẩn hóa payload (unwrap, merge charts, parse key_metrics nếu là chuỗi) để đồng bộ với lúc phân tích trực tiếp và khi đọc từ localStorage.
  * - Nếu có `key_metrics_analysis` / `insights` / `action_plan` → render theo section.
  * - Nếu chỉ có `overview` dạng chuỗi → hiển thị đoạn tóm tắt đơn giản.
+ * - Chuỗi từ Gemini có thể chứa markdown nhẹ `**in đậm**` → dùng `InsightMarkdownBody` / `renderBoldSegments`.
  */
 
 const SectionTitle = ({ children }) => (
@@ -21,22 +23,26 @@ const MetricCard = ({ label, data }) => {
       {data.value != null && (
         <p className="text-gray-600">
           <span className="text-gray-400">Giá trị: </span>
-          {String(data.value)}
+          {renderBoldSegments(String(data.value))}
         </p>
       )}
       {data.benchmark != null && (
         <p className="text-gray-600 mt-0.5">
           <span className="text-gray-400">Tham chiếu: </span>
-          {String(data.benchmark)}
+          {renderBoldSegments(String(data.benchmark))}
         </p>
       )}
       {data.assessment != null && (
         <p className="text-gray-600 mt-0.5">
           <span className="text-gray-400">Đánh giá: </span>
-          {String(data.assessment)}
+          {renderBoldSegments(String(data.assessment))}
         </p>
       )}
-      {data.comment != null && <p className="text-gray-700 mt-1.5 leading-relaxed">{String(data.comment)}</p>}
+      {data.comment != null && (
+        <div className="text-gray-700 mt-1.5 leading-relaxed">
+          <InsightMarkdownBody text={String(data.comment)} />
+        </div>
+      )}
     </div>
   );
 };
@@ -70,7 +76,9 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
     return (
       <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
         <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Tóm tắt</p>
-        <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{text}</p>
+        <div className="text-sm text-gray-700 leading-relaxed">
+          <InsightMarkdownBody text={text} />
+        </div>
       </div>
     );
   }
@@ -80,7 +88,9 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       {insightsNorm.overview && (
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
           <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">Tóm tắt tổng quan</p>
-          <p className="leading-relaxed whitespace-pre-line">{String(insightsNorm.overview)}</p>
+          <div className="leading-relaxed text-gray-800">
+            <InsightMarkdownBody text={String(insightsNorm.overview)} />
+          </div>
         </div>
       )}
 
@@ -101,7 +111,9 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
                 className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs leading-relaxed"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="font-semibold text-gray-800">{item.title || `Insight ${idx + 1}`}</span>
+                  <span className="font-semibold text-gray-800">
+                    {renderBoldSegments(item.title || `Insight ${idx + 1}`)}
+                  </span>
                   {item.type && (
                     <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{item.type}</span>
                   )}
@@ -109,12 +121,16 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
                     <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">{item.priority}</span>
                   )}
                 </div>
-                {item.detail && <p className="text-gray-700">{item.detail}</p>}
+                {item.detail && (
+                  <div className="text-gray-700">
+                    <InsightMarkdownBody text={String(item.detail)} />
+                  </div>
+                )}
                 {item.impact && (
-                  <p className="text-gray-500 mt-1">
+                  <div className="text-gray-500 mt-1">
                     <span className="text-gray-400">Tác động: </span>
-                    {item.impact}
-                  </p>
+                    {renderBoldSegments(String(item.impact))}
+                  </div>
                 )}
               </li>
             ))}
@@ -129,17 +145,19 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
             {insightsNorm.channel_analysis.best_channel && (
               <p>
                 <span className="text-gray-400">Kênh nổi bật: </span>
-                {insightsNorm.channel_analysis.best_channel}
+                {renderBoldSegments(String(insightsNorm.channel_analysis.best_channel))}
               </p>
             )}
             {insightsNorm.channel_analysis.underperforming_channel && (
               <p>
                 <span className="text-gray-400">Kênh yếu: </span>
-                {insightsNorm.channel_analysis.underperforming_channel}
+                {renderBoldSegments(String(insightsNorm.channel_analysis.underperforming_channel))}
               </p>
             )}
             {insightsNorm.channel_analysis.recommendation && (
-              <p className="text-gray-700 leading-relaxed pt-1">{insightsNorm.channel_analysis.recommendation}</p>
+              <div className="text-gray-700 leading-relaxed pt-1">
+                <InsightMarkdownBody text={String(insightsNorm.channel_analysis.recommendation)} />
+              </div>
             )}
           </div>
         </>
@@ -152,17 +170,19 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
             {insightsNorm.funnel_analysis.bottleneck && (
               <p>
                 <span className="text-gray-400">Nút thắt: </span>
-                {insightsNorm.funnel_analysis.bottleneck}
+                {renderBoldSegments(String(insightsNorm.funnel_analysis.bottleneck))}
               </p>
             )}
             {insightsNorm.funnel_analysis.drop_off_stage && (
               <p>
                 <span className="text-gray-400">Rơi nhiều ở: </span>
-                {insightsNorm.funnel_analysis.drop_off_stage}
+                {renderBoldSegments(String(insightsNorm.funnel_analysis.drop_off_stage))}
               </p>
             )}
             {insightsNorm.funnel_analysis.suggestion && (
-              <p className="text-gray-700 leading-relaxed pt-1">{insightsNorm.funnel_analysis.suggestion}</p>
+              <div className="text-gray-700 leading-relaxed pt-1">
+                <InsightMarkdownBody text={String(insightsNorm.funnel_analysis.suggestion)} />
+              </div>
             )}
           </div>
         </>
@@ -173,13 +193,17 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
           <SectionTitle>Sản phẩm / khóa học</SectionTitle>
           <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.top_product_insight.observation && (
-              <p className="text-gray-700 leading-relaxed">{insightsNorm.top_product_insight.observation}</p>
+              <div className="text-gray-700 leading-relaxed">
+                <InsightMarkdownBody text={String(insightsNorm.top_product_insight.observation)} />
+              </div>
             )}
             {insightsNorm.top_product_insight.action && (
-              <p className="text-gray-600">
-                <span className="text-gray-400">Hành động: </span>
-                {insightsNorm.top_product_insight.action}
-              </p>
+              <div className="text-gray-600 flex flex-wrap items-baseline gap-x-1 gap-y-1">
+                <span className="text-gray-400 shrink-0">Hành động:</span>
+                <div className="min-w-0 flex-1">
+                  <InsightMarkdownBody text={String(insightsNorm.top_product_insight.action)} />
+                </div>
+              </div>
             )}
           </div>
         </>
@@ -191,11 +215,23 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
           <ol className="list-decimal list-inside space-y-2 text-xs">
             {insightsNorm.action_plan.map((ap, idx) => (
               <li key={idx} className="rounded-lg border border-gray-100 bg-white px-3 py-2">
-                <span className="font-medium text-gray-800">{ap.action || 'Hành động'}</span>
+                <div className="font-medium text-gray-800">
+                  <InsightMarkdownBody text={String(ap.action || 'Hành động')} />
+                </div>
                 {ap.expected_result && (
-                  <p className="text-gray-600 mt-1">Kỳ vọng: {ap.expected_result}</p>
+                  <div className="text-gray-600 mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-1">
+                    <span className="text-gray-500 shrink-0">Kỳ vọng:</span>
+                    <div className="min-w-0 flex-1">
+                      <InsightMarkdownBody text={String(ap.expected_result)} />
+                    </div>
+                  </div>
                 )}
-                {ap.timeline && <p className="text-gray-500 mt-0.5">Thời gian: {ap.timeline}</p>}
+                {ap.timeline && (
+                  <div className="text-gray-500 mt-0.5">
+                    <span className="text-gray-400">Thời gian: </span>
+                    {renderBoldSegments(String(ap.timeline))}
+                  </div>
+                )}
               </li>
             ))}
           </ol>
@@ -204,15 +240,22 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
       {insightsNorm.risk_warning && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-          <span className="font-semibold">Cảnh báo: </span>
-          {String(insightsNorm.risk_warning)}
+          <div className="flex flex-wrap items-baseline gap-x-1 gap-y-1">
+            <span className="font-semibold shrink-0">Cảnh báo:</span>
+            <div className="min-w-0 flex-1">
+              <InsightMarkdownBody text={String(insightsNorm.risk_warning)} />
+            </div>
+          </div>
         </div>
       )}
 
       {Array.isArray(insightsNorm.notes) && insightsNorm.notes.length > 0 && (
         <div className="text-xs text-gray-500 space-y-1 pt-1">
           {insightsNorm.notes.map((n, idx) => (
-            <div key={idx}>• {n}</div>
+            <div key={idx}>
+              <span className="text-gray-400">• </span>
+              {renderBoldSegments(String(n))}
+            </div>
           ))}
         </div>
       )}

@@ -1,4 +1,7 @@
 import dashboardRepository from '../../repositories/dashboard/dashboard.repository.js';
+import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
+import landingPageRepository from '../../repositories/landingPage.repository.js';
+import leadRepository from '../../repositories/lead.repository.js';
 import customerHelperService from '../customer/customerHelper.service.js';
 
 class DashboardAnalyticsService {
@@ -445,6 +448,126 @@ class DashboardAnalyticsService {
         total: result.total,
         totalPages: Math.max(1, Math.ceil(result.total / filters.limit)),
       },
+    };
+  }
+
+  /**
+   * Thống kê landing page: view/click (bảng events) và submit (bảng leads) theo slug trong khoảng ngày.
+   * Không lọc theo user — dữ liệu marketing dùng chung toàn hệ thống.
+   *
+   * Query:
+   * - Mặc định: `startDate` / `endDate` hoặc `period` (7d|30d|90d) — giống các API dashboard khác.
+   * - Toàn thời gian: `allTime=1` hoặc `period=all` — không truyền mốc ngày xuống aggregate (mọi bản ghi).
+   *
+   * @param {number} _userId
+   * @param {string} _roleCode
+   * @param {object} query startDate, endDate, period, allTime
+   * @returns {Promise<{ filters: object, rows: { slug: string, title: string, viewCount: number, clickCount: number, submitCount: number, clickThroughRatePct: number, submitRateVsViewsPct: number }[] }>}
+   */
+  async getLandingPageStats(_userId, _roleCode, query) {
+    const q = query || {};
+    const periodRaw = String(q.period ?? '').trim().toLowerCase();
+    const allTimeFlag = String(q.allTime ?? '').trim();
+    const allTime =
+      periodRaw === 'all' ||
+      allTimeFlag === '1' ||
+      allTimeFlag.toLowerCase() === 'true';
+
+    let startDate;
+    let endDate;
+    let filters;
+
+    if (allTime) {
+      startDate = null;
+      endDate = null;
+      filters = { allTime: true };
+    } else {
+      const parsed = this.parseDateRange({
+        startDate: q.startDate,
+        endDate: q.endDate,
+        period: q.period,
+      });
+      startDate = parsed.startDate;
+      endDate = parsed.endDate;
+      filters = { startDate, endDate };
+    }
+
+    const [eventAgg, submitAgg] = await Promise.all([
+      landingPageEventRepository.aggregateEventsBySlug(startDate, endDate),
+      leadRepository.aggregateSubmitsBySlug(startDate, endDate),
+    ]);
+
+    const bySlug = new Map();
+    for (const r of eventAgg) {
+      if (!r.slug) continue;
+      bySlug.set(r.slug, {
+        slug: r.slug,
+        viewCount: Number(r.viewCount || 0),
+        clickCount: Number(r.clickCount || 0),
+        submitCount: 0,
+      });
+    }
+    for (const r of submitAgg) {
+      if (!r.slug) continue;
+      const cur = bySlug.get(r.slug) || {
+        slug: r.slug,
+        viewCount: 0,
+        clickCount: 0,
+        submitCount: 0,
+      };
+      cur.submitCount = Number(r.submitCount || 0);
+      bySlug.set(r.slug, cur);
+    }
+
+    /** Gộp mọi slug đã publish trong CMS để bảng/biểu đồ có dòng dù chưa có view/click (render /lp). */
+    const publishedList = await landingPageRepository.listPublishedSlugsWithTitles();
+    for (const p of publishedList) {
+      const key = p.slug;
+      if (!key || key === 'l') continue;
+      if (!bySlug.has(key)) {
+        bySlug.set(key, {
+          slug: key,
+          viewCount: 0,
+          clickCount: 0,
+          submitCount: 0,
+        });
+      }
+    }
+
+    const slugKeys = Array.from(bySlug.keys());
+    const titleBySlug = await landingPageRepository.findTitlesBySlugs(slugKeys);
+    /** Slug landing React cố định `/l` — đồng bộ nhãn với bảng admin khi không có bản ghi CMS. */
+    const fixedLandingSlug = 'l';
+    const fixedLandingTitle = 'Landing cố định (/l)';
+
+    const rows = Array.from(bySlug.values()).map((row) => {
+      const views = row.viewCount;
+      const clicks = row.clickCount;
+      const submits = row.submitCount;
+      const clickThroughRatePct = views > 0 ? Math.round((clicks / views) * 10000) / 100 : 0;
+      const submitRateVsViewsPct = views > 0 ? Math.round((submits / views) * 10000) / 100 : 0;
+      const slugStr = String(row.slug || '');
+      const slugKey = slugStr.trim().toLowerCase();
+      const fromDb = titleBySlug.get(slugKey);
+      const title =
+        fromDb != null && String(fromDb).trim() !== ''
+          ? String(fromDb).trim()
+          : slugKey === fixedLandingSlug
+            ? fixedLandingTitle
+            : slugStr;
+      return {
+        ...row,
+        title,
+        clickThroughRatePct,
+        submitRateVsViewsPct,
+      };
+    });
+
+    rows.sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
+
+    return {
+      filters,
+      rows,
     };
   }
 }

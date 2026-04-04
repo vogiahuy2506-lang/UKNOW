@@ -23,6 +23,7 @@ import ZaloSettings from './pages/settings/ZaloSettings';
 import EmployeeManagement from './pages/settings/EmployeeManagement';
 import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
+import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import EmailTemplates from './pages/templates/EmailTemplates';
 import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
@@ -30,6 +31,8 @@ import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import UknowLandingPage from './pages/public/UknowLandingPage';
+import LpRendererPage from './pages/public/LpRendererPage';
+import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -149,6 +152,8 @@ function App() {
         <Route path="/private-policy/" element={<Navigate to="/privacy-policy" replace />} />
         <Route path="/l" element={<UknowLandingPage />} />
         <Route path="/l/" element={<UknowLandingPage />} />
+        <Route path="/lp/:slug" element={<LpRendererPage />} />
+        <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
 
         {/* Protected Routes */}
         <Route path="/" element={
@@ -194,6 +199,14 @@ function App() {
             element={(
               <AdminRoute>
                 <LandingTestimonialsPage />
+              </AdminRoute>
+            )}
+          />
+          <Route
+            path="settings/landing-pages"
+            element={(
+              <AdminRoute>
+                <LandingPagesAdminPage />
               </AdminRoute>
             )}
           />

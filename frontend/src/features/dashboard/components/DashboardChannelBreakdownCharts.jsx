@@ -185,6 +185,8 @@ const DonutCard = ({
  * @param {object|null} [props.insights] - payload insight trả về từ API
  * @param {boolean} [props.isInsightLoading]
  * @param {string} [props.insightError]
+ * @param {boolean} [props.oneColumn] true = xếp 3 donut theo cột dọc (bản in PDF)
+ * @param {'click'|'completed'|'pending'|null} [props.onlyBreakdownKey] chỉ render một donut (mỗi trang PDF một biểu đồ)
  * @returns {JSX.Element}
  */
 const DashboardChannelBreakdownCharts = ({
@@ -192,6 +194,8 @@ const DashboardChannelBreakdownCharts = ({
   insights = null,
   isInsightLoading = false,
   insightError = '',
+  oneColumn = false,
+  onlyBreakdownKey = null,
 }) => {
   const channels = overview?.channels || {};
   const journeyEvents = overview?.journeyEvents || {};
@@ -215,32 +219,48 @@ const DashboardChannelBreakdownCharts = ({
     zalo_group: Number(channels.zaloGroup?.pendingOrderCount || 0),
   };
 
+  const breakdownDefs = [
+    {
+      id: 'click',
+      title: 'Cơ cấu Click theo kênh',
+      values: clickValues,
+      accentColor: '#6366f1',
+      insightText: insights?.charts?.channelBreakdown?.click || '',
+    },
+    {
+      id: 'completed',
+      title: 'Cơ cấu Đã mua theo kênh',
+      values: completedValues,
+      accentColor: '#22c55e',
+      insightText: insights?.charts?.channelBreakdown?.completed || '',
+    },
+    {
+      id: 'pending',
+      title: 'Cơ cấu Đơn chờ theo kênh',
+      values: pendingValues,
+      accentColor: '#f97316',
+      insightText: insights?.charts?.channelBreakdown?.pending || '',
+    },
+  ];
+
+  const visibleDefs =
+    onlyBreakdownKey === 'click' || onlyBreakdownKey === 'completed' || onlyBreakdownKey === 'pending'
+      ? breakdownDefs.filter((d) => d.id === onlyBreakdownKey)
+      : breakdownDefs;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <DonutCard
-        title="Cơ cấu Click theo kênh"
-        values={clickValues}
-        accentColor="#6366f1"
-        insightText={insights?.charts?.channelBreakdown?.click || ''}
-        isInsightLoading={isInsightLoading}
-        insightError={insightError}
-      />
-      <DonutCard
-        title="Cơ cấu Đã mua theo kênh"
-        values={completedValues}
-        accentColor="#22c55e"
-        insightText={insights?.charts?.channelBreakdown?.completed || ''}
-        isInsightLoading={isInsightLoading}
-        insightError={insightError}
-      />
-      <DonutCard
-        title="Cơ cấu Đơn chờ theo kênh"
-        values={pendingValues}
-        accentColor="#f97316"
-        insightText={insights?.charts?.channelBreakdown?.pending || ''}
-        isInsightLoading={isInsightLoading}
-        insightError={insightError}
-      />
+    <div className={oneColumn || onlyBreakdownKey ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 sm:grid-cols-3 gap-4'}>
+      {visibleDefs.map((d) => (
+        <DonutCard
+          key={d.id}
+          title={d.title}
+          values={d.values}
+          accentColor={d.accentColor}
+          insightText={d.insightText}
+          isInsightLoading={isInsightLoading}
+          insightError={insightError}
+        />
+      ))}
     </div>
   );
 };

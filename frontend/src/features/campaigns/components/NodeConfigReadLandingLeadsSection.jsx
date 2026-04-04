@@ -1,8 +1,9 @@
-import { memo, startTransition, useCallback, useMemo } from 'react';
+import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../../landing/constants/uknowLandingOptions.js';
 import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
 import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
+import { fetchLandingLeadsSlugFilterOptions } from '../../landing/utils/landingLeadsSlugFilterOptions.js';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách riêng để React bỏ qua re-render khi prop ổn định.
@@ -108,12 +109,34 @@ function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setF
 export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
   const occupations = Array.isArray(formData.landingLeadsOccupations) ? formData.landingLeadsOccupations : [];
   const interests = Array.isArray(formData.landingLeadsInterests) ? formData.landingLeadsInterests : [];
+  const slugs = Array.isArray(formData.landingLeadsSlugs) ? formData.landingLeadsSlugs : [];
+
+  const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: 'Landing React (/l)' }]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const merged = await fetchLandingLeadsSlugFilterOptions();
+      if (!cancelled) setSlugOptions(merged);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-600">
-        Lấy lead đã gửi từ form landing công khai. Để trống bộ lọc nghề/lĩnh vực nghĩa là <strong>không lọc</strong> theo
-        tiêu đó (vẫn áp dụng khoảng ngày nếu bật).
+        Lấy lead đã gửi từ form landing công khai. Để trống bộ lọc nghề/lĩnh vực / landing slug nghĩa là{' '}
+        <strong>không lọc</strong> theo tiêu đó (vẫn áp dụng khoảng ngày nếu bật).
+      </p>
+      <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
+        <strong>Chiến dịch chạy liên tục (continuous):</strong> node này được hỗ trợ. Mỗi chu kỳ hệ thống đọc lại
+        cơ sở dữ liệu và chỉ đưa vào các bước sau những lead <em>chưa</em> xuất hiện ở các chu kỳ trước (theo{' '}
+        <code className="rounded bg-white/80 px-1">leadId</code> hoặc cặp email + điện thoại). Chu kỳ đầu lấy đủ bản
+        ghi khớp bộ lọc; các chu kỳ sau chỉ lead mới. Slug trong form nhúng (
+        <code className="rounded bg-white/80 px-1">?slug=…</code>) phải trùng slug lưu trên lead (vd landing cố định{' '}
+        <code className="rounded bg-white/80 px-1">l</code>).
       </p>
 
       <div className="flex items-center gap-2">
@@ -159,6 +182,14 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
         options={UKNOW_OCCUPATION_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
         fieldKey="landingLeadsOccupations"
         selected={occupations}
+        setFormData={setFormData}
+      />
+
+      <LandingLeadsMultiFilterBlock
+        title="Lọc theo landing / slug nguồn (để trống = tất cả slug)"
+        options={slugOptions}
+        fieldKey="landingLeadsSlugs"
+        selected={slugs}
         setFormData={setFormData}
       />
 

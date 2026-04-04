@@ -1,5 +1,8 @@
 import leadRepository from '../../repositories/lead.repository.js';
-import { clampLandingLeadsLimit } from '../../utils/landingLeadsLimit.util.js';
+import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
+import { clampLandingLeadsLimit, MAX_LANDING_LEADS_LIMIT } from '../../utils/landingLeadsLimit.util.js';
+import { buildLandingLeadsAdminXlsxBuffer } from '../../utils/landingLeadsXlsxExport.util.js';
+import { canonicalLandingPageSlug } from '../../utils/landingPageSlugCanonical.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,9 +41,65 @@ export const mapLeadRowToCampaignItem = (row) => {
     occupation: String(row.occupation || '').trim(),
     interestArea: String(row.interestArea ?? row.interest_area ?? '').trim(),
     marketingConsent: Boolean(row.marketingConsent ?? row.marketing_consent),
+    landingPageSlug: String(row.landingPageSlug ?? row.landing_page_slug ?? '').trim() || null,
     createdAt: row.createdAt || row.created_at,
   };
 };
+
+/**
+ * Chuẩn hóa trường lọc dạng mảng chuỗi từ config node / JSON DB.
+ * Một số bản lưu có thể để chuỗi JSON thay vì mảng — khi đó filter cũ coi như rỗng hoặc sai.
+ *
+ * Luồng hoạt động:
+ * 1. Nếu đã là mảng → trim từng phần tử, bỏ rỗng.
+ * 2. Nếu là chuỗi không rỗng → thử JSON.parse; nếu ra mảng thì xử lý như bước 1.
+ * 3. Còn lại → mảng rỗng.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeLeadFilterStringArray(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (!t) return [];
+    try {
+      const parsed = JSON.parse(t);
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x ?? '').trim()).filter(Boolean);
+      }
+    } catch {
+      // Không coi chuỗi đơn lẻ là một giá trị filter (tránh khớp nhầm)
+    }
+  }
+  return [];
+}
+
+/**
+ * Chuẩn hóa danh sách slug landing (lowercase để khớp `landing_page_slug`).
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeLeadFilterSlugArray(raw) {
+  return normalizeLeadFilterStringArray(raw)
+    .map((s) => s.toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Bật/tắt lọc khoảng ngày từ config (hỗ trợ 'true', '1').
+ *
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+function normalizeLeadUseDateRange(raw) {
+  if (raw === true || raw === 1) return true;
+  const s = String(raw || '').trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes';
+}
 
 /**
  * Dịch vụ nghiệp vụ lead (form landing + preview/node).
@@ -88,6 +147,16 @@ class LeadService {
       throw err;
     }
 
+    // Chuẩn hóa slug: `/l` → `l`, tránh lọc admin (chọn `l`) không khớp DB
+    const landingPageSlug = canonicalLandingPageSlug(
+      body?.landingPageSlug ?? body?.landing_page_slug ?? ''
+    );
+    const utmSource = body?.utmSource != null ? String(body.utmSource).trim().slice(0, 255) || null : null;
+    const utmMedium = body?.utmMedium != null ? String(body.utmMedium).trim().slice(0, 255) || null : null;
+    const utmCampaign = body?.utmCampaign != null ? String(body.utmCampaign).trim().slice(0, 255) || null : null;
+    const utmContent = body?.utmContent != null ? String(body.utmContent).trim().slice(0, 255) || null : null;
+    const utmTerm = body?.utmTerm != null ? String(body.utmTerm).trim().slice(0, 255) || null : null;
+
     const row = await leadRepository.insertLead({
       lastName,
       firstName,
@@ -96,12 +165,39 @@ class LeadService {
       occupation,
       interestArea,
       marketingConsent,
+      landingPageSlug,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmContent,
+      utmTerm,
     });
     if (!row) {
       const err = new Error('Không thể lưu thông tin');
       err.statusCode = 500;
       throw err;
     }
+
+    if (landingPageSlug) {
+      try {
+        await landingPageEventRepository.insert({
+          eventType: 'submit',
+          landingPageSlug,
+          targetUrl: null,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          utmContent,
+          utmTerm,
+          visitorId: body?.visitorId != null ? String(body.visitorId).trim().slice(0, 64) : null,
+          referrer: body?.referrer != null ? String(body.referrer).trim().slice(0, 2000) : null,
+          userAgent: null,
+        });
+      } catch (e) {
+        console.warn('[LeadService] Không ghi landing_page_events submit:', e?.message || e);
+      }
+    }
+
     return { row, item: mapLeadRowToCampaignItem(row) };
   }
 
@@ -112,15 +208,12 @@ class LeadService {
    * @returns {Promise<{ items: object[], total: number }>}
    */
   async getLeadsForCampaignConfig(config = {}) {
-    const useDateRange = Boolean(config.landingLeadsUseDateRange);
+    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
     const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
     const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
-    const occupations = Array.isArray(config.landingLeadsOccupations)
-      ? config.landingLeadsOccupations.map((x) => String(x || '').trim()).filter(Boolean)
-      : [];
-    const interests = Array.isArray(config.landingLeadsInterests)
-      ? config.landingLeadsInterests.map((x) => String(x || '').trim()).filter(Boolean)
-      : [];
+    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
+    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
+    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
     const limit = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
 
     const filterBase = {
@@ -129,6 +222,7 @@ class LeadService {
       dateTo,
       occupations,
       interests,
+      landingSlugs,
       limit,
     };
 
@@ -140,6 +234,7 @@ class LeadService {
         dateTo,
         occupations,
         interests,
+        landingSlugs,
       }),
     ]);
 
@@ -161,20 +256,18 @@ class LeadService {
    * @param {string} config.landingLeadsDateTo
    * @param {string[]} config.landingLeadsOccupations
    * @param {string[]} config.landingLeadsInterests
+   * @param {string[]} config.landingLeadsSlugs Slug landing (vd `l`); rỗng = không lọc theo slug
    * @param {number} config.page Trang (1-based)
    * @param {number} config.pageSize Số dòng mỗi trang (đã clamp ở controller)
    * @returns {Promise<{ items: object[], total: number, page: number, pageSize: number, totalPages: number }>}
    */
   async listAdminPaginated(config = {}) {
-    const useDateRange = Boolean(config.landingLeadsUseDateRange);
+    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
     const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
     const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
-    const occupations = Array.isArray(config.landingLeadsOccupations)
-      ? config.landingLeadsOccupations.map((x) => String(x || '').trim()).filter(Boolean)
-      : [];
-    const interests = Array.isArray(config.landingLeadsInterests)
-      ? config.landingLeadsInterests.map((x) => String(x || '').trim()).filter(Boolean)
-      : [];
+    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
+    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
+    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
     const page = Math.max(1, parseInt(String(config.page), 10) || 1);
     const pageSize = Math.max(1, parseInt(String(config.pageSize), 10) || 20);
     const offset = (page - 1) * pageSize;
@@ -186,6 +279,7 @@ class LeadService {
       dateTo,
       occupations,
       interests,
+      landingSlugs,
       limit,
       offset,
     };
@@ -198,12 +292,64 @@ class LeadService {
         dateTo,
         occupations,
         interests,
+        landingSlugs,
       }),
     ]);
 
     const items = rows.map(mapLeadRowToCampaignItem);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     return { items, total, page, pageSize, totalPages };
+  }
+
+  /**
+   * Xuất toàn bộ lead khớp bộ lọc admin ra buffer Excel (tối đa `MAX_LANDING_LEADS_LIMIT` dòng).
+   *
+   * Luồng hoạt động:
+   * 1. Chuẩn hóa filter giống `listAdminPaginated`.
+   * 2. Đếm tổng → LIMIT = min(tổng, trần export).
+   * 3. SELECT một lần (offset 0), map item, build workbook.
+   *
+   * @param {object} config Cùng các trường lọc như list admin (không cần page/pageSize)
+   * @returns {Promise<{ buffer: Buffer, total: number, exportedCount: number, truncated: boolean }>}
+   */
+  async exportAdminFilteredXlsx(config = {}) {
+    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
+    const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
+    const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
+    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
+    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
+    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
+
+    const filterBase = {
+      useDateRange,
+      dateFrom,
+      dateTo,
+      occupations,
+      interests,
+      landingSlugs,
+    };
+
+    const total = await leadRepository.countFiltered(filterBase);
+    const fetchLimit = Math.min(total, MAX_LANDING_LEADS_LIMIT);
+
+    const rows =
+      fetchLimit > 0
+        ? await leadRepository.findFiltered({
+            ...filterBase,
+            limit: fetchLimit,
+            offset: 0,
+          })
+        : [];
+
+    const items = rows.map(mapLeadRowToCampaignItem);
+    const buffer = await buildLandingLeadsAdminXlsxBuffer(items);
+
+    return {
+      buffer,
+      total,
+      exportedCount: items.length,
+      truncated: total > items.length,
+    };
   }
 }
 

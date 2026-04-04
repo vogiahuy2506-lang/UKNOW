@@ -28,13 +28,73 @@ export function extractInsightFromDashboardInsightsResponse(response) {
 }
 
 /**
+ * Gỡ fence ```json ... ``` giống backend (phục vụ recovery từ overview).
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function stripCodeFencesForInsight(text) {
+  let t = String(text || '').replace(/^\uFEFF/, '').trim();
+  const fenceAt = t.search(/```(?:json)?\s*/i);
+  if (fenceAt >= 0) {
+    const fromFence = t.slice(fenceAt);
+    const m = fromFence.match(/^```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (m) return m[1].trim();
+  }
+  const whole = t.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/im);
+  if (whole) return whole[1].trim();
+  return t;
+}
+
+/**
+ * Xóa dấu phẩy thừa trước } hoặc ] ngoài chuỗi JSON (đồng bộ backend).
+ *
+ * @param {string} jsonStr
+ * @returns {string}
+ */
+function removeTrailingCommasInJson(jsonStr) {
+  const s = String(jsonStr || '');
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (esc) {
+      out += ch;
+      esc = false;
+      continue;
+    }
+    if (inStr) {
+      if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < s.length && /\s/.test(s[j])) j += 1;
+      if (j < s.length && (s[j] === '}' || s[j] === ']')) {
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
  * Trích object JSON đầu tiên bằng đếm ngoặc (tương tự backend).
  *
  * @param {string} text
  * @returns {object|null}
  */
 function extractJsonObject(text) {
-  const s = String(text || '').trim();
+  const s = stripCodeFencesForInsight(text);
   const start = s.indexOf('{');
   if (start < 0) return null;
 
@@ -68,7 +128,11 @@ function extractJsonObject(text) {
         try {
           return JSON.parse(slice);
         } catch {
-          return null;
+          try {
+            return JSON.parse(removeTrailingCommasInJson(slice));
+          } catch {
+            return null;
+          }
         }
       }
     }
@@ -95,8 +159,13 @@ function unwrapInsightPayload(raw) {
 
 function defaultCharts() {
   return {
-    ordersTrend: '',
-    channelEngagement: '',
+    ordersTrend: { summary: '', compare: '' },
+    channelEngagement: {
+      all: '',
+      email: '',
+      zalo: '',
+      zalo_group: '',
+    },
     channelBreakdown: {
       click: '',
       completed: '',
@@ -107,7 +176,102 @@ function defaultCharts() {
       topCampaignsByOrders: '',
       topCampaignsByClicks: '',
     },
+    landingTopPages: '',
   };
+}
+
+/**
+ * Chuẩn hóa `charts.channelEngagement` (legacy một chuỗi → chỉ nhánh `all`).
+ *
+ * @param {unknown} raw
+ * @returns {{ all: string, email: string, zalo: string, zalo_group: string }}
+ */
+export function normalizeChannelEngagementForUi(raw) {
+  if (raw == null) {
+    return { all: '', email: '', zalo: '', zalo_group: '' };
+  }
+  if (typeof raw === 'string') {
+    return { all: raw, email: '', zalo: '', zalo_group: '' };
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const pick = (k) => (typeof raw[k] === 'string' ? raw[k] : '');
+    return {
+      all: pick('all'),
+      email: pick('email'),
+      zalo: pick('zalo'),
+      zalo_group: pick('zalo_group'),
+    };
+  }
+  return { all: '', email: '', zalo: '', zalo_group: '' };
+}
+
+/**
+ * Chuẩn hóa `charts.ordersTrend` từ API/DB: legacy chuỗi → `summary`; object `{ summary, compare }` giữ nguyên shape.
+ *
+ * @param {unknown} raw
+ * @returns {{ summary: string, compare: string }}
+ */
+export function normalizeOrdersTrendForUi(raw) {
+  if (raw == null) {
+    return { summary: '', compare: '' };
+  }
+  if (typeof raw === 'string') {
+    return { summary: raw, compare: '' };
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const pick = (k) => (typeof raw[k] === 'string' ? raw[k] : '');
+    return {
+      summary: pick('summary'),
+      compare: pick('compare'),
+    };
+  }
+  return { summary: '', compare: '' };
+}
+
+/**
+ * Lấy markdown insight «Đơn hàng theo thời gian» đúng tab Tổng hợp / So sánh kênh.
+ *
+ * @param {object} [charts]
+ * @param {'summary'|'compare'} mode
+ * @returns {string}
+ */
+export function getOrdersTrendInsightForMode(charts, mode) {
+  const ot = normalizeOrdersTrendForUi(charts?.ordersTrend);
+  const s = (ot.summary || '').trim();
+  const c = (ot.compare || '').trim();
+  if (mode === 'compare') {
+    return c || s;
+  }
+  return s || c;
+}
+
+/**
+ * Lấy chuỗi insight «Tương tác theo kênh» đúng với tab đang xem (hoặc bản in từng kênh).
+ *
+ * @param {object} [charts]
+ * @param {'all'|'email'|'zalo'|'zalo_group'} channelId
+ * @param {{ forPrint?: boolean }} [options] - `forPrint: true`: insight legacy (một chuỗi) chỉ gắn tab «Tất cả», tránh lặp 4 trang PDF
+ * @returns {string}
+ */
+export function getChannelEngagementInsightForChannel(charts, channelId, options = {}) {
+  const { forPrint = false } = options;
+  const ce = charts?.channelEngagement;
+  if (ce == null) return '';
+  if (typeof ce === 'string') {
+    if (forPrint && channelId !== 'all') return '';
+    return ce;
+  }
+  if (typeof ce === 'object' && !Array.isArray(ce)) {
+    const key =
+      channelId === 'all' || channelId === 'email' || channelId === 'zalo' || channelId === 'zalo_group'
+        ? channelId
+        : 'all';
+    const direct = typeof ce[key] === 'string' ? ce[key].trim() : '';
+    if (direct) return ce[key];
+    const fallback = typeof ce.all === 'string' ? ce.all.trim() : '';
+    return fallback ? ce.all : '';
+  }
+  return '';
 }
 
 /**
@@ -133,6 +297,9 @@ function mergeChartsShape(raw) {
     topCampaignsByClicks: '',
     ...(charts.topLists && typeof charts.topLists === 'object' ? charts.topLists : {}),
   };
+  charts.landingTopPages = typeof charts.landingTopPages === 'string' ? charts.landingTopPages : '';
+  charts.channelEngagement = normalizeChannelEngagementForUi(charts.channelEngagement);
+  charts.ordersTrend = normalizeOrdersTrendForUi(charts.ordersTrend);
   return charts;
 }
 
@@ -161,19 +328,26 @@ function parseKeyMetricsIfString(km) {
  */
 function tryRecoverPayloadFromOverviewString(overview) {
   if (typeof overview !== 'string' || !overview.trim()) return null;
-  const t = overview.trim();
+  const stripped = stripCodeFencesForInsight(overview);
+  const t = stripped.trim();
   if (t.startsWith('{')) {
     try {
       const p = JSON.parse(t);
       if (p && typeof p === 'object' && (p.key_metrics_analysis || p.charts)) return p;
     } catch {
+      try {
+        const p2 = JSON.parse(removeTrailingCommasInJson(t));
+        if (p2 && typeof p2 === 'object' && (p2.key_metrics_analysis || p2.charts)) return p2;
+      } catch {
+        /* tiếp extractJsonObject */
+      }
       const ex = extractJsonObject(t);
       if (ex && typeof ex === 'object') return ex;
     }
   }
-  const cut = overview.indexOf('{');
+  const cut = stripped.indexOf('{');
   if (cut >= 0) {
-    const ex = extractJsonObject(overview.slice(cut));
+    const ex = extractJsonObject(stripped.slice(cut));
     if (ex && typeof ex === 'object' && (ex.key_metrics_analysis || ex.charts)) return ex;
   }
   return null;
@@ -304,7 +478,28 @@ export function isInsightPayloadUsable(payload) {
 
   const c = payload.charts;
   if (!c || typeof c !== 'object') return false;
-  if (hasNonEmptyInsightText(c.ordersTrend) || hasNonEmptyInsightText(c.channelEngagement)) return true;
+  const ot = c.ordersTrend;
+  if (typeof ot === 'string' && hasNonEmptyInsightText(ot)) {
+    return true;
+  }
+  if (ot && typeof ot === 'object' && !Array.isArray(ot)) {
+    if (hasNonEmptyInsightText(ot.summary) || hasNonEmptyInsightText(ot.compare)) {
+      return true;
+    }
+  }
+  if (hasNonEmptyInsightText(c.landingTopPages)) {
+    return true;
+  }
+  const ce = c.channelEngagement;
+  if (typeof ce === 'string' && hasNonEmptyInsightText(ce)) {
+    return true;
+  }
+  if (ce && typeof ce === 'object') {
+    const keys = ['all', 'email', 'zalo', 'zalo_group'];
+    if (keys.some((k) => hasNonEmptyInsightText(ce[k]))) {
+      return true;
+    }
+  }
   const cb = c.channelBreakdown;
   if (
     cb &&

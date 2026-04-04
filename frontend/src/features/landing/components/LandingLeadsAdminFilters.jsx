@@ -1,4 +1,5 @@
-import { memo, startTransition, useCallback, useMemo } from 'react';
+import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
 import { UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../constants/uknowLandingOptions.js';
 
 /**
@@ -24,7 +25,7 @@ const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checke
  * @param {object} props
  * @param {string} props.title
  * @param {{ value: string, labelVi: string }[]} props.options
- * @param {'landingLeadsOccupations' | 'landingLeadsInterests'} props.fieldKey
+ * @param {'landingLeadsOccupations' | 'landingLeadsInterests' | 'landingLeadsSlugs'} props.fieldKey
  * @param {string[]} props.selected
  * @param {function} props.setDraftFilters
  */
@@ -93,21 +94,45 @@ function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters 
 }
 
 /**
- * Bộ lọc danh sách lead landing (ngày, nghề, lĩnh vực).
+ * Bộ lọc danh sách lead landing (ngày, nghề, lĩnh vực, slug landing).
  *
  * @param {object} props
  * @param {object} props.draftFilters
  * @param {function} props.setDraftFilters
  * @param {function} props.onApply
  * @param {function} props.onReset
+ * @param {function} [props.onExportExcel] Xuất Excel theo bộ lọc đã áp dụng (không theo bản nháp)
+ * @param {boolean} [props.isExporting]
  */
-export function LandingLeadsAdminFilters({ draftFilters, setDraftFilters, onApply, onReset }) {
+export function LandingLeadsAdminFilters({
+  draftFilters,
+  setDraftFilters,
+  onApply,
+  onReset,
+  onExportExcel,
+  isExporting = false,
+}) {
   const occupations = Array.isArray(draftFilters.landingLeadsOccupations)
     ? draftFilters.landingLeadsOccupations
     : [];
   const interests = Array.isArray(draftFilters.landingLeadsInterests)
     ? draftFilters.landingLeadsInterests
     : [];
+  const slugs = Array.isArray(draftFilters.landingLeadsSlugs) ? draftFilters.landingLeadsSlugs : [];
+
+  const [slugOptions, setSlugOptions] = useState([{ value: 'l', labelVi: 'Landing React (/l)' }]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const raw = await fetchLandingLeadsSlugFilterOptions();
+      if (cancelled) return;
+      setSlugOptions(raw.map((o) => ({ value: o.value, labelVi: o.label })));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="card p-5 space-y-5">
@@ -115,7 +140,7 @@ export function LandingLeadsAdminFilters({ draftFilters, setDraftFilters, onAppl
         <div>
           <h2 className="text-base font-semibold text-gray-900">Bộ lọc</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Lọc theo ngày gửi, nghề nghiệp và lĩnh vực quan tâm (để trống nghĩa là không lọc theo nghề/lĩnh vực).
+            Lọc theo ngày gửi, landing/slug, nghề nghiệp và lĩnh vực (để trống nghĩa là không lọc theo mục đó).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -126,6 +151,16 @@ export function LandingLeadsAdminFilters({ draftFilters, setDraftFilters, onAppl
           >
             Xóa bộ lọc
           </button>
+          {typeof onExportExcel === 'function' ? (
+            <button
+              type="button"
+              onClick={() => onExportExcel()}
+              disabled={isExporting}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {isExporting ? 'Đang xuất…' : 'Xuất Excel'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onApply}
@@ -191,6 +226,14 @@ export function LandingLeadsAdminFilters({ draftFilters, setDraftFilters, onAppl
           setDraftFilters={setDraftFilters}
         />
       </div>
+
+      <MultiFilterBlock
+        title="Landing / slug nguồn (để trống = tất cả)"
+        options={slugOptions}
+        fieldKey="landingLeadsSlugs"
+        selected={slugs}
+        setDraftFilters={setDraftFilters}
+      />
     </div>
   );
 }

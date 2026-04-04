@@ -39,12 +39,22 @@ export const dashboardApiService = {
   },
 
   /**
+   * Thống kê landing: view, click, submit theo slug.
+   *
+   * @param {object} params startDate, endDate, period — hoặc allTime: 1 / period: 'all' (toàn thời gian)
+   */
+  getLandingPageStats(params = {}) {
+    return api.get('/dashboard/landing-pages-stats', { params });
+  },
+
+  /**
    * Sinh insight dashboard bằng Gemini (backend gọi Gemini bằng API key server-side).
    *
    * @param {object} payload
    * @param {object} payload.overview - dữ liệu từ getOverview
    * @param {object} payload.analytics - dữ liệu từ getAnalytics
    * @param {object} payload.topListsData - dữ liệu từ getTopLists
+   * @param {object} [payload.landingPageStats] - dữ liệu từ getLandingPageStats (tùy chọn, khuyến nghị gửi kèm)
    * @param {object} [payload.filters] - bộ lọc đang áp dụng (tùy chọn)
    * @returns {Promise}
    */

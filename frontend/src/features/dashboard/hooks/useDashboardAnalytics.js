@@ -88,6 +88,7 @@ export const useDashboardAnalytics = () => {
   const [ordersData, setOrdersData] = useState(EMPTY_ORDERS_DATA);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState('all');
   const [topListsData, setTopListsData] = useState(EMPTY_TOP_LISTS);
+  const [landingPageStats, setLandingPageStats] = useState({ filters: null, rows: [] });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingRuns, setIsLoadingRuns] = useState(false);
@@ -118,18 +119,21 @@ export const useDashboardAnalytics = () => {
     setErrorMessage('');
     try {
       const params = buildDashboardQueryParams(nextFilters);
-      const [overviewRes, analyticsRes, runsRes, ordersRes, topListsRes] = await Promise.all([
+      const [overviewRes, analyticsRes, runsRes, ordersRes, topListsRes, lpStatsRes] = await Promise.all([
         dashboardApiService.getOverview(params),
         dashboardApiService.getAnalytics(params),
         dashboardApiService.getRuns({ ...params, page: 1, limit: 20 }),
         dashboardApiService.getOrders({ ...params, orderStatus: 'all', page: 1, limit: 20 }),
         dashboardApiService.getTopLists({ ...params, limit: 5 }),
+        /** Thống kê landing: toàn thời gian, không phụ thuộc bộ lọc ngày dashboard. */
+        dashboardApiService.getLandingPageStats({ allTime: 1 }),
       ]);
       setOverview(overviewRes?.data?.data || null);
       setAnalytics(analyticsRes?.data?.data || null);
       setRunsData(runsRes?.data?.data || { items: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } });
       setOrdersData(ordersRes?.data?.data || EMPTY_ORDERS_DATA);
       setTopListsData(topListsRes?.data?.data || EMPTY_TOP_LISTS);
+      setLandingPageStats(lpStatsRes?.data?.data || { filters: null, rows: [] });
     } catch (error) {
       console.error('Load dashboard data error:', error);
       setErrorMessage('Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
@@ -200,6 +204,7 @@ export const useDashboardAnalytics = () => {
     ordersData,
     ordersStatusFilter,
     topListsData,
+    landingPageStats,
     campaignOptions,
     activeChannel,
     setActiveChannel,

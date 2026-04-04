@@ -7,6 +7,29 @@ import {
 } from './builderLogItems.util.js';
 
 /**
+ * Chuẩn hóa trường cấu hình lọc lead: có thể là mảng hoặc chuỗi JSON (bản lưu cũ) trước khi gọi API preview.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeLandingLeadsConfigArray(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (!t) return [];
+    try {
+      const p = JSON.parse(t);
+      return Array.isArray(p) ? p.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
  * Create node runner helpers used by Campaign Builder preview execution.
  *
  * @param {Object} deps dependency bag
@@ -764,13 +787,17 @@ export const createCampaignNodeRunner = (deps) => {
 
     if (nodeType === 'read_landing_leads') {
       const limit = clampLandingLeadsLimitUi(config.landingLeadsLimit, 1000);
+      const occ = normalizeLandingLeadsConfigArray(config.landingLeadsOccupations);
+      const intr = normalizeLandingLeadsConfigArray(config.landingLeadsInterests);
+      const slugArr = normalizeLandingLeadsConfigArray(config.landingLeadsSlugs).map((s) => s.toLowerCase());
       const params = {
         landingLeadsUseDateRange:
           config.landingLeadsUseDateRange === true || config.landingLeadsUseDateRange === 'true',
         landingLeadsDateFrom: config.landingLeadsDateFrom || '',
         landingLeadsDateTo: config.landingLeadsDateTo || '',
-        landingLeadsOccupations: JSON.stringify(Array.isArray(config.landingLeadsOccupations) ? config.landingLeadsOccupations : []),
-        landingLeadsInterests: JSON.stringify(Array.isArray(config.landingLeadsInterests) ? config.landingLeadsInterests : []),
+        landingLeadsOccupations: JSON.stringify(occ),
+        landingLeadsInterests: JSON.stringify(intr),
+        landingLeadsSlugs: JSON.stringify(slugArr),
         landingLeadsLimit: limit,
       };
       const response = await apiService.previewLandingLeads(params, { signal });

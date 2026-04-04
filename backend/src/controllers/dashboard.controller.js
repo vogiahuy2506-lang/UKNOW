@@ -49,6 +49,28 @@ class DashboardController {
   }
 
   /**
+   * GET /api/dashboard/landing-pages-stats
+   *
+   * Query: startDate, endDate, period (7d|30d|90d) — hoặc toàn thời gian: allTime=1 hoặc period=all.
+   * Response: { filters, rows: [{ slug, title, viewCount, clickCount, submitCount, clickThroughRatePct, submitRateVsViewsPct }] } — rows gồm mọi slug `landing_pages` đã publish (kể cả 0 event) và slug chỉ có trong events/leads.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getLandingPageStats(req, res) {
+    try {
+      const userId = req.user.id;
+      const roleCode = req.user.role_code;
+      const data = await dashboardAnalyticsService.getLandingPageStats(userId, roleCode, req.query);
+      this.setNoCacheHeaders(res);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get landing page stats error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
    * Lấy dữ liệu timeline cho dashboard theo bộ lọc.
    *
    * Query:
@@ -302,6 +324,7 @@ class DashboardController {
    * - overview: payload từ GET /api/dashboard/overview
    * - analytics: payload từ GET /api/dashboard/analytics
    * - topListsData: payload từ GET /api/dashboard/top-lists
+   * - landingPageStats: (tùy chọn) payload từ GET /api/dashboard/landing-pages-stats — dùng cho insight biểu đồ landing
    * - filters: (tùy chọn) { startDate, endDate, campaignType, campaignIds }
    *
    * @param {import('express').Request} req
@@ -309,7 +332,7 @@ class DashboardController {
    */
   async generateInsights(req, res) {
     try {
-      const { overview, analytics, topListsData, filters } = req.body || {};
+      const { overview, analytics, topListsData, landingPageStats, filters } = req.body || {};
 
       if (!overview || !analytics || !topListsData) {
         return res.status(400).json({
@@ -322,6 +345,7 @@ class DashboardController {
         overview,
         analytics,
         topListsData,
+        landingPageStats,
         filters,
       });
 

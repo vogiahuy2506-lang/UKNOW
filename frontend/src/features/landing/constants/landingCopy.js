@@ -215,6 +215,8 @@ export const LANDING_COPY = {
       visitSite: 'Ghé thăm ngohuuthong.com',
     },
     form: {
+      /** Tiêu đề gọn khi form nhúng iframe (không dùng eyebrow/cardTitle dài). */
+      embedTitle: 'Đăng ký nhận thông tin và ưu đãi miễn phí',
       cardEyebrow: 'Nhận tư vấn miễn phí',
       cardTitleLine1: 'Bắt đầu hành trình AI',
       cardTitleLine2: 'của bạn ngay hôm nay',
@@ -236,6 +238,8 @@ export const LANDING_COPY = {
       successTitle: 'Đăng ký thành công!',
       successBody:
         'Cảm ơn bạn đã quan tâm đến UKnow! Đội ngũ tư vấn sẽ liên hệ với bạn trong 24 giờ làm việc. Hãy kiểm tra email để nhận tài liệu AI miễn phí từ ThS. Ngô Hữu Thống.',
+      /** Bản rút gọn cho iframe (không lấn nền ngoài khối form). */
+      embedSuccessBody: 'Cảm ơn bạn! Đội ngũ tư vấn sẽ liên hệ trong thời gian sớm nhất.',
       placeholders: {
         lastName: 'Nguyễn',
         firstName: 'Văn A',
@@ -461,6 +465,7 @@ export const LANDING_COPY = {
       visitSite: 'Visit ngohuuthong.com',
     },
     form: {
+      embedTitle: 'Sign up for information and free offers',
       cardEyebrow: 'Free consultation',
       cardTitleLine1: 'Start your AI journey',
       cardTitleLine2: 'today',
@@ -482,6 +487,7 @@ export const LANDING_COPY = {
       successTitle: 'Registration successful!',
       successBody:
         'Thank you for your interest in UKnow! Our team will contact you within 24 business hours. Check your email for free AI materials from M.Sc. Ngo Huu Thong.',
+      embedSuccessBody: 'Thank you! Our team will contact you soon.',
       placeholders: {
         lastName: 'Nguyen',
         firstName: 'A',

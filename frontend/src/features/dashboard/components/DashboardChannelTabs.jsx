@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
 import DashboardInsightBlock from './DashboardInsightBlock';
+import DashboardRechartsLegend from './DashboardRechartsLegend';
 
 const CHANNEL_OPTIONS = [
   { id: 'all', label: 'Tất cả', color: 'gray' },
@@ -362,11 +363,7 @@ const DashboardChannelTabs = ({
                 tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v}
               />
               <Tooltip content={<ChannelTooltip activeChannel={activeChannel} isMonthlyView={isMonthlyView} />} />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                wrapperStyle={{ fontSize: '12px', paddingTop: '12px', color: '#64748b' }}
-              />
+              <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
               {chartConfig.map((line) => (
                 <Line
                   key={line.key}
