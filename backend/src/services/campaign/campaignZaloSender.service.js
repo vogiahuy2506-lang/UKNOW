@@ -10,6 +10,33 @@ import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
 import trackingShortLinkService from '../tracking/trackingShortLink.service.js';
+import { getZaloHttpPolyfillOption } from '../../utils/zaloUndiciFetch.util.js';
+
+/**
+ * Ánh xạ mảng với giới hạn đồng thời — tránh bắn hàng trăm request Zalo cùng lúc khi enrich tên nhóm.
+ *
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T, index: number) => Promise<R>} mapper
+ * @returns {Promise<R[]>}
+ */
+async function mapWithConcurrency(items, limit, mapper) {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const results = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await mapper(items[i], i);
+    }
+  };
+  const poolSize = Math.min(safeLimit, Math.max(0, items.length));
+  if (poolSize === 0) return results;
+  await Promise.all(Array.from({ length: poolSize }, () => worker()));
+  return results;
+}
 
 class CampaignZaloSenderService {
   constructor() {
@@ -701,7 +728,7 @@ class CampaignZaloSenderService {
   }
 
   /**
-   * Fill missing group names with extra API lookups.
+   * Bổ sung tên nhóm còn thiếu bằng gọi API (có giới hạn đồng thời qua `ZALO_GROUP_ENRICH_CONCURRENCY`).
    *
    * @param {any} api
    * @param {Array<{groupId: string, groupName: string, version: string}>} groups
@@ -716,8 +743,15 @@ class CampaignZaloSenderService {
 
     if (missingIds.length === 0) return normalizedGroups;
 
-    const nameEntries = await Promise.all(
-      missingIds.map(async (groupId) => [groupId, await this.resolveGroupNameByApi(api, groupId)])
+    const rawConc = Number.parseInt(process.env.ZALO_GROUP_ENRICH_CONCURRENCY || '4', 10);
+    const enrichConcurrency = Number.isFinite(rawConc) && rawConc > 0
+      ? Math.min(50, Math.floor(rawConc))
+      : 4;
+
+    const nameEntries = await mapWithConcurrency(
+      missingIds,
+      enrichConcurrency,
+      async (groupId) => [groupId, await this.resolveGroupNameByApi(api, groupId)]
     );
     const nameMap = new Map(nameEntries.filter((entry) => String(entry[1] || '').trim()));
 
@@ -1230,6 +1264,7 @@ class CampaignZaloSenderService {
         selfListen: false,
         checkUpdate: true,
         logging: false,
+        ...getZaloHttpPolyfillOption(),
       });
 
       try {

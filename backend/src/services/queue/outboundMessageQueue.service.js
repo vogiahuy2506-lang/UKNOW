@@ -76,6 +76,31 @@ class OutboundMessageQueueService {
   }
 
   /**
+   * Tùy chọn client ioredis dùng chung cho BullMQ (queue / events / worker).
+   *
+   * Luồng hoạt động:
+   * 1. Đọc `BULLMQ_REDIS_CONNECT_TIMEOUT_MS` (fallback `REDIS_CONNECT_TIMEOUT_MS`), mặc định 60s.
+   * 2. Gắn `connectTimeout` để tránh `ETIMEDOUT` sớm khi Redis xa hoặc mạng chậm (mặc định ioredis ~10s).
+   * 3. Giữ `maxRetriesPerRequest: null` theo yêu cầu BullMQ.
+   *
+   * @returns {import('ioredis').RedisOptions}
+   */
+  buildRedisClientOptions() {
+    const rawTimeout = String(
+      process.env.BULLMQ_REDIS_CONNECT_TIMEOUT_MS
+      || process.env.REDIS_CONNECT_TIMEOUT_MS
+      || '60000'
+    ).trim();
+    const parsed = Number.parseInt(rawTimeout, 10);
+    const connectTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 60000;
+    return {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: true,
+      connectTimeout,
+    };
+  }
+
+  /**
    * Khởi tạo kết nối Redis/Queue/QueueEvents nếu chưa có.
    *
    * @returns {Promise<void>}
@@ -85,10 +110,7 @@ class OutboundMessageQueueService {
     if (this.queue && this.queueEvents) return;
 
     const redisConfig = this.buildRedisConfig();
-    this.connection = new IORedis(redisConfig, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-    });
+    this.connection = new IORedis(redisConfig, this.buildRedisClientOptions());
     this.queue = new Queue(this.queueName, { connection: this.connection });
     this.queueEvents = new QueueEvents(this.queueName, { connection: this.connection });
     await this.queueEvents.waitUntilReady();
@@ -236,7 +258,11 @@ class OutboundMessageQueueService {
       console.info('[BullMQ] Worker đã khởi động thành công');
       return true;
     } catch (error) {
-      console.error(`[BullMQ] Không thể khởi động worker, fallback inline: ${error?.message || error}`);
+      // ETIMEDOUT ở đây là timeout TCP tới Redis (ioredis), không phải API Zalo — job Zalo qua queue sẽ fallback inline.
+      const redisTimeoutHint = String(error?.code || '').toUpperCase() === 'ETIMEDOUT'
+        ? ' Gợi ý: kiểm tra BULLMQ_REDIS_URL/REDIS_URL, firewall/VPC; có thể tăng BULLMQ_REDIS_CONNECT_TIMEOUT_MS.'
+        : '';
+      console.error(`[BullMQ] Không thể khởi động worker, fallback inline: ${error?.message || error}.${redisTimeoutHint}`);
       this.runtimeDisabled = true;
       await this.close();
       return false;

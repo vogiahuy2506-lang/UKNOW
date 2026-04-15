@@ -12,6 +12,7 @@ import zaloAccountSessionService from '../services/zalo/zaloAccountSession.servi
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
 
 class ZaloSettingsController {
   constructor() {
@@ -298,6 +299,7 @@ class ZaloSettingsController {
         selfListen: false,
         checkUpdate: true,
         logging: false,
+        ...getZaloHttpPolyfillOption(),
       });
 
       try {
@@ -1099,6 +1101,7 @@ class ZaloSettingsController {
       selfListen: false,
       checkUpdate: true,
       logging: false,
+      ...getZaloHttpPolyfillOption(),
     });
     const ctx = createContext(zalo.options.apiType, zalo.options.apiVersion);
     Object.assign(ctx.options, zalo.options);
@@ -1155,6 +1158,7 @@ class ZaloSettingsController {
             selfListen: false,
             checkUpdate: true,
             logging: false,
+            ...getZaloHttpPolyfillOption(),
           });
           api = await zalo.login(credentials);
         } else {

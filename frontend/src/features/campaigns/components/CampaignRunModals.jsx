@@ -8,6 +8,22 @@ import {
   formatCampaignDateTime,
   getTodayDateInHanoiForInput,
 } from '../utils/campaignDateTime.helpers';
+import {
+  filterSchedulesByCampaignId,
+  formatScheduleRunClockFromCron,
+  getSchedulePatternSummaryVi,
+} from '../utils/campaignRunSchedule.helpers';
+
+/**
+ * Sinh nhãn giờ chạy hiển thị trên modal (đọc 2 trường đầu của cron 5 phần).
+ *
+ * @param {string} cronExpression biểu thức cron
+ * @returns {string} dạng «Lúc HH:mm» hoặc «—» nếu không parse được
+ */
+const scheduleClockUiLabel = (cronExpression) => {
+  const clock = formatScheduleRunClockFromCron(cronExpression);
+  return clock ? `Lúc ${clock}` : '—';
+};
 
 const CampaignRunModals = ({
   weeklyDayOptions,
@@ -51,6 +67,9 @@ const CampaignRunModals = ({
   scheduleRuns,
   handleToggleSchedule,
   isReadonlyOnceSchedule,
+  campaignSchedulesModalCampaign = null,
+  closeCampaignSchedulesSummaryModal,
+  allSchedules = [],
 }) => (
   <>
     {showRunConfirmModal && (
@@ -431,6 +450,12 @@ const CampaignRunModals = ({
                   </p>
                 </div>
                 <div>
+                  <p className="text-sm text-gray-500">Giờ chạy</p>
+                  <p className="font-medium text-gray-900">
+                    {scheduleClockUiLabel(selectedSchedule.cronExpression)}
+                  </p>
+                </div>
+                <div>
                   <p className="text-sm text-gray-500">Biểu thức Cron</p>
                   <code className="text-xs bg-white px-2 py-1 rounded border">{selectedSchedule.cronExpression}</code>
                 </div>
@@ -534,6 +559,77 @@ const CampaignRunModals = ({
                   : 'Bật lịch'}
             </button>
             <button onClick={closeScheduleDetailModal} className="btn btn-secondary">
+              Đóng
+            </button>
+          </div>
+        </div>
+      </FullScreenOverlay>
+    )}
+
+    {campaignSchedulesModalCampaign && (
+      <FullScreenOverlay isOpen={Boolean(campaignSchedulesModalCampaign)}>
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Lịch chạy đã thiết lập</h3>
+              <p className="text-sm text-gray-600 mt-0.5">
+                {campaignSchedulesModalCampaign.campaignName}
+                {campaignSchedulesModalCampaign.id != null && (
+                  <span className="text-gray-400"> · ID {String(campaignSchedulesModalCampaign.id)}</span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeCampaignSchedulesSummaryModal}
+              className="p-1 hover:bg-gray-100 rounded-lg"
+              aria-label="Đóng"
+            >
+              <HiOutlineX className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {(() => {
+              const list = filterSchedulesByCampaignId(allSchedules, campaignSchedulesModalCampaign.id);
+              if (list.length === 0) {
+                return (
+                  <p className="text-sm text-gray-500 text-center py-6">
+                    Hiện không có lịch chạy nào gắn với chiến dịch này.
+                  </p>
+                );
+              }
+              return (
+                <ul className="space-y-3">
+                  {list.map((sch) => {
+                    const pattern = getSchedulePatternSummaryVi(sch, getWeeklyDayFromCron, getWeeklyDayLabel);
+                    const runTimesRaw = Number(sch?.runCount);
+                    const runTimes = Number.isFinite(runTimesRaw) && runTimesRaw >= 0 ? runTimesRaw : 0;
+                    return (
+                      <li
+                        key={sch.id}
+                        className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-gray-900 text-sm">{sch.scheduleName}</p>
+                          <span className={`badge shrink-0 ${getScheduleStatusClassName(sch)}`}>
+                            {getScheduleStatusLabel(sch)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{pattern}</p>
+                        <p className="text-sm text-gray-800">
+                          <span className="font-medium">Đã chạy:</span> {runTimes} lần
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>
+
+          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
+            <button type="button" onClick={closeCampaignSchedulesSummaryModal} className="btn btn-secondary">
               Đóng
             </button>
           </div>

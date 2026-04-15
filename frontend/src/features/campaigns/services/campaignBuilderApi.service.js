@@ -7,6 +7,9 @@ import api from '../../../services/api';
 const getInterestedCustomersEndpoint = (dataSource = 'database') =>
   dataSource === 'api' ? '/customers/interested-courses-from-api' : '/customers/interested-courses';
 
+/** Zalo getAllGroups + enrich tên nhóm có thể lâu — tránh cắt sớm so với timeout axios mặc định 10s. */
+const PREVIEW_ZALO_LIST_TIMEOUT_MS = 180000;
+
 const campaignBuilderApiService = {
   getEmailTemplateById(templateId, options = {}) {
     return api.get(`/email-templates/${templateId}`, options);
@@ -111,11 +114,19 @@ const campaignBuilderApiService = {
   },
 
   getPreviewZaloFriends(params = {}, options = {}) {
-    return api.get('/zalo/preview/friends', { params, ...options });
+    return api.get('/zalo/preview/friends', {
+      params,
+      timeout: PREVIEW_ZALO_LIST_TIMEOUT_MS,
+      ...options,
+    });
   },
 
   getPreviewZaloGroups(params = {}, options = {}) {
-    return api.get('/zalo/preview/groups', { params, ...options });
+    return api.get('/zalo/preview/groups', {
+      params,
+      timeout: PREVIEW_ZALO_LIST_TIMEOUT_MS,
+      ...options,
+    });
   },
 };
 

@@ -9,6 +9,7 @@ import {
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
+import { filterSchedulesByCampaignId } from '../utils/campaignRunSchedule.helpers';
 
 const CampaignRunMainTabs = ({
   activeMainTab,
@@ -39,6 +40,7 @@ const CampaignRunMainTabs = ({
   getScheduleStatusLabel,
   isReadonlyOnceSchedule,
   onOpenScheduleDetailModal,
+  onOpenCampaignSchedulesSummaryModal,
   onDeleteSchedule,
   onToggleSchedule,
   activatingCampaignIds,
@@ -142,6 +144,8 @@ const CampaignRunMainTabs = ({
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredActiveCampaigns.map((campaign) => {
                   const campaignKey = getCampaignKey(campaign.id);
+                  const campaignSchedules = filterSchedulesByCampaignId(schedules, campaign.id);
+                  const scheduleCount = campaignSchedules.length;
                   const isRunning = isCampaignRunningById(campaign.id);
                   const runningRun = runningRunByCampaign[campaignKey] || null;
                   const isContinuousMode = Boolean(runningRun?.runMetadata?.continuousMode);
@@ -164,6 +168,25 @@ const CampaignRunMainTabs = ({
                             {campaign.description && (
                               <div className="text-sm text-gray-500">{campaign.description}</div>
                             )}
+                            {/* Nhãn trạng thái lịch chạy + mở popup xem chi tiết các lịch */}
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              {scheduleCount === 0 ? (
+                                <span className="text-xs text-gray-500">Chưa có lịch chạy thiết lập</span>
+                              ) : (
+                                <>
+                                  <span className="badge badge-info text-xs font-normal">
+                                    Đã có {scheduleCount} lịch chạy thiết lập
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenCampaignSchedulesSummaryModal(campaign)}
+                                    className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                                  >
+                                    Xem lịch đã thiết lập
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             {isRunning && (
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="badge badge-warning flex items-center gap-1">
