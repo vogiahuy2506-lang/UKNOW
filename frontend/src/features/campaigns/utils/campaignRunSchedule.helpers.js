@@ -188,3 +188,76 @@ export const getScheduleStatusClassName = (schedule) => {
   if (isCompletedOnceSchedule(schedule)) return 'badge-info';
   return schedule?.enabled ? 'badge-success' : 'badge-gray';
 };
+
+/**
+ * Lọc danh sách lịch chạy theo id chiến dịch (so khớp kiểu số).
+ *
+ * Luồng hoạt động:
+ * 1. Chuẩn hóa `campaignId` về số nguyên.
+ * 2. Giữ các bản ghi có `campaignId` trùng khớp.
+ *
+ * @param {Array<object>} schedules danh sách lịch từ API
+ * @param {number|string} campaignId id chiến dịch
+ * @returns {Array<object>}
+ */
+export const filterSchedulesByCampaignId = (schedules = [], campaignId) => {
+  const target = Number(campaignId);
+  if (!Number.isFinite(target)) return [];
+  return schedules.filter((item) => Number(item?.campaignId) === target);
+};
+
+/**
+ * Đọc phút và giờ từ cron 5 trường do backend tạo (phút, giờ, ngày-tháng, ...).
+ * Chỉ trả kết quả khi hai trường đầu là số cụ thể (bỏ qua wildcard như `*`).
+ *
+ * @param {string} cronExpression chuỗi cron
+ * @returns {{ minute: number, hour: number }|null}
+ */
+export const parseCronMinuteHourFiveField = (cronExpression = '') => {
+  const parts = String(cronExpression).trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  const minute = Number.parseInt(parts[0], 10);
+  const hour = Number.parseInt(parts[1], 10);
+  if (!Number.isFinite(minute) || !Number.isFinite(hour)) return null;
+  if (minute < 0 || minute > 59 || hour < 0 || hour > 23) return null;
+  return { minute, hour };
+};
+
+/**
+ * Giờ chạy dạng 24h (VD 09:05) lấy từ cron; null nếu không đọc được.
+ *
+ * @param {string} cronExpression chuỗi cron
+ * @returns {string|null}
+ */
+export const formatScheduleRunClockFromCron = (cronExpression) => {
+  const parsed = parseCronMinuteHourFiveField(cronExpression);
+  if (!parsed) return null;
+  const hh = String(parsed.hour).padStart(2, '0');
+  const mm = String(parsed.minute).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
+
+/**
+ * Mô tả mẫu lịch ngắn gọn cho người dùng (ưu tiên weekly kèm thứ trong tuần), có kèm giờ chạy nếu đọc được từ cron.
+ *
+ * @param {object} schedule bản ghi lịch
+ * @param {(cron: string) => string} getWeeklyDayFromCron hàm parse thứ từ cron
+ * @param {(day: string) => string} getWeeklyDayLabel hàm map thứ → nhãn tiếng Việt
+ * @returns {string}
+ */
+export const getSchedulePatternSummaryVi = (schedule, getWeeklyDayFromCron, getWeeklyDayLabel) => {
+  const type = String(schedule?.scheduleType || '').trim();
+  const cron = String(schedule?.cronExpression || '');
+  let base;
+  if (type === 'weekly') {
+    const dayValue = getWeeklyDayFromCron(cron);
+    base = `Hàng tuần vào ${getWeeklyDayLabel(dayValue)}`;
+  } else {
+    base = getScheduleTypeLabel(type);
+  }
+  const clock = formatScheduleRunClockFromCron(cron);
+  if (clock) {
+    return `${base} — lúc ${clock}`;
+  }
+  return base;
+};

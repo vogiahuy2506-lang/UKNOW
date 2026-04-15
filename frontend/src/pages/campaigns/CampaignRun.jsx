@@ -104,6 +104,8 @@ const CampaignRun = () => {
   const [isLoadingContinuousResumeOptions, setIsLoadingContinuousResumeOptions] = useState(false);
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [stopRunConfirmTarget, setStopRunConfirmTarget] = useState(null);
+  /** Chiến dịch đang xem popup «tất cả lịch đã thiết lập» (null = đóng). */
+  const [campaignSchedulesModalCampaign, setCampaignSchedulesModalCampaign] = useState(null);
   const [selectedCampaignForLogs, setSelectedCampaignForLogs] = useState(null);
   const [selectedExecutionLogId, setSelectedExecutionLogId] = useState(null);
   const [flowOrderByNodeId, setFlowOrderByNodeId] = useState(new Map());
@@ -273,6 +275,26 @@ const CampaignRun = () => {
     setShowScheduleDetailModal(false);
     setSelectedSchedule(null);
     setScheduleRuns([]);
+  };
+
+  /**
+   * Mở popup liệt kê mọi lịch chạy của một chiến dịch (theo dữ liệu đã tải ở trang).
+   *
+   * @param {object} campaign bản ghi campaign
+   * @returns {void}
+   */
+  const openCampaignSchedulesSummaryModal = (campaign) => {
+    if (!campaign?.id) return;
+    setCampaignSchedulesModalCampaign(campaign);
+  };
+
+  /**
+   * Đóng popup tổng hợp lịch theo chiến dịch.
+   *
+   * @returns {void}
+   */
+  const closeCampaignSchedulesSummaryModal = () => {
+    setCampaignSchedulesModalCampaign(null);
   };
 
   /**
@@ -897,6 +919,7 @@ const CampaignRun = () => {
         getScheduleStatusLabel={getScheduleStatusLabel}
         isReadonlyOnceSchedule={isReadonlyOnceSchedule}
         onOpenScheduleDetailModal={openScheduleDetailModal}
+        onOpenCampaignSchedulesSummaryModal={openCampaignSchedulesSummaryModal}
         onDeleteSchedule={handleDeleteSchedule}
         onToggleSchedule={handleToggleSchedule}
         activatingCampaignIds={activatingCampaignIds}
@@ -961,6 +984,9 @@ const CampaignRun = () => {
         scheduleRuns={scheduleRuns}
         handleToggleSchedule={handleToggleSchedule}
         isReadonlyOnceSchedule={isReadonlyOnceSchedule}
+        campaignSchedulesModalCampaign={campaignSchedulesModalCampaign}
+        closeCampaignSchedulesSummaryModal={closeCampaignSchedulesSummaryModal}
+        allSchedules={schedules}
       />
     </div>
   );

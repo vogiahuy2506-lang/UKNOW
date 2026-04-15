@@ -1,4 +1,12 @@
-const ZALO_TIMEOUT_BASE_DELAY_MS = 10_000;
+/**
+ * Trễ cơ sở giữa các lần thử lại khi gặp lỗi timeout mạng (không phải timeout HTTP từng request).
+ * Mặc định 10s; có thể tăng qua `ZALO_TIMEOUT_RETRY_BASE_DELAY_MS` trong `.env`.
+ */
+const ZALO_TIMEOUT_BASE_DELAY_MS = (() => {
+  const raw = Number.parseInt(process.env.ZALO_TIMEOUT_RETRY_BASE_DELAY_MS || '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 10_000;
+})();
+
 const ZALO_TIMEOUT_MAX_ATTEMPTS = 4;
 const RETRYABLE_TIMEOUT_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
@@ -56,7 +64,7 @@ export function isNetworkTimeoutError(error) {
  * @param {() => Promise<T>} input.operation callback cần chạy
  * @param {string} [input.operationName] tên thao tác để log dễ đọc
  * @param {number} [input.maxAttempts] tổng số lần thử (mặc định 4)
- * @param {number} [input.baseDelayMs] delay cơ sở cho lần retry đầu (mặc định 10s)
+ * @param {number} [input.baseDelayMs] delay cơ sở cho lần retry đầu (mặc định từ env hoặc 10s)
  * @param {(ctx: { attempt: number, maxAttempts: number, delayMs: number, error: any, operationName: string }) => Promise<void>|void} [input.onRetry]
  * @returns {Promise<T>}
  */
