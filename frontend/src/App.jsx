@@ -35,6 +35,7 @@ import AboutPage from './pages/public/AboutPage';
 import LpRendererPage from './pages/public/LpRendererPage';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import LearningPage from './pages/learning/LearningPage';
+import CheckoutPage from './pages/checkout/CheckoutPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -77,7 +78,7 @@ const AdminRoute = ({ children }) => {
   const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
 
   if (!isAdmin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -108,7 +109,7 @@ const PublicRoute = ({ children }) => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -132,101 +133,104 @@ function App() {
           }}
         />
         <Routes>
-        {/* Auth Routes */}
-        <Route path="/login" element={
-          <PublicRoute>
-            <AuthLayout>
-              <Login />
-            </AuthLayout>
-          </PublicRoute>
-        } />
-        <Route path="/register" element={
-          <PublicRoute>
-            <AuthLayout>
-              <Register />
-            </AuthLayout>
-          </PublicRoute>
-        } />
-        <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
-        <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
-        {/* Chuyển hướng URL cũ (sai chính tả) sang đường dẫn chuẩn — tránh 404 và không rơi catch-all */}
-        <Route path="/private-policy" element={<Navigate to="/privacy-policy" replace />} />
-        <Route path="/private-policy/" element={<Navigate to="/privacy-policy" replace />} />
-        <Route path="/l" element={<UknowLandingPage />} />
-        <Route path="/l/" element={<UknowLandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/about/" element={<AboutPage />} />
-        <Route path="/lp/:slug" element={<LpRendererPage />} />
-        <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
-        <Route path="/learning" element={<LearningPage />} />
+          {/* Public Landing Page - URL gốc sẽ hiện trang này */}
+          <Route path="/" element={<UknowLandingPage />} />
 
-        {/* Protected Routes */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Dashboard />} />
-          
-          {/* Campaigns */}
-          <Route path="campaigns" element={<Campaigns />} />
-          <Route path="campaigns/:id" element={<CampaignDetail />} />
-          <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
-          <Route path="campaigns/new" element={<CampaignBuilder />} />
-          <Route path="campaign-run" element={<CampaignRun />} />
-          
-          {/* Customers */}
-          <Route path="customers" element={<Customers />} />
-          <Route path="customers/:campaignId" element={<CampaignCustomers />} />
-          <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
-          
-          {/* Settings */}
-          <Route path="settings/email" element={<EmailSettings />} />
-          <Route path="settings/zalo" element={<ZaloSettings />} />
-          <Route
-            path="settings/employees"
-            element={(
-              <AdminRoute>
-                <EmployeeManagement />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-featured-courses"
-            element={(
-              <AdminRoute>
-                <LandingFeaturedCoursesPage />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-testimonials"
-            element={(
-              <AdminRoute>
-                <LandingTestimonialsPage />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-pages"
-            element={<LandingPagesAdminPage />}
-          />
-          <Route path="settings/email-templates" element={<EmailTemplates />} />
-          <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
-          
-          {/* Courses */}
-          <Route path="courses" element={<Courses />} />
+          {/* Auth Routes */}
+          <Route path="/login" element={
+            <PublicRoute>
+              <AuthLayout>
+                <Login />
+              </AuthLayout>
+            </PublicRoute>
+          } />
+          <Route path="/register" element={
+            <PublicRoute>
+              <AuthLayout>
+                <Register />
+              </AuthLayout>
+            </PublicRoute>
+          } />
 
-          {/* Orders */}
-          <Route path="orders" element={<Orders />} />
+          {/* Các trang Public khác */}
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/about/" element={<AboutPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
+          <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
 
-          {/* Lead landing (form /l) */}
-          <Route path="landing-leads" element={<LandingLeadsListPage />} />
-        </Route>
+          {/* Điều hướng các URL cũ hoặc sai chính tả */}
+          <Route path="/l" element={<Navigate to="/" replace />} />
+          <Route path="/private-policy" element={<Navigate to="/privacy-policy" replace />} />
 
-        {/* 404 */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Các route hỗ trợ khác */}
+          <Route path="/lp/:slug" element={<LpRendererPage />} />
+          <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
+          <Route path="/learning" element={<LearningPage />} />
+
+          {/* Protected Routes - Chuyển sang prefix /dashboard */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+
+            {/* Campaigns */}
+            <Route path="campaigns" element={<Campaigns />} />
+            <Route path="campaigns/:id" element={<CampaignDetail />} />
+            <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
+            <Route path="campaigns/new" element={<CampaignBuilder />} />
+            <Route path="campaign-run" element={<CampaignRun />} />
+
+            {/* Customers */}
+            <Route path="customers" element={<Customers />} />
+            <Route path="customers/:campaignId" element={<CampaignCustomers />} />
+            <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
+
+            {/* Settings */}
+            <Route path="settings/email" element={<EmailSettings />} />
+            <Route path="settings/zalo" element={<ZaloSettings />} />
+            <Route
+              path="settings/employees"
+              element={(
+                <AdminRoute>
+                  <EmployeeManagement />
+                </AdminRoute>
+              )}
+            />
+            <Route
+              path="settings/landing-featured-courses"
+              element={(
+                <AdminRoute>
+                  <LandingFeaturedCoursesPage />
+                </AdminRoute>
+              )}
+            />
+            <Route
+              path="settings/landing-testimonials"
+              element={(
+                <AdminRoute>
+                  <LandingTestimonialsPage />
+                </AdminRoute>
+              )}
+            />
+            <Route
+              path="settings/landing-pages"
+              element={<LandingPagesAdminPage />}
+            />
+            <Route path="settings/email-templates" element={<EmailTemplates />} />
+            <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
+
+            {/* Courses & Orders */}
+            <Route path="courses" element={<Courses />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="landing-leads" element={<LandingLeadsListPage />} />
+          </Route>
+
+          {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Router>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>

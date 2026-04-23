@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FaEnvelope, FaComments, FaUsers, FaChartBar, FaBolt, FaShieldAlt, FaRocket, FaHandshake, FaHeadset, FaCheckCircle, FaArrowRight, FaPlay, FaStar, FaQuoteLeft, FaChevronLeft, FaChevronRight, FaCrown, FaGem } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../stores/authStore';
 
 const features = [
   {
@@ -167,9 +169,8 @@ const TestimonialSlider = () => {
           <button
             key={index}
             onClick={() => setCurrent(index)}
-            className={`w-3 h-3 rounded-full transition-all ${
-              current === index ? 'bg-orange-500 w-8' : 'bg-gray-300'
-            }`}
+            className={`w-3 h-3 rounded-full transition-all ${current === index ? 'bg-orange-500 w-8' : 'bg-gray-300'
+              }`}
           />
         ))}
       </div>
@@ -214,6 +215,31 @@ const AnimatedSection = ({ children, className = '', delay = 0 }) => {
 };
 
 export default function AboutPage() {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
+
+  const handlePlanClick = (planData) => {
+    if (planData.price === 'Liên hệ') {
+      window.open('https://zalo.me/sdt', '_blank'); // Hoặc link contact
+      return;
+    }
+
+    if (!isAuthenticated) {
+      // Nếu chưa đăng nhập, đẩy sang trang login
+      navigate('/login');
+    } else {
+      // Nếu đã đăng nhập, đẩy sang trang checkout kèm theo thông tin gói 
+      navigate('/checkout', {
+        state: {
+          plan: {
+            name: planData.name,
+            price: planData.price
+          }
+        }
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
       <style>{`
@@ -308,9 +334,9 @@ export default function AboutPage() {
           </h1>
 
           <p className="animate-slide-up-delay-2 text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-12">
-            UKNOW Campaign giúp bạn quản lý chiến dịch email và Zalo marketing 
-            một cách <span className="text-orange-500 font-semibold">chuyên nghiệp</span>, 
-            tiết kiệm <span className="text-orange-500 font-semibold">70% thời gian</span> 
+            UKNOW Campaign giúp bạn quản lý chiến dịch email và Zalo marketing
+            một cách <span className="text-orange-500 font-semibold">chuyên nghiệp</span>,
+            tiết kiệm <span className="text-orange-500 font-semibold">70% thời gian</span>
             và tăng <span className="text-orange-500 font-semibold">300% hiệu quả</span>.
           </p>
 
@@ -368,7 +394,7 @@ export default function AboutPage() {
       {/* Features Section */}
       <section id="features" className="py-32 bg-gray-50 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-500" />
-        
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-20">
             <span className="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full font-semibold mb-6">
@@ -450,12 +476,12 @@ export default function AboutPage() {
                       <span className="text-gray-400">Zalo Marketing</span>
                     </li>
                   </ul>
-                  <Link
-                    to="/register"
+                  <button
+                    onClick={() => handlePlanClick({ name: 'Cơ bản', price: '499K' })}
                     className="block w-full py-4 text-center bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                   >
                     Bắt đầu miễn phí
-                  </Link>
+                  </button>
                 </div>
               </div>
             </AnimatedSection>
@@ -502,12 +528,12 @@ export default function AboutPage() {
                       <span className="text-white">Automation workflows</span>
                     </li>
                   </ul>
-                  <Link
-                    to="/register"
+                  <button
+                    onClick={() => handlePlanClick({ name: 'Chuyên nghiệp', price: '999K' })}
                     className="block w-full py-4 text-center bg-white text-orange-500 rounded-xl font-bold hover:bg-orange-50 transition-colors"
                   >
                     Bắt đầu ngay
-                  </Link>
+                  </button>
                 </div>
               </div>
             </AnimatedSection>
@@ -557,7 +583,7 @@ export default function AboutPage() {
                     </li>
                   </ul>
                   <Link
-                    to="/register"
+                    to="/login"
                     className="block w-full py-4 text-center bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity"
                   >
                     Liên hệ tư vấn
@@ -578,7 +604,7 @@ export default function AboutPage() {
       {/* How It Works Section */}
       <section id="how-it-works" className="py-32 bg-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-orange-50 to-white" />
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-20">
             <span className="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full font-semibold mb-6">
@@ -594,7 +620,7 @@ export default function AboutPage() {
 
           <div className="relative">
             <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-orange-200 via-orange-400 to-orange-200 -translate-y-1/2 z-0" />
-            
+
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative z-10">
               {steps.map((step, index) => (
                 <AnimatedSection key={index} delay={index * 150}>
@@ -618,7 +644,7 @@ export default function AboutPage() {
         <div className="absolute inset-0 opacity-20">
           <div className="absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,.1) 35px, rgba(255,255,255,.1) 70px)' }} />
         </div>
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">
@@ -678,7 +704,7 @@ export default function AboutPage() {
       {/* Testimonials Section */}
       <section id="testimonials" className="py-32 bg-gray-50 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-500" />
-        
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-16">
             <span className="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full font-semibold mb-6">
@@ -699,7 +725,7 @@ export default function AboutPage() {
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-500/20 rounded-full blur-3xl" />
         </div>
-        
+
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <AnimatedSection>
             <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-orange-500/30">
