@@ -1,0 +1,57 @@
+import { Pool } from 'pg';
+
+/**
+ * Một process Node chỉ nên dùng một Pool (singleton) — mỗi slot trong `max` là một kết nối TCP tới Postgres.
+ * Trên `pg_stat_activity` nhiều session `idle` thường là **bình thường**: pool giữ kết nối để tái sử dụng,
+ * không phải lỗi nếu số lượng ≤ `DB_POOL_MAX` và không tăng vô hạn theo thời gian.
+ * Nếu RAM Postgres cao: hạ `DB_POOL_MAX` cho vừa số worker HTTP + BullMQ thực tế; tránh nhiều replica backend mỗi replica một pool.
+ */
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'uknow_campaign',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'password',
+  // Hiển thị trong pg_stat_activity.application_name (DBeaver/DataGrip) để phân biệt backend vs IDE.
+  application_name: String(process.env.DB_APPLICATION_NAME || 'uknow-campaign-backend').trim() || 'uknow-campaign-backend',
+  // Kích thước pool cấu hình qua env; mặc định 20 kết nối tối đa mỗi process.
+  max: Number.parseInt(process.env.DB_POOL_MAX, 10) || 20,
+  // Sau khoảng thời gian này client nằm im trong pool sẽ bị đóng (giảm số backend `idle` lâu dài).
+  idleTimeoutMillis: 30000,
+  // Tăng timeout chờ kết nối từ 2s → 10s để chịu được tải cao khi nhiều campaign chạy đồng thời.
+  connectionTimeoutMillis: 10000,
+  // Timeout query tối đa 30s để phát hiện query bị kẹt sớm.
+  // Lưu ý: transaction lưu khách hàng batch (`saveCustomersFromCampaignDirect`) tự `SET LOCAL statement_timeout`
+  // theo biến `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` để không bị cắt bởi giới hạn 30s này.
+  statement_timeout: 30000,
+});
+
+let hasLoggedFirstPoolConnection = false;
+
+pool.on('connect', async (client) => {
+  try {
+    await client.query("SET TIME ZONE 'Asia/Ho_Chi_Minh'");
+  } catch (error) {
+    console.error('Failed to set DB timezone:', error.message);
+  }
+  // Mỗi lần pool mở socket mới sẽ gọi handler này — không log mặc định để tránh spam log khi tải cao.
+  if (process.env.DB_DEBUG_LOG_CONNECTIONS === '1') {
+    console.log('[PostgreSQL] Mở kết nối mới trong pool');
+  } else if (!hasLoggedFirstPoolConnection) {
+    hasLoggedFirstPoolConnection = true;
+    console.log(
+      '[PostgreSQL] Pool đã kết nối (các session tiếp theo tái sử dụng pool; bật DB_DEBUG_LOG_CONNECTIONS=1 để log mỗi socket).'
+    );
+  }
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
+export default {
+  query: (text, params) => pool.query(text, params),
+  getClient: () => pool.connect(),
+  pool
+};

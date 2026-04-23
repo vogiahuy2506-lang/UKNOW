@@ -1,0 +1,30 @@
+services:
+  backend:
+    container_name: uknow-campaign-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Publish ra ngoài để máy ngoài VPS gọi được API.
+      - "0.0.0.0:${BACKEND_PORT:-5001}:5001"
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks:
+      - uknow_network
+    volumes:
+      - ./.env:/app/.env
+      - ./uploads:/app/uploads
+      - ./temp_uploads:/app/temp_uploads
+    # Giới hạn log: mỗi file tối đa 10MB, giữ tối đa 5 file xoay vòng (~50MB tổng)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  uknow_network:
+    # Network dùng chung cho các stack tách riêng (backend/frontend).
+    external: true
+    name: uknow_network
