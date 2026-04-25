@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 // Layouts
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
+import LandingLayout from './layouts/LandingLayout';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -36,6 +37,7 @@ import LpRendererPage from './pages/public/LpRendererPage';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
+import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -152,12 +154,15 @@ function App() {
             </PublicRoute>
           } />
 
-          {/* Các trang Public khác */}
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/about/" element={<AboutPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
-          <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+          {/* Landing Routes */}
+          <Route element={<LandingLayout />}>
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/about/" element={<AboutPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/payment-success" element={<PaymentSuccessPage />} />
+            <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
+            <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+          </Route>
 
           {/* Điều hướng các URL cũ hoặc sai chính tả */}
           <Route path="/l" element={<Navigate to="/" replace />} />

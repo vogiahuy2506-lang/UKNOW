@@ -1,49 +1,110 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { HiArrowLeft, HiOutlineDuplicate, HiLockClosed, HiShieldCheck, HiLightningBolt } from 'react-icons/hi';
-import { FaCrown, FaGem, FaCheckCircle, FaQuestionCircle } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { HiArrowLeft, HiOutlineDuplicate, HiShieldCheck, HiLightningBolt } from 'react-icons/hi';
+import { FaCrown, FaQuestionCircle } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import { useAuthStore } from '../../stores/authStore';
+import QRCode from 'qrcode';
 
 const CheckoutPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const pollingRef = useRef(null);
 
-    const plan = location.state?.plan || {
-        name: 'Chuyên nghiệp',
-        price: '999K',
-        isAnnual: false
-    };
+    const plan = location.state?.plan;
 
-    const orderId = "UKNOW" + Math.floor(100000 + Math.random() * 900000);
-    const accountNo = "1234567890";
-    const accountName = "CONG TY CONG NGHE UKNOW";
+    const [qrCode, setQrCode] = useState(null);
+    const [orderCode, setOrderCode] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const user = useAuthStore((state) => state.user);
+    const isAuthLoading = useAuthStore((state) => state.isLoading);
+    const [qrImageUrl, setQrImageUrl] = useState(null);
 
     const handleCopy = (text) => {
         navigator.clipboard.writeText(text);
         toast.success('Đã sao chép nội dung!');
     };
 
-    const qrUrl = `https://img.vietqr.io/image/mbbank-${accountNo}-compact2.png?amount=${plan.price.replace(/[^0-9]/g, '')}000&addInfo=${orderId}&accountName=${accountName}`;
+    // Tạo payment link khi load trang
+    useEffect(() => {
+        if (!plan) {
+            navigate('/about', { replace: true });
+            return;
+        }
+
+        const createPayment = async () => {
+            try {
+                const userEmail = location.state?.userEmail || user?.email;
+
+                if (!userEmail) {
+                    if (isAuthLoading) {
+                        return;
+                    }
+                    setError('Không tìm thấy email người dùng. Vui lòng đăng nhập lại.');
+                    setLoading(false);
+                    return;
+                }
+
+                const res = await fetch('/api/payments/create-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        planCode: plan.code,
+                        userEmail,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+
+                setQrCode(data.result.qrCode);
+                setOrderCode(data.result.orderCode);
+                const qrString = data.result.qrCode;
+                const qrDataUrl = await QRCode.toDataURL(qrString, { width: 200, margin: 1 });
+                setQrImageUrl(qrDataUrl);
+                setOrderCode(data.result.orderCode);
+                setError(null);
+            } catch (err) {
+                setError('Không thể tạo đơn hàng. Vui lòng thử lại.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        createPayment();
+    }, [plan, user, isAuthLoading]);
+
+    // Polling mỗi 3 giây sau khi có orderCode
+    useEffect(() => {
+        if (!orderCode) return;
+
+        pollingRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/payments/status/${orderCode}`);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    clearInterval(pollingRef.current);
+                    navigate('/payment-success', { state: { orderCode, fromCheckout: true } });
+                } else if (data.status === 'cancelled') {
+                    clearInterval(pollingRef.current);
+                    toast.error('Giao dịch đã bị huỷ');
+                }
+            } catch {
+                // Bỏ qua lỗi mạng tạm thời, tiếp tục polling
+            }
+        }, 3000);
+
+        return () => clearInterval(pollingRef.current);
+    }, [orderCode]);
+
+    if (!plan) return null;
 
     return (
         <div className="min-h-screen bg-[#fafafa] flex flex-col font-sans">
-            <nav className="bg-white border-b border-gray-100 py-4">
-                <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-                    <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30">
-                            <span className="text-white font-black text-xl">U</span>
-                        </div>
-                        <span className="ml-3 text-xl font-bold bg-gradient-to-r from-orange-600 to-red-500 bg-clip-text text-transparent">
-                            UKNOW
-                        </span>
-                    </div>
-                </div>
-            </nav>
-
             <div className="flex-grow pt-10 pb-20">
                 <div className="max-w-6xl mx-auto px-4">
 
-                    {/* Nút quay lại gọn gàng hơn */}
                     <button
                         onClick={() => navigate(-1)}
                         className="inline-flex items-center text-sm font-bold text-gray-400 hover:text-orange-500 mb-8 transition-colors group"
@@ -63,12 +124,10 @@ const CheckoutPage = () => {
                                     <div className="relative z-10">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Gói thành viên</span>
-                                            {plan.name === 'Chuyên nghiệp' && <FaCrown className="text-orange-500 text-xs" />}
+                                            {plan.code === 'pro' && <FaCrown className="text-orange-500 text-xs" />}
                                         </div>
                                         <h3 className="text-2xl font-black text-gray-900">{plan.name}</h3>
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            {plan.isAnnual ? 'Thanh toán theo năm (Tiết kiệm 20%)' : 'Thanh toán theo tháng'}
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Thanh toán theo tháng</p>
                                     </div>
                                     <div className="absolute -right-4 -bottom-4 text-orange-200/30 text-8xl font-black italic">U</div>
                                 </div>
@@ -76,7 +135,7 @@ const CheckoutPage = () => {
                                 <div className="space-y-4 text-sm font-medium">
                                     <div className="flex justify-between text-gray-500">
                                         <span>Phí dịch vụ</span>
-                                        <span>{plan.price}</span>
+                                        <span>{(plan.price / 1000).toFixed(0)}K</span>
                                     </div>
                                     <div className="flex justify-between text-green-600 italic">
                                         <span>Ưu đãi dùng thử 14 ngày</span>
@@ -88,13 +147,12 @@ const CheckoutPage = () => {
                                             <span className="text-[10px] text-gray-400 font-normal">Đã bao gồm thuế VAT</span>
                                         </div>
                                         <span className="text-3xl font-black text-gray-900">
-                                            {plan.price}
+                                            {(plan.price / 1000).toFixed(0)}K
                                         </span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Trust Badges - Giúp giảm trống trải */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white p-4 rounded-2xl border border-gray-100 flex items-center gap-3">
                                     <HiShieldCheck className="text-orange-500 text-2xl shrink-0" />
@@ -121,36 +179,39 @@ const CheckoutPage = () => {
                                     <div className="shrink-0">
                                         <div className="relative group">
                                             <div className="absolute -inset-4 bg-gradient-to-tr from-orange-500/20 to-red-500/20 rounded-[2rem] blur-xl group-hover:blur-2xl transition-all"></div>
-                                            <div className="relative bg-white p-3 rounded-[1.5rem] border border-gray-100 shadow-sm">
-                                                <img src={qrUrl} alt="QR" className="w-48 h-48 rounded-lg" />
+                                            <div className="relative bg-white p-3 rounded-[1.5rem] border border-gray-100 shadow-sm w-56 h-56 flex items-center justify-center">
+                                                {loading && (
+                                                    <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                                                )}
+                                                {error && (
+                                                    <p className="text-red-500 text-xs text-center">{error}</p>
+                                                )}
+                                                {qrImageUrl && (
+                                                    <img src={qrImageUrl} alt="QR" className="w-48 h-48 rounded-lg" />
+                                                )}
                                             </div>
                                         </div>
                                         <p className="text-[10px] text-center mt-4 text-gray-400 font-bold uppercase tracking-widest">Quét để thanh toán</p>
                                     </div>
 
-                                    {/* Info Info */}
+                                    {/* Hướng dẫn */}
                                     <div className="flex-1 w-full space-y-4">
                                         <div className="text-center md:text-left">
                                             <h2 className="text-xl font-black text-gray-900">Hướng dẫn thanh toán</h2>
-                                            <p className="text-sm text-gray-400 mt-1">Vui lòng nhập đúng nội dung chuyển khoản để hệ thống tự động kích hoạt.</p>
+                                            <p className="text-sm text-gray-400 mt-1">Vui lòng quét mã QR bằng app ngân hàng để thanh toán.</p>
                                         </div>
-
-                                        <div className="space-y-3">
-                                            <div onClick={() => handleCopy(accountNo)} className="group cursor-pointer p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-orange-200 transition-all">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số tài khoản</p>
+                                        {orderCode && (
+                                            <div
+                                                onClick={() => handleCopy(String(orderCode))}
+                                                className="group cursor-pointer p-4 bg-orange-500 rounded-2xl border border-orange-400 shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
+                                            >
+                                                <p className="text-[10px] font-black text-orange-100 uppercase mb-1">Mã đơn hàng</p>
                                                 <div className="flex justify-between items-center">
-                                                    <span className="font-bold text-gray-900 text-lg">{accountNo}</span>
-                                                    <HiOutlineDuplicate className="text-gray-300 group-hover:text-orange-500 transition-colors" />
-                                                </div>
-                                            </div>
-                                            <div onClick={() => handleCopy(orderId)} className="group cursor-pointer p-4 bg-orange-500 rounded-2xl border border-orange-400 shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]">
-                                                <p className="text-[10px] font-black text-orange-100 uppercase mb-1">Nội dung chuyển khoản</p>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="font-bold text-white text-lg">{orderId}</span>
+                                                    <span className="font-bold text-white text-lg">{orderCode}</span>
                                                     <HiOutlineDuplicate className="text-white/70" />
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -168,7 +229,6 @@ const CheckoutPage = () => {
                                 </div>
                             </div>
 
-                            {/* Help box */}
                             <div className="mt-6 flex items-center justify-center gap-2 text-gray-400 text-sm font-medium">
                                 <FaQuestionCircle />
                                 <span>Gặp khó khăn? <a href="#" className="text-orange-500 underline">Liên hệ hỗ trợ 24/7</a></span>
@@ -177,28 +237,6 @@ const CheckoutPage = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Footer */}
-            <footer className="bg-gray-950 text-gray-400 py-16">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex flex-col md:flex-row justify-between items-center">
-                        <div className="flex items-center mb-8 md:mb-0">
-                            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
-                                <span className="text-white font-black text-xl">U</span>
-                            </div>
-                            <span className="ml-3 text-2xl font-bold text-white">UKNOW</span>
-                        </div>
-                        <div className="flex flex-wrap justify-center gap-8 text-sm">
-                            <a href="#" className="hover:text-orange-500 transition-colors">Điều khoản sử dụng</a>
-                            <a href="#" className="hover:text-orange-500 transition-colors">Chính sách bảo mật</a>
-                            <a href="#" className="hover:text-orange-500 transition-colors">Liên hệ</a>
-                        </div>
-                    </div>
-                    <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm">
-                        © 2024 UKNOW Campaign. All rights reserved.
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 };
