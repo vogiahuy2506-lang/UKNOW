@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../stores/authStore';
-import { useLocalStorageState } from '../../hooks/useLocalStorageState';
-import { useScrollPersistence } from '../../hooks/useScrollPersistence';
+import { useAuthStore } from '../../../stores/authStore';
+import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
+import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
 import {
   HiOutlineHome,
   HiOutlineLightningBolt,
@@ -26,9 +26,9 @@ import {
   HiOutlineStar,
   HiOutlineGlobeAlt,
 } from 'react-icons/hi';
-import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
-import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
-import AccountProfileModal from '../../features/auth/components/AccountProfileModal';
+import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
+import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 
 const menuItems = [
   {
@@ -152,8 +152,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           return location.pathname === child.path;
         }
         return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-      }) || 
-      (item.name === 'Chiến dịch' && (location.pathname.includes('/campaigns/') && location.pathname.includes('/builder')));
+      }) ||
+        (item.name === 'Chiến dịch' && (location.pathname.includes('/campaigns/') && location.pathname.includes('/builder')));
     }
     return false;
   };
@@ -192,9 +192,9 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       {/* Logo row — includes close button on mobile */}
       <div className={`h-16 flex items-center border-b border-gray-200 ${showLabels ? 'px-4' : 'justify-center'}`}>
         <div className={`flex items-center flex-1 ${!showLabels ? 'justify-center' : ''}`}>
-          <img 
-            src={logoIcon} 
-            alt="UKNOW Logo" 
+          <img
+            src={logoIcon}
+            alt="UKNOW Logo"
             className={`${showLabels ? 'w-10 h-10' : 'w-12 h-12'} object-contain transition-all duration-300`}
           />
           {showLabels && (
@@ -225,9 +225,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               <div>
                 <button
                   onClick={() => toggleMenu(item.name)}
-                  className={`w-full flex items-center rounded-lg py-2 transition-all duration-200 ${
-                    !showLabels ? 'justify-center px-0' : 'px-2'
-                  } ${isActiveParent(item) ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
+                    } ${isActiveParent(item) ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
                   title={!showLabels ? item.name : ''}
                 >
                   <item.icon className={`${showLabels ? 'w-5 h-5' : 'w-6 h-6'} transition-all duration-200`} />
@@ -251,16 +250,15 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
                         : (child.end
                           ? location.pathname === child.path
                           : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
-                      
+
                       const displayName = child.path === '/campaigns/new' && isBuilderPage && location.pathname !== '/campaigns/new'
                         ? 'Chỉnh sửa chiến dịch'
                         : child.name;
 
-                      const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${
-                        isActiveChild
-                          ? 'text-primary-600 font-medium bg-primary-50 border-l-2 border-primary-500 -ml-[13px] pl-[22px]'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`;
+                      const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${isActiveChild
+                        ? 'text-primary-600 font-medium bg-primary-50 border-l-2 border-primary-500 -ml-[13px] pl-[22px]'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                        }`;
 
                       if (child.action === 'openCreateCampaignModal') {
                         return (
@@ -299,12 +297,10 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               <NavLink
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center rounded-lg py-2 transition-all duration-200 ${
-                    !showLabels ? 'justify-center px-0' : 'px-2'
-                  } ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-600 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
+                  `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
+                  } ${isActive
+                    ? 'bg-primary-50 text-primary-600 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
                   }`
                 }
                 title={!showLabels ? item.name : ''}
@@ -325,9 +321,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       >
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
-          className={`w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors ${
-            showLabels ? 'px-2 py-2' : 'p-1 justify-center'
-          }`}
+          className={`w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors ${showLabels ? 'px-2 py-2' : 'p-1 justify-center'
+            }`}
         >
           <div className={`${showLabels ? 'w-10 h-10' : 'w-9 h-9'} bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0`}>
             <span className="text-white font-medium text-sm">

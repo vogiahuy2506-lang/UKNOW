@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import Sidebar from '../components/layout/Sidebar';
-import Header from '../components/layout/Header';
+import Sidebar from '../components/layout/admin/Sidebar';
+import Header from '../components/layout/admin/Header';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import useIsMobile from '../hooks/useIsMobile';
 
@@ -150,9 +150,8 @@ const MainLayout = () => {
 
       {sidebarOpen && (
         <div
-          className={`fixed top-0 h-full cursor-col-resize transition-colors ${
-            isResizing ? 'bg-primary-100' : 'hover:bg-primary-50'
-          }`}
+          className={`fixed top-0 h-full cursor-col-resize transition-colors ${isResizing ? 'bg-primary-100' : 'hover:bg-primary-50'
+            }`}
           style={{ left: `${effectiveSidebarWidth - 3}px`, width: '6px' }}
           onMouseDown={handleResizeStart}
           role="separator"

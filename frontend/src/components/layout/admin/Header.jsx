@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore } from '../../../stores/authStore';
 import {
   HiOutlineMenu,
   HiOutlineLockClosed,
   HiOutlineLogout,
 } from 'react-icons/hi';
-import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
-import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
+import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 
 const Header = ({ onToggleSidebar }) => {
   const { user, logout } = useAuthStore();
