@@ -35,6 +35,8 @@ import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
 import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
 import adminLandingPageRoutes from './routes/adminLandingPage.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
+import planRoutes from './routes/plan.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -121,6 +123,8 @@ app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);
 app.use('/api/admin/landing-pages', adminLandingPageRoutes);
 app.use('/api/leads', leadRoutes); // GET /api/leads (auth), GET /api/leads/preview (auth)
 app.use('/api/verification', verificationRoutes); // Gửi và xác minh mã email
+app.use('/api/payments', paymentRoutes);  // POST /api/payments/create-payment, POST /api/payments/webhook
+app.use('/api/plans', planRoutes); // GET /api/plans/ - lấy danh sách gói thanh toán
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -194,7 +198,7 @@ const setupCleanupTask = () => {
   setInterval(() => {
     uploadController.cleanupTempFiles();
   }, 6 * 60 * 60 * 1000);
-  
+
   // Dọn dẹp ngay khi khởi động
   setTimeout(() => {
     uploadController.cleanupTempFiles();
