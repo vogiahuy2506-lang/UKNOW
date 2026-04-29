@@ -54,9 +54,10 @@ const Login = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await login(data.username, data.password, data.rememberMe ?? true);
+      const result = await login(data.username, data.password, data.rememberMe ?? true);
       toast.success('Đăng nhập thành công!');
-      navigate('/');
+      const role = result?.data?.user?.role;
+      navigate(role === 'super_admin' ? '/admin' : '/app');
     } catch (error) {
       const message = error.response?.data?.message || 'Đăng nhập thất bại';
       toast.error(message);

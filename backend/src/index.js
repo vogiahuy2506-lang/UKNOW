@@ -35,8 +35,13 @@ import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
 import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
 import adminLandingPageRoutes from './routes/adminLandingPage.routes.js';
+import adminStatsRoutes from './routes/adminStats.routes.js';
+import adminPlansRoutes from './routes/adminPlans.routes.js';
+import adminMembersRoutes from './routes/adminMembers.routes.js';
+import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
+import employeeRoutes from './routes/employee.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -125,6 +130,11 @@ app.use('/api/leads', leadRoutes); // GET /api/leads (auth), GET /api/leads/prev
 app.use('/api/verification', verificationRoutes); // Gửi và xác minh mã email
 app.use('/api/payments', paymentRoutes);  // POST /api/payments/create-payment, POST /api/payments/webhook
 app.use('/api/plans', planRoutes); // GET /api/plans/ - lấy danh sách gói thanh toán
+app.use('/api/employees', employeeRoutes); // CRUD nhân viên, phân quyền employee
+app.use('/api/admin/stats', adminStatsRoutes);   // Dashboard stats cho super_admin
+app.use('/api/admin/plans', adminPlansRoutes);    // CRUD gói dịch vụ + assign cho user
+app.use('/api/admin/members', adminMembersRoutes); // Danh sách thành viên, khóa, nâng super_admin
+app.use('/api/admin/orders', adminOrdersRoutes);   // Danh sách đơn hàng PayOS
 
 // Health check
 app.get('/api/health', (req, res) => {

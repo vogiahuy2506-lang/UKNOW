@@ -1,5 +1,5 @@
 import db from '../config/database.js';
-import { isAdminRole } from '../utils/roleScope.util.js';
+import { isSuperAdmin, isUserAdmin } from '../utils/roleScope.util.js';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -10,12 +10,11 @@ class LandingPageRepository {
   /**
    * Build điều kiện scope cho landing page theo vai trò.
    *
-   * Luồng hoạt động:
-   * 1. Employee chỉ thấy bản ghi do chính họ tạo (`lp.id_user = userId`).
-   * 2. Admin thấy landing của chính họ + tất cả landing do employee tạo.
-   * 3. Trả về điều kiện SQL + params để các query khác tái sử dụng.
+   * - super_admin : thấy tất cả.
+   * - user_admin  : thấy trang của mình + trang do employee của mình tạo.
+   * - employee    : thấy trang trong workspace của owner (owner + các employee cùng team).
    *
-   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @param {{ userId: number|string, role?: string, ownerId?: number|string }} scope
    * @returns {{ clause: string, params: any[] }}
    */
   buildLandingScopeCondition(scope = {}) {
@@ -24,16 +23,21 @@ class LandingPageRepository {
       return { clause: '1 = 0', params: [] };
     }
 
-    if (isAdminRole(scope?.roleCode)) {
-      return {
-        clause: '(lp.id_user = $1 OR owner_role.role_code = $2)',
-        params: [userId, 'employee'],
-      };
+    if (isSuperAdmin(scope?.role)) {
+      return { clause: '1 = 1', params: [] };
     }
 
+    // user_admin hoặc employee đều thấy toàn bộ workspace của owner
+    const ownerId = scope?.ownerId ? Number.parseInt(scope.ownerId, 10) : null;
+    const workspaceOwnerId = isUserAdmin(scope?.role) ? userId : (ownerId || userId);
+
     return {
-      clause: 'lp.id_user = $1',
-      params: [userId],
+      clause: `lp.id_user IN (
+        SELECT $1::bigint
+        UNION
+        SELECT employee_id FROM user_members WHERE owner_id = $1
+      )`,
+      params: [workspaceOwnerId],
     };
   }
 
@@ -110,8 +114,6 @@ class LandingPageRepository {
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt"
        FROM landing_pages lp
-       LEFT JOIN users owner ON owner.id = lp.id_user
-       LEFT JOIN roles owner_role ON owner_role.id = owner.id_role
        WHERE ${clause}
        ORDER BY lp.updated_at DESC`,
       params
@@ -207,8 +209,6 @@ class LandingPageRepository {
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt"
        FROM landing_pages lp
-       LEFT JOIN users owner ON owner.id = lp.id_user
-       LEFT JOIN roles owner_role ON owner_role.id = owner.id_role
        WHERE lp.id = $${params.length + 1}
          AND ${clause}
        LIMIT 1`,

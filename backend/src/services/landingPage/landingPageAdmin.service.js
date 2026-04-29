@@ -67,7 +67,7 @@ class LandingPageAdminService {
 
     const limitCheck = await checkUserResourceLimit({
       userId,
-      roleCode: authUser?.role_code,
+      role: authUser?.role,
       resourceKey: 'landingPages',
     });
     if (!limitCheck.allowed) {
@@ -120,7 +120,7 @@ class LandingPageAdminService {
     }
     const current = await landingPageRepository.findByIdInScope(id, {
       userId: authUser?.id,
-      roleCode: authUser?.role_code,
+      role: authUser?.role,
     });
     if (!current) {
       const err = new Error('Không tìm thấy landing page');

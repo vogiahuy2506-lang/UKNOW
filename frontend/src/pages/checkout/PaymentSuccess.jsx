@@ -81,7 +81,7 @@ const PaymentSuccessPage = () => {
                 </div>
 
                 <button
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => navigate('/app')}
                     className="w-full bg-gradient-to-r from-orange-600 to-red-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group"
                 >
                     Khám phá Dashboard ngay
