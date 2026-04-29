@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 // Layouts
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
+import LandingLayout from './layouts/LandingLayout';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -18,14 +19,12 @@ import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignRun from './pages/campaigns/CampaignRun';
 import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
-import EmailSettings from './pages/settings/EmailSettings';
-import ZaloSettings from './pages/settings/ZaloSettings';
+import ChannelSettings from './pages/settings/ChannelSettings';
 import EmployeeManagement from './pages/settings/EmployeeManagement';
 import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
-import EmailTemplates from './pages/templates/EmailTemplates';
-import ZaloTemplates from './pages/templates/ZaloTemplates';
+import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
@@ -35,57 +34,67 @@ import AboutPage from './pages/public/AboutPage';
 import LpRendererPage from './pages/public/LpRendererPage';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import LearningPage from './pages/learning/LearningPage';
+import CheckoutPage from './pages/checkout/CheckoutPage';
+import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminMembersPage from './pages/admin/AdminMembersPage';
+import AdminPlansPage from './pages/admin/AdminPlansPage';
+import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import NoPlanScreen from './pages/auth/NoPlanScreen';
+import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 
-// Protected Route Component
+const LoadingScreen = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <div className="spinner w-10 h-10 mx-auto mb-4"></div>
+      <p className="text-gray-500">Đang tải...</p>
+    </div>
+  </div>
+);
+
+// Bảo vệ /app/* — yêu cầu đăng nhập + có gói (employee miễn kiểm tra gói)
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, initialize } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
 
   useEffect(() => {
-    // Re-initialize if still loading after mount
     if (isLoading) {
       const timeout = setTimeout(() => {
-        // Force stop loading after 5 seconds
         useAuthStore.setState({ isLoading: false, isAuthenticated: false });
       }, 5000);
       return () => clearTimeout(timeout);
     }
   }, [isLoading]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="spinner w-10 h-10 mx-auto mb-4"></div>
-          <p className="text-gray-500">Đang tải...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
+  // Employee đi nhờ plan của owner — không cần kiểm tra active_plan_id
+  if (user?.role !== 'employee' && !user?.active_plan_id) return <NoPlanScreen />;
 
   return children;
 };
 
-/**
- * Chặn route chỉ dành cho admin.
- */
-const AdminRoute = ({ children }) => {
+// Chỉ user_admin được vào — employee thấy màn hình unauthorized
+const OwnerRoute = ({ children }) => {
   const { user } = useAuthStore();
-  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
+  if (user?.role === 'employee') return <UnauthorizedScreen />;
+  return children;
+};
 
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
+// Bảo vệ /admin/* — chỉ super_admin được vào, role khác thấy màn hình unauthorized
+const AdminRoute = ({ children }) => {
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== 'super_admin') return <UnauthorizedScreen />;
 
   return children;
 };
 
-// Public Route Component (redirect if already authenticated)
+// Redirect nếu đã đăng nhập: super_admin → /admin, còn lại → /app
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
 
   useEffect(() => {
     if (isLoading) {
@@ -96,19 +105,9 @@ const PublicRoute = ({ children }) => {
     }
   }, [isLoading]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="spinner w-10 h-10 mx-auto mb-4"></div>
-          <p className="text-gray-500">Đang tải...</p>
-        </div>
-      </div>
-    );
-  }
-
+  if (isLoading) return <LoadingScreen />;
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={user?.role === 'super_admin' ? '/admin' : '/app'} replace />;
   }
 
   return children;
@@ -132,101 +131,101 @@ function App() {
           }}
         />
         <Routes>
-        {/* Auth Routes */}
-        <Route path="/login" element={
-          <PublicRoute>
-            <AuthLayout>
-              <Login />
-            </AuthLayout>
-          </PublicRoute>
-        } />
-        <Route path="/register" element={
-          <PublicRoute>
-            <AuthLayout>
-              <Register />
-            </AuthLayout>
-          </PublicRoute>
-        } />
-        <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
-        <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
-        {/* Chuyển hướng URL cũ (sai chính tả) sang đường dẫn chuẩn — tránh 404 và không rơi catch-all */}
-        <Route path="/private-policy" element={<Navigate to="/privacy-policy" replace />} />
-        <Route path="/private-policy/" element={<Navigate to="/privacy-policy" replace />} />
-        <Route path="/l" element={<UknowLandingPage />} />
-        <Route path="/l/" element={<UknowLandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/about/" element={<AboutPage />} />
-        <Route path="/lp/:slug" element={<LpRendererPage />} />
-        <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
-        <Route path="/learning" element={<LearningPage />} />
+          {/* Public Landing Page - URL gốc sẽ hiện trang này */}
+          <Route path="/" element={<UknowLandingPage />} />
 
-        {/* Protected Routes */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Dashboard />} />
-          
-          {/* Campaigns */}
-          <Route path="campaigns" element={<Campaigns />} />
-          <Route path="campaigns/:id" element={<CampaignDetail />} />
-          <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
-          <Route path="campaigns/new" element={<CampaignBuilder />} />
-          <Route path="campaign-run" element={<CampaignRun />} />
-          
-          {/* Customers */}
-          <Route path="customers" element={<Customers />} />
-          <Route path="customers/:campaignId" element={<CampaignCustomers />} />
-          <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
-          
-          {/* Settings */}
-          <Route path="settings/email" element={<EmailSettings />} />
-          <Route path="settings/zalo" element={<ZaloSettings />} />
-          <Route
-            path="settings/employees"
-            element={(
-              <AdminRoute>
-                <EmployeeManagement />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-featured-courses"
-            element={(
-              <AdminRoute>
-                <LandingFeaturedCoursesPage />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-testimonials"
-            element={(
-              <AdminRoute>
-                <LandingTestimonialsPage />
-              </AdminRoute>
-            )}
-          />
-          <Route
-            path="settings/landing-pages"
-            element={<LandingPagesAdminPage />}
-          />
-          <Route path="settings/email-templates" element={<EmailTemplates />} />
-          <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
-          
-          {/* Courses */}
-          <Route path="courses" element={<Courses />} />
+          {/* Auth Routes */}
+          <Route path="/login" element={
+            <PublicRoute>
+              <AuthLayout>
+                <Login />
+              </AuthLayout>
+            </PublicRoute>
+          } />
+          <Route path="/register" element={
+            <PublicRoute>
+              <AuthLayout>
+                <Register />
+              </AuthLayout>
+            </PublicRoute>
+          } />
 
-          {/* Orders */}
-          <Route path="orders" element={<Orders />} />
+          {/* Landing Routes */}
+          <Route element={<LandingLayout />}>
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/about/" element={<AboutPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/payment-success" element={<PaymentSuccessPage />} />
+            <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
+            <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+          </Route>
 
-          {/* Lead landing (form /l) */}
-          <Route path="landing-leads" element={<LandingLeadsListPage />} />
-        </Route>
+          {/* Điều hướng các URL cũ hoặc sai chính tả */}
+          <Route path="/l" element={<Navigate to="/" replace />} />
+          <Route path="/private-policy" element={<Navigate to="/privacy-policy" replace />} />
 
-        {/* 404 */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Các route hỗ trợ khác */}
+          <Route path="/lp/:slug" element={<LpRendererPage />} />
+          <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
+          <Route path="/learning" element={<LearningPage />} />
+
+          {/* Protected Routes - prefix /app */}
+          <Route path="/app" element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+
+            {/* Campaigns */}
+            <Route path="campaigns" element={<Campaigns />} />
+            <Route path="campaigns/:id" element={<CampaignDetail />} />
+            <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
+            <Route path="campaigns/new" element={<CampaignBuilder />} />
+            <Route path="campaign-run" element={<CampaignRun />} />
+
+            {/* Customers */}
+            <Route path="customers" element={<Customers />} />
+            <Route path="customers/:campaignId" element={<CampaignCustomers />} />
+            <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
+
+            {/* Settings — owner only */}
+            <Route path="settings/channels" element={<OwnerRoute><ChannelSettings /></OwnerRoute>} />
+            <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
+            <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
+            <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
+            <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
+
+            {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
+            <Route path="settings/templates" element={<ChannelTemplates />} />
+
+            {/* Redirect các route cũ sang route mới */}
+            <Route path="settings/email" element={<Navigate to="/app/settings/channels" replace />} />
+            <Route path="settings/zalo" element={<Navigate to="/app/settings/channels" replace />} />
+            <Route path="settings/email-templates" element={<Navigate to="/app/settings/templates" replace />} />
+            <Route path="settings/zalo-templates" element={<Navigate to="/app/settings/templates" replace />} />
+
+            {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
+            <Route path="courses" element={<Courses />} />
+            <Route path="orders" element={<OwnerRoute><Orders /></OwnerRoute>} />
+            <Route path="landing-leads" element={<LandingLeadsListPage />} />
+          </Route>
+
+          {/* Admin Routes - chỉ super_admin */}
+          <Route path="/admin" element={
+            <AdminRoute>
+              <MainLayout />
+            </AdminRoute>
+          }>
+            <Route index element={<AdminDashboard />} />
+            <Route path="members" element={<AdminMembersPage />} />
+            <Route path="plans" element={<AdminPlansPage />} />
+            <Route path="orders" element={<AdminOrdersPage />} />
+          </Route>
+
+          {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Router>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>

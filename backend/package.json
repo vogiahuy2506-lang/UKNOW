@@ -17,6 +17,7 @@
   "author": "UKNOW",
   "license": "MIT",
   "dependencies": {
+    "@payos/node": "^2.0.5",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.71.0",

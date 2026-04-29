@@ -37,7 +37,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const isEmployee = String(profileData?.roleCode || user?.roleCode || '').trim().toLowerCase() === 'employee';
+  const isEmployee = (profileData?.role || user?.role) === 'employee';
 
   const employeeLimits = useMemo(
     () => EMPLOYEE_LIMIT_ITEMS.map((item) => ({ ...item, value: profileData?.[item.key] ?? null })),
@@ -204,7 +204,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 <input
                   type="text"
                   className="input w-full bg-gray-50 text-gray-600"
-                  value={profileData?.roleName || user?.roleName || 'Người dùng'}
+                  value={{ super_admin: 'Quản trị hệ thống', user_admin: 'Thành viên', employee: 'Nhân viên' }[profileData?.role || user?.role] || 'Người dùng'}
                   disabled
                 />
               </div>

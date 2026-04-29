@@ -37,7 +37,7 @@ const isCampaignCurrentlyRunning = (campaign) => Number(campaign?.runningCount |
 
 const Campaigns = () => {
   const user = useAuthStore((state) => state.user);
-  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
+  const isAdmin = user?.role === 'super_admin';
   const navigate = useNavigate();
   const location = useLocation();
   const [campaigns, setCampaigns] = useState([]);
@@ -205,7 +205,7 @@ const Campaigns = () => {
         throw new Error('Không nhận được mã chiến dịch mới');
       }
       setShowCreateModal(false);
-      navigate(`/campaigns/${createdCampaignId}/builder`);
+      navigate(`/app/campaigns/${createdCampaignId}/builder`);
       toast.success('Đã tạo chiến dịch mới');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể tạo chiến dịch');
@@ -236,32 +236,22 @@ const Campaigns = () => {
       </div>
 
       {/* Filters */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-4">
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
-            <div className="flex items-center rounded-lg border border-gray-300 bg-white text-sm transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-              <span className="pl-3 flex items-center shrink-0 text-gray-400" aria-hidden>
-                <HiOutlineSearch className="w-5 h-5" />
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm kiếm tên quy trình"
-                className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
-              />
-            </div>
-          </form>
-
-          {/* Status filter */}
+      <div className="card p-3">
+        <form onSubmit={handleSearch} className="flex items-center gap-2">
+          <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 bg-white px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+            <HiOutlineSearch className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm kiếm tên quy trình..."
+              className="flex-1 py-1.5 pl-2 text-sm border-0 bg-transparent focus:ring-0 focus:outline-none"
+            />
+          </div>
           <select
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="input w-auto"
+            onChange={(e) => { setStatusFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
+            className="input py-1.5 text-sm flex-1 min-w-0"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="draft">Nháp</option>
@@ -269,22 +259,18 @@ const Campaigns = () => {
             <option value="paused">Tạm dừng</option>
             <option value="completed">Hoàn thành</option>
           </select>
-
-          {/* Type filter */}
           <select
             value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="input w-auto"
+            onChange={(e) => { setTypeFilter(e.target.value); setPagination((prev) => ({ ...prev, page: 1 })); }}
+            className="input py-1.5 text-sm flex-1 min-w-0"
           >
             <option value="">Tất cả loại</option>
             <option value="email">Email</option>
             <option value="zalo">Zalo cá nhân</option>
             <option value="zalo_group">Zalo nhóm</option>
           </select>
-        </div>
+          <button type="submit" className="btn btn-primary py-1.5 text-sm whitespace-nowrap shrink-0">Tìm kiếm</button>
+        </form>
       </div>
 
       {/* Table */}
@@ -329,7 +315,7 @@ const Campaigns = () => {
                   <tr key={campaign.id}>
                     <td>
                       <Link
-                        to={`/campaigns/${campaign.id}`}
+                        to={`/app/campaigns/${campaign.id}`}
                         className="text-primary-600 hover:text-primary-700 font-medium"
                       >
                         {campaign.campaignName}
@@ -422,7 +408,7 @@ const Campaigns = () => {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
-                                onClick={() => navigate(`/campaigns/${campaign.id}/builder`)}
+                                onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
                                 className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                               >
                                 <HiOutlinePencil className="w-4 h-4 mr-3" />

@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../stores/authStore';
-import { useLocalStorageState } from '../../hooks/useLocalStorageState';
-import { useScrollPersistence } from '../../hooks/useScrollPersistence';
+import { useAuthStore } from '../../../stores/authStore';
+import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
+import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
 import {
   HiOutlineHome,
   HiOutlineLightningBolt,
   HiOutlineUsers,
   HiOutlineCog,
   HiOutlineMail,
-  HiOutlineChat,
   HiOutlineTemplate,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
@@ -25,74 +24,96 @@ import {
   HiOutlinePhotograph,
   HiOutlineStar,
   HiOutlineGlobeAlt,
+  HiOutlineCurrencyDollar,
+  HiOutlineShieldCheck,
 } from 'react-icons/hi';
-import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
-import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
-import AccountProfileModal from '../../features/auth/components/AccountProfileModal';
+import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
+import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 
-const menuItems = [
+// Menu dành cho super_admin — quản trị hệ thống
+const superAdminMenuItems = [
   {
     name: 'Dashboard',
-    path: '/',
+    path: '/admin',
     icon: HiOutlineHome,
+    end: true,
+  },
+  {
+    name: 'Quản lý thành viên',
+    path: '/admin/members',
+    icon: HiOutlineShieldCheck,
+  },
+  {
+    name: 'Quản lý gói dịch vụ',
+    path: '/admin/plans',
+    icon: HiOutlineCurrencyDollar,
+  },
+  {
+    name: 'Đơn hàng',
+    path: '/admin/orders',
+    icon: HiOutlineClipboardList,
+  },
+];
+
+// Menu dành cho user_admin và employee — vận hành marketing
+// ownerOnly: true  → chỉ user_admin thấy
+// permission: [...]  → employee thấy nếu có ÍT NHẤT 1 trong các permission này
+const userMenuItems = [
+  {
+    name: 'Dashboard',
+    path: '/app',
+    icon: HiOutlineHome,
+    end: true,
   },
   {
     name: 'Thiết lập',
     icon: HiOutlineCog,
+    ownerOnly: true,
     children: [
-      { name: 'Quản lý Email', path: '/settings/email', icon: HiOutlineMail },
-      { name: 'Mẫu Email', path: '/settings/email-templates', icon: HiOutlineTemplate },
-      { name: 'Quản lý Zalo', path: '/settings/zalo', icon: HiOutlineChat },
-      { name: 'Mẫu Zalo', path: '/settings/zalo-templates', icon: HiOutlineTemplate },
-      { name: 'Khóa học', path: '/courses', icon: HiOutlineAcademicCap },
-      {
-        name: 'Landing — khóa học nổi bật',
-        path: '/settings/landing-featured-courses',
-        icon: HiOutlinePhotograph,
-        adminOnly: true,
-      },
-      {
-        name: 'Landing — đánh giá',
-        path: '/settings/landing-testimonials',
-        icon: HiOutlineStar,
-        adminOnly: true,
-      },
-      {
-        name: 'Landing — trang HTML (/lp)',
-        path: '/settings/landing-pages',
-        icon: HiOutlineGlobeAlt,
-      },
+      { name: 'Quản lý kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, ownerOnly: true },
+      { name: 'Mẫu tin nhắn', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
+      { name: 'Sản phẩm', path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
+    ],
+  },
+  {
+    name: 'Landing page',
+    icon: HiOutlineGlobeAlt,
+    ownerOnly: true,
+    children: [
+      { name: 'Sản phẩm nổi bật', path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
+      { name: 'Đánh giá', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
+      { name: 'Trang HTML (/lp)', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+      { name: 'Danh sách khách', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
     ],
   },
   {
     name: 'Chiến dịch',
     icon: HiOutlineLightningBolt,
+    permission: ['campaigns_view', 'campaigns_create', 'campaigns_run'],
     children: [
-      { name: 'Quản lý chiến dịch', path: '/campaigns', end: true, icon: HiOutlineViewList },
-      { name: 'Tạo chiến dịch mới', path: '/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal' },
-      { name: 'Chạy chiến dịch', path: '/campaign-run', icon: HiOutlineLightningBolt },
+      { name: 'Quản lý chiến dịch', path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
+      { name: 'Tạo chiến dịch mới', path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
+      { name: 'Chạy chiến dịch', path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
     ],
   },
   {
     name: 'Khách hàng',
-    path: '/customers',
+    path: '/app/customers',
     icon: HiOutlineUsers,
+    permission: ['customers'],
   },
   {
     name: 'Đơn hàng',
-    path: '/orders',
+    path: '/app/orders',
     icon: HiOutlineClipboardList,
+    ownerOnly: true,
   },
   {
-    name: 'Danh sách khách landing page',
-    path: '/landing-leads',
-    icon: HiOutlineGlobeAlt,
-  },
-  {
-    name: 'Quản lý nhân viên',
-    path: '/settings/employees',
+    name: 'Nhân viên',
+    path: '/app/settings/employees',
     icon: HiOutlineUserGroup,
-    adminOnly: true,
+    ownerOnly: true,
   },
 ];
 
@@ -112,7 +133,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useLocalStorageState('uknow_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
   const { user, logout } = useAuthStore();
-  const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
+  const isSuperAdmin = user?.role === 'super_admin';
+  const menuItems = isSuperAdmin ? superAdminMenuItems : userMenuItems;
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
@@ -152,8 +174,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           return location.pathname === child.path;
         }
         return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-      }) || 
-      (item.name === 'Chiến dịch' && (location.pathname.includes('/campaigns/') && location.pathname.includes('/builder')));
+      }) ||
+        (item.name === 'Chiến dịch' && (location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder')));
     }
     return false;
   };
@@ -174,15 +196,21 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   // On mobile the sidebar is always "open" layout (full labels shown), never icon-only
   const showLabels = isMobile ? true : isOpen;
 
+  // Lọc menu item theo role/permissions của user
+  const filterItem = (item) => {
+    if (item.ownerOnly && user?.role !== 'user_admin') return false;
+    if (item.permission && user?.role === 'employee') {
+      return item.permission.some((p) => user?.permissions?.[p] === true);
+    }
+    return true;
+  };
+
   const visibleMenuItems = menuItems
     .map((item) => {
       if (!item.children) return item;
-      return {
-        ...item,
-        children: item.children.filter((child) => !child.adminOnly || isAdmin),
-      };
+      return { ...item, children: item.children.filter(filterItem) };
     })
-    .filter((item) => (!item.adminOnly || isAdmin) && (!item.children || item.children.length > 0));
+    .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
 
   return (
     <aside
@@ -192,15 +220,15 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       {/* Logo row — includes close button on mobile */}
       <div className={`h-16 flex items-center border-b border-gray-200 ${showLabels ? 'px-4' : 'justify-center'}`}>
         <div className={`flex items-center flex-1 ${!showLabels ? 'justify-center' : ''}`}>
-          <img 
-            src={logoIcon} 
-            alt="UKNOW Logo" 
+          <img
+            src={logoIcon}
+            alt="UKNOW Logo"
             className={`${showLabels ? 'w-10 h-10' : 'w-12 h-12'} object-contain transition-all duration-300`}
           />
           {showLabels && (
             <div className="ml-3">
               <h1 className="text-lg font-bold text-gray-900">UKNOW</h1>
-              <p className="text-xs text-gray-500">Campaign Management</p>
+              <p className="text-xs text-gray-500">{isSuperAdmin ? 'System Admin' : 'Campaign Management'}</p>
             </div>
           )}
         </div>
@@ -225,9 +253,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               <div>
                 <button
                   onClick={() => toggleMenu(item.name)}
-                  className={`w-full flex items-center rounded-lg py-2 transition-all duration-200 ${
-                    !showLabels ? 'justify-center px-0' : 'px-2'
-                  } ${isActiveParent(item) ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
+                    } ${isActiveParent(item) ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
                   title={!showLabels ? item.name : ''}
                 >
                   <item.icon className={`${showLabels ? 'w-5 h-5' : 'w-6 h-6'} transition-all duration-200`} />
@@ -245,29 +272,45 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
                 {showLabels && expandedMenus.includes(item.name) && (
                   <div className="mt-1 space-y-0.5 ml-4 pl-2 border-l border-gray-200">
                     {item.children.map((child) => {
-                      const isBuilderPage = location.pathname.includes('/campaigns/') && location.pathname.includes('/builder');
-                      const isActiveChild = child.path === '/campaigns/new'
-                        ? isBuilderPage || location.pathname === '/campaigns/new'
+                      const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
+                      const isActiveChild = child.path === '/app/campaigns/new'
+                        ? isBuilderPage || location.pathname === '/app/campaigns/new'
                         : (child.end
                           ? location.pathname === child.path
                           : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
-                      
-                      const displayName = child.path === '/campaigns/new' && isBuilderPage && location.pathname !== '/campaigns/new'
+
+                      const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
                         ? 'Chỉnh sửa chiến dịch'
                         : child.name;
 
-                      const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${
-                        isActiveChild
-                          ? 'text-primary-600 font-medium bg-primary-50 border-l-2 border-primary-500 -ml-[13px] pl-[22px]'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`;
+                      const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${isActiveChild
+                        ? 'text-primary-600 font-medium bg-primary-50 border-l-2 border-primary-500 -ml-[13px] pl-[22px]'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                        }`;
 
                       if (child.action === 'openCreateCampaignModal') {
                         return (
                           <button
                             key={child.path}
                             onClick={() => {
-                              navigate('/campaigns', { state: { openCreateCampaignModal: true } });
+                              navigate('/app/campaigns', { state: { openCreateCampaignModal: true } });
+                              handleNavClose();
+                            }}
+                            className={`${baseClassName} w-full text-left`}
+                            type="button"
+                          >
+                            {child.icon && <child.icon className="w-4 h-4 mr-2 text-gray-400" />}
+                            <span>{displayName}</span>
+                          </button>
+                        );
+                      }
+
+                      if (child.action === 'openCreateEmployeeModal') {
+                        return (
+                          <button
+                            key={child.path}
+                            onClick={() => {
+                              navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } });
                               handleNavClose();
                             }}
                             className={`${baseClassName} w-full text-left`}
@@ -298,13 +341,12 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
             ) : (
               <NavLink
                 to={item.path}
+                end={item.end}
                 className={({ isActive }) =>
-                  `flex items-center rounded-lg py-2 transition-all duration-200 ${
-                    !showLabels ? 'justify-center px-0' : 'px-2'
-                  } ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-600 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
+                  `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
+                  } ${isActive
+                    ? 'bg-primary-50 text-primary-600 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
                   }`
                 }
                 title={!showLabels ? item.name : ''}
@@ -325,9 +367,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       >
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
-          className={`w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors ${
-            showLabels ? 'px-2 py-2' : 'p-1 justify-center'
-          }`}
+          className={`w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors ${showLabels ? 'px-2 py-2' : 'p-1 justify-center'
+            }`}
         >
           <div className={`${showLabels ? 'w-10 h-10' : 'w-9 h-9'} bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0`}>
             <span className="text-white font-medium text-sm">
