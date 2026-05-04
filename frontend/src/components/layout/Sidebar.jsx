@@ -61,7 +61,6 @@ const menuItems = [
         name: 'Landing — trang HTML (/lp)',
         path: '/settings/landing-pages',
         icon: HiOutlineGlobeAlt,
-        adminOnly: true,
       },
     ],
   },

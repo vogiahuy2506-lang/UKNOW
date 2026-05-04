@@ -17,6 +17,7 @@ const EMPLOYEE_LIMIT_FIELDS = [
   { key: 'maxEmailAccounts', label: 'Số tài khoản Email quản lý tối đa' },
   { key: 'maxEmailTemplates', label: 'Số Email template tối đa' },
   { key: 'maxZaloTemplates', label: 'Số Zalo template tối đa' },
+  { key: 'maxLandingPages', label: 'Số landing page tối đa' },
 ];
 
 const buildLimitFormValues = (employee = null) => {

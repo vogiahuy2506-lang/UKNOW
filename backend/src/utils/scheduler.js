@@ -8,6 +8,105 @@ let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
 const activeNonContinuousRunIds = new Set();
 const activeOverdueNonContinuousRunIds = new Set();
+const HANOI_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+/**
+ * Chuyển thời điểm bất kỳ về khóa ngày `YYYY-MM-DD` theo múi giờ Hà Nội.
+ *
+ * @param {Date|string|null|undefined} rawDate thời điểm đầu vào
+ * @returns {string|null} khóa ngày hoặc null nếu input không hợp lệ
+ */
+const toHanoiDateKey = (rawDate) => {
+  if (!rawDate) return null;
+  const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: HANOI_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(parsed);
+};
+
+/**
+ * Tính số ngày chênh lệch giữa 2 mốc ngày dạng `YYYY-MM-DD`.
+ *
+ * @param {string} startKey mốc bắt đầu
+ * @param {string} endKey mốc kết thúc
+ * @returns {number|null} số ngày chênh lệch hoặc null nếu parse lỗi
+ */
+const getDaysDiffFromDateKeys = (startKey, endKey) => {
+  if (!startKey || !endKey) return null;
+  const [startYear, startMonth, startDay] = String(startKey).split('-').map((v) => Number.parseInt(v, 10));
+  const [endYear, endMonth, endDay] = String(endKey).split('-').map((v) => Number.parseInt(v, 10));
+  if (
+    !Number.isFinite(startYear)
+    || !Number.isFinite(startMonth)
+    || !Number.isFinite(startDay)
+    || !Number.isFinite(endYear)
+    || !Number.isFinite(endMonth)
+    || !Number.isFinite(endDay)
+  ) {
+    return null;
+  }
+  const startUtc = Date.UTC(startYear, startMonth - 1, startDay);
+  const endUtc = Date.UTC(endYear, endMonth - 1, endDay);
+  return Math.floor((endUtc - startUtc) / (24 * 60 * 60 * 1000));
+};
+
+/**
+ * Parse số ngày lặp lại từ cron custom dạng N ngày ở trường ngày-tháng.
+ *
+ * @param {string} cronExpression biểu thức cron lưu trong DB
+ * @returns {number|null} số ngày lặp hoặc null nếu không parse được
+ */
+const parseCustomIntervalDaysFromCron = (cronExpression = '') => {
+  const parts = String(cronExpression).trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 3) return null;
+  const match = String(parts[2]).match(/^\*\/(\d+)$/);
+  if (!match) return null;
+  const intervalDays = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
+  return intervalDays;
+};
+
+/**
+ * Với lịch custom, runtime cron luôn chạy hàng ngày tại cùng giờ/phút để tránh lệch mốc N ngày.
+ *
+ * @param {object} schedule bản ghi lịch chạy
+ * @returns {string} cron runtime dùng để đăng ký node-cron
+ */
+const resolveRuntimeCronExpression = (schedule) => {
+  const rawCron = String(schedule?.cron_expression || '').trim();
+  if (String(schedule?.schedule_type || '').toLowerCase() !== 'custom') {
+    return rawCron;
+  }
+  const parts = rawCron.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return rawCron;
+  return `${parts[0]} ${parts[1]} * * *`;
+};
+
+/**
+ * Quyết định lịch custom có đến hạn chạy ở ngày hiện tại hay chưa.
+ *
+ * Luồng hoạt động:
+ * 1. Parse `intervalDays` từ cron custom hiện tại.
+ * 2. Lấy mốc neo theo `last_run_at` (nếu có), nếu chưa từng chạy thì dùng `created_at`.
+ * 3. So sánh chênh lệch ngày (múi giờ Hà Nội) và chỉ cho chạy khi chia hết theo chu kỳ.
+ *
+ * @param {object} schedule bản ghi lịch custom
+ * @returns {boolean}
+ */
+const shouldTriggerCustomScheduleToday = (schedule) => {
+  const intervalDays = parseCustomIntervalDaysFromCron(schedule?.cron_expression);
+  if (!intervalDays) return true;
+  const anchorDateKey = toHanoiDateKey(schedule?.last_run_at || schedule?.created_at);
+  const todayDateKey = toHanoiDateKey(new Date());
+  const dayDiff = getDaysDiffFromDateKeys(anchorDateKey, todayDateKey);
+  if (dayDiff == null) return true;
+  if (dayDiff < 0) return false;
+  return dayDiff % intervalDays === 0;
+};
 
 const stopAllCampaignScheduleTasks = () => {
   for (const task of campaignScheduleTasks.values()) {
@@ -24,6 +123,10 @@ const stopAllCampaignScheduleTasks = () => {
 const triggerCampaignSchedule = async (schedule) => {
   try {
     if (!schedule?.id_campaign || !schedule?.id_user) return;
+    const isCustomSchedule = String(schedule?.schedule_type || '').toLowerCase() === 'custom';
+    if (isCustomSchedule && !shouldTriggerCustomScheduleToday(schedule)) {
+      return;
+    }
     console.log(
       `[Scheduler] Trigger schedule #${schedule.id} cho campaign #${schedule.id_campaign}`
     );
@@ -44,7 +147,7 @@ const triggerCampaignSchedule = async (schedule) => {
 
     // Luôn gắn nhãn thời điểm theo Asia/Ho_Chi_Minh (không phụ thuộc TZ của process/ máy chủ).
     const runName = `${schedule.schedule_name || 'Lich chay'} - ${new Date().toLocaleString('vi-VN', {
-      timeZone: 'Asia/Ho_Chi_Minh',
+      timeZone: HANOI_TIME_ZONE,
       hour12: false,
     })}`;
     const runRecord = await campaignController.createCampaignRunRecord({
@@ -101,6 +204,8 @@ const refreshCampaignSchedules = async () => {
         cs.schedule_name,
         cs.schedule_type,
         cs.cron_expression,
+        cs.last_run_at,
+        cs.created_at,
         c.id_user
        FROM campaign_schedules cs
        JOIN campaigns c ON c.id = cs.id_campaign
@@ -109,14 +214,15 @@ const refreshCampaignSchedules = async () => {
 
     stopAllCampaignScheduleTasks();
     for (const schedule of result.rows) {
-      if (!cron.validate(schedule.cron_expression)) {
-        console.warn(`[Scheduler] Cron không hợp lệ cho schedule #${schedule.id}: ${schedule.cron_expression}`);
+      const runtimeCronExpression = resolveRuntimeCronExpression(schedule);
+      if (!cron.validate(runtimeCronExpression)) {
+        console.warn(`[Scheduler] Cron không hợp lệ cho schedule #${schedule.id}: ${runtimeCronExpression}`);
         continue;
       }
-      const task = cron.schedule(schedule.cron_expression, () => {
+      const task = cron.schedule(runtimeCronExpression, () => {
         triggerCampaignSchedule(schedule);
       }, {
-        timezone: 'Asia/Ho_Chi_Minh',
+        timezone: HANOI_TIME_ZONE,
       });
       campaignScheduleTasks.set(schedule.id, task);
     }

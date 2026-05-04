@@ -133,7 +133,8 @@ router.patch(
  *   maxZaloAccounts?,
  *   maxEmailAccounts?,
  *   maxEmailTemplates?,
- *   maxZaloTemplates?
+ *   maxZaloTemplates?,
+ *   maxLandingPages?
  * } với giá trị là số nguyên >= 0 hoặc null (null = không giới hạn).
  * Response: id nhân viên + bộ giới hạn sau khi cập nhật.
  */
@@ -161,6 +162,10 @@ router.patch(
       .optional({ nullable: true })
       .isInt({ min: 0 })
       .withMessage('Giới hạn số Zalo template phải là số nguyên lớn hơn hoặc bằng 0'),
+    body('maxLandingPages')
+      .optional({ nullable: true })
+      .isInt({ min: 0 })
+      .withMessage('Giới hạn số landing page phải là số nguyên lớn hơn hoặc bằng 0'),
   ],
   handleValidationErrors,
   userController.updateEmployeeLimits.bind(userController)

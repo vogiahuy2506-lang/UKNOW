@@ -204,11 +204,7 @@ function App() {
           />
           <Route
             path="settings/landing-pages"
-            element={(
-              <AdminRoute>
-                <LandingPagesAdminPage />
-              </AdminRoute>
-            )}
+            element={<LandingPagesAdminPage />}
           />
           <Route path="settings/email-templates" element={<EmailTemplates />} />
           <Route path="settings/zalo-templates" element={<ZaloTemplates />} />

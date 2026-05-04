@@ -12,7 +12,10 @@ class LandingPageAdminController {
    */
   async list(req, res) {
     try {
-      const rows = await landingPageAdminService.list();
+      const rows = await landingPageAdminService.list({
+        userId: req.user?.id,
+        roleCode: req.user?.role_code,
+      });
       return res.json({ success: true, data: rows });
     } catch (error) {
       console.error('[LandingPageAdminController.list]', error);
@@ -32,7 +35,10 @@ class LandingPageAdminController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
-      const row = await landingPageAdminService.getById(id);
+      const row = await landingPageAdminService.getById(id, {
+        userId: req.user?.id,
+        roleCode: req.user?.role_code,
+      });
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -55,7 +61,7 @@ class LandingPageAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingPageAdminService.create(req.body || {}, userId);
+      const row = await landingPageAdminService.create(req.body || {}, req.user);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -80,7 +86,7 @@ class LandingPageAdminController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
-      const row = await landingPageAdminService.update(id, req.body || {}, userId);
+      const row = await landingPageAdminService.update(id, req.body || {}, req.user);
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -101,7 +107,10 @@ class LandingPageAdminController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
-      await landingPageAdminService.remove(id);
+      await landingPageAdminService.remove(id, {
+        userId: req.user?.id,
+        roleCode: req.user?.role_code,
+      });
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;
