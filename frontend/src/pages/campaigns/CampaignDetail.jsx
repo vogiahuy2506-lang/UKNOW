@@ -35,7 +35,7 @@ const CampaignDetail = () => {
       setCampaign(response.data.data);
     } catch (error) {
       toast.error('Không thể tải thông tin chiến dịch');
-      navigate('/campaigns');
+      navigate('/app/campaigns');
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +84,7 @@ const CampaignDetail = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center">
           <button
-            onClick={() => navigate('/campaigns')}
+            onClick={() => navigate('/app/campaigns')}
             className="mr-4 p-2 rounded-lg hover:bg-gray-100 shrink-0"
           >
             <HiOutlineArrowLeft className="w-5 h-5" />
@@ -96,7 +96,7 @@ const CampaignDetail = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
-            onClick={() => navigate(`/campaigns/${id}/builder`)}
+            onClick={() => navigate(`/app/campaigns/${id}/builder`)}
             className="btn btn-secondary"
           >
             <HiOutlinePencil className="w-5 h-5 mr-2" />

@@ -336,7 +336,7 @@ const CampaignBuilder = () => {
 
         if (!campaignData) {
           toast.error('Không thể tải thông tin chiến dịch');
-          navigate('/campaigns');
+          navigate('/app/campaigns');
           return;
         }
 
@@ -363,7 +363,7 @@ const CampaignBuilder = () => {
       } catch (error) {
         console.error('Fetch campaign error:', error);
         toast.error('Không thể tải thông tin chiến dịch');
-        navigate('/campaigns');
+        navigate('/app/campaigns');
       }
     };
 
@@ -604,7 +604,7 @@ const CampaignBuilder = () => {
       setIsDirty(false);
       setShowNameModal(false);
       if (isNewCampaign && savedCampaignId) {
-        navigate(`/campaigns/${savedCampaignId}/builder`, { replace: true });
+        navigate(`/app/campaigns/${savedCampaignId}/builder`, { replace: true });
       }
       toast.success('Đã lưu chiến dịch');
     } catch (error) {

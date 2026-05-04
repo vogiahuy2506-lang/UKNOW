@@ -3,13 +3,16 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../components/layout/admin/Sidebar';
 import Header from '../components/layout/admin/Header';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { HiOutlineSparkles } from 'react-icons/hi';
 import useIsMobile from '../hooks/useIsMobile';
+import AiChatbot from '../features/ai/AiChatbot';
 
 const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('uknow_sidebar_open', true);
   const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_sidebar_width', 256);
   const [isResizing, setIsResizing] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('uknow_ai_panel_open', false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(256);
   const location = useLocation();
@@ -130,6 +133,17 @@ const MainLayout = () => {
             <Outlet />
           </main>
         </div>
+        <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
+        
+        {/* AI Toggle Trigger (Mobile) */}
+        {!aiPanelOpen && (
+          <button 
+            onClick={() => setAiPanelOpen(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-2xl z-30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+          >
+            <HiOutlineSparkles className="w-7 h-7" />
+          </button>
+        )}
       </div>
     );
   }
@@ -164,12 +178,32 @@ const MainLayout = () => {
 
       <div
         className="flex-1 min-w-0 flex flex-col transition-all duration-300"
-        style={{ marginLeft: `${effectiveSidebarWidth}px` }}
+        style={{ 
+          marginLeft: `${effectiveSidebarWidth}px`,
+          marginRight: aiPanelOpen && !isMobile ? (window.innerWidth > 1024 ? '450px' : '400px') : '0px'
+        }}
       >
         <main ref={mainContentRef} className={mainClassName}>
           <Outlet />
         </main>
       </div>
+
+      {/* AI Side Panel */}
+      <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
+
+      {/* AI Toggle Bar (Desktop) */}
+      {!aiPanelOpen && (
+        <div className="fixed top-0 right-0 h-full w-1 z-30 group">
+          <button 
+            onClick={() => setAiPanelOpen(true)}
+            className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-24 bg-white border border-slate-200 border-r-0 rounded-l-2xl shadow-xl flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 hover:w-10 transition-all group-hover:border-orange-200"
+            title="Mở AI Assistant"
+          >
+            <HiOutlineSparkles className="w-5 h-5" />
+            <div className="w-1 h-1 bg-orange-500 rounded-full"></div>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

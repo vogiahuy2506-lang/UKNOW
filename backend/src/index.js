@@ -42,6 +42,7 @@ import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
+import aiRoutes from './routes/ai.routes.js';
 
 // Import scheduler
 import { initScheduler } from './utils/scheduler.js';
@@ -135,6 +136,7 @@ app.use('/api/admin/stats', adminStatsRoutes);   // Dashboard stats cho super_ad
 app.use('/api/admin/plans', adminPlansRoutes);    // CRUD gói dịch vụ + assign cho user
 app.use('/api/admin/members', adminMembersRoutes); // Danh sách thành viên, khóa, nâng super_admin
 app.use('/api/admin/orders', adminOrdersRoutes);   // Danh sách đơn hàng PayOS
+app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

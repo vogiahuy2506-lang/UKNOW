@@ -295,6 +295,13 @@ class UploadController {
     return fs.readFile(filePath);
   }
 
+  async readTempFileBuffer(tempId, originalName) {
+    const ext = path.extname(originalName || '');
+    const tempFileName = `${tempId}${ext}`;
+    const tempFilePath = path.join(this.tempDir, tempFileName);
+    return fs.readFile(tempFilePath);
+  }
+
   // Xóa temp file
   /**
    * Xóa một file tạm khỏi temp_uploads/ theo tên file.

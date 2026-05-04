@@ -29,7 +29,6 @@ import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
-import UknowLandingPage from './pages/public/UknowLandingPage';
 import AboutPage from './pages/public/AboutPage';
 import LpRendererPage from './pages/public/LpRendererPage';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
@@ -145,9 +144,6 @@ function App() {
           }}
         />
         <Routes>
-          {/* Public Landing Page - URL gốc sẽ hiện trang này */}
-          <Route path="/" element={<UknowLandingPage />} />
-
           {/* Auth Routes */}
           <Route path="/login" element={
             <PublicRoute>
@@ -166,8 +162,9 @@ function App() {
 
           {/* Landing Routes */}
           <Route element={<LandingLayout />}>
+            {/* Public Landing Page - URL gốc sẽ hiện trang AboutPage */}
+            <Route path="/" element={<AboutPage />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/about/" element={<AboutPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/payment-success" element={<PaymentSuccessPage />} />
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />

@@ -68,56 +68,53 @@ const Login = () => {
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl mb-4 shadow-lg shadow-primary-500/30">
-            <span className="text-white font-bold text-2xl">U</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Đăng nhập</h1>
-          <p className="text-gray-500 mt-2">Chào mừng bạn quay trở lại UKNOW</p>
+      <div className="w-full">
+        {/* Header */}
+        <div className="mb-10 lg:mb-12">
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng nhập</h1>
+          <p className="text-slate-500 font-medium">Chào mừng bạn quay trở lại với hệ thống</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Username */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-bold text-slate-700">
               Tên đăng nhập
             </label>
-            <div className="relative">
-              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="relative group">
+              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input
                 type="text"
                 {...register('username')}
-                className={`w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.username ? 'border-red-500' : ''}`}
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
                 placeholder="Nhập tên đăng nhập"
                 autoComplete="username"
               />
             </div>
             {errors.username && (
-              <p className="mt-1.5 text-sm text-red-500">{errors.username.message}</p>
+              <p className="text-sm font-medium text-red-500 flex items-center gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block"></span> {errors.username.message}</p>
             )}
           </div>
 
           {/* Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-bold text-slate-700">
               Mật khẩu
             </label>
-            <div className="relative">
-              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="relative group">
+              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 {...register('password')}
-                className={`w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.password ? 'border-red-500' : ''}`}
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
                 placeholder="Nhập mật khẩu"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
               >
                 {showPassword ? (
                   <HiOutlineEyeOff className="w-5 h-5" />
@@ -127,65 +124,66 @@ const Login = () => {
               </button>
             </div>
             {errors.password && (
-              <p className="mt-1.5 text-sm text-red-500">{errors.password.message}</p>
+              <p className="text-sm font-medium text-red-500 flex items-center gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block"></span> {errors.password.message}</p>
             )}
           </div>
 
-          {/* Remember me */}
-          <div className="flex items-center">
-            <label className="flex items-center cursor-pointer select-none">
+          {/* Remember me & Forgot Password (mock) */}
+          <div className="flex items-center justify-between pt-2">
+            <label className="flex items-center cursor-pointer group">
               <input
                 type="checkbox"
                 {...register('rememberMe')}
-                className="w-4 h-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
               />
-              <span className="ml-2 text-sm text-gray-600">Ghi nhớ đăng nhập</span>
+              <span className="ml-2 text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Ghi nhớ đăng nhập</span>
             </label>
+            <a href="#" className="text-sm font-bold text-orange-500 hover:text-orange-600 transition-colors">Quên mật khẩu?</a>
           </div>
 
           {/* Submit */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 px-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl hover:from-primary-600 hover:to-primary-700 focus:ring-4 focus:ring-primary-500/30 transition-all duration-200 shadow-lg shadow-primary-500/30 disabled:opacity-70"
+            className="w-full py-4 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none mt-4"
           >
             {isLoading ? (
-              <span className="flex items-center justify-center">
-                <div className="spinner mr-2"></div>
-                Đang đăng nhập...
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Đang xử lý...
               </span>
             ) : (
-              'Đăng nhập'
+              'Đăng nhập ngay'
             )}
           </button>
         </form>
 
         {/* Divider */}
-        <div className="flex items-center my-6">
-          <div className="flex-1 border-t border-gray-200"></div>
-          <span className="px-4 text-sm text-gray-400">hoặc</span>
-          <div className="flex-1 border-t border-gray-200"></div>
+        <div className="flex items-center my-8">
+          <div className="flex-1 border-t border-slate-200"></div>
+          <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">hoặc</span>
+          <div className="flex-1 border-t border-slate-200"></div>
         </div>
 
         {/* Google Login */}
         <button
           type="button"
           onClick={() => setShowEmailAuth(true)}
-          className="w-full py-3 px-4 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center justify-center gap-3"
+          className="w-full py-3.5 px-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-3 shadow-sm"
         >
           <GoogleIcon />
-          Đăng nhập với Google
+          Tiếp tục với Google
         </button>
 
         {/* Register Link */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
+        <div className="mt-8 text-center">
+          <p className="text-sm font-medium text-slate-600">
             Bạn chưa có tài khoản?{' '}
             <Link
               to="/register"
-              className="font-semibold text-primary-500 hover:text-primary-600 hover:underline transition-colors"
+              className="font-bold text-orange-500 hover:text-orange-600 transition-colors ml-1"
             >
-              Đăng ký ngay
+              Tạo tài khoản miễn phí
             </Link>
           </p>
         </div>
