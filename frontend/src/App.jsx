@@ -41,6 +41,7 @@ import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import NoPlanScreen from './pages/auth/NoPlanScreen';
+import RenewalScreen from './pages/auth/RenewalScreen';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 
 const LoadingScreen = () => (
@@ -69,7 +70,9 @@ const ProtectedRoute = ({ children }) => {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
   // Employee đi nhờ plan của owner — không cần kiểm tra active_plan_id
-  if (user?.role !== 'employee' && !user?.active_plan_id) return <NoPlanScreen />;
+  if (user?.role !== 'employee' && !user?.active_plan_id) {
+    return user?.isReturningCustomer ? <RenewalScreen /> : <NoPlanScreen />;
+  }
 
   return children;
 };
@@ -78,6 +81,17 @@ const ProtectedRoute = ({ children }) => {
 const OwnerRoute = ({ children }) => {
   const { user } = useAuthStore();
   if (user?.role === 'employee') return <UnauthorizedScreen />;
+  return children;
+};
+
+// user_admin luôn vào được; employee chỉ vào được nếu có ít nhất 1 trong các permission
+const PermissionRoute = ({ permission, children }) => {
+  const { user } = useAuthStore();
+  if (user?.role === 'employee') {
+    const perms = Array.isArray(permission) ? permission : [permission];
+    const hasPermission = perms.some((p) => user?.permissions?.[p] === true);
+    if (!hasPermission) return <UnauthorizedScreen />;
+  }
   return children;
 };
 
@@ -190,7 +204,7 @@ function App() {
             <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
 
             {/* Settings — owner only */}
-            <Route path="settings/channels" element={<OwnerRoute><ChannelSettings /></OwnerRoute>} />
+            <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
             <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />

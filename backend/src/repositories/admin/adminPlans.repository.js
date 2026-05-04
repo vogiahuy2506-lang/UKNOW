@@ -10,22 +10,24 @@ export async function findAllPlans() {
   return rows;
 }
 
-/** Lấy tất cả gói riêng (is_custom = true) kèm thông tin user và trạng thái thanh toán */
-export async function findCustomPlans() {
+/** Lấy tất cả gói riêng (is_custom = true) kèm thông tin user và trạng thái thanh toán.
+ *  showHidden = true → bao gồm cả gói đã ẩn (is_active = false) */
+export async function findCustomPlans({ showHidden = false } = {}) {
   const { rows } = await db.query(
     `SELECT DISTINCT ON (p.id)
             p.id, p.code, p.name, p.price, p.description, p.is_active, p.is_custom,
             p.max_employees, p.daily_email_limit, p.monthly_email_limit,
             p.daily_zalo_limit, p.monthly_zalo_limit, p.created_at,
-            COALESCE(u.email,    o_user.email)     AS assigned_email,
+            COALESCE(u.email,     o_user.email)     AS assigned_email,
             COALESCE(u.full_name, o_user.full_name) AS assigned_name,
             COALESCE(u.id,        o_user.id)        AS assigned_user_id,
+            (u.id IS NOT NULL)                      AS is_activated,
             o.status AS payment_status
      FROM plans p
      LEFT JOIN users  u      ON u.active_plan_id = p.id AND u.role = 'user_admin'
      LEFT JOIN orders o      ON o.plan_id = p.id
      LEFT JOIN users  o_user ON o.user_id  = o_user.id
-     WHERE p.is_custom = TRUE
+     WHERE p.is_custom = TRUE ${showHidden ? '' : "AND (u.id IS NULL OR u.status = 'active')"}
      ORDER BY p.id, o.created_at DESC NULLS LAST`
   );
   return rows;
@@ -96,14 +98,46 @@ export async function findUserAdminByEmail(email) {
   return rows[0] || null;
 }
 
-/** Gán gói trực tiếp cho user (bỏ qua flow thanh toán) */
+/** Gán gói trực tiếp cho user (bỏ qua flow thanh toán) — cũng set subscription_expires_at. */
 export async function assignPlanToUser(userId, planId) {
-  const { rows } = await db.query(
-    `UPDATE users SET active_plan_id = $1, updated_at = NOW() WHERE id = $2
-     RETURNING id, username, email, full_name, active_plan_id`,
-    [planId, userId]
-  );
-  return rows[0] || null;
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query(
+      `UPDATE users
+       SET active_plan_id = $1,
+           subscription_expires_at = CASE
+             WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
+               THEN subscription_expires_at + INTERVAL '1 month'
+             ELSE NOW() + INTERVAL '1 month'
+           END,
+           subscription_reminder_count = 0,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, username, email, full_name, active_plan_id, subscription_expires_at`,
+      [planId, userId]
+    );
+    const user = userResult.rows[0];
+    if (!user) { await client.query('ROLLBACK'); return null; }
+
+    const planResult = await client.query(`SELECT price FROM plans WHERE id = $1`, [planId]);
+    const price = planResult.rows[0]?.price ?? 0;
+    const orderCode = Date.now();
+    await client.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'success', NOW())`,
+      [orderCode, planId, price, user.email, user.id]
+    );
+
+    await client.query('COMMIT');
+    return user;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -128,13 +162,30 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
     const plan = planResult.rows[0];
 
     const userResult = await client.query(
-      `UPDATE users SET active_plan_id = $1, updated_at = NOW() WHERE id = $2
+      `UPDATE users
+       SET active_plan_id = $1,
+           subscription_expires_at = CASE
+             WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
+               THEN subscription_expires_at + INTERVAL '1 month'
+             ELSE NOW() + INTERVAL '1 month'
+           END,
+           subscription_reminder_count = 0,
+           updated_at = NOW()
+       WHERE id = $2
        RETURNING id, username, email, full_name`,
       [plan.id, userId]
     );
+    const assignedUser = userResult.rows[0];
+
+    const orderCode = Date.now();
+    await client.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'success', NOW())`,
+      [orderCode, plan.id, plan.price ?? 0, assignedUser.email, assignedUser.id]
+    );
 
     await client.query('COMMIT');
-    return { plan, user: userResult.rows[0] };
+    return { plan, user: assignedUser };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

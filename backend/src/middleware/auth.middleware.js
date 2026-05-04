@@ -28,12 +28,25 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Token không hợp lệ' });
     }
 
-    const userResult = await db.query(
-      `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id
-       FROM users
-       WHERE id = $1 AND status = 'active'`,
-      [decoded.userId]
-    );
+    let userResult;
+    try {
+      userResult = await db.query(
+        `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
+                subscription_expires_at
+         FROM users
+         WHERE id = $1 AND status = 'active'`,
+        [decoded.userId]
+      );
+    } catch {
+      // Fallback khi migration 007 chưa chạy (cột subscription_expires_at chưa tồn tại)
+      userResult = await db.query(
+        `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
+                NULL AS subscription_expires_at
+         FROM users
+         WHERE id = $1 AND status = 'active'`,
+        [decoded.userId]
+      );
+    }
 
     if (userResult.rows.length === 0) {
       return res.status(401).json({

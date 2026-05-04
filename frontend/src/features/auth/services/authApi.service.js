@@ -31,3 +31,8 @@ export async function updateMyProfile(payload) {
   const response = await api.put('/users/profile', payload);
   return response.data;
 }
+
+export async function getMyOrders() {
+  const response = await api.get('/users/my-orders');
+  return response.data;
+}

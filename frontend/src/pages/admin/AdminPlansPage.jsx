@@ -22,6 +22,7 @@ const AdminPlansPage = () => {
   const [deletePlan, setDeletePlan]   = useState(null);
   const [isDeleting, setIsDeleting]   = useState(false);
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [showHidden, setShowHidden]           = useState(false);
 
   const fetchPlans = async () => {
     setIsLoading(true);
@@ -32,10 +33,10 @@ const AdminPlansPage = () => {
     finally { setIsLoading(false); }
   };
 
-  const fetchCustomPlans = async () => {
+  const fetchCustomPlans = async (hidden = showHidden) => {
     setIsLoading(true);
     try {
-      const res = await adminPlansApiService.getCustomPlans();
+      const res = await adminPlansApiService.getCustomPlans(hidden);
       setCustomPlans(res.data.data || []);
     } catch { toast.error('Không thể tải danh sách gói riêng'); }
     finally { setIsLoading(false); }
@@ -43,10 +44,21 @@ const AdminPlansPage = () => {
 
   useEffect(() => {
     if (tab === 'public') fetchPlans();
-    else fetchCustomPlans();
-  }, [tab]);
+    else fetchCustomPlans(showHidden);
+  }, [tab, showHidden]);
 
   const handleRefresh = () => tab === 'public' ? fetchPlans() : fetchCustomPlans();
+
+  const handleActivate = async (plan) => {
+    if (!plan.assigned_email) return;
+    try {
+      await adminPlansApiService.assignPlan(plan.id, plan.assigned_email);
+      toast.success(`Đã kích hoạt gói "${plan.name}" cho ${plan.assigned_email}`);
+      fetchCustomPlans();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không thể kích hoạt gói');
+    }
+  };
 
   const handleDelete = async () => {
     try {
@@ -131,25 +143,37 @@ const AdminPlansPage = () => {
 
       {/* Tab: Gói riêng */}
       {tab === 'custom' && (
-        isLoading ? <SkeletonGrid /> :
-        customPlans.length === 0 ? (
-          <div className="card p-10 text-center text-gray-400">
-            <p>Chưa có gói riêng nào.</p>
-            <button type="button" onClick={() => setShowCustomModal(true)} className="btn btn-primary mt-4">
-              <HiOutlineSparkles className="w-4 h-4 mr-2" />
-              Tạo gói riêng đầu tiên
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {customPlans.map((plan) => (
-              <CustomPlanCard key={plan.id} plan={plan}
-                onEdit={(p)   => setEditPlan(p)}
-                onDelete={(p) => setDeletePlan(p)}
-              />
-            ))}
-          </div>
-        )
+        <>
+          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-primary-600 rounded"
+              checked={showHidden}
+              onChange={(e) => setShowHidden(e.target.checked)}
+            />
+            <span className="text-sm text-gray-500">Hiện gói đã ẩn</span>
+          </label>
+          {isLoading ? <SkeletonGrid /> :
+          customPlans.length === 0 ? (
+            <div className="card p-10 text-center text-gray-400">
+              <p>Chưa có gói riêng nào.</p>
+              <button type="button" onClick={() => setShowCustomModal(true)} className="btn btn-primary mt-4">
+                <HiOutlineSparkles className="w-4 h-4 mr-2" />
+                Tạo gói riêng đầu tiên
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {customPlans.map((plan) => (
+                <CustomPlanCard key={plan.id} plan={plan}
+                  onEdit={(p)     => setEditPlan(p)}
+                  onDelete={(p)   => setDeletePlan(p)}
+                  onActivate={(p) => handleActivate(p)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Modals */}

@@ -14,6 +14,9 @@ router.use(authMiddleware);
 // Get profile
 router.get('/profile', userController.getProfile.bind(userController));
 
+// Lịch sử mua gói dịch vụ của user đang đăng nhập
+router.get('/my-orders', userController.getMyOrders.bind(userController));
+
 // Update profile
 /**
  * PUT /api/users/profile

@@ -20,8 +20,8 @@ export async function listPlans() {
   return plans.map((p) => ({ ...p, user_count: countMap[p.id] || 0 }));
 }
 
-export async function listCustomPlans() {
-  return findCustomPlans();
+export async function listCustomPlans({ showHidden = false } = {}) {
+  return findCustomPlans({ showHidden });
 }
 
 export async function getPlan(id) {

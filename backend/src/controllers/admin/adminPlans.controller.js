@@ -24,10 +24,11 @@ export async function list(_req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
-/** GET /api/admin/plans/custom-list */
-export async function listCustom(_req, res) {
+/** GET /api/admin/plans/custom-list?showHidden=true */
+export async function listCustom(req, res) {
   try {
-    const plans = await adminPlansService.listCustomPlans();
+    const showHidden = req.query.showHidden === 'true';
+    const plans = await adminPlansService.listCustomPlans({ showHidden });
     return res.json({ success: true, data: plans });
   } catch (err) { return handleError(res, err); }
 }

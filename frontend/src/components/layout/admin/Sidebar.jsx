@@ -69,17 +69,15 @@ const userMenuItems = [
   {
     name: 'Thiết lập',
     icon: HiOutlineCog,
-    ownerOnly: true,
     children: [
-      { name: 'Quản lý kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, ownerOnly: true },
+      { name: 'Quản lý kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: 'Mẫu tin nhắn', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: 'Sản phẩm', path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
+      { name: 'Quản lý sản phẩm', path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
     ],
   },
   {
     name: 'Landing page',
     icon: HiOutlineGlobeAlt,
-    ownerOnly: true,
     children: [
       { name: 'Sản phẩm nổi bật', path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
       { name: 'Đánh giá', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },

@@ -4,7 +4,7 @@ import db from '../../config/database.js';
  * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
-export async function findAllMembers({ search, planId, status } = {}) {
+export async function findAllMembers({ search, planId, status, expiry } = {}) {
   const conditions = [`u.role = 'user_admin'`];
   const params = [];
 
@@ -14,6 +14,9 @@ export async function findAllMembers({ search, planId, status } = {}) {
   }
   if (planId === 'none') {
     conditions.push(`u.active_plan_id IS NULL`);
+  } else if (planId === 'custom') {
+    // Lọc user đang dùng gói riêng (enterprise)
+    conditions.push(`EXISTS (SELECT 1 FROM plans p WHERE p.id = u.active_plan_id AND p.is_custom = TRUE)`);
   } else if (planId) {
     params.push(planId);
     conditions.push(`u.active_plan_id = $${params.length}`);
@@ -22,22 +25,45 @@ export async function findAllMembers({ search, planId, status } = {}) {
     params.push(status);
     conditions.push(`u.status = $${params.length}`);
   }
+  if (expiry === 'expiring') {
+    conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW() AND u.subscription_expires_at <= NOW() + INTERVAL '7 days'`);
+  } else if (expiry === 'expired') {
+    conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at < NOW() AND u.active_plan_id IS NULL`);
+  }
 
   const where = conditions.join(' AND ');
 
-  const { rows } = await db.query(
-    `SELECT
-       u.id, u.username, u.email, u.full_name, u.status, u.created_at,
-       u.active_plan_id,
-       p.name  AS plan_name,
-       p.code  AS plan_code,
-       (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS employee_count
-     FROM users u
-     LEFT JOIN plans p ON p.id = u.active_plan_id
-     WHERE ${where}
-     ORDER BY u.created_at DESC`,
-    params
-  );
+  let rows;
+  try {
+    ({ rows } = await db.query(
+      `SELECT
+         u.id, u.username, u.email, u.full_name, u.status, u.created_at,
+         u.active_plan_id, u.subscription_expires_at,
+         p.name AS plan_name,
+         p.code AS plan_code,
+         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS employee_count
+       FROM users u
+       LEFT JOIN plans p ON p.id = u.active_plan_id
+       WHERE ${where}
+       ORDER BY u.subscription_expires_at ASC NULLS LAST, u.created_at DESC`,
+      params
+    ));
+  } catch {
+    // Fallback khi migration 007 chưa chạy (cột subscription_expires_at chưa có)
+    ({ rows } = await db.query(
+      `SELECT
+         u.id, u.username, u.email, u.full_name, u.status, u.created_at,
+         u.active_plan_id, NULL AS subscription_expires_at,
+         p.name AS plan_name,
+         p.code AS plan_code,
+         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS employee_count
+       FROM users u
+       LEFT JOIN plans p ON p.id = u.active_plan_id
+       WHERE ${where}
+       ORDER BY u.created_at DESC`,
+      params
+    ));
+  }
   return rows;
 }
 

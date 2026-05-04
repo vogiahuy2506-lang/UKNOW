@@ -23,6 +23,48 @@ import adminPlansApiService from '../../features/admin/services/adminPlansApi.se
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
+const ExpiryBadge = ({ expiresAt, hasPlan }) => {
+  if (!expiresAt) return <span className="text-xs text-gray-400">—</span>;
+
+  const now = Date.now();
+  const exp = new Date(expiresAt);
+  const daysLeft = Math.ceil((exp - now) / 86400000);
+
+  if (!hasPlan && exp < now) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
+        Đã hết hạn
+      </span>
+    );
+  }
+  if (daysLeft <= 3) {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
+          ⚠ {daysLeft} ngày
+        </span>
+        <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
+      </div>
+    );
+  }
+  if (daysLeft <= 7) {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+          {daysLeft} ngày
+        </span>
+        <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <span className="text-xs text-gray-600 font-medium">{exp.toLocaleDateString('vi-VN')}</span>
+      <p className="text-xs text-gray-400">còn {daysLeft} ngày</p>
+    </div>
+  );
+};
+
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
 const MODAL_SM = 'relative z-10 w-full max-w-md rounded-xl bg-white shadow-xl p-6';
 const MODAL_MD = 'relative z-10 w-full max-w-lg rounded-xl bg-white shadow-xl p-6';
@@ -104,6 +146,7 @@ const AdminMembersPage = () => {
   const [search, setSearch]       = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [expiryFilter, setExpiryFilter] = useState('');
 
 
   // Modals
@@ -119,6 +162,7 @@ const AdminMembersPage = () => {
       if (search)       params.search = search;
       if (planFilter)   params.planId = planFilter;
       if (statusFilter) params.status = statusFilter;
+      if (expiryFilter) params.expiry = expiryFilter;
       const res = await adminMembersApiService.getMembers(params);
       setMembers(res.data.data || []);
     } catch {
@@ -209,6 +253,7 @@ const AdminMembersPage = () => {
           >
             <option value="">Tất cả gói</option>
             <option value="none">Chưa có gói</option>
+            <option value="custom">Gói riêng (Enterprise)</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -221,6 +266,15 @@ const AdminMembersPage = () => {
             <option value="">Tất cả trạng thái</option>
             <option value="active">Đang hoạt động</option>
             <option value="inactive">Đã khóa</option>
+          </select>
+          <select
+            className="input py-1.5 text-sm flex-1 min-w-0"
+            value={expiryFilter}
+            onChange={(e) => setExpiryFilter(e.target.value)}
+          >
+            <option value="">Tất cả hạn dùng</option>
+            <option value="expiring">Sắp hết hạn (≤ 7 ngày)</option>
+            <option value="expired">Đã hết hạn</option>
           </select>
           <button type="submit" className="btn btn-primary py-1.5 text-sm whitespace-nowrap shrink-0">Tìm kiếm</button>
         </form>
@@ -241,6 +295,7 @@ const AdminMembersPage = () => {
                   <th>Gói dịch vụ</th>
                   <th>Nhân viên</th>
                   <th>Trạng thái</th>
+                  <th>Hạn dùng</th>
                   <th>Ngày đăng ký</th>
                   <th>Hành động</th>
                 </tr>
@@ -274,6 +329,9 @@ const AdminMembersPage = () => {
                         <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
                           {isActive ? 'Hoạt động' : 'Đã khóa'}
                         </span>
+                      </td>
+                      <td>
+                        <ExpiryBadge expiresAt={m.subscription_expires_at} hasPlan={!!m.active_plan_id} />
                       </td>
                       <td className="text-sm text-gray-500">{fmtDate(m.created_at)}</td>
                       <td>

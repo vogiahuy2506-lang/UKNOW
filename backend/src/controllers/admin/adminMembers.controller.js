@@ -9,8 +9,8 @@ function handleError(res, err) {
 /** GET /api/admin/members?search=&planId=&status= */
 export async function list(req, res) {
   try {
-    const { search, planId, status } = req.query;
-    const members = await adminMembersService.listMembers({ search, planId, status });
+    const { search, planId, status, expiry } = req.query;
+    const members = await adminMembersService.listMembers({ search, planId, status, expiry });
     return res.json({ success: true, data: members });
   } catch (err) { return handleError(res, err); }
 }

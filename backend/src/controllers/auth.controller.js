@@ -285,6 +285,8 @@ class AuthController {
    * Chuẩn hóa object user trả về client — dùng chung cho register/login/getMe.
    */
   formatUser(user) {
+    const expiresAt = user.subscription_expires_at ?? null;
+    const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
     return {
       id: user.id,
       username: user.username,
@@ -293,6 +295,9 @@ class AuthController {
       avatarUrl: user.avatar_url,
       role: user.role || 'user_admin',
       active_plan_id: user.active_plan_id ?? null,
+      subscriptionExpiresAt: expiresAt,
+      subscriptionExpired: isExpired,
+      isReturningCustomer: expiresAt !== null,
     };
   }
 

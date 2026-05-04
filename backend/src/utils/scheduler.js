@@ -2,6 +2,8 @@ import cron from 'node-cron';
 import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
+import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
+import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
@@ -448,4 +450,48 @@ export const initScheduler = () => {
   recoverOverdueNonContinuousCampaignRuns().catch((error) => {
     console.error('[Scheduler] Không thể quét retry non-continuous quá hạn ban đầu:', error.message);
   });
+
+  // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
+  cron.schedule('0 8 * * *', async () => {
+    console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
+    const renewalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/renewal`;
+    try {
+      // 1. Hết hạn: revoke active_plan_id
+      const expired = await findExpiredUsers();
+      for (const user of expired) {
+        await expireUserPlan(user.id);
+        console.log(`[Subscription] Đã thu hồi gói của ${user.email} (${user.plan_name})`);
+      }
+
+      // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
+      const week = await findExpiringUsers(6, 7, 1);
+      for (const user of week) {
+        const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
+        const { subject, html } = buildRenewalReminderEmail({
+          fullName: user.full_name, planName: user.plan_name,
+          expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+        });
+        await sendSystemEmail({ to: user.email, subject, html });
+        await incrementReminderCount(user.id);
+        console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
+      }
+
+      // 3. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
+      const threeDay = await findExpiringUsers(2, 3, 2);
+      for (const user of threeDay) {
+        const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
+        const { subject, html } = buildRenewalReminderEmail({
+          fullName: user.full_name, planName: user.plan_name,
+          expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+        });
+        await sendSystemEmail({ to: user.email, subject, html });
+        await incrementReminderCount(user.id);
+        console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
+      }
+    } catch (error) {
+      console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo subscription reminder cron: 08:00 hàng ngày');
 };

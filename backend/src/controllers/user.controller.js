@@ -19,6 +19,19 @@ const PROFILE_LIMIT_COLUMNS = `
   u.max_landing_pages
 `;
 
+const PLAN_COLUMNS = `
+  p.id          AS plan_id,
+  p.name        AS plan_name,
+  p.code        AS plan_code,
+  p.price       AS plan_price,
+  p.features    AS plan_features,
+  p.max_employees AS plan_max_employees,
+  p.daily_email_limit,
+  p.monthly_email_limit,
+  p.daily_zalo_limit,
+  p.monthly_zalo_limit
+`;
+
 /**
  * Chuẩn hóa giá trị giới hạn từ request body.
  *
@@ -65,8 +78,9 @@ const mapProfileResponse = (userRow) => ({
   avatarUrl: userRow.avatar_url,
   phone: userRow.phone,
   status: userRow.status,
-  roleCode: userRow.role_code || 'employee',
-  roleName: userRow.role_name || 'Nhân viên',
+  role: userRow.role || userRow.role_code || 'user_admin',
+  roleCode: userRow.role || userRow.role_code || 'user_admin',
+  roleName: userRow.role_name || 'Người dùng',
   maxCampaigns: userRow.max_campaigns ?? null,
   maxZaloAccounts: userRow.max_zalo_accounts ?? null,
   maxEmailAccounts: userRow.max_email_accounts ?? null,
@@ -75,6 +89,23 @@ const mapProfileResponse = (userRow) => ({
   maxLandingPages: userRow.max_landing_pages ?? null,
   createdAt: userRow.created_at,
   lastLoginAt: userRow.last_login_at,
+  subscriptionExpiresAt: userRow.subscription_expires_at ?? null,
+  // Plan info (user_admin only)
+  activePlanId: userRow.plan_id ?? null,
+  activePlanName: userRow.plan_name ?? null,
+  activePlanCode: userRow.plan_code ?? null,
+  activePlanPrice: userRow.plan_price ?? null,
+  activePlanFeatures: userRow.plan_features ?? null,
+  planMaxEmployees: userRow.plan_max_employees ?? null,
+  dailyEmailLimit: userRow.daily_email_limit ?? null,
+  monthlyEmailLimit: userRow.monthly_email_limit ?? null,
+  dailyZaloLimit: userRow.daily_zalo_limit ?? null,
+  monthlyZaloLimit: userRow.monthly_zalo_limit ?? null,
+  // Send usage counts (today and this month)
+  emailSentToday: Number(userRow.email_sent_today ?? 0),
+  emailSentMonth: Number(userRow.email_sent_month ?? 0),
+  zaloSentToday: Number(userRow.zalo_sent_today ?? 0),
+  zaloSentMonth: Number(userRow.zalo_sent_month ?? 0),
 });
 
 class UserController {
@@ -86,11 +117,13 @@ class UserController {
   async getProfile(req, res) {
     try {
       const userId = req.user.id;
-      
+
+      // 1. User base info — separate try/catch only for missing limit columns
       let result;
       try {
         result = await db.query(
           `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
+                  u.role, u.active_plan_id, u.subscription_expires_at,
                   ${PROFILE_LIMIT_COLUMNS},
                   u.created_at, u.last_login_at, r.role_code, r.role_name
            FROM users u
@@ -99,39 +132,75 @@ class UserController {
           [userId]
         );
       } catch {
+        // Fallback khi migration chưa chạy đủ (thiếu cột limit hoặc subscription_expires_at)
         result = await db.query(
-          `SELECT id, username, email, full_name, avatar_url, phone, status,
-                  NULL::int AS max_campaigns,
-                  NULL::int AS max_zalo_accounts,
-                  NULL::int AS max_email_accounts,
-                  NULL::int AS max_email_templates,
-                  NULL::int AS max_zalo_templates,
-                  NULL::int AS max_landing_pages,
-                  created_at, last_login_at
-           FROM users WHERE id = $1`,
+          `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
+                  u.role, u.active_plan_id,
+                  NULL AS subscription_expires_at,
+                  NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
+                  NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
+                  NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
+                  u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
+           FROM users u WHERE u.id = $1`,
           [userId]
         );
       }
 
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy người dùng'
-        });
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
       }
 
-      const user = result.rows[0];
+      const userRow = result.rows[0];
+
+      // 2. Resolve plan — active_plan_id first, then latest order by user_id OR user_email
+      let planRow = null;
+      try {
+        const planResult = await db.query(
+          `SELECT ${PLAN_COLUMNS}
+           FROM plans p
+           WHERE p.id = COALESCE(
+             $1::int,
+             (SELECT o.plan_id FROM orders o
+              WHERE o.user_id = $2 OR o.user_email = $3
+              ORDER BY o.created_at DESC LIMIT 1)
+           )`,
+          [userRow.active_plan_id || null, userId, userRow.email]
+        );
+        if (planResult.rows.length > 0) planRow = planResult.rows[0];
+      } catch {
+        // plan info is optional
+      }
+
+      // 3. Usage counts (best-effort)
+      let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
+      try {
+        const usageResult = await db.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
+               AND cj.created_at >= CURRENT_DATE) AS email_sent_today,
+             COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
+               AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS email_sent_month,
+             COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
+               AND cj.created_at >= CURRENT_DATE) AS zalo_sent_today,
+             COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
+               AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS zalo_sent_month
+           FROM customer_journey cj
+           JOIN campaigns c ON cj.campaign_id = c.id
+           WHERE c.id_user = $1`,
+          [userId]
+        );
+        if (usageResult.rows.length > 0) usageCounts = usageResult.rows[0];
+      } catch {
+        // ignore
+      }
 
       res.json({
         success: true,
-        data: mapProfileResponse(user)
+        data: mapProfileResponse({ ...userRow, ...(planRow || {}), ...usageCounts }),
       });
     } catch (error) {
       console.error('Get profile error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server'
-      });
+      res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 
@@ -192,23 +261,26 @@ class UserController {
            LIMIT 1`,
           [userId]
         );
-      } catch (queryError) {
-        if (!isMissingLimitColumnError(queryError)) throw queryError;
-        roleAndLimitResult = await db.query(
-          `SELECT r.role_code, r.role_name,
-                  NULL::int AS max_campaigns,
-                  NULL::int AS max_zalo_accounts,
-                  NULL::int AS max_email_accounts,
-                  NULL::int AS max_email_templates,
-                  NULL::int AS max_zalo_templates,
-                  NULL::int AS max_landing_pages,
-                  u.status, u.created_at, u.last_login_at
-           FROM users u
-           LEFT JOIN roles r ON u.id_role = r.id
-           WHERE u.id = $1
-           LIMIT 1`,
-          [userId]
-        );
+      } catch {
+        // Fallback không dùng JOIN để tránh lỗi khi id_role hoặc các cột limit chưa tồn tại
+        try {
+          roleAndLimitResult = await db.query(
+            `SELECT u.role AS role_code, u.role AS role_name,
+                    NULL::int AS max_campaigns,
+                    NULL::int AS max_zalo_accounts,
+                    NULL::int AS max_email_accounts,
+                    NULL::int AS max_email_templates,
+                    NULL::int AS max_zalo_templates,
+                    NULL::int AS max_landing_pages,
+                    u.status, u.created_at, u.last_login_at
+             FROM users u
+             WHERE u.id = $1
+             LIMIT 1`,
+            [userId]
+          );
+        } catch {
+          roleAndLimitResult = { rows: [] };
+        }
       }
 
       const userProfileRow = {
@@ -659,6 +731,54 @@ class UserController {
         success: false,
         message: 'Lỗi server',
       });
+    }
+  }
+
+  /**
+   * Lấy lịch sử mua gói dịch vụ của user đang đăng nhập.
+   * Tìm theo user_id hoặc user_email để bắt cả đơn cũ tạo trước khi có cột user_id.
+   */
+  async getMyOrders(req, res) {
+    try {
+      const userId = req.user.id;
+      const userEmail = req.user.email;
+
+      const result = await db.query(
+        `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
+                p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
+                p.daily_email_limit, p.monthly_email_limit,
+                p.daily_zalo_limit, p.monthly_zalo_limit
+         FROM orders o
+         LEFT JOIN plans p ON o.plan_id = p.id
+         WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'
+         ORDER BY o.created_at DESC
+         LIMIT 20`,
+        [userId, userEmail]
+      );
+
+      res.json({
+        success: true,
+        data: result.rows.map((row) => ({
+          id: row.id,
+          orderCode: String(row.order_code),
+          amount: Number(row.amount),
+          status: row.status,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          plan: row.plan_id ? {
+            id: row.plan_id,
+            name: row.plan_name,
+            code: row.plan_code,
+            dailyEmailLimit: row.daily_email_limit,
+            monthlyEmailLimit: row.monthly_email_limit,
+            dailyZaloLimit: row.daily_zalo_limit,
+            monthlyZaloLimit: row.monthly_zalo_limit,
+          } : null,
+        })),
+      });
+    } catch (error) {
+      console.error('Get my orders error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 }

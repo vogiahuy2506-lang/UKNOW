@@ -2,7 +2,7 @@ import api from '../../../services/api';
 
 const adminPlansApiService = {
   getPlans()                { return api.get('/admin/plans'); },
-  getCustomPlans()          { return api.get('/admin/plans/custom-list'); },
+  getCustomPlans(showHidden = false) { return api.get('/admin/plans/custom-list', { params: showHidden ? { showHidden: 'true' } : {} }); },
   searchUsers(q, excludeWithPlan = false) {
     return api.get('/admin/plans/search-users', { params: { q, ...(excludeWithPlan && { excludeWithPlan: 'true' }) } });
   },

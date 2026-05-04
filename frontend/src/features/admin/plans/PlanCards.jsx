@@ -1,4 +1,4 @@
-import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd } from 'react-icons/hi';
+import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt } from 'react-icons/hi';
 import { fmtVnd, fmtEmp, fmtLimit } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign }) => (
 );
 
 // ── CustomPlanCard — gói riêng doanh nghiệp ──────────────────────────────────
-export const CustomPlanCard = ({ plan, onEdit, onDelete }) => (
+export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate }) => (
   <div className="card p-5 flex flex-col gap-4">
     <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
@@ -58,10 +58,18 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete }) => (
           {(plan.assigned_name?.[0] || plan.assigned_email?.[0] || '?').toUpperCase()}
         </span>
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {plan.assigned_name && <p className="text-sm font-semibold text-gray-800 truncate">{plan.assigned_name}</p>}
         <p className="text-xs text-gray-400 truncate">{plan.assigned_email ?? 'Chưa gán'}</p>
       </div>
+      {plan.is_activated
+        ? <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+            <HiOutlineCheck className="w-3 h-3" /> Đang dùng
+          </span>
+        : <span className="shrink-0 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            Chờ kích hoạt
+          </span>
+      }
     </div>
 
     <div className="flex items-start justify-between gap-2">
@@ -80,6 +88,16 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete }) => (
     </div>
 
     <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
+      {!plan.is_activated && plan.assigned_email && (
+        <button
+          onClick={() => onActivate(plan)}
+          className="btn btn-primary text-sm px-3"
+          title="Gán gói cho tài khoản này ngay, không cần chờ thanh toán"
+        >
+          <HiOutlineLightningBolt className="w-4 h-4 mr-1" />
+          Kích hoạt
+        </button>
+      )}
       <button onClick={() => onEdit(plan)} className="btn btn-secondary flex-1 text-sm">
         <HiOutlinePencil className="w-4 h-4 mr-1.5" />
         Chỉnh sửa

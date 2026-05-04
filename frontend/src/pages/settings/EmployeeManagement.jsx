@@ -14,21 +14,21 @@ import {
   HiOutlineChat,
 } from 'react-icons/hi';
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
+import { getMyProfile } from '../../features/auth/services/authApi.service';
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 
+// keys: danh sách các permission key được bật/tắt cùng nhau khi toggle checkbox
 const PERMISSION_FIELDS = [
-  { key: 'email_settings',   label: 'Quản lý Email' },
-  { key: 'email_templates',  label: 'Mẫu Email' },
-  { key: 'zalo_settings',    label: 'Quản lý Zalo' },
-  { key: 'zalo_templates',   label: 'Mẫu Zalo' },
-  { key: 'courses',          label: 'Khóa học' },
-  { key: 'landing_pages',    label: 'Landing pages' },
-  { key: 'campaigns_view',   label: 'Chiến dịch — xem' },
-  { key: 'campaigns_create', label: 'Chiến dịch — tạo' },
-  { key: 'campaigns_run',    label: 'Chiến dịch — chạy' },
-  { key: 'customers',        label: 'Khách hàng' },
-  { key: 'leads',            label: 'Leads landing page' },
+  { keys: ['email_settings', 'zalo_settings'], label: 'Quản lý kênh gửi' },
+  { keys: ['email_templates', 'zalo_templates'], label: 'Mẫu tin nhắn' },
+  { keys: ['courses'],          label: 'Quản lý sản phẩm' },
+  { keys: ['landing_pages'],    label: 'Landing pages' },
+  { keys: ['campaigns_view'],   label: 'Chiến dịch — xem' },
+  { keys: ['campaigns_create'], label: 'Chiến dịch — tạo' },
+  { keys: ['campaigns_run'],    label: 'Chiến dịch — chạy' },
+  { keys: ['customers'],        label: 'Khách hàng' },
+  { keys: ['leads'],            label: 'Leads landing page' },
 ];
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
@@ -48,8 +48,42 @@ const renderModal = (content, onClose, panelClass = MODAL_MD) =>
 const limitLabel = (val) => (val === null || val === undefined ? '∞' : String(val));
 
 // ── LimitField ───────────────────────────────────────────────────────────────
-const LimitField = ({ label, value, onChange }) => {
+const LimitField = ({ label, value, onChange, max }) => {
   const isUnlimited = value === null || value === undefined;
+  const [text, setText] = useState(isUnlimited ? '' : String(value));
+
+  // Đồng bộ khi value thay đổi từ bên ngoài (vd: toggle unlimited)
+  useEffect(() => {
+    setText(isUnlimited ? '' : String(value ?? ''));
+  }, [value, isUnlimited]);
+
+  const handleCheck = (e) => {
+    if (e.target.checked) {
+      setText('');
+      onChange(null);
+    } else {
+      setText('0');
+      onChange(0);
+    }
+  };
+
+  const handleChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    const normalized = digits === '' ? '' : String(parseInt(digits, 10));
+    setText(normalized);
+    onChange(normalized === '' ? 0 : parseInt(normalized, 10));
+  };
+
+  const handleBlur = () => {
+    if (isUnlimited) return;
+    let num = text === '' ? 0 : parseInt(text, 10);
+    if (max !== undefined && num > max) num = max; // tự động cap khi rời ô
+    setText(String(num));
+    onChange(num);
+  };
+
+  const exceedsMax = max !== undefined && !isUnlimited && Number(text) > max;
+
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-gray-700">{label}</p>
@@ -58,22 +92,24 @@ const LimitField = ({ label, value, onChange }) => {
           type="checkbox"
           className="w-4 h-4 text-primary-600 rounded"
           checked={isUnlimited}
-          onChange={(e) => onChange(e.target.checked ? null : 0)}
+          onChange={handleCheck}
         />
         <span className="text-sm text-gray-600">Không giới hạn</span>
       </label>
       <input
-        type="number"
-        min={0}
-        className="input w-full"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        className={`input w-full ${exceedsMax ? 'border-red-400 focus:ring-red-400' : ''}`}
         disabled={isUnlimited}
-        value={isUnlimited ? '' : value}
+        value={text}
         placeholder="Nhập số lượng..."
-        onChange={(e) => {
-          const n = parseInt(e.target.value, 10);
-          onChange(isNaN(n) || n < 0 ? 0 : n);
-        }}
+        onChange={handleChange}
+        onBlur={handleBlur}
       />
+      {exceedsMax && (
+        <p className="text-xs text-red-500">Vượt quá giới hạn tối đa của gói ({max.toLocaleString()})</p>
+      )}
     </div>
   );
 };
@@ -101,6 +137,10 @@ const EmployeeManagement = () => {
     dailyZaloLimit:  null, monthlyZaloLimit:  null,
   });
   const [isSavingLimits, setIsSavingLimits] = useState(false);
+  const [planLimits, setPlanLimits] = useState({
+    dailyEmail: null, monthlyEmail: null,
+    dailyZalo:  null, monthlyZalo:  null,
+  });
 
   // Inline actions
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
@@ -147,7 +187,19 @@ const EmployeeManagement = () => {
     }
   };
 
-  useEffect(() => { fetchEmployees(); }, []);
+  useEffect(() => {
+    fetchEmployees();
+    getMyProfile().then((res) => {
+      const d = res?.data;
+      if (!d) return;
+      setPlanLimits({
+        dailyEmail:   d.dailyEmailLimit   ?? null,
+        monthlyEmail: d.monthlyEmailLimit ?? null,
+        dailyZalo:    d.dailyZaloLimit    ?? null,
+        monthlyZalo:  d.monthlyZaloLimit  ?? null,
+      });
+    }).catch(() => {});
+  }, []);
 
   // ── Mở modal chi tiết nhân viên ───────────────────────────────────────────
   const openEmployeeModal = (emp, tab = 'info') => {
@@ -496,17 +548,24 @@ const EmployeeManagement = () => {
             {activeTab === 'permissions' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {PERMISSION_FIELDS.map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 text-primary-600 rounded"
-                        checked={permState[key] === true}
-                        onChange={(e) => setPermState((prev) => ({ ...prev, [key]: e.target.checked }))}
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+                  {PERMISSION_FIELDS.map(({ keys, label }) => {
+                    const isChecked = keys.some((k) => permState[k] === true);
+                    return (
+                      <label key={keys[0]} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-primary-600 rounded"
+                          checked={isChecked}
+                          onChange={(e) => setPermState((prev) => {
+                            const next = { ...prev };
+                            keys.forEach((k) => { next[k] = e.target.checked; });
+                            return next;
+                          })}
+                        />
+                        <span className="text-sm text-gray-700">{label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
                 <div className="flex justify-end pt-2">
                   <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
@@ -529,11 +588,13 @@ const EmployeeManagement = () => {
                       label="Giới hạn / ngày"
                       value={limitsState.dailyEmailLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, dailyEmailLimit: v }))}
+                      max={planLimits.dailyEmail ?? undefined}
                     />
                     <LimitField
                       label="Giới hạn / tháng"
                       value={limitsState.monthlyEmailLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyEmailLimit: v }))}
+                      max={planLimits.monthlyEmail ?? undefined}
                     />
                   </div>
                 </div>
@@ -548,16 +609,28 @@ const EmployeeManagement = () => {
                       label="Giới hạn / ngày"
                       value={limitsState.dailyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, dailyZaloLimit: v }))}
+                      max={planLimits.dailyZalo ?? undefined}
                     />
                     <LimitField
                       label="Giới hạn / tháng"
                       value={limitsState.monthlyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyZaloLimit: v }))}
+                      max={planLimits.monthlyZalo ?? undefined}
                     />
                   </div>
                 </div>
                 <div className="flex justify-end pt-2">
-                  <button type="button" className="btn btn-primary" onClick={handleSaveLimits} disabled={isSavingLimits}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSaveLimits}
+                    disabled={isSavingLimits || [
+                      [limitsState.dailyEmailLimit,   planLimits.dailyEmail],
+                      [limitsState.monthlyEmailLimit, planLimits.monthlyEmail],
+                      [limitsState.dailyZaloLimit,    planLimits.dailyZalo],
+                      [limitsState.monthlyZaloLimit,  planLimits.monthlyZalo],
+                    ].some(([v, m]) => m !== null && m !== undefined && v !== null && v > m)}
+                  >
                     {isSavingLimits ? 'Đang lưu...' : 'Lưu giới hạn'}
                   </button>
                 </div>
