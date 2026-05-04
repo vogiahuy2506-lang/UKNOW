@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   HiOutlineSparkles, 
   HiOutlinePaperClip, 
@@ -9,7 +10,8 @@ import {
   HiOutlineRefresh,
   HiOutlinePlay,
   HiOutlineArrowRight,
-  HiOutlineTerminal
+  HiOutlineTerminal,
+  HiOutlinePencilAlt
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
@@ -78,23 +80,30 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       files: [...uploadedFiles]
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInputText('');
     setUploadedFiles([]);
     setIsTyping(true);
     setSuggestedScript(null);
 
     try {
-      const response = await aiApi.generateCampaign(userMessage.content, userMessage.files);
+      // Use the new chat API that supports history and smart routing
+      const response = await aiApi.chat(newMessages, userMessage.files);
       
       if (response.success) {
+        const { type, content, data } = response.data;
+        
         const aiMessage = {
           role: 'assistant',
-          content: `Tôi đã phân tích yêu cầu và tạo ra một kịch bản chiến dịch: **${response.data.campaignName}**.`,
-          script: response.data
+          content: content,
+          script: type === 'script' ? data : null
         };
+        
         setMessages(prev => [...prev, aiMessage]);
-        setSuggestedScript(response.data);
+        if (type === 'script') {
+          setSuggestedScript(data);
+        }
       }
     } catch (error) {
       console.error('AI Error Details:', error);
@@ -108,6 +117,23 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       }]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const navigate = useNavigate();
+
+  const handleEditCampaign = async (script) => {
+    const loadingToast = toast.loading('Đang chuẩn bị bộ thiết kế...');
+    try {
+      const response = await aiApi.executeCampaign(script, false);
+      if (response.success && response.data?.id) {
+        toast.success('Đã sẵn sàng! Đang chuyển hướng...', { id: loadingToast });
+        navigate(`/app/campaigns/${response.data.id}/builder`);
+        if (onToggle) onToggle();
+      }
+    } catch (error) {
+      console.error('Create for edit error:', error);
+      toast.error('Không thể mở bộ thiết kế kịch bản.', { id: loadingToast });
     }
   };
 
@@ -194,31 +220,85 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                 <div className="mt-5 bg-orange-50/50 rounded-2xl p-4 border border-orange-100/50 group hover:border-orange-200 transition-all">
                   <div className="flex items-center gap-2 mb-3 text-orange-600">
                     <HiOutlineTerminal className="w-5 h-5" />
-                    <span className="font-black text-[10px] uppercase tracking-[0.2em]">Generated Script</span>
+                    <span className="font-black text-[10px] uppercase tracking-[0.2em]">
+                      {msg.script.nodes && msg.script.landingPage 
+                        ? 'Marketing Package' 
+                        : msg.script.landingPage 
+                          ? 'Landing Page Design' 
+                          : 'Generated Script'}
+                    </span>
                   </div>
                   <h4 className="font-bold text-slate-900 text-sm mb-1">{msg.script.campaignName}</h4>
                   <p className="text-xs text-slate-500 mb-4 leading-relaxed">{msg.script.description}</p>
                   
                   <div className="space-y-2 mb-5">
-                    {msg.script.nodes.slice(1, 4).map((node, nIdx) => (
+                    {msg.script.nodes?.filter(node => node.nodeType !== 'trigger').slice(0, 5).map((node, nIdx) => (
                       <div key={nIdx} className="flex items-center gap-3">
                         <div className="w-6 h-6 rounded-full bg-white border border-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-500 shadow-sm">
                           {nIdx + 1}
                         </div>
-                        <span className="text-xs text-slate-600 font-medium">{node.nodeName}</span>
+                        <div className="flex-1">
+                          <p className="text-xs text-slate-700 font-bold">
+                            {node.nodeName || node.nodeSubtype || node.nodeType || 'Unnamed Step'}
+                          </p>
+                          {node.config?.subject && (
+                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1 italic">
+                              Sub: {node.config.subject}
+                            </p>
+                          )}
+                          {node.config?.content && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                              {node.config.content}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     ))}
-                    {msg.script.nodes.length > 4 && (
-                      <span className="text-[10px] text-slate-400 ml-9 font-medium">+ {msg.script.nodes.length - 4} steps more</span>
+                    {(msg.script.nodes?.length > 6) && (
+                      <span className="text-[10px] text-slate-400 ml-9 font-medium">
+                        + {msg.script.nodes.length - 6} steps more
+                      </span>
                     )}
                   </div>
 
-                  <button 
-                    onClick={handleExecuteCampaign}
-                    className="w-full py-3 px-4 bg-orange-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-[0.98]"
-                  >
-                    <HiOutlinePlay className="w-4 h-4" /> Run Campaign Now
-                  </button>
+                  {msg.script.nodes && (
+                    <div className="space-y-2">
+                      <button 
+                        onClick={handleExecuteCampaign}
+                        className="w-full py-3 px-4 bg-orange-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-[0.98]"
+                      >
+                        <HiOutlinePlay className="w-4 h-4" /> Run Campaign Now
+                      </button>
+                      
+                      <button 
+                        onClick={() => handleEditCampaign(msg.script)}
+                        className="w-full py-3 px-4 bg-white text-slate-700 border border-slate-200 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                      >
+                        <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Customize in Builder
+                      </button>
+                    </div>
+                  )}
+
+                  {msg.script.landingPage && (
+                    <button 
+                      onClick={() => {
+                        const win = window.open('', '_blank');
+                        win.document.write(`
+                          <html>
+                            <head>
+                              <title>${msg.script.landingPage.title}</title>
+                              <style>${msg.script.landingPage.css}</style>
+                            </head>
+                            <body>${msg.script.landingPage.html}</body>
+                          </html>
+                        `);
+                        win.document.close();
+                      }}
+                      className="w-full mt-2 py-3 px-4 bg-white text-slate-800 border border-slate-200 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <HiOutlineSparkles className="w-4 h-4 text-orange-500" /> Preview Landing Page
+                    </button>
+                  )}
                 </div>
               )}
             </div>

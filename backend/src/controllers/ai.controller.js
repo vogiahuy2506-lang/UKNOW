@@ -38,6 +38,41 @@ class AiController {
   }
 
   /**
+   * Smart interactive chat.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async chat(req, res) {
+    try {
+      const { history, files } = req.body;
+
+      if (!history || !history.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu lịch sử trò chuyện',
+        });
+      }
+
+      const response = await aiCampaignService.processSmartChat({
+        history,
+        files: files || [],
+      });
+
+      return res.json({
+        success: true,
+        data: response,
+      });
+    } catch (error) {
+      console.error('AI chat error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xử lý trò chuyện AI',
+      });
+    }
+  }
+
+  /**
    * Execute (Create & Run) the generated campaign.
    *
    * @param {import('express').Request} req

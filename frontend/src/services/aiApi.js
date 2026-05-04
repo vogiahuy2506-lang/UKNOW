@@ -21,6 +21,18 @@ const aiApi = {
   executeCampaign: async (script, autoRun = true) => {
     const response = await api.post('/ai/execute-campaign', { ...script, autoRun });
     return response.data;
+  },
+
+  /**
+   * Smart interactive chat.
+   * @param {Array} history Array of { role, content }
+   * @param {Array} files Array of current attached files
+   */
+  chat: async (history, files = []) => {
+    const response = await api.post('/ai/chat', { history, files }, {
+      timeout: 120000
+    });
+    return response.data;
   }
 };
 

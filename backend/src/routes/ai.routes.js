@@ -6,6 +6,9 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+// Smart interactive chat
+router.post('/chat', aiController.chat.bind(aiController));
+
 // Generate campaign script from AI
 router.post('/generate-campaign', aiController.generateCampaign.bind(aiController));
 

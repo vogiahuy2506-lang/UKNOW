@@ -1,5 +1,6 @@
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import uploadController from '../../controllers/upload.controller.js';
+import axios from 'axios';
 import path from 'path';
 
 class AiCampaignService {
@@ -79,7 +80,7 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
       "positionX": 700,
       "positionY": 300,
       "config": {
-        "content": "Nội dung tin nhắn Zalo thân thiện..."
+        "content": "Nội dung tin nhắn Zalo thân thiện, chuyên nghiệp..."
       }
     }
   ],
@@ -87,12 +88,18 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
     { "sourceNodeId": "node_1", "targetNodeId": "node_2", "connectionType": "default" },
     { "sourceNodeId": "node_2", "targetNodeId": "node_3", "connectionType": "default" },
     { "sourceNodeId": "node_3", "targetNodeId": "node_4", "connectionType": "default" }
-  ]
+  ],
+  "landingPage": {
+    "title": "Tiêu đề trang đích",
+    "html": "Mã HTML (không cần thẻ body/html, chỉ nội dung bên trong)",
+    "css": "Mã CSS tùy chỉnh để làm trang đẹp hơn"
+  }
 }
 
-LƯU Ý: 
-- Nội dung Email và Zalo phải cực kỳ chuyên nghiệp, đánh trúng tâm lý khách hàng dựa trên thông tin sản phẩm.
-- Tự động tạo ít nhất 3-5 bước trong chiến dịch để tăng tỷ lệ chuyển đổi.
+LƯU Ý QUAN TRỌNG: 
+- Bạn BẮT BUỘC phải viết nội dung chi tiết cho từng email (subject, content) và tin nhắn zalo (content). Không được để trống hoặc dùng nội dung giữ chỗ.
+- Nội dung phải mang tính thuyết phục cao, cá nhân hóa theo thông tin doanh nghiệp/sản phẩm đã cung cấp.
+- Thiết kế một Landing Page hấp dẫn (HTML/CSS) phù hợp với mục tiêu chiến dịch.
 - Chỉ trả về duy nhất khối JSON, không có văn bản giải thích bên ngoài.`
     });
 
@@ -141,11 +148,146 @@ LƯU Ý:
       
       console.log(`[AI] Extracted JSON length: ${jsonStr.length}`);
       
-      return JSON.parse(jsonStr);
+      try {
+        return JSON.parse(jsonStr); // Try original first
+      } catch (firstErr) {
+        // If it fails, try to aggressively clean only the values
+        console.warn('Initial JSON parse failed, attempting sanitization...', firstErr.message);
+        
+        // This regex finds content between quotes and escapes literal newlines within them
+        const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
+          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+        });
+        
+        return JSON.parse(sanitized);
+      }
     } catch (err) {
-      console.error('AI returned invalid JSON:', text);
-      console.error('Extraction error:', err.message);
+      console.error('Final JSON parse failed:', text);
       throw new Error('AI không thể tạo kịch bản đúng định dạng. Vui lòng thử lại với yêu cầu chi tiết hơn.');
+    }
+  }
+
+  /**
+   * Process interactive chat with context.
+   *
+   * @param {object} input
+   * @param {Array<object>} input.history Message history [{ role: 'user'|'assistant', content: string }]
+   * @param {Array<object>} input.files Current attached files
+   * @returns {Promise<object>} { type: 'text'|'script', content: string, data?: object }
+   */
+  async processSmartChat({ history = [], files = [] }) {
+    const contents = [];
+
+    // System instruction
+    const systemPrompt = `Bạn là UKNOW AI - Trợ lý Marketing thông minh.
+Nhiệm vụ của bạn là tương tác và hỗ trợ người dùng trong các hoạt động Marketing.
+
+QUY TẮC PHẢN HỒI:
+1. Nếu người dùng chỉ chào hỏi, hỏi thông tin chung hoặc thảo luận, hoặc YÊU CẦU VIẾT MỘT ĐOẠN VĂN/MẪU TIN NHẮN đơn thuần để tham khảo, hãy trả lời bằng văn bản tự nhiên (type: "text").
+2. Chỉ sử dụng type: "script" khi người dùng muốn TẠO CHIẾN DỊCH, QUY TRÌNH TỰ ĐỘNG, hoặc THIẾT KẾ TRANG ĐÍCH để có thể thực thi trên hệ thống.
+3. CHỈ TẠO NHỮNG GÌ NGƯỜI DÙNG YÊU CẦU:
+   - Chỉ tạo "nodes" (kịch bản tin nhắn) nếu người dùng yêu cầu kịch bản, chiến dịch, hoặc quy trình tự động.
+   - Chỉ tạo "landingPage" nếu người dùng yêu cầu trang đích, trang web, hoặc giao diện giới thiệu.
+   - Nếu người dùng chỉ yêu cầu một thứ, hãy để các trường khác là null.
+4. Nếu tạo script, bạn BẮT BUỘC phải trả về cấu trúc JSON sau trong trường "data":
+    {
+      "campaignName": "Tên chiến dịch/Yêu cầu",
+      "description": "Mô tả ngắn",
+      "campaignType": "mixed",
+      "nodes": [
+        { "tempId": "n1", "nodeType": "trigger", "nodeSubtype": "manual", "nodeName": "Bắt đầu", "positionX": 100, "positionY": 100 },
+        { "tempId": "n2", "nodeType": "action", "nodeSubtype": "email", "nodeName": "Gửi Email", "positionX": 400, "positionY": 100, "config": { ... } }
+      ],
+      "connections": [
+        { "sourceNodeId": "n1", "targetNodeId": "n2", "connectionType": "default" }
+      ],
+      "landingPage": { ... } | null
+    }
+6. Các nodeSubtype hợp lệ: email, zalo_personal, zalo_group, wait_time.
+5. Khi viết nội dung tin nhắn (trong nodes.config), hãy viết cực kỳ chi tiết và chuyên nghiệp.
+
+ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
+{
+  "type": "text" | "script",
+  "content": "Lời nhắn của bạn cho người dùng",
+  "data": null | { ... }
+}`;
+
+    // Prepare contents for Gemini (including history)
+    // Map history to Gemini format
+    const geminiHistory = history.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content || '(no text)' }]
+    }));
+
+    // For the last message, we might have files
+    const lastMessage = geminiHistory[geminiHistory.length - 1];
+    
+    // If there are files, we need to add them to the last user message parts
+    if (files.length > 0) {
+      for (const file of files) {
+        try {
+          const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+          lastMessage.parts.push({
+            inlineData: {
+              mimeType: file.contentType,
+              data: buffer.toString('base64'),
+            },
+          });
+        } catch (err) {
+          console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+        }
+      }
+    }
+
+    // Call Gemini
+    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+    const modelName = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    // Call Gemini using axios (already in project)
+    try {
+      const { data: result } = await axios.post(url, {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: geminiHistory,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.8,
+        }
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 120000
+      });
+
+      if (!result.candidates || result.candidates.length === 0) {
+        if (result.promptFeedback?.blockReason) {
+          throw new Error(`Yêu cầu bị chặn: ${result.promptFeedback.blockReason}`);
+        }
+        throw new Error('AI không phản hồi, vui lòng thử lại.');
+      }
+
+      const text = result.candidates[0].content?.parts?.[0]?.text;
+      if (!text) throw new Error('AI trả về kết quả rỗng.');
+
+      try {
+        return JSON.parse(text); // Try original first
+      } catch (firstErr) {
+        // If it fails, try to aggressively clean only the values
+        console.warn('Initial JSON parse failed, attempting sanitization...', firstErr.message);
+        
+        // This regex finds content between quotes and escapes literal newlines within them
+        const sanitized = text.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
+          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+        });
+        
+        return JSON.parse(sanitized);
+      }
+    } catch (err) {
+      if (err.response) {
+        console.error('Gemini API Error Detail:', JSON.stringify(err.response.data, null, 2));
+        throw new Error(`Gemini API Error (${err.response.status}): ${JSON.stringify(err.response.data)}`);
+      }
+      throw err;
     }
   }
 }
