@@ -27,6 +27,11 @@ const RESOURCE_LIMIT_MAP = {
     table: 'zalo_templates',
     label: 'số Zalo template',
   },
+  landingPages: {
+    column: 'max_landing_pages',
+    table: 'landing_pages',
+    label: 'số landing page',
+  },
 };
 
 const isMissingLimitColumnsError = (error) => error?.code === '42703';
@@ -50,7 +55,8 @@ async function getUserLimitRow(userId) {
          max_zalo_accounts,
          max_email_accounts,
          max_email_templates,
-         max_zalo_templates
+         max_zalo_templates,
+         max_landing_pages
        FROM users
        WHERE id = $1
        LIMIT 1`,

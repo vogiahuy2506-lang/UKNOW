@@ -8,13 +8,15 @@ const EMPLOYEE_LIMIT_KEYS = {
   maxEmailAccounts: 'max_email_accounts',
   maxEmailTemplates: 'max_email_templates',
   maxZaloTemplates: 'max_zalo_templates',
+  maxLandingPages: 'max_landing_pages',
 };
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
   u.max_zalo_accounts,
   u.max_email_accounts,
   u.max_email_templates,
-  u.max_zalo_templates
+  u.max_zalo_templates,
+  u.max_landing_pages
 `;
 
 /**
@@ -70,6 +72,7 @@ const mapProfileResponse = (userRow) => ({
   maxEmailAccounts: userRow.max_email_accounts ?? null,
   maxEmailTemplates: userRow.max_email_templates ?? null,
   maxZaloTemplates: userRow.max_zalo_templates ?? null,
+  maxLandingPages: userRow.max_landing_pages ?? null,
   createdAt: userRow.created_at,
   lastLoginAt: userRow.last_login_at,
 });
@@ -103,6 +106,7 @@ class UserController {
                   NULL::int AS max_email_accounts,
                   NULL::int AS max_email_templates,
                   NULL::int AS max_zalo_templates,
+                  NULL::int AS max_landing_pages,
                   created_at, last_login_at
            FROM users WHERE id = $1`,
           [userId]
@@ -197,6 +201,7 @@ class UserController {
                   NULL::int AS max_email_accounts,
                   NULL::int AS max_email_templates,
                   NULL::int AS max_zalo_templates,
+                  NULL::int AS max_landing_pages,
                   u.status, u.created_at, u.last_login_at
            FROM users u
            LEFT JOIN roles r ON u.id_role = r.id
@@ -296,7 +301,7 @@ class UserController {
       try {
         result = await db.query(
           `SELECT u.id, u.username, u.email, u.full_name, u.phone, u.status,
-                  u.max_campaigns, u.max_zalo_accounts, u.max_email_accounts, u.max_email_templates, u.max_zalo_templates,
+                  u.max_campaigns, u.max_zalo_accounts, u.max_email_accounts, u.max_email_templates, u.max_zalo_templates, u.max_landing_pages,
                   u.created_at, u.last_login_at, r.role_code, r.role_name
            FROM users u
            JOIN roles r ON u.id_role = r.id
@@ -333,6 +338,7 @@ class UserController {
           maxEmailAccounts: row.max_email_accounts,
           maxEmailTemplates: row.max_email_templates,
           maxZaloTemplates: row.max_zalo_templates,
+          maxLandingPages: row.max_landing_pages,
           createdAt: row.created_at,
           lastLoginAt: row.last_login_at,
         })),
@@ -429,6 +435,7 @@ class UserController {
           maxEmailAccounts: null,
           maxEmailTemplates: null,
           maxZaloTemplates: null,
+          maxLandingPages: null,
           createdAt: employee.created_at,
         },
       });
@@ -608,7 +615,8 @@ class UserController {
           u.max_zalo_accounts,
           u.max_email_accounts,
           u.max_email_templates,
-          u.max_zalo_templates
+          u.max_zalo_templates,
+          u.max_landing_pages
       `;
 
       let result;
@@ -642,6 +650,7 @@ class UserController {
           maxEmailAccounts: employee.max_email_accounts,
           maxEmailTemplates: employee.max_email_templates,
           maxZaloTemplates: employee.max_zalo_templates,
+          maxLandingPages: employee.max_landing_pages,
         },
       });
     } catch (error) {

@@ -1,4 +1,5 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
+import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import {
   prepareLandingHtmlOnSave,
   resolveFrontendOriginFromEnv,
@@ -9,7 +10,7 @@ import {
 const RESERVED_SLUG_FIXED_LANDING = 'l';
 
 /**
- * CRUD landing page HTML (admin).
+ * CRUD landing page HTML theo phạm vi quyền user.
  */
 class LandingPageAdminService {
   /**
@@ -26,19 +27,23 @@ class LandingPageAdminService {
   }
 
   /**
+   * Lấy danh sách landing trong phạm vi quyền của user hiện tại.
+   *
+   * @param {{ userId: number|string, roleCode?: string }} scope
    * @returns {Promise<object[]>}
    */
-  async list() {
-    const rows = await landingPageRepository.listAllForAdmin();
+  async list(scope = {}) {
+    const rows = await landingPageRepository.listByScope(scope);
     return rows.filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING);
   }
 
   /**
    * @param {number} id
+   * @param {{ userId: number|string, roleCode?: string }} scope
    * @returns {Promise<object>}
    */
-  async getById(id) {
-    const row = await landingPageRepository.findById(id);
+  async getById(id, scope = {}) {
+    const row = await landingPageRepository.findByIdInScope(id, scope);
     if (!row) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -49,10 +54,28 @@ class LandingPageAdminService {
 
   /**
    * @param {object} body
-   * @param {number} idUser
+   * @param {{ id: number|string, role_code?: string }} authUser
    * @returns {Promise<object>}
    */
-  async create(body, idUser) {
+  async create(body, authUser) {
+    const userId = Number.parseInt(authUser?.id, 10);
+    if (!Number.isFinite(userId)) {
+      const err = new Error('Thiếu thông tin người dùng');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const limitCheck = await checkUserResourceLimit({
+      userId,
+      roleCode: authUser?.role_code,
+      resourceKey: 'landingPages',
+    });
+    if (!limitCheck.allowed) {
+      const err = new Error(limitCheck.message || 'Đã đạt giới hạn landing page cho tài khoản hiện tại');
+      err.statusCode = 400;
+      throw err;
+    }
+
     const slug = String(body?.slug || '').trim().toLowerCase();
     this.assertNotReservedSlug(slug);
     if (!landingPageRepository.isValidSlug(slug)) {
@@ -77,17 +100,17 @@ class LandingPageAdminService {
       title: body?.title,
       htmlContent,
       isPublished: Boolean(body?.isPublished),
-      idUser,
+      idUser: userId,
     });
   }
 
   /**
    * @param {number} id
    * @param {object} body
-   * @param {number} idUser
+   * @param {{ id: number|string, role_code?: string }} authUser
    * @returns {Promise<object>}
    */
-  async update(id, body, idUser) {
+  async update(id, body, authUser) {
     const slug = String(body?.slug || '').trim().toLowerCase();
     this.assertNotReservedSlug(slug);
     if (!landingPageRepository.isValidSlug(slug)) {
@@ -95,7 +118,10 @@ class LandingPageAdminService {
       err.statusCode = 400;
       throw err;
     }
-    const current = await landingPageRepository.findById(id);
+    const current = await landingPageRepository.findByIdInScope(id, {
+      userId: authUser?.id,
+      roleCode: authUser?.role_code,
+    });
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -124,17 +150,18 @@ class LandingPageAdminService {
       title: body?.title,
       htmlContent,
       isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
-      idUser,
+      idUser: current.idUser,
     });
     return updated;
   }
 
   /**
    * @param {number} id
+   * @param {{ userId: number|string, roleCode?: string }} scope
    * @returns {Promise<boolean>}
    */
-  async remove(id) {
-    const current = await landingPageRepository.findById(id);
+  async remove(id, scope = {}) {
+    const current = await landingPageRepository.findByIdInScope(id, scope);
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;

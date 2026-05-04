@@ -12,6 +12,8 @@ import {
   filterSchedulesByCampaignId,
   formatScheduleRunClockFromCron,
   getSchedulePatternSummaryVi,
+  getScheduleRunTimingFieldLabelVi,
+  resolveScheduleUiTimingDate,
 } from '../utils/campaignRunSchedule.helpers';
 
 /**
@@ -23,6 +25,18 @@ import {
 const scheduleClockUiLabel = (cronExpression) => {
   const clock = formatScheduleRunClockFromCron(cronExpression);
   return clock ? `Lúc ${clock}` : '—';
+};
+
+/**
+ * Giá trị hiển thị cho cột thời gian chạy (lịch 1 lần: suy từ cron + ngày tạo khi có thể).
+ *
+ * @param {object} schedule bản ghi lịch chạy
+ * @returns {string}
+ */
+const getScheduleNextRunUiLabel = (schedule) => {
+  const at = resolveScheduleUiTimingDate(schedule);
+  if (!at) return 'Chưa xác định';
+  return formatCampaignDateTime(at);
 };
 
 const CampaignRunModals = ({
@@ -328,7 +342,7 @@ const CampaignRunModals = ({
             {(scheduleForm.scheduleType === 'custom') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cứ cách bao nhiêu ngày thì chạy lại
+                  Cứ cách bao nhiêu ngày thì chạy lại (tính từ hôm nay)
                 </label>
                 <input
                   type="number"
@@ -477,6 +491,12 @@ const CampaignRunModals = ({
                       : 'Chưa chạy lần nào'}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-gray-500">{getScheduleRunTimingFieldLabelVi(selectedSchedule)}</p>
+                  <p className="font-medium text-gray-900">
+                    {getScheduleNextRunUiLabel(selectedSchedule)}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -619,6 +639,10 @@ const CampaignRunModals = ({
                         <p className="text-sm text-gray-600">{pattern}</p>
                         <p className="text-sm text-gray-800">
                           <span className="font-medium">Đã chạy:</span> {runTimes} lần
+                        </p>
+                        <p className="text-sm text-gray-800">
+                          <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch)}:</span>{' '}
+                          {getScheduleNextRunUiLabel(sch)}
                         </p>
                       </li>
                     );

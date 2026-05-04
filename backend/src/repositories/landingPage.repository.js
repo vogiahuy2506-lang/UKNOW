@@ -1,4 +1,5 @@
 import db from '../config/database.js';
+import { isAdminRole } from '../utils/roleScope.util.js';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -6,6 +7,36 @@ const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
  * Repository bảng `landing_pages` (HTML động /lp/:slug).
  */
 class LandingPageRepository {
+  /**
+   * Build điều kiện scope cho landing page theo vai trò.
+   *
+   * Luồng hoạt động:
+   * 1. Employee chỉ thấy bản ghi do chính họ tạo (`lp.id_user = userId`).
+   * 2. Admin thấy landing của chính họ + tất cả landing do employee tạo.
+   * 3. Trả về điều kiện SQL + params để các query khác tái sử dụng.
+   *
+   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @returns {{ clause: string, params: any[] }}
+   */
+  buildLandingScopeCondition(scope = {}) {
+    const userId = Number.parseInt(scope?.userId, 10);
+    if (!Number.isFinite(userId)) {
+      return { clause: '1 = 0', params: [] };
+    }
+
+    if (isAdminRole(scope?.roleCode)) {
+      return {
+        clause: '(lp.id_user = $1 OR owner_role.role_code = $2)',
+        params: [userId, 'employee'],
+      };
+    }
+
+    return {
+      clause: 'lp.id_user = $1',
+      params: [userId],
+    };
+  }
+
   /**
    * @param {string} slug
    * @returns {boolean}
@@ -67,18 +98,23 @@ class LandingPageRepository {
   /**
    * @returns {Promise<object[]>}
    */
-  async listAllForAdmin() {
+  async listByScope(scope = {}) {
+    const { clause, params } = this.buildLandingScopeCondition(scope);
     const result = await db.query(
       `SELECT
-         id,
-         slug,
-         title,
-         is_published AS "isPublished",
-         id_user AS "idUser",
-         created_at AS "createdAt",
-         updated_at AS "updatedAt"
-       FROM landing_pages
-       ORDER BY updated_at DESC`
+         lp.id,
+         lp.slug,
+         lp.title,
+         lp.is_published AS "isPublished",
+         lp.id_user AS "idUser",
+         lp.created_at AS "createdAt",
+         lp.updated_at AS "updatedAt"
+       FROM landing_pages lp
+       LEFT JOIN users owner ON owner.id = lp.id_user
+       LEFT JOIN roles owner_role ON owner_role.id = owner.id_role
+       WHERE ${clause}
+       ORDER BY lp.updated_at DESC`,
+      params
     );
     return result.rows;
   }
@@ -147,6 +183,36 @@ class LandingPageRepository {
        WHERE id = $1
        LIMIT 1`,
       [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Lấy landing page theo id có áp phạm vi quyền xem/sửa của user hiện tại.
+   *
+   * @param {number} id
+   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @returns {Promise<object|null>}
+   */
+  async findByIdInScope(id, scope = {}) {
+    const { clause, params } = this.buildLandingScopeCondition(scope);
+    const result = await db.query(
+      `SELECT
+         lp.id,
+         lp.slug,
+         lp.title,
+         lp.html_content AS "htmlContent",
+         lp.is_published AS "isPublished",
+         lp.id_user AS "idUser",
+         lp.created_at AS "createdAt",
+         lp.updated_at AS "updatedAt"
+       FROM landing_pages lp
+       LEFT JOIN users owner ON owner.id = lp.id_user
+       LEFT JOIN roles owner_role ON owner_role.id = owner.id_role
+       WHERE lp.id = $${params.length + 1}
+         AND ${clause}
+       LIMIT 1`,
+      [...params, id]
     );
     return result.rows[0] || null;
   }
