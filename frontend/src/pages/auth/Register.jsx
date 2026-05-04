@@ -12,6 +12,7 @@ import {
   HiOutlineEyeOff,
   HiOutlineUser,
   HiOutlinePhone,
+  HiOutlineMail
 } from 'react-icons/hi';
 
 const GoogleIcon = () => (
@@ -98,156 +99,157 @@ const Register = () => {
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl mb-4 shadow-lg shadow-primary-500/30">
-            <span className="text-white font-bold text-2xl">U</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Đăng ký tài khoản</h1>
-          <p className="text-gray-500 mt-2">Tạo tài khoản để bắt đầu sử dụng UKNOW</p>
+      <div className="w-full max-w-[480px] mx-auto">
+        {/* Header */}
+        <div className="mb-8 lg:mb-10">
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng ký tài khoản</h1>
+          <p className="text-slate-500 font-medium">Bắt đầu trải nghiệm UKNOW miễn phí</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Username & Email row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
                 Tên đăng nhập <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type="text"
                   {...register('username')}
-                  className={`w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.username ? 'border-red-500' : ''}`}
-                  placeholder="Tên đăng nhập"
+                  className={`w-full pl-10 pr-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
+                  placeholder="john_doe"
                 />
               </div>
               {errors.username && (
-                <p className="mt-1 text-sm text-red-500">{errors.username.message}</p>
+                <p className="text-xs font-medium text-red-500 flex items-start gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block mt-1 flex-shrink-0"></span> <span>{errors.username.message}</span></p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
                 Email <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
+              <div className="relative group">
+                <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type="email"
                   {...register('email')}
-                  className={`w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.email ? 'border-red-500' : ''}`}
-                  placeholder="Email của bạn"
+                  className={`w-full pl-10 pr-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.email ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
+                  placeholder="name@company.com"
                 />
               </div>
               {errors.email && (
-                <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
+                <p className="text-xs font-medium text-red-500 flex items-start gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block mt-1 flex-shrink-0"></span> <span>{errors.email.message}</span></p>
               )}
             </div>
           </div>
 
           {/* Full Name & Phone row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
                 Họ và tên
               </label>
-              <div className="relative">
-                <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type="text"
                   {...register('fullName')}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="Họ và tên"
+                  className="w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                  placeholder="Nguyễn Văn A"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
                 Số điện thoại
               </label>
-              <div className="relative">
-                <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type="tel"
                   {...register('phone')}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="Số điện thoại"
+                  className="w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                  placeholder="0901234567"
                 />
               </div>
+              {errors.phone && (
+                <p className="text-xs font-medium text-red-500 flex items-start gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block mt-1 flex-shrink-0"></span> <span>{errors.phone.message}</span></p>
+              )}
             </div>
           </div>
 
           {/* Password & Confirm row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
                 Mật khẩu <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   {...register('password')}
-                  className={`w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.password ? 'border-red-500' : ''}`}
-                  placeholder="Mật khẩu"
+                  className={`w-full pl-10 pr-10 py-3 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
+                  placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
                 >
-                  {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
+                  {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>
+                <p className="text-xs font-medium text-red-500 flex items-start gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block mt-1 flex-shrink-0"></span> <span>{errors.password.message}</span></p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Xác nhận mật khẩu <span className="text-red-500">*</span>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-700">
+                Xác nhận <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   {...register('confirmPassword')}
-                  className={`w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 bg-gray-50 focus:bg-white ${errors.confirmPassword ? 'border-red-500' : ''}`}
-                  placeholder="Nhập lại mật khẩu"
+                  className={`w-full pl-10 pr-10 py-3 border rounded-xl outline-none transition-all duration-200 bg-slate-50 focus:bg-white ${errors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
+                  placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
                 >
-                  {showConfirmPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
+                  {showConfirmPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-500">{errors.confirmPassword.message}</p>
+                <p className="text-xs font-medium text-red-500 flex items-start gap-1 mt-1"><span className="w-1 h-1 rounded-full bg-red-500 inline-block mt-1 flex-shrink-0"></span> <span>{errors.confirmPassword.message}</span></p>
               )}
             </div>
           </div>
 
           {/* Terms */}
-          <div className="flex items-start">
+          <div className="flex items-start pt-2">
             <input
               type="checkbox"
               required
-              className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              className="w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
             />
-            <span className="ml-2 text-sm text-gray-600">
+            <span className="ml-2.5 text-xs text-slate-600 font-medium leading-relaxed">
               Tôi đồng ý với{' '}
-              <a href="#" className="text-primary-600 hover:underline font-medium">
+              <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">
                 Điều khoản sử dụng
               </a>{' '}
               và{' '}
-              <a href="#" className="text-primary-600 hover:underline font-medium">
+              <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">
                 Chính sách bảo mật
               </a>
             </span>
@@ -257,46 +259,48 @@ const Register = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 px-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl hover:from-primary-600 hover:to-primary-700 focus:ring-4 focus:ring-primary-500/30 transition-all duration-200 shadow-lg shadow-primary-500/30 disabled:opacity-70"
+            className="w-full py-4 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none mt-4"
           >
             {isLoading ? (
-              <span className="flex items-center justify-center">
-                <div className="spinner mr-2"></div>
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 Đang đăng ký...
               </span>
             ) : (
-              'Đăng ký'
+              'Tạo tài khoản'
             )}
           </button>
         </form>
 
         {/* Divider */}
-        <div className="flex items-center my-6">
-          <div className="flex-1 border-t border-gray-200"></div>
-          <span className="px-4 text-sm text-gray-400">hoặc</span>
-          <div className="flex-1 border-t border-gray-200"></div>
+        <div className="flex items-center my-8">
+          <div className="flex-1 border-t border-slate-200"></div>
+          <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">hoặc</span>
+          <div className="flex-1 border-t border-slate-200"></div>
         </div>
 
         {/* Google Register */}
         <button
           type="button"
           onClick={() => setShowEmailAuth(true)}
-          className="w-full py-3 px-4 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center justify-center gap-3"
+          className="w-full py-3.5 px-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-3 shadow-sm"
         >
           <GoogleIcon />
-          Đăng ký với Google
+          Đăng ký bằng Google
         </button>
 
         {/* Login link */}
-        <p className="text-center mt-6 text-sm text-gray-600">
-          Đã có tài khoản?{' '}
-          <Link
-            to="/login"
-            className="text-primary-600 hover:text-primary-700 font-semibold"
-          >
-            Đăng nhập
-          </Link>
-        </p>
+        <div className="mt-8 text-center">
+          <p className="text-sm font-medium text-slate-600">
+            Đã có tài khoản?{' '}
+            <Link
+              to="/login"
+              className="font-bold text-orange-500 hover:text-orange-600 transition-colors ml-1"
+            >
+              Đăng nhập ngay
+            </Link>
+          </p>
+        </div>
       </div>
 
       <EmailAuthModal 

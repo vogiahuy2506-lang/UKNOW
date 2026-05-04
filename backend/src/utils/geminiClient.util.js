@@ -1,37 +1,26 @@
 /**
  * Gemini client util (Google Generative Language API).
- *
- * Lưu ý bảo mật:
- * - API key phải nằm ở backend env, KHÔNG gửi xuống frontend.
- * - Endpoint backend sẽ gọi Gemini và trả về insight đã xử lý.
- *
- * Ghi chú model:
- * - Một số tên model cũ (ví dụ `gemini-1.5-flash` không suffix) có thể trả 404 trên v1beta.
- * - Mặc định dùng `gemini-2.0-flash`; có thể override bằng `GEMINI_MODEL` (vd `gemini-2.5-flash` — trần output token cao hơn, phù hợp JSON insight dài).
  */
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 /**
- * Gọi Gemini để sinh nội dung từ prompt (text).
- *
- * Luồng hoạt động:
- * 1. Lấy `GEMINI_API_KEY` + `GEMINI_MODEL` từ env.
- * 2. Gọi endpoint `generateContent`.
- * 3. Gom text từ response parts và trả về chuỗi.
+ * Gọi Gemini để sinh nội dung từ danh sách các parts (hỗ trợ multimodal).
  *
  * @param {object} input
- * @param {string} input.prompt Prompt dạng text.
- * @param {number} [input.timeoutMs=120000] Timeout request (ms) — insight JSON dài cần thời gian hơn.
- * @param {boolean} [input.jsonMode=false] Bật `responseMimeType: application/json` để giảm lỗi JSON bị cắt/thừa text.
- * @param {number} [input.maxOutputTokens=8192] Giới hạn token đầu ra (JSON phân tích dài).
- * @returns {Promise<{ text: string, finishReason: string, blockReason: string }>} text + lý do kết thúc (debug / retry)
+ * @param {Array<{text?: string, inlineData?: {mimeType: string, data: string}}>} input.parts Danh sách các parts gửi lên Gemini.
+ * @param {number} [input.timeoutMs=180000] Timeout request (ms).
+ * @param {boolean} [input.jsonMode=false] Bật responseMimeType: application/json.
+ * @param {number} [input.maxOutputTokens=16384] Giới hạn token đầu ra.
+ * @param {number} [input.temperature=0.35]
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string }>}
  */
-export async function generateGeminiText({
-  prompt,
-  timeoutMs = 120000,
+export async function generateGeminiContent({
+  parts,
+  timeoutMs = 180000,
   jsonMode = false,
-  maxOutputTokens = 8192,
+  maxOutputTokens = 16384,
+  temperature = 0.35,
 }) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
@@ -48,7 +37,7 @@ export async function generateGeminiText({
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const generationConfig = {
-      temperature: 0.35,
+      temperature,
       topP: 0.9,
       maxOutputTokens,
     };
@@ -64,12 +53,14 @@ export async function generateGeminiText({
         contents: [
           {
             role: 'user',
-            parts: [{ text: String(prompt || '') }],
+            parts: parts,
           },
         ],
         generationConfig,
       }),
     });
+
+    clearTimeout(timer);
 
     if (!response.ok) {
       const bodyText = await response.text().catch(() => '');
@@ -79,26 +70,49 @@ export async function generateGeminiText({
     }
 
     const data = await response.json();
-    const firstCand = data?.candidates?.[0];
-    const finishReason = String(firstCand?.finishReason || '').trim();
-    const blockReason = String(data?.promptFeedback?.blockReason || '').trim();
-
-    const text = (data?.candidates || [])
-      .flatMap((c) => c?.content?.parts || [])
-      .map((p) => p?.text)
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-
-    return { text, finishReason, blockReason };
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      const err = new Error('Gemini API quá thời gian xử lý, vui lòng thử lại');
-      err.status = 504;
-      throw err;
+    const candidate = data.candidates && data.candidates[0];
+    
+    if (candidate?.content?.parts) {
+      console.log('[Gemini DEBUG] Raw Parts:', JSON.stringify(candidate.content.parts, null, 2));
     }
-    throw error;
-  } finally {
+    
+    // Filter only text parts (avoid thought/reasoning parts if present)
+    const text = candidate?.content?.parts
+      ?.filter((p) => p.text && !p.thought)
+      ?.map((p) => p.text)
+      .join('') || '';
+
+    return {
+      text,
+      finishReason: candidate?.finishReason,
+      blockReason: data.promptFeedback?.blockReason,
+    };
+  } catch (error) {
     clearTimeout(timer);
+    throw error;
   }
+}
+
+/**
+ * Gọi Gemini để sinh nội dung từ prompt (text).
+ *
+ * @param {object} input
+ * @param {string} input.prompt Prompt dạng text.
+ * @param {number} [input.timeoutMs=120000] Timeout request (ms).
+ * @param {boolean} [input.jsonMode=false] Bật responseMimeType: application/json.
+ * @param {number} [input.maxOutputTokens=8192] Giới hạn token đầu ra.
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string }>}
+ */
+export async function generateGeminiText({
+  prompt,
+  timeoutMs = 120000,
+  jsonMode = false,
+  maxOutputTokens = 8192,
+}) {
+  return generateGeminiContent({
+    parts: [{ text: prompt }],
+    timeoutMs,
+    jsonMode,
+    maxOutputTokens,
+  });
 }
