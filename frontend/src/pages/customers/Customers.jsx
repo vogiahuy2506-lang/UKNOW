@@ -116,7 +116,7 @@ const Customers = () => {
             {campaigns.map((c) => (
               <button
                 key={c.id}
-                onClick={() => navigate(`/customers/${c.id}`)}
+                onClick={() => navigate(`/app/customers/${c.id}`)}
                 className="w-full flex items-center px-6 py-4 hover:bg-gray-50 transition-colors text-left group"
               >
                 {/* Icon */}

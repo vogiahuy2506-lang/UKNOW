@@ -53,7 +53,8 @@ export const useAuthStore = create((set, get) => ({
         const rawUser = response.data.data.user;
         const normalizedUser = {
           ...rawUser,
-          role: rawUser?.role || 'user_admin',
+          roleCode: rawUser?.roleCode || 'employee',
+          roleName: rawUser?.roleName || 'Nhân viên',
         };
         set({
           user: normalizedUser,
@@ -89,7 +90,8 @@ export const useAuthStore = create((set, get) => ({
     const { user, accessToken, refreshToken } = response.data.data;
     const normalizedUser = {
       ...user,
-      role: user?.role || 'user_admin',
+      roleCode: user?.roleCode || 'employee',
+      roleName: user?.roleName || 'Nhân viên',
     };
 
     storeToken('accessToken', accessToken, rememberMe);
@@ -109,7 +111,8 @@ export const useAuthStore = create((set, get) => ({
     const { user, accessToken, refreshToken } = response.data.data;
     const normalizedUser = {
       ...user,
-      role: user?.role || 'user_admin',
+      roleCode: user?.roleCode || 'employee',
+      roleName: user?.roleName || 'Nhân viên',
     };
 
     localStorage.setItem('accessToken', accessToken);
@@ -149,19 +152,20 @@ export const useAuthStore = create((set, get) => ({
   },
 
   /** Cập nhật thông tin user trong store. */
-  updateUser: (updatedUser) => {
+  updateUser: (user) => {
     set({
-      user: updatedUser
-        ? { ...updatedUser, role: updatedUser?.role || 'user_admin' }
+      user: user
+        ? {
+            ...user,
+            roleCode: user?.roleCode || 'employee',
+            roleName: user?.roleName || 'Nhân viên',
+          }
         : null,
     });
   },
 
-  /** Xác định user hiện tại có phải super_admin hay không. */
-  isSuperAdmin: () => get().user?.role === 'super_admin',
-
-  /** Xác định user hiện tại có phải user_admin hay không. */
-  isUserAdmin: () => get().user?.role === 'user_admin',
+  /** Xác định user hiện tại có phải admin hay không. */
+  isAdmin: () => String(get().user?.roleCode || '').trim().toLowerCase() === 'admin',
 }));
 
 // Khởi tạo auth khi app load
