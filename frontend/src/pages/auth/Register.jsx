@@ -224,7 +224,7 @@ const Register = () => {
   const onSubmit = async (data) => {
     setIsSendingCode(true);
     try {
-      await api.post('/verification/send-code', { email: data.email });
+      await api.post('/verification/send-code', { email: data.email, username: data.username });
       setOtpData({
         email: data.email,
         formData: {

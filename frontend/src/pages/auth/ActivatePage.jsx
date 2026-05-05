@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -9,8 +9,12 @@ const ActivatePage = () => {
   const [state, setState] = useState('loading'); // loading | success | error
   const [errorMessage, setErrorMessage] = useState('');
   const [tokenInfo, setTokenInfo] = useState({ username: '' });
+  const called = useRef(false);
 
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
     if (!token) {
       setState('error');
       setErrorMessage('Link kích hoạt không hợp lệ.');
