@@ -110,12 +110,12 @@ const AdminDashboard = () => {
   const chartRevenue = monthlyRevenue.map((r) => ({
     month:   r.month,
     revenue: Number(r.revenue),
-    orders:  Number(r.completed_orders),
+    orders:  Number(r.completedOrders),
   }));
 
   const chartPlan = planDistribution
-    .filter((p) => Number(p.user_count) > 0)
-    .map((p) => ({ name: p.name, value: Number(p.user_count) }));
+    .filter((p) => Number(p.userCount) > 0)
+    .map((p) => ({ name: p.name, value: Number(p.userCount) }));
 
   const printDate = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -149,29 +149,29 @@ const AdminDashboard = () => {
         <KpiCard
           icon={HiOutlineUsers}
           label="Thành viên có gói"
-          value={fmt(kpi.active_members)}
-          sub={`/ ${fmt(kpi.total_members)} tổng thành viên`}
+          value={fmt(kpi.activeMembers)}
+          sub={`/ ${fmt(kpi.totalMembers)} tổng thành viên`}
           color="text-blue-600" bg="bg-blue-50"
         />
         <KpiCard
           icon={HiOutlineCurrencyDollar}
           label="Doanh thu tháng này"
-          value={fmtVnd(kpi.revenue_this_month)}
-          sub={`${fmt(kpi.completed_orders_this_month)} đơn hoàn thành`}
+          value={fmtVnd(kpi.revenueThisMonth)}
+          sub={`${fmt(kpi.completedOrdersThisMonth)} đơn hoàn thành`}
           color="text-green-600" bg="bg-green-50"
         />
         <KpiCard
           icon={HiOutlineClipboardList}
           label="Đơn hàng tháng này"
-          value={fmt(kpi.orders_this_month)}
-          sub={`${fmt(kpi.pending_orders_this_month)} chờ thanh toán`}
+          value={fmt(kpi.ordersThisMonth)}
+          sub={`${fmt(kpi.pendingOrdersThisMonth)} chờ thanh toán`}
           color="text-orange-600" bg="bg-orange-50"
         />
         <KpiCard
           icon={HiOutlineChartBar}
           label="Tổng nhân viên"
-          value={fmt(kpi.total_employees)}
-          sub={`${fmt(kpi.total_members)} chủ tài khoản`}
+          value={fmt(kpi.totalEmployees)}
+          sub={`${fmt(kpi.totalMembers)} chủ tài khoản`}
           color="text-purple-600" bg="bg-purple-50"
         />
       </div>
@@ -238,8 +238,8 @@ const AdminDashboard = () => {
             ) : recentOrders.map((o) => (
               <div key={o.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{o.user_email}</p>
-                  <p className="text-xs text-gray-400">{o.plan_name || '—'} · {fmtDate(o.created_at)}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{o.userEmail}</p>
+                  <p className="text-xs text-gray-400">{o.planName || '—'} · {fmtDate(o.createdAt)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold text-gray-900">{fmtVnd(o.amount)}</p>
@@ -269,16 +269,16 @@ const AdminDashboard = () => {
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{m.full_name || m.username}</p>
+                    <p className="text-sm font-medium text-gray-800 truncate">{m.fullName || m.username}</p>
                     <p className="text-xs text-gray-400 truncate">{m.email}</p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  {m.plan_name
-                    ? <span className="badge badge-success text-xs">{m.plan_name}</span>
+                  {m.planName
+                    ? <span className="badge badge-success text-xs">{m.planName}</span>
                     : <span className="badge badge-gray text-xs">Chưa có gói</span>
                   }
-                  <p className="text-xs text-gray-400 mt-0.5">{fmtDate(m.created_at)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{fmtDate(m.createdAt)}</p>
                 </div>
               </div>
             ))}
@@ -300,10 +300,10 @@ const AdminDashboard = () => {
         {/* KPI grid */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Thành viên có gói',   value: `${fmt(kpi.active_members)} / ${fmt(kpi.total_members)}` },
-            { label: 'Doanh thu tháng này', value: fmtVnd(kpi.revenue_this_month) },
-            { label: 'Đơn tháng này',       value: fmt(kpi.orders_this_month) },
-            { label: 'Tổng nhân viên',      value: fmt(kpi.total_employees) },
+            { label: 'Thành viên có gói',   value: `${fmt(kpi.activeMembers)} / ${fmt(kpi.totalMembers)}` },
+            { label: 'Doanh thu tháng này', value: fmtVnd(kpi.revenueThisMonth) },
+            { label: 'Đơn tháng này',       value: fmt(kpi.ordersThisMonth) },
+            { label: 'Tổng nhân viên',      value: fmt(kpi.totalEmployees) },
           ].map(({ label, value }) => (
             <div key={label} className="border border-gray-200 rounded-xl p-4">
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
@@ -353,8 +353,8 @@ const AdminDashboard = () => {
               <tbody>
                 {recentOrders.map((o) => (
                   <tr key={o.id} className="border-b border-gray-100">
-                    <td className="px-2 py-1.5 border border-gray-200 truncate max-w-[120px]">{o.user_email}</td>
-                    <td className="px-2 py-1.5 border border-gray-200">{o.plan_name || '—'}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 truncate max-w-[120px]">{o.userEmail}</td>
+                    <td className="px-2 py-1.5 border border-gray-200">{o.planName || '—'}</td>
                     <td className="px-2 py-1.5 border border-gray-200 whitespace-nowrap">{fmtVnd(o.amount)}</td>
                     <td className="px-2 py-1.5 border border-gray-200">{STATUS_LABEL[o.status] || o.status}</td>
                   </tr>
@@ -377,10 +377,10 @@ const AdminDashboard = () => {
               <tbody>
                 {recentMembers.map((m) => (
                   <tr key={m.id} className="border-b border-gray-100">
-                    <td className="px-2 py-1.5 border border-gray-200">{m.full_name || m.username}</td>
+                    <td className="px-2 py-1.5 border border-gray-200">{m.fullName || m.username}</td>
                     <td className="px-2 py-1.5 border border-gray-200 truncate max-w-[120px]">{m.email}</td>
-                    <td className="px-2 py-1.5 border border-gray-200">{m.plan_name || 'Chưa có gói'}</td>
-                    <td className="px-2 py-1.5 border border-gray-200 whitespace-nowrap">{fmtDate(m.created_at)}</td>
+                    <td className="px-2 py-1.5 border border-gray-200">{m.planName || 'Chưa có gói'}</td>
+                    <td className="px-2 py-1.5 border border-gray-200 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

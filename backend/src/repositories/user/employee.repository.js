@@ -1,10 +1,10 @@
 import db from '../../config/database.js';
 
 const EMPLOYEE_SELECT = `
-  u.id, u.username, u.email, u.full_name, u.avatar_url, u.status,
-  um.permissions, um.status AS member_status, um.created_at AS joined_at,
-  um.daily_email_limit, um.monthly_email_limit,
-  um.daily_zalo_limit,  um.monthly_zalo_limit
+  u.id, u.username, u.email, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
+  um.permissions, um.status AS "memberStatus", um.created_at AS "joinedAt",
+  um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
+  um.daily_zalo_limit AS "dailyZaloLimit",  um.monthly_zalo_limit AS "monthlyZaloLimit"
 `;
 
 export async function findEmployeesByOwner(ownerId) {
@@ -52,7 +52,7 @@ export async function findOwnerPlanLimit(ownerId) {
 
 export async function findUserByEmail(email) {
   const result = await db.query(
-    `SELECT id, username, email, full_name, role, active_plan_id
+    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId"
      FROM users WHERE email = $1`,
     [email]
   );
@@ -61,7 +61,7 @@ export async function findUserByEmail(email) {
 
 export async function findOwnerInfo(ownerId) {
   const result = await db.query(
-    `SELECT id, username, full_name FROM users WHERE id = $1`,
+    `SELECT id, username, full_name AS "fullName" FROM users WHERE id = $1`,
     [ownerId]
   );
   return result.rows[0] || null;
@@ -83,9 +83,9 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
     const memberResult = await client.query(
       `INSERT INTO user_members (owner_id, employee_id)
        VALUES ($1, $2)
-       RETURNING permissions, status, created_at,
-                 daily_email_limit, monthly_email_limit,
-                 daily_zalo_limit, monthly_zalo_limit`,
+       RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
+                 daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
+                 daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
       [ownerId, newUser.id]
     );
 
@@ -112,9 +112,9 @@ export async function linkExistingUserAsEmployee(ownerId, userId) {
     const memberResult = await client.query(
       `INSERT INTO user_members (owner_id, employee_id)
        VALUES ($1, $2)
-       RETURNING permissions, status, created_at,
-                 daily_email_limit, monthly_email_limit,
-                 daily_zalo_limit, monthly_zalo_limit`,
+       RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
+                 daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
+                 daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
       [ownerId, userId]
     );
 
@@ -147,7 +147,7 @@ export async function updateEmployeeInfo(employeeId, ownerId, { fullName, email 
       `UPDATE users
        SET full_name = $1, email = $2, updated_at = CURRENT_TIMESTAMP
        WHERE id = $3
-       RETURNING id, username, email, full_name`,
+       RETURNING id, username, email, full_name AS "fullName"`,
       [fullName || null, email, employeeId]
     );
 
@@ -177,7 +177,7 @@ export async function updateEmployeeStatus(employeeId, ownerId, status) {
     `UPDATE user_members
      SET status = $1, updated_at = CURRENT_TIMESTAMP
      WHERE employee_id = $2 AND owner_id = $3
-     RETURNING status`,
+     RETURNING status AS "memberStatus"`,
     [status, employeeId, ownerId]
   );
   return result.rows[0] || null;
@@ -197,8 +197,8 @@ export async function updateEmployeeSendLimits(employeeId, ownerId, {
          monthly_zalo_limit  = $4,
          updated_at          = CURRENT_TIMESTAMP
      WHERE employee_id = $5 AND owner_id = $6
-     RETURNING daily_email_limit, monthly_email_limit,
-               daily_zalo_limit, monthly_zalo_limit`,
+     RETURNING daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
+               daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
     [dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, employeeId, ownerId]
   );
   return result.rows[0] || null;

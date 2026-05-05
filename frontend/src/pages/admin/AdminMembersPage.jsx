@@ -103,10 +103,10 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
       <div>
         <h2 className="text-xl font-semibold text-gray-900">Gán gói dịch vụ</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Thành viên: <strong>{member.full_name || member.username}</strong> ({member.email})
+          Thành viên: <strong>{member.fullName || member.username}</strong> ({member.email})
         </p>
-        {member.plan_name && (
-          <p className="text-sm text-gray-400 mt-0.5">Gói hiện tại: <strong>{member.plan_name}</strong></p>
+        {member.planName && (
+          <p className="text-sm text-gray-400 mt-0.5">Gói hiện tại: <strong>{member.planName}</strong></p>
         )}
       </div>
       <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
@@ -309,31 +309,31 @@ const AdminMembersPage = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
                             <span className="text-primary-600 text-sm font-semibold">
-                              {(m.full_name || m.username || '?')[0].toUpperCase()}
+                              {(m.fullName || m.username || '?')[0].toUpperCase()}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{m.full_name || m.username}</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
                             <p className="text-xs text-gray-400 truncate">{m.email}</p>
                           </div>
                         </div>
                       </td>
                       <td>
-                        {m.plan_name
-                          ? <span className="badge badge-success">{m.plan_name}</span>
+                        {m.planName
+                          ? <span className="badge badge-success">{m.planName}</span>
                           : <span className="badge badge-gray">Chưa có gói</span>
                         }
                       </td>
-                      <td className="text-sm text-gray-600">{m.employee_count ?? 0}</td>
+                      <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
                       <td>
                         <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
                           {isActive ? 'Hoạt động' : 'Đã khóa'}
                         </span>
                       </td>
                       <td>
-                        <ExpiryBadge expiresAt={m.subscription_expires_at} hasPlan={!!m.active_plan_id} />
+                        <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
                       </td>
-                      <td className="text-sm text-gray-500">{fmtDate(m.created_at)}</td>
+                      <td className="text-sm text-gray-500">{fmtDate(m.createdAt)}</td>
                       <td>
                         <div className="flex items-center gap-1">
                           {/* Gán gói */}
@@ -409,7 +409,7 @@ const AdminMembersPage = () => {
             <h2 className="text-xl font-semibold text-gray-900">Nâng lên Super Admin</h2>
           </div>
           <p className="text-sm text-gray-600">
-            Bạn sắp nâng <strong>{promoteConfirm.full_name || promoteConfirm.username}</strong> ({promoteConfirm.email}) lên quyền <strong>Super Admin</strong>.
+            Bạn sắp nâng <strong>{promoteConfirm.fullName || promoteConfirm.username}</strong> ({promoteConfirm.email}) lên quyền <strong>Super Admin</strong>.
           </p>
           <p className="text-sm text-gray-500 mt-2">
             Tài khoản này sẽ có toàn quyền quản trị hệ thống. Hành động này không thể hoàn tác qua giao diện.
