@@ -23,7 +23,7 @@ router.get(
   employeeController.getEmployee
 );
 
-// POST /api/employees — tạo tài khoản employee mới (cần có plan)
+// POST /api/employees — tạo tài khoản employee mới và gửi email mời (cần có plan)
 router.post(
   '/',
   requireActivePlan,
@@ -39,9 +39,6 @@ router.post(
       .isEmail()
       .withMessage('Email không hợp lệ')
       .normalizeEmail(),
-    body('password')
-      .isLength({ min: 6 })
-      .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
     body('fullName')
       .optional({ checkFalsy: true })
       .trim()
@@ -50,6 +47,14 @@ router.post(
   ],
   handleValidationErrors,
   employeeController.createEmployee
+);
+
+// POST /api/employees/:id/resend-invite — gửi lại email mời kích hoạt
+router.post(
+  '/:id/resend-invite',
+  [param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ')],
+  handleValidationErrors,
+  employeeController.resendInvite
 );
 
 // POST /api/employees/link — link user_admin chưa có plan thành employee (cần có plan)

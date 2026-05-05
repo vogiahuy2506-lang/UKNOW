@@ -16,8 +16,6 @@ import {
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 
-const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
-
 // keys: danh sách các permission key được bật/tắt cùng nhau khi toggle checkbox
 const PERMISSION_FIELDS = [
   { keys: ['email_settings', 'zalo_settings'], label: 'Quản lý kênh gửi' },
@@ -143,11 +141,12 @@ const EmployeeManagement = () => {
   });
 
   // Inline actions
-  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
-  const [resetConfirmEmp, setResetConfirmEmp]   = useState(null);
-  const [isResetting, setIsResetting]           = useState(false);
-  const [deleteConfirmEmp, setDeleteConfirmEmp] = useState(null);
-  const [isDeleting, setIsDeleting]             = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId]   = useState(null);
+  const [resetConfirmEmp, setResetConfirmEmp]     = useState(null);
+  const [isResetting, setIsResetting]             = useState(false);
+  const [deleteConfirmEmp, setDeleteConfirmEmp]   = useState(null);
+  const [isDeleting, setIsDeleting]               = useState(false);
+  const [resendingInviteId, setResendingInviteId] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -213,7 +212,6 @@ const EmployeeManagement = () => {
       dailyZaloLimit:    emp.daily_zalo_limit    ?? null,
       monthlyZaloLimit:  emp.monthly_zalo_limit  ?? null,
     });
-    setActiveMenu(null);
   };
 
   // ── Tab Thông tin ──────────────────────────────────────────────────────────
@@ -269,9 +267,8 @@ const EmployeeManagement = () => {
         username: values.username.trim(),
         email:    values.email.trim(),
         fullName: values.fullName?.trim() || null,
-        password: DEFAULT_EMPLOYEE_PASSWORD,
       });
-      toast.success(`Tạo tài khoản thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`);
+      toast.success('Đã gửi lời mời kích hoạt đến email nhân viên');
       setShowCreateModal(false);
       createNewForm.reset();
       fetchEmployees(true);
@@ -317,12 +314,25 @@ const EmployeeManagement = () => {
     try {
       setIsResetting(true);
       await userManagementApiService.resetEmployeePassword(resetConfirmEmp.id);
-      toast.success(`Reset thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`);
+      toast.success('Reset thành công. Mật khẩu mặc định: digiso@2026');
       setResetConfirmEmp(null);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Không thể reset mật khẩu');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleResendInvite = async (emp) => {
+    try {
+      setResendingInviteId(emp.id);
+      await userManagementApiService.resendInvite(emp.id);
+      toast.success('Đã gửi lại lời mời đến email nhân viên');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không thể gửi lại lời mời');
+    } finally {
+      setResendingInviteId(null);
+      fetchEmployees(true);
     }
   };
 
@@ -405,9 +415,13 @@ const EmployeeManagement = () => {
                       <td>{emp.full_name || <span className="text-gray-400">—</span>}</td>
                       <td className="text-sm text-gray-600">{emp.email}</td>
                       <td>
-                        <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
-                          {isActive ? 'Đang hoạt động' : 'Đã khóa'}
-                        </span>
+                        {emp.status === 'pending_activation' ? (
+                          <span className="badge badge-warning">Chờ kích hoạt</span>
+                        ) : (
+                          <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
+                            {isActive ? 'Đang hoạt động' : 'Đã khóa'}
+                          </span>
+                        )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
                         {limitLabel(emp.daily_email_limit)}/ngày
@@ -506,31 +520,45 @@ const EmployeeManagement = () => {
                 <div className="border-t border-gray-100 pt-5 space-y-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Quản lý tài khoản</p>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(selectedEmployee)}
-                      disabled={statusUpdatingId === selectedEmployee.id}
-                      className={`btn ${selectedEmployee.member_status === 'active' ? 'btn-secondary text-yellow-600' : 'btn-secondary text-green-600'}`}
-                    >
-                      {statusUpdatingId === selectedEmployee.id ? (
-                        <div className="spinner w-4 h-4 mr-2" />
-                      ) : selectedEmployee.member_status === 'active' ? (
-                        <HiOutlineLockClosed className="w-4 h-4 mr-2" />
-                      ) : (
-                        <HiOutlineLockOpen className="w-4 h-4 mr-2" />
-                      )}
-                      {statusUpdatingId === selectedEmployee.id
-                        ? 'Đang cập nhật...'
-                        : selectedEmployee.member_status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setResetConfirmEmp(selectedEmployee)}
-                      className="btn btn-secondary"
-                    >
-                      <HiOutlineKey className="w-4 h-4 mr-2" />
-                      Reset mật khẩu
-                    </button>
+                    {selectedEmployee.status !== 'pending_activation' && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(selectedEmployee)}
+                        disabled={statusUpdatingId === selectedEmployee.id}
+                        className={`btn ${selectedEmployee.member_status === 'active' ? 'btn-secondary text-yellow-600' : 'btn-secondary text-green-600'}`}
+                      >
+                        {statusUpdatingId === selectedEmployee.id ? (
+                          <div className="spinner w-4 h-4 mr-2" />
+                        ) : selectedEmployee.member_status === 'active' ? (
+                          <HiOutlineLockClosed className="w-4 h-4 mr-2" />
+                        ) : (
+                          <HiOutlineLockOpen className="w-4 h-4 mr-2" />
+                        )}
+                        {statusUpdatingId === selectedEmployee.id
+                          ? 'Đang cập nhật...'
+                          : selectedEmployee.member_status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
+                      </button>
+                    )}
+                    {selectedEmployee.status === 'pending_activation' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleResendInvite(selectedEmployee)}
+                        disabled={resendingInviteId === selectedEmployee.id}
+                        className="btn btn-secondary"
+                      >
+                        <HiOutlineMail className="w-4 h-4 mr-2" />
+                        {resendingInviteId === selectedEmployee.id ? 'Đang gửi...' : 'Gửi lại lời mời'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setResetConfirmEmp(selectedEmployee)}
+                        className="btn btn-secondary"
+                      >
+                        <HiOutlineKey className="w-4 h-4 mr-2" />
+                        Reset mật khẩu
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setDeleteConfirmEmp(selectedEmployee)}
@@ -665,8 +693,7 @@ const EmployeeManagement = () => {
           {createTab === 'new' ? (
             <form onSubmit={createNewForm.handleSubmit(onSubmitCreateNew)} className="space-y-4">
               <p className="text-sm text-gray-500">
-                Dùng khi email <strong>chưa có</strong> trong hệ thống.
-                Mật khẩu mặc định: <strong>{DEFAULT_EMPLOYEE_PASSWORD}</strong>
+                Dùng khi email <strong>chưa có</strong> trong hệ thống. Hệ thống sẽ gửi email mời kích hoạt tài khoản đến nhân viên.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -742,7 +769,7 @@ const EmployeeManagement = () => {
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Xác nhận reset mật khẩu</h2>
           <p className="text-sm text-gray-500 mt-2">Reset mật khẩu cho <strong>{resetConfirmEmp.username}</strong>?</p>
-          <p className="text-sm text-gray-500 mt-1">Mật khẩu sau khi reset: <strong>{DEFAULT_EMPLOYEE_PASSWORD}</strong></p>
+          <p className="text-sm text-gray-500 mt-1">Mật khẩu sau khi reset: <strong>digiso@2026</strong></p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setResetConfirmEmp(null)} disabled={isResetting}>Hủy</button>
             <button type="button" className="btn btn-primary" onClick={handleConfirmReset} disabled={isResetting}>

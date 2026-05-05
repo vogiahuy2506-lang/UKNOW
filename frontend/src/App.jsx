@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
 import { useEffect } from 'react';
@@ -42,6 +42,9 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import NoPlanScreen from './pages/auth/NoPlanScreen';
 import RenewalScreen from './pages/auth/RenewalScreen';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
+import ActivatePage from './pages/auth/ActivatePage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -51,6 +54,33 @@ const LoadingScreen = () => (
     </div>
   </div>
 );
+
+const LockedEmployeeScreen = () => {
+  const { logout } = useAuthStore();
+  const navigate = useNavigate();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 max-w-md w-full text-center">
+        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-5">
+          <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-5a7 7 0 110-14 7 7 0 010 14z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Tài khoản bị tạm khóa</h1>
+        <p className="text-gray-500 mt-2 text-sm">
+          Tài khoản của bạn đã bị quản lý tạm khóa. Vui lòng liên hệ quản lý để được hỗ trợ.
+        </p>
+        <button
+          onClick={async () => { await logout(); navigate('/login'); }}
+          className="btn btn-secondary w-full mt-8"
+        >
+          Đăng xuất
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Bảo vệ /app/* — yêu cầu đăng nhập + có gói (employee miễn kiểm tra gói)
 const ProtectedRoute = ({ children }) => {
@@ -68,6 +98,8 @@ const ProtectedRoute = ({ children }) => {
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
+  // Employee bị khóa — member_status inactive nên không có ownerId
+  if (user?.role === 'employee' && !user?.ownerId) return <LockedEmployeeScreen />;
   // Employee đi nhờ plan của owner — không cần kiểm tra active_plan_id
   if (user?.role !== 'employee' && !user?.active_plan_id) {
     return user?.isReturningCustomer ? <RenewalScreen /> : <NoPlanScreen />;
@@ -170,6 +202,17 @@ function App() {
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
             <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
           </Route>
+
+          {/* Kích hoạt tài khoản nhân viên qua link email */}
+          <Route path="/activate" element={<ActivatePage />} />
+
+          {/* Quên mật khẩu */}
+          <Route path="/forgot-password" element={
+            <PublicRoute>
+              <AuthLayout><ForgotPasswordPage /></AuthLayout>
+            </PublicRoute>
+          } />
+          <Route path="/reset-password" element={<AuthLayout><ResetPasswordPage /></AuthLayout>} />
 
           {/* Điều hướng các URL cũ hoặc sai chính tả */}
           <Route path="/l" element={<Navigate to="/" replace />} />

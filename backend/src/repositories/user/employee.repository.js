@@ -59,6 +59,14 @@ export async function findUserByEmail(email) {
   return result.rows[0] || null;
 }
 
+export async function findOwnerInfo(ownerId) {
+  const result = await db.query(
+    `SELECT id, username, full_name FROM users WHERE id = $1`,
+    [ownerId]
+  );
+  return result.rows[0] || null;
+}
+
 export async function createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName }) {
   const client = await db.getClient();
   try {
@@ -66,7 +74,7 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
 
     const userResult = await client.query(
       `INSERT INTO users (username, email, password_hash, full_name, status, role, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'active', 'employee', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, 'pending_activation', 'employee', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id, username, email, full_name, avatar_url, status, role`,
       [username, email, passwordHash, fullName || null]
     );
@@ -206,10 +214,22 @@ export async function removeEmployee(employeeId, ownerId) {
       [employeeId, ownerId]
     );
 
-    await client.query(
-      `UPDATE users SET role = 'user_admin', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+    const userRes = await client.query(
+      `SELECT status FROM users WHERE id = $1`,
       [employeeId]
     );
+    const userStatus = userRes.rows[0]?.status;
+
+    if (userStatus === 'pending_activation') {
+      // Chưa từng kích hoạt → xóa hẳn để email có thể dùng lại
+      await client.query(`DELETE FROM users WHERE id = $1`, [employeeId]);
+    } else {
+      // Đã active/inactive → giữ lại tài khoản, chuyển về user_admin
+      await client.query(
+        `UPDATE users SET role = 'user_admin', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [employeeId]
+      );
+    }
 
     await client.query('COMMIT');
   } catch (err) {

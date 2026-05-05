@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -37,10 +37,15 @@ const loginSchema = z.object({
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
+
+  const isActivated = searchParams.get('activated') === '1';
+  const activatedUsername = searchParams.get('username') || '';
+  const isPasswordReset = searchParams.get('reset') === '1';
 
   const {
     register,
@@ -69,6 +74,28 @@ const Login = () => {
   return (
     <>
       <div className="w-full">
+        {/* Banner đặt lại mật khẩu thành công */}
+        {isPasswordReset && (
+          <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200">
+            <p className="text-green-800 font-semibold text-sm">Đặt lại mật khẩu thành công!</p>
+            <p className="text-green-700 text-sm mt-1">Đăng nhập với mật khẩu mới của bạn.</p>
+          </div>
+        )}
+
+        {/* Banner kích hoạt thành công */}
+        {isActivated && (
+          <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200">
+            <p className="text-green-800 font-semibold text-sm">Tài khoản đã được kích hoạt!</p>
+            <p className="text-green-700 text-sm mt-1">
+              Đăng nhập với tên đăng nhập: <strong>{activatedUsername}</strong>
+              <br />
+              Mật khẩu mặc định: <strong>digiso@2026</strong>
+              <br />
+              <span className="text-green-600">Vui lòng đổi mật khẩu sau khi đăng nhập.</span>
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-10 lg:mb-12">
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng nhập</h1>
@@ -138,7 +165,7 @@ const Login = () => {
               />
               <span className="ml-2 text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Ghi nhớ đăng nhập</span>
             </label>
-            <a href="#" className="text-sm font-bold text-orange-500 hover:text-orange-600 transition-colors">Quên mật khẩu?</a>
+            <Link to="/forgot-password" className="text-sm font-bold text-orange-500 hover:text-orange-600 transition-colors">Quên mật khẩu?</Link>
           </div>
 
           {/* Submit */}

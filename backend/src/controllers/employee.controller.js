@@ -56,15 +56,29 @@ export async function getEmployee(req, res) {
 
 /**
  * POST /api/employees
- * Tạo tài khoản employee mới.
- * Body: { username, email, password, fullName }
+ * Tạo tài khoản employee mới và gửi email mời kích hoạt.
+ * Body: { username, email, fullName }
  */
 export async function createEmployee(req, res) {
   try {
     const ownerId = req.user.id;
-    const { username, email, password, fullName } = req.body;
-    const employee = await employeeService.createEmployee(ownerId, { username, email, password, fullName });
-    return res.status(201).json({ success: true, message: 'Tạo nhân viên thành công', data: employee });
+    const { username, email, fullName } = req.body;
+    const employee = await employeeService.createEmployee(ownerId, { username, email, fullName });
+    return res.status(201).json({ success: true, message: 'Đã gửi lời mời đến email nhân viên', data: employee });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * POST /api/employees/:id/resend-invite
+ * Gửi lại email mời kích hoạt cho nhân viên chưa kích hoạt.
+ */
+export async function resendInvite(req, res) {
+  try {
+    const ownerId = req.user.id;
+    await employeeService.resendInvitation(ownerId, Number(req.params.id));
+    return res.json({ success: true, message: 'Đã gửi lại lời mời kích hoạt' });
   } catch (err) {
     return handleServiceError(res, err);
   }

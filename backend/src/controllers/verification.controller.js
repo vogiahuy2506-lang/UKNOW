@@ -1,3 +1,4 @@
+import dns from 'dns/promises';
 import verificationService from '../services/verification.service.js';
 import db from '../config/database.js';
 
@@ -8,6 +9,18 @@ class VerificationController {
   async sendCode(req, res) {
     try {
       const { email } = req.body;
+
+      // Kiểm tra domain email có MX record hợp lệ không
+      const domain = email.split('@')[1];
+      try {
+        const records = await dns.resolveMx(domain);
+        if (!records || records.length === 0) throw new Error('No MX');
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: 'Địa chỉ email không hợp lệ hoặc domain không tồn tại',
+        });
+      }
 
       // Kiểm tra email đã tồn tại chưa (nếu là đăng ký)
       const existingUser = await db.query(

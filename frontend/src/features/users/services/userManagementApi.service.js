@@ -46,6 +46,10 @@ export const userManagementApiService = {
   deleteEmployee(employeeId) {
     return api.delete(`/employees/${employeeId}`);
   },
+
+  resendInvite(employeeId) {
+    return api.post(`/employees/${employeeId}/resend-invite`);
+  },
 };
 
 export default userManagementApiService;

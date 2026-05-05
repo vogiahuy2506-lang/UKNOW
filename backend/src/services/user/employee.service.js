@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import {
   findEmployeesByOwner,
   findEmployeeByIdAndOwner,
   countActiveEmployees,
   findOwnerPlanLimit,
   findUserByEmail,
+  findOwnerInfo,
   createEmployeeWithLink,
   linkExistingUserAsEmployee,
   updateEmployeeInfo,
@@ -14,6 +16,7 @@ import {
   removeEmployee,
   resetEmployeePassword as resetPasswordInDb,
 } from '../../repositories/user/employee.repository.js';
+import verificationService from '../verification.service.js';
 
 export const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 
@@ -62,7 +65,7 @@ export async function getEmployee(ownerId, employeeId) {
   return employee;
 }
 
-export async function createEmployee(ownerId, { username, email, password, fullName }) {
+export async function createEmployee(ownerId, { username, email, fullName }) {
   await assertCanAddEmployee(ownerId);
 
   const existingUser = await findUserByEmail(email);
@@ -70,8 +73,32 @@ export async function createEmployee(ownerId, { username, email, password, fullN
     throw { status: 400, message: 'Email này đã được sử dụng bởi một tài khoản khác' };
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  return createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName });
+  // Tạo password hash ngẫu nhiên — tài khoản chưa thể đăng nhập cho đến khi kích hoạt
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+  const employee = await createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName });
+
+  const owner = await findOwnerInfo(ownerId);
+  try {
+    await verificationService.sendEmployeeInvitation(email, owner?.full_name || owner?.username || 'Team');
+  } catch (emailErr) {
+    console.error('Failed to send invitation email:', emailErr);
+    // Không throw — tài khoản đã tạo, owner có thể gửi lại lời mời thủ công
+  }
+
+  return employee;
+}
+
+export async function resendInvitation(ownerId, employeeId) {
+  const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
+  if (!employee) {
+    throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+  if (employee.status !== 'pending_activation') {
+    throw { status: 400, message: 'Tài khoản đã được kích hoạt', code: 'ALREADY_ACTIVATED' };
+  }
+
+  const owner = await findOwnerInfo(ownerId);
+  await verificationService.sendEmployeeInvitation(employee.email, owner?.full_name || owner?.username || 'Team');
 }
 
 export async function linkUserAsEmployee(ownerId, email) {

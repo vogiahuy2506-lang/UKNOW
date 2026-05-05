@@ -71,4 +71,28 @@ router.post('/logout', authMiddleware, authController.logout.bind(authController
 // Lấy thông tin user hiện tại
 router.get('/me', authMiddleware, authController.getMe.bind(authController));
 
+// Quên mật khẩu — gửi email reset
+router.post('/forgot-password',
+  [body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail()],
+  handleValidationErrors,
+  authController.forgotPassword.bind(authController)
+);
+
+// Đặt lại mật khẩu bằng token từ email
+router.post('/reset-password',
+  [
+    body('token').notEmpty().withMessage('Token không được để trống'),
+    body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+  ],
+  handleValidationErrors,
+  authController.resetPassword.bind(authController)
+);
+
+// Kích hoạt tài khoản nhân viên qua link email
+router.post('/activate',
+  [body('token').notEmpty().withMessage('Token không được để trống')],
+  handleValidationErrors,
+  authController.activateAccount.bind(authController)
+);
+
 export default router;

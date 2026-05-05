@@ -3,6 +3,10 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import db from '../config/database.js';
+import verificationService from '../services/verification.service.js';
+
+const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
+
 
 class AuthController {
   /**
@@ -15,7 +19,16 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { username, email, password, fullName, phone } = req.body;
+      const { username, email, password, fullName, phone, emailVerificationCode } = req.body;
+
+      // Xác minh OTP email trước khi tạo tài khoản
+      if (!emailVerificationCode) {
+        return res.status(400).json({ success: false, message: 'Vui lòng xác minh email trước khi đăng ký' });
+      }
+      const verification = await verificationService.verifyCode(email, emailVerificationCode);
+      if (!verification) {
+        return res.status(400).json({ success: false, message: 'Mã xác minh email không đúng hoặc đã hết hạn' });
+      }
 
       const existingEmail = await client.query(
         'SELECT id FROM users WHERE email = $1',
@@ -43,6 +56,10 @@ class AuthController {
       );
 
       const user = result.rows[0];
+
+      // Đánh dấu mã xác minh đã dùng
+      await verificationService.markCodeAsUsed(verification.id);
+
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
 
@@ -254,6 +271,110 @@ class AuthController {
       return res.status(500).json({ success: false, message: 'Lỗi server' });
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * Gửi email đặt lại mật khẩu.
+   * POST /auth/forgot-password — body: { email }
+   * Luôn trả 200 để không lộ email có tồn tại hay không.
+   */
+  async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+
+      const result = await db.query(
+        `SELECT id FROM users WHERE email = $1 AND status = 'active'`,
+        [email]
+      );
+
+      if (result.rows.length > 0) {
+        await verificationService.sendPasswordReset(email);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.',
+      });
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Đặt lại mật khẩu bằng token từ email.
+   * POST /auth/reset-password — body: { token, password }
+   */
+  async resetPassword(req, res) {
+    try {
+      const { token, password } = req.body;
+
+      const record = await verificationService.findPasswordResetToken(token);
+      if (!record) {
+        return res.status(400).json({ success: false, message: 'Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const result = await db.query(
+        `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE email = $2 AND status = 'active'
+         RETURNING id`,
+        [passwordHash, record.email]
+      );
+
+      if (!result.rows[0]) {
+        return res.status(400).json({ success: false, message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa' });
+      }
+
+      await verificationService.markCodeAsUsed(record.id);
+
+      return res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Kích hoạt tài khoản nhân viên — đặt mật khẩu mặc định và chuyển status sang active.
+   * POST /auth/activate — body: { token }
+   */
+  async activateAccount(req, res) {
+    try {
+      const { token } = req.body;
+
+      const invitation = await verificationService.findInvitationByToken(token);
+      if (!invitation) {
+        return res.status(400).json({ success: false, message: 'Link kích hoạt không hợp lệ hoặc đã hết hạn' });
+      }
+
+      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+
+      const result = await db.query(
+        `UPDATE users
+         SET password_hash = $1, status = 'active', updated_at = CURRENT_TIMESTAMP
+         WHERE email = $2 AND status = 'pending_activation'
+         RETURNING id, username, email, full_name, avatar_url, status, role, active_plan_id,
+                   NULL AS subscription_expires_at`,
+        [passwordHash, invitation.email]
+      );
+
+      if (!result.rows[0]) {
+        return res.status(400).json({ success: false, message: 'Tài khoản đã được kích hoạt trước đó', code: 'ALREADY_ACTIVATED' });
+      }
+
+      await verificationService.markCodeAsUsed(invitation.id);
+
+      return res.json({
+        success: true,
+        message: 'Kích hoạt tài khoản thành công',
+        data: { username: result.rows[0].username },
+      });
+    } catch (error) {
+      console.error('Activate account error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 

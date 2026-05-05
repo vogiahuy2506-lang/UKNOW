@@ -430,7 +430,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           </div>
           {/* Tab bar */}
           <div className="flex border-b border-gray-100 px-6 gap-1">
-            {TABS.filter((tab) => !(isEmployee && tab.key === 'orders')).map((tab) => (
+            {TABS.filter((tab) => !((isEmployee || role === 'super_admin') && tab.key === 'orders')).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
