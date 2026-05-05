@@ -35,10 +35,6 @@ export const userManagementApiService = {
     return api.patch(`/employees/${employeeId}/permissions`, { permissions });
   },
 
-  /**
-   * Cập nhật giới hạn lượt gửi email/zalo theo ngày và tháng.
-   * Giá trị null = không giới hạn.
-   */
   updateSendLimits(employeeId, limits) {
     return api.patch(`/employees/${employeeId}/limits`, limits);
   },
