@@ -19,12 +19,14 @@ import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignRun from './pages/campaigns/CampaignRun';
 import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
-import ChannelSettings from './pages/settings/ChannelSettings';
+import EmailSettings from './pages/settings/EmailSettings';
+import ZaloSettings from './pages/settings/ZaloSettings';
 import EmployeeManagement from './pages/settings/EmployeeManagement';
 import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
-import ChannelTemplates from './pages/templates/ChannelTemplates';
+import EmailTemplates from './pages/templates/EmailTemplates';
+import ZaloTemplates from './pages/templates/ZaloTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
@@ -187,20 +189,20 @@ function App() {
             <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
 
             {/* Settings — owner only */}
-            <Route path="settings/channels" element={<OwnerRoute><ChannelSettings /></OwnerRoute>} />
+            <Route path="settings/email" element={<OwnerRoute><EmailSettings /></OwnerRoute>} />
+            <Route path="settings/zalo" element={<OwnerRoute><ZaloSettings /></OwnerRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
             <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
-            <Route path="settings/templates" element={<ChannelTemplates />} />
+            <Route path="settings/email-templates" element={<EmailTemplates />} />
+            <Route path="settings/zalo-templates" element={<ZaloTemplates />} />
 
-            {/* Redirect các route cũ sang route mới */}
-            <Route path="settings/email" element={<Navigate to="/app/settings/channels" replace />} />
-            <Route path="settings/zalo" element={<Navigate to="/app/settings/channels" replace />} />
-            <Route path="settings/email-templates" element={<Navigate to="/app/settings/templates" replace />} />
-            <Route path="settings/zalo-templates" element={<Navigate to="/app/settings/templates" replace />} />
+            {/* Redirect các route cũ nếu cần */}
+            <Route path="settings/channels" element={<Navigate to="/app/settings/email" replace />} />
+            <Route path="settings/templates" element={<Navigate to="/app/settings/email-templates" replace />} />
 
             {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
             <Route path="courses" element={<Courses />} />

@@ -105,7 +105,7 @@ const CustomerDetail = () => {
     } catch (error) {
       console.error('Fetch customer detail error:', error);
       toast.error('Không thể tải thông tin khách hàng', { id: 'customer-detail-load-error' });
-      navigate('/customers');
+      navigate('/app/customers');
     } finally {
       setIsLoading(false);
     }
@@ -237,7 +237,7 @@ const CustomerDetail = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => navigate('/customers')}
+            onClick={() => navigate('/app/customers')}
             className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 shrink-0"
           >
             <HiOutlineArrowLeft className="h-5 w-5" />

@@ -167,7 +167,7 @@ const CampaignCustomers = () => {
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate('/customers')}
+          onClick={() => navigate('/app/customers')}
           className="p-2 rounded-lg hover:bg-gray-100 shrink-0 transition-colors"
           aria-label="Quay lai"
         >
