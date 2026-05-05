@@ -37,11 +37,11 @@ export async function findAllMembers({ search, planId, status, expiry } = {}) {
   try {
     ({ rows } = await db.query(
       `SELECT
-         u.id, u.username, u.email, u.full_name, u.status, u.created_at,
-         u.active_plan_id, u.subscription_expires_at,
-         p.name AS plan_name,
-         p.code AS plan_code,
-         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS employee_count
+         u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
+         u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt",
+         p.name AS "planName",
+         p.code AS "planCode",
+         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount"
        FROM users u
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ${where}
@@ -52,11 +52,11 @@ export async function findAllMembers({ search, planId, status, expiry } = {}) {
     // Fallback khi migration 007 chưa chạy (cột subscription_expires_at chưa có)
     ({ rows } = await db.query(
       `SELECT
-         u.id, u.username, u.email, u.full_name, u.status, u.created_at,
-         u.active_plan_id, NULL AS subscription_expires_at,
-         p.name AS plan_name,
-         p.code AS plan_code,
-         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS employee_count
+         u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
+         u.active_plan_id AS "activePlanId", NULL AS "subscriptionExpiresAt",
+         p.name AS "planName",
+         p.code AS "planCode",
+         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount"
        FROM users u
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ${where}
@@ -69,8 +69,9 @@ export async function findAllMembers({ search, planId, status, expiry } = {}) {
 
 export async function findMemberById(id) {
   const { rows } = await db.query(
-    `SELECT u.id, u.username, u.email, u.full_name, u.status, u.role, u.created_at, u.active_plan_id,
-            p.name AS plan_name, p.code AS plan_code
+    `SELECT u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.role, u.created_at AS "createdAt", 
+            u.active_plan_id AS "activePlanId",
+            p.name AS "planName", p.code AS "planCode"
      FROM users u
      LEFT JOIN plans p ON p.id = u.active_plan_id
      WHERE u.id = $1`,
