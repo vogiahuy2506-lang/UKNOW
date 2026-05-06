@@ -36,6 +36,33 @@ const removeToken = (key) => {
   sessionStorage.removeItem(key);
 };
 
+/**
+ * Chuẩn hóa thông tin user từ backend để phù hợp với frontend store.
+ */
+const normalizeUser = (user) => {
+  if (!user) return null;
+  
+  // Map backend roles to frontend roleCode
+  let roleCode = user.roleCode || 'employee';
+  let roleName = user.roleName || 'Nhân viên';
+
+  if (!user.roleCode && user.role) {
+    if (user.role === 'super_admin' || user.role === 'user_admin') {
+      roleCode = 'admin';
+      roleName = user.role === 'super_admin' ? 'Super Admin' : 'Quản trị viên';
+    } else if (user.role === 'employee') {
+      roleCode = 'employee';
+      roleName = 'Nhân viên';
+    }
+  }
+
+  return {
+    ...user,
+    roleCode,
+    roleName,
+  };
+};
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -51,13 +78,8 @@ export const useAuthStore = create((set, get) => ({
       try {
         const response = await api.get('/auth/me');
         const rawUser = response.data.data.user;
-        const normalizedUser = {
-          ...rawUser,
-          roleCode: rawUser?.roleCode || 'employee',
-          roleName: rawUser?.roleName || 'Nhân viên',
-        };
         set({
-          user: normalizedUser,
+          user: normalizeUser(rawUser),
           isAuthenticated: true,
           isLoading: false,
         });
@@ -88,17 +110,30 @@ export const useAuthStore = create((set, get) => ({
   login: async (username, password, rememberMe = true) => {
     const response = await api.post('/auth/login', { username, password });
     const { user, accessToken, refreshToken } = response.data.data;
-    const normalizedUser = {
-      ...user,
-      roleCode: user?.roleCode || 'employee',
-      roleName: user?.roleName || 'Nhân viên',
-    };
 
     storeToken('accessToken', accessToken, rememberMe);
     storeToken('refreshToken', refreshToken, rememberMe);
 
     set({
-      user: normalizedUser,
+      user: normalizeUser(user),
+      isAuthenticated: true,
+    });
+
+    return response.data;
+  },
+
+  /**
+   * Đăng nhập / đăng ký bằng Google.
+   */
+  googleLogin: async (credential, rememberMe = true) => {
+    const response = await api.post('/auth/google-login', { credential });
+    const { user, accessToken, refreshToken } = response.data.data;
+
+    storeToken('accessToken', accessToken, rememberMe);
+    storeToken('refreshToken', refreshToken, rememberMe);
+
+    set({
+      user: normalizeUser(user),
       isAuthenticated: true,
     });
 
@@ -109,17 +144,12 @@ export const useAuthStore = create((set, get) => ({
   register: async (data) => {
     const response = await api.post('/auth/register', data);
     const { user, accessToken, refreshToken } = response.data.data;
-    const normalizedUser = {
-      ...user,
-      roleCode: user?.roleCode || 'employee',
-      roleName: user?.roleName || 'Nhân viên',
-    };
 
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
 
     set({
-      user: normalizedUser,
+      user: normalizeUser(user),
       isAuthenticated: true,
     });
 
@@ -153,15 +183,7 @@ export const useAuthStore = create((set, get) => ({
 
   /** Cập nhật thông tin user trong store. */
   updateUser: (user) => {
-    set({
-      user: user
-        ? {
-            ...user,
-            roleCode: user?.roleCode || 'employee',
-            roleName: user?.roleName || 'Nhân viên',
-          }
-        : null,
-    });
+    set({ user: normalizeUser(user) });
   },
 
   /** Xác định user hiện tại có phải admin hay không. */

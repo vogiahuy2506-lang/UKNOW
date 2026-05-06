@@ -4,6 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 
@@ -49,8 +52,8 @@ class AuthController {
       const passwordHash = await bcrypt.hash(password, 10);
 
       const result = await client.query(
-        `INSERT INTO users (username, email, password_hash, full_name, phone, status, role, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'active', 'user_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id, username, email, full_name, avatar_url, status, role`,
         [username, email, passwordHash, fullName || null, phone || null]
       );
@@ -133,7 +136,7 @@ class AuthController {
           'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
           [failedAttempts, lockedUntil, user.id]
         );
-        await this.logLoginAttempt(client, user.id, username, 'failed', 'Mật khẩu không đúng', ipAddress, userAgent);
+        await this.logLoginAttempt(client, user.id, user.email, 'failed', 'Mật khẩu không đúng', ipAddress, userAgent);
 
         return res.status(401).json({
           success: false,
@@ -147,7 +150,7 @@ class AuthController {
          WHERE id = $2`,
         [ipAddress, user.id]
       );
-      await this.logLoginAttempt(client, user.id, username, 'success', null, ipAddress, userAgent);
+      await this.logLoginAttempt(client, user.id, user.email, 'success', null, ipAddress, userAgent);
 
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
@@ -178,6 +181,141 @@ class AuthController {
     } catch (error) {
       console.error('Login error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Đăng nhập hoặc đăng ký bằng Google
+   * @param {import('express').Request} req - body: { credential }
+   * @param {import('express').Response} res
+   */
+  async googleLogin(req, res) {
+    const client = await db.getClient();
+
+    try {
+      const { credential } = req.body;
+      const ipAddress = req.ip || req.socket?.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      if (!credential) {
+        return res.status(400).json({ success: false, message: 'Thiếu Google credential' });
+      }
+
+      // 1. Verify Google token
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      const { email, name, picture } = payload;
+
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Không thể lấy email từ Google' });
+      }
+
+      // 2. Check if user exists
+      let result = await client.query(
+        `SELECT id, username, email, full_name, avatar_url, status, role,
+                active_plan_id, password_hash, failed_login_attempts, locked_until
+         FROM users
+         WHERE email = $1`,
+        [email]
+      );
+
+      let user;
+
+      // 3. Nếu chưa tồn tại, tạo mới
+      if (result.rows.length === 0) {
+        // Tạo username từ email
+        let baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+        if (baseUsername.length < 3) baseUsername += 'user';
+        
+        // Đảm bảo username là unique
+        let username = baseUsername;
+        let suffix = 1;
+        while (true) {
+          const checkUser = await client.query('SELECT id FROM users WHERE username = $1', [username]);
+          if (checkUser.rows.length === 0) break;
+          username = `${baseUsername}${suffix}`;
+          suffix++;
+        }
+
+        // Random password for Google users
+        const randomPassword = crypto.randomBytes(16).toString('hex');
+        const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+        const insertResult = await client.query(
+          `INSERT INTO users (username, email, password_hash, full_name, avatar_url, is_verified, status, role, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           RETURNING id, username, email, full_name, avatar_url, status, role`,
+          [username, email, passwordHash, name || null, picture || null]
+        );
+        user = insertResult.rows[0];
+      } else {
+        user = result.rows[0];
+
+        // Nếu status không active
+        if (user.status !== 'active') {
+          return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
+        }
+        if (user.locked_until && new Date(user.locked_until) > new Date()) {
+          return res.status(403).json({
+            success: false,
+            message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+          });
+        }
+        // Cập nhật thông tin profile nếu có thay đổi từ Google
+        if (user.full_name !== name || user.avatar_url !== picture || !user.is_verified) {
+          await client.query(
+            'UPDATE users SET full_name = COALESCE($1, full_name), avatar_url = COALESCE($2, avatar_url), is_verified = true, updated_at = NOW() WHERE id = $3',
+            [name, picture, user.id]
+          );
+          user.full_name = name || user.full_name;
+          user.avatar_url = picture || user.avatar_url;
+        }
+      }
+
+      // 4. Update login status
+      await client.query(
+        `UPDATE users SET failed_login_attempts = 0, locked_until = NULL,
+          last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
+         WHERE id = $2`,
+        [ipAddress, user.id]
+      );
+      await this.logLoginAttempt(client, user.id, user.email, 'success', 'google', ipAddress, userAgent);
+
+      // 5. Generate tokens
+      const accessToken = this.generateAccessToken(user);
+      const refreshToken = await this.generateRefreshToken(user, req);
+
+      const responseUser = this.formatUser(user);
+
+      // Với employee: lấy thêm permissions và ownerId từ user_members
+      if (user.role === 'employee') {
+        const memberResult = await client.query(
+          `SELECT owner_id, permissions FROM user_members WHERE employee_id = $1 AND status = 'active'`,
+          [user.id]
+        );
+        if (memberResult.rows[0]) {
+          responseUser.ownerId = memberResult.rows[0].owner_id;
+          responseUser.permissions = memberResult.rows[0].permissions;
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đăng nhập Google thành công',
+        data: {
+          user: responseUser,
+          accessToken,
+          refreshToken,
+        },
+      });
+    } catch (error) {
+      console.error('Google Login error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server khi đăng nhập bằng Google' });
     } finally {
       client.release();
     }

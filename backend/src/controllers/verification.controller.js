@@ -9,17 +9,27 @@ class VerificationController {
   async sendCode(req, res) {
     try {
       const { email, username } = req.body;
+      console.log(`[Verification] Sending code to: ${email}, username: ${username}`);
 
       // Kiểm tra domain email có MX record hợp lệ không
       const domain = email.split('@')[1];
       try {
-        const records = await dns.resolveMx(domain);
-        if (!records || records.length === 0) throw new Error('No MX');
-      } catch {
-        return res.status(400).json({
-          success: false,
-          message: 'Địa chỉ email không hợp lệ hoặc domain không tồn tại',
-        });
+        // Chỉ kiểm tra MX record nếu không phải là môi trường development hoặc domain là common email
+        const isCommonDomain = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'].includes(domain.toLowerCase());
+        
+        if (!isCommonDomain && process.env.NODE_ENV !== 'development') {
+          const records = await dns.resolveMx(domain);
+          if (!records || records.length === 0) throw new Error('No MX');
+        }
+      } catch (dnsError) {
+        console.warn(`[Verification] DNS check failed for ${domain}:`, dnsError.message);
+        // Trong môi trường dev hoặc nếu là domain phổ biến mà DNS fail (có thể do network), ta vẫn cho qua
+        if (process.env.NODE_ENV !== 'development' && !['localhost', 'test.com'].includes(domain)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Địa chỉ email không hợp lệ hoặc domain không tồn tại',
+          });
+        }
       }
 
       // Kiểm tra email đã tồn tại chưa
@@ -28,6 +38,7 @@ class VerificationController {
         [email]
       );
       if (existingUser.rows.length > 0) {
+        console.log(`[Verification] Email already used: ${email}`);
         return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
       }
 
@@ -38,6 +49,7 @@ class VerificationController {
           [username]
         );
         if (existingUsername.rows.length > 0) {
+          console.log(`[Verification] Username already used: ${username}`);
           return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
         }
       }

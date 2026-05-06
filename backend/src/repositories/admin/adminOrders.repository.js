@@ -18,10 +18,10 @@ export async function findOrders({ status, search, dateFrom, dateTo, page = 1, l
 
   const [rowsRes, countRes] = await Promise.all([
     db.query(
-      `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
-              o.user_email, o.user_id,
-              p.name AS plan_name, p.code AS plan_code, p.is_custom,
-              u.full_name AS user_full_name
+      `SELECT o.id, o.order_code AS "orderCode", o.amount, o.status, o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+              o.user_email AS "userEmail", o.user_id AS "userId",
+              p.name AS "planName", p.code AS "planCode", p.is_custom AS "isCustom",
+              u.full_name AS "userFullName"
        FROM orders o
        LEFT JOIN plans p ON o.plan_id = p.id
        LEFT JOIN users u ON o.user_id = u.id
@@ -54,11 +54,11 @@ export async function setOrderCancelled(orderCode) {
 export async function getOrdersKpi() {
   const { rows } = await db.query(`
     SELECT
-      COUNT(*)                                                        AS total_orders,
-      COUNT(CASE WHEN status = 'success'   THEN 1 END)               AS success_count,
-      COUNT(CASE WHEN status = 'pending'   THEN 1 END)               AS pending_count,
-      COUNT(CASE WHEN status = 'cancelled' THEN 1 END)               AS cancelled_count,
-      COALESCE(SUM(CASE WHEN status = 'success' THEN amount END), 0) AS total_revenue
+      COUNT(*)                                                        AS "totalOrders",
+      COUNT(CASE WHEN status = 'success'   THEN 1 END)               AS "successCount",
+      COUNT(CASE WHEN status = 'pending'   THEN 1 END)               AS "pendingCount",
+      COUNT(CASE WHEN status = 'cancelled' THEN 1 END)               AS "cancelledCount",
+      COALESCE(SUM(CASE WHEN status = 'success' THEN amount END), 0) AS "totalRevenue"
     FROM orders
   `);
   return rows[0];

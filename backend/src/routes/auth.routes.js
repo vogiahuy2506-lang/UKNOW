@@ -54,6 +54,17 @@ router.post('/login',
   authController.login.bind(authController)
 );
 
+// Đăng nhập Google
+router.post('/google-login',
+  [
+    body('credential')
+      .notEmpty()
+      .withMessage('Credential không được để trống')
+  ],
+  handleValidationErrors,
+  authController.googleLogin.bind(authController)
+);
+
 // Refresh token
 router.post('/refresh-token',
   [

@@ -106,20 +106,20 @@ const AdminOrdersPage = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           label="Doanh thu"
-          value={kpi ? fmtVnd(kpi.total_revenue) : '—'}
+          value={kpi ? fmtVnd(kpi.totalRevenue) : '—'}
           sub="Từ đơn thành công"
         />
         <KpiCard
           label="Tổng đơn"
-          value={kpi ? Number(kpi.total_orders).toLocaleString() : '—'}
+          value={kpi ? Number(kpi.totalOrders).toLocaleString() : '—'}
         />
         <KpiCard
           label="Chờ thanh toán"
-          value={kpi ? Number(kpi.pending_count).toLocaleString() : '—'}
+          value={kpi ? Number(kpi.pendingCount).toLocaleString() : '—'}
         />
         <KpiCard
           label="Đã hủy"
-          value={kpi ? Number(kpi.cancelled_count).toLocaleString() : '—'}
+          value={kpi ? Number(kpi.cancelledCount).toLocaleString() : '—'}
         />
       </div>
 
@@ -211,38 +211,38 @@ const AdminOrdersPage = () => {
                 </tr>
               ) : orders.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.order_code}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.orderCode}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-gray-800">{o.plan_name || '—'}</span>
-                      {o.is_custom && (
+                      <span className="font-medium text-gray-800">{o.planName || '—'}</span>
+                      {o.isCustom && (
                         <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium">
                           Riêng
                         </span>
                       )}
                     </div>
-                    {o.plan_code && <p className="text-xs text-gray-400">#{o.plan_code}</p>}
+                    {o.planCode && <p className="text-xs text-gray-400">#{o.planCode}</p>}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-800">{o.user_full_name || o.user_email}</p>
-                    {o.user_full_name && <p className="text-xs text-gray-400">{o.user_email}</p>}
+                    <p className="text-gray-800">{o.userFullName || o.userEmail}</p>
+                    {o.userFullName && <p className="text-xs text-gray-400">{o.userEmail}</p>}
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {fmtVnd(o.amount)}
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                    {fmtDate(o.created_at)}
+                    {fmtDate(o.createdAt)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
                   </td>
                   <td className="px-4 py-3">
                     {o.status === 'pending' && (
-                      cancellingCode === o.order_code ? (
+                      cancellingCode === o.orderCode ? (
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleCancel(o.order_code)}
+                            onClick={() => handleCancel(o.orderCode)}
                             className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
                             Xác nhận
@@ -258,7 +258,7 @@ const AdminOrdersPage = () => {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setCancellingCode(o.order_code)}
+                          onClick={() => setCancellingCode(o.orderCode)}
                           title="Huỷ đơn và vô hiệu hoá QR"
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         >

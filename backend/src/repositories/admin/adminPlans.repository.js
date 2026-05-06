@@ -2,9 +2,10 @@ import db from '../../config/database.js';
 
 export async function findAllPlans() {
   const { rows } = await db.query(
-    `SELECT id, code, name, price, description, features, is_active, is_custom, max_employees,
-            daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
-            created_at, updated_at
+    `SELECT id, code, name, price, description, features, is_active AS "isActive", is_custom AS "isCustom", max_employees AS "maxEmployees",
+            daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit", 
+            daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
+            created_at AS "createdAt", updated_at AS "updatedAt"
      FROM plans WHERE is_custom = FALSE ORDER BY price ASC, id ASC`
   );
   return rows;
@@ -15,14 +16,14 @@ export async function findAllPlans() {
 export async function findCustomPlans({ showHidden = false } = {}) {
   const { rows } = await db.query(
     `SELECT DISTINCT ON (p.id)
-            p.id, p.code, p.name, p.price, p.description, p.is_active, p.is_custom,
-            p.max_employees, p.daily_email_limit, p.monthly_email_limit,
-            p.daily_zalo_limit, p.monthly_zalo_limit, p.created_at,
-            COALESCE(u.email,     o_user.email)     AS assigned_email,
-            COALESCE(u.full_name, o_user.full_name) AS assigned_name,
-            COALESCE(u.id,        o_user.id)        AS assigned_user_id,
-            (u.id IS NOT NULL)                      AS is_activated,
-            o.status AS payment_status
+            p.id, p.code, p.name, p.price, p.description, p.is_active AS "isActive", p.is_custom AS "isCustom",
+            p.max_employees AS "maxEmployees", p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
+            p.daily_zalo_limit AS "dailyZaloLimit", p.monthly_zalo_limit AS "monthlyZaloLimit", p.created_at AS "createdAt",
+            COALESCE(u.email,     o_user.email)     AS "assignedEmail",
+            COALESCE(u.full_name, o_user.full_name) AS "assignedName",
+            COALESCE(u.id,        o_user.id)        AS "assignedUserId",
+            (u.id IS NOT NULL)                      AS "isActivated",
+            o.status AS "paymentStatus"
      FROM plans p
      LEFT JOIN users  u      ON u.active_plan_id = p.id AND u.role = 'user_admin'
      LEFT JOIN orders o      ON o.plan_id = p.id
@@ -77,7 +78,7 @@ export async function deletePlan(id) {
 /** Tìm user_admin theo email gần đúng để autocomplete */
 export async function searchUserAdminsByEmail(query, limit = 8, excludeWithPlan = false) {
   const { rows } = await db.query(
-    `SELECT id, email, full_name, active_plan_id
+    `SELECT id, email, full_name AS "fullName", active_plan_id AS "activePlanId"
      FROM users
      WHERE role = 'user_admin'
        AND email ILIKE $1
@@ -92,7 +93,7 @@ export async function searchUserAdminsByEmail(query, limit = 8, excludeWithPlan 
 /** Tìm user_admin theo email để gán gói trực tiếp */
 export async function findUserAdminByEmail(email) {
   const { rows } = await db.query(
-    `SELECT id, username, email, full_name, role, active_plan_id FROM users WHERE email = $1`,
+    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId" FROM users WHERE email = $1`,
     [email]
   );
   return rows[0] || null;
@@ -115,7 +116,7 @@ export async function assignPlanToUser(userId, planId) {
            subscription_reminder_count = 0,
            updated_at = NOW()
        WHERE id = $2
-       RETURNING id, username, email, full_name, active_plan_id, subscription_expires_at`,
+       RETURNING id, username, email, full_name AS "fullName", active_plan_id AS "activePlanId", subscription_expires_at AS "subscriptionExpiresAt"`,
       [planId, userId]
     );
     const user = userResult.rows[0];
@@ -172,7 +173,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
            subscription_reminder_count = 0,
            updated_at = NOW()
        WHERE id = $2
-       RETURNING id, username, email, full_name`,
+       RETURNING id, username, email, full_name AS "fullName"`,
       [plan.id, userId]
     );
     const assignedUser = userResult.rows[0];
@@ -197,7 +198,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
 /** Lấy số lượng user đang dùng từng plan */
 export async function getPlanUserCounts() {
   const { rows } = await db.query(
-    `SELECT active_plan_id AS plan_id, COUNT(*) AS user_count
+    `SELECT active_plan_id AS "planId", COUNT(*) AS "userCount"
      FROM users WHERE active_plan_id IS NOT NULL AND role = 'user_admin'
      GROUP BY active_plan_id`
   );

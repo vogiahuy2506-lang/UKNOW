@@ -204,13 +204,13 @@ const EmployeeManagement = () => {
   const openEmployeeModal = (emp, tab = 'info') => {
     setSelectedEmployee(emp);
     setActiveTab(tab);
-    editForm.reset({ fullName: emp.full_name || '', email: emp.email || '' });
+    editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     setPermState(emp.permissions || {});
     setLimitsState({
-      dailyEmailLimit:   emp.daily_email_limit   ?? null,
-      monthlyEmailLimit: emp.monthly_email_limit ?? null,
-      dailyZaloLimit:    emp.daily_zalo_limit    ?? null,
-      monthlyZaloLimit:  emp.monthly_zalo_limit  ?? null,
+      dailyEmailLimit:   emp.dailyEmailLimit   ?? null,
+      monthlyEmailLimit: emp.monthlyEmailLimit ?? null,
+      dailyZaloLimit:    emp.dailyZaloLimit    ?? null,
+      monthlyZaloLimit:  emp.monthlyZaloLimit  ?? null,
     });
   };
 
@@ -296,7 +296,7 @@ const EmployeeManagement = () => {
 
   // ── Khóa / Mở khóa ────────────────────────────────────────────────────────
   const handleToggleStatus = async (emp) => {
-    const newStatus = emp.member_status === 'active' ? 'inactive' : 'active';
+    const newStatus = emp.memberStatus === 'active' ? 'inactive' : 'active';
     try {
       setStatusUpdatingId(emp.id);
       await userManagementApiService.updateEmployeeStatus(emp.id, newStatus);
@@ -404,7 +404,7 @@ const EmployeeManagement = () => {
               </thead>
               <tbody>
                 {employees.map((emp) => {
-                  const isActive = emp.member_status === 'active';
+                  const isActive = emp.memberStatus === 'active';
                   return (
                     <tr
                       key={emp.id}
@@ -412,7 +412,7 @@ const EmployeeManagement = () => {
                       onClick={() => openEmployeeModal(emp)}
                     >
                       <td className="font-medium text-primary-600">{emp.username}</td>
-                      <td>{emp.full_name || <span className="text-gray-400">—</span>}</td>
+                      <td>{emp.fullName || <span className="text-gray-400">—</span>}</td>
                       <td className="text-sm text-gray-600">{emp.email}</td>
                       <td>
                         {emp.status === 'pending_activation' ? (
@@ -424,17 +424,17 @@ const EmployeeManagement = () => {
                         )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.daily_email_limit)}/ngày
+                        {limitLabel(emp.dailyEmailLimit)}/ngày
                         <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthly_email_limit)}/tháng
+                        {limitLabel(emp.monthlyEmailLimit)}/tháng
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.daily_zalo_limit)}/ngày
+                        {limitLabel(emp.dailyZaloLimit)}/ngày
                         <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthly_zalo_limit)}/tháng
+                        {limitLabel(emp.monthlyZaloLimit)}/tháng
                       </td>
                       <td className="text-sm text-gray-500">
-                        {emp.joined_at ? new Date(emp.joined_at).toLocaleDateString('vi-VN') : '—'}
+                        {emp.joinedAt ? new Date(emp.joinedAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                     </tr>
                   );
@@ -451,7 +451,7 @@ const EmployeeManagement = () => {
           {/* Modal header */}
           <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">{selectedEmployee.full_name || selectedEmployee.username}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{selectedEmployee.fullName || selectedEmployee.username}</h2>
               <p className="text-sm text-gray-500 mt-0.5">@{selectedEmployee.username} · {selectedEmployee.email}</p>
             </div>
             <button
@@ -525,7 +525,7 @@ const EmployeeManagement = () => {
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}
                         disabled={statusUpdatingId === selectedEmployee.id}
-                        className={`btn ${selectedEmployee.member_status === 'active' ? 'btn-secondary text-yellow-600' : 'btn-secondary text-green-600'}`}
+                        className={`btn ${selectedEmployee.memberStatus === 'active' ? 'btn-secondary text-yellow-600' : 'btn-secondary text-green-600'}`}
                       >
                         {statusUpdatingId === selectedEmployee.id ? (
                           <div className="spinner w-4 h-4 mr-2" />
@@ -536,7 +536,7 @@ const EmployeeManagement = () => {
                         )}
                         {statusUpdatingId === selectedEmployee.id
                           ? 'Đang cập nhật...'
-                          : selectedEmployee.member_status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
+                          : selectedEmployee.memberStatus === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
                       </button>
                     )}
                     {selectedEmployee.status === 'pending_activation' ? (
