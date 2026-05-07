@@ -50,13 +50,34 @@ const AdminPlansPage = () => {
   const handleRefresh = () => tab === 'public' ? fetchPlans() : fetchCustomPlans();
 
   const handleActivate = async (plan) => {
-    if (!plan.assigned_email) return;
+    if (!plan.assignedEmail) return;
     try {
-      await adminPlansApiService.assignPlan(plan.id, plan.assigned_email);
-      toast.success(`Đã kích hoạt gói "${plan.name}" cho ${plan.assigned_email}`);
+      await adminPlansApiService.assignPlan(plan.id, plan.assignedEmail);
+      toast.success(`Đã kích hoạt gói "${plan.name}" cho ${plan.assignedEmail}`);
       fetchCustomPlans();
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Không thể kích hoạt gói');
+    }
+  };
+
+  const handleToggleVisibility = async (plan) => {
+    try {
+      await adminPlansApiService.updatePlan(plan.id, {
+        name: plan.name,
+        price: plan.price,
+        description: plan.description,
+        features: plan.features || [],
+        maxEmployees: plan.maxEmployees,
+        isActive: !plan.isActive,
+        dailyEmailLimit: plan.dailyEmailLimit,
+        monthlyEmailLimit: plan.monthlyEmailLimit,
+        dailyZaloLimit: plan.dailyZaloLimit,
+        monthlyZaloLimit: plan.monthlyZaloLimit,
+      });
+      toast.success(plan.isActive ? 'Đã ẩn gói dịch vụ' : 'Đã hiển thị gói dịch vụ');
+      fetchPlans();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái gói');
     }
   };
 
@@ -135,6 +156,7 @@ const AdminPlansPage = () => {
                 onEdit={(p)   => setEditPlan(p)}
                 onDelete={(p) => setDeletePlan(p)}
                 onAssign={(p) => setAssignPlan(p)}
+                onToggle={(p) => handleToggleVisibility(p)}
               />
             ))}
           </div>
@@ -198,9 +220,9 @@ const AdminPlansPage = () => {
                 Cảnh báo: {deletePlan.user_count} thành viên đang dùng gói này.
               </span>
             )}
-            {deletePlan.assigned_email && (
+            {deletePlan.assignedEmail && (
               <span className="text-amber-600 block mt-1">
-                Cảnh báo: gói đang được gán cho {deletePlan.assigned_email}.
+                Cảnh báo: gói đang được gán cho {deletePlan.assignedEmail}.
               </span>
             )}
           </p>

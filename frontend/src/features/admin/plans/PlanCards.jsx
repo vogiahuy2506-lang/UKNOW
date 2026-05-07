@@ -1,14 +1,14 @@
-import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt } from 'react-icons/hi';
+import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
 import { fmtVnd, fmtEmp, fmtLimit } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
-export const PlanCard = ({ plan, onEdit, onDelete, onAssign }) => (
-  <div className={`card p-5 flex flex-col gap-4 ${!plan.is_active ? 'opacity-60' : ''}`}>
+export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => (
+  <div className={`card p-5 flex flex-col gap-4 ${!plan.isActive ? 'opacity-60' : ''}`}>
     <div className="flex items-start justify-between gap-2">
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
-          {!plan.is_active && <span className="badge badge-gray text-xs">Ẩn</span>}
+          {!plan.isActive && <span className="badge badge-gray text-xs">Ẩn</span>}
         </div>
         {plan.code && <p className="text-xs text-gray-400 mt-0.5">#{plan.code}</p>}
       </div>
@@ -16,7 +16,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign }) => (
     </div>
 
     <div className="flex items-center gap-4 text-sm text-gray-500">
-      <span>{fmtEmp(plan.max_employees)}</span>
+      <span>{fmtEmp(plan.maxEmployees)}</span>
       <span className="text-gray-200">|</span>
       <span>{plan.user_count ?? 0} thành viên đang dùng</span>
     </div>
@@ -39,6 +39,9 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign }) => (
         <HiOutlinePencil className="w-4 h-4 mr-1.5" />
         Chỉnh sửa
       </button>
+      <button onClick={() => onToggle(plan)} className="btn btn-secondary text-sm px-3" title={plan.isActive ? 'Ẩn gói' : 'Hiển thị gói'}>
+        {plan.isActive ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
+      </button>
       <button onClick={() => onAssign(plan)} className="btn btn-secondary text-sm px-3" title="Gán cho người dùng">
         <HiOutlineUserAdd className="w-4 h-4" />
       </button>
@@ -55,14 +58,14 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate }) => (
     <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
         <span className="text-white font-bold text-sm">
-          {(plan.assigned_name?.[0] || plan.assigned_email?.[0] || '?').toUpperCase()}
+          {(plan.assignedName?.[0] || plan.assignedEmail?.[0] || '?').toUpperCase()}
         </span>
       </div>
       <div className="min-w-0 flex-1">
-        {plan.assigned_name && <p className="text-sm font-semibold text-gray-800 truncate">{plan.assigned_name}</p>}
-        <p className="text-xs text-gray-400 truncate">{plan.assigned_email ?? 'Chưa gán'}</p>
+        {plan.assignedName && <p className="text-sm font-semibold text-gray-800 truncate">{plan.assignedName}</p>}
+        <p className="text-xs text-gray-400 truncate">{plan.assignedEmail ?? 'Chưa gán'}</p>
       </div>
-      {plan.is_activated
+      {plan.isActivated
         ? <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
             <HiOutlineCheck className="w-3 h-3" /> Đang dùng
           </span>
@@ -80,15 +83,15 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate }) => (
     {plan.description && <p className="text-xs text-gray-400 italic -mt-2">{plan.description}</p>}
 
     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-      <span>Email/ngày: <strong className="text-gray-700">{fmtLimit(plan.daily_email_limit)}</strong></span>
-      <span>Email/tháng: <strong className="text-gray-700">{fmtLimit(plan.monthly_email_limit)}</strong></span>
-      <span>Zalo/ngày: <strong className="text-gray-700">{fmtLimit(plan.daily_zalo_limit)}</strong></span>
-      <span>Zalo/tháng: <strong className="text-gray-700">{fmtLimit(plan.monthly_zalo_limit)}</strong></span>
-      <span className="col-span-2">Nhân viên: <strong className="text-gray-700">{fmtEmp(plan.max_employees)}</strong></span>
+      <span>Email/ngày: <strong className="text-gray-700">{fmtLimit(plan.dailyEmailLimit)}</strong></span>
+      <span>Email/tháng: <strong className="text-gray-700">{fmtLimit(plan.monthlyEmailLimit)}</strong></span>
+      <span>Zalo/ngày: <strong className="text-gray-700">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
+      <span>Zalo/tháng: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
+      <span className="col-span-2">Nhân viên: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees)}</strong></span>
     </div>
 
     <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
-      {!plan.is_activated && plan.assigned_email && (
+      {!plan.isActivated && plan.assignedEmail && (
         <button
           onClick={() => onActivate(plan)}
           className="btn btn-primary text-sm px-3"
