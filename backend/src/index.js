@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import db from './config/database.js';
 import { formatUtcAndVietnamForLog } from './utils/vnTimeFormat.util.js';
 import uploadController from './controllers/upload.controller.js';
@@ -100,6 +101,7 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);

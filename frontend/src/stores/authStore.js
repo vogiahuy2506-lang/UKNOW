@@ -108,11 +108,10 @@ export const useAuthStore = create((set, get) => ({
    * @returns {object} response data
    */
   login: async (username, password, rememberMe = true) => {
-    const response = await api.post('/auth/login', { username, password });
-    const { user, accessToken, refreshToken } = response.data.data;
+    const response = await api.post('/auth/login', { username, password, rememberMe });
+    const { user, accessToken } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
-    storeToken('refreshToken', refreshToken, rememberMe);
 
     set({
       user: normalizeUser(user),
@@ -127,10 +126,9 @@ export const useAuthStore = create((set, get) => ({
    */
   googleLogin: async (credential, rememberMe = true) => {
     const response = await api.post('/auth/google-login', { credential });
-    const { user, accessToken, refreshToken } = response.data.data;
+    const { user, accessToken } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
-    storeToken('refreshToken', refreshToken, rememberMe);
 
     set({
       user: normalizeUser(user),
@@ -143,10 +141,9 @@ export const useAuthStore = create((set, get) => ({
   // Register (giữ lại cho trường hợp backend dùng nội bộ)
   register: async (data) => {
     const response = await api.post('/auth/register', data);
-    const { user, accessToken, refreshToken } = response.data.data;
+    const { user, accessToken } = response.data.data;
 
     localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
 
     set({
       user: normalizeUser(user),
@@ -166,14 +163,12 @@ export const useAuthStore = create((set, get) => ({
     const shouldSkipServerLogout = Boolean(options?.skipServer);
     try {
       if (!shouldSkipServerLogout) {
-        const refreshToken = getStoredToken('refreshToken');
-        await api.post('/auth/logout', { refreshToken });
+        await api.post('/auth/logout', {});
       }
     } catch {
       // Bỏ qua lỗi logout phía server, vẫn xóa local state
     } finally {
       removeToken('accessToken');
-      removeToken('refreshToken');
       set({
         user: null,
         isAuthenticated: false,

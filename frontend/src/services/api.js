@@ -8,7 +8,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 10000,
+  withCredentials: true,
 });
 
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/logout'];
@@ -109,23 +110,16 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshToken = getStoredToken('refreshToken');
-    if (!refreshToken) {
-      await forceLogoutAndRedirect();
-      return Promise.reject(error);
-    }
-
     if (statusCode === 401 && !originalRequest?._retry) {
       originalRequest._retry = true;
 
       try {
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {
-          refreshToken,
+        const response = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
+          withCredentials: true,
         });
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        const { accessToken } = response.data.data;
         updateStoredToken('accessToken', accessToken);
-        updateStoredToken('refreshToken', newRefreshToken);
 
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
