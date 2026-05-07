@@ -14,13 +14,13 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
     name: plan.name || '',
     price: plan.price ?? 0,
     description: plan.description || '',
-    maxEmployees: plan.max_employees ?? -1,
-    isActive: plan.is_active ?? true,
+    maxEmployees: plan.maxEmployees ?? -1,
+    isActive: plan.isActive ?? true,
     features: plan.features || [],
-    dailyEmailLimit: plan.daily_email_limit ?? '',
-    monthlyEmailLimit: plan.monthly_email_limit ?? '',
-    dailyZaloLimit: plan.daily_zalo_limit ?? '',
-    monthlyZaloLimit: plan.monthly_zalo_limit ?? '',
+    dailyEmailLimit: plan.dailyEmailLimit ?? '',
+    monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
+    dailyZaloLimit: plan.dailyZaloLimit ?? '',
+    monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -155,11 +155,11 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     name: plan.name || '',
     price: plan.price ?? 0,
     description: plan.description || '',
-    maxEmployees: plan.max_employees ?? -1,
-    dailyEmailLimit: plan.daily_email_limit ?? '',
-    monthlyEmailLimit: plan.monthly_email_limit ?? '',
-    dailyZaloLimit: plan.daily_zalo_limit ?? '',
-    monthlyZaloLimit: plan.monthly_zalo_limit ?? '',
+    maxEmployees: plan.maxEmployees ?? -1,
+    dailyEmailLimit: plan.dailyEmailLimit ?? '',
+    monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
+    dailyZaloLimit: plan.dailyZaloLimit ?? '',
+    monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -184,8 +184,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold text-gray-900">Chỉnh sửa gói riêng</h2>
-        {plan.assigned_email && (
-          <p className="text-sm text-gray-500 mt-1">Doanh nghiệp: <strong>{plan.assigned_name || plan.assigned_email}</strong></p>
+        {plan.assignedEmail && (
+          <p className="text-sm text-gray-500 mt-1">Doanh nghiệp: <strong>{plan.assignedName || plan.assignedEmail}</strong></p>
         )}
       </div>
 
