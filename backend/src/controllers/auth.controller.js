@@ -10,8 +10,23 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 
+const REFRESH_TOKEN_COOKIE = 'refreshToken';
+const REFRESH_TOKEN_PATH = '/api/auth';
 
 class AuthController {
+  setRefreshTokenCookie(res, token, rememberMe = true) {
+    res.cookie(REFRESH_TOKEN_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: REFRESH_TOKEN_PATH,
+      ...(rememberMe ? { maxAge: 7 * 24 * 60 * 60 * 1000 } : {}),
+    });
+  }
+
+  clearRefreshTokenCookie(res) {
+    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: REFRESH_TOKEN_PATH });
+  }
   /**
    * Đăng ký tài khoản mới.
    * Tất cả user tự đăng ký đều là user_admin, active_plan_id = NULL cho đến khi mua gói.
@@ -65,6 +80,7 @@ class AuthController {
 
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
+      this.setRefreshTokenCookie(res, refreshToken);
 
       return res.status(201).json({
         success: true,
@@ -72,7 +88,6 @@ class AuthController {
         data: {
           user: this.formatUser(user),
           accessToken,
-          refreshToken,
         },
       });
     } catch (error) {
@@ -93,7 +108,7 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { username, password } = req.body;
+      const { username, password, rememberMe = true } = req.body;
       const ipAddress = req.ip || req.socket?.remoteAddress;
       const userAgent = req.headers['user-agent'];
 
@@ -154,6 +169,7 @@ class AuthController {
 
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
+      this.setRefreshTokenCookie(res, refreshToken, rememberMe);
 
       const responseUser = this.formatUser(user);
 
@@ -175,7 +191,6 @@ class AuthController {
         data: {
           user: responseUser,
           accessToken,
-          refreshToken,
         },
       });
     } catch (error) {
@@ -289,6 +304,7 @@ class AuthController {
       // 5. Generate tokens
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
+      this.setRefreshTokenCookie(res, refreshToken);
 
       const responseUser = this.formatUser(user);
 
@@ -310,7 +326,6 @@ class AuthController {
         data: {
           user: responseUser,
           accessToken,
-          refreshToken,
         },
       });
     } catch (error) {
@@ -331,7 +346,7 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { refreshToken } = req.body;
+      const refreshToken = req.cookies?.refreshToken;
 
       if (!refreshToken) {
         return res.status(400).json({ success: false, message: 'Refresh token không được cung cấp' });
@@ -340,6 +355,7 @@ class AuthController {
       try {
         jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
       } catch {
+        this.clearRefreshTokenCookie(res);
         return res.status(401).json({
           success: false,
           message: 'Refresh token không hợp lệ hoặc đã hết hạn',
@@ -355,6 +371,7 @@ class AuthController {
       );
 
       if (tokenResult.rows.length === 0) {
+        this.clearRefreshTokenCookie(res);
         return res.status(401).json({
           success: false,
           message: 'Refresh token không tồn tại hoặc đã bị thu hồi',
@@ -370,10 +387,11 @@ class AuthController {
 
       const newAccessToken = this.generateAccessToken(user);
       const newRefreshToken = await this.generateRefreshToken(user, req);
+      this.setRefreshTokenCookie(res, newRefreshToken);
 
       return res.json({
         success: true,
-        data: { accessToken: newAccessToken, refreshToken: newRefreshToken },
+        data: { accessToken: newAccessToken },
       });
     } catch (error) {
       console.error('Refresh token error:', error);
@@ -392,7 +410,7 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { refreshToken } = req.body;
+      const refreshToken = req.cookies?.refreshToken;
       const userId = req.user.id;
 
       if (refreshToken) {
@@ -403,6 +421,7 @@ class AuthController {
         );
       }
 
+      this.clearRefreshTokenCookie(res);
       return res.json({ success: true, message: 'Đăng xuất thành công' });
     } catch (error) {
       console.error('Logout error:', error);
