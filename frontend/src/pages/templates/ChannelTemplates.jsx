@@ -1,13 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import EmailTemplates from './EmailTemplates';
 
 const TABS = [
   { key: 'email', label: 'Email' },
-  { key: 'zalo',  label: 'Zalo' },
+  { key: 'zalo', label: 'Zalo' },
 ];
 
 const ChannelTemplates = () => {
   const [active, setActive] = useState('email');
+  const location = useLocation();
+
+  // Nếu chatbot AI truyền draft qua navigation state,
+  // chuyển sang tab đúng kênh và truyền draft xuống EmailTemplates.
+  const aiDraft = location.state?.aiDraft || null;
+
+  useEffect(() => {
+    if (aiDraft?.channel === 'zalo') {
+      setActive('zalo');
+    } else if (aiDraft?.channel === 'email') {
+      setActive('email');
+    }
+  }, [aiDraft]);
 
   return (
     <div className="space-y-6">
@@ -29,7 +43,11 @@ const ChannelTemplates = () => {
         ))}
       </div>
 
-      <EmailTemplates key={active} isZaloTemplate={active === 'zalo'} />
+      <EmailTemplates
+        key={active}
+        isZaloTemplate={active === 'zalo'}
+        aiDraft={active === (aiDraft?.channel || 'email') ? aiDraft : null}
+      />
     </div>
   );
 };

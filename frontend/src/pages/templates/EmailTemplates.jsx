@@ -19,7 +19,7 @@ import {
   wrapEmailSrcDoc,
 } from '../../features/templates/utils/emailTemplateEditor.helpers';
 
-const EmailTemplates = ({ isZaloTemplate = false }) => {
+const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
   const templateApiService = isZaloTemplate ? zaloTemplateApiService : emailTemplateApiService;
   const templateKindLabel = isZaloTemplate ? 'zalo' : 'email';
   const subjectLabel = isZaloTemplate ? 'Tiêu đề tin nhắn' : 'Tiêu đề email';
@@ -80,6 +80,26 @@ const EmailTemplates = ({ isZaloTemplate = false }) => {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  // Auto-open editor with AI-generated draft from chatbot
+  useEffect(() => {
+    if (!aiDraft) return;
+    setEditingTemplate(null);
+    setFormData({
+      templateName: aiDraft.templateName || '',
+      subject: aiDraft.subject || '',
+      bodyHtml: aiDraft.bodyHtml || '',
+      bodyText: aiDraft.bodyText || '',
+      attachments: [],
+      category: aiDraft.category || 'marketing',
+    });
+    setVariables([]);
+    setDeletedAttachments([]);
+    const nextTab = isZaloTemplate ? 'text' : (aiDraft.bodyHtml ? 'html' : 'text');
+    setContentTab(nextTab);
+    setActiveInput(nextTab);
+    setShowEditorModal(true);
+  }, [aiDraft]);
 
   const {
     editorPreviewSrcDoc,
