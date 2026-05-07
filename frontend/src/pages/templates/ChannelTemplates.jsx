@@ -29,7 +29,7 @@ const ChannelTemplates = () => {
         ))}
       </div>
 
-      <EmailTemplates isZaloTemplate={active === 'zalo'} />
+      <EmailTemplates key={active} isZaloTemplate={active === 'zalo'} />
     </div>
   );
 };
