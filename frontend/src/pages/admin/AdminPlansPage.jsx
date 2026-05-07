@@ -64,15 +64,15 @@ const AdminPlansPage = () => {
     try {
       await adminPlansApiService.updatePlan(plan.id, {
         name: plan.name,
-        price: plan.price,
+        price: parseInt(plan.price, 10),
         description: plan.description,
         features: plan.features || [],
-        maxEmployees: plan.maxEmployees,
+        maxEmployees: parseInt(plan.maxEmployees ?? 0, 10),
         isActive: !plan.isActive,
-        dailyEmailLimit: plan.dailyEmailLimit,
-        monthlyEmailLimit: plan.monthlyEmailLimit,
-        dailyZaloLimit: plan.dailyZaloLimit,
-        monthlyZaloLimit: plan.monthlyZaloLimit,
+        dailyEmailLimit: plan.dailyEmailLimit ?? null,
+        monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
+        dailyZaloLimit: plan.dailyZaloLimit ?? null,
+        monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
       });
       toast.success(plan.isActive ? 'Đã ẩn gói dịch vụ' : 'Đã hiển thị gói dịch vụ');
       fetchPlans();
