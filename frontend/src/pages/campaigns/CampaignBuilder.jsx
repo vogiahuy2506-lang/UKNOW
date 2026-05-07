@@ -310,8 +310,17 @@ const CampaignBuilder = () => {
       if (isNewCampaign) {
         // Reset về state ban đầu khi tạo mới và hydrate từ draft tạm nếu có
         const draft = readCampaignDraft();
-        const draftNodes = Array.isArray(draft?.nodes) ? draft.nodes : [];
-        const draftEdges = Array.isArray(draft?.edges) ? draft.edges : [];
+        const aiScript = draft?._aiScript;
+        let draftNodes, draftEdges;
+        if (aiScript && Array.isArray(aiScript.nodes)) {
+          // Convert AI script (nodes+connections) to ReactFlow format
+          const converted = buildFlowFromCampaign(aiScript);
+          draftNodes = converted.nodes;
+          draftEdges = converted.edges;
+        } else {
+          draftNodes = Array.isArray(draft?.nodes) ? draft.nodes : [];
+          draftEdges = Array.isArray(draft?.edges) ? draft.edges : [];
+        }
         setCampaignName(draft?.campaignName || '');
         setCampaignDescription(draft?.campaignDescription || '');
         setCampaignType(draft?.campaignType || 'email');

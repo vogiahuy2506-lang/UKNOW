@@ -4,9 +4,10 @@ import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck,
-  HiOutlineQuestionMarkCircle, HiOutlineExclamation,
-  HiOutlineMail, HiOutlineChat,
+  HiOutlineQuestionMarkCircle,
+  HiOutlineMail, HiOutlineChat, HiOutlineExternalLink,
 } from 'react-icons/hi';
+import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
 import api from '../../services/api';
@@ -176,7 +177,7 @@ const CampaignScriptCard = ({ script, onRun, onEdit }) => (
 );
 
 // Landing page card
-const LandingPageCard = ({ page }) => {
+const LandingPageCard = ({ page, onSaveToLibrary }) => {
   const handlePreview = () => {
     const win = window.open('', '_blank');
     win.document.write(`<html><head><title>${page.title}</title><style>${page.css || ''}</style></head><body>${page.html}</body></html>`);
@@ -189,9 +190,14 @@ const LandingPageCard = ({ page }) => {
         <span className="font-black text-[10px] uppercase tracking-widest">Landing Page</span>
       </div>
       <p className="text-sm font-bold text-slate-800 mb-3">{page.title}</p>
-      <button onClick={handlePreview} className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2">
-        <HiOutlineSparkles className="w-4 h-4 text-orange-400" /> Xem trước trang
-      </button>
+      <div className="space-y-2">
+        <button onClick={handlePreview} className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2">
+          <HiOutlineExternalLink className="w-4 h-4 text-orange-400" /> Xem trước
+        </button>
+        <button onClick={() => onSaveToLibrary?.(page)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2">
+          <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Chỉnh sửa & Lưu
+        </button>
+      </div>
     </div>
   );
 };
@@ -269,18 +275,23 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     onToggle?.();
   };
 
-  const handleEditCampaign = async (script) => {
-    const t = toast.loading('Đang chuẩn bị...');
-    try {
-      const res = await aiApi.executeCampaign(script, false);
-      if (res.success && res.data?.id) {
-        toast.success('Sẵn sàng!', { id: t });
-        navigate(`/app/campaigns/${res.data.id}/builder`);
-        onToggle?.();
-      }
-    } catch {
-      toast.error('Không thể mở builder.', { id: t });
-    }
+  // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
+  const handleEditCampaign = (script) => {
+    writeCampaignDraft({
+      campaignName: script.campaignName || '',
+      campaignDescription: script.description || '',
+      campaignType: script.campaignType || 'mixed',
+      // Store raw script nodes/connections for buildFlowFromCampaign (legacy format)
+      _aiScript: script,
+      updatedAt: new Date().toISOString(),
+    });
+    navigate('/app/campaigns/new/builder');
+    onToggle?.();
+  };
+
+  const handleSaveLandingPage = (page) => {
+    navigate('/app/settings/landing-pages', { state: { aiDraft: page } });
+    onToggle?.();
   };
 
   const handleRunCampaign = async () => {
@@ -371,7 +382,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
               {/* Landing page */}
               {msg.type === 'landing_page' && msg.data && (
-                <LandingPageCard page={msg.data} />
+                <LandingPageCard page={msg.data} onSaveToLibrary={handleSaveLandingPage} />
               )}
             </div>
           </div>

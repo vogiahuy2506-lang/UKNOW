@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil } from 'react-icons/hi';
 import {
@@ -34,6 +35,25 @@ export default function LandingPagesAdminPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [statsPack, setStatsPack] = useState({ filters: {}, rows: [] });
+  const location = useLocation();
+
+  // Auto-open editor when AI chatbot passes a landing page draft
+  useEffect(() => {
+    const aiDraft = location.state?.aiDraft;
+    if (!aiDraft) return;
+    setEditingId(null);
+    setForm({
+      slug: '',
+      title: aiDraft.title || '',
+      htmlContent: aiDraft.html
+        ? `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`
+        : '',
+      isPublished: false,
+    });
+    setModalOpen(true);
+    // Clear state so refreshing doesn't re-open
+    window.history.replaceState({}, '');
+  }, [location.state]);
 
   /**
    * Tải danh sách CMS + thống kê landing (toàn thời gian) song song.
