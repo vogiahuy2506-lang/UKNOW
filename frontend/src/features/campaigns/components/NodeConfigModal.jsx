@@ -492,6 +492,7 @@ const NodeConfigModal = ({
             formData={formData}
             setFormData={setFormData}
             emailTemplates={emailTemplates}
+            zaloTemplates={zaloTemplates}
             mappingTemplate={mappingTemplate}
             handleMappingTemplateSelect={handleMappingTemplateSelect}
           />
