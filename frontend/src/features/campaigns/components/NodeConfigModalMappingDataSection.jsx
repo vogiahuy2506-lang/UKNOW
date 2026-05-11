@@ -15,6 +15,7 @@ export const NodeConfigMappingDataSection = ({
   formData,
   setFormData,
   emailTemplates,
+  zaloTemplates = [],
   mappingTemplate,
   handleMappingTemplateSelect,
 }) => {
@@ -62,11 +63,24 @@ export const NodeConfigMappingDataSection = ({
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="">-- Chọn template để lấy biến --</option>
-          {emailTemplates.map((tpl) => (
-            <option key={tpl.id} value={tpl.id}>
-              {tpl.templateName} ({tpl.category})
-            </option>
-          ))}
+          {emailTemplates.length > 0 && (
+            <optgroup label="📧 Email">
+              {emailTemplates.map((tpl) => (
+                <option key={`email-${tpl.id}`} value={tpl.id}>
+                  {tpl.templateName} ({tpl.category})
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {zaloTemplates.length > 0 && (
+            <optgroup label="💬 Zalo">
+              {zaloTemplates.map((tpl) => (
+                <option key={`zalo-${tpl.id}`} value={tpl.id}>
+                  {tpl.templateName}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         {mappingTemplate && (
           <p className="text-xs text-gray-500 mt-1">
