@@ -19,7 +19,7 @@ export async function toggleMemberStatus(id) {
 export async function promoteToSuperAdmin(id) {
   const member = await findMemberById(id);
   if (!member) throw { status: 404, message: 'Không tìm thấy thành viên' };
-  if (member.role !== 'user_admin') throw { status: 400, message: 'Tài khoản này không phải user_admin' };
+  if (member.role !== 'user') throw { status: 400, message: 'Tài khoản này không phải người dùng thông thường' };
   const result = await promoteMemberToSuperAdmin(id);
   if (!result) throw { status: 500, message: 'Không thể nâng cấp tài khoản' };
   return result;

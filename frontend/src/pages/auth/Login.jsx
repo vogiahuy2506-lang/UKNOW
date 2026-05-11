@@ -27,7 +27,7 @@ const Login = () => {
       const result = await googleLogin(credentialResponse.credential);
       toast.success('Đăng nhập Google thành công!');
       const role = result?.data?.user?.role;
-      navigate(role === 'super_admin' ? '/admin' : '/app');
+      navigate(role === 'admin' ? '/admin' : '/app');
     } catch (error) {
       const message = error.response?.data?.message || 'Đăng nhập Google thất bại';
       toast.error(message);
@@ -59,7 +59,7 @@ const Login = () => {
       const result = await login(data.username, data.password, data.rememberMe ?? true);
       toast.success('Đăng nhập thành công!');
       const role = result?.data?.user?.role;
-      navigate(role === 'super_admin' ? '/admin' : '/app');
+      navigate(role === 'admin' ? '/admin' : '/app');
     } catch (error) {
       const message = error.response?.data?.message || 'Đăng nhập thất bại';
       toast.error(message);
