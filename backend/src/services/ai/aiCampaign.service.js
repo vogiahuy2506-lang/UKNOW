@@ -127,7 +127,7 @@ LƯU Ý QUAN TRỌNG:
       }
     }
 
-    const systemPrompt = `Bạn là UKNOW AI - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
+    const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
