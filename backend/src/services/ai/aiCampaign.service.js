@@ -114,10 +114,10 @@ LƯU Ý QUAN TRỌNG:
    * Process interactive smart chat with intent detection.
    * Returns: { type, content, data, missing_fields }
    */
-  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user_admin' }) {
+  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user' }) {
     let contextBlock = '';
 
-    if (userRole === 'super_admin') {
+    if (userRole === 'admin') {
       // Super admin: inject số liệu nền tảng real-time
       try {
         contextBlock = await buildAdminContext();

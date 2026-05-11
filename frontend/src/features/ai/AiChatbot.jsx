@@ -205,7 +205,7 @@ const LandingPageCard = ({ page, onSaveToLibrary }) => {
 
 const AiChatbot = ({ isOpen, onToggle }) => {
   const { user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = user?.role === 'admin';
 
   const welcomeMessage = isSuperAdmin
     ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng UKNOW theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
