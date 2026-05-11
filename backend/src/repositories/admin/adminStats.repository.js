@@ -6,8 +6,8 @@ const TZ = 'Asia/Ho_Chi_Minh';
 export async function getKpiStats() {
   const { rows } = await db.query(`
     SELECT
-      (SELECT COUNT(*) FROM users WHERE role = 'user_admin')                                    AS "totalMembers",
-      (SELECT COUNT(*) FROM users WHERE role = 'user_admin' AND active_plan_id IS NOT NULL)     AS "activeMembers",
+      (SELECT COUNT(*) FROM users WHERE role = 'user')                                    AS "totalMembers",
+      (SELECT COUNT(*) FROM users WHERE role = 'user' AND active_plan_id IS NOT NULL)     AS "activeMembers",
       (SELECT COUNT(*) FROM users WHERE role = 'employee')                                      AS "totalEmployees",
       (SELECT COALESCE(SUM(amount), 0) FROM orders
         WHERE status = 'completed'
@@ -53,7 +53,7 @@ export async function getPlanDistribution() {
       p.price,
       COUNT(u.id) AS "userCount"
     FROM plans p
-    LEFT JOIN users u ON u.active_plan_id = p.id AND u.role = 'user_admin'
+    LEFT JOIN users u ON u.active_plan_id = p.id AND u.role = 'user'
     WHERE p.is_active = true
     GROUP BY p.id, p.name, p.code, p.price
     ORDER BY p.price ASC
@@ -95,7 +95,7 @@ export async function getRecentMembers(limit = 10) {
       p.code AS "planCode"
     FROM users u
     LEFT JOIN plans p ON p.id = u.active_plan_id
-    WHERE u.role = 'user_admin'
+    WHERE u.role = 'user'
     ORDER BY u.created_at DESC
     LIMIT $1
   `, [limit]);
@@ -113,7 +113,7 @@ export async function getExpiringSoon(days = 7) {
       EXTRACT(DAY FROM (u.subscription_expires_at - NOW()))::INTEGER AS "daysLeft"
     FROM users u
     LEFT JOIN plans p ON p.id = u.active_plan_id
-    WHERE u.role = 'user_admin'
+    WHERE u.role = 'user'
       AND u.subscription_expires_at IS NOT NULL
       AND u.subscription_expires_at > NOW()
       AND u.subscription_expires_at <= NOW() + ($1 || ' days')::INTERVAL
@@ -143,7 +143,7 @@ export async function getNewUsersWeekly() {
       TO_CHAR(DATE_TRUNC('week', created_at AT TIME ZONE $1), 'DD/MM') AS week,
       COUNT(*) AS "newUsers"
     FROM users
-    WHERE role = 'user_admin'
+    WHERE role = 'user'
       AND created_at >= NOW() - INTERVAL '4 weeks'
     GROUP BY DATE_TRUNC('week', created_at AT TIME ZONE $1)
     ORDER BY DATE_TRUNC('week', created_at AT TIME ZONE $1) ASC
