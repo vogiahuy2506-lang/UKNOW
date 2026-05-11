@@ -111,12 +111,6 @@ export async function linkUserAsEmployee(ownerId, email) {
   if (user.id === ownerId) {
     throw { status: 400, message: 'Không thể tự thêm mình làm nhân viên' };
   }
-  if (user.role !== 'user_admin') {
-    throw { status: 400, message: 'Tài khoản này đã là nhân viên của một chủ sở hữu khác' };
-  }
-  if (user.activePlanId !== null) {
-    throw { status: 400, message: 'Tài khoản này đã có gói dịch vụ riêng và không thể chuyển thành nhân viên' };
-  }
 
   return linkExistingUserAsEmployee(ownerId, user.id);
 }

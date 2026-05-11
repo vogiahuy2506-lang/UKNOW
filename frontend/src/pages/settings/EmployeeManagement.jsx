@@ -737,7 +737,7 @@ const EmployeeManagement = () => {
           ) : (
             <form onSubmit={createLinkForm.handleSubmit(onSubmitCreateLink)} className="space-y-4">
               <p className="text-sm text-gray-500">
-                Dùng khi email <strong>đã có</strong> trong hệ thống nhưng chưa thuộc team nào và chưa có gói dịch vụ riêng.
+                Dùng khi email <strong>đã có</strong> trong hệ thống. Người dùng có thể đang thuộc nhiều doanh nghiệp khác nhau — thêm họ vào team của bạn sẽ không ảnh hưởng đến các mối quan hệ hiện tại.
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
