@@ -8,41 +8,39 @@ import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.servic
 
 class EmailSettingsController {
   /**
-   * Chuẩn hóa cấu hình SMTP theo chế độ SendGrid-only.
+   * Chuẩn hóa cấu hình SMTP.
    *
    * Luồng hoạt động:
-   * 1. Luôn lấy host/port/username từ biến env SendGrid (hoặc mặc định chuẩn SendGrid).
-   * 2. Ưu tiên API key gửi từ form (`password` dạng SG.*), fallback sang `SENDGRID_API_KEY`.
-   * 3. Chặn mọi cấu hình SMTP provider khác để đảm bảo hệ thống chỉ gửi qua SendGrid.
+   * 1. Ưu tiên sử dụng cấu hình SMTP truyền vào (từ DB).
+   * 2. Nếu không có host, fallback sang biến env SendGrid.
    *
    * @param {{host?: string, port?: number|string, username?: string, password?: string}} config cấu hình SMTP thô
-   * @returns {{host: string, port: number, username: string, password: string}} cấu hình SMTP SendGrid đã chuẩn hóa
+   * @returns {{host: string, port: number, username: string, password: string}} cấu hình SMTP đã chuẩn hóa
    */
   normalizeSmtpConfig(config = {}) {
-    const rawHost = String(config.host || '').trim().toLowerCase();
+    const rawHost = String(config.host || '').trim();
+    const rawPort = Number.parseInt(config.port, 10);
+    const rawUsername = String(config.username || '').trim();
     const rawPassword = String(config.password || '').trim();
+
+    if (rawHost) {
+      return {
+        host: rawHost,
+        port: Number.isFinite(rawPort) ? rawPort : 587,
+        username: rawUsername,
+        password: rawPassword,
+      };
+    }
+
     const envSendGridHost = String(process.env.SENDGRID_SMTP_HOST || '').trim() || 'smtp.sendgrid.net';
     const envSendGridPort = Number.parseInt(process.env.SENDGRID_SMTP_PORT, 10);
-    const envSendGridUsername = String(process.env.SENDGRID_SMTP_USERNAME || '').trim();
     const envSendGridApiKey = String(process.env.SENDGRID_API_KEY || '').trim();
-    const resolvedPassword = rawPassword.startsWith('SG.') ? rawPassword : envSendGridApiKey;
-    const resolvedUsername = 'apikey';
-    const hasLegacyProviderHost = rawHost && !rawHost.includes('sendgrid');
-    if (hasLegacyProviderHost) {
-      console.warn('[EmailSettings] Phát hiện SMTP host không phải SendGrid, hệ thống sẽ ép dùng SendGrid.');
-    }
-    if (envSendGridUsername && envSendGridUsername.toLowerCase() !== 'apikey') {
-      console.warn('[EmailSettings] SENDGRID_SMTP_USERNAME không hợp lệ, hệ thống sẽ ép về "apikey".');
-    }
-    if (!resolvedPassword || !resolvedPassword.startsWith('SG.')) {
-      throw new Error('Thiếu SendGrid API key hợp lệ. Vui lòng cấu hình SMTP Password (SG.*) hoặc SENDGRID_API_KEY.');
-    }
 
     return {
       host: envSendGridHost,
       port: Number.isFinite(envSendGridPort) ? envSendGridPort : 587,
-      username: resolvedUsername,
-      password: resolvedPassword,
+      username: 'apikey',
+      password: envSendGridApiKey,
     };
   }
 
@@ -150,12 +148,12 @@ class EmailSettingsController {
     const addUtmToUrl = (url) => {
       // Chỉ thêm UTM nếu có campaignId
       if (!campaignId) return url;
-      
+
       try {
         const parsed = new URL(url);
         // Chỉ thêm UTM cho external links (http/https)
         if (!['http:', 'https:'].includes(parsed.protocol)) return url;
-        
+
         // Thêm UTM parameters nếu chưa có
         if (!parsed.searchParams.has('utm_source')) {
           parsed.searchParams.set('utm_source', 'email_campaign');
@@ -169,7 +167,7 @@ class EmailSettingsController {
         if (runId && !parsed.searchParams.has('utm_id_run')) {
           parsed.searchParams.set('utm_id_run', String(runId));
         }
-        
+
         return parsed.toString();
       } catch {
         // Nếu URL không hợp lệ, trả về nguyên bản
@@ -215,12 +213,12 @@ class EmailSettingsController {
             const trackingLongUrl = `${clickBaseUrl}?url=${encodeURIComponent(urlWithUtm)}&lk=${encodeURIComponent(linkKey)}${labelParam}`;
             const finalTrackingUrl = useShortLink
               ? await trackingShortLinkService.createShortTrackingUrl({
-                  trackingBaseUrl,
-                  destinationUrl: trackingLongUrl,
-                  channel: 'email',
-                  trackingToken,
-                  linkKey,
-                })
+                trackingBaseUrl,
+                destinationUrl: trackingLongUrl,
+                channel: 'email',
+                trackingToken,
+                linkKey,
+              })
               : trackingLongUrl;
             return `<a${pre} href=${quote}${finalTrackingUrl}${quote}${post}>${innerHtml}</a>`;
           })
