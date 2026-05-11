@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import useAuthStore from '../../stores/authStore';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
@@ -203,6 +204,9 @@ const LandingPageCard = ({ page, onSaveToLibrary }) => {
 };
 
 const AiChatbot = ({ isOpen, onToggle }) => {
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const [messages, setMessages] = useState([{
     role: 'assistant',
     content: 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo kịch bản chiến dịch\n🌐 Thiết kế Landing Page\n\nHãy cho tôi biết bạn cần gì nhé!'
@@ -221,11 +225,13 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      aiApi.getBusinessProfile()
-        .then(res => setHasProfile(!!res.data))
-        .catch(() => setHasProfile(true));
+      if (!isSuperAdmin) {
+        aiApi.getBusinessProfile()
+          .then(res => setHasProfile(!!res.data))
+          .catch(() => setHasProfile(true));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, isSuperAdmin]);
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -340,8 +346,8 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         </button>
       </div>
 
-      {/* Banner nhắc thiết lập hồ sơ */}
-      {!hasProfile && (
+      {/* Banner nhắc thiết lập hồ sơ — chỉ hiện cho user_admin */}
+      {!isSuperAdmin && !hasProfile && (
         <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
           <HiOutlineSparkles className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
