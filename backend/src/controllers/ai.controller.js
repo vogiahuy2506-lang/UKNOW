@@ -60,6 +60,7 @@ class AiController {
         history,
         files: files || [],
         userId: req.user.id,
+        userRole: req.user.role,
       });
 
       return res.json({

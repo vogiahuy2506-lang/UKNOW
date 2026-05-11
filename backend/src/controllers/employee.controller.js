@@ -6,7 +6,7 @@ import * as employeeService from '../services/user/employee.service.js';
  * - super_admin có thể truyền ownerId qua query param để xem của bất kỳ owner nào.
  */
 function resolveOwnerId(req) {
-  if (req.user.role === 'super_admin') {
+  if (req.user.role === 'admin') {
     return req.query.ownerId ? Number(req.query.ownerId) : null;
   }
   return req.user.id;
@@ -86,7 +86,8 @@ export async function resendInvite(req, res) {
 
 /**
  * POST /api/employees/link
- * Link một user_admin (chưa có plan) thành employee theo email.
+ * Link tài khoản người dùng có sẵn thành nhân viên theo email.
+ * Người dùng có thể đang thuộc nhiều tổ chức khác — thao tác này không ảnh hưởng đến các mối quan hệ đó.
  * Body: { email }
  */
 export async function linkEmployee(req, res) {

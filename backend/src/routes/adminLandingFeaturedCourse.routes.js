@@ -6,7 +6,7 @@ import landingFeaturedCourseAdminController from '../controllers/landingFeatured
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(requireRole('super_admin', 'user_admin'));
+router.use(requireRole('admin', 'user'));
 
 router.get('/', landingFeaturedCourseAdminController.list.bind(landingFeaturedCourseAdminController));
 router.post('/', landingFeaturedCourseAdminController.create.bind(landingFeaturedCourseAdminController));
