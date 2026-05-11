@@ -101,3 +101,52 @@ export async function getRecentMembers(limit = 10) {
   `, [limit]);
   return rows;
 }
+
+/** Thành viên sắp hết hạn trong N ngày tới */
+export async function getExpiringSoon(days = 7) {
+  const { rows } = await db.query(`
+    SELECT
+      u.email,
+      u.full_name AS "fullName",
+      p.name AS "planName",
+      u.subscription_expires_at AS "expiresAt",
+      EXTRACT(DAY FROM (u.subscription_expires_at - NOW()))::INTEGER AS "daysLeft"
+    FROM users u
+    LEFT JOIN plans p ON p.id = u.active_plan_id
+    WHERE u.role = 'user_admin'
+      AND u.subscription_expires_at IS NOT NULL
+      AND u.subscription_expires_at > NOW()
+      AND u.subscription_expires_at <= NOW() + ($1 || ' days')::INTERVAL
+    ORDER BY u.subscription_expires_at ASC
+  `, [days]);
+  return rows;
+}
+
+/** Tổng quan chiến dịch trên toàn nền tảng */
+export async function getCampaignStats() {
+  const { rows } = await db.query(`
+    SELECT
+      (SELECT COUNT(*) FROM campaigns)                                        AS "totalCampaigns",
+      (SELECT COUNT(*) FROM campaigns WHERE status = 'active')               AS "activeCampaigns",
+      (SELECT COUNT(*) FROM campaigns WHERE status = 'completed')            AS "completedCampaigns",
+      (SELECT COUNT(*) FROM campaigns
+        WHERE created_at >= NOW() - INTERVAL '30 days')                      AS "newLast30Days",
+      (SELECT COUNT(DISTINCT owner_id) FROM campaigns)                       AS "usersWithCampaigns"
+  `);
+  return rows[0];
+}
+
+/** Thống kê user mới theo tuần (4 tuần gần nhất) */
+export async function getNewUsersWeekly() {
+  const { rows } = await db.query(`
+    SELECT
+      TO_CHAR(DATE_TRUNC('week', created_at AT TIME ZONE $1), 'DD/MM') AS week,
+      COUNT(*) AS "newUsers"
+    FROM users
+    WHERE role = 'user_admin'
+      AND created_at >= NOW() - INTERVAL '4 weeks'
+    GROUP BY DATE_TRUNC('week', created_at AT TIME ZONE $1)
+    ORDER BY DATE_TRUNC('week', created_at AT TIME ZONE $1) ASC
+  `, [TZ]);
+  return rows;
+}

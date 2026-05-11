@@ -1,5 +1,6 @@
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import businessProfileService from './businessProfile.service.js';
+import { buildAdminContext } from './adminContext.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
 
@@ -113,14 +114,45 @@ LƯU Ý QUAN TRỌNG:
    * Process interactive smart chat with intent detection.
    * Returns: { type, content, data, missing_fields }
    */
-  async processSmartChat({ history = [], files = [], userId = null }) {
-    // RAG: bơm context doanh nghiệp vào system prompt
-    let ragContext = '';
+  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user_admin' }) {
+    let contextBlock = '';
+
+    if (userRole === 'super_admin') {
+      // Super admin: inject số liệu nền tảng real-time
+      try {
+        contextBlock = await buildAdminContext();
+      } catch (e) {
+        console.warn('[AI] Không lấy được admin context:', e.message);
+      }
+
+      const adminSystemPrompt = `Bạn là UKNOW AI - Trợ lý thông minh cho System Admin của nền tảng UKNOW.
+Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược và trả lời câu hỏi về tình trạng hoạt động của nền tảng.
+
+${contextBlock}
+
+QUY TẮC:
+- Luôn dựa trên dữ liệu thực được cung cấp ở trên, không được bịa số liệu.
+- Trả lời súc tích, rõ ràng. Dùng bullet points khi liệt kê.
+- Nếu người dùng hỏi về dữ liệu không có trong context (ví dụ: chi tiết từng user cụ thể), hãy nói rõ rằng bạn chỉ có số liệu tổng quan.
+- Có thể đưa ra nhận xét, phân tích xu hướng, và gợi ý hành động dựa trên số liệu.
+
+ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
+{
+  "type": "text",
+  "content": "Câu trả lời của bạn (tiếng Việt)",
+  "missing_fields": [],
+  "data": null
+}`;
+
+      return this._runChat(adminSystemPrompt, history, files);
+    }
+
+    // User admin: RAG context từ hồ sơ doanh nghiệp
     if (userId && history.length > 0) {
       const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
       if (lastUserMsg) {
         try {
-          ragContext = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
+          contextBlock = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
         } catch (e) {
           console.warn('[AI] Không lấy được RAG context:', e.message);
         }
@@ -134,7 +166,7 @@ LƯU Ý QUAN TRỌNG:
 - Nếu thiếu thông tin cần thiết → type: "ask_more", hỏi cụ thể những gì còn thiếu.
 - Chỉ tạo nội dung khi đã có đủ thông tin từ người dùng.
 
-${ragContext ? ragContext + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
+${contextBlock ? contextBlock + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
 ### 1. type: "text"
 Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận không liên quan đến tạo nội dung.
@@ -214,6 +246,16 @@ Khi type="template_draft": content mô tả template vừa tạo, data chứa te
 Khi type="campaign_script": content mô tả chiến dịch, data chứa script.
 Khi type="landing_page": content mô tả trang, data chứa html/css.`;
 
+    return this._runChat(systemPrompt, history, files);
+  }
+
+  /**
+   * Shared Gemini chat runner — builds history, attaches files, calls API.
+   * @param {string} systemPrompt
+   * @param {Array}  history  — [{role, content}]
+   * @param {Array}  files    — [{tempId, originalName, contentType}]
+   */
+  async _runChat(systemPrompt, history, files) {
     const geminiHistory = history.map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content || '(no text)' }]
@@ -226,10 +268,7 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.`;
         try {
           const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
           lastMessage.parts.push({
-            inlineData: {
-              mimeType: file.contentType,
-              data: buffer.toString('base64'),
-            },
+            inlineData: { mimeType: file.contentType, data: buffer.toString('base64') },
           });
         } catch (err) {
           console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
@@ -245,14 +284,8 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.`;
       const { data: result } = await axios.post(url, {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: geminiHistory,
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        }
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 120000
-      });
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
+      }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
 
       if (!result.candidates || result.candidates.length === 0) {
         if (result.promptFeedback?.blockReason) {
