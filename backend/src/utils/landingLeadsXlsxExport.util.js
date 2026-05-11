@@ -41,12 +41,12 @@ export async function buildLandingLeadsAdminXlsxBuffer(items) {
     const createdStr =
       created && !Number.isNaN(created.getTime())
         ? created.toLocaleString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
         : '';
 
     sheet.addRow({

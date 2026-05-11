@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
@@ -212,14 +212,24 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [currentScript, setCurrentScript] = useState(null);
+  const [hasProfile, setHasProfile] = useState(true);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      aiApi.getBusinessProfile()
+        .then(res => setHasProfile(!!res.data))
+        .catch(() => setHasProfile(true));
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOpen]);
+  }, [messages]);
 
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -329,6 +339,24 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           <HiOutlineArrowRight className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Banner nhắc thiết lập hồ sơ */}
+      {!hasProfile && (
+        <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+          <HiOutlineSparkles className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-orange-800">Chưa có hồ sơ doanh nghiệp</p>
+            <p className="text-xs text-orange-600 mt-0.5">Thiết lập để AI cá nhân hóa nội dung theo đúng thương hiệu của bạn.</p>
+          </div>
+          <Link
+            to="/app/settings/ai-profile"
+            onClick={onToggle}
+            className="shrink-0 text-xs font-bold text-orange-600 hover:text-orange-700 underline underline-offset-2 whitespace-nowrap"
+          >
+            Thiết lập →
+          </Link>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
