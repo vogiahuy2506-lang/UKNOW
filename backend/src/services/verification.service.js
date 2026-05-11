@@ -14,20 +14,18 @@ class VerificationService {
    * Lưu mã xác minh vào database
    */
   async saveVerificationCode(email, code, type = 'email_verification', expiresInMinutes = 10) {
-    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-
     // Đánh dấu các mã cũ của email này là đã sử dụng
     await db.query(
       'UPDATE verification_codes SET is_used = TRUE WHERE email = $1 AND type = $2 AND is_used = FALSE',
       [email, type]
     );
 
-    // Tạo mã mới
+    // Dùng SQL NOW() để tránh lệch timezone giữa Node.js và DB server
     const result = await db.query(
       `INSERT INTO verification_codes (email, code, type, expires_at)
-       VALUES ($1, $2, $3, $4)
+       VALUES ($1, $2, $3, NOW() + ($4 || ' minutes')::interval)
        RETURNING id`,
-      [email, code, type, expiresAt]
+      [email, code, type, expiresInMinutes]
     );
 
     return result.rows[0];

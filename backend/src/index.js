@@ -49,6 +49,7 @@ import aiRoutes from './routes/ai.routes.js';
 import { initScheduler } from './utils/scheduler.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
+import { runMigrations } from './utils/migrationRunner.util.js';
 
 const app = express();
 
@@ -178,28 +179,7 @@ const testDBConnection = async () => {
     console.log(
       `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
     );
-    // Lazy migration: đảm bảo cột uknow_status tồn tại
-    await client.query(
-      `ALTER TABLE campaign_customers ADD COLUMN IF NOT EXISTS uknow_status VARCHAR(20) DEFAULT NULL`
-    );
-    // Lazy migration: tạo bảng verification_codes nếu chưa có (không có foreign key để tránh lỗi)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS verification_codes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        email VARCHAR(255) NOT NULL,
-        code VARCHAR(6) NOT NULL,
-        type VARCHAR(20) NOT NULL DEFAULT 'email_verification',
-        expires_at TIMESTAMP NOT NULL,
-        is_used BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        user_id UUID
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(email)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_verification_codes_expires ON verification_codes(expires_at)`);
-    // Lazy migration: thêm cột is_verified cho users
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP`);
+    await runMigrations(client);
   } catch (error) {
     console.error('Database connection failed:', error.message);
   } finally {

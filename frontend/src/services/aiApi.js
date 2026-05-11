@@ -33,7 +33,17 @@ const aiApi = {
       timeout: 120000
     });
     return response.data;
-  }
+  },
+
+  getBusinessProfile: async () => {
+    const response = await api.get('/ai/business-profile');
+    return response.data;
+  },
+
+  saveBusinessProfile: async (data) => {
+    const response = await api.put('/ai/business-profile', data);
+    return response.data;
+  },
 };
 
 export default aiApi;

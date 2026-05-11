@@ -1,4 +1,5 @@
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+import businessProfileService from './businessProfile.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
 
@@ -6,13 +7,24 @@ class AiCampaignService {
   /**
    * Generate campaign JSON structure from prompt and files.
    */
-  async generateCampaignScript({ prompt, files = [] }) {
+  async generateCampaignScript({ prompt, files = [], userId = null }) {
     const parts = [];
+
+    // RAG: bơm context doanh nghiệp nếu user đã thiết lập hồ sơ
+    let ragContext = '';
+    if (userId) {
+      try {
+        ragContext = await businessProfileService.getContextForPrompt(userId, prompt);
+      } catch (e) {
+        console.warn('[AI] Không lấy được RAG context:', e.message);
+      }
+    }
+
     parts.push({
       text: `Bạn là một chuyên gia Marketing Automation cấp cao. 
 Nhiệm vụ của bạn là đọc hiểu thông tin doanh nghiệp, sản phẩm/dịch vụ từ các tài liệu đính kèm và yêu cầu của người dùng để thiết kế một CHIẾN DỊCH MARKETING ĐA KÊNH (Email, Zalo Cá Nhân, Zalo Nhóm).
 
-Dưới đây là yêu cầu từ khách hàng: "${prompt}"
+${ragContext ? ragContext + '\n\n' : ''}Dưới đây là yêu cầu từ khách hàng: "${prompt}"
 
 Hãy phân tích tài liệu (nếu có) và tạo ra một kịch bản chiến dịch hoàn chỉnh dưới định dạng JSON để hệ thống có thể thực thi ngay lập tức.
 
@@ -101,7 +113,20 @@ LƯU Ý QUAN TRỌNG:
    * Process interactive smart chat with intent detection.
    * Returns: { type, content, data, missing_fields }
    */
-  async processSmartChat({ history = [], files = [] }) {
+  async processSmartChat({ history = [], files = [], userId = null }) {
+    // RAG: bơm context doanh nghiệp vào system prompt
+    let ragContext = '';
+    if (userId && history.length > 0) {
+      const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
+      if (lastUserMsg) {
+        try {
+          ragContext = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
+        } catch (e) {
+          console.warn('[AI] Không lấy được RAG context:', e.message);
+        }
+      }
+    }
+
     const systemPrompt = `Bạn là UKNOW AI - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
@@ -109,7 +134,7 @@ LƯU Ý QUAN TRỌNG:
 - Nếu thiếu thông tin cần thiết → type: "ask_more", hỏi cụ thể những gì còn thiếu.
 - Chỉ tạo nội dung khi đã có đủ thông tin từ người dùng.
 
-## PHÂN LOẠI Ý ĐỊNH (intent):
+${ragContext ? ragContext + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
 ### 1. type: "text"
 Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận không liên quan đến tạo nội dung.
