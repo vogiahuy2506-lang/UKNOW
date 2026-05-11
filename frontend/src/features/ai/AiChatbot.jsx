@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import useAuthStore from '../../stores/authStore';
+import { useAuthStore } from '../../stores/authStore';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
@@ -231,7 +231,8 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           .catch(() => setHasProfile(true));
       }
     }
-  }, [isOpen, isSuperAdmin]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
