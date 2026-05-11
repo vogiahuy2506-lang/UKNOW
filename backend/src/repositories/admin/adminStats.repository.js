@@ -131,7 +131,7 @@ export async function getCampaignStats() {
       (SELECT COUNT(*) FROM campaigns WHERE status = 'completed')            AS "completedCampaigns",
       (SELECT COUNT(*) FROM campaigns
         WHERE created_at >= NOW() - INTERVAL '30 days')                      AS "newLast30Days",
-      (SELECT COUNT(DISTINCT owner_id) FROM campaigns)                       AS "usersWithCampaigns"
+      (SELECT COUNT(DISTINCT id_user) FROM campaigns)                        AS "usersWithCampaigns"
   `);
   return rows[0];
 }
