@@ -1,4 +1,5 @@
 import aiCampaignService from '../services/ai/aiCampaign.service.js';
+import businessProfileService from '../services/ai/businessProfile.service.js';
 import campaignController from './campaign.controller.js';
 
 class AiController {
@@ -22,6 +23,7 @@ class AiController {
       const script = await aiCampaignService.generateCampaignScript({
         prompt,
         files: files || [],
+        userId: req.user.id,
       });
 
       return res.json({
@@ -57,6 +59,7 @@ class AiController {
       const response = await aiCampaignService.processSmartChat({
         history,
         files: files || [],
+        userId: req.user.id,
       });
 
       return res.json({
@@ -133,6 +136,41 @@ class AiController {
         success: false,
         message: 'Lỗi khi thực thi chiến dịch AI',
       });
+    }
+  }
+
+  /**
+   * GET /ai/business-profile — Lấy hồ sơ doanh nghiệp của user hiện tại.
+   */
+  async getBusinessProfile(req, res) {
+    try {
+      const profile = await businessProfileService.getProfile(req.user.id);
+      return res.json({ success: true, data: profile });
+    } catch (error) {
+      console.error('Get business profile error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * PUT /ai/business-profile — Lưu + re-embed hồ sơ doanh nghiệp.
+   */
+  async saveBusinessProfile(req, res) {
+    try {
+      const { company_name, industry, products, target_audience, tone, brand_color, extra_context } = req.body;
+      const profile = await businessProfileService.saveProfile(req.user.id, {
+        company_name,
+        industry,
+        products,
+        target_audience,
+        tone,
+        brand_color,
+        extra_context,
+      });
+      return res.json({ success: true, data: profile, message: 'Đã lưu và cập nhật hồ sơ doanh nghiệp' });
+    } catch (error) {
+      console.error('Save business profile error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 }

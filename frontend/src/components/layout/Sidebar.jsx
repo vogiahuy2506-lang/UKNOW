@@ -25,6 +25,7 @@ import {
   HiOutlinePhotograph,
   HiOutlineStar,
   HiOutlineGlobeAlt,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 import logoIcon from '../../assets/icons/cropped-uknow-1-32x32.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
@@ -40,6 +41,7 @@ const menuItems = [
     name: 'Thiết lập',
     icon: HiOutlineCog,
     children: [
+      { name: 'Hồ sơ doanh nghiệp AI', path: '/settings/ai-profile', icon: HiOutlineSparkles, adminOnly: true },
       { name: 'Quản lý Email', path: '/settings/email', icon: HiOutlineMail },
       { name: 'Mẫu Email', path: '/settings/email-templates', icon: HiOutlineTemplate },
       { name: 'Quản lý Zalo', path: '/settings/zalo', icon: HiOutlineChat },

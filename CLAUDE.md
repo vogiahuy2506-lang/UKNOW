@@ -109,7 +109,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=uknow-campaign
 DB_USER=postgres
-DB_PASSWORD=
+DB_WORD=
 
 JWT_SECRET=
 JWT_REFRESH_SECRET=
