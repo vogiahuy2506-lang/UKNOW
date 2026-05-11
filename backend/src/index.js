@@ -42,6 +42,7 @@ import adminMembersRoutes from './routes/adminMembers.routes.js';
 import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
+import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 
@@ -134,6 +135,7 @@ app.use('/api/leads', leadRoutes); // GET /api/leads (auth), GET /api/leads/prev
 app.use('/api/verification', verificationRoutes); // Gửi và xác minh mã email
 app.use('/api/payments', paymentRoutes);  // POST /api/payments/create-payment, POST /api/payments/webhook
 app.use('/api/plans', planRoutes); // GET /api/plans/ - lấy danh sách gói thanh toán
+app.use('/api/contact', contactRoutes); // POST /api/contact - form liên hệ public
 app.use('/api/employees', employeeRoutes); // CRUD nhân viên, phân quyền employee
 app.use('/api/admin/stats', adminStatsRoutes);   // Dashboard stats cho super_admin
 app.use('/api/admin/plans', adminPlansRoutes);    // CRUD gói dịch vụ + assign cho user

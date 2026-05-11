@@ -1,12 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { HiOutlineLogout, HiOutlineChevronDown, HiOutlineViewGrid } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 
+/**
+ * Chỉ giữ các route độc lập. Các section nội bộ của trang chủ
+ * (#features, #how-it-works, #testimonials) đã hiện ngay trên homepage
+ * nên không cần lặp lại ở navbar.
+ */
+const NAV_LINKS = [
+  { kind: 'route', to: '/',        label: 'Trang chủ', matchPaths: ['/', '/about'] },
+  { kind: 'route', to: '/pricing', label: 'Bảng giá',  matchPaths: ['/pricing'] },
+  { kind: 'route', to: '/contact', label: 'Liên hệ',   matchPaths: ['/contact'] },
+];
+
 const AVATAR_STYLES = {
-  super_admin: 'from-purple-500 to-violet-600',
+  admin: 'from-purple-500 to-violet-600',
   employee: 'from-blue-500 to-cyan-500',
-  user_admin: 'from-orange-500 to-red-500',
+  'user': 'from-orange-500 to-red-500',
 };
 
 function UserMenu({ user, logout }) {
@@ -26,8 +37,8 @@ function UserMenu({ user, logout }) {
     navigate('/login');
   };
 
-  const dashboardPath = user?.role === 'super_admin' ? '/admin' : '/app';
-  const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES.user_admin;
+  const dashboardPath = user?.role === 'admin' ? '/admin' : '/app';
+  const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
   const initial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
   const displayName = user?.fullName || user?.username || 'Tài khoản';
 
@@ -73,26 +84,46 @@ function UserMenu({ user, logout }) {
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
+  const location = useLocation();
+
+  const isActive = (item) => item.matchPaths?.includes(location.pathname);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <span className="text-white font-black text-xl">U</span>
+        {/* Grid 3 cột: logo | menu (center) | actions — đảm bảo menu luôn nằm chính giữa */}
+        <div className="grid grid-cols-[auto_1fr_auto] items-center h-20 gap-4">
+          {/* Logo — FounderAI */}
+          <Link to="/" className="flex items-center group">
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30 transition-transform group-hover:scale-105">
+              <span className="text-white font-black text-xl">F</span>
             </div>
-            <span className="ml-3 text-2xl font-black bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent tracking-tight">
-              KNOW
+            <span className="ml-3 text-2xl font-black tracking-tight">
+              <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Founder</span>
+              <span className="text-slate-800">AI</span>
             </span>
+          </Link>
+
+          {/* Menu chính giữa */}
+          <div className="hidden md:flex items-center justify-center gap-10">
+            {NAV_LINKS.map((item) => {
+              const active = isActive(item);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`font-bold transition-colors whitespace-nowrap ${
+                    active ? 'text-orange-600' : 'text-slate-600 hover:text-orange-600'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
 
-          <div className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-slate-600 hover:text-orange-600 font-bold transition-colors">Tính năng</a>
-            <a href="#pricing" className="text-slate-600 hover:text-orange-600 font-bold transition-colors">Bảng giá</a>
-            <a href="#how-it-works" className="text-slate-600 hover:text-orange-600 font-bold transition-colors">Cách hoạt động</a>
-            <a href="#testimonials" className="text-slate-600 hover:text-orange-600 font-bold transition-colors">Đánh giá</a>
-
+          {/* Actions bên phải */}
+          <div className="hidden md:flex items-center gap-3 justify-self-end">
             {isAuthenticated ? (
               <UserMenu user={user} logout={logout} />
             ) : (
@@ -107,7 +138,7 @@ export default function Navbar() {
                   to="/register"
                   className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all transform hover:-translate-y-0.5"
                 >
-                  Đăng ký miễn phí
+                  Đăng ký
                 </Link>
               </>
             )}
