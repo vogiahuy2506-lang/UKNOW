@@ -5,6 +5,9 @@ import {
   createPlan,
   updatePlan,
   deletePlan,
+  countOrdersForPlan,
+  softDeletePlan,
+  unassignPlanFromUsers,
   findUserAdminByEmail,
   searchUserAdminsByEmail,
   assignPlanToUser,
@@ -65,15 +68,68 @@ export async function editPlan(id, payload) {
   });
 }
 
+/**
+ * Xoá gói thông minh, phân biệt theo loại gói:
+ *
+ *   ┌───────────────┬─────────────────┬───────────────────────────────────────────────┐
+ *   │ Loại gói      │ Có order?       │ Hành vi                                       │
+ *   ├───────────────┼─────────────────┼───────────────────────────────────────────────┤
+ *   │ Đại trà       │ Không           │ Hard delete                                   │
+ *   │ Đại trà       │ Có              │ Soft delete, GIỮ user đang dùng đến hết kỳ    │
+ *   │ Custom        │ Không           │ Hard delete                                   │
+ *   │ Custom        │ Có              │ Soft delete + GỠ active_plan_id của user      │
+ *   └───────────────┴─────────────────┴───────────────────────────────────────────────┘
+ *
+ * Lý do tách: gói đại trà bán cho nhiều khách → ẩn = chỉ chặn khách mới, khách cũ
+ *   được dùng hết kỳ (đã trả tiền). Gói custom chỉ phục vụ 1 khách → ẩn = chấm dứt
+ *   hợp tác, gỡ luôn quyền sử dụng.
+ * Hard delete an toàn vì FK `users_active_plan_id_fkey` có ON DELETE SET NULL.
+ */
 export async function removePlan(id) {
   const plan = await findPlanById(id);
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
-  return deletePlan(id);
+
+  const orderCount = await countOrdersForPlan(id);
+
+  if (orderCount === 0) {
+    const result = await deletePlan(id);
+    return {
+      mode: 'hard',
+      plan: result,
+      orderCount: 0,
+      unassignedUsers: [],
+      message: `Đã xoá gói "${plan.name}".`,
+    };
+  }
+
+  const result = await softDeletePlan(id);
+
+  if (plan.is_custom) {
+    const unassigned = await unassignPlanFromUsers(id);
+    const emails = unassigned.map((u) => u.email).join(', ');
+    return {
+      mode: 'soft',
+      plan: result,
+      orderCount,
+      unassignedUsers: unassigned,
+      message: unassigned.length
+        ? `Đã ẩn gói "${plan.name}" và gỡ quyền sử dụng của ${unassigned.length} khách: ${emails}. (Vẫn giữ ${orderCount} đơn hàng để lưu lịch sử.)`
+        : `Đã ẩn gói "${plan.name}". Không có khách nào đang dùng để gỡ.`,
+    };
+  }
+
+  return {
+    mode: 'soft',
+    plan: result,
+    orderCount,
+    unassignedUsers: [],
+    message: `Đã ẩn gói "${plan.name}" — khách mới sẽ không thấy, khách cũ vẫn được dùng đến hết kỳ. (Còn ${orderCount} đơn hàng tham chiếu.)`,
+  };
 }
 
 /**
  * Tạo gói custom + gán ngay cho một user cụ thể theo email.
- * Gói được ẩn khỏi trang pricing công khai (is_active = false).
+ * Custom plan tự động ẩn khỏi trang pricing công khai (filter `is_custom = false` ở payment repo).
  */
 export async function createCustomPlanForUser(userEmail, planData) {
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
@@ -101,6 +157,8 @@ export async function createCustomPlanForUser(userEmail, planData) {
 /**
  * Tạo gói custom + tạo link thanh toán PayOS.
  * Gói được tạo nhưng CHƯA gán cho user — webhook sẽ tự gán sau khi thanh toán thành công.
+ * `is_active = true` → ngữ nghĩa "chưa bị admin xoá"; custom plan tự động ẩn khỏi pricing
+ * công khai nhờ filter `is_custom = false` ở `payment/plan.repository.js`.
  */
 export async function createCustomPlanWithPayment(userEmail, planData) {
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
@@ -116,7 +174,7 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
     description:       planData.description || null,
     features:          [],
     maxEmployees:      planData.maxEmployees ?? -1,
-    isActive:          false,
+    isActive:          true,
     isCustom:          true,
     dailyEmailLimit:   parseLimitField(planData.dailyEmailLimit),
     monthlyEmailLimit: parseLimitField(planData.monthlyEmailLimit),

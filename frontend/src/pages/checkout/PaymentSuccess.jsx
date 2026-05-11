@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { FaCheckCircle, FaRocket, FaArrowRight } from 'react-icons/fa';
+import { useAuthStore } from '../../stores/authStore';
 
 const PaymentSuccessPage = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const location = useLocation();
+    const initialize = useAuthStore((state) => state.initialize);
 
     const [verified, setVerified] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -60,7 +62,7 @@ const PaymentSuccessPage = () => {
 
                 <h1 className="text-4xl font-black text-gray-900 mb-2">Thanh toán thành công!</h1>
                 <p className="text-gray-500 mb-8 font-medium">
-                    Chào mừng bạn đến với UKNOW. Tài khoản của bạn đã được kích hoạt.
+                    Chào mừng bạn đến với FounderAI. Tài khoản của bạn đã được kích hoạt.
                 </p>
 
                 <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 mb-8 text-left">
@@ -81,7 +83,7 @@ const PaymentSuccessPage = () => {
                 </div>
 
                 <button
-                    onClick={() => navigate('/app')}
+                    onClick={async () => { await initialize(); navigate('/app'); }}
                     className="w-full bg-gradient-to-r from-orange-600 to-red-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group"
                 >
                     Khám phá Dashboard ngay

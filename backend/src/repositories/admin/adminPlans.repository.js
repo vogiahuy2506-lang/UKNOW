@@ -25,10 +25,10 @@ export async function findCustomPlans({ showHidden = false } = {}) {
             (u.id IS NOT NULL)                      AS "isActivated",
             o.status AS "paymentStatus"
      FROM plans p
-     LEFT JOIN users  u      ON u.active_plan_id = p.id AND u.role = 'user_admin'
+     LEFT JOIN users  u      ON u.active_plan_id = p.id AND u.role = 'user'
      LEFT JOIN orders o      ON o.plan_id = p.id
      LEFT JOIN users  o_user ON o.user_id  = o_user.id
-     WHERE p.is_custom = TRUE ${showHidden ? '' : "AND (u.id IS NULL OR u.status = 'active')"}
+     WHERE p.is_custom = TRUE ${showHidden ? '' : 'AND p.is_active = TRUE'}
      ORDER BY p.id, o.created_at DESC NULLS LAST`
   );
   return rows;
@@ -75,12 +75,43 @@ export async function deletePlan(id) {
   return rows[0] || null;
 }
 
+/** Đếm số order tham chiếu đến plan — dùng để quyết định hard/soft delete. */
+export async function countOrdersForPlan(planId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS count FROM orders WHERE plan_id = $1`,
+    [planId]
+  );
+  return rows[0]?.count || 0;
+}
+
+/** Soft delete — ẩn gói nhưng giữ lại để các FK (orders, users) còn dùng được. */
+export async function softDeletePlan(id) {
+  const { rows } = await db.query(
+    `UPDATE plans SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id, name`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+/** Gỡ plan khỏi tất cả user đang active — dùng cho custom plan khi ẩn (vì plan này chỉ phục vụ user đó).
+ *  Trả về danh sách email đã bị gỡ để admin biết. */
+export async function unassignPlanFromUsers(planId) {
+  const { rows } = await db.query(
+    `UPDATE users
+        SET active_plan_id = NULL, updated_at = NOW()
+      WHERE active_plan_id = $1
+      RETURNING email, full_name AS "fullName"`,
+    [planId]
+  );
+  return rows;
+}
+
 /** Tìm user_admin theo email gần đúng để autocomplete */
 export async function searchUserAdminsByEmail(query, limit = 8, excludeWithPlan = false) {
   const { rows } = await db.query(
     `SELECT id, email, full_name AS "fullName", active_plan_id AS "activePlanId"
      FROM users
-     WHERE role = 'user_admin'
+     WHERE role = 'user'
        AND email ILIKE $1
        ${excludeWithPlan ? 'AND active_plan_id IS NULL' : ''}
      ORDER BY email ASC
@@ -143,7 +174,7 @@ export async function assignPlanToUser(userId, planId) {
 
 /**
  * Tạo gói custom + gán cho user trong một transaction.
- * Gói được tạo với is_active = false (ẩn khỏi trang pricing công khai).
+ * `is_active = true` = "chưa bị admin xoá". Custom plan ẩn khỏi pricing nhờ filter `is_custom = false`.
  */
 export async function createAndAssignCustomPlan(userId, { code, name, price, description, maxEmployees,
   dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit }) {
@@ -155,7 +186,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
       `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
                           daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,'[]',$5,false,true,$6,$7,$8,$9,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,'[]',$5,true,true,$6,$7,$8,$9,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, description || null, maxEmployees,
        dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null]
@@ -199,7 +230,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
 export async function getPlanUserCounts() {
   const { rows } = await db.query(
     `SELECT active_plan_id AS "planId", COUNT(*) AS "userCount"
-     FROM users WHERE active_plan_id IS NOT NULL AND role = 'user_admin'
+     FROM users WHERE active_plan_id IS NOT NULL AND role = 'user'
      GROUP BY active_plan_id`
   );
   return rows;

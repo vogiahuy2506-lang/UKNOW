@@ -7,7 +7,7 @@ export const createPayment = async (req, res) => {
             return res.status(400).json({ error: 'Thiếu planCode hoặc userEmail' });
         }
 
-        const result = await paymentService.createPaymentLink({ planCode, userEmail });
+        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id });
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
         console.error(err);
