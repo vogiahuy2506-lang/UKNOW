@@ -14,7 +14,7 @@ export async function findExpiringUsers(minDays, maxDays, reminderThreshold) {
             u.subscription_reminder_count
      FROM users u
      JOIN plans p ON u.active_plan_id = p.id
-     WHERE u.role = 'user_admin'
+     WHERE u.role = 'user'
        AND u.status = 'active'
        AND u.subscription_expires_at IS NOT NULL
        AND u.subscription_expires_at > NOW()
@@ -34,7 +34,7 @@ export async function findExpiredUsers() {
     `SELECT u.id, u.email, u.full_name, p.name AS plan_name
      FROM users u
      JOIN plans p ON u.active_plan_id = p.id
-     WHERE u.role = 'user_admin'
+     WHERE u.role = 'user'
        AND u.subscription_expires_at IS NOT NULL
        AND u.subscription_expires_at < NOW()`,
   );

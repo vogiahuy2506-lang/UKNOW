@@ -78,6 +78,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Tự động gắn X-Owner-Context khi user đang ở ngữ cảnh employee
+    const { activeContext } = useAuthStore.getState();
+    if (activeContext?.type === 'employee' && activeContext.ownerId) {
+      config.headers['X-Owner-Context'] = String(activeContext.ownerId);
+    }
+
     return config;
   },
   (error) => {

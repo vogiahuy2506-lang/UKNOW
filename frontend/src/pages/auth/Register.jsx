@@ -215,7 +215,7 @@ const Register = () => {
       const result = await googleLogin(credentialResponse.credential);
       toast.success('Đăng nhập Google thành công!');
       const role = result?.data?.user?.role;
-      navigate(role === 'super_admin' ? '/admin' : '/app');
+      navigate(role === 'admin' ? '/admin' : '/app');
     } catch (error) {
       const message = error.response?.data?.message || 'Đăng nhập Google thất bại';
       toast.error(message);
@@ -270,7 +270,7 @@ const Register = () => {
       <div className="w-full max-w-[480px] mx-auto">
         <div className="mb-8 lg:mb-10">
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng ký tài khoản</h1>
-          <p className="text-slate-500 font-medium">Bắt đầu trải nghiệm UKNOW miễn phí</p>
+          <p className="text-slate-500 font-medium">Bắt đầu trải nghiệm FounderAI miễn phí</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

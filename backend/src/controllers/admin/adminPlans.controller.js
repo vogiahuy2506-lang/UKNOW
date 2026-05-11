@@ -61,11 +61,11 @@ export async function update(req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
-/** DELETE /api/admin/plans/:id */
+/** DELETE /api/admin/plans/:id — auto fallback sang soft delete nếu plan đã có order. */
 export async function remove(req, res) {
   try {
-    await adminPlansService.removePlan(Number(req.params.id));
-    return res.json({ success: true, message: 'Đã xóa gói dịch vụ' });
+    const result = await adminPlansService.removePlan(Number(req.params.id));
+    return res.json({ success: true, message: result.message, data: result });
   } catch (err) { return handleError(res, err); }
 }
 

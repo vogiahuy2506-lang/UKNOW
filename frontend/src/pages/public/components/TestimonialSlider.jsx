@@ -7,7 +7,7 @@ const testimonials = [
     role: 'Marketing Manager',
     company: 'TechCorp Vietnam',
     avatar: 'N',
-    content: 'UKNOW đã giúp chúng tôi tăng 300% hiệu quả chiến dịch email marketing chỉ trong 3 tháng đầu sử dụng.',
+    content: 'FounderAI đã giúp chúng tôi tăng 300% hiệu quả chiến dịch email marketing chỉ trong 3 tháng đầu sử dụng.',
     rating: 5,
   },
   {
@@ -15,7 +15,7 @@ const testimonials = [
     role: 'CEO',
     company: 'EduLearn VN',
     avatar: 'T',
-    content: 'Hệ thống tự động hóa của UKNOW tiết kiệm cho team tôi hơn 20 giờ mỗi tuần. Tuyệt vời!',
+    content: 'Hệ thống tự động hóa của FounderAI tiết kiệm cho team tôi hơn 20 giờ mỗi tuần. Tuyệt vời!',
     rating: 5,
   },
   {

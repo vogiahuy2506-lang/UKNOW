@@ -7,7 +7,6 @@ import {
 
 import AnimatedSection from '../../components/AnimatedSection';
 import TestimonialSlider from './components/TestimonialSlider';
-import PricingSection from './components/PricingSection';
 
 // ─── Static data ────────────────────────────────────────────────────────────
 
@@ -78,7 +77,7 @@ export default function AboutPage() {
           </h1>
 
           <p className="animate-slide-up-delay-2 text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
-            UKNOW cung cấp giải pháp xây dựng Landing Page, quản lý Lead và thiết lập chuỗi Email/Zalo tự động. Giải phóng nhân sự, <strong className="text-slate-900">X10 doanh thu.</strong>
+            FounderAI cung cấp giải pháp xây dựng Landing Page, quản lý Lead và thiết lập chuỗi Email/Zalo tự động. Giải phóng nhân sự, <strong className="text-slate-900">X10 doanh thu.</strong>
           </p>
 
           <div className="animate-slide-up-delay-3 flex flex-col sm:flex-row justify-center items-center gap-4 mb-20">
@@ -191,15 +190,12 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Pricing Section (Dynamic) */}
-      <PricingSection />
-
       {/* Benefits Section */}
       <section className="py-32 bg-slate-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-900/40 via-slate-900 to-slate-900"></div>
         <div className="relative max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">Tại sao chọn UKNOW?</h2>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">Tại sao chọn FounderAI?</h2>
             <p className="text-xl text-orange-200 max-w-2xl mx-auto">Đồng hành cùng doanh nghiệp bạn trên chặng đường số hóa.</p>
           </AnimatedSection>
 

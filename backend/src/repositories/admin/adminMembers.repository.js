@@ -5,7 +5,7 @@ import db from '../../config/database.js';
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
 export async function findAllMembers({ search, planId, status, expiry } = {}) {
-  const conditions = [`u.role = 'user_admin'`];
+  const conditions = [`u.role = 'user'`];
   const params = [];
 
   if (search) {
@@ -82,7 +82,7 @@ export async function findMemberById(id) {
 
 export async function setMemberStatus(id, status) {
   const { rows } = await db.query(
-    `UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND role = 'user_admin'
+    `UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND role = 'user'
      RETURNING id, status`,
     [status, id]
   );
@@ -91,7 +91,7 @@ export async function setMemberStatus(id, status) {
 
 export async function promoteMemberToSuperAdmin(id) {
   const { rows } = await db.query(
-    `UPDATE users SET role = 'super_admin', updated_at = NOW() WHERE id = $1 AND role = 'user_admin'
+    `UPDATE users SET role = 'admin', updated_at = NOW() WHERE id = $1 AND role = 'user'
      RETURNING id, username, email, role`,
     [id]
   );
