@@ -31,6 +31,8 @@ import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import AboutPage from './pages/public/AboutPage';
+import PricingPage from './pages/public/PricingPage';
+import ContactPage from './pages/public/ContactPage';
 import LpRendererPage from './pages/public/LpRendererPage';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import LearningPage from './pages/learning/LearningPage';
@@ -83,9 +85,9 @@ const LockedEmployeeScreen = () => {
   );
 };
 
-// Bảo vệ /app/* — yêu cầu đăng nhập + có gói (employee miễn kiểm tra gói)
+// Bảo vệ /app/* — yêu cầu đăng nhập + có gói
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, user } = useAuthStore();
+  const { isAuthenticated, isLoading, user, activeContext } = useAuthStore();
 
   useEffect(() => {
     if (isLoading) {
@@ -98,30 +100,30 @@ const ProtectedRoute = ({ children }) => {
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role === 'super_admin') return <Navigate to="/admin" replace />;
-  // Employee bị khóa — member_status inactive nên không có ownerId
-  if (user?.role === 'employee' && !user?.ownerId) return <LockedEmployeeScreen />;
-  // Employee đi nhờ plan của owner — không cần kiểm tra active_plan_id
-  if (user?.role !== 'employee' && !user?.active_plan_id) {
+  if (user?.role === 'admin') return <Navigate to="/admin" replace />;
+
+  // Employee context: plan check dựa vào owner's plan (middleware đã xử lý server-side)
+  // Frontend chỉ cần kiểm tra self context
+  if (activeContext?.type === 'self' && !user?.active_plan_id) {
     return user?.isReturningCustomer ? <RenewalScreen /> : <NoPlanScreen />;
   }
 
   return children;
 };
 
-// Chỉ user_admin được vào — employee thấy màn hình unauthorized
+// Chỉ self context (user_admin) được vào — employee context thấy màn hình unauthorized
 const OwnerRoute = ({ children }) => {
-  const { user } = useAuthStore();
-  if (user?.role === 'employee') return <UnauthorizedScreen />;
+  const { activeContext } = useAuthStore();
+  if (activeContext?.type === 'employee') return <UnauthorizedScreen />;
   return children;
 };
 
-// user_admin luôn vào được; employee chỉ vào được nếu có ít nhất 1 trong các permission
+// Self context luôn vào được; employee context chỉ vào được nếu có ít nhất 1 trong các permission
 const PermissionRoute = ({ permission, children }) => {
-  const { user } = useAuthStore();
-  if (user?.role === 'employee') {
+  const { activeContext } = useAuthStore();
+  if (activeContext?.type === 'employee') {
     const perms = Array.isArray(permission) ? permission : [permission];
-    const hasPermission = perms.some((p) => user?.permissions?.[p] === true);
+    const hasPermission = perms.some((p) => activeContext?.permissions?.[p] === true);
     if (!hasPermission) return <UnauthorizedScreen />;
   }
   return children;
@@ -133,7 +135,7 @@ const AdminRoute = ({ children }) => {
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role !== 'super_admin') return <UnauthorizedScreen />;
+  if (user?.role !== 'admin') return <UnauthorizedScreen />;
 
   return children;
 };
@@ -153,7 +155,7 @@ const PublicRoute = ({ children }) => {
 
   if (isLoading) return <LoadingScreen />;
   if (isAuthenticated) {
-    return <Navigate to={user?.role === 'super_admin' ? '/admin' : '/app'} replace />;
+    return <Navigate to={user?.role === 'admin' ? '/admin' : '/app'} replace />;
   }
 
   return children;
@@ -198,6 +200,8 @@ function App() {
             {/* Public Landing Page - URL gốc sẽ hiện trang AboutPage */}
             <Route path="/" element={<AboutPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/payment-success" element={<PaymentSuccessPage />} />
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
