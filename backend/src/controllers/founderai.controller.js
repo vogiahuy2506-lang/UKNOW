@@ -194,7 +194,7 @@ class FounderAIController {
     }
 
     const fullName = this.toNullableText(payload.fullName);
-    const customerSource = this.toNullableText(payload.customerSource) || 'Founder AI';
+    const customerSource = this.toNullableText(payload.customerSource) || 'founderai';
     const hasPurchased = payload.hasPurchased === true;
     const totalOrders = Number.isFinite(payload.totalOrders) ? payload.totalOrders : null;
     const totalSpent = Number.isFinite(payload.totalSpent) ? payload.totalSpent : null;
