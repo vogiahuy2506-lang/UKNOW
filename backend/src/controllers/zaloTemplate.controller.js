@@ -82,7 +82,7 @@ class ZaloTemplateController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user?.role_code);
+      const isAdmin = isAdminRole(req.user?.role);
       const page = Number.parseInt(req.query.page, 10) || 1;
       const limit = Number.parseInt(req.query.limit, 10) || 10;
       const { category, search } = req.query;
@@ -192,7 +192,7 @@ class ZaloTemplateController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user?.role_code);
+      const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
       const result = await db.query(
         isAdmin
@@ -245,7 +245,7 @@ class ZaloTemplateController {
   async create(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const { templateName, templateCode, subject, bodyText, tempAttachments, variables, category } = req.body;
 
       const zaloTemplateLimitCheck = await checkUserResourceLimit({
@@ -325,7 +325,7 @@ class ZaloTemplateController {
   async update(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user?.role_code);
+      const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
       const {
         templateName,
@@ -484,7 +484,7 @@ class ZaloTemplateController {
   async delete(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user?.role_code);
+      const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
 
       const templateResult = await db.query(
