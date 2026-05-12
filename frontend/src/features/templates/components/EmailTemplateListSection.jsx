@@ -9,7 +9,6 @@ import {
 const EmailTemplateListSection = ({
   isLoading,
   filteredTemplates,
-  templates,
   filterCategory,
   setFilterCategory,
   searchTerm,

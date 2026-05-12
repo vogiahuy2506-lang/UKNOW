@@ -382,7 +382,7 @@ const STATUS_FILTER_OPTIONS = [
  * @returns {JSX.Element}
  */
 const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
-  const items = runsData?.items || [];
+  const items = useMemo(() => runsData?.items || [], [runsData?.items]);
   const pagination = runsData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
   const [searchQuery, setSearchQuery]     = useState('');

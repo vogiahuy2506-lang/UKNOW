@@ -14,6 +14,14 @@ const ContextSwitcher = ({ showLabels = true }) => {
   const ref = useRef(null);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const memberships = user?.memberships || [];
   if (memberships.length === 0) return null;
 
@@ -38,14 +46,6 @@ const ContextSwitcher = ({ showLabels = true }) => {
     switchContext(null);
     navigate('/app');
   };
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // ─── Dropdown panel — dùng chung cho cả 2 mode ──────────────────────────
   const DropdownPanel = ({ className = '' }) => (

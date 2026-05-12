@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { HiArrowLeft, HiOutlineDuplicate, HiShieldCheck, HiLightningBolt } from 'react-icons/hi';
 import { FaCrown, FaQuestionCircle } from 'react-icons/fa';
@@ -14,7 +14,6 @@ const CheckoutPage = () => {
 
     const plan = location.state?.plan;
 
-    const [qrCode, setQrCode] = useState(null);
     const [orderCode, setOrderCode] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -53,7 +52,6 @@ const CheckoutPage = () => {
                 });
                 if (!data.success) throw new Error(data.message);
 
-                setQrCode(data.result.qrCode);
                 setOrderCode(data.result.orderCode);
                 const qrString = data.result.qrCode;
                 const qrDataUrl = await QRCode.toDataURL(qrString, { width: 200, margin: 1 });
@@ -68,6 +66,7 @@ const CheckoutPage = () => {
         };
 
         createPayment();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate/location stable; chỉ tạo payment khi plan/user/auth-state đổi
     }, [plan, user, isAuthLoading]);
 
     // Polling mỗi 3 giây sau khi có orderCode
@@ -92,6 +91,7 @@ const CheckoutPage = () => {
         }, 3000);
 
         return () => clearInterval(pollingRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate stable; chỉ poll khi orderCode đổi
     }, [orderCode]);
 
     if (!plan) return null;

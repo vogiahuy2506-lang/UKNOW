@@ -79,6 +79,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
 
   useEffect(() => {
     fetchTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ fetch 1 lần lúc mount
   }, []);
 
   // Auto-open editor with AI-generated draft from chatbot
@@ -99,6 +100,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     setContentTab(nextTab);
     setActiveInput(nextTab);
     setShowEditorModal(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ react khi aiDraft đổi; isZaloTemplate là route-based prop ổn định
   }, [aiDraft]);
 
   const {
@@ -220,10 +222,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Tách temp attachments và existing attachments
       const allAttachments = formData.attachments || [];
-      const tempAttachments = allAttachments.filter(att => att.isTemp && att.tempId);
-      const existingAttachments = allAttachments.filter(att => !att.isTemp);
 
       // Auto-fill displayName trống theo thứ tự toàn bộ danh sách
       const withAutoName = (att, globalIndex) => ({
@@ -452,7 +451,8 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     setShowVariableSuggestions(false);
   };
 
-  const insertHtmlAtCursor = (snippet) => {
+  // Giữ lại cho tính năng rich-text editor chưa wire up
+  const _insertHtmlAtCursor = (snippet) => {
     const ref = htmlTextareaRef.current;
     if (!ref) return;
     const start = ref.selectionStart ?? 0;
@@ -473,7 +473,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     });
   };
 
-  const insertHtmlToTextEditor = (snippet) => {
+  const _insertHtmlToTextEditor = (snippet) => {
     const editor = textEditorRef.current;
     if (!editor) return;
     const selection = window.getSelection();
@@ -495,11 +495,11 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     setIsResizing(true);
   };
 
-  const handleToolbarMouseDown = (event) => {
+  const _handleToolbarMouseDown = (event) => {
     event.preventDefault();
   };
 
-  const applyTextCommand = (command, value = null) => {
+  const _applyTextCommand = (command, value = null) => {
     const editor = textEditorRef.current;
     if (!editor) return;
     const selection = window.getSelection();
@@ -516,7 +516,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     saveTextSelection();
   };
 
-  const focusTextEditor = () => {
+  const _focusTextEditor = () => {
     if (textEditorRef.current) {
       textEditorRef.current.focus();
     }

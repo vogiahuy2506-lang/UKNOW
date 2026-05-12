@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { FaCheckCircle, FaRocket, FaArrowRight } from 'react-icons/fa';
 import { useAuthStore } from '../../stores/authStore';
@@ -40,6 +40,7 @@ const PaymentSuccessPage = () => {
             }
         };
         verify();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ verify 1 lần lúc mount
     }, []);
 
     if (loading) {

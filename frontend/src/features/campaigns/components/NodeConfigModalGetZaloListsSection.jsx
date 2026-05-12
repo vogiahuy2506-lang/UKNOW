@@ -245,6 +245,7 @@ export const NodeConfigGetAllFriendsSection = ({
 
     setLastAutoLoadedAccountId(accountId);
     handleLoadPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadPreview/resolvePreviewAccountId là helper trong scope, không nên trigger refetch
   }, [
     formData.zaloAccountId,
     formData.zaloFriendsCount,
@@ -719,6 +720,7 @@ export const NodeConfigGetAllGroupsSection = ({
 
     setLastAutoLoadedAccountId(accountId);
     handleLoadPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadPreview/resolvePreviewAccountId là helper trong scope, không nên trigger refetch
   }, [
     isLoadingPreview,
     lastAutoLoadedAccountId,

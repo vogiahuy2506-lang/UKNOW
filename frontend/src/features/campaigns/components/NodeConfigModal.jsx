@@ -370,7 +370,7 @@ const NodeConfigModal = ({
         zaloFriendTemplateMappings: mappings,
       };
     });
-  }, [nodeType, normalizeTemplateVariables, zaloFriendTemplate]);
+  }, [nodeType, zaloFriendTemplate]);
 
   const upstreamNodes = getUpstreamNodes({
     currentNodeId: node?.id,

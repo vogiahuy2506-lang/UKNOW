@@ -199,6 +199,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
 
     setLastAutoLoadTestKey(autoLoadKey);
     handleLoadTestPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLoadTestPreview là helper trong scope, không nên trigger refetch
   }, [
     campaignId,
     formData.interestedCourseQuery,

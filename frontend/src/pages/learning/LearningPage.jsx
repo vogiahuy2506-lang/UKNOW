@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FaStar, FaUsers, FaClock, FaBook, FaCheck, FaChevronRight, FaShieldAlt, FaGraduationCap, FaAward, FaHeart, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaPlay, FaQuoteLeft, FaArrowRight, FaBolt, FaLightbulb, FaUsersCog, FaRobot, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
+import { FaStar, FaUsers, FaCheck, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaQuoteLeft, FaArrowRight, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
 
 const instructor = {
   name: 'Ngô Hữu Thống',
@@ -138,7 +138,7 @@ const formatPrice = (price) => {
   return new Intl.NumberFormat('vi-VN').format(price) + 'đ';
 };
 
-const useAnimatedCounter = (end, duration = 2000, suffix = '') => {
+const useAnimatedCounter = (end, duration = 2000) => {
   const [count, setCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef(null);
@@ -383,7 +383,6 @@ export default function LearningPage() {
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
 
   const { count: studentCount } = useAnimatedCounter(stats.students);
-  const { count: courseCount } = useAnimatedCounter(stats.courses);
 
   const handleEnroll = (course) => {
     setSelectedCourse(course);

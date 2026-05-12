@@ -9,7 +9,6 @@ import {
   HiOutlineUsers,
   HiOutlineCog,
   HiOutlineMail,
-  HiOutlineChat,
   HiOutlineTemplate,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
