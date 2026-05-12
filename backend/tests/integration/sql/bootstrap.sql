@@ -150,6 +150,72 @@ CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
 
+-- ─── Email module (settings + templates) ──────────────────────────────
+-- Schema tối thiểu để test CRUD email-settings và email-templates.
+-- Các cột tracking nâng cao (sent_count counters, daily/hourly) đủ để test
+-- side-effect của incrementSentCount.
+
+CREATE TABLE email_settings (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name             VARCHAR(255) NOT NULL,
+  email            VARCHAR(255) NOT NULL,
+  smtp_host        VARCHAR(255),
+  smtp_port        INTEGER,
+  smtp_username    VARCHAR(255),
+  smtp_password    TEXT,
+  use_tls          BOOLEAN      NOT NULL DEFAULT TRUE,
+  daily_limit      INTEGER      NOT NULL DEFAULT 1000,
+  hourly_limit     INTEGER      NOT NULL DEFAULT 100,
+  daily_sent_count INTEGER      NOT NULL DEFAULT 0,
+  total_sent_count INTEGER      NOT NULL DEFAULT 0,
+  is_verified      BOOLEAN      NOT NULL DEFAULT FALSE,
+  status           VARCHAR(20)  NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'inactive')),
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_email_settings_user ON email_settings(id_user);
+
+CREATE TABLE email_templates (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  template_name VARCHAR(255) NOT NULL,
+  template_code VARCHAR(100),
+  subject       TEXT,
+  body_html     TEXT,
+  body_text     TEXT,
+  attachments   JSONB        NOT NULL DEFAULT '[]',
+  variables     JSONB        NOT NULL DEFAULT '[]',
+  category      VARCHAR(100),
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  usage_count   INTEGER      NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_email_templates_user ON email_templates(id_user);
+
+-- Bảng stub cho EXISTS subquery trong getAll/getById email-template.
+-- KHÔNG dùng để test campaign flow ở đây — chỉ để query không lỗi 42P01.
+CREATE TABLE campaigns (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  campaign_name VARCHAR(255),
+  status        VARCHAR(50)  NOT NULL DEFAULT 'draft',
+  total_sent    INTEGER      NOT NULL DEFAULT 0,
+  total_customers INTEGER    NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE campaign_nodes (
+  id                BIGSERIAL PRIMARY KEY,
+  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE CASCADE,
+  node_subtype      VARCHAR(50),
+  id_email_template BIGINT,
+  config            JSONB        NOT NULL DEFAULT '{}'
+);
+
 -- ─── Contact submissions (migration 015) ──────────────────────────────
 CREATE TABLE contact_submissions (
   id           BIGSERIAL PRIMARY KEY,
