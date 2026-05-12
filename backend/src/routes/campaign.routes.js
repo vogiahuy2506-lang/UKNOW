@@ -1,7 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import campaignController from '../controllers/campaign.controller.js';
-import uknowController from '../controllers/Founder AI.controller.js';
+import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 
@@ -58,6 +58,6 @@ router.post('/:id/duplicate',
 );
 
 // Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
-router.post('/:id/sync-Founder AI', uknowController.syncCampaignUknow.bind(uknowController));
+router.post('/:id/sync-founderai', founderaiController.syncCampaignUknow.bind(founderaiController));
 
 export default router;

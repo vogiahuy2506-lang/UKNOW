@@ -176,7 +176,7 @@ class LandingFeaturedCourseService {
     }
     return row;
   }
-
+  /**
    * @param {number|string} id
    * @param {number} userId
    */

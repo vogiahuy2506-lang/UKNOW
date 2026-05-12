@@ -53,7 +53,7 @@ class LandingFeaturedCourseRepository {
     );
     return result.rows.map((r) => this._mapRow(r));
   }
-
+  /**
    * Tất cả bản ghi (admin).
    *
    * @param {number|string} userId

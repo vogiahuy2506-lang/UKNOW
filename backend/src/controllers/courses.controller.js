@@ -269,7 +269,7 @@ class CoursesController {
         : userId;
       
       console.log(`[Manual Sync] Bắt đầu đồng bộ khóa học bởi user ${userId} cho owner ${effectiveOwnerId}`);
-      const result = await this.syncCoursesFromUknow(effectiveOwnerId);
+      const result = await this.syncCoursesFromFounderAI(effectiveOwnerId);
       
       return res.json({
         success: result.success,
@@ -291,7 +291,7 @@ class CoursesController {
    * 4. INSERT/UPDATE vào database
    * @param {number} userId - ID của user
    */
-  async syncCoursesFromUknow(userId = 1) {
+  async syncCoursesFromFounderAI(userId = 1) {
     const startTime = Date.now();
     let totalOrders = 0;
     let totalLineItems = 0;
