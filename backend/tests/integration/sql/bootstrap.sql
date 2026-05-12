@@ -213,8 +213,51 @@ CREATE TABLE campaign_nodes (
   id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE CASCADE,
   node_subtype      VARCHAR(50),
   id_email_template BIGINT,
+  id_zalo_template  BIGINT,
   config            JSONB        NOT NULL DEFAULT '{}'
 );
+
+-- ─── Zalo module (settings + templates) ────────────────────────────────
+-- Schema tối thiểu để CRUD zalo_settings (chỉ cột mà controller truy vấn)
+-- và zalo_templates. cookie_text lưu plain text (production cũng plain —
+-- không dùng AES như SMTP password).
+
+CREATE TABLE zalo_settings (
+  id                BIGSERIAL PRIMARY KEY,
+  id_user           BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  display_name      VARCHAR(255) NOT NULL,
+  zalo_user_id      VARCHAR(255),
+  zalo_name         VARCHAR(255),
+  zalo_phone        VARCHAR(50),
+  login_method      VARCHAR(20)  NOT NULL DEFAULT 'qr',
+  cookie_text       TEXT,
+  status            VARCHAR(20)  NOT NULL DEFAULT 'disconnected',
+  is_active         BOOLEAN      NOT NULL DEFAULT TRUE,
+  is_default        BOOLEAN      NOT NULL DEFAULT FALSE,
+  notes             TEXT,
+  last_connected_at TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_zalo_settings_user ON zalo_settings(id_user);
+
+CREATE TABLE zalo_templates (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  template_name VARCHAR(255) NOT NULL,
+  template_code VARCHAR(100),
+  subject       TEXT,
+  body_html     TEXT,
+  body_text     TEXT,
+  attachments   JSONB        NOT NULL DEFAULT '[]',
+  variables     JSONB        NOT NULL DEFAULT '[]',
+  category      VARCHAR(100),
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  usage_count   INTEGER      NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_zalo_templates_user ON zalo_templates(id_user);
 
 -- ─── Contact submissions (migration 015) ──────────────────────────────
 CREATE TABLE contact_submissions (
