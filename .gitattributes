@@ -1,0 +1,17 @@
+# Force LF line endings cho shell scripts — quan trọng cho husky hooks
+# vì bash trên macOS/Linux không parse được CRLF.
+*.sh        text eol=lf
+.husky/*    text eol=lf
+
+# Code files: dùng auto để git tự xử text/binary
+*           text=auto
+
+# Binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.xlsx      binary
+*.zip       binary
