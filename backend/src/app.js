@@ -1,4 +1,6 @@
-import 'dotenv/config';
+// dotenv được load ở src/index.js (production entrypoint) hoặc bởi test runner.
+// Không import dotenv ở đây để app.js có thể được import độc lập trong test
+// mà không nuốt nhầm config production (vd PGSSLMODE=require của Neon).
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
