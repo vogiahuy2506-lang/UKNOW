@@ -1,12 +1,12 @@
 import { normalizeLandingLpTrackApiBase } from './normalizeLandingLpTrackApiBase.js';
 
 /**
- * Gỡ khối iframe/script do UKnow chèn (đồng bộ backend `stripUknowLandingAutoBlocks`).
+ * Gỡ khối iframe/script do Founder AI chèn (đồng bộ backend `stripFounderLandingAutoBlocks`).
  */
-export function stripUknowLandingAutoBlocks(html) {
+export function stripFounderLandingAutoBlocks(html) {
   let out = String(html ?? '');
-  out = out.replace(/<section\s[^>]*data-uknow-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
-  out = out.replace(/<div\s[^>]*data-uknow-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
+  out = out.replace(/<section\s[^>]*data-founder-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
+  out = out.replace(/<div\s[^>]*data-founder-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
   return out;
@@ -54,7 +54,7 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return String(html ?? '');
-  let out = stripUknowLandingAutoBlocks(html);
+  let out = stripFounderLandingAutoBlocks(html);
   out = rewriteHttpAnchorsToTrack(out, { slug: s, apiBase });
   out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
   return out;
@@ -76,8 +76,8 @@ export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }
   const embedUrl = `${origin}/embed/lead-form?slug=${encodeURIComponent(s)}`;
   const scriptSrc = `${origin}/lp-track.js`;
   /** Không bọc section — dán đúng vị trí layout; chiều cao iframe được lp-track.js chỉnh qua postMessage từ trang embed. */
-  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="Đăng ký UKnow" loading="lazy"></iframe>\n`;
-  const scriptBlock = `<div data-uknow-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="Đăng ký Founder AI" loading="lazy"></iframe>\n`;
+  const scriptBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
   return {
     iframeBlock,
     scriptBlock,
@@ -101,7 +101,7 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   const api = normalizeLandingLpTrackApiBase(apiBase);
   if (!origin || !api) return out;
 
-  if (out.includes('data-uknow-lp-injected="1"')) {
+  if (out.includes('data-founder-lp-injected="1"')) {
     return out;
   }
 
@@ -111,7 +111,7 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
 
   const scriptBlock = hasTrackScript
     ? ''
-    : `<div data-uknow-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+    : `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
 
   const injectBlock = `${scriptBlock}`;
   if (!injectBlock.trim()) return out;

@@ -14,6 +14,8 @@ export async function truncateAll() {
   await db.query(`
     TRUNCATE TABLE
       dashboard_insights,
+      landing_testimonials,
+      landing_featured_courses,
       landing_pages,
       file_access_events,
       template_files,

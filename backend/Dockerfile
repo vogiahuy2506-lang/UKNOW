@@ -11,6 +11,9 @@ COPY . .
 
 ENV NODE_ENV=production
 
+# Tạo thư mục cho upload và cấp quyền cho user node
+RUN mkdir -p temp_uploads uploads && chown -R node:node /app
+
 # Chạy bằng user không phải root để tăng an toàn khi deploy VPS
 USER node
 

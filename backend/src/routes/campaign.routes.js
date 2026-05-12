@@ -1,7 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import campaignController from '../controllers/campaign.controller.js';
-import uknowController from '../controllers/uknow.controller.js';
+import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 
@@ -57,7 +57,7 @@ router.post('/:id/duplicate',
   campaignController.duplicate.bind(campaignController)
 );
 
-// Đồng bộ trạng thái khách hàng từ UKNOW cho chiến dịch cụ thể
-router.post('/:id/sync-uknow', uknowController.syncCampaignUknow.bind(uknowController));
+// Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
+router.post('/:id/sync-founderai', founderaiController.syncCampaignUknow.bind(founderaiController));
 
 export default router;

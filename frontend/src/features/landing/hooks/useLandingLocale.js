@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { LANDING_COPY } from '../constants/landingCopy.js';
 
 /** Khóa localStorage để nhớ ngôn ngữ landing giữa các lần truy cập */
-export const LANDING_LOCALE_STORAGE_KEY = 'uknow-landing-lang';
+export const LANDING_LOCALE_STORAGE_KEY = 'founder-landing-lang';
 
 /**
  * Quản lý ngôn ngữ hiển thị trang landing (vi/en).

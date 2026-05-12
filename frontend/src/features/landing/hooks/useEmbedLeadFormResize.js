@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
  *
  * Luồng:
  * 1. Chỉ chạy khi đang trong iframe (`parent !== window`).
- * 2. Đo `scrollHeight` của root, postMessage `uknow-lp-embed-resize`.
+ * 2. Đo `scrollHeight` của root, postMessage `founder-lp-embed-resize`.
  * 3. ResizeObserver + timeout ngắn để bắt layout sau font / đổi trạng thái success.
  *
  * @param {object} opts
@@ -27,7 +27,7 @@ export function useEmbedLeadFormResize({ enabled, depsKey }) {
       const h = Math.ceil(root.scrollHeight);
       if (h < 40) return;
       try {
-        window.parent.postMessage({ type: 'uknow-lp-embed-resize', height: h }, '*');
+        window.parent.postMessage({ type: 'founder-lp-embed-resize', height: h }, '*');
       } catch {
         // Trang embed không gửi được — bỏ qua
       }

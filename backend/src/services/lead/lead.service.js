@@ -1,4 +1,5 @@
 import leadRepository from '../../repositories/lead.repository.js';
+import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
 import { clampLandingLeadsLimit, MAX_LANDING_LEADS_LIMIT } from '../../utils/landingLeadsLimit.util.js';
 import { buildLandingLeadsAdminXlsxBuffer } from '../../utils/landingLeadsXlsxExport.util.js';
@@ -142,7 +143,7 @@ class LeadService {
     }
     // Nghề nghiệp / lĩnh vực có thể để trống (khớp form landing công khai); DB vẫn nhận chuỗi rỗng (NOT NULL varchar).
     if (!marketingConsent) {
-      const err = new Error('Cần đồng ý nhận thông tin từ UKnow');
+      const err = new Error('Cần đồng ý nhận thông tin từ Founder AI');
       err.statusCode = 400;
       throw err;
     }
@@ -151,6 +152,16 @@ class LeadService {
     const landingPageSlug = canonicalLandingPageSlug(
       body?.landingPageSlug ?? body?.landing_page_slug ?? ''
     );
+
+    // Xác định id_user từ landing page slug
+    let idUser = 1; // Mặc định nếu không tìm thấy (admin/hệ thống)
+    if (landingPageSlug) {
+      const lp = await landingPageRepository.findPublishedBySlug(landingPageSlug);
+      if (lp && lp.idUser) {
+        idUser = lp.idUser;
+      }
+    }
+
     const utmSource = body?.utmSource != null ? String(body.utmSource).trim().slice(0, 255) || null : null;
     const utmMedium = body?.utmMedium != null ? String(body.utmMedium).trim().slice(0, 255) || null : null;
     const utmCampaign = body?.utmCampaign != null ? String(body.utmCampaign).trim().slice(0, 255) || null : null;
@@ -171,6 +182,7 @@ class LeadService {
       utmCampaign,
       utmContent,
       utmTerm,
+      idUser,
     });
     if (!row) {
       const err = new Error('Không thể lưu thông tin');

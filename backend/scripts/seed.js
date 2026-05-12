@@ -107,8 +107,8 @@ async function seed() {
     console.log('\n🔐 Đang hash password...');
     const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
 
-    // 3. Tạo 20 user_admin
-    console.log('👥 Tạo 20 user_admin...');
+    // 3. Tạo 20 user
+    console.log('👥 Tạo 20 user...');
     const createdUsers = [];
 
     for (let i = 0; i < 20; i++) {
@@ -145,7 +145,7 @@ async function seed() {
            (username, email, password_hash, full_name, role, status,
             active_plan_id, subscription_expires_at, is_verified, verified_at,
             created_at, updated_at)
-         VALUES ($1,$2,$3,$4,'user_admin','active',$5,$6,true,NOW(),$7,$7)
+         VALUES ($1,$2,$3,$4,'user','active',$5,$6,true,NOW(),$7,$7)
          ON CONFLICT (email) DO UPDATE SET
            active_plan_id = EXCLUDED.active_plan_id,
            subscription_expires_at = EXCLUDED.subscription_expires_at,
@@ -156,7 +156,7 @@ async function seed() {
       createdUsers.push({ ...rows[0], plan, company, createdAt });
       process.stdout.write('.');
     }
-    console.log(`\n✅ Đã tạo/cập nhật ${createdUsers.length} user_admin`);
+    console.log(`\n✅ Đã tạo/cập nhật ${createdUsers.length} user`);
 
     // 4. Tạo đơn hàng (1-3 đơn / user, rải qua 6 tháng)
     console.log('\n💳 Tạo đơn hàng...');
@@ -234,7 +234,7 @@ async function seed() {
           `INSERT INTO users
              (username, email, password_hash, full_name, role, status,
               is_verified, verified_at, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,'employee','active',true,NOW(),NOW(),NOW())
+           VALUES ($1,$2,$3,$4,'user','active',true,NOW(),NOW(),NOW())
            ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
            RETURNING id`,
           [empUsername, empEmail, passwordHash, empName]
@@ -260,7 +260,7 @@ async function seed() {
     console.log('🎉 SEED HOÀN TẤT!');
     console.log('═'.repeat(50));
     console.log(`📧 Mật khẩu tất cả test accounts: ${TEST_PASSWORD}`);
-    console.log('\n📋 Tài khoản test (user_admin):');
+    console.log('\n📋 Tài khoản test (user):');
     createdUsers.slice(0, 5).forEach(u => {
       console.log(`  • ${u.email}  (${u.plan.name})`);
     });

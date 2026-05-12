@@ -5,12 +5,15 @@ import {
   HiOutlineMenu,
   HiOutlineLockClosed,
   HiOutlineLogout,
+  HiOutlineUser,
+  HiOutlineUserGroup,
+  HiCheck,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import logoIcon from '../../../assets/icons/cropped-founder-1-32x32.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 
 const Header = ({ onToggleSidebar }) => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -43,8 +46,15 @@ const Header = ({ onToggleSidebar }) => {
         </button>
 
         <div className="flex items-center gap-2">
-          <img src={logoIcon} alt="UKNOW Logo" className="w-7 h-7 object-contain" />
-          <span className="text-sm font-bold text-gray-900">UKNOW</span>
+          <img src={logoIcon} alt="Founder AI Logo" className="w-7 h-7 object-contain" />
+          <span className="text-sm font-bold text-gray-900">
+            Founder AI
+            {activeContext.type === 'employee' && (
+              <span className="ml-1 text-primary-600 font-medium opacity-80">
+                / {activeContext.ownerName}
+              </span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -66,17 +76,65 @@ const Header = ({ onToggleSidebar }) => {
               <p className="text-sm font-semibold text-gray-900">{user?.fullName || user?.username}</p>
               <p className="text-xs text-gray-500">{user?.email}</p>
             </div>
-            <div className="p-2">
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  setShowChangePassword(true);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-600 rounded-lg transition-colors"
-              >
-                <HiOutlineLockClosed className="w-5 h-5" />
-                Đổi mật khẩu
-              </button>
+              <div className="p-2 border-b border-gray-100">
+                <p className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  Ngữ cảnh hoạt động
+                </p>
+                <button
+                  onClick={() => {
+                    switchContext(null);
+                    setShowMenu(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${
+                    activeContext.type === 'self'
+                      ? 'bg-primary-50 text-primary-600 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <HiOutlineUser className="w-4 h-4" />
+                    Cá nhân
+                  </div>
+                  {activeContext.type === 'self' && <HiCheck className="w-4 h-4" />}
+                </button>
+
+                {user?.memberships?.map((m) => (
+                  <button
+                    key={m.ownerId}
+                    onClick={() => {
+                      switchContext(m.ownerId);
+                      setShowMenu(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors mt-1 ${
+                      activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
+                        ? 'bg-primary-50 text-primary-600 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <HiOutlineUserGroup className="w-4 h-4" />
+                      <span className="truncate max-w-[140px]">
+                        {m.ownerName || m.ownerUsername}
+                      </span>
+                    </div>
+                    {activeContext.type === 'employee' && activeContext.ownerId === m.ownerId && (
+                      <HiCheck className="w-4 h-4" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-2">
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    setShowChangePassword(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                  <HiOutlineLockClosed className="w-4 h-4" />
+                  Đổi mật khẩu
+                </button>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"

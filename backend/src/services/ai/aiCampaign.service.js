@@ -125,7 +125,7 @@ LƯU Ý QUAN TRỌNG:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
-      const adminSystemPrompt = `Bạn là UKNOW AI - Trợ lý thông minh cho System Admin của nền tảng UKNOW.
+      const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI.
 Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược và trả lời câu hỏi về tình trạng hoạt động của nền tảng.
 
 ${contextBlock}
@@ -159,7 +159,7 @@ QUY TẮC:
       }
     }
 
-    const systemPrompt = `Bạn là UKNOW AI - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
+    const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.

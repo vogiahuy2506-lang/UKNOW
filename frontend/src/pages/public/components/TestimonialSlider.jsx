@@ -43,9 +43,10 @@ export default function TestimonialSlider() {
         >
           {testimonials.map((testimonial, index) => (
             <div key={index} className="w-full flex-shrink-0 px-4">
-              <div className="bg-white rounded-3xl p-8 md:p-12 shadow-2xl">
-                <FaQuoteLeft className="text-4xl text-orange-200 mb-6" />
-                <p className="text-xl md:text-2xl text-gray-700 mb-8 leading-relaxed italic">
+              <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform duration-500"></div>
+                <FaQuoteLeft className="text-4xl text-orange-500/30 mb-6" />
+                <p className="text-xl md:text-2xl text-slate-300 mb-8 leading-relaxed italic">
                   {testimonial.content}
                 </p>
                 <div className="flex items-center justify-between">
@@ -54,8 +55,8 @@ export default function TestimonialSlider() {
                       {testimonial.avatar}
                     </div>
                     <div className="ml-4">
-                      <div className="font-bold text-gray-900">{testimonial.name}</div>
-                      <div className="text-gray-500">{testimonial.role} - {testimonial.company}</div>
+                      <div className="font-bold text-white">{testimonial.name}</div>
+                      <div className="text-orange-400">{testimonial.role} - <span className="text-slate-400">{testimonial.company}</span></div>
                     </div>
                   </div>
                   <div className="flex">
@@ -72,15 +73,15 @@ export default function TestimonialSlider() {
 
       <button
         onClick={prev}
-        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-orange-50 transition-colors"
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 md:-translate-x-6 w-12 h-12 bg-slate-800 border border-slate-700 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-slate-700 transition-colors z-20 group"
       >
-        <FaChevronLeft className="text-orange-500" />
+        <FaChevronLeft className="text-orange-500 group-hover:text-orange-400" />
       </button>
       <button
         onClick={next}
-        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-orange-50 transition-colors"
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 md:translate-x-6 w-12 h-12 bg-slate-800 border border-slate-700 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-slate-700 transition-colors z-20 group"
       >
-        <FaChevronRight className="text-orange-500" />
+        <FaChevronRight className="text-orange-500 group-hover:text-orange-400" />
       </button>
 
       <div className="flex justify-center gap-2 mt-8">
@@ -88,7 +89,7 @@ export default function TestimonialSlider() {
           <button
             key={index}
             onClick={() => setCurrent(index)}
-            className={`w-3 h-3 rounded-full transition-all ${current === index ? 'bg-orange-500 w-8' : 'bg-gray-300'}`}
+            className={`w-3 h-3 rounded-full transition-all ${current === index ? 'bg-orange-500 w-8 shadow-[0_0_10px_rgba(249,115,22,0.5)]' : 'bg-slate-700 hover:bg-slate-600'}`}
           />
         ))}
       </div>

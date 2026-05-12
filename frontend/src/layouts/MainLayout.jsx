@@ -8,11 +8,11 @@ import useIsMobile from '../hooks/useIsMobile';
 import AiChatbot from '../features/ai/AiChatbot';
 
 const MainLayout = () => {
-  const [sidebarOpen, setSidebarOpen] = useLocalStorageState('uknow_sidebar_open', true);
-  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_sidebar_width', 256);
+  const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', true);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('founder_ai_sidebar_width', 256);
   const [isResizing, setIsResizing] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('uknow_ai_panel_open', false);
+  const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(256);
   const location = useLocation();
@@ -62,7 +62,7 @@ const MainLayout = () => {
     const el = mainContentRef.current;
     if (!el || isFullLayout) return;
 
-    const storageKey = `uknow_scroll_${location.pathname}`;
+    const storageKey = `founder_ai_scroll_${location.pathname}`;
 
     const rafId = requestAnimationFrame(() => {
       try {

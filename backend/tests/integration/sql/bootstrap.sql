@@ -404,6 +404,7 @@ CREATE INDEX idx_tracking_short_links_code ON tracking_short_links(short_code);
 -- shared trên trang public, không chia theo owner).
 CREATE TABLE leads (
   id                  BIGSERIAL PRIMARY KEY,
+  id_user             BIGINT,
   last_name           VARCHAR(255),
   first_name          VARCHAR(255),
   email               VARCHAR(255),
@@ -422,12 +423,14 @@ CREATE TABLE leads (
 );
 CREATE INDEX idx_leads_slug ON leads(landing_page_slug);
 CREATE INDEX idx_leads_email ON leads(email);
+CREATE INDEX idx_leads_user ON leads(id_user);
 CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
 
 -- Landing page events — view/click/submit tracking cho landing page.
 -- LeadService.createPublicLead ghi 1 event 'submit' nếu có slug.
 CREATE TABLE landing_page_events (
   id                BIGSERIAL PRIMARY KEY,
+  id_user           BIGINT,
   event_type        VARCHAR(20)  NOT NULL,
   landing_page_slug VARCHAR(100),
   target_url        TEXT,
@@ -443,6 +446,7 @@ CREATE TABLE landing_page_events (
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_landing_page_events_slug ON landing_page_events(landing_page_slug);
+CREATE INDEX idx_landing_page_events_user ON landing_page_events(id_user);
 
 -- ─── Customers (Batch B) ──────────────────────────────────────────────
 -- Bảng khách hàng end-user (target list cho campaign). Multi-tenant theo id_user.
@@ -693,12 +697,13 @@ CREATE TABLE dashboard_insights (
 );
 CREATE INDEX idx_dashboard_insights_user ON dashboard_insights(id_user);
 
--- ─── Landing pages (dashboard stats source) ────────────────────────────
+-- ─── Landing pages (CMS + dashboard stats source) ──────────────────────
 CREATE TABLE landing_pages (
   id            BIGSERIAL PRIMARY KEY,
   id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   slug          VARCHAR(100) NOT NULL,
   title         VARCHAR(500),
+  html_content  TEXT         NOT NULL DEFAULT '',
   status        VARCHAR(20)  NOT NULL DEFAULT 'draft',
   is_published  BOOLEAN      NOT NULL DEFAULT FALSE,
   published_at  TIMESTAMPTZ,
@@ -707,6 +712,44 @@ CREATE TABLE landing_pages (
 );
 CREATE INDEX idx_landing_pages_user ON landing_pages(id_user);
 CREATE INDEX idx_landing_pages_slug ON landing_pages(slug);
+
+-- ─── Landing featured courses (Batch C CMS) ────────────────────────────
+CREATE TABLE landing_featured_courses (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sort_order    INTEGER      NOT NULL DEFAULT 0,
+  title_vi      VARCHAR(500) NOT NULL,
+  title_en      VARCHAR(500) NOT NULL,
+  tag_vi        VARCHAR(255) NOT NULL DEFAULT '',
+  tag_en        VARCHAR(255) NOT NULL DEFAULT '',
+  image_url     TEXT,
+  link_url      TEXT         NOT NULL,
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_landing_featured_courses_user ON landing_featured_courses(id_user);
+
+-- ─── Landing testimonials (Batch C CMS) ────────────────────────────────
+CREATE TABLE landing_testimonials (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sort_order    INTEGER      NOT NULL DEFAULT 0,
+  quote_vi      TEXT         NOT NULL,
+  quote_en      TEXT         NOT NULL,
+  star_rating   SMALLINT     NOT NULL DEFAULT 5,
+  name_vi       VARCHAR(255) NOT NULL,
+  name_en       VARCHAR(255) NOT NULL,
+  role_vi       VARCHAR(255) NOT NULL DEFAULT '',
+  role_en       VARCHAR(255) NOT NULL DEFAULT '',
+  location_vi   VARCHAR(255) NOT NULL DEFAULT '',
+  location_en   VARCHAR(255) NOT NULL DEFAULT '',
+  image_url     TEXT,
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_landing_testimonials_user ON landing_testimonials(id_user);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

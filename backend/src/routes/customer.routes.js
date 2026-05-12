@@ -25,7 +25,7 @@ router.get(
 // Data node: khach hang da de lai thong tin + khoa hoc
 router.get('/interested-courses', customerController.getInterestedCustomersWithCourses.bind(customerController));
 
-// Data node: khach hang tu UKNOW API
+// Data node: khach hang tu Founder AI API
 router.get('/interested-courses-from-api', customerController.getInterestedCustomersFromUknowApi.bind(customerController));
 
 // Journey

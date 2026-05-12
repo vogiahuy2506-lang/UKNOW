@@ -86,7 +86,7 @@ export const nodeConfigs = {
       icon: HiOutlineGlobe,
       bgColor: '#E0F2F1',
       iconColor: '#0D6E6E',
-      description: 'Lead từ form landing UKnow (lọc ngày, nghề, lĩnh vực)',
+      description: 'Lead từ form landing Founder AI (lọc ngày, nghề, lĩnh vực)',
     },
     {
       type: 'select_zalo_account',

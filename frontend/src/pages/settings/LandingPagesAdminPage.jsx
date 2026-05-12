@@ -114,7 +114,7 @@ export default function LandingPagesAdminPage() {
   }, [rows, statsBySlug]);
 
   /**
-   * Xem trước gần giống bản lưu: strip khối UKnow cũ + rewrite link http(s) + chèn lp-track.js (iframe không tự chèn).
+   * Xem trước gần giống bản lưu: strip khối Founder AI cũ + rewrite link http(s) + chèn lp-track.js (iframe không tự chèn).
    * Cần slug hợp lệ (khác `l`) và `window` để tính origin / API base.
    */
   const previewSrcDoc = useMemo(() => {

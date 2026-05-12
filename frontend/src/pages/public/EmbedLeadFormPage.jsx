@@ -1,8 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
-import { UknowLeadFormCard } from '../../features/landing/components/UknowLeadFormCard.jsx';
+import { FounderLeadFormCard } from '../../features/landing/components/FounderLeadFormCard.jsx';
 import { useEmbedLeadFormResize } from '../../features/landing/hooks/useEmbedLeadFormResize.js';
 import { useLandingLocale } from '../../features/landing/hooks/useLandingLocale.js';
-import { useUknowLandingForm } from '../../features/landing/hooks/useUknowLandingForm.js';
+import { useFounderLandingForm } from '../../features/landing/hooks/useFounderLandingForm.js';
 
 /**
  * Form lead nhúng iframe — query `slug` = landing_page_slug gửi kèm POST /api/public/leads.
@@ -14,7 +14,7 @@ export default function EmbedLeadFormPage() {
   const rawSlug = String(sp.get('slug') || '').trim().toLowerCase();
   const slug = rawSlug.replace(/^\/+|\/+$/g, '');
   const { locale, copy } = useLandingLocale();
-  const { form, setField, submitting, error, success, submit } = useUknowLandingForm(locale, {
+  const { form, setField, submitting, error, success, submit } = useFounderLandingForm(locale, {
     landingPageSlug: slug || null,
   });
 
@@ -35,9 +35,9 @@ export default function EmbedLeadFormPage() {
   return (
     <div
       ref={resizeRootRef}
-      className="box-border inline-block w-max max-w-full min-h-0 m-0 bg-white font-landing text-uknow-ink antialiased align-top"
+      className="box-border inline-block w-max max-w-full min-h-0 m-0 bg-white font-landing text-founder-ink antialiased align-top"
     >
-      <UknowLeadFormCard
+      <FounderLeadFormCard
         variant="embed"
         locale={locale}
         formCopy={copy.form}

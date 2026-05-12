@@ -23,10 +23,10 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
         </div>
         <p className={`mb-[10px] text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
           Chính sách xử lý dữ liệu cá nhân – Bên xử lý dữ liệu (sau đây gọi tắt là <strong>&quot;Chính sách&quot;</strong>) quy định về những thông tin mà Công ty TNHH Giải pháp số DIGISO thu thập trên hoặc thông qua các website:{' '}
-          <strong>digiso.vn</strong>, <strong>uknow.edu.vn</strong>, <strong>campaign.digiso.vn</strong> và các ứng dụng, dịch vụ liên quan.
+          <strong>digiso.vn</strong>, <strong>founderai.biz</strong>, <strong>campaign.digiso.vn</strong> và các ứng dụng, dịch vụ liên quan.
         </p>
         <p className={`mb-[10px] text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
-          This Data Processing Policy – Processor (hereinafter &quot;<strong>Policy</strong>&quot;) governs information collected by DIGISO Digital Solutions Co., Ltd. through its websites: <strong>digiso.vn</strong>, <strong>uknow.edu.vn</strong>,{' '}
+          This Data Processing Policy – Processor (hereinafter &quot;<strong>Policy</strong>&quot;) governs information collected by DIGISO Digital Solutions Co., Ltd. through its websites: <strong>digiso.vn</strong>, <strong>founderai.biz</strong>,{' '}
           <strong>campaign.digiso.vn</strong> and related applications and services.
         </p>
         <p className={`text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
@@ -63,7 +63,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Hợp đồng:</strong> Hợp đồng cung cấp dịch vụ phần mềm/giải pháp số ký kết giữa DIGISO và Khách hàng.
           </li>
           <li>
-            <strong>Dịch vụ:</strong> Bao gồm các website digiso.vn, uknow.edu.vn, campaign.digiso.vn, ứng dụng và các dịch vụ liên quan.
+            <strong>Dịch vụ:</strong> Bao gồm các website digiso.vn, founderai.biz, campaign.digiso.vn, ứng dụng và các dịch vụ liên quan.
           </li>
           <li>
             <strong>Dữ liệu cá nhân:</strong> Thông tin gắn liền hoặc giúp xác định một cá nhân cụ thể, theo quy định tại Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15.
@@ -86,7 +86,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Agreement:</strong> Service agreement signed between DIGISO and the Customer.
           </li>
           <li>
-            <strong>Services:</strong> Includes digiso.vn, uknow.edu.vn, campaign.digiso.vn websites, applications, and related services.
+            <strong>Services:</strong> Includes digiso.vn, founderai.biz, campaign.digiso.vn websites, applications, and related services.
           </li>
           <li>
             <strong>Personal Data:</strong> Information linked to or that identifies a specific individual, as defined under Vietnam&apos;s Personal Data Protection Law No. 91/2025/QH15.
@@ -125,7 +125,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <li>Hình ảnh cá nhân, CMND/CCCD, số định danh cá nhân, hộ chiếu</li>
             <li>Thông tin tài khoản số, lịch sử hoạt động trực tuyến</li>
             <li>Tình trạng hôn nhân, thông tin quan hệ gia đình (nếu cần thiết)</li>
-            <li>Dữ liệu học tập: tiến độ khóa học, kết quả kiểm tra, chứng chỉ (Uknow.edu.vn)</li>
+            <li>Dữ liệu học tập: tiến độ khóa học, kết quả kiểm tra, chứng chỉ (Founder AI.edu.vn)</li>
             <li>Dữ liệu chiến dịch marketing: thông tin đăng ký, phản hồi chiến dịch (campaign.digiso.vn)</li>
           </ul>
           <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
@@ -134,7 +134,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <li>Personal photo, ID/citizen ID, passport, individual ID number</li>
             <li>Digital account information, online activity history</li>
             <li>Marital status, family relationship information (if required)</li>
-            <li>Learning data: course progress, assessment results, certificates (Uknow.edu.vn)</li>
+            <li>Learning data: course progress, assessment results, certificates (Founder AI.edu.vn)</li>
             <li>Marketing campaign data: registration info, campaign responses (campaign.digiso.vn)</li>
           </ul>
         </div>
@@ -185,7 +185,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
         </div>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
           <li>
-            <strong>Vận hành dịch vụ:</strong> Duy trì và cung cấp đầy đủ tính năng của các nền tảng digiso.vn, uknow.edu.vn, campaign.digiso.vn.
+            <strong>Vận hành dịch vụ:</strong> Duy trì và cung cấp đầy đủ tính năng của các nền tảng digiso.vn, founderai.biz, campaign.digiso.vn.
           </li>
           <li>
             <strong>Cải thiện sản phẩm:</strong> Phân tích hành vi người dùng để nâng cao trải nghiệm và phát triển tính năng mới.
@@ -197,7 +197,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Marketing (campaign.digiso.vn):</strong> Quản lý và theo dõi hiệu quả các chiến dịch marketing với sự đồng ý của người dùng.
           </li>
           <li>
-            <strong>Đào tạo (uknow.edu.vn):</strong> Quản lý tiến độ học, cấp chứng chỉ điện tử, theo dõi kết quả.
+            <strong>Đào tạo (founderai.biz):</strong> Quản lý tiến độ học, cấp chứng chỉ điện tử, theo dõi kết quả.
           </li>
           <li>
             <strong>Phân tích thống kê:</strong> Thông qua Google Analytics — vận hành độc lập và có chính sách bảo mật riêng.
@@ -205,7 +205,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
         </ul>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
           <li>
-            <strong>Service operation:</strong> Maintain and deliver full features of digiso.vn, uknow.edu.vn, campaign.digiso.vn.
+            <strong>Service operation:</strong> Maintain and deliver full features of digiso.vn, founderai.biz, campaign.digiso.vn.
           </li>
           <li>
             <strong>Product improvement:</strong> Analyze user behavior to enhance experience and develop new features.
@@ -217,7 +217,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Marketing (campaign.digiso.vn):</strong> Manage and track marketing campaign performance with user consent.
           </li>
           <li>
-            <strong>Training (uknow.edu.vn):</strong> Manage learning progress, issue digital certificates, track results.
+            <strong>Training (founderai.biz):</strong> Manage learning progress, issue digital certificates, track results.
           </li>
           <li>
             <strong>Analytics:</strong> Via Google Analytics — independently operated with its own privacy policy.

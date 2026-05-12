@@ -384,7 +384,7 @@ export const requestCampaignScheduleRefresh = async () => {
  * Khởi tạo các scheduled jobs
  */
 export const initScheduler = () => {
-  // Đồng bộ khóa học từ UKNOW mỗi ngày lúc 00:30 (12:30 AM)
+  // Đồng bộ khóa học từ Founder AI mỗi ngày lúc 00:30 (12:30 AM)
   // Cron format: phút giờ ngày tháng thứ
   // '30 0 * * *' = 00:30 mỗi ngày
   cron.schedule('30 0 * * *', async () => {
@@ -392,7 +392,7 @@ export const initScheduler = () => {
     try {
       // Sync với userId mặc định = 1
       // Lưu ý: Query lấy TẤT CẢ courses để so sánh, không phân biệt user
-      const result = await coursesController.syncCoursesFromUknow();
+      const result = await coursesController.syncCoursesFromFounderAI();
       if (result.success) {
         console.log('[Scheduler] Đồng bộ khóa học thành công:', {
           totalChecked: result.totalChecked,

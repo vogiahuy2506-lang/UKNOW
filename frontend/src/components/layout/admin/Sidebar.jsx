@@ -27,7 +27,7 @@ import {
   HiOutlineCurrencyDollar,
   HiOutlineShieldCheck,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import logoIcon from '../../../assets/icons/cropped-founder-1-32x32.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ContextSwitcher from '../../ContextSwitcher';
@@ -130,7 +130,7 @@ const userMenuItems = [
  */
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useLocalStorageState('uknow_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
+  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
   const { user, logout, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const menuItems = isSuperAdmin ? superAdminMenuItems : userMenuItems;
@@ -144,7 +144,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const userMenuRef = useRef(null);
   const navRef = useRef(null);
-  useScrollPersistence('uknow_sidebar_scroll', navRef);
+  useScrollPersistence('founder_sidebar_scroll', navRef);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -227,12 +227,12 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
         <div className={`flex items-center flex-1 ${!showLabels ? 'justify-center' : ''}`}>
           <img
             src={logoIcon}
-            alt="UKNOW Logo"
+            alt="Founder AI Logo"
             className={`${showLabels ? 'w-10 h-10' : 'w-12 h-12'} object-contain transition-all duration-300`}
           />
           {showLabels && (
             <div className="ml-3">
-              <h1 className="text-lg font-bold text-gray-900">UKNOW</h1>
+              <h1 className="text-lg font-bold text-gray-900">Founder AI</h1>
               <p className="text-xs text-gray-500">{isSuperAdmin ? 'System Admin' : 'Campaign Management'}</p>
             </div>
           )}

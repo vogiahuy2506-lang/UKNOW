@@ -1,5 +1,5 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
-import { UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../../landing/constants/uknowLandingOptions.js';
+import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../../landing/constants/founder-landing-options.js';
 import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
 import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
@@ -179,7 +179,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
       <LandingLeadsMultiFilterBlock
         title="Lọc theo nghề nghiệp (có thể chọn nhiều)"
-        options={UKNOW_OCCUPATION_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
+        options={founder_OCCUPATION_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
         fieldKey="landingLeadsOccupations"
         selected={occupations}
         setFormData={setFormData}
@@ -195,7 +195,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
       <LandingLeadsMultiFilterBlock
         title="Lọc theo lĩnh vực quan tâm (có thể chọn nhiều)"
-        options={UKNOW_INTEREST_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
+        options={founder_INTEREST_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
         fieldKey="landingLeadsInterests"
         selected={interests}
         setFormData={setFormData}

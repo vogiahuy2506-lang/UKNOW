@@ -34,7 +34,7 @@ const CONTACT_CHANNELS = [
   {
     icon: HiOutlineChat,
     label: 'Zalo OA',
-    value: 'FounderAI Official',
+    value: 'Founder AI Official',
     href: 'https://zalo.me/founderai',
     description: 'Hỗ trợ trực tuyến',
   },
@@ -94,7 +94,7 @@ export default function ContactPage() {
         </h1>
         <p className="text-base md:text-lg text-slate-600 max-w-2xl mx-auto">
           Có câu hỏi về sản phẩm, cần tư vấn gói doanh nghiệp hay muốn hợp tác?
-          Đội ngũ FounderAI sẵn sàng hỗ trợ bạn.
+          Đội ngũ Founder AI sẵn sàng hỗ trợ bạn.
         </p>
       </div>
 
@@ -109,7 +109,7 @@ export default function ContactPage() {
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 mb-2">Cảm ơn bạn!</h3>
                 <p className="text-slate-600 mb-6 max-w-md mx-auto">
-                  Yêu cầu của bạn đã được ghi nhận. Đội ngũ FounderAI sẽ liên hệ lại trong vòng 24 giờ làm việc.
+                  Yêu cầu của bạn đã được ghi nhận. Đội ngũ Founder AI sẽ liên hệ lại trong vòng 24 giờ làm việc.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
