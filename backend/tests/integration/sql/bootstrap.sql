@@ -195,27 +195,88 @@ CREATE TABLE email_templates (
 );
 CREATE INDEX idx_email_templates_user ON email_templates(id_user);
 
--- Bảng stub cho EXISTS subquery trong getAll/getById email-template.
--- KHÔNG dùng để test campaign flow ở đây — chỉ để query không lỗi 42P01.
+-- ─── Campaigns module ─────────────────────────────────────────────────
+-- Bảng tối thiểu để test CRUD campaign + publish/pause/duplicate + run
+-- create-record. KHÔNG cover execute (cần BullMQ + email/zalo senders).
+
 CREATE TABLE campaigns (
-  id            BIGSERIAL PRIMARY KEY,
-  id_user       BIGINT       REFERENCES users(id) ON DELETE CASCADE,
-  campaign_name VARCHAR(255),
-  status        VARCHAR(50)  NOT NULL DEFAULT 'draft',
-  total_sent    INTEGER      NOT NULL DEFAULT 0,
-  total_customers INTEGER    NOT NULL DEFAULT 0,
-  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  id                    BIGSERIAL PRIMARY KEY,
+  id_user               BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  campaign_name         VARCHAR(255) NOT NULL,
+  description           TEXT,
+  campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
+    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed')),
+  status                VARCHAR(50)  NOT NULL DEFAULT 'draft',
+  id_data_source        BIGINT,
+  flow_json             JSONB,
+  landing_page_url      TEXT,
+  landing_page_form_id  BIGINT,
+  start_date            TIMESTAMPTZ,
+  end_date              TIMESTAMPTZ,
+  timezone              VARCHAR(50)  NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+  total_customers       INTEGER      NOT NULL DEFAULT 0,
+  total_sent            INTEGER      NOT NULL DEFAULT 0,
+  total_delivered       INTEGER      NOT NULL DEFAULT 0,
+  total_opened          INTEGER      NOT NULL DEFAULT 0,
+  total_clicked         INTEGER      NOT NULL DEFAULT 0,
+  total_converted       INTEGER      NOT NULL DEFAULT 0,
+  total_revenue         BIGINT       NOT NULL DEFAULT 0,
+  published_at          TIMESTAMPTZ,
+  last_run_at           TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_campaigns_user ON campaigns(id_user);
+CREATE INDEX idx_campaigns_status ON campaigns(status);
 
 CREATE TABLE campaign_nodes (
   id                BIGSERIAL PRIMARY KEY,
-  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_campaign       BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  node_type         VARCHAR(50),
   node_subtype      VARCHAR(50),
+  node_name         VARCHAR(255),
+  node_description  TEXT,
+  position_x        NUMERIC      DEFAULT 0,
+  position_y        NUMERIC      DEFAULT 0,
+  config            JSONB        NOT NULL DEFAULT '{}',
+  execution_order   INTEGER      NOT NULL DEFAULT 1,
+  is_active         BOOLEAN      NOT NULL DEFAULT TRUE,
   id_email_template BIGINT,
   id_zalo_template  BIGINT,
-  config            JSONB        NOT NULL DEFAULT '{}'
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_campaign_nodes_campaign ON campaign_nodes(id_campaign);
+
+CREATE TABLE campaign_connections (
+  id                BIGSERIAL PRIMARY KEY,
+  id_campaign       BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  source_node_id    BIGINT       NOT NULL REFERENCES campaign_nodes(id) ON DELETE CASCADE,
+  target_node_id    BIGINT       NOT NULL REFERENCES campaign_nodes(id) ON DELETE CASCADE,
+  connection_type   VARCHAR(50)  NOT NULL DEFAULT 'default',
+  connection_label  VARCHAR(255),
+  condition_config  JSONB,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_campaign_connections_campaign ON campaign_connections(id_campaign);
+
+CREATE TABLE campaign_runs (
+  id              BIGSERIAL PRIMARY KEY,
+  id_campaign     BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_schedule     BIGINT,
+  run_name        VARCHAR(255),
+  run_type        VARCHAR(20)  NOT NULL DEFAULT 'manual'
+    CHECK (run_type IN ('manual', 'scheduled')),
+  status          VARCHAR(20)  NOT NULL DEFAULT 'running'
+    CHECK (status IN ('running', 'completed', 'failed', 'stopped')),
+  started_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  completed_at    TIMESTAMPTZ,
+  error_message   TEXT,
+  run_metadata    JSONB        NOT NULL DEFAULT '{}',
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
+CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
 
 -- ─── Zalo module (settings + templates) ────────────────────────────────
 -- Schema tối thiểu để CRUD zalo_settings (chỉ cột mà controller truy vấn)
