@@ -444,6 +444,257 @@ CREATE TABLE landing_page_events (
 );
 CREATE INDEX idx_landing_page_events_slug ON landing_page_events(landing_page_slug);
 
+-- ─── Customers (Batch B) ──────────────────────────────────────────────
+-- Bảng khách hàng end-user (target list cho campaign). Multi-tenant theo id_user.
+CREATE TABLE customers (
+  id                      BIGSERIAL PRIMARY KEY,
+  id_user                 BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email                   VARCHAR(255),
+  phone                   VARCHAR(50),
+  zalo_id                 VARCHAR(255),
+  zalo_phone              VARCHAR(50),
+  facebook_id             VARCHAR(255),
+  full_name               VARCHAR(255),
+  gender                  VARCHAR(10),
+  customer_source         VARCHAR(50),
+  source_landing_page     VARCHAR(255),
+  source_form_id          VARCHAR(255),
+  utm_source              VARCHAR(255),
+  utm_medium              VARCHAR(255),
+  utm_campaign            VARCHAR(255),
+  has_purchased           BOOLEAN      NOT NULL DEFAULT FALSE,
+  total_orders            INTEGER      NOT NULL DEFAULT 0,
+  total_spent             BIGINT       NOT NULL DEFAULT 0,
+  last_order_at           TIMESTAMPTZ,
+  email_subscribed        BOOLEAN      NOT NULL DEFAULT TRUE,
+  email_unsubscribed_at   TIMESTAMPTZ,
+  email_hard_bounced      BOOLEAN      NOT NULL DEFAULT FALSE,
+  last_email_sent_at      TIMESTAMPTZ,
+  last_email_opened_at    TIMESTAMPTZ,
+  last_email_clicked_at   TIMESTAMPTZ,
+  last_zalo_sent_at       TIMESTAMPTZ,
+  last_zalo_read_at       TIMESTAMPTZ,
+  zalo_in_group           BOOLEAN,
+  id_zalo_group           BIGINT,
+  zalo_group_joined_at    TIMESTAMPTZ,
+  zalo_is_friend          BOOLEAN,
+  zalo_friend_added_at    TIMESTAMPTZ,
+  notes                   TEXT,
+  custom_fields           JSONB,
+  created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_customers_user  ON customers(id_user);
+CREATE INDEX idx_customers_email ON customers(email);
+CREATE INDEX idx_customers_phone ON customers(phone);
+
+-- ─── Courses (WooCommerce sync) ────────────────────────────────────────
+CREATE TABLE courses (
+  id            BIGSERIAL PRIMARY KEY,
+  course_code   VARCHAR(100),
+  course_name   VARCHAR(500),
+  product_id    INTEGER,
+  price         BIGINT,
+  status        VARCHAR(50),
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_courses_code       ON courses(course_code);
+CREATE INDEX idx_courses_product_id ON courses(product_id);
+
+-- ─── Email messages — outbound emails (tracking ready) ─────────────────
+CREATE TABLE email_messages (
+  id                      BIGSERIAL PRIMARY KEY,
+  id_user                 BIGINT,
+  id_campaign             BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run                  BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_customer             BIGINT       REFERENCES customers(id) ON DELETE SET NULL,
+  id_email_template       BIGINT,
+  id_email_setting        BIGINT,
+  id_node                 BIGINT,
+  message_id              VARCHAR(255),
+  tracking_token          VARCHAR(255) UNIQUE,
+  recipient_email         VARCHAR(255),
+  recipient_name          VARCHAR(255),
+  sender_email            VARCHAR(255),
+  sender_name             VARCHAR(255),
+  subject                 TEXT,
+  body_html               TEXT,
+  body_text               TEXT,
+  email_step              INTEGER,
+  sequence_message_order  INTEGER,
+  status                  VARCHAR(30)  NOT NULL DEFAULT 'pending',
+  open_count              INTEGER      NOT NULL DEFAULT 0,
+  click_count             INTEGER      NOT NULL DEFAULT 0,
+  first_opened_at         TIMESTAMPTZ,
+  last_opened_at          TIMESTAMPTZ,
+  first_clicked_at        TIMESTAMPTZ,
+  last_clicked_at         TIMESTAMPTZ,
+  sent_at                 TIMESTAMPTZ,
+  delivered_at            TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_email_messages_customer ON email_messages(id_customer);
+CREATE INDEX idx_email_messages_token    ON email_messages(tracking_token);
+CREATE INDEX idx_email_messages_run      ON email_messages(id_run);
+
+-- ─── Zalo messages — outbound (group/person) ───────────────────────────
+CREATE TABLE zalo_messages (
+  id                BIGSERIAL PRIMARY KEY,
+  id_user           BIGINT,
+  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_customer       BIGINT       REFERENCES customers(id) ON DELETE SET NULL,
+  id_zalo_template  BIGINT,
+  id_node           BIGINT,
+  tracking_token    VARCHAR(255) UNIQUE,
+  recipient_phone   VARCHAR(50),
+  recipient_uid     VARCHAR(255),
+  recipient_name    VARCHAR(255),
+  message_content   TEXT,
+  click_count       INTEGER      NOT NULL DEFAULT 0,
+  status            VARCHAR(30)  NOT NULL DEFAULT 'pending',
+  sent_at           TIMESTAMPTZ,
+  first_clicked_at  TIMESTAMPTZ,
+  last_clicked_at   TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_zalo_messages_customer ON zalo_messages(id_customer);
+CREATE INDEX idx_zalo_messages_token    ON zalo_messages(tracking_token);
+
+-- ─── Campaign-customer pivot ───────────────────────────────────────────
+-- Theo dõi tham gia + counters tương tác per (campaign, customer).
+CREATE TABLE campaign_customers (
+  id                          BIGSERIAL PRIMARY KEY,
+  id_campaign                 BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_customer                 BIGINT       NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  status                      VARCHAR(30),
+  uknow_status                VARCHAR(30),
+  has_opened                  BOOLEAN      NOT NULL DEFAULT FALSE,
+  has_clicked                 BOOLEAN      NOT NULL DEFAULT FALSE,
+  email_received_count        INTEGER      NOT NULL DEFAULT 0,
+  email_opened_count          INTEGER      NOT NULL DEFAULT 0,
+  email_clicked_count         INTEGER      NOT NULL DEFAULT 0,
+  joined_at                   TIMESTAMPTZ,
+  first_email_sent_at         TIMESTAMPTZ,
+  last_email_sent_at          TIMESTAMPTZ,
+  first_email_opened_at       TIMESTAMPTZ,
+  last_email_opened_at        TIMESTAMPTZ,
+  first_email_clicked_at      TIMESTAMPTZ,
+  last_email_clicked_at       TIMESTAMPTZ,
+  last_activity_at            TIMESTAMPTZ,
+  created_at                  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at                  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_campaign_customer UNIQUE (id_campaign, id_customer)
+);
+CREATE INDEX idx_campaign_customers_customer ON campaign_customers(id_customer);
+CREATE INDEX idx_campaign_customers_campaign ON campaign_customers(id_campaign);
+
+-- ─── Campaign participation (1-1 record per campaign+customer) ─────────
+CREATE TABLE campaign_participations (
+  id            BIGSERIAL PRIMARY KEY,
+  id_customer   BIGINT       NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  id_campaign   BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_run        BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  joined_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_campaign_participation UNIQUE (id_customer, id_campaign)
+);
+CREATE INDEX idx_campaign_participations_customer ON campaign_participations(id_customer);
+CREATE INDEX idx_campaign_participations_campaign ON campaign_participations(id_campaign);
+
+-- ─── Customer purchases (order from WooCommerce or campaign-attributed) ─
+CREATE TABLE customer_purchases (
+  id                BIGSERIAL PRIMARY KEY,
+  id_customer       BIGINT       NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_email_message  BIGINT       REFERENCES email_messages(id) ON DELETE SET NULL,
+  id_zalo_message   BIGINT       REFERENCES zalo_messages(id) ON DELETE SET NULL,
+  id_course         BIGINT       REFERENCES courses(id) ON DELETE SET NULL,
+  order_id          VARCHAR(100),
+  order_key         VARCHAR(255),
+  order_status      VARCHAR(50),
+  product_name      VARCHAR(500),
+  product_type      VARCHAR(50),
+  amount            BIGINT,
+  currency          VARCHAR(10),
+  payment_method    VARCHAR(100),
+  purchase_date     TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_customer_purchases_customer ON customer_purchases(id_customer);
+CREATE INDEX idx_customer_purchases_campaign ON customer_purchases(id_campaign);
+CREATE INDEX idx_customer_purchases_order    ON customer_purchases(order_id);
+
+-- ─── Customer journey — event log (open/click/purchase/etc.) ───────────
+CREATE TABLE customer_journey (
+  id                BIGSERIAL PRIMARY KEY,
+  id_customer       BIGINT       NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_node           BIGINT,
+  id_email_message  BIGINT       REFERENCES email_messages(id) ON DELETE SET NULL,
+  id_zalo_message   BIGINT       REFERENCES zalo_messages(id) ON DELETE SET NULL,
+  event_type        VARCHAR(50)  NOT NULL,
+  event_channel     VARCHAR(30),
+  event_data        JSONB,
+  ip_address        VARCHAR(45),
+  user_agent        TEXT,
+  device_type       VARCHAR(50),
+  country           VARCHAR(50),
+  city              VARCHAR(100),
+  event_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_customer_journey_customer ON customer_journey(id_customer);
+CREATE INDEX idx_customer_journey_campaign ON customer_journey(id_campaign);
+CREATE INDEX idx_customer_journey_event_at ON customer_journey(event_at);
+
+-- ─── Template files (attachments) ──────────────────────────────────────
+CREATE TABLE template_files (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT,
+  storage_key   VARCHAR(500) NOT NULL UNIQUE,
+  original_name VARCHAR(500),
+  display_name  VARCHAR(500),
+  mime_type     VARCHAR(200),
+  file_size     BIGINT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_template_files_key ON template_files(storage_key);
+
+-- ─── File access events (download tracking) ────────────────────────────
+CREATE TABLE file_access_events (
+  id           BIGSERIAL PRIMARY KEY,
+  file_id      BIGINT,
+  campaign_id  BIGINT,
+  customer_id  BIGINT,
+  email        VARCHAR(255),
+  event_type   VARCHAR(30),
+  ip_address   VARCHAR(45),
+  user_agent   TEXT,
+  occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
+
+-- ─── Landing pages (dashboard stats source) ────────────────────────────
+CREATE TABLE landing_pages (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slug          VARCHAR(100) NOT NULL,
+  title         VARCHAR(500),
+  status        VARCHAR(20)  NOT NULL DEFAULT 'draft',
+  is_published  BOOLEAN      NOT NULL DEFAULT FALSE,
+  published_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_landing_pages_user ON landing_pages(id_user);
+CREATE INDEX idx_landing_pages_slug ON landing_pages(slug);
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
