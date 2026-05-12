@@ -25,13 +25,13 @@ export function FounderLandingCoursesHighlight({ courses, items, landingSlug = '
 
   const tracked = useCallback(
     (targetUrl) => {
-      const raw = String(targetUrl || '').trim() || 'https://Founder AI.edu.vn/';
+      const raw = String(targetUrl || '').trim() || 'https://founderai.biz/';
       return buildLandingTrackGoUrl(slug, raw);
     },
     [slug]
   );
 
-  const catalogHref = useMemo(() => tracked('https://Founder AI.edu.vn/'), [tracked]);
+  const catalogHref = useMemo(() => tracked('https://founderai.biz/'), [tracked]);
 
   const grads = [
     'from-[#148C94] to-[#1DA1AB]',
@@ -104,7 +104,7 @@ export function FounderLandingCoursesHighlight({ courses, items, landingSlug = '
         {list.map((c, i) => {
           const grad = grads[i % grads.length];
           const Icon = FALLBACK_ICONS[i % FALLBACK_ICONS.length];
-          const href = tracked(String(c.linkUrl || '').trim() || 'https://Founder AI.edu.vn/');
+          const href = tracked(String(c.linkUrl || '').trim() || 'https://founderai.biz/');
           const hasImage = Boolean(c.imageUrl && String(c.imageUrl).trim());
 
           return (

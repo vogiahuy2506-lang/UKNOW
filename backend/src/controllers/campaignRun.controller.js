@@ -36,7 +36,7 @@ class CampaignRunController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { campaignId, scheduleId, limit = 50 } = req.query;
 
       // Ép sang `timestamptz` để node-pg trả về instant UTC đúng trong JSON.
@@ -128,7 +128,7 @@ class CampaignRunController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
       const {
         executionLogsLimit: execLimitRaw,
@@ -400,7 +400,7 @@ class CampaignRunController {
   async stopById(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const runId = Number.parseInt(req.params.id, 10);
 
       if (!Number.isFinite(runId)) {

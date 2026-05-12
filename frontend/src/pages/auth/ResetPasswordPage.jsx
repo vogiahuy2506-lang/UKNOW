@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import api from '../../services/api';
@@ -8,21 +8,11 @@ const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const token = searchParams.get('token');
 
-  const [tokenState, setTokenState] = useState('loading'); // loading | valid | invalid
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const password = watch('password');
-
-  // Validate token khi load trang
-  useEffect(() => {
-    if (!token) { setTokenState('invalid'); return; }
-
-    // Thử gọi reset với token rỗng chỉ để check — thay vào đó ta lazy-validate khi submit
-    // Chỉ check token tồn tại ở client side, server sẽ validate khi submit
-    setTokenState('valid');
-  }, [token]);
 
   const onSubmit = async (values) => {
     setIsSubmitting(true);

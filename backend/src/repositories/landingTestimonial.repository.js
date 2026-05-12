@@ -115,6 +115,7 @@ class LandingTestimonialRepository {
          location_en,
          image_url,
          is_active,
+         id_user,
          created_at,
          updated_at
        FROM landing_testimonials

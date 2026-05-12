@@ -182,6 +182,7 @@ const AdminMembersPage = () => {
   useEffect(() => {
     fetchMembers();
     fetchPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ fetch 1 lần lúc mount
   }, []);
 
   // Re-fetch khi filter thay đổi (debounce không cần thiết ở đây vì có nút tìm kiếm)
@@ -191,7 +192,6 @@ const AdminMembersPage = () => {
   };
 
   const handleToggleStatus = async (member) => {
-    setActiveMenu(null);
     try {
       setStatusUpdatingId(member.id);
       await adminMembersApiService.toggleStatus(member.id);

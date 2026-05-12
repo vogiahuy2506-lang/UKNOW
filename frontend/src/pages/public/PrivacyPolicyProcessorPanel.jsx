@@ -125,7 +125,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <li>Hình ảnh cá nhân, CMND/CCCD, số định danh cá nhân, hộ chiếu</li>
             <li>Thông tin tài khoản số, lịch sử hoạt động trực tuyến</li>
             <li>Tình trạng hôn nhân, thông tin quan hệ gia đình (nếu cần thiết)</li>
-            <li>Dữ liệu học tập: tiến độ khóa học, kết quả kiểm tra, chứng chỉ (Founder AI.edu.vn)</li>
+            <li>Dữ liệu học tập: tiến độ khóa học, kết quả kiểm tra, chứng chỉ (founderai.biz)</li>
             <li>Dữ liệu chiến dịch marketing: thông tin đăng ký, phản hồi chiến dịch (campaign.digiso.vn)</li>
           </ul>
           <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
@@ -134,7 +134,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <li>Personal photo, ID/citizen ID, passport, individual ID number</li>
             <li>Digital account information, online activity history</li>
             <li>Marital status, family relationship information (if required)</li>
-            <li>Learning data: course progress, assessment results, certificates (Founder AI.edu.vn)</li>
+            <li>Learning data: course progress, assessment results, certificates (founderai.biz)</li>
             <li>Marketing campaign data: registration info, campaign responses (campaign.digiso.vn)</li>
           </ul>
         </div>

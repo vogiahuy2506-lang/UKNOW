@@ -35,6 +35,7 @@ const ActivatePage = () => {
           setErrorMessage(err?.response?.data?.message || 'Link kích hoạt không hợp lệ hoặc đã hết hạn.');
         }
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ activate 1 lần (guard bằng called.current)
   }, []);
 
   if (state === 'loading') {

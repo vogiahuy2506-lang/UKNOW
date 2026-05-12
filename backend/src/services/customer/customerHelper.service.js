@@ -94,13 +94,13 @@ class CustomerHelperService {
    * Normalize incoming source to supported domain values.
    *
    * @param {unknown} value
-   * @returns {'Founder AI'|'uknow_campaign'|null}
+   * @returns {'founderai'|'uknow_campaign'|null}
    */
   normalizeCustomerSource(value) {
     const raw = value === null || value === undefined ? '' : String(value).trim().toLowerCase();
     if (!raw) return null;
 
-    if (['Founder AI', 'woocommerce', 'learnpress'].includes(raw)) return 'Founder AI';
+    if (['founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress'].includes(raw)) return 'founderai';
     if (['uknow_campaign', 'campaign', 'campaign_uknow'].includes(raw)) return 'uknow_campaign';
     return null;
   }

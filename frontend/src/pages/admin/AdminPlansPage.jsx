@@ -45,6 +45,7 @@ const AdminPlansPage = () => {
   useEffect(() => {
     if (tab === 'public') fetchPlans();
     else fetchCustomPlans(showHidden);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPlans/fetchCustomPlans stable trong scope
   }, [tab, showHidden]);
 
   const handleRefresh = () => tab === 'public' ? fetchPlans() : fetchCustomPlans();

@@ -194,7 +194,7 @@ class CampaignController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const { page = 1, limit = 10, status, type, search } = req.query;
       const data = await campaignCrudService.getAllCampaigns({
         userId,
@@ -227,7 +227,7 @@ class CampaignController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const { id } = req.params;
       const campaign = await campaignCrudService.getCampaignById({
         userId,
@@ -264,7 +264,7 @@ class CampaignController {
 
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const {
         campaignName,
         description,
@@ -387,7 +387,7 @@ class CampaignController {
       await client.query('BEGIN');
 
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
       const {
@@ -555,7 +555,7 @@ class CampaignController {
       await client.query('BEGIN');
       
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
 
@@ -668,7 +668,7 @@ class CampaignController {
   async publish(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.publishCampaign({
@@ -709,7 +709,7 @@ class CampaignController {
   async pause(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.pauseCampaign({
@@ -763,7 +763,7 @@ class CampaignController {
   async run(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const campaignId = parseInt(req.params.id, 10);
       const source = String(req.body?.source || '').trim().toLowerCase();
       const scheduleId = Number.isFinite(parseInt(req.body?.scheduleId, 10))
@@ -987,7 +987,7 @@ class CampaignController {
   async duplicate(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const { id } = req.params;
       const { campaignName } = req.body;
       const duplicated = await campaignCrudService.duplicateCampaign({

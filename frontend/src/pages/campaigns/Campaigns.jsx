@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import {
   HiOutlinePlus,
   HiOutlineSearch,
-  HiOutlineFilter,
   HiOutlineDotsVertical,
   HiOutlinePlay,
   HiOutlinePause,
@@ -61,6 +60,7 @@ const Campaigns = () => {
 
   useEffect(() => {
     fetchCampaigns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch theo filter/page
   }, [pagination.page, statusFilter, typeFilter]);
 
   useEffect(() => {

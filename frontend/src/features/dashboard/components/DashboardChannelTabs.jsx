@@ -293,8 +293,6 @@ const DashboardChannelTabs = ({
     chartConfig.some((cfg) => (item[cfg.key] || 0) > 0)
   );
 
-  const activeOption = CHANNEL_OPTIONS.find((opt) => opt.id === activeChannel) || CHANNEL_OPTIONS[0];
-
   const chartTitle = {
     all: 'Tương tác tổng hợp theo kênh',
     email: 'Hiệu quả Email + Đơn hàng Email',

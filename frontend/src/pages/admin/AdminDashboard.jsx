@@ -294,7 +294,7 @@ const AdminDashboard = () => {
             <h1 className="text-2xl font-bold">Dashboard hệ thống — Founder AI</h1>
             <p className="text-sm text-gray-500 mt-0.5">Xuất lúc {printDate}</p>
           </div>
-          <p className="text-xs text-gray-400">Founder AI.vn</p>
+          <p className="text-xs text-gray-400">founderai.biz</p>
         </div>
 
         {/* KPI grid */}

@@ -2,16 +2,16 @@
  * Gỡ các khối do hệ thống tự chèn trước đó (để lần lưu sau idempotent, tránh nhân đôi iframe/script).
  *
  * Luồng:
- * 1. Xóa `<section data-Founder AI-lp-embed>` (iframe form).
- * 2. Xóa `<div data-Founder AI-lp-injected>` và `<script ... lp-track.js ...>`.
+ * 1. Xóa `<section data-founder-lp-embed>` (iframe form).
+ * 2. Xóa `<div data-founder-lp-injected>` và `<script ... lp-track.js ...>`.
  *
  * @param {string} html
  * @returns {string}
  */
-export function stripUknowLandingAutoBlocks(html) {
+export function stripFounderLandingAutoBlocks(html) {
   let out = String(html ?? '');
-  out = out.replace(/<section\s[^>]*data-Founder AI-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
-  out = out.replace(/<div\s[^>]*data-Founder AI-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
+  out = out.replace(/<section\s[^>]*data-founder-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
+  out = out.replace(/<div\s[^>]*data-founder-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
   return out;
@@ -90,7 +90,7 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return String(html ?? '');
-  let out = stripUknowLandingAutoBlocks(html);
+  let out = stripFounderLandingAutoBlocks(html);
   out = rewriteHttpAnchorsToTrack(out, { slug: s, apiBase });
   out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
   return out;
@@ -100,7 +100,7 @@ export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }
  * Bổ sung script tracking vào chuỗi HTML (iframe form không tự chèn — admin copy từ CMS).
  *
  * Luồng:
- * 1. Nếu HTML đã có marker `data-Founder AI-lp-injected` thì bỏ qua toàn bộ (tránh lặp).
+ * 1. Nếu HTML đã có marker `data-founder-lp-injected` thì bỏ qua toàn bộ (tránh lặp).
  * 2. Nếu đã có `lp-track.js` thì không chèn script trùng.
  * 3. Chèn thẻ script `lp-track.js` (defer) với `data-api-base` + `data-slug` trước `</body>`.
  *
@@ -121,7 +121,7 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   if (!origin || !api) return out;
 
   // Marker tổng — admin/preview có thể chèn một lần để tránh lặp khi merge tay
-  if (out.includes('data-Founder AI-lp-injected="1"')) {
+  if (out.includes('data-founder-lp-injected="1"')) {
     return out;
   }
 
@@ -131,7 +131,7 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
 
   const scriptBlock = hasTrackScript
     ? ''
-    : `<div data-Founder AI-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+    : `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
 
   const injectBlock = `${scriptBlock}`;
   if (!injectBlock.trim()) return out;

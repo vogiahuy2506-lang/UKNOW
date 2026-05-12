@@ -32,7 +32,7 @@ class UknowSyncService {
             email: customer.email,
             phone: customer.billing?.phone,
             fullName: ctx.formatName(customer.first_name, customer.last_name),
-            customerSource: 'Founder AI',
+            customerSource: 'founderai',
             hasPurchased: (parseInt(customer.orders_count || 0, 10) || 0) > 0,
             totalOrders: parseInt(customer.orders_count || 0, 10) || 0,
             totalSpent: ctx.parseMoney(customer.total_spent),

@@ -25,7 +25,7 @@ export function FounderLandingFinalCta({ finalCta }) {
           {finalCta.button}
         </a>
         <a
-          href="https://Founder AI.edu.vn/"
+          href="https://founderai.biz/"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block rounded-lg border-2 border-white/35 px-8 py-3.5 text-[0.95rem] font-semibold text-white transition hover:border-white"

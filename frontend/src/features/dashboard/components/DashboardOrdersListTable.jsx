@@ -7,7 +7,7 @@ import {
   formatDateTime,
   getCustomerDisplayName,
 } from '../../customers/utils/customerDisplay.helpers';
-import { formatEventType, normalizeJourneyDescription } from '../../customers/utils/customerJourney.helpers';
+import { normalizeJourneyDescription } from '../../customers/utils/customerJourney.helpers';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -332,24 +332,13 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
     fetchAll();
     abortRef.current = () => { cancelled = true; };
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch khi customerId/campaignId đổi, không cần react với mọi field của order
   }, [order?.customerId, order?.campaignId]);
 
-  if (!order) return null;
-
-  const statusCfg = getOrderStatusCfg(order.statusGroup);
-  const channelCfg = getChannelCfg(order.campaignType);
-
-  const displayName = customer
-    ? (getCustomerDisplayName(customer) || `Khách hàng #${order.customerId}`)
-    : (order.customerName || `Khách hàng #${order.customerId || '?'}`);
-
-  const customerEmail = customer?.email || order.customerEmail;
-  const customerPhone = customer?.phone || order.customerPhone;
-  const customerZaloId = customer?.zaloId || order.customerZaloId;
-
   // Build journey timeline filtered to only events belonging to order.runId
+  // NOTE: useMemo phải đặt trước mọi early return để tuân thủ Rules of Hooks
   const journeyTimeline = useMemo(() => {
-    if (!journey) return [];
+    if (!journey || !order) return [];
     const targetRunId = order?.runId ? Number(order.runId) : null;
     const targetOrderKey = normalizeOrderReference(order?.orderRef || order?.orderId);
     const emailById = new Map(
@@ -465,7 +454,21 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
     return [...events, ...purchases]
       .filter((e) => e.at)
       .sort((a, b) => new Date(a.at) - new Date(b.at));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ react với các field cần thiết của order
   }, [journey, order?.runId, order?.orderId, order?.orderRef]);
+
+  if (!order) return null;
+
+  const statusCfg = getOrderStatusCfg(order.statusGroup);
+  const channelCfg = getChannelCfg(order.campaignType);
+
+  const displayName = customer
+    ? (getCustomerDisplayName(customer) || `Khách hàng #${order.customerId}`)
+    : (order.customerName || `Khách hàng #${order.customerId || '?'}`);
+
+  const customerEmail = customer?.email || order.customerEmail;
+  const customerPhone = customer?.phone || order.customerPhone;
+  const customerZaloId = customer?.zaloId || order.customerZaloId;
 
   const DetailRow = ({ label, value, children }) => (
     <div className="flex flex-col gap-0.5 py-2.5 border-b border-gray-100 last:border-0">
@@ -705,7 +708,7 @@ const DashboardOrdersListTable = ({
   onChangePage,
 }) => {
   const navigate = useNavigate();
-  const items = ordersData?.items || [];
+  const items = useMemo(() => ordersData?.items || [], [ordersData?.items]);
   const pagination = ordersData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
   const [searchQuery, setSearchQuery] = useState('');

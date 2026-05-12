@@ -7,7 +7,54 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit",
+    "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --coverage"
+  },
+  "jest": {
+    "transform": {},
+    "clearMocks": true,
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js",
+      "!src/config/**",
+      "!src/**/__tests__/**",
+      "!src/**/*.spec.js"
+    ],
+    "coverageReporters": [
+      "text-summary",
+      "lcov",
+      "html",
+      "json-summary"
+    ],
+    "coverageDirectory": "coverage",
+    "projects": [
+      {
+        "displayName": "unit",
+        "testEnvironment": "node",
+        "transform": {},
+        "clearMocks": true,
+        "testMatch": [
+          "<rootDir>/src/**/__tests__/**/*.spec.js",
+          "<rootDir>/src/**/*.spec.js"
+        ]
+      },
+      {
+        "displayName": "integration",
+        "testEnvironment": "node",
+        "transform": {},
+        "clearMocks": true,
+        "testTimeout": 15000,
+        "testMatch": [
+          "<rootDir>/tests/integration/**/*.test.js"
+        ],
+        "globalSetup": "<rootDir>/tests/integration/setup.js",
+        "globalTeardown": "<rootDir>/tests/integration/teardown.js"
+      }
+    ]
   },
   "keywords": [
     "campaign",
@@ -46,6 +93,7 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "supertest": "^7.2.2"
   }
 }

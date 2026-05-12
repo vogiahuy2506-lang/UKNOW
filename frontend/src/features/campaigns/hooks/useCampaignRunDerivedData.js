@@ -72,7 +72,7 @@ const useCampaignRunDerivedData = ({
      * 3) Log kết thúc hệ thống (nếu có)
      */
     return runEndLog ? [...systemLogs, ...nodeLogs, runEndLog] : [...systemLogs, ...nodeLogs];
-  }, [selectedRunDetail, selectedRunDetail?.executionLogs, flowOrderByNodeId]);
+  }, [selectedRunDetail, flowOrderByNodeId]);
 
   const filteredActiveCampaigns = useMemo(() => {
     if (selectedLogCampaignId) {
