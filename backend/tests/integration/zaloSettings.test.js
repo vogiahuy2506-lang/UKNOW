@@ -163,13 +163,7 @@ describe('GET /api/zalo/accounts — list', () => {
     expect(acc.createdBy).toEqual({ name: expect.any(String) });
   });
 
-  // BUG pre-existing: controller dùng `req.user.role_code` nhưng auth.middleware
-  // chỉ set `req.user.role`. Kết quả: với role=admin, `isAdmin = false` → admin
-  // chỉ thấy account của chính mình thay vì tất cả owner. Vì là pre-existing bug
-  // (không phải chỗ refactor đợt này), test giữ ở `it.skip` để khi nào fix mismatch
-  // role/role_code sẽ tự bật lên + pass.
-  // eslint-disable-next-line jest/no-disabled-tests
-  it.skip('admin (role=admin) thấy account của tất cả owner — sẽ pass khi sửa role_code → role', async () => {
+  it('admin (role=admin) thấy account của tất cả owner', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const ownerA = await createUser({ role: 'user', username: 'oa' });
     const ownerB = await createUser({ role: 'user', username: 'ob' });
