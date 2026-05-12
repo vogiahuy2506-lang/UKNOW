@@ -1,41 +1,56 @@
 #!/usr/bin/env sh
 # UKNOW pre-push hook
 # --------------------
-# Chạy unit test backend trước khi push để catch regression nhanh (5–10s)
-# thay vì đợi CI 60s+.
+# Chạy nhanh các test có thể chạy không cần Postgres local trước khi push để
+# catch regression sớm (5–10s) thay vì đợi CI 60s+.
 #
 # Skip khi:
-#   - Push không có file backend nào thay đổi.
-#   - Push tới branch không phải feature (vd. main/develop — CI tự gate).
+#   - Push không có file backend/frontend thay đổi.
 #   - Dev cần khẩn cấp:  `git push --no-verify`
 #
-# Integration test KHÔNG chạy ở đây vì cần Postgres local.
+# Backend integration test KHÔNG chạy ở đây vì cần Postgres local.
 # CI sẽ luôn chạy integration trên service container.
 
-REMOTE="$1"
-URL="$2"
-
-# Nếu không có thay đổi backend → bỏ qua hook hoàn toàn
-if ! git diff --name-only @{push}..HEAD 2>/dev/null | grep -q '^backend/'; then
-  # Fallback cho branch mới chưa từng push: so với origin/main
-  base_ref=$(git merge-base HEAD origin/main 2>/dev/null)
-  if [ -z "$base_ref" ] || ! git diff --name-only "$base_ref"..HEAD | grep -q '^backend/'; then
-    echo "[pre-push] Không có thay đổi backend — skip unit test."
-    exit 0
-  fi
+# Tìm base ref để so sánh: trước hết là remote tracking, fallback merge-base với origin/main.
+DIFF_BASE=$(git rev-parse @{push} 2>/dev/null)
+if [ -z "$DIFF_BASE" ]; then
+  DIFF_BASE=$(git merge-base HEAD origin/main 2>/dev/null)
+fi
+if [ -z "$DIFF_BASE" ]; then
+  echo "[pre-push] Không xác định được base ref — bỏ qua hook."
+  exit 0
 fi
 
-echo "[pre-push] Chạy backend unit test trước khi push..."
+CHANGED=$(git diff --name-only "$DIFF_BASE"..HEAD)
+HAS_BACKEND=$(echo "$CHANGED" | grep -c '^backend/' || true)
+HAS_FRONTEND=$(echo "$CHANGED" | grep -c '^frontend/' || true)
+
+if [ "$HAS_BACKEND" -eq 0 ] && [ "$HAS_FRONTEND" -eq 0 ]; then
+  echo "[pre-push] Không có thay đổi backend/frontend — skip test."
+  exit 0
+fi
+
 echo "[pre-push] Bỏ qua nhanh:  git push --no-verify"
-echo ""
 
-cd backend || exit 1
+if [ "$HAS_BACKEND" -gt 0 ]; then
+  echo "[pre-push] Chạy backend unit test..."
+  (cd backend && npm run test:unit --silent -- --ci) || {
+    echo ""
+    echo "[pre-push] ❌ Backend unit test FAIL — fix trước hoặc dùng --no-verify để bypass."
+    exit 1
+  }
+  echo "[pre-push] ✅ Backend unit test pass."
+fi
 
-if ! npm run test:unit --silent -- --ci; then
-  echo ""
-  echo "[pre-push] ❌ Unit test FAIL — fix trước hoặc dùng --no-verify để bypass."
-  exit 1
+if [ "$HAS_FRONTEND" -gt 0 ]; then
+  echo "[pre-push] Chạy frontend Vitest..."
+  (cd frontend && npm run test:run --silent) || {
+    echo ""
+    echo "[pre-push] ❌ Frontend test FAIL — fix trước hoặc dùng --no-verify để bypass."
+    exit 1
+  }
+  echo "[pre-push] ✅ Frontend test pass."
 fi
 
 echo ""
-echo "[pre-push] ✅ Unit test pass — tiến hành push."
+echo "[pre-push] ✅ Tất cả nhanh-test pass — tiến hành push."
