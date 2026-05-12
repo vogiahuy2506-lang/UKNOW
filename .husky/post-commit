@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+# Tự động strip "Co-authored-by: Cursor <cursoragent@cursor.com>" khỏi commit
+# message ngay sau khi commit được tạo.
+#
+# Vì sao cần hook này:
+#   Cursor IDE/Agent tự động thêm trailer "Co-authored-by: Cursor" vào mọi
+#   commit do agent tạo. Trailer này không phản ánh tác giả thực sự nên team
+#   quyết định loại bỏ. Hook này chạy sau mỗi commit, kiểm tra trailer và
+#   amend nếu cần — chỉ amend khi thực sự có thay đổi để tránh vòng lặp
+#   vô hạn (post-commit gọi commit --amend lại trigger post-commit).
+#
+# Bypass: GIT_SKIP_COAUTHOR_STRIP=1 git commit -m "..."
+
+if [ -n "$GIT_SKIP_COAUTHOR_STRIP" ]; then
+  exit 0
+fi
+
+# Tránh đệ quy: nếu đang trong tiến trình amend từ chính hook này thì thoát.
+if [ -n "$HUSKY_AMEND_IN_PROGRESS" ]; then
+  exit 0
+fi
+
+CURRENT_MSG=$(git log -1 --format=%B)
+STRIPPED_MSG=$(echo "$CURRENT_MSG" | sed '/^Co-authored-by: Cursor <cursoragent@cursor\.com>$/d')
+
+if [ "$CURRENT_MSG" != "$STRIPPED_MSG" ]; then
+  HUSKY_AMEND_IN_PROGRESS=1 git commit --amend -m "$STRIPPED_MSG" --no-verify --no-edit >/dev/null 2>&1
+fi
+
+exit 0
