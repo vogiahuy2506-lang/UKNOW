@@ -16,7 +16,7 @@ class VerificationService {
   async saveVerificationCode(email, code, type = 'email_verification', expiresInMinutes = 10) {
     // Đánh dấu các mã cũ của email này là đã sử dụng
     await db.query(
-      'UPDATE verification_codes SET is_used = TRUE WHERE email = $1 AND type = $2 AND is_used = FALSE',
+      'UPDATE verification_codes SET is_used = TRUE WHERE LOWER(email) = LOWER($1) AND type = $2 AND is_used = FALSE',
       [email, type]
     );
 
@@ -37,7 +37,7 @@ class VerificationService {
   async verifyCode(email, code, type = 'email_verification') {
     const result = await db.query(
       `SELECT * FROM verification_codes
-       WHERE email = $1 AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
+       WHERE LOWER(email) = LOWER($1) AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
       [email, code, type]
     );

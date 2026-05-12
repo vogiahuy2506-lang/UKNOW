@@ -49,7 +49,7 @@ class AuthController {
       }
 
       const existingEmail = await client.query(
-        'SELECT id FROM users WHERE email = $1',
+        'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
         [email]
       );
       if (existingEmail.rows.length > 0) {
@@ -92,6 +92,18 @@ class AuthController {
       });
     } catch (error) {
       console.error('Register error:', error);
+      
+      // Xử lý lỗi unique constraint từ DB (nếu manual check bị lọt do race condition)
+      if (error.code === '23505') {
+        const detail = error.detail || '';
+        if (detail.includes('email')) {
+          return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
+        }
+        if (detail.includes('username')) {
+          return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
+        }
+      }
+
       return res.status(500).json({ success: false, message: 'Lỗi server' });
     } finally {
       client.release();
