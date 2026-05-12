@@ -109,7 +109,8 @@ describe('POST /api/customers — create', () => {
 
     const { rows } = await db.query(`SELECT id_user, customer_source, notes FROM customers WHERE id = $1`, [res.body.data.id]);
     expect(Number(rows[0].id_user)).toBe(Number(user.id));
-    expect(rows[0].customer_source).toBe('uknow');
+    // normalizeCustomerSource('uknow') → 'founderai' (rebrand).
+    expect(rows[0].customer_source).toBe('founderai');
     expect(rows[0].notes).toBe('test note');
   });
 
