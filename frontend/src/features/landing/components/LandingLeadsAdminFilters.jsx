@@ -1,6 +1,6 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
-import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/FounderLandingOptions.js';
+import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách để giảm re-render.
