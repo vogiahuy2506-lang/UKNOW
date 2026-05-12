@@ -494,15 +494,21 @@ CREATE INDEX idx_customers_phone ON customers(phone);
 
 -- ─── Courses (WooCommerce sync) ────────────────────────────────────────
 CREATE TABLE courses (
-  id            BIGSERIAL PRIMARY KEY,
-  course_code   VARCHAR(100),
-  course_name   VARCHAR(500),
-  product_id    INTEGER,
-  price         BIGINT,
-  status        VARCHAR(50),
-  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  id              BIGSERIAL PRIMARY KEY,
+  id_user         BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  course_code     VARCHAR(100),
+  course_name     VARCHAR(500),
+  product_id      INTEGER,
+  price           BIGINT,
+  original_price  BIGINT,
+  description     TEXT,
+  category        VARCHAR(255),
+  thumbnail_url   TEXT,
+  status          VARCHAR(50),
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_courses_user       ON courses(id_user);
 CREATE INDEX idx_courses_code       ON courses(course_code);
 CREATE INDEX idx_courses_product_id ON courses(product_id);
 
