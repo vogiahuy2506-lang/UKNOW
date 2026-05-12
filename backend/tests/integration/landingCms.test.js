@@ -307,8 +307,8 @@ describe('Featured courses authorization', () => {
 
 describe('GET /api/admin/landing-featured-courses', () => {
   it('trả danh sách của user (kèm cả inactive), sort_order ASC', async () => {
-    const me = await createUser({ username: 'fc-list' });
-    const other = await createUser({ username: 'fc-other' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-list' } });
+    const other = await createUserWithPlan({ userOverrides: { username: 'fc-other' } });
     await insertFeaturedCourse({ idUser: me.id, sortOrder: 2, titleVi: 'B' });
     await insertFeaturedCourse({ idUser: me.id, sortOrder: 1, titleVi: 'A', isActive: false });
     await insertFeaturedCourse({ idUser: other.id, sortOrder: 0, titleVi: 'Foreign' });
@@ -323,7 +323,7 @@ describe('GET /api/admin/landing-featured-courses', () => {
 
 describe('POST /api/admin/landing-featured-courses', () => {
   it('thiếu titleVi → 400', async () => {
-    const me = await createUser({ username: 'fc-c1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-c1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-featured-courses')
@@ -334,7 +334,7 @@ describe('POST /api/admin/landing-featured-courses', () => {
   });
 
   it('linkUrl không phải http/https → 400', async () => {
-    const me = await createUser({ username: 'fc-c2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-c2' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-featured-courses')
@@ -345,7 +345,7 @@ describe('POST /api/admin/landing-featured-courses', () => {
   });
 
   it('imageUrl không http(s) → 400', async () => {
-    const me = await createUser({ username: 'fc-c3' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-c3' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-featured-courses')
@@ -355,7 +355,7 @@ describe('POST /api/admin/landing-featured-courses', () => {
   });
 
   it('happy path → 201, idUser gắn đúng', async () => {
-    const me = await createUser({ username: 'fc-c4' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-c4' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-featured-courses')
@@ -382,7 +382,7 @@ describe('POST /api/admin/landing-featured-courses', () => {
 
 describe('PUT /api/admin/landing-featured-courses/:id', () => {
   it('id không tồn tại → 404', async () => {
-    const me = await createUser({ username: 'fc-u1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-u1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .put('/api/admin/landing-featured-courses/99999')
@@ -392,7 +392,7 @@ describe('PUT /api/admin/landing-featured-courses/:id', () => {
   });
 
   it('update merge giữ field cũ + cập nhật field mới', async () => {
-    const me = await createUser({ username: 'fc-u2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-u2' } });
     const row = await insertFeaturedCourse({ idUser: me.id, titleVi: 'Old VI', titleEn: 'Old EN' });
     const token = await loginAs(me);
 
@@ -411,7 +411,7 @@ describe('PUT /api/admin/landing-featured-courses/:id', () => {
 
 describe('DELETE /api/admin/landing-featured-courses/:id', () => {
   it('id không tồn tại → 404', async () => {
-    const me = await createUser({ username: 'fc-d1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-d1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .delete('/api/admin/landing-featured-courses/99999')
@@ -420,7 +420,7 @@ describe('DELETE /api/admin/landing-featured-courses/:id', () => {
   });
 
   it('xóa của mình → 200 + row biến mất', async () => {
-    const me = await createUser({ username: 'fc-d2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-d2' } });
     const row = await insertFeaturedCourse({ idUser: me.id });
     const token = await loginAs(me);
     const res = await request(app)
@@ -432,8 +432,8 @@ describe('DELETE /api/admin/landing-featured-courses/:id', () => {
   });
 
   it('quirk: xóa của user khác vẫn 200 (service không check owner)', async () => {
-    const me = await createUser({ username: 'fc-d3' });
-    const other = await createUser({ username: 'fc-d3-other' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-d3' } });
+    const other = await createUserWithPlan({ userOverrides: { username: 'fc-d3-other' } });
     const row = await insertFeaturedCourse({ idUser: other.id });
     const token = await loginAs(me);
     const res = await request(app)
@@ -462,7 +462,7 @@ describe('Testimonials authorization', () => {
 
 describe('POST /api/admin/landing-testimonials', () => {
   it('thiếu quoteVi → 400', async () => {
-    const me = await createUser({ username: 'ts-c1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-c1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-testimonials')
@@ -473,7 +473,7 @@ describe('POST /api/admin/landing-testimonials', () => {
   });
 
   it('starRating ngoài 1-5 → 400', async () => {
-    const me = await createUser({ username: 'ts-c2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-c2' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-testimonials')
@@ -483,7 +483,7 @@ describe('POST /api/admin/landing-testimonials', () => {
   });
 
   it('happy path → 201 với starRating + idUser', async () => {
-    const me = await createUser({ username: 'ts-c3' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-c3' } });
     const token = await loginAs(me);
     const res = await request(app)
       .post('/api/admin/landing-testimonials')
@@ -508,8 +508,8 @@ describe('POST /api/admin/landing-testimonials', () => {
 
 describe('GET /api/admin/landing-testimonials', () => {
   it('chỉ trả testimonial của workspace, sort_order ASC', async () => {
-    const me = await createUser({ username: 'ts-l1' });
-    const other = await createUser({ username: 'ts-l1-other' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-l1' } });
+    const other = await createUserWithPlan({ userOverrides: { username: 'ts-l1-other' } });
     await insertTestimonial({ idUser: me.id, sortOrder: 2, nameVi: 'B' });
     await insertTestimonial({ idUser: me.id, sortOrder: 1, nameVi: 'A', isActive: false });
     await insertTestimonial({ idUser: other.id, sortOrder: 0, nameVi: 'X' });
@@ -521,7 +521,7 @@ describe('GET /api/admin/landing-testimonials', () => {
 
 describe('PUT /api/admin/landing-testimonials/:id', () => {
   it('id không tồn tại → 404', async () => {
-    const me = await createUser({ username: 'ts-u1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-u1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .put('/api/admin/landing-testimonials/99999')
@@ -531,7 +531,7 @@ describe('PUT /api/admin/landing-testimonials/:id', () => {
   });
 
   it('update merge — sửa quoteVi + giữ các field còn lại', async () => {
-    const me = await createUser({ username: 'ts-u2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-u2' } });
     const row = await insertTestimonial({ idUser: me.id, quoteVi: 'Old', nameVi: 'Tên cũ' });
     const token = await loginAs(me);
     const res = await request(app)
@@ -546,7 +546,7 @@ describe('PUT /api/admin/landing-testimonials/:id', () => {
 
 describe('DELETE /api/admin/landing-testimonials/:id', () => {
   it('id không tồn tại → 404', async () => {
-    const me = await createUser({ username: 'ts-d1' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-d1' } });
     const token = await loginAs(me);
     const res = await request(app)
       .delete('/api/admin/landing-testimonials/99999')
@@ -555,7 +555,7 @@ describe('DELETE /api/admin/landing-testimonials/:id', () => {
   });
 
   it('xóa của mình → 200 + biến mất', async () => {
-    const me = await createUser({ username: 'ts-d2' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-d2' } });
     const row = await insertTestimonial({ idUser: me.id });
     const token = await loginAs(me);
     const res = await request(app)
@@ -567,8 +567,8 @@ describe('DELETE /api/admin/landing-testimonials/:id', () => {
   });
 
   it('quirk: xóa của user khác → 403 (testimonial CHECK owner, khác với featuredCourse)', async () => {
-    const me = await createUser({ username: 'ts-d3' });
-    const other = await createUser({ username: 'ts-d3-other' });
+    const me = await createUserWithPlan({ userOverrides: { username: 'ts-d3' } });
+    const other = await createUserWithPlan({ userOverrides: { username: 'ts-d3-other' } });
     const row = await insertTestimonial({ idUser: other.id });
     const token = await loginAs(me);
     const res = await request(app)
