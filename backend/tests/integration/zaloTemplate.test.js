@@ -12,10 +12,6 @@
  * KHÔNG cover:
  *   - tempAttachments/file upload (đi qua uploadController → cần mock S3 + multer).
  *   - active campaign usage chi tiết (chỉ assert shape `activeUsage` cơ bản).
- *
- * Lưu ý:
- *   - Controller dùng `req.user?.role_code` ở chỗ isAdmin nhưng auth.middleware
- *     chỉ set `role`. Pre-existing bug — test chỉ dùng đường user thường.
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -169,6 +165,19 @@ describe('GET /api/zalo-templates', () => {
     const res = await request(app).get('/api/zalo-templates').set('Authorization', `Bearer ${t}`);
     expect(res.body.data.items[0].templateName).toBe('new');
     expect(res.body.data.items[1].templateName).toBe('old');
+  });
+
+  it('admin (role=admin) thấy template của tất cả owner', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const a = await createUser({ role: 'user', username: 'oa' });
+    const b = await createUser({ role: 'user', username: 'ob' });
+    await insertTemplate({ ownerId: a.id, templateName: 'tplA' });
+    await insertTemplate({ ownerId: b.id, templateName: 'tplB' });
+
+    const t = await loginAs(admin);
+    const res = await request(app).get('/api/zalo-templates').set('Authorization', `Bearer ${t}`);
+
+    expect(res.body.data.items.map((x) => x.templateName).sort()).toEqual(['tplA', 'tplB']);
   });
 });
 
