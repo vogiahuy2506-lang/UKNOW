@@ -5,7 +5,6 @@ import {
   HiOutlineMail,
   HiOutlinePlus,
   HiOutlineTrash,
-  HiOutlineUserAdd,
 } from 'react-icons/hi';
 import NodeConfigTemplatePreviewModal from './NodeConfigTemplatePreviewModal';
 import TemplateSearchSelect from './TemplateSearchSelect';
@@ -193,7 +192,10 @@ const ZaloTemplateListSection = ({
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  const steps = Array.isArray(formData[stepsKey]) ? formData[stepsKey] : [];
+  const steps = useMemo(
+    () => (Array.isArray(formData[stepsKey]) ? formData[stepsKey] : []),
+    [formData, stepsKey]
+  );
   const sendMode = formData[sendModeKey] || 'all';
   const templateOptions = useMemo(
     () => templates.map((item) => ({

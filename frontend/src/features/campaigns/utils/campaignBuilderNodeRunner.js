@@ -63,7 +63,6 @@ export const createCampaignNodeRunner = (deps) => {
     writePreviewSessionData,
     toastNotifier,
     isRunCancelledError,
-    sleep,
     logItemsMode = '100',
   } = deps;
 
@@ -383,35 +382,6 @@ export const createCampaignNodeRunner = (deps) => {
       zaloName,
       groupName,
     };
-  };
-
-  /**
-   * Collect value list from manual text or node source.
-   *
-   * @param {object} input source options
-   * @returns {string[]}
-   */
-  const collectListFromSource = (ctx, input = {}) => {
-    const sourceMode = String(input.sourceMode || 'manual').trim();
-    if (sourceMode === 'manual') {
-      return parseListText(input.manualValue || '');
-    }
-    const sourceNodeId = String(input.sourceNodeId || '').trim();
-    const sourceField = String(input.sourceField || '').trim();
-    if (!sourceNodeId || !sourceField) return [];
-    const source = ctx.nodeResultsById?.[sourceNodeId] || null;
-    if (!source) return [];
-    const items = Array.isArray(source?.output?.items) ? source.output.items : [];
-    const values = [];
-    items.forEach((item) => {
-      const raw = item?.[sourceField];
-      if (Array.isArray(raw)) {
-        raw.forEach((val) => values.push(...parseListText(val)));
-      } else {
-        values.push(...parseListText(raw));
-      }
-    });
-    return Array.from(new Set(values));
   };
 
   const collectRecipientEntriesFromSource = (ctx, input = {}) => {
@@ -1588,10 +1558,10 @@ export const createCampaignNodeRunner = (deps) => {
         for (let index = 0; index < recipientsForStep.length; index += 1) {
           const recipient = recipientsForStep[index];
           if (index > 0) {
-            // eslint-disable-next-line no-await-in-loop
+             
             await waitRandomTemplateStepDelay(`email_step_${stepIndex + 1}`, signal, 'email');
           }
-          // eslint-disable-next-line no-await-in-loop
+           
           const result = await sendStepToRecipient(recipient, step, stepIndex, { skipApiDelay: true });
           applyEmailResultForRecipient(recipient, stepIndex, result);
         }
@@ -1599,7 +1569,7 @@ export const createCampaignNodeRunner = (deps) => {
 
       if (sendAllAtOnce) {
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
-          // eslint-disable-next-line no-await-in-loop
+           
           await runEmailStepWave(steps[stepIndex], stepIndex);
         }
       } else {
@@ -1607,13 +1577,13 @@ export const createCampaignNodeRunner = (deps) => {
         let previousStepTargetAt = scheduleStartAt;
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
           const step = steps[stepIndex];
-          // eslint-disable-next-line no-await-in-loop
+           
           previousStepTargetAt = await waitForScheduledEmailStep({
             scheduleStartAt,
             previousStepTargetAt,
             step,
           });
-          // eslint-disable-next-line no-await-in-loop
+           
           await runEmailStepWave(step, stepIndex);
         }
       }
@@ -1688,7 +1658,7 @@ export const createCampaignNodeRunner = (deps) => {
         ctx.zaloTemplateContentCache = templateContentCache;
         const steps = [];
         for (const step of templateSteps) {
-          // eslint-disable-next-line no-await-in-loop
+           
           const templateContent = await getZaloTemplateContent(step.templateId, templateContentCache, signal);
           if (!templateContent.message) {
             throw new Error('Template Zalo không có nội dung để gửi');
@@ -1751,7 +1721,7 @@ export const createCampaignNodeRunner = (deps) => {
               channel: 'zalo',
             });
           }
-          // eslint-disable-next-line no-await-in-loop
+           
           const response = await apiService.sendPreviewZaloPersonal({
             accountId: accountForSend.id,
             recipients: [recipient],
@@ -1836,7 +1806,7 @@ export const createCampaignNodeRunner = (deps) => {
           if (zaloPreviewPoolParallel > 1) {
             for (let offset = 0; offset < recipientsForStep.length; offset += zaloPreviewPoolParallel) {
               const batch = recipientsForStep.slice(offset, offset + zaloPreviewPoolParallel);
-              // eslint-disable-next-line no-await-in-loop
+               
               await Promise.all(
                 batch.map((rec) => runStepForRecipient(step, stepIndex, rec, { skipApiDelay: true }))
               );
@@ -1845,10 +1815,10 @@ export const createCampaignNodeRunner = (deps) => {
           }
           for (let index = 0; index < recipientsForStep.length; index += 1) {
             if (index > 0) {
-              // eslint-disable-next-line no-await-in-loop
+               
               await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo');
             }
-            // eslint-disable-next-line no-await-in-loop
+             
             await runStepForRecipient(step, stepIndex, recipientsForStep[index], { skipApiDelay: true });
           }
         };
@@ -1858,18 +1828,18 @@ export const createCampaignNodeRunner = (deps) => {
           let previousStepTargetAt = scheduleStartAt;
           for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
             const step = steps[stepIndex];
-            // eslint-disable-next-line no-await-in-loop
+             
             previousStepTargetAt = await waitForScheduledStep({
               scheduleStartAt,
               previousStepTargetAt,
               step,
             });
-            // eslint-disable-next-line no-await-in-loop
+             
             await runZaloStepWave(step, stepIndex);
           }
         } else {
           for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
-            // eslint-disable-next-line no-await-in-loop
+             
             await runZaloStepWave(steps[stepIndex], stepIndex);
           }
         }
@@ -1960,7 +1930,7 @@ export const createCampaignNodeRunner = (deps) => {
       if (zaloPreviewPoolParallel > 1) {
         for (let offset = 0; offset < pendingRecipients.length; offset += zaloPreviewPoolParallel) {
           const batch = pendingRecipients.slice(offset, offset + zaloPreviewPoolParallel);
-          // eslint-disable-next-line no-await-in-loop
+           
           await Promise.all(
             batch.map(async (recipient) => {
               const entry = recipientEntries.find(
@@ -2122,11 +2092,11 @@ export const createCampaignNodeRunner = (deps) => {
 
       for (const entry of recipientEntries) {
         const renderedMessage = renderFriendTemplateMessage(entry);
-        // eslint-disable-next-line no-await-in-loop
+         
         await waitRandomPreviewApiDelay('zalo_friend_request_single', signal, {
           channel: 'zalo',
         });
-        // eslint-disable-next-line no-await-in-loop
+         
         const response = await apiService.sendPreviewZaloFriendRequest({
           accountId: selectedAccount.id,
           recipients: [entry.phone],
@@ -2211,7 +2181,7 @@ export const createCampaignNodeRunner = (deps) => {
         ctx.zaloGroupTemplateContentCache = templateContentCache;
         const steps = [];
         for (const step of templateSteps) {
-          // eslint-disable-next-line no-await-in-loop
+           
           const templateContent = await getZaloTemplateContent(step.templateId, templateContentCache, signal);
           if (!templateContent.message) {
             throw new Error('Template Zalo không có nội dung để gửi');
@@ -2252,7 +2222,7 @@ export const createCampaignNodeRunner = (deps) => {
             const groupId = String(entry?.value || '').trim();
             if (!groupId) continue;
             if (index > 0) {
-              // eslint-disable-next-line no-await-in-loop
+               
               await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template');
             }
             const renderedMessage = mappings.length > 0
@@ -2264,7 +2234,7 @@ export const createCampaignNodeRunner = (deps) => {
                 fallbackNodeId: config.zaloGroupNodeId || '',
               })
               : String(step.message || '').trim();
-            // eslint-disable-next-line no-await-in-loop
+             
             const response = await apiService.sendPreviewZaloGroup({
               accountId: selectedAccount.id,
               groupIds: [groupId],
@@ -2325,18 +2295,18 @@ export const createCampaignNodeRunner = (deps) => {
           let previousStepTargetAt = scheduleStartAt;
           for (let index = 0; index < steps.length; index += 1) {
             const step = steps[index];
-            // eslint-disable-next-line no-await-in-loop
+             
             previousStepTargetAt = await waitForScheduledGroupStep({
               scheduleStartAt,
               previousStepTargetAt,
               step,
             });
-            // eslint-disable-next-line no-await-in-loop
+             
             await runSingleStep(step, index);
           }
         } else {
           for (let index = 0; index < steps.length; index += 1) {
-            // eslint-disable-next-line no-await-in-loop
+             
             await runSingleStep(steps[index], index);
           }
         }

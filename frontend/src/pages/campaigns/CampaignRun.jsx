@@ -168,6 +168,7 @@ const CampaignRun = () => {
     }, 5000);
     
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy 1 lần lúc mount + setup poller
   }, []);
 
   useEffect(() => {
@@ -600,6 +601,7 @@ const CampaignRun = () => {
       isCancelled = true;
       clearInterval(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isCampaignRunningById đọc từ runningCampaigns đã có trong deps
   }, [runningCampaigns, selectedCampaignForLogs?.id, selectedRunDetail?.id, selectedRunDetail?.status]);
 
   const {

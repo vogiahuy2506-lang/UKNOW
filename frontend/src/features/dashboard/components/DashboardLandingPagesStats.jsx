@@ -9,7 +9,10 @@ const PAGE_SIZE = 5;
  * @param {{ filters?: object, rows?: object[] }} props.data
  */
 const DashboardLandingPagesStats = ({ data }) => {
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const rows = useMemo(
+    () => (Array.isArray(data?.rows) ? data.rows : []),
+    [data?.rows]
+  );
   const [page, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));

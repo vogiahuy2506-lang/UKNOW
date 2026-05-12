@@ -542,9 +542,11 @@ const DashboardTopCharts = ({
 }) => {
   const topCourses = topListsData?.topCourses || [];
   const topCampaignsByOrders = topListsData?.topCampaignsByOrders || [];
-  const topCampaignsByClicks = topListsData?.topCampaignsByClicks || [];
 
-  const topCampaignsRate = useMemo(() => mapCampaignsToRates(topCampaignsByClicks), [topCampaignsByClicks]);
+  const topCampaignsRate = useMemo(
+    () => mapCampaignsToRates(topListsData?.topCampaignsByClicks || []),
+    [topListsData?.topCampaignsByClicks]
+  );
 
   return (
     <div className="space-y-4">
@@ -613,8 +615,10 @@ export function DashboardTopChartsPrintSection({
 }) {
   const topCourses = topListsData?.topCourses || [];
   const topCampaignsByOrders = topListsData?.topCampaignsByOrders || [];
-  const topCampaignsByClicks = topListsData?.topCampaignsByClicks || [];
-  const topCampaignsRate = useMemo(() => mapCampaignsToRates(topCampaignsByClicks), [topCampaignsByClicks]);
+  const topCampaignsRate = useMemo(
+    () => mapCampaignsToRates(topListsData?.topCampaignsByClicks || []),
+    [topListsData?.topCampaignsByClicks]
+  );
 
   return (
     <>

@@ -49,7 +49,7 @@ const MainLayout = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, setSidebarWidth]);
 
   const handleResizeStart = (event) => {
     setIsResizing(true);

@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
-import EmailAuthModal from '../../components/auth/EmailAuthModal';
 import api from '../../services/api';
 import {
   HiOutlineLockClosed,
