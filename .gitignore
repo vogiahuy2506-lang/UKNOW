@@ -59,7 +59,6 @@ uploads/
 Thumbs.db
 .vscode/
 .idea/
-.github/
 .cursor/
 backend/sql/
 backend/.tmp_zca/
