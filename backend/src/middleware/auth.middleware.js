@@ -34,16 +34,15 @@ const authMiddleware = async (req, res, next) => {
         `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
                 subscription_expires_at
          FROM users
-         WHERE id = $1 AND status = 'active'`,
+         WHERE id = $1 AND status IN ('active', 'pending_activation')`,
         [decoded.userId]
       );
     } catch {
-      // Fallback khi migration 007 chưa chạy (cột subscription_expires_at chưa tồn tại)
       userResult = await db.query(
         `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
                 NULL AS subscription_expires_at
          FROM users
-         WHERE id = $1 AND status = 'active'`,
+         WHERE id = $1 AND status IN ('active', 'pending_activation')`,
         [decoded.userId]
       );
     }
@@ -58,25 +57,42 @@ const authMiddleware = async (req, res, next) => {
     const user = userResult.rows[0];
     req.user = { ...user };
 
-    // Chỉ query user_members khi là employee để lấy owner_id và permissions
-    if (user.role === 'employee') {
+    // Xử lý context switching: header X-Owner-Context cho phép user hoạt động
+    // trong ngữ cảnh của một owner mà họ là employee.
+    const ownerCtxId = req.headers['x-owner-context'];
+
+    if (ownerCtxId) {
       const memberResult = await db.query(
-        `SELECT owner_id, permissions
-         FROM user_members
-         WHERE employee_id = $1 AND status = 'active'
-         LIMIT 1`,
-        [user.id]
+        `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
+                u.subscription_expires_at AS "ownerPlanExpiry"
+         FROM user_members um
+         JOIN users u ON u.id = um.owner_id
+         WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'`,
+        [user.id, ownerCtxId]
       );
 
-      if (memberResult.rows.length === 0) {
+      if (!memberResult.rows[0]) {
         return res.status(403).json({
           success: false,
-          message: 'Tài khoản nhân viên chưa được liên kết với chủ sở hữu',
+          message: 'Không có quyền truy cập với ngữ cảnh này',
+          code: 'INVALID_CONTEXT',
         });
       }
 
-      req.user.owner_id = memberResult.rows[0].owner_id;
-      req.user.permissions = memberResult.rows[0].permissions;
+      const member = memberResult.rows[0];
+      req.user.activeContext = {
+        type: 'employee',
+        ownerId: Number(ownerCtxId),
+        permissions: member.permissions,
+        contextPlanId: member.ownerPlanId,
+        contextPlanExpiry: member.ownerPlanExpiry,
+      };
+    } else {
+      req.user.activeContext = {
+        type: 'self',
+        contextPlanId: user.active_plan_id,
+        contextPlanExpiry: user.subscription_expires_at,
+      };
     }
 
     return next();

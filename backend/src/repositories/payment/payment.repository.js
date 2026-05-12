@@ -30,10 +30,19 @@ export const findOrderStatusByCode = async (orderCode) => {
 // Lấy user_id và plan_id từ order để cập nhật active_plan sau khi thanh toán thành công
 export const findOrderByCode = async (orderCode) => {
     const { rows } = await db.query(
-        'SELECT id, user_id, plan_id, status FROM orders WHERE order_code = $1',
+        'SELECT id, user_id, plan_id, status, user_email FROM orders WHERE order_code = $1',
         [orderCode]
     );
     return rows[0] || null;
+};
+
+// Tìm user_id theo email (fallback khi order được tạo khi chưa có auth)
+export const findUserIdByEmail = async (email) => {
+    const { rows } = await db.query(
+        'SELECT id FROM users WHERE email = $1 LIMIT 1',
+        [email]
+    );
+    return rows[0]?.id || null;
 };
 
 // Cập nhật active_plan_id + subscription_expires_at sau khi thanh toán thành công.

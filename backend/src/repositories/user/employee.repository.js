@@ -72,9 +72,10 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
   try {
     await client.query('BEGIN');
 
+    // Tạo user mới với role user_admin (pending_activation cho đến khi họ set password)
     const userResult = await client.query(
       `INSERT INTO users (username, email, password_hash, full_name, status, role, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'pending_activation', 'employee', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, 'pending_activation', 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id, username, email, full_name, avatar_url, status, role`,
       [username, email, passwordHash, fullName || null]
     );
@@ -100,32 +101,17 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
 }
 
 export async function linkExistingUserAsEmployee(ownerId, userId) {
-  const client = await db.getClient();
-  try {
-    await client.query('BEGIN');
-
-    await client.query(
-      `UPDATE users SET role = 'employee', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [userId]
-    );
-
-    const memberResult = await client.query(
-      `INSERT INTO user_members (owner_id, employee_id)
-       VALUES ($1, $2)
-       RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
-                 daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
-                 daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
-      [ownerId, userId]
-    );
-
-    await client.query('COMMIT');
-    return memberResult.rows[0];
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  // Không cần transaction hay UPDATE role — chỉ tạo quan hệ user_members
+  const result = await db.query(
+    `INSERT INTO user_members (owner_id, employee_id)
+     VALUES ($1, $2)
+     ON CONFLICT (owner_id, employee_id) DO UPDATE SET status = 'active', updated_at = CURRENT_TIMESTAMP
+     RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
+               daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
+               daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
+    [ownerId, userId]
+  );
+  return result.rows[0];
 }
 
 export async function updateEmployeeInfo(employeeId, ownerId, { fullName, email }) {
@@ -221,15 +207,10 @@ export async function removeEmployee(employeeId, ownerId) {
     const userStatus = userRes.rows[0]?.status;
 
     if (userStatus === 'pending_activation') {
-      // Chưa từng kích hoạt → xóa hẳn để email có thể dùng lại
+      // Được mời nhưng chưa kích hoạt → xóa hẳn để email có thể dùng lại
       await client.query(`DELETE FROM users WHERE id = $1`, [employeeId]);
-    } else {
-      // Đã active/inactive → giữ lại tài khoản, chuyển về user_admin
-      await client.query(
-        `UPDATE users SET role = 'user_admin', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-        [employeeId]
-      );
     }
+    // Tài khoản đã active: giữ nguyên user_admin, không cần đổi role
 
     await client.query('COMMIT');
   } catch (err) {

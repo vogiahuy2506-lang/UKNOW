@@ -31,6 +31,7 @@ import {
 import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
+import ContextSwitcher from '../../ContextSwitcher';
 
 // Menu dành cho super_admin — quản trị hệ thống
 const superAdminMenuItems = [
@@ -131,9 +132,13 @@ const userMenuItems = [
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useLocalStorageState('uknow_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
-  const { user, logout } = useAuthStore();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const { user, logout, activeContext } = useAuthStore();
+  const isSuperAdmin = user?.role === 'admin';
   const menuItems = isSuperAdmin ? superAdminMenuItems : userMenuItems;
+  // Context-aware filtering: employee context dùng permissions do owner cấp,
+  // self context (chủ tài khoản) thấy hết.
+  const isEmployeeCtx = activeContext?.type === 'employee';
+  const ctxPermissions = activeContext?.permissions || {};
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
@@ -195,11 +200,13 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   // On mobile the sidebar is always "open" layout (full labels shown), never icon-only
   const showLabels = isMobile ? true : isOpen;
 
-  // Lọc menu item theo role/permissions của user
+  // Lọc menu item theo ngữ cảnh hoạt động.
+  // - ownerOnly: chỉ hiện khi đang ở context cá nhân (chủ tài khoản).
+  // - permission: trong employee context phải có ít nhất 1 quyền tương ứng.
   const filterItem = (item) => {
-    if (item.ownerOnly && user?.role !== 'user_admin') return false;
-    if (item.permission && user?.role === 'employee') {
-      return item.permission.some((p) => user?.permissions?.[p] === true);
+    if (item.ownerOnly && isEmployeeCtx) return false;
+    if (item.permission && isEmployeeCtx) {
+      return item.permission.some((p) => ctxPermissions[p] === true);
     }
     return true;
   };
@@ -243,6 +250,13 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           </button>
         )}
       </div>
+
+      {/* Context Switcher — chuyển giữa tài khoản cá nhân và các tổ chức */}
+      {!isSuperAdmin && (
+        <div className="px-2 pt-2">
+          <ContextSwitcher showLabels={showLabels} />
+        </div>
+      )}
 
       {/* Navigation */}
       <nav ref={navRef} className={`p-2 space-y-1 overflow-y-auto flex-1 min-h-0 ${!showLabels ? 'px-2' : ''}`}>

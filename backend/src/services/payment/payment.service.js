@@ -1,8 +1,8 @@
 import { findPlanByCode } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
-import { createOrder, findOrderStatusByCode, updateOrderStatus, findOrderByCode, activateUserPlan } from '../../repositories/payment/payment.repository.js';
+import { createOrder, findOrderStatusByCode, updateOrderStatus, findOrderByCode, activateUserPlan, findUserIdByEmail } from '../../repositories/payment/payment.repository.js';
 
-export const createPaymentLink = async ({ planCode, userEmail }) => {
+export const createPaymentLink = async ({ planCode, userEmail, userId = null }) => {
     // 1. Lấy plan từ DB
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
@@ -16,6 +16,7 @@ export const createPaymentLink = async ({ planCode, userEmail }) => {
         planId: plan.id,
         amount: plan.price,
         userEmail,
+        userId,
     });
 
     // 4. Gọi PayOS
@@ -52,8 +53,11 @@ export const handleWebhook = async (body) => {
 
         await updateOrderStatus(webhookData.orderCode, 'success');
 
-        if (order?.user_id && order?.plan_id) {
-            await activateUserPlan(order.user_id, order.plan_id);
+        const userId = order?.user_id || (order?.user_email ? await findUserIdByEmail(order.user_email) : null);
+        if (userId && order?.plan_id) {
+            await activateUserPlan(userId, order.plan_id);
+        } else {
+            console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
         }
     }
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuthStore } from '../../stores/authStore';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
@@ -203,9 +204,16 @@ const LandingPageCard = ({ page, onSaveToLibrary }) => {
 };
 
 const AiChatbot = ({ isOpen, onToggle }) => {
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.role === 'admin';
+
+  const welcomeMessage = isSuperAdmin
+    ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng UKNOW theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
+    : 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo kịch bản chiến dịch\n🌐 Thiết kế Landing Page\n\nHãy cho tôi biết bạn cần gì nhé!';
+
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo kịch bản chiến dịch\n🌐 Thiết kế Landing Page\n\nHãy cho tôi biết bạn cần gì nhé!'
+    content: welcomeMessage,
   }]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -221,10 +229,13 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      aiApi.getBusinessProfile()
-        .then(res => setHasProfile(!!res.data))
-        .catch(() => setHasProfile(true));
+      if (!isSuperAdmin) {
+        aiApi.getBusinessProfile()
+          .then(res => setHasProfile(!!res.data))
+          .catch(() => setHasProfile(true));
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -340,8 +351,8 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         </button>
       </div>
 
-      {/* Banner nhắc thiết lập hồ sơ */}
-      {!hasProfile && (
+      {/* Banner nhắc thiết lập hồ sơ — chỉ hiện cho user_admin */}
+      {!isSuperAdmin && !hasProfile && (
         <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
           <HiOutlineSparkles className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">

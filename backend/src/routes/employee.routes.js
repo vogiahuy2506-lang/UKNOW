@@ -10,7 +10,7 @@ const router = express.Router();
 // Tất cả routes yêu cầu đăng nhập.
 // Chỉ super_admin và user_admin mới quản lý được nhân viên.
 router.use(authMiddleware);
-router.use(requireRole('super_admin', 'user_admin'));
+router.use(requireRole('admin', 'user'));
 
 // GET /api/employees
 router.get('/', employeeController.getEmployees);
@@ -57,7 +57,7 @@ router.post(
   employeeController.resendInvite
 );
 
-// POST /api/employees/link — link user_admin chưa có plan thành employee (cần có plan)
+// POST /api/employees/link — link tài khoản người dùng có sẵn thành nhân viên (cần owner có plan)
 router.post(
   '/link',
   requireActivePlan,

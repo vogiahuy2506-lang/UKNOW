@@ -81,11 +81,39 @@ const AdminPlansPage = () => {
     }
   };
 
+  const handleRestore = async (plan) => {
+    try {
+      await adminPlansApiService.updatePlan(plan.id, {
+        name: plan.name,
+        price: parseInt(plan.price, 10),
+        description: plan.description,
+        features: plan.features || [],
+        maxEmployees: parseInt(plan.maxEmployees ?? 0, 10),
+        isActive: true,
+        dailyEmailLimit: plan.dailyEmailLimit ?? null,
+        monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
+        dailyZaloLimit: plan.dailyZaloLimit ?? null,
+        monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
+      });
+      toast.success(`Đã khôi phục gói "${plan.name}"`);
+      fetchCustomPlans();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không thể khôi phục gói');
+    }
+  };
+
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      await adminPlansApiService.deletePlan(deletePlan.id);
-      toast.success('Đã xóa gói dịch vụ');
+      const res = await adminPlansApiService.deletePlan(deletePlan.id);
+      const data = res?.data;
+      const isSoftDelete = data?.data?.mode === 'soft';
+      const message = data?.message || (isSoftDelete ? 'Đã ẩn gói' : 'Đã xóa gói dịch vụ');
+      if (isSoftDelete) {
+        toast(message, { icon: 'ℹ️', duration: 5000 });
+      } else {
+        toast.success(message);
+      }
       setDeletePlan(null);
       handleRefresh();
     } catch (err) {
@@ -191,6 +219,7 @@ const AdminPlansPage = () => {
                   onEdit={(p)     => setEditPlan(p)}
                   onDelete={(p)   => setDeletePlan(p)}
                   onActivate={(p) => handleActivate(p)}
+                  onRestore={(p)  => handleRestore(p)}
                 />
               ))}
             </div>
@@ -211,31 +240,58 @@ const AdminPlansPage = () => {
         <AssignModal plan={assignPlan} onClose={() => setAssignPlan(null)} onAssigned={fetchPlans} />
       )}
       {deletePlan && renderModal(
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Xác nhận xóa gói</h2>
-          <p className="text-sm text-gray-500 mt-2">
-            Xóa gói <strong>{deletePlan.name}</strong>?
-            {deletePlan.user_count > 0 && (
-              <span className="text-red-500 block mt-1">
-                Cảnh báo: {deletePlan.user_count} thành viên đang dùng gói này.
-              </span>
-            )}
-            {deletePlan.assignedEmail && (
-              <span className="text-amber-600 block mt-1">
-                Cảnh báo: gói đang được gán cho {deletePlan.assignedEmail}.
-              </span>
-            )}
-          </p>
-          <div className="flex justify-end gap-2 mt-6">
-            <button type="button" className="btn btn-secondary" onClick={() => setDeletePlan(null)} disabled={isDeleting}>Hủy</button>
-            <button type="button"
-              className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
-              onClick={handleDelete} disabled={isDeleting}
-            >
-              {isDeleting ? 'Đang xóa...' : 'Xác nhận xóa'}
-            </button>
-          </div>
-        </div>,
+        (() => {
+          const isCustom = deletePlan.isCustom ?? deletePlan.is_custom;
+          const hasUsers = (deletePlan.user_count > 0) || !!deletePlan.assignedEmail;
+          return (
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Xác nhận xoá gói</h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Xoá gói <strong>{deletePlan.name}</strong>?
+              </p>
+
+              {isCustom && hasUsers && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+                  <p className="font-medium text-red-700">Gói riêng — sẽ <u>chấm dứt</u> với khách hàng</p>
+                  <p className="text-red-600 mt-1">
+                    {deletePlan.assignedEmail
+                      ? <>Khách <strong>{deletePlan.assignedEmail}</strong> sẽ bị gỡ gói ngay lập tức và mất quyền dùng dịch vụ.</>
+                      : <>{deletePlan.user_count} khách đang dùng sẽ bị gỡ gói.</>}
+                  </p>
+                  <p className="text-gray-500 italic text-xs mt-2">
+                    Lịch sử đơn hàng vẫn được giữ để đối soát.
+                  </p>
+                </div>
+              )}
+
+              {!isCustom && hasUsers && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                  <p className="font-medium text-amber-700">Gói đại trà — vẫn cho khách cũ dùng tiếp</p>
+                  <p className="text-amber-600 mt-1">
+                    {deletePlan.user_count > 0 && <>{deletePlan.user_count} khách đang dùng vẫn được phục vụ đến hết kỳ.</>}
+                    {' '}Khách mới sẽ không còn thấy gói này trên trang Bảng giá.
+                  </p>
+                </div>
+              )}
+
+              {!hasUsers && (
+                <p className="text-xs text-gray-400 italic mt-2">
+                  Chưa có khách dùng — gói sẽ bị <strong>xoá vĩnh viễn</strong>.
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button type="button" className="btn btn-secondary" onClick={() => setDeletePlan(null)} disabled={isDeleting}>Hủy</button>
+                <button type="button"
+                  className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
+                  onClick={handleDelete} disabled={isDeleting}
+                >
+                  {isDeleting ? 'Đang xoá...' : (isCustom && hasUsers ? 'Xoá & chấm dứt' : 'Xác nhận xoá')}
+                </button>
+              </div>
+            </div>
+          );
+        })(),
         () => { if (!isDeleting) setDeletePlan(null); },
         MODAL_SM
       )}

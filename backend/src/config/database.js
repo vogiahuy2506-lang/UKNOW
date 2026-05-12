@@ -45,9 +45,14 @@ pool.on('connect', async (client) => {
   }
 });
 
+/**
+ * pg.Pool tự loại client lỗi ra khỏi pool và mở kết nối mới ở lần query kế tiếp,
+ * nên KHÔNG `process.exit` ở đây — với Neon serverless, connection idle thường bị
+ * server đóng đột ngột (ETIMEDOUT/ECONNRESET) và đó là chuyện bình thường,
+ * không phải lý do để crash cả ứng dụng.
+ */
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('[PostgreSQL] Idle client error (pool sẽ tự xử lý):', err.code || err.message);
 });
 
 export default {

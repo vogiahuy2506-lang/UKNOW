@@ -12,23 +12,25 @@ import {
   HiOutlineClipboardList,
   HiOutlineCheckCircle,
   HiOutlineBan,
+  HiOutlineShieldCheck,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getMyOrders } from '../services/authApi.service';
 
 const ROLE_LABELS = {
-  super_admin: 'Quản trị hệ thống',
-  user_admin: 'Thành viên',
+  admin: 'Quản trị hệ thống',
+  user: 'Thành viên',
   employee: 'Nhân viên',
 };
 
-const EMPLOYEE_LIMIT_ITEMS = [
-  { key: 'maxCampaigns', label: 'Chiến dịch tối đa' },
-  { key: 'maxZaloAccounts', label: 'Tài khoản Zalo tối đa' },
-  { key: 'maxEmailAccounts', label: 'Tài khoản Email tối đa' },
-  { key: 'maxEmailTemplates', label: 'Email template tối đa' },
-  { key: 'maxZaloTemplates', label: 'Zalo template tối đa' },
-];
+const PERMISSION_LABELS = {
+  manage_campaigns: 'Quản lý chiến dịch',
+  manage_contacts: 'Quản lý khách hàng',
+  manage_templates: 'Quản lý mẫu tin',
+  manage_channels: 'Quản lý kênh gửi',
+  manage_landing_pages: 'Quản lý landing page',
+  view_analytics: 'Xem báo cáo',
+};
 
 const PROFILE_FORM_INITIAL_STATE = { fullName: '', email: '', phone: '' };
 
@@ -293,13 +295,138 @@ function OrderHistoryTab({ isUserAdmin }) {
   );
 }
 
-const TABS = [
-  { key: 'profile', label: 'Hồ sơ' },
-  { key: 'orders',  label: 'Lịch sử gói' },
-];
+/** Tab hiển thị quyền hạn và giới hạn gửi khi đang trong employee context */
+function EmployeeContextTab({ activeContext }) {
+  const permissions = activeContext?.permissions || {};
+  const grantedPerms = Object.entries(permissions).filter(([, v]) => v);
+  const deniedPerms  = Object.entries(permissions).filter(([, v]) => !v);
+
+  const hasEmailLimit = activeContext?.dailyEmailLimit !== null || activeContext?.monthlyEmailLimit !== null;
+  const hasZaloLimit  = activeContext?.dailyZaloLimit !== null || activeContext?.monthlyZaloLimit !== null;
+  const hasAnyLimit   = hasEmailLimit || hasZaloLimit;
+
+  return (
+    <div className="space-y-5">
+      {/* Context banner */}
+      <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+        <HiOutlineShieldCheck className="w-5 h-5 text-blue-500 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-blue-800">
+            Đang làm việc tại: {activeContext?.ownerName}
+          </p>
+          <p className="text-xs text-blue-500 mt-0.5">
+            Quyền hạn và giới hạn bên dưới được cấp bởi doanh nghiệp này.
+          </p>
+        </div>
+      </div>
+
+      {/* Permissions */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quyền được cấp</p>
+        {grantedPerms.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">Chưa được cấp quyền nào.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {grantedPerms.map(([key]) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200"
+              >
+                <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                {PERMISSION_LABELS[key] || key}
+              </span>
+            ))}
+          </div>
+        )}
+        {deniedPerms.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {deniedPerms.map(([key]) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-gray-50 text-gray-400 border border-gray-200"
+              >
+                <HiOutlineBan className="w-3.5 h-3.5" />
+                {PERMISSION_LABELS[key] || key}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Send limits */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Giới hạn gửi tin được cấp</p>
+        {!hasAnyLimit ? (
+          <p className="text-sm text-gray-400 italic">Không giới hạn số lượt gửi.</p>
+        ) : (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+            {hasEmailLimit && (
+              <>
+                <div className="flex items-center justify-between py-1">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
+                    Email / ngày
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                    {activeContext?.dailyEmailLimit === null ? 'Không giới hạn' : activeContext.dailyEmailLimit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
+                    Email / tháng
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                    {activeContext?.monthlyEmailLimit === null ? 'Không giới hạn' : activeContext.monthlyEmailLimit.toLocaleString()}
+                  </span>
+                </div>
+              </>
+            )}
+            {hasZaloLimit && (
+              <>
+                <div className="flex items-center justify-between py-1">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
+                    Zalo / ngày
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                    {activeContext?.dailyZaloLimit === null ? 'Không giới hạn' : activeContext.dailyZaloLimit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
+                    Zalo / tháng
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                    {activeContext?.monthlyZaloLimit === null ? 'Không giới hạn' : activeContext.monthlyZaloLimit.toLocaleString()}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const AccountProfileModal = ({ isOpen, onClose }) => {
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, activeContext } = useAuthStore();
+  const isEmployeeCtx = activeContext?.type === 'employee';
+
+  const TABS = isEmployeeCtx
+    ? [
+        { key: 'profile', label: 'Hồ sơ' },
+        { key: 'permissions', label: 'Quyền hạn & Giới hạn' },
+      ]
+    : user?.role === 'user'
+      ? [
+          { key: 'profile', label: 'Hồ sơ' },
+          { key: 'orders',  label: 'Lịch sử gói' },
+        ]
+      : [{ key: 'profile', label: 'Hồ sơ' }];
+
   const [activeTab, setActiveTab] = useState('profile');
   const [formValues, setFormValues] = useState(PROFILE_FORM_INITIAL_STATE);
   const [profileData, setProfileData] = useState(null);
@@ -308,16 +435,12 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Always use authStore role for permission checks — it comes from the JWT and is always correct.
-  // profileData.role may lag or default incorrectly when the roles table JOIN returns null.
-  const role = user?.role;
-  const isEmployee = role === 'employee';
-  const isUserAdmin = role === 'user_admin';
+  const isUserAdmin = !isEmployeeCtx && user?.role === 'user';
 
-  const employeeLimits = useMemo(
-    () => EMPLOYEE_LIMIT_ITEMS.map((item) => ({ ...item, value: profileData?.[item.key] ?? null })),
-    [profileData]
-  );
+  // Reset tab khi context thay đổi (employee ↔ self) để tránh tab không tồn tại
+  useEffect(() => {
+    setActiveTab('profile');
+  }, [isEmployeeCtx]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -430,7 +553,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           </div>
           {/* Tab bar */}
           <div className="flex border-b border-gray-100 px-6 gap-1">
-            {TABS.filter((tab) => !((isEmployee || role === 'super_admin') && tab.key === 'orders')).map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -454,6 +577,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         ) : activeTab === 'orders' ? (
           <div className="overflow-y-auto px-6 py-5">
             <OrderHistoryTab isUserAdmin={isUserAdmin} />
+          </div>
+        ) : activeTab === 'permissions' ? (
+          <div className="overflow-y-auto px-6 py-5">
+            <EmployeeContextTab activeContext={activeContext} />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-5 space-y-5">
@@ -514,36 +641,11 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Plan & usage — user_admin only */}
+            {/* Plan & usage — only in self context */}
             {isUserAdmin && (
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Gói đang sử dụng</p>
                 <PlanSection data={profileData} />
-              </div>
-            )}
-
-            {/* Employee resource limits */}
-            {isEmployee && (
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Giới hạn tài nguyên</p>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500 mb-3">
-                    Giá trị trống nghĩa là tài khoản của bạn không bị giới hạn ở mục đó.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {employeeLimits.map((item) => (
-                      <div
-                        key={item.key}
-                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
-                      >
-                        <span className="text-sm text-gray-600">{item.label}</span>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {item.value === null ? 'Không giới hạn' : item.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
 
