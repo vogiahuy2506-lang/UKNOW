@@ -150,6 +150,25 @@ CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
 
+-- ─── Contact submissions (migration 015) ──────────────────────────────
+CREATE TABLE contact_submissions (
+  id           BIGSERIAL PRIMARY KEY,
+  name         VARCHAR(255) NOT NULL,
+  email        VARCHAR(255) NOT NULL,
+  phone        VARCHAR(50),
+  company      VARCHAR(255),
+  company_size VARCHAR(50),
+  message      TEXT,
+  status       VARCHAR(50) DEFAULT 'new'
+    CHECK (status IN ('new', 'contacted', 'qualified', 'closed')),
+  notes        TEXT,
+  ip_address   VARCHAR(50),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_contact_submissions_email ON contact_submissions(email);
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (

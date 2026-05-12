@@ -13,6 +13,7 @@ import db from '../../../src/config/database.js';
 export async function truncateAll() {
   await db.query(`
     TRUNCATE TABLE
+      contact_submissions,
       login_history,
       refresh_tokens,
       verification_codes,
