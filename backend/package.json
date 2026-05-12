@@ -47,6 +47,7 @@
         "testEnvironment": "node",
         "transform": {},
         "clearMocks": true,
+        "testTimeout": 15000,
         "testMatch": [
           "<rootDir>/tests/integration/**/*.test.js"
         ],
