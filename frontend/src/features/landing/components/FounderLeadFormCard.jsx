@@ -1,4 +1,4 @@
-import { getOptionLabel, founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/FounderLandingOptions.js';
+import { getOptionLabel, founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options.js';
 
 /**
  * Thẻ form đăng ký lead — khớp mock `.form-card`; link chính sách nội bộ `/privacy-policy`.

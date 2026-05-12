@@ -1,5 +1,5 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
-import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../../landing/constants/FounderLandingOptions.js';
+import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../../landing/constants/founder-landing-options.js';
 import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
 import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
