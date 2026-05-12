@@ -9,7 +9,10 @@
  * Lưu ý: KHÔNG được run trên DB production. Hàm sẽ refuse nếu DB_NAME không
  * chứa "_test" để chống nhầm lẫn (xem `assertTestDatabaseName`).
  */
-import 'dotenv/config';
+// Cố ý KHÔNG import 'dotenv/config' ở đây:
+//   - backend/.env chứa config production (Neon SSL, key thật).
+//   - Test phải tự nhận env từ command line / CI để bảo đảm chạy đúng DB test.
+//   - Nếu cần test với .env, dev tự `source` trước khi chạy `npm run test:integration`.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
