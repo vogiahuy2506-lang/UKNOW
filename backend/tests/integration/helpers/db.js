@@ -15,6 +15,8 @@ export async function truncateAll() {
     TRUNCATE TABLE
       campaign_nodes,
       campaigns,
+      zalo_templates,
+      zalo_settings,
       email_templates,
       email_settings,
       contact_submissions,
@@ -125,8 +127,13 @@ export async function assignPlanToUser(userId, planId) {
 /**
  * Tạo order tham chiếu một plan — dùng để test soft delete behavior.
  */
+// Counter để bảo đảm order_code duy nhất khi tạo nhiều đơn liên tiếp trong 1 test.
+// Dùng string vì BIGINT ngoài tầm Number.MAX_SAFE_INTEGER (~9e15) nếu nhân nhiều ms.
+let _orderCodeCounter = 0;
+
 export async function createOrder({ planId, userId, userEmail, status = 'success', amount = 100000 }) {
-  const orderCode = Date.now() + Math.floor(Math.random() * 1000);
+  _orderCodeCounter += 1;
+  const orderCode = `${Date.now()}${String(_orderCodeCounter).padStart(6, '0')}`;
   const { rows } = await db.query(
     `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
