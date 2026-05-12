@@ -392,7 +392,7 @@ export const initScheduler = () => {
     try {
       // Sync với userId mặc định = 1
       // Lưu ý: Query lấy TẤT CẢ courses để so sánh, không phân biệt user
-      const result = await coursesController.syncCoursesFromUknow();
+      const result = await coursesController.syncCoursesFromFounderAI();
       if (result.success) {
         console.log('[Scheduler] Đồng bộ khóa học thành công:', {
           totalChecked: result.totalChecked,
