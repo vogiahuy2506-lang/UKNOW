@@ -6,7 +6,7 @@ import landingTestimonialAdminController from '../controllers/landingTestimonial
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(requireRole('super_admin', 'user_admin'));
+router.use(requireRole('admin', 'user'));
 
 router.get('/', landingTestimonialAdminController.list.bind(landingTestimonialAdminController));
 router.post('/', landingTestimonialAdminController.create.bind(landingTestimonialAdminController));

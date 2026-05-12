@@ -4,6 +4,7 @@ import { HiArrowLeft, HiOutlineDuplicate, HiShieldCheck, HiLightningBolt } from 
 import { FaCrown, FaQuestionCircle } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
+import api from '../../services/api';
 import QRCode from 'qrcode';
 
 const CheckoutPage = () => {
@@ -46,15 +47,10 @@ const CheckoutPage = () => {
                     return;
                 }
 
-                const res = await fetch('/api/payments/create-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        planCode: plan.code,
-                        userEmail,
-                    }),
+                const { data } = await api.post('/payments/create-payment', {
+                    planCode: plan.code,
+                    userEmail,
                 });
-                const data = await res.json();
                 if (!data.success) throw new Error(data.message);
 
                 setQrCode(data.result.qrCode);

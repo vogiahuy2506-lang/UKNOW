@@ -1,23 +1,11 @@
 import { create } from 'zustand';
 import api from '../services/api';
 
-/**
- * Lấy token từ storage (ưu tiên localStorage, fallback sessionStorage).
- * Dùng khi khởi tạo để hỗ trợ cả 2 chế độ remember me.
- *
- * @param {string} key - tên key
- * @returns {string|null}
- */
+const CONTEXT_STORAGE_KEY = 'uknow_active_context';
+
 const getStoredToken = (key) =>
   localStorage.getItem(key) || sessionStorage.getItem(key);
 
-/**
- * Lưu token vào storage tương ứng với chế độ remember me.
- *
- * @param {string} key - tên key
- * @param {string} value - giá trị token
- * @param {boolean} rememberMe - true → localStorage, false → sessionStorage
- */
 const storeToken = (key, value, rememberMe) => {
   if (rememberMe) {
     localStorage.setItem(key, value);
@@ -26,14 +14,60 @@ const storeToken = (key, value, rememberMe) => {
   }
 };
 
-/**
- * Xóa token khỏi cả hai storage (đảm bảo logout sạch bất kể storage nào đang dùng).
- *
- * @param {string} key - tên key
- */
 const removeToken = (key) => {
   localStorage.removeItem(key);
   sessionStorage.removeItem(key);
+};
+
+/**
+ * Khôi phục activeContext từ sessionStorage (mất khi đóng tab, không persist qua logout).
+ * Trả về null nếu không có hoặc đã stale.
+ */
+const loadStoredContext = () => {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveContext = (ctx) => {
+  if (ctx && ctx.type === 'employee') {
+    sessionStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(ctx));
+  } else {
+    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+  }
+};
+
+/** Build employee context object từ membership row (snapshot dữ liệu hiện tại). */
+const buildEmployeeContext = (membership) => ({
+  type: 'employee',
+  ownerId: membership.ownerId,
+  ownerName: membership.ownerName || membership.ownerUsername,
+  ownerAvatarUrl: membership.ownerAvatarUrl,
+  permissions: membership.permissions,
+  dailyEmailLimit: membership.dailyEmailLimit ?? null,
+  monthlyEmailLimit: membership.monthlyEmailLimit ?? null,
+  dailyZaloLimit: membership.dailyZaloLimit ?? null,
+  monthlyZaloLimit: membership.monthlyZaloLimit ?? null,
+});
+
+/**
+ * Chọn ngữ cảnh mặc định sau khi đăng nhập / khởi tạo:
+ *   - Nếu user không có plan (active_plan_id null) NHƯNG là employee của ít nhất 1 owner
+ *     → tự động vào context employee đầu tiên để họ thấy được dashboard
+ *   - Nếu có plan → mặc định 'self'
+ *   - Admin → luôn 'self'
+ */
+const pickDefaultContext = (user) => {
+  if (!user || user.role === 'admin') return { type: 'self' };
+  const memberships = user.memberships || [];
+  const hasPlan = !!user.active_plan_id;
+  if (!hasPlan && memberships.length > 0) {
+    return buildEmployeeContext(memberships[0]);
+  }
+  return { type: 'self' };
 };
 
 /**
@@ -41,18 +75,17 @@ const removeToken = (key) => {
  */
 const normalizeUser = (user) => {
   if (!user) return null;
-  
-  // Map backend roles to frontend roleCode
-  let roleCode = user.roleCode || 'employee';
-  let roleName = user.roleName || 'Nhân viên';
+
+  let roleCode = user.roleCode || 'user';
+  let roleName = user.roleName || 'Người dùng';
 
   if (!user.roleCode && user.role) {
-    if (user.role === 'super_admin' || user.role === 'user_admin') {
+    if (user.role === 'admin') {
       roleCode = 'admin';
-      roleName = user.role === 'super_admin' ? 'Super Admin' : 'Quản trị viên';
-    } else if (user.role === 'employee') {
-      roleCode = 'employee';
-      roleName = 'Nhân viên';
+      roleName = 'Super Admin';
+    } else {
+      roleCode = 'user';
+      roleName = 'Người dùng';
     }
   }
 
@@ -60,6 +93,7 @@ const normalizeUser = (user) => {
     ...user,
     roleCode,
     roleName,
+    memberships: user.memberships || [],
   };
 };
 
@@ -67,10 +101,11 @@ export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
+  activeContext: { type: 'self' },
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
-   * Kiểm tra cả localStorage và sessionStorage để hỗ trợ remember me.
    */
   initialize: async () => {
     const token = getStoredToken('accessToken');
@@ -78,19 +113,40 @@ export const useAuthStore = create((set, get) => ({
       try {
         const response = await api.get('/auth/me');
         const rawUser = response.data.data.user;
+        const normalizedUser = normalizeUser(rawUser);
+
+        // Khôi phục context đã lưu (nếu vẫn còn trong memberships); nếu không, chọn default thông minh
+        const storedCtx = loadStoredContext();
+        let activeContext = null;
+        if (storedCtx?.type === 'employee' && normalizedUser?.memberships) {
+          const membership = normalizedUser.memberships.find(
+            (m) => String(m.ownerId) === String(storedCtx.ownerId)
+          );
+          if (membership) {
+            activeContext = buildEmployeeContext(membership);
+          }
+        }
+        if (!activeContext) {
+          activeContext = pickDefaultContext(normalizedUser);
+          saveContext(activeContext);
+        }
+
         set({
-          user: normalizeUser(rawUser),
+          user: normalizedUser,
           isAuthenticated: true,
           isLoading: false,
+          activeContext,
         });
       } catch (error) {
         console.error('Auth initialization failed:', error);
         removeToken('accessToken');
         removeToken('refreshToken');
+        sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
         set({
           user: null,
           isAuthenticated: false,
           isLoading: false,
+          activeContext: { type: 'self' },
         });
       }
     } else {
@@ -100,23 +156,17 @@ export const useAuthStore = create((set, get) => ({
 
   /**
    * Đăng nhập bằng username/password.
-   * Mặc định bật ghi nhớ đăng nhập để phiên có thể dùng lại trên tab mới.
-   *
-   * @param {string} username - tên đăng nhập
-   * @param {string} password - mật khẩu
-   * @param {boolean} rememberMe - ghi nhớ đăng nhập
-   * @returns {object} response data
    */
   login: async (username, password, rememberMe = true) => {
     const response = await api.post('/auth/login', { username, password, rememberMe });
     const { user, accessToken } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
+    const normalizedUser = normalizeUser(user);
+    const activeContext = pickDefaultContext(normalizedUser);
+    saveContext(activeContext);
 
-    set({
-      user: normalizeUser(user),
-      isAuthenticated: true,
-    });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext });
 
     return response.data;
   },
@@ -129,35 +179,31 @@ export const useAuthStore = create((set, get) => ({
     const { user, accessToken } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
+    const normalizedUser = normalizeUser(user);
+    const activeContext = pickDefaultContext(normalizedUser);
+    saveContext(activeContext);
 
-    set({
-      user: normalizeUser(user),
-      isAuthenticated: true,
-    });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext });
 
     return response.data;
   },
 
-  // Register (giữ lại cho trường hợp backend dùng nội bộ)
   register: async (data) => {
     const response = await api.post('/auth/register', data);
     const { user, accessToken } = response.data.data;
 
     localStorage.setItem('accessToken', accessToken);
+    const normalizedUser = normalizeUser(user);
+    const activeContext = pickDefaultContext(normalizedUser);
+    saveContext(activeContext);
 
-    set({
-      user: normalizeUser(user),
-      isAuthenticated: true,
-    });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext });
 
     return response.data;
   },
 
   /**
    * Đăng xuất: thu hồi refresh token, xóa tokens khỏi mọi storage.
-   *
-   * @param {{skipServer?: boolean}} [options] cấu hình logout
-   * @param {boolean} [options.skipServer=false] true để chỉ logout local, không gọi API server
    */
   logout: async (options = {}) => {
     const shouldSkipServerLogout = Boolean(options?.skipServer);
@@ -166,14 +212,55 @@ export const useAuthStore = create((set, get) => ({
         await api.post('/auth/logout', {});
       }
     } catch {
-      // Bỏ qua lỗi logout phía server, vẫn xóa local state
+      // Bỏ qua lỗi logout phía server
     } finally {
       removeToken('accessToken');
+      sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
       set({
         user: null,
         isAuthenticated: false,
+        activeContext: { type: 'self' },
       });
     }
+  },
+
+  /**
+   * Chuyển ngữ cảnh hoạt động.
+   * @param {number|string|null} ownerId - null để về self context
+   */
+  switchContext: (ownerId) => {
+    const { user } = get();
+
+    if (!ownerId) {
+      const ctx = { type: 'self' };
+      saveContext(ctx);
+      set({ activeContext: ctx });
+      return;
+    }
+
+    const membership = user?.memberships?.find(
+      (m) => String(m.ownerId) === String(ownerId)
+    );
+
+    if (!membership) {
+      console.warn('[AuthStore] switchContext: membership not found for ownerId', ownerId);
+      return;
+    }
+
+    const ctx = {
+      type: 'employee',
+      ownerId: membership.ownerId,
+      ownerName: membership.ownerName || membership.ownerUsername,
+      ownerAvatarUrl: membership.ownerAvatarUrl,
+      permissions: membership.permissions,
+      dailyEmailLimit: membership.dailyEmailLimit ?? null,
+      monthlyEmailLimit: membership.monthlyEmailLimit ?? null,
+      dailyZaloLimit: membership.dailyZaloLimit ?? null,
+      monthlyZaloLimit: membership.monthlyZaloLimit ?? null,
+    };
+
+    saveContext(ctx);
+    set({ activeContext: ctx });
   },
 
   /** Cập nhật thông tin user trong store. */

@@ -68,7 +68,7 @@ class AuthController {
 
       const result = await client.query(
         `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id, username, email, full_name, avatar_url, status, role`,
         [username, email, passwordHash, fullName || null, phone || null]
       );
@@ -185,17 +185,20 @@ class AuthController {
 
       const responseUser = this.formatUser(user);
 
-      // Với employee: lấy thêm permissions và ownerId từ user_members
-      if (user.role === 'employee') {
-        const memberResult = await client.query(
-          `SELECT owner_id, permissions FROM user_members WHERE employee_id = $1 AND status = 'active'`,
-          [user.id]
-        );
-        if (memberResult.rows[0]) {
-          responseUser.ownerId = memberResult.rows[0].owner_id;
-          responseUser.permissions = memberResult.rows[0].permissions;
-        }
-      }
+      // Lấy memberships để frontend hiện Context Switcher ngay sau login
+      const membershipsResult = await client.query(
+        `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
+                u.username AS "ownerUsername", u.avatar_url AS "ownerAvatarUrl",
+                um.permissions, um.status,
+                um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
+                um.daily_zalo_limit AS "dailyZaloLimit", um.monthly_zalo_limit AS "monthlyZaloLimit"
+         FROM user_members um
+         JOIN users u ON u.id = um.owner_id
+         WHERE um.employee_id = $1 AND um.status = 'active'
+         ORDER BY um.created_at ASC`,
+        [user.id]
+      );
+      responseUser.memberships = membershipsResult.rows;
 
       return res.json({
         success: true,
@@ -275,7 +278,7 @@ class AuthController {
 
         const insertResult = await client.query(
           `INSERT INTO users (username, email, password_hash, full_name, avatar_url, is_verified, status, role, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
            RETURNING id, username, email, full_name, avatar_url, status, role`,
           [username, email, passwordHash, name || null, picture || null]
         );
@@ -320,17 +323,19 @@ class AuthController {
 
       const responseUser = this.formatUser(user);
 
-      // Với employee: lấy thêm permissions và ownerId từ user_members
-      if (user.role === 'employee') {
-        const memberResult = await client.query(
-          `SELECT owner_id, permissions FROM user_members WHERE employee_id = $1 AND status = 'active'`,
-          [user.id]
-        );
-        if (memberResult.rows[0]) {
-          responseUser.ownerId = memberResult.rows[0].owner_id;
-          responseUser.permissions = memberResult.rows[0].permissions;
-        }
-      }
+      const membershipsResult = await client.query(
+        `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
+                u.username AS "ownerUsername", u.avatar_url AS "ownerAvatarUrl",
+                um.permissions, um.status,
+                um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
+                um.daily_zalo_limit AS "dailyZaloLimit", um.monthly_zalo_limit AS "monthlyZaloLimit"
+         FROM user_members um
+         JOIN users u ON u.id = um.owner_id
+         WHERE um.employee_id = $1 AND um.status = 'active'
+         ORDER BY um.created_at ASC`,
+        [user.id]
+      );
+      responseUser.memberships = membershipsResult.rows;
 
       return res.json({
         success: true,
@@ -549,20 +554,37 @@ class AuthController {
 
   /**
    * Lấy thông tin user đang đăng nhập từ req.user (set bởi authMiddleware).
+   * Trả thêm memberships[] — danh sách các tài khoản owner mà user đang là employee.
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
   async getMe(req, res) {
     try {
       const user = req.user;
-      const data = { user: this.formatUser(user) };
+      const formatted = this.formatUser(user);
 
-      if (user.role === 'employee') {
-        data.user.ownerId = user.owner_id;
-        data.user.permissions = user.permissions;
-      }
+      // Lấy danh sách tổ chức mà user đang là employee (để hiện Context Switcher)
+      const membershipsResult = await db.query(
+        `SELECT um.owner_id AS "ownerId",
+                u.full_name AS "ownerName",
+                u.username AS "ownerUsername",
+                u.avatar_url AS "ownerAvatarUrl",
+                um.permissions,
+                um.status,
+                um.daily_email_limit AS "dailyEmailLimit",
+                um.monthly_email_limit AS "monthlyEmailLimit",
+                um.daily_zalo_limit AS "dailyZaloLimit",
+                um.monthly_zalo_limit AS "monthlyZaloLimit"
+         FROM user_members um
+         JOIN users u ON u.id = um.owner_id
+         WHERE um.employee_id = $1 AND um.status = 'active'
+         ORDER BY um.created_at ASC`,
+        [user.id]
+      );
 
-      return res.json({ success: true, data });
+      formatted.memberships = membershipsResult.rows;
+
+      return res.json({ success: true, data: { user: formatted } });
     } catch (error) {
       console.error('Get me error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -583,7 +605,7 @@ class AuthController {
       email: user.email,
       fullName: user.full_name,
       avatarUrl: user.avatar_url,
-      role: user.role || 'user_admin',
+      role: user.role || 'user',
       active_plan_id: user.active_plan_id ?? null,
       subscriptionExpiresAt: expiresAt,
       subscriptionExpired: isExpired,
@@ -593,7 +615,7 @@ class AuthController {
 
   generateAccessToken(user) {
     return jwt.sign(
-      { userId: user.id, email: user.email, role: user.role || 'user_admin' },
+      { userId: user.id, email: user.email, role: user.role || 'user' },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '3h' }
     );

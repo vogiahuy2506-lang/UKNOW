@@ -5,7 +5,7 @@ import * as ctrl from '../controllers/admin/adminOrders.controller.js';
 
 const router = express.Router();
 router.use(authMiddleware);
-router.use(requireRole('super_admin'));
+router.use(requireRole('admin'));
 
 router.get('/', ctrl.list);
 router.patch('/:orderCode/cancel', ctrl.cancel);
