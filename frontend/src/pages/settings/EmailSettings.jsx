@@ -256,7 +256,7 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="UKNOW"
+                            placeholder="Founder AI"
                             required
                           />
                         </div>
@@ -272,7 +272,7 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="noreply@uknow.vn"
+                            placeholder="noreply@Founder AI.vn"
                             required
                           />
                         </div>

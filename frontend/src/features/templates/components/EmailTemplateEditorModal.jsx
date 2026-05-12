@@ -125,7 +125,7 @@ const EmailTemplateEditorModal = ({
                 updateSubjectValue(e.target.value, e.target.selectionStart || 0)
               }
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-              placeholder="Ví dụ: Chào mừng {{name}} đến với UKNOW!"
+              placeholder="Ví dụ: Chào mừng {{name}} đến với Founder AI!"
               required
             />
           </div>

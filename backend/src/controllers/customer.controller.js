@@ -139,7 +139,7 @@ class CustomerController {
   }
 
   /**
-   * Lấy danh sách khách hàng từ UKNOW API dựa trên orders
+   * Lấy danh sách khách hàng từ Founder AI API dựa trên orders
    * Map course_code (DB) với product_id (API)
    * @param {import('express').Request} req
    * @param {import('express').Response} res
@@ -160,10 +160,10 @@ class CustomerController {
         data,
       });
     } catch (error) {
-      console.error('Get interested customers from UKNOW API error:', error.response?.data || error.message);
+      console.error('Get interested customers from Founder AI API error:', error.response?.data || error.message);
       res.status(500).json({
         success: false,
-        message: 'Khong the lay du lieu khach hang tu UKNOW API',
+        message: 'Khong the lay du lieu khach hang tu Founder AI API',
       });
     }
   }

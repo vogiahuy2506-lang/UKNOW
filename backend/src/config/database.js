@@ -13,7 +13,7 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'password',
   // Hiển thị trong pg_stat_activity.application_name (DBeaver/DataGrip) để phân biệt backend vs IDE.
-  application_name: String(process.env.DB_APPLICATION_NAME || 'uknow-campaign-backend').trim() || 'uknow-campaign-backend',
+  application_name: String(process.env.DB_APPLICATION_NAME || 'Founder AI-campaign-backend').trim() || 'Founder AI-campaign-backend',
   // Kích thước pool cấu hình qua env; mặc định 20 kết nối tối đa mỗi process.
   max: Number.parseInt(process.env.DB_POOL_MAX, 10) || 20,
   // Sau khoảng thời gian này client nằm im trong pool sẽ bị đóng (giảm số backend `idle` lâu dài).

@@ -89,7 +89,7 @@ class LandingPageAdminService {
       err.statusCode = 409;
       throw err;
     }
-    /** Khi lưu: gỡ khối UKnow cũ, đổi href http(s) sang link tracking, chèn lp-track.js (không tự chèn iframe). */
+    /** Khi lưu: gỡ khối Founder AI cũ, đổi href http(s) sang link tracking, chèn lp-track.js (không tự chèn iframe). */
     const htmlContent = prepareLandingHtmlOnSave(body?.htmlContent ?? '', {
       slug,
       frontendOrigin: resolveFrontendOriginFromEnv(),

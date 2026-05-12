@@ -7,7 +7,7 @@
  * 3. Bản lưu cũ không hợp lệ (fallback "Không parse được JSON...") sẽ bị bỏ qua / xóa khi đọc.
  */
 
-const STORAGE_KEY = 'uknow_dashboard_insight_latest';
+const STORAGE_KEY = 'founder_dashboard_insight_latest';
 
 /**
  * Trích object insight từ response axios `POST /dashboard/insights` (hỗ trợ `data` lồng hoặc payload phẳng).

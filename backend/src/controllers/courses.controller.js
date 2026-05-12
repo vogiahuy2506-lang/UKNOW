@@ -1,20 +1,21 @@
 import axios from 'axios';
 import db from '../config/database.js';
 import { serverError, paginate } from '../helpers.js';
+import { buildUserScopeClause } from '../utils/roleScope.util.js';
 
 class CoursesController {
   constructor() {
-    this.baseUrl = process.env.UKNOW_API_URL || 'https://uknow.edu.vn/wp-json';
+    this.baseUrl = process.env.UKNOW_API_URL || 'https://founderai.biz/wp-json';
     this.consumerKey = process.env.UKNOW_CONSUMER_KEY;
     this.consumerSecret = process.env.UKNOW_CONSUMER_SECRET;
   }
 
   /**
-   * Lấy auth headers cho UKNOW API
+   * Lấy auth headers cho Founder AI API
    */
   getAuthHeaders() {
     if (!this.consumerKey || !this.consumerSecret) {
-      throw new Error('Thiếu thông tin xác thực UKNOW API');
+      throw new Error('Thiếu thông tin xác thực Founder AI API');
     }
     const credentials = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
     return {
@@ -24,7 +25,7 @@ class CoursesController {
   }
 
   /**
-   * Fetch chi tiết product từ UKNOW WooCommerce API
+   * Fetch chi tiết product từ Founder AI WooCommerce API
    * @param {string|number} productId - ID của product cần lấy
    * @returns {Promise<object|null>} Product data hoặc null nếu không tìm thấy
    */
@@ -105,12 +106,22 @@ class CoursesController {
           thumbnail_url,
           created_at,
           updated_at
-        FROM courses
+        FROM courses AS courses
       `;
+      
+      const { id: userId, role, activeContext } = req.user;
+      const { clause: scopeClause, params: scopedParams } = buildUserScopeClause({
+        tableAlias: 'courses',
+        userId,
+        role,
+        activeContext
+      });
 
-      const params = [];
+      const params = [...scopedParams];
       const whereClauses = [];
-      let paramIndex = 1;
+      if (scopeClause) whereClauses.push(scopeClause);
+      
+      let paramIndex = params.length + 1;
       
       if (search) {
         whereClauses.push(`course_name ILIKE $${paramIndex}`);
@@ -136,7 +147,7 @@ class CoursesController {
 
       // Đếm tổng số
       const countQuery = whereClauses.length > 0
-        ? `SELECT COUNT(*) FROM courses WHERE ${whereClauses.join(' AND ')}`
+        ? `SELECT COUNT(*) FROM courses AS courses WHERE ${whereClauses.join(' AND ')}`
         : `SELECT COUNT(*) FROM courses`;
       
       const countResult = await db.query(countQuery, params);
@@ -185,6 +196,7 @@ class CoursesController {
       const result = await db.query(
         `SELECT 
           id,
+          id_user,
           course_code,
           course_name,
           price,
@@ -200,14 +212,28 @@ class CoursesController {
         [id]
       );
 
-      if (result.rows.length === 0) {
+      const courseRaw = result.rows[0];
+      if (!courseRaw) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy khóa học',
         });
       }
 
-      const row = result.rows[0];
+      // Kiểm tra quyền sở hữu (trừ admin)
+      const { id: userId, role, activeContext } = req.user;
+      const isOwner = Number(courseRaw.id_user) === Number(userId);
+      const isContextOwner = activeContext?.type === 'employee' && Number(courseRaw.id_user) === Number(activeContext.ownerId);
+      const isAdmin = role === 'admin';
+
+      if (!isAdmin && !isOwner && !isContextOwner) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền truy cập khóa học này',
+        });
+      }
+
+      const row = courseRaw;
       const course = {
         id: row.id,
         courseCode: row.course_code,
@@ -232,15 +258,18 @@ class CoursesController {
   }
 
   /**
-   * Đồng bộ khóa học từ UKNOW API (thủ công)
+   * Đồng bộ khóa học từ Founder AI API (thủ công)
    * POST /api/courses/sync
    */
   async syncManual(req, res) {
     try {
       const userId = req.user.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
       
-      console.log(`[Manual Sync] Bắt đầu đồng bộ khóa học bởi user ${userId}`);
-      const result = await this.syncCoursesFromUknow(userId);
+      console.log(`[Manual Sync] Bắt đầu đồng bộ khóa học bởi user ${userId} cho owner ${effectiveOwnerId}`);
+      const result = await this.syncCoursesFromUknow(effectiveOwnerId);
       
       return res.json({
         success: result.success,
@@ -255,7 +284,7 @@ class CoursesController {
   }
 
   /**
-   * Đồng bộ khóa học từ UKNOW API bằng cách:
+   * Đồng bộ khóa học từ Founder AI API bằng cách:
    * 1. Lấy tất cả orders (phân trang)
    * 2. Thu thập product_id từ line_items
    * 3. Fetch chi tiết từng product qua /wc/v3/products/:product_id
@@ -273,9 +302,9 @@ class CoursesController {
     const errors = [];
 
     try {
-      console.log('[Courses Sync] Bắt đầu đồng bộ khóa học từ UKNOW API (qua orders)');
+      console.log('[Courses Sync] Bắt đầu đồng bộ khóa học từ Founder AI API (qua orders)');
 
-      // Bước 1: Lấy tất cả orders từ UKNOW API (phân trang)
+      // Bước 1: Lấy tất cả orders từ Founder AI API (phân trang)
       let page = 1;
       let hasMore = true;
       const productIdsSet = new Set();
@@ -328,10 +357,12 @@ class CoursesController {
       const productIds = Array.from(productIdsSet);
       console.log(`[Courses Sync] Thu thập được ${productIds.length} unique products từ ${totalOrders} orders (${totalLineItems} line items)`);
 
-      // Bước 2: Lấy tất cả courses hiện có trong database
+      // Bước 2: Lấy tất cả courses hiện có trong database của user này
       const existingCoursesResult = await db.query(
         `SELECT id, course_code, course_name, price, original_price, description, category, thumbnail_url, status
-         FROM courses`
+         FROM courses
+         WHERE id_user = $1`,
+        [userId]
       );
 
       const existingCoursesMap = new Map();

@@ -125,7 +125,7 @@ LƯU Ý QUAN TRỌNG:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
-      const adminSystemPrompt = `Bạn là UKNOW AI - Trợ lý thông minh cho System Admin của nền tảng UKNOW.
+      const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI.
 Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược và trả lời câu hỏi về tình trạng hoạt động của nền tảng.
 
 ${contextBlock}

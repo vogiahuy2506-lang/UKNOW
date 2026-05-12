@@ -27,8 +27,8 @@ class LandingTestimonialService {
     return landingTestimonialRepository.findActiveOrdered();
   }
 
-  async listAdmin() {
-    return landingTestimonialRepository.findAllOrdered();
+  async listAdmin(userId) {
+    return landingTestimonialRepository.findAllOrdered(userId);
   }
 
   /**
@@ -92,6 +92,7 @@ class LandingTestimonialService {
         return await landingTestimonialRepository.insert({
           ...payloadBase,
           imageUrl: newUrl,
+          idUser: userId,
         });
       } catch (dbErr) {
         await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingTestimonialRollback');
@@ -103,6 +104,7 @@ class LandingTestimonialService {
     return landingTestimonialRepository.insert({
       ...payloadBase,
       imageUrl,
+      idUser: userId,
     });
   }
 
@@ -203,12 +205,18 @@ class LandingTestimonialService {
    * Xóa bản ghi và file ảnh trên `uploads/` nếu URL trỏ về file nội bộ.
    *
    * @param {number|string} id
+   * @param {number} userId
    */
-  async remove(id) {
+  async remove(id, userId) {
     const existing = await landingTestimonialRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy đánh giá landing');
       err.statusCode = 404;
+      throw err;
+    }
+    if (existing.idUser !== userId) {
+      const err = new Error('Bạn không có quyền xóa bản ghi này');
+      err.statusCode = 403;
       throw err;
     }
     const fileKey = extractStorageKeyFromImageUrl(existing.imageUrl);

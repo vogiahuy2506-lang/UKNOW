@@ -5,7 +5,7 @@ import leadService from '../services/lead/lead.service.js';
  */
 class PublicLeadController {
   /**
-   * Tạo lead mới từ form landing UKnow.
+   * Tạo lead mới từ form landing Founder AI.
    *
    * Luồng hoạt động:
    * 1. Nhận JSON body (họ, tên, email, SĐT, nghề, lĩnh vực, đồng ý marketing).

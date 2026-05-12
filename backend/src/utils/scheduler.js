@@ -384,7 +384,7 @@ export const requestCampaignScheduleRefresh = async () => {
  * Khởi tạo các scheduled jobs
  */
 export const initScheduler = () => {
-  // Đồng bộ khóa học từ UKNOW mỗi ngày lúc 00:30 (12:30 AM)
+  // Đồng bộ khóa học từ Founder AI mỗi ngày lúc 00:30 (12:30 AM)
   // Cron format: phút giờ ngày tháng thứ
   // '30 0 * * *' = 00:30 mỗi ngày
   cron.schedule('30 0 * * *', async () => {

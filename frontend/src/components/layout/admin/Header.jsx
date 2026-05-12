@@ -6,7 +6,7 @@ import {
   HiOutlineLockClosed,
   HiOutlineLogout,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/cropped-uknow-1-32x32.png';
+import logoIcon from '../../../assets/icons/cropped-founder-1-32x32.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 
 const Header = ({ onToggleSidebar }) => {
@@ -43,8 +43,8 @@ const Header = ({ onToggleSidebar }) => {
         </button>
 
         <div className="flex items-center gap-2">
-          <img src={logoIcon} alt="UKNOW Logo" className="w-7 h-7 object-contain" />
-          <span className="text-sm font-bold text-gray-900">UKNOW</span>
+          <img src={logoIcon} alt="Founder AI Logo" className="w-7 h-7 object-contain" />
+          <span className="text-sm font-bold text-gray-900">Founder AI</span>
         </div>
       </div>
 

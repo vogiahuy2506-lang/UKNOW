@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
-const SENDER_NAME = process.env.SYSTEM_EMAIL_NAME || 'UKNOW Platform';
-const SENDER_ADDRESS = process.env.SYSTEM_EMAIL_FROM || 'noreply@uknow.vn';
+const SENDER_NAME = process.env.SYSTEM_EMAIL_NAME || 'Founder AI Platform';
+const SENDER_ADDRESS = process.env.SYSTEM_EMAIL_FROM || 'noreply@founderai.biz';
 
 /**
  * Nodemailer transporter dùng SendGrid SMTP cho email hệ thống (nhắc hạn, thông báo).
@@ -52,7 +52,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
     : `📅 Còn <strong style="color:${urgencyColor}">${daysLeft} ngày</strong>`;
 
   return {
-    subject: `[UKNOW] Gói ${planName} của bạn sắp hết hạn (còn ${daysLeft} ngày)`,
+    subject: `[Founder AI] Gói ${planName} của bạn sắp hết hạn (còn ${daysLeft} ngày)`,
     html: `
 <!DOCTYPE html>
 <html lang="vi">
@@ -62,7 +62,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
 
     <!-- Header -->
     <div style="background:#f97316;padding:28px 32px">
-      <p style="margin:0;color:#fff;font-size:20px;font-weight:700">UKNOW Campaign</p>
+      <p style="margin:0;color:#fff;font-size:20px;font-weight:700">Founder AI</p>
       <p style="margin:4px 0 0;color:rgba(255,255,255,.85);font-size:13px">Thông báo gia hạn gói dịch vụ</p>
     </div>
 
@@ -93,14 +93,14 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
 
       <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6">
         Nếu bạn đã gia hạn hoặc không muốn nhận thông báo này, vui lòng liên hệ
-        <a href="mailto:support@uknow.vn" style="color:#f97316">support@uknow.vn</a>.
+        <a href="mailto:support@founderai.biz" style="color:#f97316">support@founderai.biz</a>.
       </p>
     </div>
 
     <!-- Footer -->
     <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6">
       <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center">
-        © ${new Date().getFullYear()} UKNOW Platform · Email tự động, vui lòng không reply trực tiếp.
+        © ${new Date().getFullYear()} Founder AI Platform · Email tự động, vui lòng không reply trực tiếp.
       </p>
     </div>
   </div>

@@ -270,7 +270,7 @@ const Register = () => {
       <div className="w-full max-w-[480px] mx-auto">
         <div className="mb-8 lg:mb-10">
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng ký tài khoản</h1>
-          <p className="text-slate-500 font-medium">Bắt đầu trải nghiệm FounderAI miễn phí</p>
+          <p className="text-slate-500 font-medium">Bắt đầu trải nghiệm Founder AI miễn phí</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
