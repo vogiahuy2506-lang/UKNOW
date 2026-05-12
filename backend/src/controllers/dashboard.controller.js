@@ -31,7 +31,7 @@ class DashboardController {
   async getOverview(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getOverview(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
@@ -60,7 +60,7 @@ class DashboardController {
   async getLandingPageStats(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getLandingPageStats(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
       res.json({ success: true, data });
@@ -86,7 +86,7 @@ class DashboardController {
   async getAnalytics(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getAnalytics(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
@@ -120,7 +120,7 @@ class DashboardController {
   async getRuns(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getRuns(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
@@ -157,7 +157,7 @@ class DashboardController {
   async getOrdersList(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getOrdersList(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
@@ -195,7 +195,7 @@ class DashboardController {
   async getTopLists(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getTopLists(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
@@ -221,7 +221,7 @@ class DashboardController {
   async compareCampaigns(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user.role_code;
+      const roleCode = req.user.role;
       const isAdmin = String(roleCode || '').trim().toLowerCase() === 'admin';
       const { campaignIds } = req.query;
 

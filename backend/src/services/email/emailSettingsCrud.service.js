@@ -26,7 +26,7 @@ class EmailSettingsCrudService {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const { page = 1, limit = 10, status } = req.query;
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
@@ -61,7 +61,7 @@ class EmailSettingsCrudService {
   async getById(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const { id } = req.params;
       const item = await emailSettingsRepository.getById(userId, id, { roleCode });
       if (!item) {
@@ -103,7 +103,7 @@ class EmailSettingsCrudService {
   async create(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const {
         name,
         email,
@@ -168,7 +168,7 @@ class EmailSettingsCrudService {
   async update(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const { id } = req.params;
       const current = await emailSettingsRepository.getById(userId, id, { roleCode });
       if (!current) {
@@ -207,7 +207,7 @@ class EmailSettingsCrudService {
   async delete(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const { id } = req.params;
       const deleted = await emailSettingsRepository.delete(userId, id, { roleCode });
       if (!deleted) {
@@ -233,7 +233,7 @@ class EmailSettingsCrudService {
   async getActiveSettings(req, res) {
     try {
       const userId = req.user.id;
-      const roleCode = req.user?.role_code;
+      const roleCode = req.user?.role;
       const rows = await emailSettingsRepository.getActiveByUser(userId, { roleCode });
       res.json({
         success: true,
