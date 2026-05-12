@@ -541,25 +541,28 @@ CREATE INDEX idx_email_messages_run      ON email_messages(id_run);
 
 -- ─── Zalo messages — outbound (group/person) ───────────────────────────
 CREATE TABLE zalo_messages (
-  id                BIGSERIAL PRIMARY KEY,
-  id_user           BIGINT,
-  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
-  id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
-  id_customer       BIGINT       REFERENCES customers(id) ON DELETE SET NULL,
-  id_zalo_template  BIGINT,
-  id_node           BIGINT,
-  tracking_token    VARCHAR(255) UNIQUE,
-  recipient_phone   VARCHAR(50),
-  recipient_uid     VARCHAR(255),
-  recipient_name    VARCHAR(255),
-  message_content   TEXT,
-  click_count       INTEGER      NOT NULL DEFAULT 0,
-  status            VARCHAR(30)  NOT NULL DEFAULT 'pending',
-  sent_at           TIMESTAMPTZ,
-  first_clicked_at  TIMESTAMPTZ,
-  last_clicked_at   TIMESTAMPTZ,
-  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  id                  BIGSERIAL PRIMARY KEY,
+  id_user             BIGINT,
+  id_campaign         BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run              BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_customer         BIGINT       REFERENCES customers(id) ON DELETE SET NULL,
+  id_zalo_template    BIGINT,
+  id_node             BIGINT,
+  channel             VARCHAR(50),
+  group_id            VARCHAR(100),
+  tracking_token      VARCHAR(255) UNIQUE,
+  tracking_metadata   JSONB,
+  recipient_phone     VARCHAR(50),
+  recipient_uid       VARCHAR(255),
+  recipient_name      VARCHAR(255),
+  message_content     TEXT,
+  click_count         INTEGER      NOT NULL DEFAULT 0,
+  status              VARCHAR(30)  NOT NULL DEFAULT 'pending',
+  sent_at             TIMESTAMPTZ,
+  first_clicked_at    TIMESTAMPTZ,
+  last_clicked_at     TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_zalo_messages_customer ON zalo_messages(id_customer);
 CREATE INDEX idx_zalo_messages_token    ON zalo_messages(tracking_token);
@@ -679,6 +682,16 @@ CREATE TABLE file_access_events (
   occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
+
+-- ─── Dashboard insights (Gemini AI persistence) ───────────────────────
+CREATE TABLE dashboard_insights (
+  id                BIGSERIAL PRIMARY KEY,
+  id_user           BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payload           JSONB       NOT NULL,
+  filters_snapshot  JSONB,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_dashboard_insights_user ON dashboard_insights(id_user);
 
 -- ─── Landing pages (dashboard stats source) ────────────────────────────
 CREATE TABLE landing_pages (
