@@ -163,6 +163,7 @@ const EmployeeManagement = () => {
     createLinkForm.reset();
     setShowCreateModal(true);
     navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ phản ứng theo location.state
   }, [location.state]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ const EmployeeManagement = () => {
         monthlyZalo:  d.monthlyZaloLimit  ?? null,
       });
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ fetch 1 lần lúc mount
   }, []);
 
   // ── Mở modal chi tiết nhân viên ───────────────────────────────────────────

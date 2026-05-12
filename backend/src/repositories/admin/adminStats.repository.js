@@ -2,7 +2,13 @@ import db from '../../config/database.js';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
-/** KPI tổng quan: thành viên, doanh thu, đơn hàng tháng này */
+/**
+ * KPI tổng quan: thành viên, doanh thu, đơn hàng tháng này.
+ *
+ * Lưu ý: bảng `orders` dùng giá trị `status = 'success'` cho đơn đã thanh toán
+ * (xem `payment.service.js` cập nhật sau webhook PayOS). Trước đây query này
+ * dùng 'completed' nên doanh thu tháng/đơn thành công luôn = 0.
+ */
 export async function getKpiStats() {
   const { rows } = await db.query(`
     SELECT
@@ -10,13 +16,13 @@ export async function getKpiStats() {
       (SELECT COUNT(*) FROM users WHERE role = 'user' AND active_plan_id IS NOT NULL)     AS "activeMembers",
       (SELECT COUNT(*) FROM users WHERE role = 'employee')                                      AS "totalEmployees",
       (SELECT COALESCE(SUM(amount), 0) FROM orders
-        WHERE status = 'completed'
+        WHERE status = 'success'
           AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "revenueThisMonth",
       (SELECT COUNT(*) FROM orders
         WHERE DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "ordersThisMonth",
-      (SELECT COUNT(*) FROM orders WHERE status = 'completed'
+      (SELECT COUNT(*) FROM orders WHERE status = 'success'
           AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "completedOrdersThisMonth",
       (SELECT COUNT(*) FROM orders WHERE status = 'pending'
@@ -32,9 +38,9 @@ export async function getMonthlyRevenue() {
     SELECT
       TO_CHAR(DATE_TRUNC('month', created_at AT TIME ZONE $1), 'MM/YYYY') AS month,
       DATE_TRUNC('month', created_at AT TIME ZONE $1)                      AS "monthDate",
-      COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) AS revenue,
       COUNT(*) AS "totalOrders",
-      COUNT(CASE WHEN status = 'completed' THEN 1 END) AS "completedOrders"
+      COUNT(CASE WHEN status = 'success' THEN 1 END) AS "completedOrders"
     FROM orders
     WHERE created_at >= NOW() - INTERVAL '6 months'
     GROUP BY DATE_TRUNC('month', created_at AT TIME ZONE $1)

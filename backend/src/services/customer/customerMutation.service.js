@@ -10,7 +10,7 @@ class CustomerMutationService {
       if (customerSource && !normalizedCustomerSource) {
         return res.status(400).json({
           success: false,
-          message: 'Nguon khach hang khong hop le. Chi cho phep: Founder AI, uknow_campaign',
+          message: 'Nguon khach hang khong hop le. Chi cho phep: founderai, uknow_campaign',
         });
       }
 
@@ -266,7 +266,7 @@ class CustomerMutationService {
       if (customerSource && !normalizedCustomerSource) {
         return res.status(400).json({
           success: false,
-          message: 'Nguon khach hang khong hop le. Chi cho phep: Founder AI, uknow_campaign',
+          message: 'Nguon khach hang khong hop le. Chi cho phep: founderai, uknow_campaign',
         });
       }
 

@@ -6,7 +6,7 @@
 export const LANDING_COPY = {
   vi: {
     nav: {
-      brand: 'Founder AI.edu.vn',
+      brand: 'Founder AI',
       instructorPrefix: 'Giảng viên:',
       instructorName: 'ThS. Ngô Hữu Thống',
       /** Alt text cho avatar giảng viên */
@@ -105,22 +105,22 @@ export const LANDING_COPY = {
           tag: 'Phổ biến nhất',
           title: 'Xóa Mù A.I — Khóa học dành cho người chưa biết gì',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Marketing & Kinh doanh',
           title: 'Kích hoạt tiềm năng ChatGPT-4o trong mọi công việc',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Thiết kế trình bày',
           title: 'Thiết kế Slide PowerPoint bằng A.I từ A–Z',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'Founder AI.edu.vn →',
+      linkLabel: 'founderai.biz →',
       carouselPrevAria: 'Xem khóa học trước',
       carouselNextAria: 'Xem khóa học tiếp theo',
       detailCtaLabel: 'Xem chi tiết',
@@ -259,7 +259,7 @@ export const LANDING_COPY = {
   },
   en: {
     nav: {
-      brand: 'Founder AI.edu.vn',
+      brand: 'Founder AI',
       instructorPrefix: 'Instructor:',
       instructorName: 'M.Sc. Ngo Huu Thong',
       instructorPhotoAlt: 'M.Sc. Ngo Huu Thong',
@@ -357,22 +357,22 @@ export const LANDING_COPY = {
           tag: 'Most popular',
           title: 'AI Literacy — for complete beginners',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Marketing & business',
           title: 'Unlock ChatGPT-4o for everyday work',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Presentation design',
           title: 'PowerPoint slides with AI from A to Z',
           imageUrl: null,
-          linkUrl: 'https://Founder AI.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'Founder AI.edu.vn →',
+      linkLabel: 'founderai.biz →',
       carouselPrevAria: 'Previous course',
       carouselNextAria: 'Next course',
       detailCtaLabel: 'View details',

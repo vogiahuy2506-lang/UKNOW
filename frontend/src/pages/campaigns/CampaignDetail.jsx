@@ -27,6 +27,7 @@ const CampaignDetail = () => {
 
   useEffect(() => {
     fetchCampaign();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch khi id đổi
   }, [id]);
 
   const fetchCampaign = async () => {

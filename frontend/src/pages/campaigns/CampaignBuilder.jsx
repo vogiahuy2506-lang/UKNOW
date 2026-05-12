@@ -33,17 +33,6 @@ import CampaignBuilderPageLayout from '../../features/campaigns/components/Campa
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
 import toast from 'react-hot-toast';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
-import {
-  HiOutlineMail,
-  HiOutlineCursorClick,
-  HiOutlineTrash,
-  HiOutlineExclamationCircle,
-  HiOutlineDocumentText,
-  HiOutlineDocument,
-  HiOutlineLink,
-  HiOutlinePlus,
-} from 'react-icons/hi';
-
 const LOG_LIST_MIN_WIDTH = 200;
 const LOG_DETAIL_MIN_WIDTH = 220;
 const NODE_DROP_OFFSET_X = 76;

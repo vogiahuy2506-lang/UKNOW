@@ -8,7 +8,7 @@ class CampaignScheduleController {
   async getAll(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
 
       // Ép timestamptz để node-pg không parse naive timestamp theo TZ tiến trình (UTC).
       const result = await db.query(
@@ -69,7 +69,7 @@ class CampaignScheduleController {
   async getById(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
 
       const result = await db.query(
@@ -138,7 +138,7 @@ class CampaignScheduleController {
   async create(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { campaignId, scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
@@ -217,7 +217,7 @@ class CampaignScheduleController {
   async update(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
       const { scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
@@ -316,7 +316,7 @@ class CampaignScheduleController {
   async delete(req, res) {
     try {
       const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role_code);
+      const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không

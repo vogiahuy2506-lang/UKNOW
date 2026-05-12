@@ -181,8 +181,8 @@ class CustomerQueryService {
     if (normalizedSource) {
       if (normalizedSource === 'uknow_campaign') {
         query += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
-      } else if (normalizedSource === 'Founder AI') {
-        query += ` AND LOWER(c.customer_source) IN ('Founder AI', 'woocommerce', 'learnpress')`;
+      } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
+        query += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
       }
     }
 
@@ -251,8 +251,8 @@ class CustomerQueryService {
     if (normalizedSource) {
       if (normalizedSource === 'uknow_campaign') {
         countQuery += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
-      } else if (normalizedSource === 'Founder AI') {
-        countQuery += ` AND LOWER(c.customer_source) IN ('Founder AI', 'woocommerce', 'learnpress')`;
+      } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
+        countQuery += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
       }
     }
     if (Number.isFinite(parsedCampaignId)) {

@@ -102,8 +102,7 @@ const Courses = () => {
     setIsSyncing(true);
     try {
       const res = await api.post('/courses/sync');
-      const data = res.data?.data || {};
-      
+
       if (res.data?.success) {
         toast.success(res.data.message || 'Đồng bộ thành công');
         // Refresh danh sách sau khi sync

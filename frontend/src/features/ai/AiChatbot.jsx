@@ -240,6 +240,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ scroll khi messages đổi; isOpen chỉ là guard
   }, [messages]);
 
   const handleFileUpload = async (e) => {

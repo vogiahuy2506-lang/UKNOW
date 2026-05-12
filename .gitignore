@@ -53,13 +53,18 @@ uploads/
 .vite/
 
 ####################
+# TEST COVERAGE
+####################
+backend/coverage/
+node_modules/
+
+####################
 # OS / EDITOR
 ####################
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-.github/
 .cursor/
 backend/sql/
 backend/.tmp_zca/
