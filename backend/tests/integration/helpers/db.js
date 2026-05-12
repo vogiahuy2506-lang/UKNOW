@@ -17,6 +17,8 @@ export async function truncateAll() {
       refresh_tokens,
       verification_codes,
       user_members,
+      orders,
+      plans,
       users
     RESTART IDENTITY CASCADE
   `);
@@ -69,6 +71,63 @@ export async function createVerificationCode({
     [email, code, type, expiresAt]
   );
   return { email, code };
+}
+
+/**
+ * Tạo plan trong DB. Tiện cho test admin/plans hoặc payment.
+ *
+ * @param {object} overrides
+ * @returns {Promise<object>} row plan đã tạo
+ */
+export async function createPlan(overrides = {}) {
+  const code = overrides.code || `plan_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const name = overrides.name || `Plan ${code}`;
+  const price = overrides.price ?? 100000;
+  const isCustom = overrides.isCustom ?? false;
+  const isActive = overrides.isActive ?? true;
+  const maxEmployees = overrides.maxEmployees ?? 5;
+
+  const { rows } = await db.query(
+    `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
+                        daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING *`,
+    [
+      code,
+      name,
+      price,
+      overrides.description ?? null,
+      JSON.stringify(overrides.features ?? []),
+      maxEmployees,
+      isActive,
+      isCustom,
+      overrides.dailyEmailLimit ?? null,
+      overrides.monthlyEmailLimit ?? null,
+      overrides.dailyZaloLimit ?? null,
+      overrides.monthlyZaloLimit ?? null,
+    ]
+  );
+  return rows[0];
+}
+
+/**
+ * Gán plan vào user (set active_plan_id).
+ */
+export async function assignPlanToUser(userId, planId) {
+  await db.query(`UPDATE users SET active_plan_id = $1 WHERE id = $2`, [planId, userId]);
+}
+
+/**
+ * Tạo order tham chiếu một plan — dùng để test soft delete behavior.
+ */
+export async function createOrder({ planId, userId, userEmail, status = 'success', amount = 100000 }) {
+  const orderCode = Date.now() + Math.floor(Math.random() * 1000);
+  const { rows } = await db.query(
+    `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [orderCode, planId, amount, userEmail, userId, status]
+  );
+  return rows[0];
 }
 
 /**

@@ -42,6 +42,7 @@ CREATE TABLE users (
   max_email_templates     INTEGER,
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
+  subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -107,6 +108,47 @@ CREATE TABLE verification_codes (
 );
 
 CREATE INDEX idx_verification_codes_lookup ON verification_codes(email, code, type);
+
+-- ─── Plans + Orders (payment) ──────────────────────────────────────────
+CREATE TABLE plans (
+  id                    BIGSERIAL PRIMARY KEY,
+  code                  VARCHAR(50)  UNIQUE,
+  name                  VARCHAR(100) NOT NULL,
+  price                 BIGINT       NOT NULL DEFAULT 0,
+  description           TEXT,
+  features              JSONB        NOT NULL DEFAULT '[]',
+  is_active             BOOLEAN      NOT NULL DEFAULT TRUE,
+  is_custom             BOOLEAN      NOT NULL DEFAULT FALSE,
+  max_employees         INTEGER      NOT NULL DEFAULT 0,
+  daily_email_limit     INTEGER,
+  monthly_email_limit   INTEGER,
+  daily_zalo_limit      INTEGER,
+  monthly_zalo_limit    INTEGER,
+  created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- FK sau khi plans tồn tại: users.active_plan_id → plans(id)
+ALTER TABLE users
+  ADD CONSTRAINT users_active_plan_fk
+    FOREIGN KEY (active_plan_id) REFERENCES plans(id) ON DELETE SET NULL;
+
+CREATE TABLE orders (
+  id          BIGSERIAL PRIMARY KEY,
+  order_code  BIGINT       NOT NULL UNIQUE,
+  plan_id     BIGINT       REFERENCES plans(id) ON DELETE SET NULL,
+  amount      BIGINT       NOT NULL DEFAULT 0,
+  user_email  VARCHAR(255),
+  user_id     BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  status      VARCHAR(20)  NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
+CREATE INDEX idx_orders_user_id    ON orders(user_id);
+CREATE INDEX idx_orders_order_code ON orders(order_code);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

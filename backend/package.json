@@ -10,8 +10,8 @@
     "seed": "node scripts/seed.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand",
-    "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit",
+    "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit"
   },
   "jest": {
     "transform": {},
