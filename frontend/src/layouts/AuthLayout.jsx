@@ -55,7 +55,7 @@ const AuthLayout = ({ children }) => {
         <div className="relative z-10 flex items-center gap-6 text-sm font-semibold text-slate-500">
           <span>© 2026 Founder AI Marketing.</span>
           <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">Bảo mật</Link>
-          <a href="mailto:support@Founder AI.vn" className="hover:text-orange-400 transition-colors">Hỗ trợ</a>
+          <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">Hỗ trợ</a>
         </div>
       </div>
 

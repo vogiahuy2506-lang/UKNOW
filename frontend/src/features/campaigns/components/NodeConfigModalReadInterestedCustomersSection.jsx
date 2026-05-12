@@ -223,7 +223,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
         ];
         const dataSourceOpts = [
           { value: 'database', label: 'Database Founder AI Campaign', desc: 'Lấy dữ liệu từ database của hệ thống' },
-          { value: 'api', label: 'API Founder AI.edu.vn', desc: 'Lấy dữ liệu từ WooCommerce API (orders)' },
+          { value: 'api', label: 'API Founder AI', desc: 'Lấy dữ liệu từ WooCommerce API (orders)' },
         ];
         const currentCustomerType = formData.interestedCustomerType || 'interested';
         const currentDataSource = formData.interestedDataSource || 'database';
@@ -341,7 +341,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 <strong>Lưu ý:</strong>{' '}
                 {currentDataSource === 'database'
                   ? 'Nếu đang sửa chiến dịch cụ thể thì ưu tiên lấy dữ liệu trong chiến dịch đó, nếu không sẽ lấy toàn bộ dữ liệu của tài khoản.'
-                  : 'Dữ liệu sẽ được lấy trực tiếp từ WooCommerce API của Founder AI.edu.vn. Đảm bảo đã cấu hình đúng thông tin API key.'}
+                  : 'Dữ liệu sẽ được lấy trực tiếp từ WooCommerce API của founderai.biz. Đảm bảo đã cấu hình đúng thông tin API key.'}
               </p>
             </div>
           </div>

@@ -74,7 +74,7 @@ function PrivacyPolicy() {
               </span>
               <span className="text-slate-600">·</span>
               <span className="rounded-md border border-slate-600/80 bg-slate-900/50 px-2.5 py-1 text-slate-300">
-                Founder AI.edu.vn
+                founderai.biz
               </span>
               <span className="text-slate-600">·</span>
               <span className="rounded-md border border-slate-600/80 bg-slate-900/50 px-2.5 py-1 text-slate-300">
@@ -175,12 +175,12 @@ function PrivacyPolicy() {
               <span className={lc(language, 'vi')}>
                 Cập nhật: <strong>01 tháng 04 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Áp dụng cho: digiso.vn &nbsp;·&nbsp; Founder AI.edu.vn &nbsp;·&nbsp; campaign.digiso.vn
+                Áp dụng cho: digiso.vn &nbsp;·&nbsp; founderai.biz &nbsp;·&nbsp; campaign.digiso.vn
               </span>
               <span className={lc(language, 'en')}>
                 Last updated: <strong>April 01, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Applies to: digiso.vn &nbsp;·&nbsp; Founder AI.edu.vn &nbsp;·&nbsp; campaign.digiso.vn
+                Applies to: digiso.vn &nbsp;·&nbsp; founderai.biz &nbsp;·&nbsp; campaign.digiso.vn
               </span>
             </p>
           </div>
@@ -234,7 +234,7 @@ function PrivacyPolicy() {
                     rel="noopener noreferrer"
                     className="text-teal-400 no-underline hover:underline"
                   >
-                    Founder AI.edu.vn
+                    founderai.biz
                   </a>
                   {'\u00a0'}·{'\u00a0'}
                   <a
@@ -276,7 +276,7 @@ function PrivacyPolicy() {
             </a>
             {'\u00a0'}·{'\u00a0'}
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
-              Founder AI.edu.vn
+              founderai.biz
             </a>
             {'\u00a0'}·{'\u00a0'}
             <a href="https://campaign.digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
@@ -291,7 +291,7 @@ function PrivacyPolicy() {
             </a>
             {'\u00a0'}·{'\u00a0'}
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
-              Founder AI.edu.vn
+              founderai.biz
             </a>
             {'\u00a0'}·{'\u00a0'}
             <a href="https://campaign.digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
