@@ -8,8 +8,8 @@ on:
       - '.github/workflows/deploy-backend.yml'
 
 jobs:
-  test:
-    name: Jest (backend)
+  unit:
+    name: Jest unit (backend)
     runs-on: ubuntu-latest
 
     defaults:
@@ -30,12 +30,65 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest
-        run: npm test -- --ci
+      - name: Run Jest (unit)
+        run: npm run test:unit -- --ci
+
+  integration:
+    name: Jest integration (backend)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: uknow_campaign_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: uknow_campaign_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ci-jwt-secret
+      JWT_REFRESH_SECRET: ci-jwt-refresh-secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      BULLMQ_ENABLED: 'false'
+      NODE_ENV: test
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest (integration)
+        run: npm run test:integration -- --ci
 
   deploy:
     name: Build & Deploy Backend
-    needs: test
+    needs: [unit, integration]
     runs-on: ubuntu-latest
 
     steps:
