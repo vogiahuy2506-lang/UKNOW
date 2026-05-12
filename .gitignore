@@ -53,6 +53,12 @@ uploads/
 .vite/
 
 ####################
+# TEST COVERAGE
+####################
+backend/coverage/
+node_modules/
+
+####################
 # OS / EDITOR
 ####################
 .DS_Store

@@ -10,6 +10,35 @@ on:
       - '.github/workflows/test-backend.yml'
 
 jobs:
+  schema-sync-check:
+    name: Schema sync (migrations ↔ bootstrap.sql)
+    runs-on: ubuntu-latest
+    # Chỉ chạy cho PR vì cần so sánh với base branch.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cảnh báo nếu migration mới chưa được mirror vào bootstrap.sql
+        run: |
+          BASE_REF="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --depth=1 || true
+
+          MIGRATIONS_CHANGED=$(git diff --name-only "$BASE_REF"...HEAD | grep -c '^backend/migrations/' || true)
+          BOOTSTRAP_CHANGED=$(git diff --name-only "$BASE_REF"...HEAD | grep -c '^backend/tests/integration/sql/bootstrap.sql' || true)
+
+          if [ "$MIGRATIONS_CHANGED" -gt 0 ] && [ "$BOOTSTRAP_CHANGED" -eq 0 ]; then
+            echo "::warning::PR có $MIGRATIONS_CHANGED file migration thay đổi nhưng KHÔNG sửa backend/tests/integration/sql/bootstrap.sql."
+            echo "::warning::Nếu migration thêm/đổi cột NOT NULL hoặc bảng mới được dùng trong code, hãy mirror vào bootstrap.sql để integration test vẫn pass."
+            echo ""
+            echo "Migrations đổi trong PR:"
+            git diff --name-only "$BASE_REF"...HEAD | grep '^backend/migrations/' || true
+          else
+            echo "✅ Không phát hiện drift giữa migrations và bootstrap.sql trong PR này."
+          fi
+
   unit:
     name: Jest unit (backend)
     runs-on: ubuntu-latest
@@ -85,5 +114,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest (integration)
-        run: npm run test:integration -- --ci
+      - name: Run Jest (integration + coverage)
+        run: npm run test:coverage -- --ci
+
+      - name: Coverage summary trên PR
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "### 📊 Coverage backend" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            node -e "
+              const c = require('./coverage/coverage-summary.json').total;
+              const fmt = (m) => \`\${m.pct.toString().padStart(6)}%  (\${m.covered}/\${m.total})\`;
+              console.log('Statements:', fmt(c.statements));
+              console.log('Branches  :', fmt(c.branches));
+              console.log('Functions :', fmt(c.functions));
+              console.log('Lines     :', fmt(c.lines));
+            " >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "(coverage-summary.json không tồn tại — kiểm tra config Jest)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          retention-days: 7
+          if-no-files-found: warn
