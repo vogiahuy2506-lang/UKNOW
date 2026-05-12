@@ -13,6 +13,8 @@ import db from '../../../src/config/database.js';
 export async function truncateAll() {
   await db.query(`
     TRUNCATE TABLE
+      campaign_runs,
+      campaign_connections,
       campaign_nodes,
       campaigns,
       zalo_templates,
