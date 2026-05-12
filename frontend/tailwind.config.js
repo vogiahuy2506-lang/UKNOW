@@ -40,7 +40,7 @@ export default {
           900: '#333947',
           950: '#22262f',
         },
-        uknow: {
+        founder: {
           teal: '#0b5563',
           'teal-mid': '#0e7a8a',
           'teal-light': '#13a8bd',
@@ -73,34 +73,34 @@ export default {
       },
       fontFamily: {
         sans: ['Lexend', 'Inter', 'system-ui', 'sans-serif'],
-        uknow: ['Lexend', '"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
+        founder: ['Lexend', '"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
         /** Trang landing `/l` — toàn bộ UI dùng Roboto */
         landing: ['Roboto', 'system-ui', 'sans-serif'],
         display: ['Fraunces', 'Georgia', 'serif'],
       },
       keyframes: {
-        uknowFadeUp: {
+        founderFadeUp: {
           from: { opacity: '0', transform: 'translateY(28px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
-        uknowBlink: {
+        founderBlink: {
           '0%, 100%': { opacity: '1', transform: 'scale(1)' },
           '50%': { opacity: '0.3', transform: 'scale(0.7)' },
         },
-        uknowFloat1: {
+        founderFloat1: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-8px)' },
         },
-        uknowFloat2: {
+        founderFloat2: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(8px)' },
         },
       },
       animation: {
-        'uknow-fade-up': 'uknowFadeUp 0.7s ease both',
-        'uknow-blink': 'uknowBlink 1.6s ease-in-out infinite',
-        'uknow-float-1': 'uknowFloat1 3s ease-in-out infinite',
-        'uknow-float-2': 'uknowFloat2 3.5s ease-in-out infinite',
+        'founder-fade-up': 'founderFadeUp 0.7s ease both',
+        'founder-blink': 'founderBlink 1.6s ease-in-out infinite',
+        'founder-float-1': 'founderFloat1 3s ease-in-out infinite',
+        'founder-float-2': 'founderFloat2 3.5s ease-in-out infinite',
       },
     },
   },

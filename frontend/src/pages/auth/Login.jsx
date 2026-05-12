@@ -96,7 +96,7 @@ const Login = () => {
         {/* Header */}
         <div className="mb-10 lg:mb-12">
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">Đăng nhập</h1>
-          <p className="text-slate-500 font-medium">Chào mừng bạn quay trở lại với hệ thống</p>
+          <p className="text-slate-500 font-medium">Chào mừng bạn quay trở lại với nền tảng Founder AI</p>
         </div>
 
         {/* Form */}

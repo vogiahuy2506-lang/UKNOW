@@ -208,7 +208,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const isSuperAdmin = user?.role === 'admin';
 
   const welcomeMessage = isSuperAdmin
-    ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng UKNOW theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
+    ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng Founder AI theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
     : 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo kịch bản chiến dịch\n🌐 Thiết kế Landing Page\n\nHãy cho tôi biết bạn cần gì nhé!';
 
   const [messages, setMessages] = useState([{
@@ -339,7 +339,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             <HiOutlineSparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">UKNOW AI Assistant</h3>
+            <h3 className="font-bold text-slate-800 text-sm">Founder AI AI Assistant</h3>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sẵn sàng</span>
@@ -475,7 +475,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             </button>
           </div>
         </div>
-        <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • UKNOW Marketing AI</p>
+        <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Founder AI Marketing AI</p>
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"

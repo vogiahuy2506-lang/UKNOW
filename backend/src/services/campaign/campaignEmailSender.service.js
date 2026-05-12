@@ -486,12 +486,12 @@ class CampaignEmailSenderService {
     let attachments = [];
 
     if (template) {
-      subject = template.subject || 'Thông báo từ UKNOW';
+      subject = template.subject || 'Thông báo từ Founder AI';
       htmlBody = template.body_html || template.html_content || '';
       textBody = template.body_text || template.text_content || '';
       attachments = template.attachments || [];
     } else {
-      subject = config.emailSubject || config.subject || 'Thông báo từ UKNOW';
+      subject = config.emailSubject || config.subject || 'Thông báo từ Founder AI';
       htmlBody = config.emailBody || config.htmlContent || config.body || '';
       textBody = config.textContent || config.textBody || '';
 
@@ -551,8 +551,8 @@ class CampaignEmailSenderService {
       textBody = textBody.replace(regex, value);
     }
 
-    if (!subject || subject.trim() === '') subject = 'Thông báo từ UKNOW';
-    if (!htmlBody || htmlBody.trim() === '') htmlBody = textBody || 'Email từ UKNOW';
+    if (!subject || subject.trim() === '') subject = 'Thông báo từ Founder AI';
+    if (!htmlBody || htmlBody.trim() === '') htmlBody = textBody || 'Email từ Founder AI';
     if (!textBody || textBody.trim() === '') textBody = htmlBody.replace(/<[^>]*>/g, '');
 
     console.info(
@@ -620,7 +620,7 @@ class CampaignEmailSenderService {
       info = await transporter.sendMail({
         from: `"${settings.name}" <${settings.email}>`,
         to: customer.email,
-        subject: subject || 'Email từ UKNOW',
+        subject: subject || 'Email từ Founder AI',
         text: textBody,
         html: trackedHtmlContent || `<p>${textBody}</p>`,
         attachments: realMailAttachments.length ? realMailAttachments : undefined,
@@ -868,7 +868,7 @@ class CampaignEmailSenderService {
       messageId: info?.messageId || null,
       from: settings.email || null,
       sentAt,
-      subject: subject || 'Email từ UKNOW',
+      subject: subject || 'Email từ Founder AI',
       tracking: {
         token: trackingToken,
         baseUrl: trackingBaseUrl,

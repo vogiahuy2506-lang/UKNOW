@@ -33,8 +33,8 @@ class LandingFeaturedCourseService {
     return landingFeaturedCourseRepository.findActiveOrdered();
   }
 
-  async listAdmin() {
-    return landingFeaturedCourseRepository.findAllOrdered();
+  async listAdmin(userId) {
+    return landingFeaturedCourseRepository.findAllOrdered(userId);
   }
 
   /**
@@ -82,6 +82,7 @@ class LandingFeaturedCourseService {
         return await landingFeaturedCourseRepository.insert({
           ...payloadBase,
           imageUrl: newUrl,
+          idUser: userId,
         });
       } catch (dbErr) {
         await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingFeaturedCourseRollback');
@@ -93,6 +94,7 @@ class LandingFeaturedCourseService {
     return landingFeaturedCourseRepository.insert({
       ...payloadBase,
       imageUrl,
+      idUser: userId,
     });
   }
 
@@ -140,6 +142,7 @@ class LandingFeaturedCourseService {
       imageUrl,
       linkUrl,
       isActive: b.isActive !== undefined ? b.isActive : existing.isActive,
+      idUser: userId,
     });
 
     if (hasTemp) {
@@ -174,12 +177,10 @@ class LandingFeaturedCourseService {
     return row;
   }
 
-  /**
-   * Xóa bản ghi và file ảnh trên `uploads/` nếu URL trỏ về file nội bộ.
-   *
    * @param {number|string} id
+   * @param {number} userId
    */
-  async remove(id) {
+  async remove(id, userId) {
     const existing = await landingFeaturedCourseRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy khóa học nổi bật');

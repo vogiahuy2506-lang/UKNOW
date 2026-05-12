@@ -16,7 +16,12 @@ class LandingFeaturedCourseAdminController {
    */
   async list(req, res) {
     try {
-      const rows = await landingFeaturedCourseService.listAdmin();
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+        
+      const rows = await landingFeaturedCourseService.listAdmin(effectiveOwnerId);
       return res.json({ success: true, data: rows });
     } catch (error) {
       console.error('[LandingFeaturedCourseAdminController.list]', error);
@@ -43,7 +48,11 @@ class LandingFeaturedCourseAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingFeaturedCourseService.create(req.body || {}, userId);
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
+      const row = await landingFeaturedCourseService.create(req.body || {}, effectiveOwnerId);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -71,7 +80,11 @@ class LandingFeaturedCourseAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingFeaturedCourseService.update(req.params.id, req.body || {}, userId);
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
+      const row = await landingFeaturedCourseService.update(req.params.id, req.body || {}, effectiveOwnerId);
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -94,7 +107,12 @@ class LandingFeaturedCourseAdminController {
    */
   async remove(req, res) {
     try {
-      await landingFeaturedCourseService.remove(req.params.id);
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+        
+      await landingFeaturedCourseService.remove(req.params.id, effectiveOwnerId);
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;

@@ -125,7 +125,7 @@ const AdminDashboard = () => {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard hệ thống</h1>
-          <p className="text-gray-500 mt-1">Tổng quan toàn bộ nền tảng UKNOW</p>
+          <p className="text-gray-500 mt-1">Tổng quan toàn bộ nền tảng Founder AI</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -291,10 +291,10 @@ const AdminDashboard = () => {
         {/* Title */}
         <div className="flex items-center justify-between border-b border-gray-300 pb-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard hệ thống — UKNOW</h1>
+            <h1 className="text-2xl font-bold">Dashboard hệ thống — Founder AI</h1>
             <p className="text-sm text-gray-500 mt-0.5">Xuất lúc {printDate}</p>
           </div>
-          <p className="text-xs text-gray-400">uknow.vn</p>
+          <p className="text-xs text-gray-400">Founder AI.vn</p>
         </div>
 
         {/* KPI grid */}

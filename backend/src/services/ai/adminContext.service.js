@@ -30,7 +30,7 @@ export async function buildAdminContext() {
   ]);
 
   const lines = [
-    `=== DỮ LIỆU NỀN TẢNG UKNOW (cập nhật lúc ${now}) ===`,
+    `=== DỮ LIỆU NỀN TẢNG Founder AI (cập nhật lúc ${now}) ===`,
     '',
     '## THÀNH VIÊN',
     `- Tổng user_admin: ${kpi.totalMembers}`,

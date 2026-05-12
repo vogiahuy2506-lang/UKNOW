@@ -17,11 +17,11 @@ const useCampaignBuilderLayoutState = ({
   logListMinWidth,
   logDetailMinWidth,
 }) => {
-  const [runLogHeight, setRunLogHeight] = useLocalStorageState('uknow_builder_runLogHeight', 256);
+  const [runLogHeight, setRunLogHeight] = useLocalStorageState('founder_builder_runLogHeight', 256);
   const [isResizingLog, setIsResizingLog] = useState(false);
-  const [logListWidth, setLogListWidth] = useLocalStorageState('uknow_builder_logListWidth', 240);
+  const [logListWidth, setLogListWidth] = useLocalStorageState('founder_builder_logListWidth', 240);
   const [isResizingLogSplit, setIsResizingLogSplit] = useState(false);
-  const [builderSidebarWidth, setBuilderSidebarWidth] = useLocalStorageState('uknow_builder_sidebarWidth', 240);
+  const [builderSidebarWidth, setBuilderSidebarWidth] = useLocalStorageState('founder_builder_sidebarWidth', 240);
   const [isResizingBuilderSidebar, setIsResizingBuilderSidebar] = useState(false);
 
   const logResizeStartYRef = useRef(0);

@@ -70,14 +70,14 @@ export default function AboutPage() {
           </div>
 
           <h1 className="animate-slide-up-delay-1 text-5xl md:text-7xl lg:text-8xl font-black mb-8 leading-[1.1] text-slate-900 tracking-tight">
-            Vận Hành Marketing<br/>
+            Vận Hành Marketing<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
               Tự Động & Đột Phá
             </span>
           </h1>
 
           <p className="animate-slide-up-delay-2 text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
-            FounderAI cung cấp giải pháp xây dựng Landing Page, quản lý Lead và thiết lập chuỗi Email/Zalo tự động. Giải phóng nhân sự, <strong className="text-slate-900">X10 doanh thu.</strong>
+            Founder AI cung cấp giải pháp xây dựng Landing Page, quản lý Lead và thiết lập chuỗi Email/Zalo tự động. Giải phóng nhân sự, <strong className="text-slate-900">X10 doanh thu.</strong>
           </p>
 
           <div className="animate-slide-up-delay-3 flex flex-col sm:flex-row justify-center items-center gap-4 mb-20">
@@ -100,9 +100,9 @@ export default function AboutPage() {
           <div className="animate-slide-up-delay-3 pt-10 border-t border-slate-100 flex flex-wrap justify-center items-center gap-12 opacity-60 grayscale">
             <span className="font-bold text-slate-500 text-sm tracking-widest uppercase">Đối tác tin cậy:</span>
             <div className="flex gap-10 font-black text-xl text-slate-800">
-              <span className="flex items-center gap-1"><FaBolt/> TechFlow</span>
-              <span className="flex items-center gap-1"><FaShieldAlt/> SecureNet</span>
-              <span className="flex items-center gap-1"><FaChartBar/> GrowthHQ</span>
+              <span className="flex items-center gap-1"><FaBolt /> TechFlow</span>
+              <span className="flex items-center gap-1"><FaShieldAlt /> SecureNet</span>
+              <span className="flex items-center gap-1"><FaChartBar /> GrowthHQ</span>
             </div>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function AboutPage() {
           <div className="relative">
             {/* Horizontal Line connecting steps on large screens */}
             <div className="hidden lg:block absolute top-[40%] left-[10%] right-[10%] h-1 bg-gradient-to-r from-orange-100 via-red-300 to-orange-100 z-0 rounded-full" />
-            
+
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 relative z-10">
               {steps.map((step, index) => (
                 <AnimatedSection key={index} delay={index * 150} className="text-center">
@@ -195,7 +195,7 @@ export default function AboutPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-900/40 via-slate-900 to-slate-900"></div>
         <div className="relative max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">Tại sao chọn FounderAI?</h2>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">Tại sao chọn Founder AI?</h2>
             <p className="text-xl text-orange-200 max-w-2xl mx-auto">Đồng hành cùng doanh nghiệp bạn trên chặng đường số hóa.</p>
           </AnimatedSection>
 
@@ -228,7 +228,7 @@ export default function AboutPage() {
                   >
                     Tạo tài khoản miễn phí
                   </Link>
-                  <span className="text-orange-100 text-sm font-medium flex items-center gap-2"><FaCheckCircle/> Mất chưa tới 1 phút</span>
+                  <span className="text-orange-100 text-sm font-medium flex items-center gap-2"><FaCheckCircle /> Mất chưa tới 1 phút</span>
                 </div>
               </div>
             </div>
@@ -244,7 +244,7 @@ export default function AboutPage() {
               ĐÁNH GIÁ THỰC TẾ
             </span>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 mb-6 tracking-tight">
-              Được yêu thích bởi <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">Người trong ngành</span>
+              Được yêu thích bởi <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">Người trong ngành</span>
             </h2>
           </AnimatedSection>
           <TestimonialSlider />

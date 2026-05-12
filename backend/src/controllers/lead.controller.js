@@ -61,7 +61,15 @@ class LeadController {
    */
   async preview(req, res) {
     try {
-      const config = parseLandingLeadFilters(req.query || {});
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+        
+      const config = {
+        ...parseLandingLeadFilters(req.query || {}),
+        idUser: effectiveOwnerId,
+      };
       const { items, total } = await leadService.getLeadsForCampaignConfig(config);
       const limitNorm = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
 
@@ -105,8 +113,14 @@ class LeadController {
       const pageSizeRaw = parseInt(String(q.pageSize), 10);
       const pageSize = Math.min(100, Math.max(1, Number.isFinite(pageSizeRaw) ? pageSizeRaw : 20));
 
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
       const { items, total, totalPages } = await leadService.listAdminPaginated({
         ...base,
+        idUser: effectiveOwnerId,
         page,
         pageSize,
       });
@@ -144,7 +158,15 @@ class LeadController {
    */
   async exportXlsx(req, res) {
     try {
-      const base = parseLandingLeadFilters(req.query || {});
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
+      const base = {
+        ...parseLandingLeadFilters(req.query || {}),
+        idUser: effectiveOwnerId,
+      };
       const { buffer, total, exportedCount, truncated } = await leadService.exportAdminFilteredXlsx(base);
 
       const now = new Date();

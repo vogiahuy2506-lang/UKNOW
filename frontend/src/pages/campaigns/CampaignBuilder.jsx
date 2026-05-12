@@ -88,7 +88,7 @@ const CampaignBuilder = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [runLogs, setRunLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [showRunLogs, setShowRunLogs] = useLocalStorageState('uknow_builder_showRunLogs', true);
+  const [showRunLogs, setShowRunLogs] = useLocalStorageState('founder_ai_builder_showRunLogs', true);
   /** Chế độ cắt log/preview trên Builder: luôn `100` (node Sheet có thể ghi đè trong cấu hình). */
   const builderLogItemsMode = '100';
   const [selectedRunLogId, setSelectedRunLogId] = useState(null);
@@ -98,7 +98,7 @@ const CampaignBuilder = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedCategories, setExpandedCategories] = useLocalStorageState('uknow_builder_expandedCategories', ['Triggers', 'Actions', 'Logic', 'Data']);
+  const [expandedCategories, setExpandedCategories] = useLocalStorageState('founder_ai_builder_expandedCategories', ['Triggers', 'Actions', 'Logic', 'Data']);
   const [showNameModal, setShowNameModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -108,7 +108,7 @@ const CampaignBuilder = () => {
   const [emailTemplates, setEmailTemplates] = useState([]);
   const [zaloTemplates, setZaloTemplates] = useState([]);
   const [emailSettings, setEmailSettings] = useState([]);
-  const previewSessionKey = `uknow_builder_preview_data_${id || 'new'}`;
+  const previewSessionKey = `founder_ai_builder_preview_data_${id || 'new'}`;
   const deleteNodeName =
     selectedNode?.data?.label?.trim() ||
     selectedNode?.data?.nodeType ||

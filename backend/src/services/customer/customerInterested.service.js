@@ -251,7 +251,7 @@ class CustomerInterestedService {
   }
 
   /**
-   * Get interested customers from UKNOW WooCommerce API.
+   * Get interested customers from Founder AI WooCommerce API.
    *
    * @param {object} input
    * @returns {Promise<object>}
@@ -264,12 +264,12 @@ class CustomerInterestedService {
     customerType,
   }) {
     const axios = (await import('axios')).default;
-    const baseUrl = process.env.UKNOW_API_URL || 'https://uknow.edu.vn/wp-json';
+    const baseUrl = process.env.UKNOW_API_URL || 'https://founderai.biz/wp-json';
     const consumerKey = process.env.UKNOW_CONSUMER_KEY;
     const consumerSecret = process.env.UKNOW_CONSUMER_SECRET;
 
     if (!consumerKey || !consumerSecret) {
-      const error = new Error('Chua cau hinh thong tin xac thuc UKNOW API');
+      const error = new Error('Chua cau hinh thong tin xac thuc Founder AI API');
       error.statusCode = 500;
       throw error;
     }

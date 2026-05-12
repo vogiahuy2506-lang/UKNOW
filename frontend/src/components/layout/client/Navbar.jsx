@@ -100,7 +100,7 @@ export default function Navbar() {
             </div>
             <span className="ml-3 text-2xl font-black tracking-tight">
               <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Founder</span>
-              <span className="text-slate-800">AI</span>
+              <span className="text-slate-800 ml-1">AI</span>
             </span>
           </Link>
 

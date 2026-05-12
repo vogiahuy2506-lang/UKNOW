@@ -188,8 +188,8 @@ class EmailSettingsSmtpService {
       });
 
       const info = await transporter.sendMail({
-        text: content || 'Đây là email test từ hệ thống UKNOW',
-        html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống UKNOW'}</p>`,
+        text: content || 'Đây là email test từ hệ thống Founder AI',
+        html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
       });
 
       await emailSettingsRepository.incrementSentCount(id);
@@ -296,7 +296,7 @@ class EmailSettingsSmtpService {
         password: decryptSmtpSecret(setting.smtp_password),
       });
 
-      const plainTextContent = content || 'Đây là email từ hệ thống UKNOW';
+      const plainTextContent = content || 'Đây là email từ hệ thống Founder AI';
       const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
       // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
       /**
@@ -325,7 +325,7 @@ class EmailSettingsSmtpService {
           to,
           cc: ccList.length ? ccList : undefined,
           bcc: bccList.length ? bccList : undefined,
-          subject: subject || 'Email từ UKNOW',
+          subject: subject || 'Email từ Founder AI',
           text: plainTextContent,
           html: trackedHtmlContent || `<p>${plainTextContent}</p>`,
           attachments: realMailAttachments.length ? realMailAttachments : undefined,

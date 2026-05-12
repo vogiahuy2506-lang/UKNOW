@@ -1,4 +1,4 @@
-const CAMPAIGN_DRAFT_STORAGE_KEY = 'uknow_campaign_builder_draft';
+const CAMPAIGN_DRAFT_STORAGE_KEY = 'founder_ai_campaign_builder_draft';
 
 /**
  * Read temporary campaign draft from session storage.
