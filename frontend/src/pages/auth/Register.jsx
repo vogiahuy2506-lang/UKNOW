@@ -397,6 +397,7 @@ const Register = () => {
 
         <div className="w-full flex justify-center">
           <GoogleLogin
+            clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleError}
             theme="outline"
