@@ -19,7 +19,9 @@ import payosClient from '../../utils/payos.util.js';
 
 export async function listPlans() {
   const [plans, counts] = await Promise.all([findAllPlans(), getPlanUserCounts()]);
-  const countMap = Object.fromEntries(counts.map((c) => [c.plan_id, Number(c.user_count)]));
+  // Repository alias các cột về camelCase ("planId", "userCount") — phải dùng đúng key
+  // nếu không countMap rỗng và user_count luôn fallback về 0.
+  const countMap = Object.fromEntries(counts.map((c) => [c.planId, Number(c.userCount)]));
   return plans.map((p) => ({ ...p, user_count: countMap[p.id] || 0 }));
 }
 
