@@ -272,7 +272,7 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="noreply@Founder AI.vn"
+                            placeholder="noreply@founderai.biz"
                             required
                           />
                         </div>

@@ -6,7 +6,7 @@
 export const LANDING_COPY = {
   vi: {
     nav: {
-      brand: 'Founder AI.edu.vn',
+      brand: 'Founder AI',
       instructorPrefix: 'Giảng viên:',
       instructorName: 'ThS. Ngô Hữu Thống',
       /** Alt text cho avatar giảng viên */
@@ -120,7 +120,7 @@ export const LANDING_COPY = {
           linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'Founder AI.edu.vn →',
+      linkLabel: 'founderai.biz →',
       carouselPrevAria: 'Xem khóa học trước',
       carouselNextAria: 'Xem khóa học tiếp theo',
       detailCtaLabel: 'Xem chi tiết',
@@ -259,7 +259,7 @@ export const LANDING_COPY = {
   },
   en: {
     nav: {
-      brand: 'Founder AI.edu.vn',
+      brand: 'Founder AI',
       instructorPrefix: 'Instructor:',
       instructorName: 'M.Sc. Ngo Huu Thong',
       instructorPhotoAlt: 'M.Sc. Ngo Huu Thong',
@@ -372,7 +372,7 @@ export const LANDING_COPY = {
           linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'Founder AI.edu.vn →',
+      linkLabel: 'founderai.biz →',
       carouselPrevAria: 'Previous course',
       carouselNextAria: 'Next course',
       detailCtaLabel: 'View details',
