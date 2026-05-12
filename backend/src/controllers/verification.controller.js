@@ -12,7 +12,8 @@ class VerificationController {
       console.log(`[Verification] Sending code to: ${email}, username: ${username}`);
 
       // Kiểm tra domain email có MX record hợp lệ không
-      const domain = email.split('@')[1];
+      const trimmedEmail = email.trim();
+      const domain = trimmedEmail.split('@')[1];
       try {
         // Chỉ kiểm tra MX record nếu không phải là môi trường development hoặc domain là common email
         const isCommonDomain = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'].includes(domain.toLowerCase());

@@ -16,7 +16,12 @@ class LandingTestimonialAdminController {
    */
   async list(req, res) {
     try {
-      const rows = await landingTestimonialService.listAdmin();
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+        
+      const rows = await landingTestimonialService.listAdmin(effectiveOwnerId);
       return res.json({ success: true, data: rows });
     } catch (error) {
       console.error('[LandingTestimonialAdminController.list]', error);
@@ -45,7 +50,11 @@ class LandingTestimonialAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingTestimonialService.create(req.body || {}, userId);
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
+      const row = await landingTestimonialService.create(req.body || {}, effectiveOwnerId);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -73,7 +82,11 @@ class LandingTestimonialAdminController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
-      const row = await landingTestimonialService.update(req.params.id, req.body || {}, userId);
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+
+      const row = await landingTestimonialService.update(req.params.id, req.body || {}, effectiveOwnerId);
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -96,7 +109,12 @@ class LandingTestimonialAdminController {
    */
   async remove(req, res) {
     try {
-      await landingTestimonialService.remove(req.params.id);
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+        
+      await landingTestimonialService.remove(req.params.id, effectiveOwnerId);
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;

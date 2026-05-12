@@ -15,6 +15,7 @@ class LandingPageAdminController {
       const rows = await landingPageAdminService.list({
         userId: req.user?.id,
         roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
       });
       return res.json({ success: true, data: rows });
     } catch (error) {
@@ -38,6 +39,7 @@ class LandingPageAdminController {
       const row = await landingPageAdminService.getById(id, {
         userId: req.user?.id,
         roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
       });
       return res.json({ success: true, data: row });
     } catch (error) {
@@ -110,6 +112,7 @@ class LandingPageAdminController {
       await landingPageAdminService.remove(id, {
         userId: req.user?.id,
         roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
       });
       return res.json({ success: true });
     } catch (error) {

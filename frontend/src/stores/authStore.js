@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 
-const CONTEXT_STORAGE_KEY = 'uknow_active_context';
+const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
 const getStoredToken = (key) =>
   localStorage.getItem(key) || sessionStorage.getItem(key);

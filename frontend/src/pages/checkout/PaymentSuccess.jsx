@@ -63,7 +63,7 @@ const PaymentSuccessPage = () => {
 
                 <h1 className="text-4xl font-black text-gray-900 mb-2">Thanh toán thành công!</h1>
                 <p className="text-gray-500 mb-8 font-medium">
-                    Chào mừng bạn đến với FounderAI. Tài khoản của bạn đã được kích hoạt.
+                    Chào mừng bạn đến với Founder AI. Tài khoản của bạn đã được kích hoạt.
                 </p>
 
                 <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 mb-8 text-left">

@@ -1,4 +1,4 @@
-const LISTENER_ERROR_GUARD_FLAG = Symbol('uknow.zalo.listener.errorGuard');
+const LISTENER_ERROR_GUARD_FLAG = Symbol('Founder AI.zalo.listener.errorGuard');
 
 class ZaloAccountSessionService {
   constructor() {

@@ -1,6 +1,6 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
-import { UKNOW_INTEREST_OPTIONS, UKNOW_OCCUPATION_OPTIONS } from '../constants/uknowLandingOptions.js';
+import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách để giảm re-render.
@@ -213,14 +213,14 @@ export function LandingLeadsAdminFilters({
       <div className="grid gap-6 md:grid-cols-2">
         <MultiFilterBlock
           title="Nghề nghiệp"
-          options={UKNOW_OCCUPATION_OPTIONS}
+          options={founder_OCCUPATION_OPTIONS}
           fieldKey="landingLeadsOccupations"
           selected={occupations}
           setDraftFilters={setDraftFilters}
         />
         <MultiFilterBlock
           title="Lĩnh vực quan tâm"
-          options={UKNOW_INTEREST_OPTIONS}
+          options={founder_INTEREST_OPTIONS}
           fieldKey="landingLeadsInterests"
           selected={interests}
           setDraftFilters={setDraftFilters}

@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'uknow_landing_vid';
+const STORAGE_KEY = 'founder_landing_vid';
 
 /**
  * Lấy hoặc tạo visitorId ổn định trên trình duyệt (thống kê view/click/submit).

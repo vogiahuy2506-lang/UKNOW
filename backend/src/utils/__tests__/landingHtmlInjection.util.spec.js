@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
-  stripUknowLandingAutoBlocks,
+  stripFounderLandingAutoBlocks,
   rewriteHttpAnchorsToTrack,
   normalizeLandingLpTrackApiBase,
   prepareLandingHtmlOnSave,
@@ -10,44 +10,44 @@ import {
 } from '../landingHtmlInjection.util.js';
 
 describe('landingHtmlInjection.util', () => {
-  describe('stripUknowLandingAutoBlocks', () => {
-    it('xóa <section data-uknow-lp-embed>', () => {
-      const html = '<p>before</p><section data-uknow-lp-embed="1"><iframe></iframe></section><p>after</p>';
-      const out = stripUknowLandingAutoBlocks(html);
-      expect(out).not.toContain('data-uknow-lp-embed');
+  describe('stripFounderLandingAutoBlocks', () => {
+    it('xóa <section data-founder-lp-embed>', () => {
+      const html = '<p>before</p><section data-founder-lp-embed="1"><iframe></iframe></section><p>after</p>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).not.toContain('data-founder-lp-embed');
       expect(out).toContain('<p>before</p>');
       expect(out).toContain('<p>after</p>');
     });
 
-    it('xóa <div data-uknow-lp-injected>', () => {
-      const html = '<div data-uknow-lp-injected="1" style="display:none"></div><p>x</p>';
-      const out = stripUknowLandingAutoBlocks(html);
-      expect(out).not.toContain('data-uknow-lp-injected');
+    it('xóa <div data-founder-lp-injected>', () => {
+      const html = '<div data-founder-lp-injected="1" style="display:none"></div><p>x</p>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).not.toContain('data-founder-lp-injected');
       expect(out).toContain('<p>x</p>');
     });
 
     it('xóa <script ...lp-track.js...>', () => {
       const html = '<script src="https://host/lp-track.js" defer></script><p>ok</p>';
-      const out = stripUknowLandingAutoBlocks(html);
+      const out = stripFounderLandingAutoBlocks(html);
       expect(out).not.toContain('lp-track.js');
       expect(out).toContain('<p>ok</p>');
     });
 
     it('idempotent: chạy 2 lần ra cùng kết quả', () => {
-      const html = '<section data-uknow-lp-embed="1">x</section><script src="lp-track.js"></script><div data-uknow-lp-injected="1"></div>';
-      const once = stripUknowLandingAutoBlocks(html);
-      const twice = stripUknowLandingAutoBlocks(once);
+      const html = '<section data-founder-lp-embed="1">x</section><script src="lp-track.js"></script><div data-founder-lp-injected="1"></div>';
+      const once = stripFounderLandingAutoBlocks(html);
+      const twice = stripFounderLandingAutoBlocks(once);
       expect(twice).toBe(once);
     });
 
     it('giữ HTML không khớp pattern', () => {
       const html = '<section>regular section</section><script src="other.js"></script>';
-      expect(stripUknowLandingAutoBlocks(html)).toBe(html);
+      expect(stripFounderLandingAutoBlocks(html)).toBe(html);
     });
 
     it('input null/undefined → trả chuỗi rỗng', () => {
-      expect(stripUknowLandingAutoBlocks(null)).toBe('');
-      expect(stripUknowLandingAutoBlocks(undefined)).toBe('');
+      expect(stripFounderLandingAutoBlocks(null)).toBe('');
+      expect(stripFounderLandingAutoBlocks(undefined)).toBe('');
     });
   });
 
@@ -172,7 +172,7 @@ describe('landingHtmlInjection.util', () => {
     it('chèn marker + script trước </body>', () => {
       const html = '<html><body><p>hello</p></body></html>';
       const out = injectLandingEnhancements(html, opts);
-      expect(out).toContain('data-uknow-lp-injected="1"');
+      expect(out).toContain('data-founder-lp-injected="1"');
       expect(out).toContain('<script src="http://localhost:5174/lp-track.js"');
       expect(out).toContain('data-slug="promo"');
       expect(out).toContain('data-api-base="http://localhost:5001/api"');
@@ -180,7 +180,7 @@ describe('landingHtmlInjection.util', () => {
     });
 
     it('bỏ qua nếu marker đã tồn tại (idempotent)', () => {
-      const html = '<html><body><div data-uknow-lp-injected="1"></div></body></html>';
+      const html = '<html><body><div data-founder-lp-injected="1"></div></body></html>';
       const out = injectLandingEnhancements(html, opts);
       expect(out).toBe(html);
     });
@@ -250,11 +250,11 @@ describe('landingHtmlInjection.util', () => {
     it('chạy đủ pipeline: strip → rewrite link → inject script', () => {
       const html =
         '<html><body>' +
-        '<section data-uknow-lp-embed="1">old</section>' +
+        '<section data-founder-lp-embed="1">old</section>' +
         '<a href="https://target.com">click</a>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      expect(out).not.toContain('data-uknow-lp-embed');
+      expect(out).not.toContain('data-founder-lp-embed');
       expect(out).toContain('landing-track/go');
       expect(out).toContain('lp-track.js');
       expect(out).toContain('data-slug="promo"');

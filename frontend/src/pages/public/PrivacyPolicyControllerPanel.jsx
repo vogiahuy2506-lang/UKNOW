@@ -22,10 +22,10 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
           <h2 className={`pt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl ${lc(language, 'en')}`}>Introduction</h2>
         </div>
         <p className={`mb-[10px] text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
-          Chính sách xử lý dữ liệu cá nhân – Bên kiểm soát dữ liệu quy định mục đích và phương tiện mà DIGISO sử dụng để xử lý dữ liệu cá nhân với tư cách <strong>bên kiểm soát dữ liệu</strong>, thông qua các website <strong>digiso.vn</strong>, <strong>uknow.edu.vn</strong>, <strong>campaign.digiso.vn</strong> và các kênh giao tiếp liên quan.
+          Chính sách xử lý dữ liệu cá nhân – Bên kiểm soát dữ liệu quy định mục đích và phương tiện mà DIGISO sử dụng để xử lý dữ liệu cá nhân với tư cách <strong>bên kiểm soát dữ liệu</strong>, thông qua các website <strong>digiso.vn</strong>, <strong>founderai.biz</strong>, <strong>campaign.digiso.vn</strong> và các kênh giao tiếp liên quan.
         </p>
         <p className={`mb-[10px] text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
-          This Data Processing Policy – Controller sets out the purpose and means by which DIGISO processes personal data as a <strong>data controller</strong>, through the websites <strong>digiso.vn</strong>, <strong>uknow.edu.vn</strong>, <strong>campaign.digiso.vn</strong> and related communication channels.
+          This Data Processing Policy – Controller sets out the purpose and means by which DIGISO processes personal data as a <strong>data controller</strong>, through the websites <strong>digiso.vn</strong>, <strong>founderai.biz</strong>, <strong>campaign.digiso.vn</strong> and related communication channels.
         </p>
         <p className={`text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
           Nếu bạn là người dùng của Khách hàng đã ký hợp đồng với DIGISO, vui lòng tham khảo tab <em>Chính sách xử lý dữ liệu – Bên xử lý</em>.
@@ -91,7 +91,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <li>Số điện thoại, email, địa chỉ liên hệ</li>
             <li>Hình ảnh, CMND/CCCD, hộ chiếu, GPLX, mã số thuế, BHXH</li>
             <li>Thông tin tài khoản số, lịch sử hoạt động trực tuyến</li>
-            <li>Dữ liệu học tập và tiến độ khóa học (uknow.edu.vn)</li>
+            <li>Dữ liệu học tập và tiến độ khóa học (founderai.biz)</li>
             <li>Thông tin đăng ký chiến dịch và hành vi tương tác (campaign.digiso.vn)</li>
           </ul>
           <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
@@ -99,7 +99,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <li>Phone number, email, contact address</li>
             <li>Photo, ID/citizen ID, passport, driver&apos;s license, tax code, social insurance</li>
             <li>Digital account information, online activity history</li>
-            <li>Learning data and course progress (uknow.edu.vn)</li>
+            <li>Learning data and course progress (founderai.biz)</li>
             <li>Campaign registration info and interaction behavior (campaign.digiso.vn)</li>
           </ul>
         </div>
@@ -161,7 +161,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Giao kết hợp đồng:</strong> Tên, email, số điện thoại, tài khoản ngân hàng để soạn thảo và ký kết văn bản.
           </li>
           <li>
-            <strong>Đăng ký dịch vụ:</strong> Thông tin cung cấp khi đăng ký tài khoản, điền form trên digiso.vn, uknow.edu.vn, campaign.digiso.vn.
+            <strong>Đăng ký dịch vụ:</strong> Thông tin cung cấp khi đăng ký tài khoản, điền form trên digiso.vn, founderai.biz, campaign.digiso.vn.
           </li>
           <li>
             <strong>Tự động thu thập:</strong> Cookie, web beacon, địa chỉ IP khi truy cập website.
@@ -178,7 +178,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Contract execution:</strong> Name, email, phone, bank details for drafting and signing agreements.
           </li>
           <li>
-            <strong>Service registration:</strong> Information provided when signing up or filling forms on digiso.vn, uknow.edu.vn, campaign.digiso.vn.
+            <strong>Service registration:</strong> Information provided when signing up or filling forms on digiso.vn, founderai.biz, campaign.digiso.vn.
           </li>
           <li>
             <strong>Automatic collection:</strong> Cookies, web beacons, IP addresses during website visits.
@@ -215,7 +215,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Chiến dịch marketing (campaign.digiso.vn):</strong> Quản lý, đo lường và tối ưu hóa chiến dịch quảng cáo.
           </li>
           <li>
-            <strong>Đào tạo (uknow.edu.vn):</strong> Quản lý học viên, cấp chứng chỉ, phân tích tiến độ học tập.
+            <strong>Đào tạo (founderai.biz):</strong> Quản lý học viên, cấp chứng chỉ, phân tích tiến độ học tập.
           </li>
           <li>
             <strong>Phân tích:</strong> Sử dụng Google Analytics để hiểu lưu lượng truy cập và hành vi người dùng.
@@ -238,7 +238,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Marketing campaigns (campaign.digiso.vn):</strong> Manage, measure, and optimize advertising campaigns.
           </li>
           <li>
-            <strong>Training (uknow.edu.vn):</strong> Manage learners, issue certificates, analyze learning progress.
+            <strong>Training (founderai.biz):</strong> Manage learners, issue certificates, analyze learning progress.
           </li>
           <li>
             <strong>Analytics:</strong> Use Google Analytics to understand traffic and user behavior.
@@ -417,13 +417,13 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
           <h2 className={`pt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl ${lc(language, 'en')}`}>Data Security</h2>
         </div>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
-          <li>Mã hóa SSL/TLS cho toàn bộ kết nối trên digiso.vn, uknow.edu.vn, campaign.digiso.vn</li>
+          <li>Mã hóa SSL/TLS cho toàn bộ kết nối trên digiso.vn, founderai.biz, campaign.digiso.vn</li>
           <li>Hạ tầng GCP Singapore + máy chủ nội địa FPT Smart Cloud</li>
           <li>Kiểm soát truy cập theo vai trò (RBAC), xác thực 2 lớp (2FA)</li>
           <li>Sao lưu định kỳ và giám sát bảo mật liên tục</li>
         </ul>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
-          <li>SSL/TLS encryption for all connections on digiso.vn, uknow.edu.vn, campaign.digiso.vn</li>
+          <li>SSL/TLS encryption for all connections on digiso.vn, founderai.biz, campaign.digiso.vn</li>
           <li>GCP Singapore infrastructure + domestic FPT Smart Cloud servers</li>
           <li>Role-based access control (RBAC), two-factor authentication (2FA)</li>
           <li>Regular backups and continuous security monitoring</li>

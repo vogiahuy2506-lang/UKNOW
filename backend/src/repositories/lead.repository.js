@@ -27,8 +27,9 @@ class LeadRepository {
     const result = await db.query(
       `INSERT INTO leads (
          last_name, first_name, email, phone, occupation, interest_area, marketing_consent,
-         landing_page_slug, utm_source, utm_medium, utm_campaign, utm_content, utm_term
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         landing_page_slug, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+         id_user
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING
          id,
          last_name AS "lastName",
@@ -44,6 +45,7 @@ class LeadRepository {
          utm_campaign AS "utmCampaign",
          utm_content AS "utmContent",
          utm_term AS "utmTerm",
+         id_user AS "idUser",
          created_at AS "createdAt"`,
       [
         payload.lastName,
@@ -59,6 +61,7 @@ class LeadRepository {
         payload.utmCampaign ?? null,
         payload.utmContent ?? null,
         payload.utmTerm ?? null,
+        payload.idUser,
       ]
     );
     return result.rows[0] || null;
@@ -124,6 +127,12 @@ class LeadRepository {
       const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
       conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
       params.push(slugVariants);
+      idx += 1;
+    }
+
+    if (filters.idUser) {
+      conditions.push(`id_user = $${idx}`);
+      params.push(filters.idUser);
       idx += 1;
     }
 
@@ -196,6 +205,12 @@ class LeadRepository {
       const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
       conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
       params.push(slugVariants);
+      idx += 1;
+    }
+
+    if (filters.idUser) {
+      conditions.push(`id_user = $${idx}`);
+      params.push(filters.idUser);
       idx += 1;
     }
 

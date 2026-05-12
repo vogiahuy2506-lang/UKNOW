@@ -1,12 +1,12 @@
 /**
- * Chuỗi giao diện trang landing `/l` — bám mock `uknow-landing-v2.html`, song ngữ VI/EN.
+ * Chuỗi giao diện trang landing `/l` — bám mock `founder-landing-v2.html`, song ngữ VI/EN.
  * Cấu trúc: `LANDING_COPY.vi` / `LANDING_COPY.en` — cùng khóa để đổi ngôn ngữ an toàn.
  */
 
 export const LANDING_COPY = {
   vi: {
     nav: {
-      brand: 'UKnow.edu.vn',
+      brand: 'Founder AI.edu.vn',
       instructorPrefix: 'Giảng viên:',
       instructorName: 'ThS. Ngô Hữu Thống',
       /** Alt text cho avatar giảng viên */
@@ -23,11 +23,11 @@ export const LANDING_COPY = {
       titleLine2: 'trong',
       titleAccent: '30 ngày',
       subtitle:
-        'Học cùng ThS. Ngô Hữu Thống — chuyên gia AI hàng đầu với hơn 10 năm kinh nghiệm. Hơn 10,000 học viên đã thay đổi sự nghiệp nhờ UKnow.',
+        'Học cùng ThS. Ngô Hữu Thống — chuyên gia AI hàng đầu với hơn 10 năm kinh nghiệm. Hơn 10,000 học viên đã thay đổi sự nghiệp nhờ Founder AI.',
       instructorMini: {
         name: 'ThS. Ngô Hữu Thống',
         title: 'Chuyên gia AI & Chuyển đổi số',
-        badge: 'Chủ nhân các khóa học UKnow',
+        badge: 'Chủ nhân các khóa học Founder AI',
       },
       stats: [
         { value: '10K', sup: '+', label: 'Học viên' },
@@ -64,7 +64,7 @@ export const LANDING_COPY = {
       ],
     },
     benefits: {
-      eyebrow: 'Tại sao chọn UKnow',
+      eyebrow: 'Tại sao chọn Founder AI',
       title: 'Học AI thực chiến,',
       titleLine2: 'không lý thuyết suông',
       subtitle:
@@ -105,29 +105,29 @@ export const LANDING_COPY = {
           tag: 'Phổ biến nhất',
           title: 'Xóa Mù A.I — Khóa học dành cho người chưa biết gì',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Marketing & Kinh doanh',
           title: 'Kích hoạt tiềm năng ChatGPT-4o trong mọi công việc',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Thiết kế trình bày',
           title: 'Thiết kế Slide PowerPoint bằng A.I từ A–Z',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'uknow.edu.vn →',
+      linkLabel: 'Founder AI.edu.vn →',
       carouselPrevAria: 'Xem khóa học trước',
       carouselNextAria: 'Xem khóa học tiếp theo',
       detailCtaLabel: 'Xem chi tiết',
     },
     testimonials: {
       eyebrow: 'Học viên nói gì',
-      title: 'Kết quả thực tế từ cộng đồng UKnow',
+      title: 'Kết quả thực tế từ cộng đồng Founder AI',
       carouselPrevAria: 'Xem đánh giá trước',
       carouselNextAria: 'Xem đánh giá tiếp',
       /** Nhãn ảnh minh chứng (không phải avatar) */
@@ -156,7 +156,7 @@ export const LANDING_COPY = {
         {
           id: 't3',
           quote:
-            'Thầy cho mình thêm rất nhiều công cụ AI hữu ích mà trước đây không biết. Rất giá trị! Sẽ tiếp tục đăng ký thêm các khóa học của UKnow & thầy Ngô Hữu Thống.',
+            'Thầy cho mình thêm rất nhiều công cụ AI hữu ích mà trước đây không biết. Rất giá trị! Sẽ tiếp tục đăng ký thêm các khóa học của Founder AI & thầy Ngô Hữu Thống.',
           name: 'Phạm Quốc Việt',
           role: 'Freelancer, TP. Hồ Chí Minh',
           avatarClass: 'av3',
@@ -174,7 +174,7 @@ export const LANDING_COPY = {
         {
           id: 't5',
           quote:
-            'Cộng đồng UKnow rất nhiệt tình, hỏi gì cũng được giải đáp. Thầy Thống truyền cảm hứng để mình học đều mỗi tuần.',
+            'Cộng đồng Founder AI rất nhiệt tình, hỏi gì cũng được giải đáp. Thầy Thống truyền cảm hứng để mình học đều mỗi tuần.',
           name: 'Hoàng Văn Tú',
           role: 'Kỹ sư xây dựng, Cần Thơ',
           avatarClass: 'av1',
@@ -203,12 +203,12 @@ export const LANDING_COPY = {
     finalCta: {
       title: 'Sẵn sàng chinh phục AI',
       titleLine2: 'cùng ThS. Ngô Hữu Thống?',
-      subtitle: 'Tham gia ngay hôm nay và nhận ưu đãi đặc biệt cho học viên mới từ UKnow.',
+      subtitle: 'Tham gia ngay hôm nay và nhận ưu đãi đặc biệt cho học viên mới từ Founder AI.',
       button: 'Đăng ký tư vấn miễn phí',
       buttonSecondary: 'Xem tất cả khóa học',
     },
     footer: {
-      tagline: '© 2026 UKnow Education. Nền tảng học AI hàng đầu Việt Nam.',
+      tagline: '© 2026 Founder AI Education. Nền tảng học AI hàng đầu Việt Nam.',
       instructorLine: 'Giảng viên: ThS. Ngô Hữu Thống —',
       privacy: 'Chính sách bảo mật',
       ngohuuLink: 'ngohuuthong.com →',
@@ -230,14 +230,14 @@ export const LANDING_COPY = {
       interest: 'Lĩnh vực quan tâm',
       selectOccupation: '-- Chọn nghề nghiệp --',
       selectInterest: '-- Chọn chủ đề --',
-      consentPrefix: 'Tôi đồng ý nhận thông tin khóa học & ưu đãi từ UKnow qua email/SMS. Xem',
+      consentPrefix: 'Tôi đồng ý nhận thông tin khóa học & ưu đãi từ Founder AI qua email/SMS. Xem',
       privacyLink: 'Chính sách bảo mật',
       submit: 'Nhận tư vấn & ưu đãi miễn phí',
       submitting: 'Đang gửi...',
       secureNote: 'Thông tin của bạn được bảo mật tuyệt đối',
       successTitle: 'Đăng ký thành công!',
       successBody:
-        'Cảm ơn bạn đã quan tâm đến UKnow! Đội ngũ tư vấn sẽ liên hệ với bạn trong 24 giờ làm việc. Hãy kiểm tra email để nhận tài liệu AI miễn phí từ ThS. Ngô Hữu Thống.',
+        'Cảm ơn bạn đã quan tâm đến Founder AI! Đội ngũ tư vấn sẽ liên hệ với bạn trong 24 giờ làm việc. Hãy kiểm tra email để nhận tài liệu AI miễn phí từ ThS. Ngô Hữu Thống.',
       /** Bản rút gọn cho iframe (không lấn nền ngoài khối form). */
       embedSuccessBody: 'Cảm ơn bạn! Đội ngũ tư vấn sẽ liên hệ trong thời gian sớm nhất.',
       placeholders: {
@@ -259,7 +259,7 @@ export const LANDING_COPY = {
   },
   en: {
     nav: {
-      brand: 'UKnow.edu.vn',
+      brand: 'Founder AI.edu.vn',
       instructorPrefix: 'Instructor:',
       instructorName: 'M.Sc. Ngo Huu Thong',
       instructorPhotoAlt: 'M.Sc. Ngo Huu Thong',
@@ -275,11 +275,11 @@ export const LANDING_COPY = {
       titleLine2: 'in',
       titleAccent: '30 days',
       subtitle:
-        'Learn with M.Sc. Ngo Huu Thong — a leading AI expert with 10+ years of experience. Over 10,000 learners have transformed their careers with UKnow.',
+        'Learn with M.Sc. Ngo Huu Thong — a leading AI expert with 10+ years of experience. Over 10,000 learners have transformed their careers with Founder AI.',
       instructorMini: {
         name: 'M.Sc. Ngo Huu Thong',
         title: 'AI & digital transformation expert',
-        badge: 'Creator of UKnow courses',
+        badge: 'Creator of Founder AI courses',
       },
       stats: [
         { value: '10K', sup: '+', label: 'Learners' },
@@ -316,7 +316,7 @@ export const LANDING_COPY = {
       ],
     },
     benefits: {
-      eyebrow: 'Why UKnow',
+      eyebrow: 'Why Founder AI',
       title: 'Hands-on AI learning,',
       titleLine2: 'not theory only',
       subtitle:
@@ -357,29 +357,29 @@ export const LANDING_COPY = {
           tag: 'Most popular',
           title: 'AI Literacy — for complete beginners',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Marketing & business',
           title: 'Unlock ChatGPT-4o for everyday work',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
         {
           tag: 'Presentation design',
           title: 'PowerPoint slides with AI from A to Z',
           imageUrl: null,
-          linkUrl: 'https://uknow.edu.vn/',
+          linkUrl: 'https://founderai.biz/',
         },
       ],
-      linkLabel: 'uknow.edu.vn →',
+      linkLabel: 'Founder AI.edu.vn →',
       carouselPrevAria: 'Previous course',
       carouselNextAria: 'Next course',
       detailCtaLabel: 'View details',
     },
     testimonials: {
       eyebrow: 'Learner voices',
-      title: 'Real outcomes from the UKnow community',
+      title: 'Real outcomes from the Founder AI community',
       carouselPrevAria: 'Previous testimonials',
       carouselNextAria: 'Next testimonials',
       proofImageTapHint: 'Tap to enlarge',
@@ -406,7 +406,7 @@ export const LANDING_COPY = {
         {
           id: 't3',
           quote:
-            'So many useful AI tools I never knew before. I will keep joining UKnow and M.Sc. Ngo Huu Thong’s courses.',
+            'So many useful AI tools I never knew before. I will keep joining Founder AI and M.Sc. Ngo Huu Thong’s courses.',
           name: 'Pham Quoc Viet',
           role: 'Freelancer, Ho Chi Minh City',
           avatarClass: 'av3',
@@ -424,7 +424,7 @@ export const LANDING_COPY = {
         {
           id: 't5',
           quote:
-            'The UKnow community is supportive — questions always get answered. M.Sc. Thong inspires me to learn every week.',
+            'The Founder AI community is supportive — questions always get answered. M.Sc. Thong inspires me to learn every week.',
           name: 'Hoang Van Tu',
           role: 'Civil engineer, Can Tho',
           avatarClass: 'av1',
@@ -453,12 +453,12 @@ export const LANDING_COPY = {
     finalCta: {
       title: 'Ready to master AI',
       titleLine2: 'with M.Sc. Ngo Huu Thong?',
-      subtitle: 'Join today and get a special offer for new UKnow learners.',
+      subtitle: 'Join today and get a special offer for new Founder AI learners.',
       button: 'Free consultation',
       buttonSecondary: 'Browse all courses',
     },
     footer: {
-      tagline: '© 2026 UKnow Education. Vietnam’s leading AI learning platform.',
+      tagline: '© 2026 Founder AI Education. Vietnam’s leading AI learning platform.',
       instructorLine: 'Instructor: M.Sc. Ngo Huu Thong —',
       privacy: 'Privacy policy',
       ngohuuLink: 'ngohuuthong.com →',
@@ -479,14 +479,14 @@ export const LANDING_COPY = {
       interest: 'Topic of interest',
       selectOccupation: '-- Select occupation --',
       selectInterest: '-- Select topic --',
-      consentPrefix: 'I agree to receive course updates & offers from UKnow via email/SMS. See',
+      consentPrefix: 'I agree to receive course updates & offers from Founder AI via email/SMS. See',
       privacyLink: 'Privacy policy',
       submit: 'Get consultation & offer',
       submitting: 'Sending...',
       secureNote: 'Your information is kept strictly confidential',
       successTitle: 'Registration successful!',
       successBody:
-        'Thank you for your interest in UKnow! Our team will contact you within 24 business hours. Check your email for free AI materials from M.Sc. Ngo Huu Thong.',
+        'Thank you for your interest in Founder AI! Our team will contact you within 24 business hours. Check your email for free AI materials from M.Sc. Ngo Huu Thong.',
       embedSuccessBody: 'Thank you! Our team will contact you soon.',
       placeholders: {
         lastName: 'Nguyen',

@@ -16,7 +16,7 @@ import campaignScheduleRoutes from './routes/campaignSchedule.routes.js';
 import campaignRunRoutes from './routes/campaignRun.routes.js';
 import customerRoutes from './routes/customer.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
-import uknowRoutes from './routes/uknow.routes.js';
+import founderaiRoutes from './routes/founderai.routes.js';
 import googleSheetsRoutes from './routes/googleSheets.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import downloadRoutes from './routes/download.routes.js';
@@ -114,7 +114,7 @@ export function createApp() {
   app.use('/api/campaign-runs', campaignRunRoutes);
   app.use('/api/customers', customerRoutes);
   app.use('/api/dashboard', dashboardRoutes);
-  app.use('/api/uknow', uknowRoutes);
+  app.use('/api/founderai', founderaiRoutes);
   app.use('/api/google-sheets', googleSheetsRoutes);
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/attachments', attachmentsRoutes);

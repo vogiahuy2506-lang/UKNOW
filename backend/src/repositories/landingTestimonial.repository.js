@@ -26,6 +26,7 @@ class LandingTestimonialRepository {
       locationEn: row.location_en,
       imageUrl: row.image_url,
       isActive: row.is_active,
+      idUser: row.id_user,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -64,9 +65,10 @@ class LandingTestimonialRepository {
   /**
    * Tất cả bản ghi (admin).
    *
+   * @param {number|string} userId
    * @returns {Promise<object[]>}
    */
-  async findAllOrdered() {
+  async findAllOrdered(userId) {
     const result = await db.query(
       `SELECT
          id,
@@ -82,10 +84,13 @@ class LandingTestimonialRepository {
          location_en,
          image_url,
          is_active,
+         id_user,
          created_at,
          updated_at
        FROM landing_testimonials
-       ORDER BY sort_order ASC, id ASC`
+       WHERE id_user = $1
+       ORDER BY sort_order ASC, id ASC`,
+      [userId]
     );
     return result.rows.map((r) => this._mapRow(r));
   }
@@ -119,10 +124,6 @@ class LandingTestimonialRepository {
     return this._mapRow(result.rows[0]);
   }
 
-  /**
-   * @param {object} payload
-   * @returns {Promise<object>}
-   */
   async insert(payload) {
     const result = await db.query(
       `INSERT INTO landing_testimonials (
@@ -133,8 +134,9 @@ class LandingTestimonialRepository {
          role_vi, role_en,
          location_vi, location_en,
          image_url,
-         is_active
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         is_active,
+         id_user
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING
          id,
          sort_order,
@@ -149,6 +151,7 @@ class LandingTestimonialRepository {
          location_en,
          image_url,
          is_active,
+         id_user,
          created_at,
          updated_at`,
       [
@@ -164,6 +167,7 @@ class LandingTestimonialRepository {
         payload.locationEn ?? '',
         payload.imageUrl || null,
         payload.isActive !== false,
+        payload.idUser,
       ]
     );
     return this._mapRow(result.rows[0]);

@@ -16,7 +16,7 @@ class VerificationService {
   async saveVerificationCode(email, code, type = 'email_verification', expiresInMinutes = 10) {
     // Đánh dấu các mã cũ của email này là đã sử dụng
     await db.query(
-      'UPDATE verification_codes SET is_used = TRUE WHERE email = $1 AND type = $2 AND is_used = FALSE',
+      'UPDATE verification_codes SET is_used = TRUE WHERE LOWER(email) = LOWER($1) AND type = $2 AND is_used = FALSE',
       [email, type]
     );
 
@@ -37,7 +37,7 @@ class VerificationService {
   async verifyCode(email, code, type = 'email_verification') {
     const result = await db.query(
       `SELECT * FROM verification_codes
-       WHERE email = $1 AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
+       WHERE LOWER(email) = LOWER($1) AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
       [email, code, type]
     );
@@ -59,16 +59,16 @@ class VerificationService {
    * Gửi email xác minh
    */
   async sendVerificationEmail(email, code) {
-    const subject = 'Mã xác minh email - UKNOW';
+    const subject = 'Mã xác minh email - Founder AI';
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #F97316, #EA580C); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">UKNOW</h1>
+          <h1 style="color: white; margin: 0;">Founder AI</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1f2937; margin-top: 0;">Xác minh email của bạn</h2>
           <p style="color: #6b7280; font-size: 16px;">
-            Cảm ơn bạn đã đăng ký UKNOW. Vui lòng sử dụng mã bên dưới để xác minh email của bạn:
+            Cảm ơn bạn đã đăng ký Founder AI. Vui lòng sử dụng mã bên dưới để xác minh email của bạn:
           </p>
           <div style="background: white; border: 2px dashed #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
             <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #F97316;">${code}</span>
@@ -114,16 +114,16 @@ class VerificationService {
    */
   async sendInvitationEmail(email, token, ownerName) {
     const activationUrl = `${process.env.FRONTEND_URL}/activate?token=${token}`;
-    const subject = 'Lời mời tham gia team - UKNOW';
+    const subject = 'Lời mời tham gia team - Founder AI';
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #F97316, #EA580C); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">UKNOW</h1>
+          <h1 style="color: white; margin: 0;">Founder AI</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1f2937; margin-top: 0;">Bạn được mời tham gia team</h2>
           <p style="color: #6b7280; font-size: 16px;">
-            <strong>${ownerName}</strong> đã thêm bạn vào team trên UKNOW.
+            <strong>${ownerName}</strong> đã thêm bạn vào team trên Founder AI.
             Nhấn nút bên dưới để kích hoạt tài khoản và đặt mật khẩu của bạn.
           </p>
           <div style="text-align: center; margin: 32px 0;">
@@ -176,11 +176,11 @@ class VerificationService {
    */
   async sendPasswordResetEmail(email, token) {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-    const subject = 'Đặt lại mật khẩu - UKNOW';
+    const subject = 'Đặt lại mật khẩu - Founder AI';
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #F97316, #EA580C); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">UKNOW</h1>
+          <h1 style="color: white; margin: 0;">Founder AI</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1f2937; margin-top: 0;">Đặt lại mật khẩu</h2>

@@ -125,7 +125,7 @@ const Courses = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý khóa học</h1>
           <p className="mt-1 text-gray-500">
-            Danh sách khóa học được đồng bộ tự động từ UKNOW mỗi ngày lúc 00:30
+            Danh sách khóa học được đồng bộ tự động từ Founder AI mỗi ngày lúc 00:30
           </p>
         </div>
         <button

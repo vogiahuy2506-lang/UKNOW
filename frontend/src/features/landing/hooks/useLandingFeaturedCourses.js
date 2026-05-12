@@ -28,7 +28,7 @@ function mapStaticItem(s) {
     tag: s.tag,
     title: s.title,
     imageUrl: s.imageUrl ?? null,
-    linkUrl: s.linkUrl || 'https://uknow.edu.vn/',
+    linkUrl: s.linkUrl || 'https://founderai.biz/',
   };
 }
 

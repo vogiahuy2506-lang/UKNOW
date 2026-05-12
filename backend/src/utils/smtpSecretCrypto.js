@@ -19,7 +19,7 @@ function getSmtpCryptoKey() {
     String(process.env.SMTP_SECRET_KEY || '').trim() ||
     String(process.env.JWT_SECRET || '').trim() ||
     String(process.env.TOKEN_SECRET || '').trim() ||
-    'uknow-default-smtp-secret-change-me';
+    'Founder AI-default-smtp-secret-change-me';
 
   return crypto.createHash('sha256').update(rawSecret, 'utf8').digest();
 }

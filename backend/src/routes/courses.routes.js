@@ -7,7 +7,7 @@ const router = express.Router();
 // Tất cả các routes đều yêu cầu xác thực
 router.use(authMiddleware);
 
-// Đồng bộ khóa học từ UKNOW (thủ công)
+// Đồng bộ khóa học từ Founder AI (thủ công)
 router.post('/sync', coursesController.syncManual.bind(coursesController));
 
 // Lấy danh sách khóa học (có phân trang và tìm kiếm)
