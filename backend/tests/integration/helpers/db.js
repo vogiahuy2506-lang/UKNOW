@@ -13,6 +13,11 @@ import db from '../../../src/config/database.js';
 export async function truncateAll() {
   await db.query(`
     TRUNCATE TABLE
+      landing_page_events,
+      leads,
+      tracking_short_links,
+      campaign_schedules,
+      campaign_executions,
       campaign_runs,
       campaign_connections,
       campaign_nodes,

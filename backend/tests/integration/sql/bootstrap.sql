@@ -261,22 +261,67 @@ CREATE TABLE campaign_connections (
 CREATE INDEX idx_campaign_connections_campaign ON campaign_connections(id_campaign);
 
 CREATE TABLE campaign_runs (
-  id              BIGSERIAL PRIMARY KEY,
-  id_campaign     BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  id_schedule     BIGINT,
-  run_name        VARCHAR(255),
-  run_type        VARCHAR(20)  NOT NULL DEFAULT 'manual'
+  id                BIGSERIAL PRIMARY KEY,
+  id_campaign       BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_schedule       BIGINT,
+  run_name          VARCHAR(255),
+  run_type          VARCHAR(20)  NOT NULL DEFAULT 'manual'
     CHECK (run_type IN ('manual', 'scheduled')),
-  status          VARCHAR(20)  NOT NULL DEFAULT 'running'
+  status            VARCHAR(20)  NOT NULL DEFAULT 'running'
     CHECK (status IN ('running', 'completed', 'failed', 'stopped')),
-  started_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  completed_at    TIMESTAMPTZ,
-  error_message   TEXT,
-  run_metadata    JSONB        NOT NULL DEFAULT '{}',
-  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  started_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  completed_at      TIMESTAMPTZ,
+  total_recipients  INTEGER      NOT NULL DEFAULT 0,
+  successful_sends  INTEGER      NOT NULL DEFAULT 0,
+  failed_sends      INTEGER      NOT NULL DEFAULT 0,
+  error_message     TEXT,
+  run_metadata      JSONB        NOT NULL DEFAULT '{}',
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
 CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
+
+-- Campaign executions — log từng node được engine xử lý cho mỗi customer/run.
+-- Bảng tối thiểu để GET /api/campaign-runs/:id không 500 khi chưa có run nào.
+CREATE TABLE campaign_executions (
+  id                BIGSERIAL PRIMARY KEY,
+  id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE CASCADE,
+  id_customer       BIGINT,
+  status            VARCHAR(30),
+  action_type       VARCHAR(50),
+  path_taken        VARCHAR(50),
+  execution_data    JSONB,
+  error_message     TEXT,
+  node_id           VARCHAR(100),
+  node_name         VARCHAR(255),
+  node_type         VARCHAR(50),
+  node_subtype      VARCHAR(50),
+  node_order        INTEGER,
+  progress_current  INTEGER,
+  progress_total    INTEGER,
+  node_result_json  JSONB,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_campaign_executions_run ON campaign_executions(id_run);
+
+-- Campaign schedules (cron) — `id_schedule` trên campaign_runs trỏ về đây.
+CREATE TABLE campaign_schedules (
+  id              BIGSERIAL PRIMARY KEY,
+  id_campaign     BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  schedule_name   VARCHAR(255) NOT NULL,
+  schedule_type   VARCHAR(20)  NOT NULL
+    CHECK (schedule_type IN ('once', 'daily', 'weekly', 'monthly', 'custom')),
+  cron_expression VARCHAR(100) NOT NULL,
+  enabled         BOOLEAN      NOT NULL DEFAULT TRUE,
+  last_run_at     TIMESTAMPTZ,
+  next_run_at     TIMESTAMPTZ,
+  run_count       INTEGER      NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_campaign_schedules_campaign ON campaign_schedules(id_campaign);
 
 -- ─── Zalo module (settings + templates) ────────────────────────────────
 -- Schema tối thiểu để CRUD zalo_settings (chỉ cột mà controller truy vấn)
@@ -338,6 +383,66 @@ CREATE TABLE contact_submissions (
 );
 
 CREATE INDEX idx_contact_submissions_email ON contact_submissions(email);
+
+-- ─── Tracking short links ──────────────────────────────────────────────
+-- Mã rút gọn `/t/:code` redirect 302 sang `destination_url`.
+CREATE TABLE tracking_short_links (
+  id              BIGSERIAL PRIMARY KEY,
+  short_code      VARCHAR(32)  NOT NULL UNIQUE,
+  destination_url TEXT         NOT NULL,
+  channel         VARCHAR(50),
+  tracking_token  VARCHAR(255),
+  link_key        VARCHAR(255),
+  click_count     INTEGER      NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_tracking_short_links_code ON tracking_short_links(short_code);
+
+-- ─── Landing page leads ────────────────────────────────────────────────
+-- Form lead landing public — không gắn với user (cấu trúc multi-tenant
+-- shared trên trang public, không chia theo owner).
+CREATE TABLE leads (
+  id                  BIGSERIAL PRIMARY KEY,
+  last_name           VARCHAR(255),
+  first_name          VARCHAR(255),
+  email               VARCHAR(255),
+  phone               VARCHAR(50),
+  occupation          VARCHAR(100),
+  interest_area       VARCHAR(100),
+  marketing_consent   BOOLEAN      NOT NULL DEFAULT FALSE,
+  landing_page_slug   VARCHAR(100),
+  utm_source          VARCHAR(255),
+  utm_medium          VARCHAR(255),
+  utm_campaign        VARCHAR(255),
+  utm_content         VARCHAR(255),
+  utm_term            VARCHAR(255),
+  ip_address          VARCHAR(45),
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_leads_slug ON leads(landing_page_slug);
+CREATE INDEX idx_leads_email ON leads(email);
+CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
+
+-- Landing page events — view/click/submit tracking cho landing page.
+-- LeadService.createPublicLead ghi 1 event 'submit' nếu có slug.
+CREATE TABLE landing_page_events (
+  id                BIGSERIAL PRIMARY KEY,
+  event_type        VARCHAR(20)  NOT NULL,
+  landing_page_slug VARCHAR(100),
+  target_url        TEXT,
+  utm_source        VARCHAR(255),
+  utm_medium        VARCHAR(255),
+  utm_campaign      VARCHAR(255),
+  utm_content       VARCHAR(255),
+  utm_term          VARCHAR(255),
+  visitor_id        VARCHAR(64),
+  referrer          VARCHAR(2000),
+  user_agent        TEXT,
+  ip_address        VARCHAR(45),
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_landing_page_events_slug ON landing_page_events(landing_page_slug);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
