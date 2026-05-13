@@ -15,6 +15,12 @@ router.post('/generate-campaign', aiController.generateCampaign.bind(aiControlle
 // Create and optionally run the campaign
 router.post('/execute-campaign', aiController.executeCampaign.bind(aiController));
 
+// Create campaign from AI draft (NO auto-run)
+router.post('/create-from-draft', aiController.createCampaignFromDraft.bind(aiController));
+
+// Push AI script to existing campaign
+router.post('/push-to-campaign/:id', aiController.pushToCampaign.bind(aiController));
+
 // Business profile (RAG context)
 router.get('/business-profile', aiController.getBusinessProfile.bind(aiController));
 router.put('/business-profile', aiController.saveBusinessProfile.bind(aiController));
