@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "dev:e2e": "DOTENV_CONFIG_PATH=../e2e/.env.test nodemon -r dotenv/config src/index.js",
+    "start:e2e": "DOTENV_CONFIG_PATH=../e2e/.env.test node -r dotenv/config src/index.js",
     "start": "node src/index.js",
     "seed": "node scripts/seed.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",

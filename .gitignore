@@ -60,6 +60,14 @@ frontend/coverage/
 node_modules/
 
 ####################
+# E2E (Playwright)
+####################
+e2e/.env.test
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+
+####################
 # OS / EDITOR
 ####################
 .DS_Store

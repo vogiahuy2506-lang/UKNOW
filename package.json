@@ -6,7 +6,9 @@
   "scripts": {
     "prepare": "husky",
     "test:backend:unit": "cd backend && npm run test:unit",
-    "test:backend:integration": "cd backend && npm run test:integration"
+    "test:backend:integration": "cd backend && npm run test:integration",
+    "test:e2e": "cd e2e && npm test",
+    "e2e:install": "cd e2e && npm install && npx playwright install chromium"
   },
   "devDependencies": {
     "husky": "^9.1.7"
