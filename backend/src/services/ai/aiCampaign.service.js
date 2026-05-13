@@ -1,6 +1,7 @@
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import businessProfileService from './businessProfile.service.js';
 import { buildAdminContext } from './adminContext.service.js';
+import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
 import db from '../../config/database.js';
@@ -206,22 +207,31 @@ QUY TẮC THIẾT KẾ:
    - "send_zalo_personal": Gửi tin nhắn Zalo cá nhân (cần content).
    - "send_zalo_group": Gửi tin nhắn vào nhóm Zalo (cần content).
 3. Sử dụng node "logic" với Subtype "wait_time" để tạo độ trễ giữa các bước (config: { amount, unit: 'minutes'|'hours'|'days' }).
-4. Kênh EMAIL phải có:
-   - emailTemplateId: NÊN dùng ID từ danh sách template có sẵn nếu phù hợp (VD: 1, 2, 3...). Nếu không có template phù hợp thì để null và viết nội dung trực tiếp.
-   - emailSubject: tiêu đề email hấp dẫn
-   - emailBody: nội dung HTML đầy đủ, chuyên nghiệp
-   - templateMappings: [] (rỗng, dùng biến mặc định)
-5. Kênh ZALO CÁ NHÂN phải có:
-   - zaloAccountId: NÊN dùng ID từ tài khoản Zalo đã kết nối (VD: 1, 2...). Nếu chưa có thì để null.
+4. **BẮT BUỘC phải điền config đầy đủ cho mỗi node:**
+
+   **Node send_email BẮT BUỘC phải có config với các trường:**
+   - emailTemplateId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
+   - emailSubject: "Tiêu đề email hấp dẫn (bắt buộc)"
+   - emailBody: "<h1>HTML...</h1> (bắt buộc, HTML hoàn chỉnh)"
+   - templateMappings: []
+   - enableLinkTracking: true
+   - saveMessageLog: true
+
+   **Node send_zalo_personal BẮT BUỘC phải có config với các trường:**
+   - zaloAccountId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
    - recipientNodeId: null
-   - message: nội dung tin nhắn Zalo (dưới 4000 ký tự)
+   - message: "Nội dung tin nhắn Zalo (bắt buộc, dưới 4000 ký tự)"
    - zaloPersonalTemplateSteps: []
-6. Kênh ZALO NHÓM phải có:
-   - zaloAccountId: NÊN dùng ID từ tài khoản Zalo đã kết nối
-   - zaloGroupNodeId: NÊN dùng ID từ danh sách nhóm có sẵn (VD: 1, 2...). Nếu không có thì để null.
-   - message: nội dung tin nhắn nhóm
+   - saveMessageLog: true
+
+   **Node send_zalo_group BẮT BUỘC phải có config với các trường:**
+   - zaloAccountId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
+   - zaloGroupNodeId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
+   - message: "Nội dung tin nhắn nhóm (bắt buộc)"
    - zaloGroupTemplateSteps: []
-7. KẾ HOẠCH THỜI GIAN BẮT BUỘC cho mỗi bước gửi:
+   - saveMessageLog: true
+
+5. KẾ HOẠCH THỜI GIAN BẮT BUỘC cho mỗi bước gửi:
    - Tính từ thời điểm trigger
    - Email 1: gửi ngay (0 phút)
    - Zalo 1: gửi sau 5-10 phút
@@ -229,14 +239,17 @@ QUY TẮC THIẾT KẾ:
    - Zalo 2: gửi sau 3-4 ngày
    - Email 3: gửi sau 7 ngày
    - Tạo node wait_time giữa các bước với thời gian phù hợp
-8. Các node phải được nối với nhau qua mảng "connections".
-9. **QUAN TRỌNG**: Điền sẵn các thông số từ tài nguyên có sẵn (emailTemplateId, zaloAccountId, zaloGroupNodeId) để user chỉ cần xem và điều chỉnh nếu cần.
+6. Các node phải được nối với nhau qua mảng "connections".
+7. **QUAN TRỌNG**: 
+   - Điền emailTemplateId, zaloAccountId, zaloGroupNodeId từ danh sách có sẵn (nếu có)
+   - Nếu không có tài nguyên, vẫn phải tạo config với giá trị mặc định: emailTemplateId=null, zaloAccountId=null, zaloGroupNodeId=null
+   - KHONG DC de config trong {} cho cac node action
 
 CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
 {
   "campaignName": "Tên chiến dịch hấp dẫn, có chứa từ khóa sản phẩm",
   "description": "Mô tả ngắn gọn mục tiêu chiến dịch (1-2 câu)",
-  "campaignType": "mixed | email | zalo | zalo_group",
+  "campaignType": "mixed",
   "isAiDraft": true,
   "nodes": [
     {
@@ -253,14 +266,14 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
       "tempId": "node_2",
       "nodeType": "action",
       "nodeSubtype": "send_email",
-      "nodeName": "Email chào mừng - Giới thiệu [tên sản phẩm]",
+      "nodeName": "Email chào mừng - Giới thiệu sản phẩm",
       "nodeDescription": "Gửi email giới thiệu sản phẩm ngay khi kích hoạt",
       "positionX": 400,
       "positionY": 80,
       "config": {
-        "emailTemplateId": 1,
-        "emailSubject": "Tiêu đề email hấp dẫn có emoji",
-        "emailBody": "<h1>Chào bạn!</h1><p>Nội dung HTML đầy đủ...</p>",
+        "emailTemplateId": null,
+        "emailSubject": "🎉 Chào mừng bạn đến với [TÊN_SẢN_PHẨM]!",
+        "emailBody": "<h1>Xin chào!</h1><p>Chúng tôi rất vui được giới thiệu đến bạn sản phẩm tuyệt vời này...</p>",
         "templateMappings": [],
         "enableLinkTracking": true,
         "saveMessageLog": true
@@ -283,15 +296,31 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
       "tempId": "node_4",
       "nodeType": "action",
       "nodeSubtype": "send_zalo_personal",
-      "nodeName": "Zalo cá nhân - Nhắc nhở về ưu đãi",
+      "nodeName": "Zalo cá nhân - Nhắc nhở ưu đãi",
       "nodeDescription": "Gửi tin nhắn Zalo nhắc nhở sau 3 ngày",
       "positionX": 1000,
       "positionY": 80,
       "config": {
-        "zaloAccountId": 1,
+        "zaloAccountId": null,
         "recipientNodeId": null,
-        "message": "Nội dung tin nhắn Zalo cá nhân (dưới 4000 ký tự, thân thiện, có CTA)...",
+        "message": "Xin chào! 👋\n\nChúng tôi có ưu đãi đặc biệt dành cho bạn. Nhấn vào đường link để xem chi tiết nhé!",
         "zaloPersonalTemplateSteps": [],
+        "saveMessageLog": true
+      }
+    },
+    {
+      "tempId": "node_5",
+      "nodeType": "action",
+      "nodeSubtype": "send_zalo_group",
+      "nodeName": "Zalo nhóm - Chia sẻ ưu đãi",
+      "nodeDescription": "Gửi tin nhắn vào nhóm Zalo",
+      "positionX": 1300,
+      "positionY": 80,
+      "config": {
+        "zaloAccountId": null,
+        "zaloGroupNodeId": null,
+        "message": "📢 Thông báo ưu đãi!\n\nChia sẻ tin tuyệt vời này đến mọi người trong nhóm nhé!",
+        "zaloGroupTemplateSteps": [],
         "saveMessageLog": true
       }
     }
@@ -299,7 +328,8 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
   "connections": [
     { "sourceNodeId": "node_1", "targetNodeId": "node_2", "connectionType": "default" },
     { "sourceNodeId": "node_2", "targetNodeId": "node_3", "connectionType": "default" },
-    { "sourceNodeId": "node_3", "targetNodeId": "node_4", "connectionType": "default" }
+    { "sourceNodeId": "node_3", "targetNodeId": "node_4", "connectionType": "default" },
+    { "sourceNodeId": "node_4", "targetNodeId": "node_5", "connectionType": "default" }
   ],
   "landingPage": null
 }
@@ -307,7 +337,9 @@ CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
 LƯU Ý QUAN TRỌNG:
 - Bạn BẮT BUỘC phải viết nội dung chi tiết cho từng email (subject, bodyHtml) và tin nhắn zalo (message). Không được để trống hoặc dùng nội dung giữ chỗ.
 - Nội dung phải mang tính thuyết phục cao, cá nhân hóa theo thông tin doanh nghiệp/sản phẩm đã cung cấp.
-- Ưu tiên sử dụng template và tài khoản có sẵn (điền sẵn ID trong config).
+- Nếu có email templates hoặc Zalo accounts trong danh sách trên, HÃY ĐIỀN ID THỰC TẾ vào config (emailTemplateId, zaloAccountId, zaloGroupNodeId).
+- Nếu không có tài nguyên, vẫn phải tạo config ĐẦY ĐỦ với giá trị null: emailTemplateId=null, zaloAccountId=null, zaloGroupNodeId=null
+- KHONG DC de config trong {} cho cac node action - phai co it nhat message/emailSubject/emailBody
 - Thiết kế đa kênh: kết hợp Email + Zalo cá nhân + Zalo nhóm (ít nhất 2-3 kênh).
 - Mỗi bước phải có kế hoạch thời gian rõ ràng, sử dụng node wait_time để tạo khoảng cách.
 - Tổng chiến dịch nên có 4-6 bước gửi tin nhắn trong 10-14 ngày.
@@ -566,6 +598,39 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.`;
       }
       throw err;
     }
+  }
+
+  /**
+   * Generate landing page using AI with optional template.
+   * @param {object} params
+   * @param {string} params.prompt - User's request
+   * @param {number} [params.templateId] - Optional template ID
+   * @param {number} [params.userId] - User ID for RAG context
+   * @param {Array} [params.files] - Attached files
+   * @returns {Promise<object>}
+   */
+  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
+    return landingTemplateService.generateLandingPage({ prompt, templateId, userId, files });
+  }
+
+  /**
+   * Get available landing page templates.
+   * @param {string} [category] - Optional category filter
+   * @returns {Promise<object[]>}
+   */
+  async getLandingTemplates(category = null) {
+    if (category) {
+      return landingTemplateService.getTemplatesByCategory(category);
+    }
+    return landingTemplateService.getTemplates();
+  }
+
+  /**
+   * Get landing page template categories.
+   * @returns {Promise<object[]>}
+   */
+  async getLandingTemplateCategories() {
+    return landingTemplateService.getCategories();
   }
 
   /**

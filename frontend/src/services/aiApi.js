@@ -65,6 +65,30 @@ const aiApi = {
     const response = await api.put('/ai/business-profile', data);
     return response.data;
   },
+
+  // Landing Page Templates
+  getLandingTemplates: async (category = null) => {
+    const params = category ? { category } : {};
+    const response = await api.get('/landing-templates', { params });
+    return response.data;
+  },
+
+  getLandingTemplateCategories: async () => {
+    const response = await api.get('/landing-templates/categories');
+    return response.data;
+  },
+
+  getLandingTemplate: async (id) => {
+    const response = await api.get(`/landing-templates/${id}`);
+    return response.data;
+  },
+
+  generateLandingPage: async (prompt, templateId = null, files = []) => {
+    const response = await api.post('/landing-templates/generate', { prompt, templateId, files }, {
+      timeout: 120000
+    });
+    return response.data;
+  },
 };
 
 export default aiApi;
