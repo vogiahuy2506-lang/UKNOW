@@ -134,7 +134,9 @@ function PlanSection({ data }) {
         {data.planMaxEmployees !== null && (
           <div className="text-right shrink-0">
             <p className="text-xs text-gray-500">Nhân viên tối đa</p>
-            <p className="text-sm font-bold text-gray-800">{data.planMaxEmployees} người</p>
+            <p className="text-sm font-bold text-gray-800">
+              {data.planMaxEmployees === -1 ? 'Không giới hạn' : `${data.planMaxEmployees} người`}
+            </p>
           </div>
         )}
       </div>
