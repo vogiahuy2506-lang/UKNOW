@@ -42,6 +42,8 @@ import planRoutes from './routes/plan.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';
+import landingTemplateRoutes from './routes/landingTemplate.routes.js';
+import customDomainRoutes from './routes/customDomain.routes.js';
 
 /**
  * Khởi tạo Express app (không listen).
@@ -141,6 +143,8 @@ export function createApp() {
   app.use('/api/admin/members', adminMembersRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/landing-templates', landingTemplateRoutes);
+  app.use('/api/custom-domains', customDomainRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

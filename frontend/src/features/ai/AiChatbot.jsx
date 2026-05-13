@@ -8,11 +8,14 @@ import {
   HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineExternalLink,
   HiOutlineDatabase, HiOutlineChevronDown, HiOutlineFolderOpen,
+  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
 import api from '../../services/api';
+import LandingPageCard from './components/LandingPageCard';
+import TemplateSelector from './components/TemplateSelector';
 
 const CATEGORIES = [
   { id: 'marketing', label: '📢 Marketing' },
@@ -264,31 +267,7 @@ const CampaignScriptCard = ({ script, onCreate, onEdit, onPushToExisting }) => (
   </div>
 );
 
-// Landing page card
-const LandingPageCard = ({ page, onSaveToLibrary }) => {
-  const handlePreview = () => {
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>${page.title}</title><style>${page.css || ''}</style></head><body>${page.html}</body></html>`);
-    win.document.close();
-  };
-  return (
-    <div className="mt-4 bg-slate-50 rounded-2xl p-4 border border-slate-200">
-      <div className="flex items-center gap-2 mb-2 text-slate-600">
-        <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-        <span className="font-black text-[10px] uppercase tracking-widest">Landing Page</span>
-      </div>
-      <p className="text-sm font-bold text-slate-800 mb-3">{page.title}</p>
-      <div className="space-y-2">
-        <button onClick={handlePreview} className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2">
-          <HiOutlineExternalLink className="w-4 h-4 text-orange-400" /> Xem trước
-        </button>
-        <button onClick={() => onSaveToLibrary?.(page)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2">
-          <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Chỉnh sửa & Lưu
-        </button>
-      </div>
-    </div>
-  );
-};
+// Landing page card - now imported from ./components/LandingPageCard.jsx
 
 const AiChatbot = ({ isOpen, onToggle }) => {
   const { user } = useAuthStore();
@@ -310,6 +289,9 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -388,6 +370,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
   const handleEditCampaign = (script) => {
+    console.log('[AI Chatbot] Saving AI script to draft:', JSON.stringify(script, null, 2));
     writeCampaignDraft({
       campaignName: script.campaignName || '',
       campaignDescription: script.description || '',
@@ -457,6 +440,62 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     }
   };
 
+  // Open template selector for landing page generation
+  const handleRequestLandingPage = () => {
+    setShowTemplateSelector(true);
+  };
+
+  // Handle template selection and generate landing page
+  const handleTemplateSelect = async (template) => {
+    if (!pendingLandingPrompt) return;
+
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+    setIsTyping(true);
+
+    const templateContext = template
+      ? `Tôi muốn dựa trên template "${template.name}" (${template.category}). `
+      : 'Tôi muốn tạo landing page từ đầu. ';
+
+    const fullPrompt = templateContext + pendingLandingPrompt;
+
+    try {
+      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles);
+
+      if (response.success) {
+        const { title, html, css, variables } = response.data;
+
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước, chỉnh sửa và lưu vào thư viện.`,
+          type: 'landing_page',
+          data: {
+            title,
+            html,
+            css,
+            variables,
+            templateId: template?.id,
+            templateName: template?.name,
+          },
+        }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ Lỗi khi tạo landing page: ${error.response?.data?.message || error.message}`
+      }]);
+    } finally {
+      setIsTyping(false);
+      setSelectedTemplate(null);
+      setPendingLandingPrompt(null);
+    }
+  };
+
+  // Handle generate new landing page from existing card
+  const handleGenerateNewLandingPage = () => {
+    setShowTemplateSelector(true);
+  };
+
   return (
     <div className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}>
       {/* Header */}
@@ -493,6 +532,31 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           >
             Thiết lập →
           </Link>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      {!isSuperAdmin && (
+        <div className="flex-shrink-0 mx-4 mt-3 flex gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => {
+              setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+              setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-medium text-slate-600 transition-all whitespace-nowrap"
+          >
+            <HiOutlineGlobeAlt className="w-3.5 h-3.5" />
+            Landing Page
+          </button>
+          <button
+            onClick={() => {
+              setInputText('Viết template email chào mừng khách hàng mới');
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 rounded-full text-xs font-medium text-orange-700 transition-all whitespace-nowrap"
+          >
+            <HiOutlineMail className="w-3.5 h-3.5" />
+            Template Email
+          </button>
         </div>
       )}
 
@@ -549,7 +613,11 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
               {/* Landing page */}
               {msg.type === 'landing_page' && msg.data && (
-                <LandingPageCard page={msg.data} onSaveToLibrary={handleSaveLandingPage} />
+                <LandingPageCard
+                  page={msg.data}
+                  onSaveToLibrary={handleSaveLandingPage}
+                  onGenerateNew={handleGenerateNewLandingPage}
+                />
               )}
             </div>
           </div>
@@ -617,6 +685,16 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           setSelectedScriptForPush(null);
         }}
         onSelect={handleSelectCampaign}
+      />
+
+      {/* Template Selector Modal */}
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => {
+          setShowTemplateSelector(false);
+          setPendingLandingPrompt(null);
+        }}
+        onSelect={handleTemplateSelect}
       />
     </div>
   );
