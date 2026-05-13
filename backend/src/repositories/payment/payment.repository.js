@@ -1,11 +1,11 @@
 import db from '../../config/database.js';
 
 // Tạo đơn mua mới
-export const createOrder = async ({ orderCode, planId, amount, userEmail, userId = null, status = 'pending' }) => {
+export const createOrder = async ({ orderCode, planId, amount, userEmail, userId = null, status = 'pending', paymentMethod = 'payos', note = null }) => {
     const { rows } = await db.query(
-        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-        [orderCode, planId, amount, userEmail, userId, status]
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+        [orderCode, planId, amount, userEmail, userId, status, paymentMethod, note]
     );
     return rows[0];
 };

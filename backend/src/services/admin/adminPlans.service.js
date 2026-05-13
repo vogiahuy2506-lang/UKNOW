@@ -208,13 +208,32 @@ export async function searchUsers(query, excludeWithPlan = false) {
 
 /**
  * Gán gói trực tiếp cho user theo email (super_admin override, bỏ qua thanh toán).
+ * @param {number} planId
+ * @param {string} userEmail
+ * @param {{ paymentMethod?: 'manual'|'free', note?: string }} [opts]
+ *   paymentMethod: 'manual' = thu tiền ngoài (cộng doanh thu), 'free' = miễn phí (không tính)
  */
-export async function assignPlan(planId, userEmail) {
+export async function assignPlan(planId, userEmail, { paymentMethod = 'free', note = null } = {}) {
   const plan = await findPlanById(planId);
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
 
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
   if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };
 
-  return assignPlanToUser(user.id, planId);
+  const result = await assignPlanToUser(user.id, planId);
+
+  const orderCode = Date.now();
+  const amount = paymentMethod === 'manual' ? Number(plan.price) : 0;
+  await createOrder({
+    orderCode,
+    planId: plan.id,
+    amount,
+    userEmail: user.email,
+    userId: user.id,
+    status: 'success',
+    paymentMethod,
+    note,
+  });
+
+  return result;
 }

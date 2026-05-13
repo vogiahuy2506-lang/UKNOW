@@ -105,15 +105,20 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
 
 // ── AssignModal — gán gói đại trà cho 1 user ─────────────────────────────────
 export const AssignModal = ({ plan, onClose, onAssigned }) => {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail]               = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('free');
+  const [note, setNote]                 = useState('');
+  const [isLoading, setIsLoading]       = useState(false);
 
   const handleAssign = async (e) => {
     e.preventDefault();
     if (!email.trim()) { toast.error('Vui lòng nhập email'); return; }
     try {
       setIsLoading(true);
-      const res = await adminPlansApiService.assignPlan(plan.id, email.trim());
+      const res = await adminPlansApiService.assignPlan(plan.id, email.trim(), {
+        paymentMethod,
+        note: note.trim() || null,
+      });
       toast.success(`Đã gán gói "${plan.name}" cho ${res.data.data.email}`);
       onAssigned();
       onClose();
@@ -136,6 +141,22 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Email người dùng *</label>
         <EmailAutocomplete value={email} onChange={setEmail} />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Hình thức thanh toán *</label>
+        <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+          <option value="free">Miễn phí / Demo (không tính doanh thu)</option>
+          <option value="manual">Đã thu tiền ngoài (tính vào doanh thu)</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+        <input
+          className="input w-full"
+          placeholder="VD: Chuyển khoản MB Bank 12/05/2026..."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isLoading}>Hủy</button>
