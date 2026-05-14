@@ -1,5 +1,6 @@
 import customDomainRepository from '../repositories/customDomain.repository.js';
 import landingPageRepository from '../repositories/landingPage.repository.js';
+import cloudflareService from './cloudflare.service.js';
 import axios from 'axios';
 
 /**
@@ -116,9 +117,170 @@ class CustomDomainService {
       throw new Error('Domain not found');
     }
 
-    // TODO: Trigger DNS cleanup / SSL certificate deletion if integrated
+    // Cleanup Cloudflare DNS if configured
+    if (cloudflareService.isConfigured()) {
+      await cloudflareService.cleanupDomain(existing.domain);
+    }
 
     return customDomainRepository.deleteById(id);
+  }
+
+  /**
+   * Setup domain with Cloudflare (DNS + SSL)
+   * @param {number} id
+   * @param {object} scope
+   * @returns {Promise<object>}
+   */
+  async setupWithCloudflare(id, scope = {}) {
+    const domain = await customDomainRepository.findByIdInScope(id, scope);
+    if (!domain) {
+      throw new Error('Domain not found');
+    }
+
+    if (!cloudflareService.isConfigured()) {
+      throw new Error('Cloudflare API not configured. Please set CLOUDFLARE_API_TOKEN in environment.');
+    }
+
+    const cnameTarget = domain.cname_target || process.env.LP_CNAME_TARGET || 'lp.uknow.vn';
+
+    // Setup DNS and SSL via Cloudflare
+    const result = await cloudflareService.setupDomain(domain.domain, cnameTarget);
+
+    if (result.success) {
+      // Update database
+      await customDomainRepository.updateById(id, {
+        dnsConfig: {
+          ...domain.dns_config,
+          cloudflareSetup: {
+            setupAt: new Date().toISOString(),
+            proxied: true,
+          }
+        },
+        sslStatus: result.ssl?.status || 'pending',
+        status: 'active',
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get Cloudflare setup status
+   * @param {number} id
+   * @param {object} scope
+   * @returns {Promise<object>}
+   */
+  async getCloudflareStatus(id, scope = {}) {
+    const domain = await customDomainRepository.findByIdInScope(id, scope);
+    if (!domain) {
+      throw new Error('Domain not found');
+    }
+
+    const isConfigured = cloudflareService.isConfigured();
+
+    if (!isConfigured) {
+      return {
+        configured: false,
+        message: 'Cloudflare API not configured',
+        setupAvailable: true,
+        instructions: 'Set CLOUDFLARE_API_TOKEN in environment variables to enable automatic setup'
+      };
+    }
+
+    // Check zone existence
+    const zoneResult = await cloudflareService.getZone(domain.domain);
+
+    return {
+      configured: true,
+      zoneFound: zoneResult.success,
+      dnsSetup: domain.dns_config?.cloudflareSetup || null,
+      sslStatus: domain.ssl_status,
+    };
+  }
+
+  /**
+   * Verify domain via Cloudflare (checks DNS records)
+   * @param {number} id
+   * @param {object} scope
+   * @returns {Promise<object>}
+   */
+  async verifyDomainWithCloudflare(id, scope = {}) {
+    const domain = await customDomainRepository.findByIdInScope(id, scope);
+    if (!domain) {
+      throw new Error('Domain not found');
+    }
+
+    if (!cloudflareService.isConfigured()) {
+      // Fallback to manual verification
+      return this.verifyDomain(id, scope);
+    }
+
+    // Update status
+    await customDomainRepository.updateById(id, {
+      verificationStatus: 'in_progress',
+      status: 'verifying',
+      lastCheckedAt: new Date(),
+    });
+
+    // Check DNS via Cloudflare
+    const zoneResult = await cloudflareService.getZone(domain.domain);
+
+    if (!zoneResult.success) {
+      await customDomainRepository.updateById(id, {
+        verificationStatus: 'failed',
+        status: 'failed',
+        errorMessage: zoneResult.message,
+        lastCheckedAt: new Date(),
+      });
+
+      return {
+        success: false,
+        message: zoneResult.message,
+        hint: 'Make sure the domain is added to your Cloudflare account first'
+      };
+    }
+
+    // Check if CNAME record exists
+    const name = cloudflareService.extractSubdomain(domain.domain, zoneResult.zone.name);
+    const recordResult = await cloudflareService.getDnsRecord(zoneResult.zone.id, name);
+
+    if (!recordResult.success || !recordResult.record) {
+      await customDomainRepository.updateById(id, {
+        verificationStatus: 'failed',
+        status: 'failed',
+        errorMessage: 'CNAME record not found. Please add DNS records first.',
+        lastCheckedAt: new Date(),
+      });
+
+      return {
+        success: false,
+        message: 'DNS record not found',
+        hint: 'Run setup with Cloudflare or add CNAME record manually'
+      };
+    }
+
+    // Verify successful
+    await customDomainRepository.updateById(id, {
+      verificationStatus: 'verified',
+      sslStatus: 'pending',
+      status: 'active',
+      isVerified: true,
+      verifiedAt: new Date(),
+    });
+
+    // Auto-setup SSL
+    const sslResult = await cloudflareService.provisionSSL(domain.domain);
+    if (sslResult.success) {
+      await customDomainRepository.updateById(id, {
+        sslStatus: sslResult.status || 'active',
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Domain verified and SSL configured',
+      ssl: sslResult
+    };
   }
 
   /**

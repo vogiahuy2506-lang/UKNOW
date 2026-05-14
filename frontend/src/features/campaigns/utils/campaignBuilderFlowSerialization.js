@@ -4,11 +4,67 @@
  * Supports both:
  * - modern `flowJson` payload
  * - legacy `nodes` + `connections` payload
+ * - AI script format (nodes with tempId, connections)
  *
  * @param {Object} campaignData backend campaign object
  * @returns {{nodes: Array, edges: Array}} normalized flow data
  */
 export const buildFlowFromCampaign = (campaignData) => {
+  // Handle AI script format - AI uses tempId instead of id
+  if (campaignData && campaignData.nodes && campaignData.connections) {
+    console.log('[buildFlowFromCampaign] Processing AI script with', campaignData.nodes.length, 'nodes');
+
+    // AI script nodes have tempId, positionX, positionY, nodeSubtype, nodeName, config
+    const aiNodes = campaignData.nodes;
+    const aiConnections = campaignData.connections || [];
+
+    // Convert AI nodes to ReactFlow nodes
+    const reactFlowNodes = aiNodes.map((node, index) => {
+      // Determine node type for ReactFlow
+      const nodeSubtype = node.nodeSubtype || node.nodeType || '';
+      let nodeType = 'task';
+
+      if (nodeSubtype === 'start' || nodeSubtype === 'manual' || nodeSubtype === 'read_landing_leads') {
+        nodeType = 'start';
+      } else if (nodeSubtype === 'end') {
+        nodeType = 'end';
+      }
+
+      // Use tempId as the ReactFlow node id, or generate one
+      const nodeId = node.tempId || node.id || `node_${index + 1}`;
+
+      return {
+        id: nodeId,
+        type: nodeType,
+        position: {
+          x: Number(node.positionX) || (index * 300 + 100),
+          y: Number(node.positionY) || 100,
+        },
+        data: {
+          label: node.nodeName || node.label || 'Node',
+          nodeType: node.nodeSubtype || node.nodeType || 'task',
+          config: node.config || {},
+          description: node.nodeDescription || '',
+        },
+      };
+    });
+
+    // Convert AI connections to ReactFlow edges
+    const reactFlowEdges = aiConnections.map((conn, index) => {
+      return {
+        id: conn.id || `edge_${index + 1}`,
+        source: conn.sourceNodeId || conn.source || '',
+        target: conn.targetNodeId || conn.target || '',
+        type: 'custom',
+        label: conn.connectionLabel || undefined,
+      };
+    });
+
+    console.log('[buildFlowFromCampaign] Converted to', reactFlowNodes.length, 'nodes and', reactFlowEdges.length, 'edges');
+
+    return { nodes: reactFlowNodes, edges: reactFlowEdges };
+  }
+
   const flow = normalizeFlowJson(campaignData?.flowJson);
   if (flow?.nodes && flow?.edges) {
     const storedNodes = Array.isArray(campaignData?.nodes) ? campaignData.nodes : [];
@@ -46,24 +102,39 @@ export const buildFlowFromCampaign = (campaignData) => {
     };
   }
 
-  const fallbackNodes = (campaignData?.nodes || []).map((node) => ({
-    id: normalizeNodeId(node.id),
-    type: node.nodeSubtype === 'start' ? 'start' : node.nodeSubtype === 'end' ? 'end' : 'task',
-    position: {
-      x: Number(node.positionX) || 0,
-      y: Number(node.positionY) || 0,
-    },
-    data: {
-      label: node.nodeName || '',
-      nodeType: node.nodeSubtype || node.nodeType,
-      config: node.config || {},
-    },
-  }));
+  // Legacy format
+  const legacyNodes = Array.isArray(campaignData?.nodes) ? campaignData.nodes : [];
+  const fallbackNodes = legacyNodes.map((node, index) => {
+    // Handle both tempId and id
+    const nodeId = node.tempId || node.id || `node_${index + 1}`;
+    const nodeSubtype = node.nodeSubtype || node.nodeType || '';
+    let nodeType = 'task';
+
+    if (nodeSubtype === 'start' || nodeSubtype === 'manual' || nodeSubtype === 'read_landing_leads') {
+      nodeType = 'start';
+    } else if (nodeSubtype === 'end') {
+      nodeType = 'end';
+    }
+
+    return {
+      id: normalizeNodeId(nodeId),
+      type: nodeType,
+      position: {
+        x: Number(node.positionX) || (index * 300 + 100),
+        y: Number(node.positionY) || 100,
+      },
+      data: {
+        label: node.nodeName || node.label || '',
+        nodeType: node.nodeSubtype || node.nodeType || 'task',
+        config: node.config || {},
+      },
+    };
+  });
 
   const fallbackEdges = (campaignData?.connections || []).map((conn, index) => ({
     id: conn.id ? String(conn.id) : `${normalizeEdgeEnd(conn.sourceNodeId)}-${normalizeEdgeEnd(conn.targetNodeId)}-${index}`,
-    source: normalizeEdgeEnd(conn.sourceNodeId),
-    target: normalizeEdgeEnd(conn.targetNodeId),
+    source: normalizeEdgeEnd(conn.sourceNodeId || conn.source),
+    target: normalizeEdgeEnd(conn.targetNodeId || conn.target),
     type: conn.connectionType || 'custom',
     label: conn.connectionLabel || undefined,
   }));

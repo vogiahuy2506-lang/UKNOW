@@ -31,4 +31,13 @@ router.get('/:id/verification-instructions', customDomainController.getVerificat
 // GET /api/custom-domains/:id/ssl-status - Get SSL status
 router.get('/:id/ssl-status', customDomainController.getSslStatus.bind(customDomainController));
 
+// POST /api/custom-domains/:id/setup-cloudflare - Setup with Cloudflare
+router.post('/:id/setup-cloudflare', customDomainController.setupCloudflare.bind(customDomainController));
+
+// GET /api/custom-domains/:id/cloudflare-status - Get Cloudflare status
+router.get('/:id/cloudflare-status', customDomainController.getCloudflareStatus.bind(customDomainController));
+
+// POST /api/custom-domains/:id/verify-cloudflare - Verify via Cloudflare
+router.post('/:id/verify-cloudflare', customDomainController.verifyWithCloudflare.bind(customDomainController));
+
 export default router;

@@ -370,13 +370,37 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
   const handleEditCampaign = (script) => {
-    console.log('[AI Chatbot] Saving AI script to draft:', JSON.stringify(script, null, 2));
+    console.log('[AI Chatbot] handleEditCampaign - Script received:', JSON.stringify(script, null, 2));
+    console.log('[AI Chatbot] Number of nodes:', script?.nodes?.length);
+    console.log('[AI Chatbot] Number of connections:', script?.connections?.length);
+
+    // Ensure nodes and connections are valid arrays
+    const validNodes = Array.isArray(script?.nodes) ? script.nodes.filter(n => n && n.tempId) : [];
+    const validConnections = Array.isArray(script?.connections) ? script.connections.filter(c => c && c.sourceNodeId && c.targetNodeId) : [];
+
+    console.log('[AI Chatbot] Valid nodes:', validNodes.length);
+    console.log('[AI Chatbot] Valid connections:', validConnections.length);
+
+    // Log each node
+    validNodes.forEach((node, i) => {
+      console.log(`[AI Chatbot] Node ${i + 1}: tempId=${node.tempId}, subtype=${node.nodeSubtype}, name=${node.nodeName}`);
+    });
+
+    // Log each connection
+    validConnections.forEach((conn, i) => {
+      console.log(`[AI Chatbot] Connection ${i + 1}: ${conn.sourceNodeId} -> ${conn.targetNodeId}`);
+    });
+
     writeCampaignDraft({
-      campaignName: script.campaignName || '',
-      campaignDescription: script.description || '',
-      campaignType: script.campaignType || 'mixed',
+      campaignName: script?.campaignName || '',
+      campaignDescription: script?.description || '',
+      campaignType: script?.campaignType || 'mixed',
       // Store raw script nodes/connections for buildFlowFromCampaign (legacy format)
-      _aiScript: script,
+      _aiScript: {
+        ...script,
+        nodes: validNodes,
+        connections: validConnections,
+      },
       updatedAt: new Date().toISOString(),
     });
     navigate('/app/campaigns/new/builder');
@@ -658,7 +682,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             placeholder="Nhập yêu cầu... (Enter để gửi)"
             className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-4 pr-12 py-3.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 resize-none min-h-[90px] transition-all"
           />
-          <div className="absolute right-3 bottom-3 flex gap-1.5">
+          {/* <div className="absolute right-3 bottom-3 flex gap-1.5">
             <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
               className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl disabled:opacity-50">
               {isUploading
@@ -669,7 +693,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
               className="p-2 bg-slate-900 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:shadow-none transition-all">
               <HiOutlineChevronRight className="w-4 h-4" />
             </button>
-          </div>
+          </div> */}
         </div>
         <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Founder AI Marketing AI</p>
       </div>
