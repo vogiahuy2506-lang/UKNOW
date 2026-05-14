@@ -664,7 +664,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
               className="p-2 bg-slate-900 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:shadow-none transition-all">
               <HiOutlineChevronRight className="w-4 h-4" />
             </button>
-          </div> */}
+          </div>
         </div>
         <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Founder AI Marketing AI</p>
       </div>
