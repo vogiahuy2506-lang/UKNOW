@@ -1,7 +1,7 @@
 services:
   backend:
     container_name: uknow-campaign-backend
-    image: hoangphucsenna/uknow-backend:latest
+    image: nhatminh7104/uknow-backend:latest
     ports:
       # Publish ra ngoài để máy ngoài VPS gọi được API.
       - "0.0.0.0:${BACKEND_PORT:-5001}:5001"
