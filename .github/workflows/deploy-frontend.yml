@@ -60,9 +60,9 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest
           build-args: |
-            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_API_URL=/api
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-            VITE_PRIMARY_APP_HOSTS=${{ secrets.VITE_PRIMARY_APP_HOSTS }}
+            VITE_PRIMARY_APP_HOSTS=localhost,127.0.0.1,founderai.biz,www.founderai.biz
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
