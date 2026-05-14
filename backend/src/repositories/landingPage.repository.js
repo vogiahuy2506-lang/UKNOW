@@ -19,17 +19,18 @@ class LandingPageRepository {
    */
   buildLandingScopeCondition(scope = {}) {
     const userId = Number.parseInt(scope?.userId, 10);
+    const role = scope?.role ?? scope?.roleCode;
     if (!Number.isFinite(userId)) {
       return { clause: '1 = 0', params: [] };
     }
 
-    if (isSuperAdmin(scope?.role)) {
+    if (isSuperAdmin(role)) {
       return { clause: '1 = 1', params: [] };
     }
 
     // user_admin hoặc employee đều thấy toàn bộ workspace của owner
     const ownerId = scope?.ownerId ? Number.parseInt(scope.ownerId, 10) : null;
-    const workspaceOwnerId = isUserAdmin(scope?.role) ? userId : (ownerId || userId);
+    const workspaceOwnerId = isUserAdmin(role) ? userId : (ownerId || userId);
 
     return {
       clause: `lp.id_user IN (

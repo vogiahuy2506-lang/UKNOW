@@ -4,6 +4,8 @@ import { useAuthStore } from './stores/authStore';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
+
 // Layouts
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
@@ -34,6 +36,7 @@ import AboutPage from './pages/public/AboutPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
 import LpRendererPage from './pages/public/LpRendererPage';
+import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
@@ -135,22 +138,36 @@ const PublicRoute = ({ children }) => {
 };
 
 function App() {
+  const toaster = (
+    <Toaster
+      position="top-center"
+      containerStyle={{
+        zIndex: 999999,
+      }}
+      toastOptions={{
+        duration: 3000,
+        style: {
+          background: '#333',
+          color: '#fff',
+        },
+      }}
+    />
+  );
+
+  if (typeof window !== 'undefined' && !isPrimaryAppHostname(window.location.hostname)) {
+    return (
+      <>
+        {toaster}
+        <LpRendererByHost />
+        {createPortal(<div id="modal-root"></div>, document.body)}
+      </>
+    );
+  }
+
   return (
     <>
       <Router>
-        <Toaster
-          position="top-center"
-          containerStyle={{
-            zIndex: 999999,
-          }}
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: '#333',
-              color: '#fff',
-            },
-          }}
-        />
+        {toaster}
         <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={

@@ -38,7 +38,7 @@ import adminPlansRoutes from './routes/adminPlans.routes.js';
 import adminMembersRoutes from './routes/adminMembers.routes.js';
 import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
-import planRoutes from './routes/plan.routes.js';
+import planRoutes from './routes/plan.routes.js'; 
 import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';

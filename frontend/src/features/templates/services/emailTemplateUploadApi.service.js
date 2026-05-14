@@ -4,8 +4,10 @@ import api from '../../../services/api';
  * Upload and attachment helper APIs for email template editor.
  */
 export const emailTemplateUploadApiService = {
-  uploadTempFile(payload, config = {}) {
-    return api.post('/uploads/temp', payload, config);
+  uploadTempFile(payload) {
+    return api.post('/uploads/temp', payload, {
+      headers: { 'Content-Type': undefined },
+    });
   },
 
   /**

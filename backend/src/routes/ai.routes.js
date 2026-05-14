@@ -12,6 +12,9 @@ router.post('/chat', aiController.chat.bind(aiController));
 // Generate campaign script from AI
 router.post('/generate-campaign', aiController.generateCampaign.bind(aiController));
 
+// Generate full landing page HTML (Tailwind CDN + business context)
+router.post('/generate-landing-html', aiController.generateLandingHtml.bind(aiController));
+
 // Create and optionally run the campaign
 router.post('/execute-campaign', aiController.executeCampaign.bind(aiController));
 

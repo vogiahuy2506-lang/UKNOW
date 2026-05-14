@@ -719,6 +719,20 @@ CREATE TABLE landing_pages (
 CREATE INDEX idx_landing_pages_user ON landing_pages(id_user);
 CREATE INDEX idx_landing_pages_slug ON landing_pages(slug);
 
+CREATE TABLE landing_page_domains (
+  id                 BIGSERIAL PRIMARY KEY,
+  landing_page_id    BIGINT NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
+  hostname           TEXT NOT NULL,
+  verification_token TEXT NOT NULL,
+  status             TEXT NOT NULL DEFAULT 'pending_verification',
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  verified_at        TIMESTAMPTZ,
+  CONSTRAINT chk_landing_page_domains_status CHECK (status IN ('pending_verification', 'active', 'disabled'))
+);
+CREATE UNIQUE INDEX uq_landing_page_domains_landing_page_id ON landing_page_domains(landing_page_id);
+CREATE UNIQUE INDEX uq_landing_page_domains_hostname_lower ON landing_page_domains(LOWER(hostname));
+
 -- ─── Landing featured courses (Batch C CMS) ────────────────────────────
 CREATE TABLE landing_featured_courses (
   id            BIGSERIAL PRIMARY KEY,

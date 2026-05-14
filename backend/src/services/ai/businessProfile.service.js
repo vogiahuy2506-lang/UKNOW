@@ -100,6 +100,47 @@ class BusinessProfileService {
       `=== HẾT THÔNG TIN DOANH NGHIỆP ===`,
     ].join('\n');
   }
+
+  /**
+   * Gộp toàn bộ field hồ sơ thành một khối text (khi không dùng được RAG hoặc RAG không trả chunk đủ liên quan).
+   * @param {object|null} profile
+   * @returns {string}
+   */
+  formatProfileForPrompt(profile) {
+    if (!profile) return '';
+    const lines = [];
+    if (profile.company_name) lines.push(`Tên công ty: ${profile.company_name}`);
+    if (profile.industry) lines.push(`Ngành: ${profile.industry}`);
+    if (profile.products) lines.push(`Sản phẩm / dịch vụ: ${profile.products}`);
+    if (profile.target_audience) lines.push(`Khách mục tiêu: ${profile.target_audience}`);
+    if (profile.tone) lines.push(`Giọng điệu: ${profile.tone}`);
+    if (profile.brand_color) lines.push(`Màu thương hiệu: ${profile.brand_color}`);
+    if (profile.extra_context) lines.push(`Bổ sung: ${profile.extra_context}`);
+    if (!lines.length) return '';
+    return [
+      '=== HỒ SƠ DOANH NGHIỆP (đầy đủ) ===',
+      ...lines.map((l) => `- ${l}`),
+      '=== HẾT HỒ SƠ ===',
+    ].join('\n');
+  }
+
+  /**
+   * Context cho sinh landing: ưu tiên RAG theo prompt; nếu lỗi / rỗng thì dùng toàn bộ hồ sơ (không phụ thuộc pgvector).
+   * @param {number} userId
+   * @param {string} userPrompt
+   * @returns {Promise<string>}
+   */
+  async getContextForLandingAi(userId, userPrompt) {
+    let rag = '';
+    try {
+      rag = await this.getContextForPrompt(userId, userPrompt);
+    } catch (e) {
+      console.warn('[AI Landing] RAG không khả dụng, fallback hồ sơ đầy đủ:', e?.message || e);
+    }
+    if (String(rag || '').trim()) return rag;
+    const profile = await this.getProfile(userId);
+    return this.formatProfileForPrompt(profile);
+  }
 }
 
 export default new BusinessProfileService();

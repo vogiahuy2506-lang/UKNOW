@@ -101,6 +101,7 @@ export async function generateGeminiContent({
  * @param {number} [input.timeoutMs=120000] Timeout request (ms).
  * @param {boolean} [input.jsonMode=false] Bật responseMimeType: application/json.
  * @param {number} [input.maxOutputTokens=8192] Giới hạn token đầu ra.
+ * @param {number} [input.temperature=0.35]
  * @returns {Promise<{ text: string, finishReason: string, blockReason: string }>}
  */
 export async function generateGeminiText({
@@ -108,11 +109,13 @@ export async function generateGeminiText({
   timeoutMs = 120000,
   jsonMode = false,
   maxOutputTokens = 8192,
+  temperature = 0.35,
 }) {
   return generateGeminiContent({
     parts: [{ text: prompt }],
     timeoutMs,
     jsonMode,
     maxOutputTokens,
+    temperature,
   });
 }

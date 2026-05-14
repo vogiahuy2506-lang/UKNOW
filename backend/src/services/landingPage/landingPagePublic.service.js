@@ -1,11 +1,26 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
 import { isValidPublicLandingRedirectUrl } from '../../utils/landingRedirectTarget.util.js';
+import landingPageDomainService from './landingPageDomain.service.js';
 
 /**
  * API công khai: HTML landing đã publish, analytics view, redirect click có ghi log.
  */
 class LandingPagePublicService {
+  /**
+   * Payload theo hostname custom (www.*) đã verify — kèm slug để analytics.
+   *
+   * @param {string} hostname
+   * @returns {Promise<{ title: string, htmlContent: string, slug: string }|null>}
+   */
+  async getPublishedPayloadByHost(hostname) {
+    const slug = await landingPageDomainService.getPublishedSlugForHost(hostname);
+    if (!slug) return null;
+    const payload = await this.getPublishedPayload(slug);
+    if (!payload) return null;
+    return { ...payload, slug };
+  }
+
   /**
    * Payload cho SPA render iframe (chỉ khi đã publish).
    *

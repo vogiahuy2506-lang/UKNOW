@@ -33,6 +33,35 @@ class LandingPagePublicController {
   }
 
   /**
+   * GET /api/public/landing-pages-by-host?host=www.example.com
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getPublishedByHost(req, res) {
+    try {
+      const host = String(req.query.host || '').trim().toLowerCase();
+      if (!host) {
+        return res.status(400).json({ success: false, message: 'Thiếu tham số host' });
+      }
+      const data = await landingPagePublicService.getPublishedPayloadByHost(host);
+      if (!data) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy landing cho hostname này hoặc chưa xác minh DNS',
+        });
+      }
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('[LandingPagePublicController.getPublishedByHost]', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Không thể tải landing page',
+      });
+    }
+  }
+
+  /**
    * POST /api/public/landing-analytics/view
    *
    * Body: slug (bắt buộc), visitorId?, referrer?, utmSource?, utmMedium?, utmCampaign?, utmContent?, utmTerm?

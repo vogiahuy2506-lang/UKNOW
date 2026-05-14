@@ -6,6 +6,7 @@
  *   - KPI:
  *       * totalMembers / activeMembers / totalEmployees
  *       * ordersThisMonth / completedOrdersThisMonth / pendingOrdersThisMonth / revenueThisMonth
+ *         (revenueThisMonth loại đơn payment_method = 'free')
  *   - monthlyRevenue: gộp theo tháng, chỉ cộng đơn "đã thanh toán".
  *   - planDistribution: count user_admin theo plan (chỉ plan is_active=true).
  *   - recentOrders / recentMembers.
@@ -137,6 +138,35 @@ describe('KPI overview', () => {
 
     expect(Number(res.body.data.kpi.revenueThisMonth)).toBe(500000);
     expect(Number(res.body.data.kpi.completedOrdersThisMonth)).toBe(1);
+  });
+
+  it('revenueThisMonth loại đơn success có payment_method=free (gán miễn phí)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const plan = await createPlan({ code: 'p' });
+    const buyer = await createUser({ role: 'user', username: 'buyer1', email: 'b@b.com' });
+
+    await createOrder({
+      planId: plan.id,
+      userId: buyer.id,
+      userEmail: buyer.email,
+      status: 'success',
+      amount: 0,
+      paymentMethod: 'free',
+    });
+    await createOrder({
+      planId: plan.id,
+      userId: buyer.id,
+      userEmail: buyer.email,
+      status: 'success',
+      amount: 300000,
+      paymentMethod: 'manual',
+    });
+
+    const t = await loginAs(admin);
+    const res = await request(app).get('/api/admin/stats/overview').set('Authorization', `Bearer ${t}`);
+
+    expect(Number(res.body.data.kpi.revenueThisMonth)).toBe(300000);
+    expect(Number(res.body.data.kpi.completedOrdersThisMonth)).toBe(2);
   });
 
   it('ordersThisMonth gồm cả pending + success + cancelled (KHÔNG lọc status)', async () => {
