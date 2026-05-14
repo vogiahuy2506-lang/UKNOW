@@ -1,0 +1,23 @@
+services:
+  postgres-e2e:
+    image: postgres:15-alpine
+    container_name: uknow-postgres-e2e
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: uknow_campaign_test
+      TZ: Asia/Ho_Chi_Minh
+      PGTZ: Asia/Ho_Chi_Minh
+    ports:
+      - '5433:5432'
+    volumes:
+      - uknow-pg-e2e-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d uknow_campaign_test']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  uknow-pg-e2e-data:

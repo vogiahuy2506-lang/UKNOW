@@ -1,0 +1,20 @@
+{
+  "name": "uknow-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests cho UKNOW Campaign (Playwright + Chromium).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "seed": "node scripts/seed-test-db.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.3"
+  }
+}

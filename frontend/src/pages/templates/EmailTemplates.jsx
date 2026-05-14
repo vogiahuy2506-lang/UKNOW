@@ -529,11 +529,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     try {
       const payload = new FormData();
       payload.append('file', file);
-      const response = await emailTemplateUploadApiService.uploadTempFile(payload, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await emailTemplateUploadApiService.uploadTempFile(payload);
       
       const tempData = response.data?.data;
       if (!tempData || !tempData.tempId) {

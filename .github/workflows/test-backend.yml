@@ -9,6 +9,10 @@ on:
       - 'backend/**'
       - '.github/workflows/test-backend.yml'
 
+concurrency:
+  group: test-backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   schema-sync-check:
     name: Schema sync (migrations ↔ bootstrap.sql)

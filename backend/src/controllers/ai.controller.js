@@ -1,4 +1,5 @@
 import aiCampaignService from '../services/ai/aiCampaign.service.js';
+import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import campaignController from './campaign.controller.js';
 
@@ -296,6 +297,35 @@ class AiController {
     } catch (error) {
       console.error('Get business profile error:', error);
       return res.status(error.status || 500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /ai/generate-landing-html — Sinh HTML landing đầy đủ (Tailwind CDN), có context hồ sơ DN.
+   */
+  async generateLandingHtml(req, res) {
+    try {
+      const { prompt, title } = req.body;
+      if (!String(prompt || '').trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập mô tả trang landing cho AI',
+        });
+      }
+
+      const data = await aiLandingPageService.generate({
+        userId: req.user.id,
+        prompt: String(prompt).trim(),
+        titleHint: title != null ? String(title) : '',
+      });
+
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('AI generate landing HTML error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi sinh landing HTML',
+      });
     }
   }
 

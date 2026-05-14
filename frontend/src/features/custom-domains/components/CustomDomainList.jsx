@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   HiOutlineGlobeAlt, HiOutlinePlus, HiOutlineTrash,
   HiOutlineRefresh, HiOutlineExternalLink, HiOutlineCheck,
-  HiOutlineX, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineLockClosed, HiOutlineChevronRight, HiOutlineInformationCircle,
-  HiOutlineCloud, HiOutlineLockOpen
+  HiOutlineShieldCheck, HiOutlineShieldExclamation,
+  HiOutlineLockClosed, HiOutlineInformationCircle
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import customDomainApi from '../../../services/customDomainApi';
@@ -33,7 +32,6 @@ const CustomDomainList = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [verifyingId, setVerifyingId] = useState(null);
-  const [cloudflareSetupId, setCloudflareSetupId] = useState(null);
 
   useEffect(() => {
     fetchDomains();
@@ -66,41 +64,6 @@ const CustomDomainList = () => {
       toast.error(error.response?.data?.message || 'Lỗi khi xác minh domain');
     } finally {
       setVerifyingId(null);
-    }
-  };
-
-  const handleVerifyWithCloudflare = async (domain) => {
-    setVerifyingId(domain.id);
-    try {
-      const res = await customDomainApi.verifyWithCloudflare(domain.id);
-      if (res.success) {
-        toast.success(res.message || 'Xác minh thành công!');
-      } else {
-        toast.error(res.message || 'Xác minh thất bại');
-        if (res.hint) toast(res.hint, { icon: 'ℹ️' });
-      }
-      await fetchDomains();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi xác minh domain');
-    } finally {
-      setVerifyingId(null);
-    }
-  };
-
-  const handleSetupCloudflare = async (domain) => {
-    setCloudflareSetupId(domain.id);
-    try {
-      const res = await customDomainApi.setupCloudflare(domain.id);
-      if (res.success) {
-        toast.success(res.message || 'Đã cấu hình Cloudflare!');
-      } else {
-        toast.error(res.message || 'Cấu hình thất bại');
-      }
-      await fetchDomains();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi cấu hình Cloudflare');
-    } finally {
-      setCloudflareSetupId(null);
     }
   };
 
@@ -240,32 +203,9 @@ const CustomDomainList = () => {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* Cloudflare Setup Button */}
                   {domain.status !== 'active' && (
                     <button
-                      onClick={() => handleSetupCloudflare(domain)}
-                      disabled={cloudflareSetupId === domain.id}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-600 font-medium text-xs rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50"
-                      title="Cấu hình tự động với Cloudflare"
-                    >
-                      {cloudflareSetupId === domain.id ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
-                          Đang cấu hình...
-                        </>
-                      ) : (
-                        <>
-                          <HiOutlineCloud className="w-3.5 h-3.5" />
-                          Cloudflare
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Manual Verify Button */}
-                  {domain.status !== 'active' && (
-                    <button
-                      onClick={() => handleVerifyWithCloudflare(domain)}
+                      onClick={() => handleVerify(domain)}
                       disabled={verifyingId === domain.id || domain.status === 'verifying'}
                       className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 font-medium text-xs rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
                     >

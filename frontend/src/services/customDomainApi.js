@@ -72,33 +72,6 @@ const customDomainApi = {
     const response = await api.get(`/custom-domains/${id}/ssl-status`);
     return response.data;
   },
-
-  /**
-   * Setup domain with Cloudflare (DNS + SSL).
-   * @param {number} id
-   */
-  setupCloudflare: async (id) => {
-    const response = await api.post(`/custom-domains/${id}/setup-cloudflare`);
-    return response.data;
-  },
-
-  /**
-   * Get Cloudflare setup status.
-   * @param {number} id
-   */
-  getCloudflareStatus: async (id) => {
-    const response = await api.get(`/custom-domains/${id}/cloudflare-status`);
-    return response.data;
-  },
-
-  /**
-   * Verify domain via Cloudflare API.
-   * @param {number} id
-   */
-  verifyWithCloudflare: async (id) => {
-    const response = await api.post(`/custom-domains/${id}/verify-cloudflare`);
-    return response.data;
-  },
 };
 
 export default customDomainApi;

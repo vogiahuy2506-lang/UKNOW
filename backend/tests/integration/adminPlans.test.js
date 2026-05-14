@@ -346,7 +346,7 @@ describe('DELETE /api/admin/plans/:id — smart delete', () => {
 });
 
 describe('POST /api/admin/plans/:id/assign', () => {
-  it('gán plan cho user → user.active_plan_id được cập nhật + order success tạo ra', async () => {
+  it('gán plan (mặc định free) → order success amount=0, payment_method=free', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
     const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
@@ -368,11 +368,54 @@ describe('POST /api/admin/plans/:id/assign', () => {
     expect(userRow.rows[0].subscription_expires_at).not.toBeNull();
 
     const orderRow = await db.query(
-      `SELECT status, amount FROM orders WHERE user_id = $1 AND plan_id = $2`,
+      `SELECT status, amount, payment_method, note FROM orders WHERE user_id = $1 AND plan_id = $2`,
+      [customer.id, plan.id]
+    );
+    expect(orderRow.rows[0].status).toBe('success');
+    expect(Number(orderRow.rows[0].amount)).toBe(0);
+    expect(orderRow.rows[0].payment_method).toBe('free');
+    expect(orderRow.rows[0].note).toBeNull();
+  });
+
+  it('paymentMethod=manual → amount = giá gói + ghi chú lưu DB', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        userEmail: customer.email,
+        paymentMethod: 'manual',
+        note: 'CK MB 12/05',
+      });
+
+    expect(res.status).toBe(200);
+
+    const orderRow = await db.query(
+      `SELECT status, amount, payment_method, note FROM orders WHERE user_id = $1 AND plan_id = $2`,
       [customer.id, plan.id]
     );
     expect(orderRow.rows[0].status).toBe('success');
     expect(Number(orderRow.rows[0].amount)).toBe(500000);
+    expect(orderRow.rows[0].payment_method).toBe('manual');
+    expect(orderRow.rows[0].note).toBe('CK MB 12/05');
+  });
+
+  it('paymentMethod không hợp lệ → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email, paymentMethod: 'payos' });
+
+    expect(res.status).toBe(400);
   });
 
   it('user không tồn tại → 404', async () => {

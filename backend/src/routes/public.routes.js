@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import publicLeadController from '../controllers/publicLead.controller.js';
 import landingFeaturedCoursePublicController from '../controllers/landingFeaturedCoursePublic.controller.js';
 import landingTestimonialPublicController from '../controllers/landingTestimonialPublic.controller.js';
@@ -7,8 +8,13 @@ import { domainResolver } from '../middleware/domainResolver.js';
 
 const router = express.Router();
 
-// Apply domain resolver middleware to all routes
-router.use(domainResolver);
+/** Cho phép gọi API public từ custom domain (Origin = www.khách.com) — GET/POST landing + analytics. */
+const landingPublicCors = cors({
+  origin: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  maxAge: 86400,
+});
 
 router.post('/leads', publicLeadController.create.bind(publicLeadController));
 
@@ -19,12 +25,20 @@ router.get(
 
 router.post(
   '/landing-analytics/view',
+  landingPublicCors,
   landingPagePublicController.postView.bind(landingPagePublicController)
 );
 
 // GET /api/public/landing-pages/:slug - Get landing page by slug
 router.get(
+  '/landing-pages-by-host',
+  landingPublicCors,
+  landingPagePublicController.getPublishedByHost.bind(landingPagePublicController)
+);
+
+router.get(
   '/landing-pages/:slug',
+  landingPublicCors,
   landingPagePublicController.getPublished.bind(landingPagePublicController)
 );
 

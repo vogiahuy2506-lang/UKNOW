@@ -17,6 +17,7 @@ export async function getKpiStats() {
       (SELECT COUNT(*) FROM users WHERE role = 'employee')                                      AS "totalEmployees",
       (SELECT COALESCE(SUM(amount), 0) FROM orders
         WHERE status = 'success'
+          AND COALESCE(payment_method, 'payos') != 'free'
           AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "revenueThisMonth",
       (SELECT COUNT(*) FROM orders
@@ -38,7 +39,7 @@ export async function getMonthlyRevenue() {
     SELECT
       TO_CHAR(DATE_TRUNC('month', created_at AT TIME ZONE $1), 'MM/YYYY') AS month,
       DATE_TRUNC('month', created_at AT TIME ZONE $1)                      AS "monthDate",
-      COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN status = 'success' AND COALESCE(payment_method, 'payos') != 'free' THEN amount ELSE 0 END), 0) AS revenue,
       COUNT(*) AS "totalOrders",
       COUNT(CASE WHEN status = 'success' THEN 1 END) AS "completedOrders"
     FROM orders

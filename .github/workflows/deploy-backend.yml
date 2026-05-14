@@ -6,6 +6,11 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   unit:
@@ -106,16 +111,19 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: hoangphucsenna/uknow-backend:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DOCKERHUB_USERNAME
           script: |
-            docker pull hoangphucsenna/uknow-backend:latest
+            docker pull $DOCKERHUB_USERNAME/uknow-backend:latest
             docker stop uknow-campaign-backend || true
             docker rm uknow-campaign-backend || true
             docker run -d \
@@ -126,5 +134,5 @@ jobs:
               -v /root/uknow/backend/.env:/app/.env \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
-              hoangphucsenna/uknow-backend:latest
+              $DOCKERHUB_USERNAME/uknow-backend:latest
             docker image prune -f

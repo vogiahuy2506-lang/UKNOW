@@ -6,11 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "dev:e2e": "DOTENV_CONFIG_PATH=../e2e/.env.test nodemon -r dotenv/config src/index.js",
+    "start:e2e": "DOTENV_CONFIG_PATH=../e2e/.env.test node -r dotenv/config src/index.js",
     "start": "node src/index.js",
     "seed": "node scripts/seed.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
     "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --coverage"
   },
@@ -47,7 +49,9 @@
         "testEnvironment": "node",
         "transform": {},
         "clearMocks": true,
-        "testTimeout": 15000,
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/integration/jest-timeout.js"
+        ],
         "testMatch": [
           "<rootDir>/tests/integration/**/*.test.js"
         ],

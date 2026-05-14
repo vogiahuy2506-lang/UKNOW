@@ -152,13 +152,21 @@ export async function assignPlanToUser(userId, planId) {
 // Dùng string vì BIGINT ngoài tầm Number.MAX_SAFE_INTEGER (~9e15) nếu nhân nhiều ms.
 let _orderCodeCounter = 0;
 
-export async function createOrder({ planId, userId, userEmail, status = 'success', amount = 100000 }) {
+export async function createOrder({
+  planId,
+  userId,
+  userEmail,
+  status = 'success',
+  amount = 100000,
+  paymentMethod = 'payos',
+  note = null,
+}) {
   _orderCodeCounter += 1;
   const orderCode = `${Date.now()}${String(_orderCodeCounter).padStart(6, '0')}`;
   const { rows } = await db.query(
-    `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [orderCode, planId, amount, userEmail, userId, status]
+    `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [orderCode, planId, amount, userEmail, userId, status, paymentMethod, note]
   );
   return rows[0];
 }

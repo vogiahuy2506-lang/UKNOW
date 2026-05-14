@@ -23,6 +23,23 @@ export async function fetchPublishedLandingHtml(slug) {
 }
 
 /**
+ * Tải landing đã publish theo hostname custom (www.*) đã verify.
+ *
+ * @param {string} host window.location.hostname
+ * @returns {Promise<{ title: string, htmlContent: string, slug: string }>}
+ */
+export async function fetchPublishedLandingByHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  const { data } = await publicClient.get('/public/landing-pages-by-host', {
+    params: { host: h },
+  });
+  if (!data?.success || !data?.data) {
+    throw new Error(data?.message || 'Không tải được landing page');
+  }
+  return data.data;
+}
+
+/**
  * Ghi nhận một lượt xem landing (slug `l` cho trang /l không cần bản ghi landing_pages).
  *
  * @param {object} payload

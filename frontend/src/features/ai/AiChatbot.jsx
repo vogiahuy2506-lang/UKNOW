@@ -6,8 +6,8 @@ import {
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck,
   HiOutlineQuestionMarkCircle,
-  HiOutlineMail, HiOutlineChat, HiOutlineExternalLink,
-  HiOutlineDatabase, HiOutlineChevronDown, HiOutlineFolderOpen,
+  HiOutlineMail, HiOutlineChat,
+  HiOutlineDatabase, HiOutlineFolderOpen,
   HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
@@ -150,7 +150,7 @@ const AskMoreCard = ({ missingFields }) => (
 );
 
 // Campaign picker modal
-const CampaignPickerModal = ({ isOpen, onClose, onSelect, loading }) => {
+const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -291,7 +291,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [, setSelectedTemplate] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -370,37 +370,13 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
   const handleEditCampaign = (script) => {
-    console.log('[AI Chatbot] handleEditCampaign - Script received:', JSON.stringify(script, null, 2));
-    console.log('[AI Chatbot] Number of nodes:', script?.nodes?.length);
-    console.log('[AI Chatbot] Number of connections:', script?.connections?.length);
-
-    // Ensure nodes and connections are valid arrays
-    const validNodes = Array.isArray(script?.nodes) ? script.nodes.filter(n => n && n.tempId) : [];
-    const validConnections = Array.isArray(script?.connections) ? script.connections.filter(c => c && c.sourceNodeId && c.targetNodeId) : [];
-
-    console.log('[AI Chatbot] Valid nodes:', validNodes.length);
-    console.log('[AI Chatbot] Valid connections:', validConnections.length);
-
-    // Log each node
-    validNodes.forEach((node, i) => {
-      console.log(`[AI Chatbot] Node ${i + 1}: tempId=${node.tempId}, subtype=${node.nodeSubtype}, name=${node.nodeName}`);
-    });
-
-    // Log each connection
-    validConnections.forEach((conn, i) => {
-      console.log(`[AI Chatbot] Connection ${i + 1}: ${conn.sourceNodeId} -> ${conn.targetNodeId}`);
-    });
-
+    console.log('[AI Chatbot] Saving AI script to draft:', JSON.stringify(script, null, 2));
     writeCampaignDraft({
-      campaignName: script?.campaignName || '',
-      campaignDescription: script?.description || '',
-      campaignType: script?.campaignType || 'mixed',
+      campaignName: script.campaignName || '',
+      campaignDescription: script.description || '',
+      campaignType: script.campaignType || 'mixed',
       // Store raw script nodes/connections for buildFlowFromCampaign (legacy format)
-      _aiScript: {
-        ...script,
-        nodes: validNodes,
-        connections: validConnections,
-      },
+      _aiScript: script,
       updatedAt: new Date().toISOString(),
     });
     navigate('/app/campaigns/new/builder');
@@ -462,11 +438,6 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không thể đẩy kịch bản.', { id: t });
     }
-  };
-
-  // Open template selector for landing page generation
-  const handleRequestLandingPage = () => {
-    setShowTemplateSelector(true);
   };
 
   // Handle template selection and generate landing page
@@ -682,7 +653,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             placeholder="Nhập yêu cầu... (Enter để gửi)"
             className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-4 pr-12 py-3.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 resize-none min-h-[90px] transition-all"
           />
-          {/* <div className="absolute right-3 bottom-3 flex gap-1.5">
+          <div className="absolute right-3 bottom-3 flex gap-1.5">
             <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
               className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl disabled:opacity-50">
               {isUploading

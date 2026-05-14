@@ -1,4 +1,5 @@
 import landingPageAdminService from '../services/landingPage/landingPageAdmin.service.js';
+import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
 
 /**
  * API quản trị — CRUD landing page HTML (auth + admin).
@@ -118,6 +119,80 @@ class LandingPageAdminController {
     } catch (error) {
       const status = error.statusCode || 500;
       if (status >= 500) console.error('[LandingPageAdminController.remove]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể xóa' });
+    }
+  }
+
+  /**
+   * GET /api/admin/landing-pages/:id/custom-domain
+   */
+  async getCustomDomain(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageDomainService.getForLanding(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.getCustomDomain]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Lỗi' });
+    }
+  }
+
+  /**
+   * PUT /api/admin/landing-pages/:id/custom-domain
+   * Body: { hostname: "www.example.com" }
+   */
+  async putCustomDomain(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const hostname = String(req.body?.hostname || '').trim();
+      const data = await landingPageDomainService.setHostname(id, hostname, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.putCustomDomain]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể lưu' });
+    }
+  }
+
+  /**
+   * POST /api/admin/landing-pages/:id/custom-domain/verify
+   */
+  async postCustomDomainVerify(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageDomainService.verifyDns(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.postCustomDomainVerify]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Xác minh thất bại' });
+    }
+  }
+
+  /**
+   * DELETE /api/admin/landing-pages/:id/custom-domain
+   */
+  async deleteCustomDomain(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageDomainService.remove(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.deleteCustomDomain]', error);
       return res.status(status).json({ success: false, message: error.message || 'Không thể xóa' });
     }
   }

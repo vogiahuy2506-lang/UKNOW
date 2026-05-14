@@ -84,6 +84,22 @@ Push main ──► deploy-backend.yml ──► unit + integration  ──► B
                                               SSH deploy VPS (chỉ khi tests xanh)
 ```
 
+**GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Dùng cho |
+|--------|-----------|
+| `DOCKERHUB_USERNAME` | Docker Hub user/namespace (ví dụ `nhatminh7104`) — dùng cho login, tag image (`$USER/uknow-backend`, `$USER/uknow-frontend`) và lệnh `docker pull` trên VPS |
+| `DOCKERHUB_TOKEN` | Access token Docker Hub (quyền Read & Write), không dùng mật khẩu nếu Hub yêu cầu token |
+| `VPS_HOST` | IP hoặc hostname VPS |
+| `VPS_USER` | User SSH (thường `root`) |
+| `VPS_SSH_KEY` | Private key PEM (full multiline) |
+
+**Deploy tay:** Actions → workflow Deploy Backend / Deploy Frontend → **Run workflow** (không cần push thêm commit).
+
+**Trên VPS** (một lần): network Docker phải tồn tại giống workflow — ví dụ `docker network create uknow_network`; file `.env` và volume paths trong SSH script (`/root/uknow/...`) phải khớp thực tế.
+
+**Merge production:** sau khi merge vào `main`, nhớ **chạy migration** PostgreSQL trên DB production (ví dụ migration payment `018_*`) — CI không apply migration lên VPS.
+
 ## Tài liệu
 
 - [`CLAUDE.md`](./CLAUDE.md) — kiến trúc + dev commands

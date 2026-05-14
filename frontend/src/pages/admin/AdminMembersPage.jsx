@@ -81,13 +81,18 @@ const renderModal = (content, onClose, cls = MODAL_SM) =>
 // ── AssignPlanModal ───────────────────────────────────────────────────────────
 const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   const [selectedPlanId, setSelectedPlanId] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [paymentMethod, setPaymentMethod]   = useState('free');
+  const [note, setNote]                     = useState('');
+  const [isSaving, setIsSaving]             = useState(false);
 
   const handleAssign = async () => {
     if (!selectedPlanId) { toast.error('Vui lòng chọn gói'); return; }
     try {
       setIsSaving(true);
-      await adminPlansApiService.assignPlan(Number(selectedPlanId), member.email);
+      await adminPlansApiService.assignPlan(Number(selectedPlanId), member.email, {
+        paymentMethod,
+        note: note.trim() || null,
+      });
       toast.success('Gán gói thành công');
       onDone();
       onClose();
@@ -123,6 +128,22 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
             </option>
           ))}
         </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Hình thức thanh toán *</label>
+        <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+          <option value="free">Miễn phí / Demo (không tính doanh thu)</option>
+          <option value="manual">Đã thu tiền ngoài (tính vào doanh thu)</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+        <input
+          className="input w-full"
+          placeholder="VD: Chuyển khoản MB Bank 12/05/2026..."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Hủy</button>
