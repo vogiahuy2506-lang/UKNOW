@@ -7,11 +7,15 @@ import {
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck,
   HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineExternalLink,
+  HiOutlineDatabase, HiOutlineChevronDown, HiOutlineFolderOpen,
+  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
 import api from '../../services/api';
+import LandingPageCard from './components/LandingPageCard';
+import TemplateSelector from './components/TemplateSelector';
 
 const CATEGORIES = [
   { id: 'marketing', label: '📢 Marketing' },
@@ -145,12 +149,92 @@ const AskMoreCard = ({ missingFields }) => (
   </div>
 );
 
+// Campaign picker modal
+const CampaignPickerModal = ({ isOpen, onClose, onSelect, loading }) => {
+  const [campaigns, setCampaigns] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingCampaigns(true);
+      api.get('/campaigns', { params: { status: 'draft,active,paused', limit: 50 } })
+        .then(res => setCampaigns(res.data.data || []))
+        .catch(() => setCampaigns([]))
+        .finally(() => setLoadingCampaigns(false));
+    }
+  }, [isOpen]);
+
+  const filtered = campaigns.filter(c =>
+    c.campaignName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[70vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <HiOutlineFolderOpen className="w-5 h-5 text-orange-500" />
+            <h3 className="font-bold text-slate-800">Chọn chiến dịch</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg">
+            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+        <div className="p-4 border-b border-slate-100">
+          <input
+            type="text"
+            placeholder="Tìm kiếm chiến dịch..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-orange-400"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {loadingCampaigns ? (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-8">Không có chiến dịch nào</p>
+          ) : (
+            <div className="space-y-1">
+              {filtered.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => onSelect(c)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-left transition-colors"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                    c.campaignType === 'email' ? 'bg-orange-100 text-orange-600' :
+                    c.campaignType === 'zalo' ? 'bg-blue-100 text-blue-600' :
+                    c.campaignType === 'zalo_group' ? 'bg-purple-100 text-purple-600' :
+                    'bg-green-100 text-green-600'
+                  }`}>
+                    {c.campaignType?.charAt(0).toUpperCase() || 'M'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{c.campaignName}</p>
+                    <p className="text-[10px] text-slate-400">{c.campaignType} • {c.status}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Campaign script card
-const CampaignScriptCard = ({ script, onRun, onEdit }) => (
+const CampaignScriptCard = ({ script, onCreate, onEdit, onPushToExisting }) => (
   <div className="mt-4 bg-orange-50/50 rounded-2xl p-4 border border-orange-100">
     <div className="flex items-center gap-2 mb-3 text-orange-600">
       <HiOutlineTerminal className="w-5 h-5" />
-      <span className="font-black text-[10px] uppercase tracking-[0.2em]">Kịch bản chiến dịch</span>
+      <span className="font-black text-[10px] uppercase tracking-[0.2em]">Kịch bản chiến dịch (Draft)</span>
     </div>
     <h4 className="font-bold text-slate-900 text-sm mb-1">{script.campaignName}</h4>
     <p className="text-xs text-slate-500 mb-4 leading-relaxed">{script.description}</p>
@@ -161,47 +245,29 @@ const CampaignScriptCard = ({ script, onRun, onEdit }) => (
           <div className="flex-1">
             <p className="text-xs text-slate-700 font-bold">{node.nodeName || node.nodeSubtype}</p>
             {node.config?.subject && <p className="text-[10px] text-slate-400 line-clamp-1 italic">Sub: {node.config.subject}</p>}
+            {node.config?.zaloAccountId && <p className="text-[10px] text-blue-400 line-clamp-1">Zalo Account: #{node.config.zaloAccountId}</p>}
           </div>
         </div>
       ))}
       {script.nodes?.length > 6 && <span className="text-[10px] text-slate-400 ml-9">+ {script.nodes.length - 6} bước nữa</span>}
     </div>
     <div className="space-y-2">
-      <button onClick={onRun} className="w-full py-2.5 bg-orange-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-orange-600 flex items-center justify-center gap-2">
-        <HiOutlinePlay className="w-4 h-4" /> Chạy ngay
+      <button onClick={onCreate} className="w-full py-2.5 bg-orange-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-orange-600 flex items-center justify-center gap-2">
+        <HiOutlinePlay className="w-4 h-4" /> Tạo chiến dịch
       </button>
-      <button onClick={() => onEdit(script)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2">
-        <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Tùy chỉnh
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => onPushToExisting?.(script)} className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5">
+          <HiOutlineDatabase className="w-4 h-4 text-blue-500" /> Đẩy vào campaign có sẵn
+        </button>
+        <button onClick={() => onEdit?.(script)} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5">
+          <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Tùy chỉnh
+        </button>
+      </div>
     </div>
   </div>
 );
 
-// Landing page card
-const LandingPageCard = ({ page, onSaveToLibrary }) => {
-  const handlePreview = () => {
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>${page.title}</title><style>${page.css || ''}</style></head><body>${page.html}</body></html>`);
-    win.document.close();
-  };
-  return (
-    <div className="mt-4 bg-slate-50 rounded-2xl p-4 border border-slate-200">
-      <div className="flex items-center gap-2 mb-2 text-slate-600">
-        <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-        <span className="font-black text-[10px] uppercase tracking-widest">Landing Page</span>
-      </div>
-      <p className="text-sm font-bold text-slate-800 mb-3">{page.title}</p>
-      <div className="space-y-2">
-        <button onClick={handlePreview} className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2">
-          <HiOutlineExternalLink className="w-4 h-4 text-orange-400" /> Xem trước
-        </button>
-        <button onClick={() => onSaveToLibrary?.(page)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2">
-          <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Chỉnh sửa & Lưu
-        </button>
-      </div>
-    </div>
-  );
-};
+// Landing page card - now imported from ./components/LandingPageCard.jsx
 
 const AiChatbot = ({ isOpen, onToggle }) => {
   const { user } = useAuthStore();
@@ -221,6 +287,11 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [currentScript, setCurrentScript] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
+  const [showCampaignPicker, setShowCampaignPicker] = useState(false);
+  const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -299,6 +370,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
   const handleEditCampaign = (script) => {
+    console.log('[AI Chatbot] Saving AI script to draft:', JSON.stringify(script, null, 2));
     writeCampaignDraft({
       campaignName: script.campaignName || '',
       campaignDescription: script.description || '',
@@ -316,19 +388,112 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     onToggle?.();
   };
 
-  const handleRunCampaign = async () => {
+  /**
+   * Create campaign from AI draft (NO auto-run).
+   * User will go to builder to review and run manually.
+   */
+  const handleCreateCampaign = async () => {
     if (!currentScript) return;
-    const t = toast.loading('Đang khởi chạy...');
+    const t = toast.loading('Đang tạo chiến dịch...');
     try {
-      const res = await aiApi.executeCampaign(currentScript, true);
+      const res = await aiApi.createCampaignFromDraft(currentScript);
       if (res.success) {
-        toast.success('Chiến dịch đã kích hoạt!', { id: t });
+        toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
         setCurrentScript(null);
-        setMessages(prev => [...prev, { role: 'assistant', content: '🎉 Chiến dịch đã được kích hoạt! Theo dõi tại mục Quản lý chiến dịch nhé.' }]);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `🎉 Chiến dịch "${currentScript.campaignName}" đã được tạo thành công!\n\nVào Campaign Builder để xem chi tiết và nhấn "Chạy" khi sẵn sàng.`
+        }]);
+        // Navigate to the new campaign builder
+        if (res.campaignId) {
+          navigate(`/app/campaigns/${res.campaignId}/builder`);
+          onToggle?.();
+        }
       }
-    } catch {
-      toast.error('Không thể chạy chiến dịch.', { id: t });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể tạo chiến dịch.', { id: t });
     }
+  };
+
+  const handlePushToExisting = (script) => {
+    setSelectedScriptForPush(script);
+    setShowCampaignPicker(true);
+  };
+
+  const handleSelectCampaign = async (campaign) => {
+    if (!selectedScriptForPush) return;
+    setShowCampaignPicker(false);
+    const t = toast.loading('Đang đẩy kịch bản vào chiến dịch...');
+    try {
+      const res = await aiApi.pushToCampaign(campaign.id, selectedScriptForPush, true);
+      if (res.success) {
+        toast.success(`Đã đẩy kịch bản vào "${campaign.campaignName}" và kích hoạt!`, { id: t });
+        setCurrentScript(null);
+        setSelectedScriptForPush(null);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `🎉 Kịch bản đã được đẩy vào chiến dịch "${campaign.campaignName}" và đang chạy! Theo dõi tại mục Quản lý chiến dịch nhé.`
+        }]);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể đẩy kịch bản.', { id: t });
+    }
+  };
+
+  // Open template selector for landing page generation
+  const handleRequestLandingPage = () => {
+    setShowTemplateSelector(true);
+  };
+
+  // Handle template selection and generate landing page
+  const handleTemplateSelect = async (template) => {
+    if (!pendingLandingPrompt) return;
+
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+    setIsTyping(true);
+
+    const templateContext = template
+      ? `Tôi muốn dựa trên template "${template.name}" (${template.category}). `
+      : 'Tôi muốn tạo landing page từ đầu. ';
+
+    const fullPrompt = templateContext + pendingLandingPrompt;
+
+    try {
+      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles);
+
+      if (response.success) {
+        const { title, html, css, variables } = response.data;
+
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước, chỉnh sửa và lưu vào thư viện.`,
+          type: 'landing_page',
+          data: {
+            title,
+            html,
+            css,
+            variables,
+            templateId: template?.id,
+            templateName: template?.name,
+          },
+        }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ Lỗi khi tạo landing page: ${error.response?.data?.message || error.message}`
+      }]);
+    } finally {
+      setIsTyping(false);
+      setSelectedTemplate(null);
+      setPendingLandingPrompt(null);
+    }
+  };
+
+  // Handle generate new landing page from existing card
+  const handleGenerateNewLandingPage = () => {
+    setShowTemplateSelector(true);
   };
 
   return (
@@ -367,6 +532,31 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           >
             Thiết lập →
           </Link>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      {!isSuperAdmin && (
+        <div className="flex-shrink-0 mx-4 mt-3 flex gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => {
+              setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+              setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-medium text-slate-600 transition-all whitespace-nowrap"
+          >
+            <HiOutlineGlobeAlt className="w-3.5 h-3.5" />
+            Landing Page
+          </button>
+          <button
+            onClick={() => {
+              setInputText('Viết template email chào mừng khách hàng mới');
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 rounded-full text-xs font-medium text-orange-700 transition-all whitespace-nowrap"
+          >
+            <HiOutlineMail className="w-3.5 h-3.5" />
+            Template Email
+          </button>
         </div>
       )}
 
@@ -415,14 +605,19 @@ const AiChatbot = ({ isOpen, onToggle }) => {
               {msg.type === 'campaign_script' && msg.data && (
                 <CampaignScriptCard
                   script={msg.data}
-                  onRun={handleRunCampaign}
+                  onCreate={handleCreateCampaign}
                   onEdit={handleEditCampaign}
+                  onPushToExisting={handlePushToExisting}
                 />
               )}
 
               {/* Landing page */}
               {msg.type === 'landing_page' && msg.data && (
-                <LandingPageCard page={msg.data} onSaveToLibrary={handleSaveLandingPage} />
+                <LandingPageCard
+                  page={msg.data}
+                  onSaveToLibrary={handleSaveLandingPage}
+                  onGenerateNew={handleGenerateNewLandingPage}
+                />
               )}
             </div>
           </div>
@@ -481,6 +676,26 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"
         accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
+
+      {/* Campaign Picker Modal */}
+      <CampaignPickerModal
+        isOpen={showCampaignPicker}
+        onClose={() => {
+          setShowCampaignPicker(false);
+          setSelectedScriptForPush(null);
+        }}
+        onSelect={handleSelectCampaign}
+      />
+
+      {/* Template Selector Modal */}
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => {
+          setShowTemplateSelector(false);
+          setPendingLandingPrompt(null);
+        }}
+        onSelect={handleTemplateSelect}
+      />
     </div>
   );
 };

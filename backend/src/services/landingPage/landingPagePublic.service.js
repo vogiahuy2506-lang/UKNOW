@@ -39,6 +39,25 @@ class LandingPagePublicService {
   }
 
   /**
+   * Get landing page payload by ID (for custom domain resolution).
+   * Returns the full payload including ID for tracking.
+   *
+   * @param {number} landingPageId
+   * @returns {Promise<{ id: number, title: string, slug: string, htmlContent: string }|null>}
+   */
+  async getPublishedPayloadById(landingPageId) {
+    const row = await landingPageRepository.findById(landingPageId);
+    if (!row || !row.isPublished) return null;
+
+    return {
+      id: row.id,
+      title: row.title || '',
+      slug: row.slug,
+      htmlContent: row.htmlContent || '',
+    };
+  }
+
+  /**
    * Ghi view (gọi từ parent /lp khi mount).
    *
    * @param {object} body

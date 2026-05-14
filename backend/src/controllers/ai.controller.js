@@ -142,6 +142,152 @@ class AiController {
   }
 
   /**
+   * Create campaign from AI draft (NO auto-run).
+   * User will review and run manually.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async createCampaignFromDraft(req, res) {
+    try {
+      const { script } = req.body;
+
+      if (!script || !script.nodes || !script.connections) {
+        return res.status(400).json({
+          success: false,
+          message: 'Script không hợp lệ. Cần có nodes và connections.',
+        });
+      }
+
+      const createReq = {
+        ...req,
+        body: {
+          campaignName: script.campaignName,
+          description: script.description || '',
+          campaignType: script.campaignType || 'mixed',
+          nodes: script.nodes,
+          connections: script.connections,
+        },
+      };
+
+      const createRes = await new Promise((resolve, reject) => {
+        const mockRes = {
+          status: (code) => ({
+            json: (data) => resolve({ status: code, data }),
+          }),
+          json: (data) => resolve({ status: 200, data }),
+        };
+        campaignController.create(createReq, mockRes).catch(reject);
+      });
+
+      if (createRes.status >= 400) {
+        return res.status(createRes.status).json(createRes.data);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã tạo chiến dịch từ draft AI. Vào Campaign Builder để xem và chạy khi sẵn sàng.',
+        campaignId: createRes.data.data?.id,
+        campaignName: script.campaignName,
+      });
+    } catch (error) {
+      console.error('AI create from draft error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Lỗi khi tạo chiến dịch từ draft AI',
+      });
+    }
+  }
+
+  /**
+   * Push AI-generated script to an existing campaign.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async pushToCampaign(req, res) {
+    try {
+      const { id: campaignId } = req.params;
+      const { script, autoRun = false } = req.body;
+
+      if (!script || !script.nodes || !script.connections) {
+        return res.status(400).json({
+          success: false,
+          message: 'Script không hợp lệ. Cần có nodes và connections.',
+        });
+      }
+
+      // Re-use campaignController.update logic to push nodes/connections
+      const updateReq = {
+        ...req,
+        params: { id: campaignId },
+        body: {
+          campaignName: script.campaignName,
+          description: script.description,
+          campaignType: script.campaignType || 'mixed',
+          nodes: script.nodes,
+          connections: script.connections,
+        },
+      };
+
+      const updateRes = await new Promise((resolve, reject) => {
+        const mockRes = {
+          status: (code) => ({
+            json: (data) => resolve({ status: code, data }),
+          }),
+          json: (data) => resolve({ status: 200, data }),
+        };
+        campaignController.update(updateReq, mockRes).catch(reject);
+      });
+
+      if (updateRes.status >= 400) {
+        return res.status(updateRes.status).json(updateRes.data);
+      }
+
+      // If user wants to run immediately
+      if (autoRun) {
+        const runReq = {
+          ...req,
+          params: { id: campaignId },
+          body: {
+            runName: `AI Auto Run - ${new Date().toLocaleString()}`,
+            source: 'campaign_run',
+          },
+        };
+
+        const runRes = await new Promise((resolve, reject) => {
+          const mockRes = {
+            status: (code) => ({
+              json: (data) => resolve({ status: code, data }),
+            }),
+            json: (data) => resolve({ status: 200, data }),
+          };
+          campaignController.run(runReq, mockRes).catch(reject);
+        });
+
+        return res.json({
+          success: true,
+          message: 'Đã cập nhật và kích hoạt chiến dịch!',
+          campaignId,
+          run: runRes.data,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã đẩy kịch bản vào chiến dịch thành công!',
+        campaignId,
+      });
+    } catch (error) {
+      console.error('AI push to campaign error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Lỗi khi đẩy kịch bản vào chiến dịch',
+      });
+    }
+  }
+
+  /**
    * GET /ai/business-profile — Lấy hồ sơ doanh nghiệp của user hiện tại.
    */
   async getBusinessProfile(req, res) {

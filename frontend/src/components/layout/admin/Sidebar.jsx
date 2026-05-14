@@ -83,6 +83,7 @@ const userMenuItems = [
       { name: 'Sản phẩm nổi bật', path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
       { name: 'Đánh giá', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
       { name: 'Trang HTML (/lp)', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+      { name: 'Tên miền riêng', path: '/app/settings/custom-domains', icon: HiOutlineGlobeAlt, ownerOnly: true },
       { name: 'Danh sách khách', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
     ],
   },
