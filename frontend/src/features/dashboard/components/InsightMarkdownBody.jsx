@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 
+/* eslint-disable react-refresh/only-export-components -- renderBoldSegments helper exported with default component */
 /**
  * Tách chuỗi thành các đoạn text và **in đậm** (markdown tối giản).
  *

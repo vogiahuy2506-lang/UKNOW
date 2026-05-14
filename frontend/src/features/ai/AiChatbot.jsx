@@ -6,8 +6,8 @@ import {
   HiOutlineChevronRight, HiOutlinePlay, HiOutlineArrowRight,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck,
   HiOutlineQuestionMarkCircle,
-  HiOutlineMail, HiOutlineChat, HiOutlineExternalLink,
-  HiOutlineDatabase, HiOutlineChevronDown, HiOutlineFolderOpen,
+  HiOutlineMail, HiOutlineChat,
+  HiOutlineDatabase, HiOutlineFolderOpen,
   HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
@@ -150,7 +150,7 @@ const AskMoreCard = ({ missingFields }) => (
 );
 
 // Campaign picker modal
-const CampaignPickerModal = ({ isOpen, onClose, onSelect, loading }) => {
+const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -291,7 +291,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [, setSelectedTemplate] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -438,11 +438,6 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không thể đẩy kịch bản.', { id: t });
     }
-  };
-
-  // Open template selector for landing page generation
-  const handleRequestLandingPage = () => {
-    setShowTemplateSelector(true);
   };
 
   // Handle template selection and generate landing page

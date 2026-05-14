@@ -142,6 +142,9 @@ CREATE TABLE orders (
   user_id     BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   status      VARCHAR(20)  NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
+  payment_method VARCHAR(20) NOT NULL DEFAULT 'payos'
+    CHECK (payment_method IN ('payos', 'manual', 'free')),
+  note        TEXT,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
