@@ -6,7 +6,8 @@ import { Pool } from 'pg';
  * không phải lỗi nếu số lượng ≤ `DB_POOL_MAX` và không tăng vô hạn theo thời gian.
  * Nếu RAM Postgres cao: hạ `DB_POOL_MAX` cho vừa số worker HTTP + BullMQ thực tế; tránh nhiều replica backend mỗi replica một pool.
  */
-const pool = new Pool({
+
+const poolConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || 'uknow_campaign',
@@ -24,7 +25,16 @@ const pool = new Pool({
   // Lưu ý: transaction lưu khách hàng batch (`saveCustomersFromCampaignDirect`) tự `SET LOCAL statement_timeout`
   // theo biến `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` để không bị cắt bởi giới hạn 30s này.
   statement_timeout: 30000,
-});
+};
+
+// SSL configuration for Neon and other cloud providers
+if (process.env.DB_SSL === 'true' || process.env.DB_SSL === true) {
+  poolConfig.ssl = {
+    rejectUnauthorized: false,
+  };
+}
+
+const pool = new Pool(poolConfig);
 
 let hasLoggedFirstPoolConnection = false;
 

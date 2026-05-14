@@ -1,0 +1,202 @@
+import landingTemplateRepository from '../../repositories/landingTemplate.repository.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+import businessProfileService from '../ai/businessProfile.service.js';
+import uploadController from '../../controllers/upload.controller.js';
+
+/**
+ * Service for landing page templates and AI generation.
+ */
+class LandingTemplateService {
+  /**
+   * Get all available templates.
+   * @returns {Promise<object[]>}
+   */
+  async getTemplates() {
+    return landingTemplateRepository.listAll();
+  }
+
+  /**
+   * Get templates by category.
+   * @param {string} category
+   * @returns {Promise<object[]>}
+   */
+  async getTemplatesByCategory(category) {
+    return landingTemplateRepository.listByCategory(category);
+  }
+
+  /**
+   * Get template by ID.
+   * @param {number} id
+   * @returns {Promise<object|null>}
+   */
+  async getTemplateById(id) {
+    return landingTemplateRepository.findActiveById(id);
+  }
+
+  /**
+   * Get available categories.
+   * @returns {Promise<object[]>}
+   */
+  async getCategories() {
+    return landingTemplateRepository.getCategoriesWithCount();
+  }
+
+  /**
+   * Generate landing page HTML from prompt using AI.
+   * @param {object} params
+   * @param {string} params.prompt - User's request
+   * @param {number} [params.templateId] - Optional template ID to base on
+   * @param {number} [params.userId] - User ID for RAG context
+   * @param {Array} [params.files] - Files attached to request
+   * @returns {Promise<object>} - { title, html, css, variables }
+   */
+  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
+    // 1. Get template if specified
+    let template = null;
+    if (templateId) {
+      template = await landingTemplateRepository.findActiveById(templateId);
+    }
+
+    // 2. Build RAG context from business profile
+    let ragContext = '';
+    let businessProfile = null;
+    if (userId) {
+      try {
+        ragContext = await businessProfileService.getContextForPrompt(userId, prompt);
+        businessProfile = await businessProfileService.getProfile(userId);
+      } catch (e) {
+        console.warn('[LandingTemplate] RAG context unavailable:', e.message);
+      }
+    }
+
+    // 3. Build system prompt with template structure
+    const templateInfo = template
+      ? `
+=== TEMPLATE BASE ===
+Template Name: ${template.name}
+Template Category: ${template.category}
+Template Structure:
+${template.html_structure}
+
+CSS Variables: ${JSON.stringify(template.cssVariables || {})}
+Default Config: ${JSON.stringify(template.defaultConfig || {})}
+`
+      : '';
+
+    const systemPrompt = `Bạn là chuyên gia thiết kế Landing Page với 10+ năm kinh nghiệm.
+Nhiệm vụ: Tạo landing page HTML đẹp, chuyên nghiệp dựa trên yêu cầu của khách hàng.
+
+${templateInfo}
+
+${ragContext ? ragContext + '\n' : ''}
+=== YÊU CẦU CỦA KHÁCH HÀNG ===
+"${prompt}"
+
+=== QUY TẮC THIẾT KẾ ===
+1. Sử dụng Tailwind CSS (CDN) cho styling
+2. HTML phải là FRAGMENT - không cần html/head/body tags
+3. Nội dung phải SÚC TÍNH, THUYẾT PHỤC, PHÙ HỢP thương hiệu
+4. Form đăng ký phải có: tên, email, số điện thoại
+5. Call-to-Action rõ ràng, nổi bật
+6. Responsive trên mobile
+7. Sử dụng emoji hợp lý cho visual appeal
+
+=== CÁC BIẾN CÓ THỂ SỬ DỤNG ===
+Nếu có template, thay thế các placeholder trong template bằng nội dung phù hợp.
+Các placeholder có format: {{variable_name}}
+VD: {{business_name}}, {{product_name}}, {{cta_text}}, {{headline}}, v.v.
+
+=== ĐỊNH DẠNG TRẢ VỀ (JSON) ===
+{
+  "title": "Tiêu đề trang (cho browser tab)",
+  "html": "Nội dung HTML (FRAGMENT - không có html/head/body)",
+  "css": "CSS bổ sung nếu cần (tùy chọn, có thể để trống)",
+  "variables": {
+    "variable_name": "giá trị đã thay thế"
+  },
+  "config": {
+    "primaryColor": "#màu chính",
+    "secondaryColor": "#màu phụ"
+  }
+}
+
+QUAN TRỌNG:
+- Chỉ trả về JSON, không có văn bản giải thích bên ngoài
+- HTML phải hoàn chỉnh, có thể dán trực tiếp vào iframe
+- Form phải có onsubmit="event.preventDefault(); ..." để test`;
+
+    // 4. Call AI
+    const parts = [{ text: systemPrompt }];
+
+    // 5. Attach files if any
+    for (const file of files) {
+      try {
+        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        parts.push({
+          inlineData: {
+            mimeType: file.contentType,
+            data: buffer.toString('base64'),
+          },
+        });
+      } catch (err) {
+        console.warn(`[LandingTemplate] Could not read file ${file.tempId}:`, err.message);
+      }
+    }
+
+    console.log('[LandingTemplate] Generating landing page...');
+    const { text } = await generateGeminiContent({
+      parts,
+      jsonMode: true,
+      temperature: 0.7,
+    });
+
+    // 6. Parse response
+    const result = this._parseJson(text);
+    return {
+      ...result,
+      templateId: templateId || null,
+      templateName: template?.name || null,
+    };
+  }
+
+  /**
+   * Parse JSON from AI response.
+   * @param {string} text
+   * @returns {object}
+   */
+  _parseJson(text) {
+    let jsonStr = String(text || '').trim();
+
+    // Try to extract JSON from markdown code blocks
+    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    } else {
+      // Find first { and last }
+      const firstBrace = jsonStr.indexOf('{');
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+      }
+    }
+
+    // Remove trailing commas
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
+
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      // Try sanitization for escaped strings
+      try {
+        const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
+          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+        });
+        return JSON.parse(sanitized);
+      } catch {
+        throw new Error('Failed to parse AI response as JSON');
+      }
+    }
+  }
+}
+
+export default new LandingTemplateService();

@@ -3,7 +3,7 @@ import api from './api';
 const aiApi = {
   /**
    * Generate campaign script from AI.
-   * @param {string} prompt 
+   * @param {string} prompt
    * @param {Array} files Array of { tempId, originalName, ... }
    */
   generateCampaign: async (prompt, files = []) => {
@@ -20,6 +20,27 @@ const aiApi = {
    */
   executeCampaign: async (script, autoRun = true) => {
     const response = await api.post('/ai/execute-campaign', { ...script, autoRun });
+    return response.data;
+  },
+
+  /**
+   * Create campaign from AI draft (NO auto-run).
+   * User will review and run manually.
+   * @param {object} script The campaign script from AI
+   */
+  createCampaignFromDraft: async (script) => {
+    const response = await api.post('/ai/create-from-draft', { script });
+    return response.data;
+  },
+
+  /**
+   * Push AI script to an existing campaign.
+   * @param {number} campaignId Target campaign ID
+   * @param {object} script The campaign script
+   * @param {boolean} autoRun Whether to run the campaign immediately
+   */
+  pushToCampaign: async (campaignId, script, autoRun = false) => {
+    const response = await api.post(`/ai/push-to-campaign/${campaignId}`, { script, autoRun });
     return response.data;
   },
 
@@ -42,6 +63,30 @@ const aiApi = {
 
   saveBusinessProfile: async (data) => {
     const response = await api.put('/ai/business-profile', data);
+    return response.data;
+  },
+
+  // Landing Page Templates
+  getLandingTemplates: async (category = null) => {
+    const params = category ? { category } : {};
+    const response = await api.get('/landing-templates', { params });
+    return response.data;
+  },
+
+  getLandingTemplateCategories: async () => {
+    const response = await api.get('/landing-templates/categories');
+    return response.data;
+  },
+
+  getLandingTemplate: async (id) => {
+    const response = await api.get(`/landing-templates/${id}`);
+    return response.data;
+  },
+
+  generateLandingPage: async (prompt, templateId = null, files = []) => {
+    const response = await api.post('/landing-templates/generate', { prompt, templateId, files }, {
+      timeout: 120000
+    });
     return response.data;
   },
 };
