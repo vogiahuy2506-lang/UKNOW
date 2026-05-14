@@ -2,7 +2,8 @@
 -- Allows users to host landing pages on their own domains
 
 -- 1. Custom Domains Table
-CREATE TABLE custom_domains (
+-- IF NOT EXISTS: DB có thể đã có bảng từ migration cũ 019_custom_domains.sql (đổi tên file → 020).
+CREATE TABLE IF NOT EXISTS custom_domains (
   id SERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   landing_page_id BIGINT REFERENCES landing_pages(id) ON DELETE SET NULL,
@@ -28,13 +29,13 @@ CREATE TABLE custom_domains (
   CONSTRAINT unique_user_domain UNIQUE (user_id, domain)
 );
 
-CREATE INDEX idx_custom_domains_user ON custom_domains(user_id);
-CREATE INDEX idx_custom_domains_domain ON custom_domains(domain);
-CREATE INDEX idx_custom_domains_status ON custom_domains(status);
-CREATE INDEX idx_custom_domains_landing_page ON custom_domains(landing_page_id);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_user ON custom_domains(user_id);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_status ON custom_domains(status);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_landing_page ON custom_domains(landing_page_id);
 
 -- 2. Domain Verification History (for audit)
-CREATE TABLE custom_domain_verifications (
+CREATE TABLE IF NOT EXISTS custom_domain_verifications (
   id SERIAL PRIMARY KEY,
   domain_id BIGINT NOT NULL REFERENCES custom_domains(id) ON DELETE CASCADE,
   verification_type VARCHAR(20) NOT NULL, -- txt, cname, http
@@ -44,10 +45,10 @@ CREATE TABLE custom_domain_verifications (
   response_data JSONB -- Store DNS lookup results or HTTP response
 );
 
-CREATE INDEX idx_domain_verifications_domain ON custom_domain_verifications(domain_id);
+CREATE INDEX IF NOT EXISTS idx_domain_verifications_domain ON custom_domain_verifications(domain_id);
 
 -- 3. Domain SSL Certificates tracking
-CREATE TABLE custom_domain_ssl (
+CREATE TABLE IF NOT EXISTS custom_domain_ssl (
   id SERIAL PRIMARY KEY,
   domain_id BIGINT NOT NULL REFERENCES custom_domains(id) ON DELETE CASCADE,
   cert_arn VARCHAR(255),
@@ -58,7 +59,7 @@ CREATE TABLE custom_domain_ssl (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_domain_ssl_domain ON custom_domain_ssl(domain_id);
+CREATE INDEX IF NOT EXISTS idx_domain_ssl_domain ON custom_domain_ssl(domain_id);
 
 -- 4. Add foreign key to landing_pages for custom domain reference
 -- This allows us to know which custom domain is serving which landing page
