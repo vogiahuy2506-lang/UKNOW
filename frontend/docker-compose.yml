@@ -1,7 +1,7 @@
 services:
   frontend:
     container_name: uknow-campaign-frontend
-    image: ghcr.io/nhatminh7104/uknow-fe:latest
+    image: nhatminh7104/uknow-frontend:latest
     ports:
       - "${FRONTEND_HTTP_PORT:-80}:80"
       - "${FRONTEND_HTTPS_PORT:-443}:443"

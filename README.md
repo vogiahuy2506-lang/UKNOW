@@ -88,8 +88,8 @@ Push main ──► deploy-backend.yml ──► unit + integration  ──► B
 
 | Secret | Dùng cho |
 |--------|-----------|
-| `DOCKERHUB_USERNAME` | Login Docker Hub trước khi push image |
-| `DOCKERHUB_TOKEN` | Token/password Docker Hub |
+| `DOCKERHUB_USERNAME` | Docker Hub user/namespace (ví dụ `nhatminh7104`) — dùng cho login, tag image (`$USER/uknow-backend`, `$USER/uknow-frontend`) và lệnh `docker pull` trên VPS |
+| `DOCKERHUB_TOKEN` | Access token Docker Hub (quyền Read & Write), không dùng mật khẩu nếu Hub yêu cầu token |
 | `VPS_HOST` | IP hoặc hostname VPS |
 | `VPS_USER` | User SSH (thường `root`) |
 | `VPS_SSH_KEY` | Private key PEM (full multiline) |
