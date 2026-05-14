@@ -132,44 +132,21 @@ export async function findUserAdminByEmail(email) {
 
 /** Gán gói trực tiếp cho user (bỏ qua flow thanh toán) — cũng set subscription_expires_at. */
 export async function assignPlanToUser(userId, planId) {
-  const client = await db.getClient();
-  try {
-    await client.query('BEGIN');
-
-    const userResult = await client.query(
-      `UPDATE users
-       SET active_plan_id = $1,
-           subscription_expires_at = CASE
-             WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
-               THEN subscription_expires_at + INTERVAL '1 month'
-             ELSE NOW() + INTERVAL '1 month'
-           END,
-           subscription_reminder_count = 0,
-           updated_at = NOW()
-       WHERE id = $2
-       RETURNING id, username, email, full_name AS "fullName", active_plan_id AS "activePlanId", subscription_expires_at AS "subscriptionExpiresAt"`,
-      [planId, userId]
-    );
-    const user = userResult.rows[0];
-    if (!user) { await client.query('ROLLBACK'); return null; }
-
-    const planResult = await client.query(`SELECT price FROM plans WHERE id = $1`, [planId]);
-    const price = planResult.rows[0]?.price ?? 0;
-    const orderCode = Date.now();
-    await client.query(
-      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, 'success', NOW())`,
-      [orderCode, planId, price, user.email, user.id]
-    );
-
-    await client.query('COMMIT');
-    return user;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const { rows } = await db.query(
+    `UPDATE users
+     SET active_plan_id = $1,
+         subscription_expires_at = CASE
+           WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
+             THEN subscription_expires_at + INTERVAL '1 month'
+           ELSE NOW() + INTERVAL '1 month'
+         END,
+         subscription_reminder_count = 0,
+         updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, username, email, full_name AS "fullName", active_plan_id AS "activePlanId", subscription_expires_at AS "subscriptionExpiresAt"`,
+    [planId, userId]
+  );
+  return rows[0] || null;
 }
 
 /**
