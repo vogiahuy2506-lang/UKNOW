@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   HiOutlineGlobeAlt, HiOutlineX, HiOutlineCheck,
-  HiOutlineInformationCircle, HiOutlineExternalLink, HiOutlineDocumentText
+  HiOutlineInformationCircle, HiOutlineDocumentText
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import customDomainApi from '../../../services/customDomainApi';

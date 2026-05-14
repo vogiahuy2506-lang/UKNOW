@@ -3,7 +3,7 @@ import {
   HiOutlineSparkles, HiOutlineExternalLink, HiOutlinePencilAlt,
   HiOutlineDeviceMobile, HiOutlineDesktopComputer, HiOutlineCode,
   HiOutlineEye, HiOutlineDownload, HiOutlineClipboard, HiOutlineX,
-  HiOutlineChevronRight, HiOutlineCheck
+  HiOutlineCheck
 } from 'react-icons/hi';
 
 /**

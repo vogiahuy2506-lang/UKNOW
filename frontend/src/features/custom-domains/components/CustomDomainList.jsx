@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   HiOutlineGlobeAlt, HiOutlinePlus, HiOutlineTrash,
   HiOutlineRefresh, HiOutlineExternalLink, HiOutlineCheck,
-  HiOutlineX, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineLockClosed, HiOutlineChevronRight, HiOutlineInformationCircle
+  HiOutlineShieldCheck, HiOutlineShieldExclamation,
+  HiOutlineLockClosed, HiOutlineInformationCircle
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import customDomainApi from '../../../services/customDomainApi';
