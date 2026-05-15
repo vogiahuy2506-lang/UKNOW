@@ -104,6 +104,15 @@ jobs:
       - name: Wait for backend
         run: curl --retry 15 --retry-delay 3 --retry-connrefused -sf http://localhost:5001/api/health
 
+      - name: Start frontend
+        run: yarn dev --port 5174 &
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:5174/api
+
+      - name: Wait for frontend
+        run: curl --retry 20 --retry-delay 3 --retry-connrefused -sf http://localhost:5174
+
       - name: Run Playwright tests
         run: npm test
         working-directory: e2e
