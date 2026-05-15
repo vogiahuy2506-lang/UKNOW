@@ -17,7 +17,7 @@ test.describe('Thông tin tài khoản', () => {
       page.getByText(/Cập nhật.*thành công/i),
     ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole('button', { name: 'Đóng' }).click();
+    await page.getByRole('button', { name: 'Đóng', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Thông tin tài khoản' })).not.toBeVisible();
   });
 });
