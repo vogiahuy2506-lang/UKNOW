@@ -1,24 +1,24 @@
 import PricingSection from './components/PricingSection';
 
-/**
- * Trang bảng giá — fit gọn trong 1 viewport, không scroll.
- * Hero và cards đặt sát nhau để cards có nhiều không gian nhất cho nội dung.
- */
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-white pt-24">
-      {/* Hero ngắn gọn */}
-      <div className="text-center px-6 mb-2">
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-          Bảng giá
-        </h1>
-        <p className="text-base md:text-lg text-slate-600 mt-2">
-          Chọn gói phù hợp với doanh nghiệp của bạn. 14 ngày dùng thử miễn phí.
-        </p>
-      </div>
+    <div className="relative min-h-screen">
+      <div className="relative pt-4 pb-6">
+        {/* Hero heading */}
+        <div className="text-center px-6 pt-6 pb-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-1.5">
+            Founder AI
+          </p>
+          <h1
+            className="font-black text-white"
+            style={{ fontSize: 'clamp(28px, 4vw, 48px)', lineHeight: 1.05, letterSpacing: '-0.02em' }}
+          >
+            Bảng giá
+          </h1>
+        </div>
 
-      {/* Pricing cards — sát ngay sau hero */}
-      <PricingSection embedded compact />
+        <PricingSection embedded glass compact />
+      </div>
     </div>
   );
 }

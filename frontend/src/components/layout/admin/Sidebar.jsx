@@ -28,6 +28,7 @@ import {
   HiOutlineShieldCheck,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
+
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ContextSwitcher from '../../ContextSwitcher';
@@ -224,20 +225,28 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       style={sidebarStyle}
     >
       {/* Logo row — includes close button on mobile */}
-      <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
-        <div className="flex items-center justify-center flex-1">
+      <div className={`h-16 flex items-center border-b border-gray-200 px-4 ${showLabels ? 'justify-between' : 'justify-center'}`}>
+        <div className="flex items-center gap-2.5 min-w-0">
           <img
             src={logoIcon}
-            alt="Founder AI Logo"
-            className={`${showLabels ? 'h-10 w-auto' : 'w-10 h-10'} object-contain transition-all duration-300`}
+            alt="Founder AI"
+            className="w-8 h-8 object-contain shrink-0"
           />
+          {showLabels && (
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-gray-900 leading-tight truncate">Founder AI</p>
+              <p className="text-[11px] text-gray-400 leading-tight truncate">
+                {isSuperAdmin ? 'System Admin' : 'Campaign Management'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Close button — only on mobile */}
-        {isMobile && (
+        {isMobile && showLabels && (
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-2 flex-shrink-0"
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             aria-label="Đóng menu"
           >
             <HiOutlineX className="w-5 h-5 text-gray-500" />

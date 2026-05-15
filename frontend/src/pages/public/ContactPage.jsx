@@ -86,13 +86,14 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-24 pb-20">
+    <div className="relative min-h-screen">
+      <div className="relative pt-8 pb-20">
       {/* Hero */}
-      <div className="max-w-7xl mx-auto px-6 text-center mb-12">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight mb-4">
+      <div className="max-w-7xl mx-auto px-6 text-center mb-12 pt-10">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4">
           Liên hệ với chúng tôi
         </h1>
-        <p className="text-base md:text-lg text-slate-600 max-w-2xl mx-auto">
+        <p className="text-base md:text-lg text-white/70 max-w-2xl mx-auto">
           Có câu hỏi về sản phẩm, cần tư vấn gói doanh nghiệp hay muốn hợp tác?
           Đội ngũ Founder AI sẵn sàng hỗ trợ bạn.
         </p>
@@ -305,6 +306,7 @@ export default function ContactPage() {
           </div>
         </div>
       </div>
+      </div>{/* end relative content wrapper */}
     </div>
   );
 }

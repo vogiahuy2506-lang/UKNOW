@@ -7,6 +7,55 @@ import { getPlans } from '../../../services/plan.service';
 
 const ZALO_URL = 'https://zalo.me/0388180856';
 
+// Glass mode styles — dùng cho trang /pricing với video background
+const GLASS_STYLES = [
+  {
+    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
+    title: 'text-slate-900',
+    price: 'text-slate-900',
+    unit: 'text-slate-500',
+    feature: 'text-slate-600',
+    featureIcon: 'text-orange-500',
+    button: 'bg-orange-500 text-white hover:bg-orange-600',
+    corner: 'from-orange-100/40 to-orange-50/20',
+    icon: FaRocket,
+  },
+  {
+    wrapper: 'bg-white/75 border border-orange-300/60 backdrop-blur-sm shadow-xl shadow-orange-500/10',
+    badge: 'Phổ Biến Nhất',
+    title: 'text-slate-900',
+    price: 'text-slate-900',
+    unit: 'text-slate-500',
+    feature: 'text-slate-600',
+    featureIcon: 'text-orange-500',
+    button: 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg hover:shadow-orange-500/30',
+    corner: 'from-orange-200/40 to-orange-100/20',
+    icon: FaCrown,
+  },
+  {
+    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
+    title: 'text-slate-900',
+    price: 'text-slate-900',
+    unit: 'text-slate-500',
+    feature: 'text-slate-600',
+    featureIcon: 'text-orange-500',
+    button: 'bg-orange-500 text-white hover:bg-orange-600',
+    corner: 'from-amber-100/40 to-amber-50/20',
+    icon: FaBolt,
+  },
+  {
+    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
+    title: 'text-slate-900',
+    price: 'text-slate-900',
+    unit: 'text-slate-500',
+    feature: 'text-slate-600',
+    featureIcon: 'text-orange-500',
+    button: 'bg-orange-500 text-white hover:bg-orange-600',
+    corner: 'from-amber-100/40 to-amber-50/20',
+    icon: FaGem,
+  },
+];
+
 // Mảng các style động để tự động xoay vòng cho các gói
 const DYNAMIC_STYLES = [
   {
@@ -64,7 +113,7 @@ const DYNAMIC_STYLES = [
  * - embedded (boolean): ẩn phần hero (badge + heading + subtitle) để nhúng vào trang có hero riêng.
  * - compact  (boolean): thu nhỏ padding/spacing để fit trong 1 viewport.
  */
-export default function PricingSection({ embedded = false, compact = false }) {
+export default function PricingSection({ embedded = false, compact = false, glass = false }) {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState([]);
@@ -111,20 +160,22 @@ export default function PricingSection({ embedded = false, compact = false }) {
     );
   }
 
-  // Quyết định padding theo chế độ:
-  // - compact:  pb-6 md:pb-8  (không có top padding vì PricingPage tự kiểm soát mb của hero)
-  // - embedded: py-12 md:py-16 (có hero riêng phía trên)
-  // - default:  py-32 + nền slate
+  const styleSet = glass ? GLASS_STYLES : DYNAMIC_STYLES;
+
   const sectionPadding = compact
-    ? 'pb-6 md:pb-8 bg-white'
+    ? 'pb-6 md:pb-8'
     : embedded
-      ? 'py-12 md:py-16 bg-white'
-      : 'py-32 bg-slate-50 border-t border-slate-200';
+      ? 'py-12 md:py-16'
+      : glass
+        ? 'py-16'
+        : 'py-32 bg-slate-50 border-t border-slate-200';
+
+  const sectionBg = (glass || compact || embedded) ? '' : '';
 
   return (
     <section
       id="pricing"
-      className={`${sectionPadding} relative w-full ${embedded ? '' : 'overflow-hidden'} ${compact ? 'pt-3' : ''}`}
+      className={`${sectionPadding} ${sectionBg} relative w-full ${embedded ? '' : 'overflow-hidden'} ${compact ? 'pt-3' : ''}`}
     >
       {!embedded && (
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-50 opacity-70"></div>
@@ -159,7 +210,7 @@ export default function PricingSection({ embedded = false, compact = false }) {
             // Cấp phát style động dựa trên vị trí. Gói ở giữa (index 1) thường nổi bật nhất.
             // Admin có thể thêm code "custom" để ép hiển thị nút liên hệ Zalo.
             const isCustom = plan.code === 'custom';
-            const style = DYNAMIC_STYLES[index % DYNAMIC_STYLES.length];
+            const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
 
             const features = Array.isArray(plan.features)
@@ -194,7 +245,7 @@ export default function PricingSection({ embedded = false, compact = false }) {
 
                     <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{plan.description}</p>
 
-                    <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/20`}>
+                    <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
                       {isCustom || plan.price === 0 ? (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>Liên hệ</span>
@@ -231,7 +282,7 @@ export default function PricingSection({ embedded = false, compact = false }) {
           })}
         </div>
 
-        {!compact && (
+        {!compact && !glass && (
           <AnimatedSection className="text-center mt-16 max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-full px-6 py-3 text-sm font-medium text-slate-600">
               <FaStar className="text-yellow-400 w-5 h-5" /> Tất cả các gói đều có <strong className="text-orange-600">14 ngày dùng thử miễn phí</strong>. Không cần thẻ tín dụng.
