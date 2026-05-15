@@ -1,26 +1,106 @@
 import { Link } from 'react-router-dom';
+import { FaFacebookF, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
+import founderaiLogo from '../../../assets/icons/founderai-logo.png';
+
+const PRODUCT_LINKS = [
+  { label: 'Tính năng', to: '/#features' },
+  { label: 'Bảng giá', to: '/pricing' },
+  { label: 'Đăng ký miễn phí', to: '/register' },
+];
+
+const COMPANY_LINKS = [
+  { label: 'Trang chủ', to: '/' },
+  { label: 'Liên hệ', to: '/contact' },
+  { label: 'Chính sách bảo mật', href: '/privacy-policy' },
+];
+
+const SOCIAL_LINKS = [
+  { icon: FaFacebookF, href: 'https://facebook.com', label: 'Facebook' },
+  { icon: FaLinkedinIn, href: 'https://linkedin.com', label: 'LinkedIn' },
+  { icon: FaYoutube, href: 'https://youtube.com', label: 'YouTube' },
+];
 
 export default function Footer() {
   return (
-    <footer className="bg-slate-950 text-slate-400 py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <Link to="/" className="flex items-center mb-8 md:mb-0 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105">
-              <span className="text-white font-black text-xl">F</span>
+    <footer className="bg-slate-950 text-slate-400">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-12">
+
+          {/* Cột 1 — Brand */}
+          <div className="flex flex-col gap-5">
+            <Link to="/">
+              <img
+                src={founderaiLogo}
+                alt="Founder AI Logo"
+                className="h-10 w-auto object-contain"
+              />
+            </Link>
+            <p className="text-sm leading-relaxed text-slate-400 max-w-xs">
+              Nền tảng automation marketing all-in-one — xây dựng Landing Page,
+              quản lý Lead và tự động hóa Email / Zalo cho doanh nghiệp Việt Nam.
+            </p>
+            <div className="flex items-center gap-3 mt-1">
+              {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="w-9 h-9 rounded-full border border-slate-700 flex items-center justify-center text-slate-400 hover:border-orange-500 hover:text-orange-500 transition-colors"
+                >
+                  <Icon className="w-4 h-4" />
+                </a>
+              ))}
             </div>
-            <span className="ml-3 text-2xl font-black text-white tracking-tight">Founder AI</span>
-          </Link>
-          <div className="flex flex-wrap justify-center gap-8 text-sm">
-            <Link to="/" className="hover:text-orange-500 transition-colors">Trang chủ</Link>
-            <Link to="/pricing" className="hover:text-orange-500 transition-colors">Bảng giá</Link>
-            <Link to="/contact" className="hover:text-orange-500 transition-colors">Liên hệ</Link>
-            <a href="/privacy-policy" className="hover:text-orange-500 transition-colors">Chính sách bảo mật</a>
-            <a href="/login" className="hover:text-orange-500 transition-colors">Đăng nhập</a>
+          </div>
+
+          {/* Cột 2 — Sản phẩm */}
+          <div className="flex flex-col gap-4">
+            <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+              Sản phẩm
+            </h4>
+            <ul className="flex flex-col gap-3">
+              {PRODUCT_LINKS.map(({ label, to }) => (
+                <li key={label}>
+                  <Link
+                    to={to}
+                    className="text-sm hover:text-orange-500 transition-colors"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Cột 3 — Công ty */}
+          <div className="flex flex-col gap-4">
+            <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+              Công ty
+            </h4>
+            <ul className="flex flex-col gap-3">
+              {COMPANY_LINKS.map(({ label, to, href }) => (
+                <li key={label}>
+                  {to ? (
+                    <Link to={to} className="text-sm hover:text-orange-500 transition-colors">
+                      {label}
+                    </Link>
+                  ) : (
+                    <a href={href} className="text-sm hover:text-orange-500 transition-colors">
+                      {label}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-        <div className="border-t border-slate-800 mt-8 pt-8 text-center text-sm">
-          © 2026 Founder AI Marketing Platform. All rights reserved.
+
+        {/* Bottom bar */}
+        <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+          <span>© 2026 Founder AI Marketing Platform. All rights reserved.</span>
+          <span>Made with ❤️ in Vietnam</span>
         </div>
       </div>
     </footer>

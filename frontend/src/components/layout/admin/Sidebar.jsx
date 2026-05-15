@@ -27,7 +27,7 @@ import {
   HiOutlineCurrencyDollar,
   HiOutlineShieldCheck,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/cropped-founder-1-32x32.png';
+import logoIcon from '../../../assets/icons/founderai-logo.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ContextSwitcher from '../../ContextSwitcher';
@@ -224,19 +224,13 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
       style={sidebarStyle}
     >
       {/* Logo row — includes close button on mobile */}
-      <div className={`h-16 flex items-center border-b border-gray-200 ${showLabels ? 'px-4' : 'justify-center'}`}>
-        <div className={`flex items-center flex-1 ${!showLabels ? 'justify-center' : ''}`}>
+      <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
+        <div className="flex items-center justify-center flex-1">
           <img
             src={logoIcon}
             alt="Founder AI Logo"
-            className={`${showLabels ? 'w-10 h-10' : 'w-12 h-12'} object-contain transition-all duration-300`}
+            className={`${showLabels ? 'h-10 w-auto' : 'w-10 h-10'} object-contain transition-all duration-300`}
           />
-          {showLabels && (
-            <div className="ml-3">
-              <h1 className="text-lg font-bold text-gray-900">Founder AI</h1>
-              <p className="text-xs text-gray-500">{isSuperAdmin ? 'System Admin' : 'Campaign Management'}</p>
-            </div>
-          )}
         </div>
 
         {/* Close button — only on mobile */}
