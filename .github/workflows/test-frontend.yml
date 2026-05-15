@@ -1,0 +1,41 @@
+name: Test Frontend
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/test-frontend.yml'
+
+concurrency:
+  group: test-frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Vitest (frontend)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run Vitest
+        run: yarn test:ci
