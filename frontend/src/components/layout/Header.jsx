@@ -6,7 +6,7 @@ import {
   HiOutlineLockClosed,
   HiOutlineLogout,
 } from 'react-icons/hi';
-import logoIcon from '../../assets/icons/cropped-founder-1-32x32.png';
+import logoIcon from '../../assets/icons/founderai-logo.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
 
 /**
@@ -52,9 +52,8 @@ const Header = ({ onToggleSidebar }) => {
           <HiOutlineMenu className="w-6 h-6 text-gray-600" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <img src={logoIcon} alt="Founder AI Logo" className="w-8 h-8 object-contain" />
-          <span className="text-base font-bold text-gray-900">Founder AI</span>
+        <div className="flex items-center">
+          <img src={logoIcon} alt="Founder AI Logo" className="h-8 w-auto object-contain" />
         </div>
       </div>
 
