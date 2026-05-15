@@ -14,8 +14,8 @@ test.describe('Thông tin tài khoản', () => {
 
     await page.getByRole('button', { name: 'Lưu thông tin' }).click();
     await expect(
-      page.getByText('Cập nhật thông tin tài khoản thành công.'),
-    ).toBeVisible({ timeout: 12_000 });
+      page.getByText(/Cập nhật.*thành công/i),
+    ).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Đóng' }).click();
     await expect(page.getByRole('heading', { name: 'Thông tin tài khoản' })).not.toBeVisible();

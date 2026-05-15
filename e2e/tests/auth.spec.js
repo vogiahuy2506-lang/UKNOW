@@ -15,7 +15,7 @@ test.describe('Auth', () => {
 
   test('submit trống → validation', async ({ page }) => {
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
     await expect(page.getByText(/Vui lòng nhập tên đăng nhập/)).toBeVisible();
   });
 
@@ -23,7 +23,7 @@ test.describe('Auth', () => {
     await page.goto('/login');
     await page.getByPlaceholder('Nhập tên đăng nhập').fill(USERNAME);
     await page.getByPlaceholder('Nhập mật khẩu').fill(`wrong-${Date.now()}`);
-    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -31,7 +31,7 @@ test.describe('Auth', () => {
     await page.goto('/login');
     await page.getByPlaceholder('Nhập tên đăng nhập').fill(USERNAME);
     await page.getByPlaceholder('Nhập mật khẩu').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
     await page.waitForURL(/\/app(\/|$)/, { timeout: 20_000 });
     await expect(page.locator('aside').first()).toBeVisible();
   });
