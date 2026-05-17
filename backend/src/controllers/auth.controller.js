@@ -117,7 +117,16 @@ class AuthController {
    * @param {import('express').Response} res
    */
   async login(req, res) {
-    const client = await db.getClient();
+    let client;
+    try {
+      client = await db.getClient();
+    } catch (connError) {
+      console.error('Login - DB connection error:', connError.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Không thể kết nối database. Vui lòng thử lại.',
+      });
+    }
 
     try {
       const { username, password, rememberMe = true } = req.body;

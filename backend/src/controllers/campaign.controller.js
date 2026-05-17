@@ -315,11 +315,18 @@ class CampaignController {
           const node = nodes[idx];
           const nodeKey = String(node.tempId ?? node.id ?? '');
           const executionOrder = orderMap.get(nodeKey) || idx + 1;
+          // Support both camelCase (AI output) and snake_case (normalized)
+          const nodeType = node.nodeType ?? node.node_type ?? 'unknown';
+          const nodeSubtype = node.nodeSubtype ?? node.node_subtype ?? '';
+          const nodeName = node.nodeName ?? node.node_name ?? 'Node';
+          const nodeDescription = node.nodeDescription ?? node.node_description ?? '';
+          const positionX = node.positionX ?? node.position_x ?? 0;
+          const positionY = node.positionY ?? node.position_y ?? 0;
           const nodeResult = await client.query(
             `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING id`,
-            [campaign.id, node.nodeType, node.nodeSubtype, node.nodeName, node.nodeDescription, node.positionX || 0, node.positionY || 0, JSON.stringify(node.config || {}), executionOrder]
+            [campaign.id, nodeType, nodeSubtype, nodeName, nodeDescription, positionX, positionY, JSON.stringify(node.config || {}), executionOrder]
           );
           nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
         }

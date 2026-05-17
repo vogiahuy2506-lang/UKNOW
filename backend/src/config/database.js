@@ -1,3 +1,45 @@
+const isNeon = process.env.DB_HOST?.includes('neon.tech');
+
+/**
+ * Wrapper cho database operations với automatic retry cho Neon serverless.
+ * Neon hay bị connection timeout khi connection cũ bị đóng.
+ */
+async function withRetry(operation, maxRetries = 2, delayMs = 500) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      // Chỉ retry nếu là connection error
+      if (!isNeon || !isConnectionError(error)) {
+        throw error;
+      }
+      console.warn(`[DB] Connection error, retry ${i + 1}/${maxRetries}:`, error.message);
+      if (i < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
+function isConnectionError(error) {
+  const code = error?.code || error?.cause?.code;
+  const msg = error?.message || '';
+  return (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNREFUSED' ||
+    msg.includes('Connection terminated') ||
+    msg.includes('connection timeout') ||
+    msg.includes('Connection closed')
+  );
+}
+
+export { withRetry, isConnectionError, isNeon };
+
 import { Pool } from 'pg';
 
 /**
@@ -16,15 +58,15 @@ const poolConfig = {
   // Hiển thị trong pg_stat_activity.application_name (DBeaver/DataGrip) để phân biệt backend vs IDE.
   application_name: String(process.env.DB_APPLICATION_NAME || 'founderai-campaign-backend').trim() || 'founderai-campaign-backend',
   // Kích thước pool cấu hình qua env; mặc định 20 kết nối tối đa mỗi process.
-  max: Number.parseInt(process.env.DB_POOL_MAX, 10) || 20,
-  // Sau khoảng thời gian này client nằm im trong pool sẽ bị đóng (giảm số backend `idle` lâu dài).
-  idleTimeoutMillis: 30000,
+  max: Number.parseInt(process.env.DB_POOL_MAX, 10) || (isNeon ? 3 : 20),
+  // Neon serverless: giảm idle timeout để tránh connection bị server đóng
+  idleTimeoutMillis: isNeon ? 10000 : 30000,
   // Tăng timeout chờ kết nối từ 2s → 10s để chịu được tải cao khi nhiều campaign chạy đồng thời.
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: isNeon ? 5000 : 10000,
   // Timeout query tối đa 30s để phát hiện query bị kẹt sớm.
   // Lưu ý: transaction lưu khách hàng batch (`saveCustomersFromCampaignDirect`) tự `SET LOCAL statement_timeout`
   // theo biến `SAVE_CUSTOMERS_STATEMENT_TIMEOUT_MS` để không bị cắt bởi giới hạn 30s này.
-  statement_timeout: 30000,
+  statement_timeout: isNeon ? 10000 : 30000,
 };
 
 // SSL configuration for Neon and other cloud providers
@@ -66,7 +108,9 @@ pool.on('error', (err) => {
 });
 
 export default {
-  query: (text, params) => pool.query(text, params),
+  query: (text, params) => withRetry(() => pool.query(text, params)),
   getClient: () => pool.connect(),
-  pool
+  pool,
+  withRetry,
+  isConnectionError
 };

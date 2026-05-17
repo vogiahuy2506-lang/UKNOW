@@ -140,6 +140,53 @@ class AiCampaignService {
   }
 
   /**
+   * Lấy thống kê khách hàng của user để gợi ý audience.
+   * Lưu ý: Tất cả khách hàng được cung cấp từ file/Google Sheet, không phải từ lịch sử mua hàng.
+   * @param {number} userId
+   * @returns {Promise<object>}
+   */
+  async getCustomerStats(userId) {
+    try {
+      // Lấy số liệu tổng quan
+      const totalResult = await db.query(
+        `SELECT COUNT(*) as total FROM customers WHERE id_user = $1`,
+        [userId]
+      );
+      
+      // Lấy số khách có email
+      const emailResult = await db.query(
+        `SELECT COUNT(*) as count FROM customers 
+         WHERE id_user = $1 AND email IS NOT NULL AND email <> ''`,
+        [userId]
+      );
+      
+      // Lấy số khách có Zalo ID
+      const zaloResult = await db.query(
+        `SELECT COUNT(*) as count FROM customers 
+         WHERE id_user = $1 AND (zalo_id IS NOT NULL OR zalo_phone IS NOT NULL)`,
+        [userId]
+      );
+
+      // Lấy số khách có phone
+      const phoneResult = await db.query(
+        `SELECT COUNT(*) as count FROM customers 
+         WHERE id_user = $1 AND phone IS NOT NULL AND phone <> ''`,
+        [userId]
+      );
+
+      return {
+        total: parseInt(totalResult.rows[0]?.total || 0, 10),
+        hasEmail: parseInt(emailResult.rows[0]?.count || 0, 10),
+        hasZalo: parseInt(zaloResult.rows[0]?.count || 0, 10),
+        hasPhone: parseInt(phoneResult.rows[0]?.count || 0, 10),
+      };
+    } catch (e) {
+      console.warn('[AI] Không lấy được customer stats:', e.message);
+      return { total: 0, hasEmail: 0, hasZalo: 0, hasPhone: 0 };
+    }
+  }
+
+  /**
    * Generate campaign JSON structure from prompt and files.
    */
   async generateCampaignScript({ prompt, files = [], userId = null }) {
@@ -200,151 +247,158 @@ LUỒNG HOẠT ĐỘNG MỚI:
 
 ${ragContext ? ragContext + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}Dưới đây là yêu cầu từ khách hàng: "${prompt}"
 
-QUY TẮC THIẾT KẾ:
-1. Luôn bắt đầu bằng một node "trigger" (Subtype: "manual" hoặc "read_landing_leads").
-2. Sử dụng các node "action" để gửi thông điệp:
-   - "send_email": Gửi email (cần subject, bodyHtml/bodyText).
-   - "send_zalo_personal": Gửi tin nhắn Zalo cá nhân (cần content).
-   - "send_zalo_group": Gửi tin nhắn vào nhóm Zalo (cần content).
-3. Sử dụng node "logic" với Subtype "wait_time" để tạo độ trễ giữa các bước (config: { amount, unit: 'minutes'|'hours'|'days' }).
-4. **BẮT BUỘC phải điền config đầy đủ cho mỗi node:**
+QUY TẮC THIẾT KẾ CHIẾN DỊCH HOÀN CHỈNH:
 
-   **Node send_email BẮT BUỘC phải có config với các trường:**
-   - emailTemplateId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
-   - emailSubject: "Tiêu đề email hấp dẫn (bắt buộc)"
-   - emailBody: "<h1>HTML...</h1> (bắt buộc, HTML hoàn chỉnh)"
-   - templateMappings: []
-   - enableLinkTracking: true
-   - saveMessageLog: true
+## XÁC ĐỊNH LOẠI CHIẾN DỊCH (bắt buộc):
+Dựa vào yêu cầu khách hàng, xác định loại chiến dịch:
+- Nếu khách hàng nhắc đến "email", "hòm thư", "mail": → campaignType = "email"
+- Nếu khách hàng nhắc đến "zalo cá nhân", "tin nhắn zalo", "nhắn zalo": → campaignType = "zalo"
+- Nếu khách hàng nhắc đến "zalo nhóm", "gửi nhóm", "group": → campaignType = "zalo_group"
 
-   **Node send_zalo_personal BẮT BUỘC phải có config với các trường:**
-   - zaloAccountId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
-   - recipientNodeId: null
-   - message: "Nội dung tin nhắn Zalo (bắt buộc, dưới 4000 ký tự)"
-   - zaloPersonalTemplateSteps: []
-   - saveMessageLog: true
+## CẤU TRÚC BẮT BUỘC THEO TỪNG LOẠI:
 
-   **Node send_zalo_group BẮT BUỘC phải có config với các trường:**
-   - zaloAccountId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
-   - zaloGroupNodeId: ID_SỐ_HOẶC_NULL (VD: 1 hoặc null)
-   - message: "Nội dung tin nhắn nhóm (bắt buộc)"
-   - zaloGroupTemplateSteps: []
-   - saveMessageLog: true
+### A. CHIẾN DỊCH EMAIL (campaignType = "email"):
+   - Node Trigger: Bắt đầu (trigger type: "manual")
+   - Node Email 1: Gửi ngay (không delay)
+   - Node DATA 1: Condition - rẽ nhánh theo hành vi (đã mở email chưa?)
+     - Nhánh YES: Email 2 + Tag khách quan tâm
+     - Nhánh NO: Email 2 + Tag khách cần nhắc nhở
+   - Node End: Kết thúc
 
-5. KẾ HOẠCH THỜI GIAN BẮT BUỘC cho mỗi bước gửi:
-   - Tính từ thời điểm trigger
-   - Email 1: gửi ngay (0 phút)
-   - Zalo 1: gửi sau 5-10 phút
-   - Email 2: gửi sau 2-3 ngày
-   - Zalo 2: gửi sau 3-4 ngày
-   - Email 3: gửi sau 7 ngày
-   - Tạo node wait_time giữa các bước với thời gian phù hợp
-6. Các node phải được nối với nhau qua mảng "connections".
-7. **QUAN TRỌNG**: 
-   - Điền emailTemplateId, zaloAccountId, zaloGroupNodeId từ danh sách có sẵn (nếu có)
-   - Nếu không có tài nguyên, vẫn phải tạo config với giá trị mặc định: emailTemplateId=null, zaloAccountId=null, zaloGroupNodeId=null
-   - KHONG DC de config trong {} cho cac node action
+   Ví dụ: trigger -> Email1 -> Condition -> Email2 (YES) -> Tag -> End
+                                      -> Email2 (NO) -> Tag -> End
+
+### B. CHIẾN DỊCH ZALO CÁ NHÂN (campaignType = "zalo"):
+   - Node Trigger: Bắt đầu
+   - Node Zalo 1: Gửi ngay (không delay)
+   - Node DATA 1: Filter - lọc đối tượng (ví dụ: theo thành phố, tag)
+   - Node Zalo 2: Gửi sau delay, kèm Tag
+   - Node End: Kết thúc
+
+### C. CHIẾN DỊCH ZALO NHÓM (campaignType = "zalo_group"):
+   - Node Trigger: Bắt đầu
+   - Node Zalo Group 1: Gửi ngay
+   - Node DATA 1: Tag - gắn tag cho thành viên
+   - Node Zalo Group 2: Gửi sau 1 ngày, kèm Tag
+   - Node End: Kết thúc
+
+## NODE TYPES BẮT BUỘC PHẢI SỬ DỤNG (không chỉ có trigger và action):
+
+### NODE TYPES:
+1. **trigger** - Kích hoạt chiến dịch (loại: manual, form_submit, tag_added, etc.)
+2. **action** - Thực hiện hành động (loại: send_email, send_zalo_personal, send_zalo_group)
+3. **data** - Xử lý dữ liệu (LOẠI BẮT BUỘC THÊM VÀO!):
+   - **condition**: Rẽ nhánh theo điều kiện
+     * config: { "field": "field_name", "operator": "equals|contains|greater_than|less_than", "value": "giá trị", "thenLabel": "Nhãn nhánh YES", "elseLabel": "Nhãn nhánh NO" }
+   - **filter**: Lọc contact theo điều kiện
+     * config: { "filters": [{ "field": "field_name", "operator": "equals|contains", "value": "giá trị", "logic": "and|or" }] }
+   - **tag_contact**: Gắn/Xóa tag cho contact
+     * config: { "action": "add|remove", "tags": ["tag1", "tag2"] }
+   - **update_attribute**: Cập nhật thuộc tính contact
+     * config: { "field": "field_name", "value": "giá trị mới" }
+   - **wait**: Chờ một khoảng thời gian
+     * config: { "duration": SỐ, "unit": "minutes|hours|days" }
+4. **end** - Kết thúc chiến dịch
+
+### VÍ DỤ WORKFLOW CÓ DATA NODES:
+
+Ví dụ 1 - Chiến dịch có rẽ nhánh theo hành vi:
+  trigger -> Email1 -> Condition (đã mở email?)
+    - YES: Email ưu đãi -> Tag "quan_tam" -> End
+    - NO: Email nhắc nhở -> End
+
+Ví dụ 2 - Chiến dịch có lọc và gắn tag:
+  trigger -> Filter (chỉ khách ở HCM) -> Email1 -> Tag "da_gui_email1" -> Email2 -> End
+
+Ví dụ 3 - Chiến dịch có nhiều nhánh:
+  trigger -> Email1 -> Condition (đã mua?)
+    - YES: Email cảm ơn -> Tag "khach_hang" -> End
+    - NO: Email ưu đãi -> Email2 -> Condition (đã mở?)
+      - YES: Tag "quan_tam" -> End
+      - NO: Email nhắc -> Tag "chua_quan_tam" -> End
+
+## ĐIỀU KIỆN BẮT BUỘC:
+- Tối thiểu 3-4 nodes gửi tin cho mỗi chiến dịch
+- Node đầu tiên: KHÔNG có delayValue (gửi ngay)
+- Các node tiếp theo: BẮT BUỘC có delayValue và delayUnit
+- Mỗi node phải có nội dung THỰC, không placeholder
+- **BẮT BUỘC phải có ít nhất 1-2 DATA nodes** (condition, filter, tag_contact, etc.) - KHÔNG chỉ có trigger và action!
+- Sử dụng condition nodes để tạo rẽ nhánh theo hành vi khách hàng
+- Sử dụng tag_contact nodes để phân loại khách hàng
+
+**LƯU Ý QUAN TRỌNG VỀ CONFIG:**
+- Node gửi tin BẮT BUỘC có thêm config delay: config phải chứa "delayValue" và "delayUnit"
+- Ví dụ Email 2 (chờ 2 ngày sau email 1):
+  - emailTemplateId: null
+  - emailSubject: "..."
+  - emailBody: "..."
+  - delayValue: 2
+  - delayUnit: "days"
+- Node đầu tiên (sau trigger): KHÔNG cần delayValue
+- KHÔNG tạo node wait_time riêng - delay được đặt trong config của node gửi tin
 
 CẤU TRÚC JSON PHẢI TRẢ VỀ (VÀ CHỈ TRẢ VỀ JSON):
+YÊU CẦU: Tạo workflow HOÀN CHỈNH với TỐI THIỂU 5-6 nodes (không tính end node).
+YÊU CẦU: Phải có ít nhất 1-2 DATA nodes (condition, filter, tag_contact, update_attribute)
+
+VÍ DỤ WORKFLOW CÓ ĐẦY ĐỦ NODE TYPES (bao gồm DATA nodes):
+
+=== VÍ DỤ CHIẾN DỊCH EMAIL CÓ RẼ NHÁNH (có condition và tag) ===
 {
-  "campaignName": "Tên chiến dịch hấp dẫn, có chứa từ khóa sản phẩm",
-  "description": "Mô tả ngắn gọn mục tiêu chiến dịch (1-2 câu)",
-  "campaignType": "mixed",
+  "campaignName": "Chiến dịch Email [TÊN_SẢN_PHẨM] - Rẽ nhánh theo hành vi",
+  "description": "Gửi email, theo dõi hành vi và rẽ nhánh: mở email → ưu đãi, không mở → nhắc nhở",
+  "campaignType": "email",
   "isAiDraft": true,
   "nodes": [
-    {
-      "tempId": "node_1",
-      "nodeType": "trigger",
-      "nodeSubtype": "manual",
-      "nodeName": "Bắt đầu chiến dịch",
-      "nodeDescription": "Kích hoạt thủ công",
-      "positionX": 100,
-      "positionY": 100,
-      "config": {}
-    },
-    {
-      "tempId": "node_2",
-      "nodeType": "action",
-      "nodeSubtype": "send_email",
-      "nodeName": "Email chào mừng - Giới thiệu sản phẩm",
-      "nodeDescription": "Gửi email giới thiệu sản phẩm ngay khi kích hoạt",
-      "positionX": 400,
-      "positionY": 80,
-      "config": {
-        "emailTemplateId": null,
-        "emailSubject": "🎉 Chào mừng bạn đến với [TÊN_SẢN_PHẨM]!",
-        "emailBody": "<h1>Xin chào!</h1><p>Chúng tôi rất vui được giới thiệu đến bạn sản phẩm tuyệt vời này...</p>",
-        "templateMappings": [],
-        "enableLinkTracking": true,
-        "saveMessageLog": true
-      }
-    },
-    {
-      "tempId": "node_3",
-      "nodeType": "logic",
-      "nodeSubtype": "wait_time",
-      "nodeName": "Chờ 3 ngày",
-      "nodeDescription": "Đợi 3 ngày sau email đầu tiên",
-      "positionX": 700,
-      "positionY": 80,
-      "config": {
-        "amount": 3,
-        "unit": "days"
-      }
-    },
-    {
-      "tempId": "node_4",
-      "nodeType": "action",
-      "nodeSubtype": "send_zalo_personal",
-      "nodeName": "Zalo cá nhân - Nhắc nhở ưu đãi",
-      "nodeDescription": "Gửi tin nhắn Zalo nhắc nhở sau 3 ngày",
-      "positionX": 1000,
-      "positionY": 80,
-      "config": {
-        "zaloAccountId": null,
-        "recipientNodeId": null,
-        "message": "Xin chào! 👋\n\nChúng tôi có ưu đãi đặc biệt dành cho bạn. Nhấn vào đường link để xem chi tiết nhé!",
-        "zaloPersonalTemplateSteps": [],
-        "saveMessageLog": true
-      }
-    },
-    {
-      "tempId": "node_5",
-      "nodeType": "action",
-      "nodeSubtype": "send_zalo_group",
-      "nodeName": "Zalo nhóm - Chia sẻ ưu đãi",
-      "nodeDescription": "Gửi tin nhắn vào nhóm Zalo",
-      "positionX": 1300,
-      "positionY": 80,
-      "config": {
-        "zaloAccountId": null,
-        "zaloGroupNodeId": null,
-        "message": "📢 Thông báo ưu đãi!\n\nChia sẻ tin tuyệt vời này đến mọi người trong nhóm nhé!",
-        "zaloGroupTemplateSteps": [],
-        "saveMessageLog": true
-      }
-    }
+    { "tempId": "node_1", "nodeType": "trigger", "nodeSubtype": "manual", "nodeName": "Bắt đầu chiến dịch", "nodeDescription": "Kích hoạt thủ công", "positionX": 100, "positionY": 300, "config": {} },
+    { "tempId": "node_2", "nodeType": "action", "nodeSubtype": "send_email", "nodeName": "Email 1 - Chào mừng & Ưu đãi", "nodeDescription": "Gửi ngay email chào mừng kèm ưu đãi đặc biệt", "positionX": 400, "positionY": 300, "config": { "emailTemplateId": null, "emailSubject": "🎉 Chào mừng bạn đến với [TÊN_SẢN_PHẨM]! Giảm ngay 20%", "emailBody": "<h1>Xin chào!</h1><p>Chúng tôi dành tặng bạn ưu đãi đặc biệt...</p>", "templateMappings": [], "enableLinkTracking": true, "saveMessageLog": true } },
+    { "tempId": "node_3", "nodeType": "data", "nodeSubtype": "condition", "nodeName": "Kiểm tra hành vi", "nodeDescription": "Rẽ nhánh theo việc đã mở email hay chưa", "positionX": 700, "positionY": 300, "config": { "field": "email_opened", "operator": "equals", "value": "true", "thenLabel": "Đã mở email", "elseLabel": "Chưa mở email" } },
+    { "tempId": "node_4", "nodeType": "action", "nodeSubtype": "send_email", "nodeName": "Email 2 - Cảm ơn & Upsell", "nodeDescription": "Gửi cho nhánh ĐÃ MỞ: cảm ơn và giới thiệu sản phẩm cao cấp", "positionX": 1000, "positionY": 150, "config": { "emailTemplateId": null, "emailSubject": "Cảm ơn bạn! Đây là bản nâng cấp dành riêng", "emailBody": "<h1>Cảm ơn bạn đã quan tâm!</h1><p>Chúng tôi có sản phẩm premium...</p>", "delayValue": 1, "delayUnit": "days", "templateMappings": [], "enableLinkTracking": true, "saveMessageLog": true } },
+    { "tempId": "node_5", "nodeType": "data", "nodeSubtype": "tag_contact", "nodeName": "Tag khách hàng quan tâm", "nodeDescription": "Gắn tag cho khách đã mở email", "positionX": 1300, "positionY": 150, "config": { "action": "add", "tags": ["da_mo_email", "quan_tam"] } },
+    { "tempId": "node_6", "nodeType": "action", "nodeSubtype": "send_email", "nodeName": "Email 3 - Nhắc nhở ưu đãi", "nodeDescription": "Gửi cho nhánh CHƯA MỞ: nhắc nhở ưu đãi sắp hết hạn", "positionX": 1000, "positionY": 450, "config": { "emailTemplateId": null, "emailSubject": "⏰ Ưu đãi sắp kết thúc! Nhanh tay đăng ký", "emailBody": "<h1>Đừng bỏ lỡ!</h1><p>Ưu đãi của bạn sắp hết hạn...</p>", "delayValue": 2, "delayUnit": "days", "templateMappings": [], "enableLinkTracking": true, "saveMessageLog": true } },
+    { "tempId": "node_7", "nodeType": "data", "nodeSubtype": "tag_contact", "nodeName": "Tag khách chưa quan tâm", "nodeDescription": "Gắn tag cho khách chưa mở email", "positionX": 1300, "positionY": 450, "config": { "action": "add", "tags": ["chua_mo_email", "can_nhac_nho"] } },
+    { "tempId": "node_8", "nodeType": "end", "nodeSubtype": "end", "nodeName": "Kết thúc chiến dịch", "nodeDescription": "Hoàn thành chiến dịch", "positionX": 1600, "positionY": 300, "config": {} }
   ],
   "connections": [
-    { "sourceNodeId": "node_1", "targetNodeId": "node_2", "connectionType": "default" },
-    { "sourceNodeId": "node_2", "targetNodeId": "node_3", "connectionType": "default" },
-    { "sourceNodeId": "node_3", "targetNodeId": "node_4", "connectionType": "default" },
-    { "sourceNodeId": "node_4", "targetNodeId": "node_5", "connectionType": "default" }
+    { "sourceNodeId": "node_1", "targetNodeId": "node_2" },
+    { "sourceNodeId": "node_2", "targetNodeId": "node_3" },
+    { "sourceNodeId": "node_3", "targetNodeId": "node_4", "label": "Đã mở email" },
+    { "sourceNodeId": "node_3", "targetNodeId": "node_6", "label": "Chưa mở email" },
+    { "sourceNodeId": "node_4", "targetNodeId": "node_5" },
+    { "sourceNodeId": "node_5", "targetNodeId": "node_8" },
+    { "sourceNodeId": "node_6", "targetNodeId": "node_7" },
+    { "sourceNodeId": "node_7", "targetNodeId": "node_8" }
+  ]
+}
+
+=== VÍ DỤ CHIẾN DỊCH ZALO NHÓM CÓ TAG ===
+{
+  "campaignName": "Chiến dịch Zalo Nhóm [TÊN_SẢN_PHẨM]",
+  "description": "Gửi tin nhắn nhóm và phân loại thành viên bằng tag",
+  "campaignType": "zalo_group",
+  "isAiDraft": true,
+  "nodes": [
+    { "tempId": "node_1", "nodeType": "trigger", "nodeSubtype": "manual", "nodeName": "Bắt đầu chiến dịch", "nodeDescription": "Kích hoạt thủ công", "positionX": 100, "positionY": 300, "config": {} },
+    { "tempId": "node_2", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Zalo Group 1 - Thông báo", "nodeDescription": "Gửi ngay tin nhắn thông báo đầu tiên", "positionX": 400, "positionY": 300, "config": { "zaloAccountId": null, "zaloGroupNodeId": null, "message": "📢 Chào mọi người! Chúng tôi có thông tin quan trọng cần chia sẻ...", "zaloGroupTemplateSteps": [], "saveMessageLog": true } },
+    { "tempId": "node_3", "nodeType": "data", "nodeSubtype": "tag_contact", "nodeName": "Tag thành viên đã nhận", "nodeDescription": "Gắn tag cho thành viên đã nhận tin", "positionX": 700, "positionY": 300, "config": { "action": "add", "tags": ["da_nhan_thong_bao"] } },
+    { "tempId": "node_4", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Zalo Group 2 - Ưu đãi", "nodeDescription": "Gửi sau 1 ngày, kèm ưu đãi đặc biệt", "positionX": 1000, "positionY": 300, "config": { "zaloAccountId": null, "zaloGroupNodeId": null, "message": "🎉 Ưu đãi đặc biệt dành riêng cho thành viên nhóm! Giảm ngay 30%...", "delayValue": 1, "delayUnit": "days", "zaloGroupTemplateSteps": [], "saveMessageLog": true } },
+    { "tempId": "node_5", "nodeType": "end", "nodeSubtype": "end", "nodeName": "Kết thúc", "nodeDescription": "Hoàn thành chuỗi Zalo nhóm", "positionX": 1300, "positionY": 300, "config": {} }
   ],
-  "landingPage": null
+  "connections": [
+    { "sourceNodeId": "node_1", "targetNodeId": "node_2" },
+    { "sourceNodeId": "node_2", "targetNodeId": "node_3" },
+    { "sourceNodeId": "node_3", "targetNodeId": "node_4" },
+    { "sourceNodeId": "node_4", "targetNodeId": "node_5" }
+  ]
 }
 
 LƯU Ý QUAN TRỌNG:
-- Bạn BẮT BUỘC phải viết nội dung chi tiết cho từng email (subject, bodyHtml) và tin nhắn zalo (message). Không được để trống hoặc dùng nội dung giữ chỗ.
-- Nội dung phải mang tính thuyết phục cao, cá nhân hóa theo thông tin doanh nghiệp/sản phẩm đã cung cấp.
-- Nếu có email templates hoặc Zalo accounts trong danh sách trên, HÃY ĐIỀN ID THỰC TẾ vào config (emailTemplateId, zaloAccountId, zaloGroupNodeId).
-- Nếu không có tài nguyên, vẫn phải tạo config ĐẦY ĐỦ với giá trị null: emailTemplateId=null, zaloAccountId=null, zaloGroupNodeId=null
-- KHONG DC de config trong {} cho cac node action - phai co it nhat message/emailSubject/emailBody
-- Thiết kế đa kênh: kết hợp Email + Zalo cá nhân + Zalo nhóm (ít nhất 2-3 kênh).
-- Mỗi bước phải có kế hoạch thời gian rõ ràng, sử dụng node wait_time để tạo khoảng cách.
-- Tổng chiến dịch nên có 4-6 bước gửi tin nhắn trong 10-14 ngày.
-- ĐÂY LÀ DRAFT - user sẽ xem trước và nhấn "Tạo chiến dịch" để khởi tạo thật sự.
-- Chỉ trả về duy nhất khối JSON, không có văn bản giải thích bên ngoài.`
+- campaignType phải khớp: "email", "zalo", hoặc "zalo_group"
+- KHÔNG tạo node wait_time - delay đặt TRONG config của node gửi tin tiếp theo
+- Node đầu tiên (sau trigger): KHÔNG có delayValue
+- Các node tiếp theo: BẮT BUỘC có "delayValue" và "delayUnit" trong config
+- Ví dụ: node thứ 3 có "delayValue": 2, "delayUnit": "days" = chờ 2 ngày SAU KHI node 2 xong
+- Chỉ trả về duy nhất khối JSON, không giải thích bên ngoài.`
     });
 
     for (const file of files) {
@@ -365,7 +419,7 @@ LƯU Ý QUAN TRỌNG:
     const { text } = await generateGeminiContent({
       parts,
       jsonMode: true,
-      temperature: 0.7,
+      temperature: 0.8,
     });
     console.log(`[AI] Gemini response received (${text?.length || 0} chars)`);
 
@@ -417,6 +471,7 @@ QUY TẮC:
         const zaloAccounts = await this.getZaloAccounts(userId);
         const zaloGroups = await this.getZaloGroups(userId);
         const recommendedType = await this.getRecommendedCampaignType(userId);
+        const customerStats = await this.getCustomerStats(userId);
 
         existingResources = `
 === TÀI NGUYÊN CÓ SẴN ===
@@ -424,14 +479,21 @@ ${recommendedType === 'email' ? 'NÊN thiết kế chiến dịch Email (B2B).' 
   recommendedType === 'zalo' ? 'NÊN thiết kế chiến dịch Zalo (B2C).' :
   'Có thể kết hợp đa kênh.'}
 
-${emailTemplates.length > 0 ? `Email Templates có sẵn:
-${emailTemplates.map(t => `- ID: ${t.id} | ${t.name} | Subject: ${t.subject}`).join('\n')}` : 'Chưa có email template.'}
+📊 THỐNG KÊ KHÁCH HÀNG:
+- Tổng khách hàng: ${customerStats.total}
+- Có email: ${customerStats.hasEmail}
+- Có Zalo: ${customerStats.hasZalo}
+- Có phone: ${customerStats.hasPhone}
+*Lưu ý: Khách hàng được cung cấp từ FILE/GOOGLE SHEET do người dùng upload*
 
-${zaloAccounts.length > 0 ? `Tài khoản Zalo đã kết nối:
-${zaloAccounts.map(a => `- ID: ${a.id} | ${a.displayName}`).join('\n')}` : 'Chưa có tài khoản Zalo.'}
+${emailTemplates.length > 0 ? `📧 Email Templates có sẵn:
+${emailTemplates.map(t => `- ID: ${t.id} | ${t.name} | Subject: ${t.subject}`).join('\n')}` : '📧 Chưa có email template.'}
 
-${zaloGroups.length > 0 ? `Nhóm Zalo:
-${zaloGroups.map(g => `- ID: ${g.id} | ${g.groupName}`).join('\n')}` : 'Chưa có nhóm Zalo.'}
+${zaloAccounts.length > 0 ? `💬 Tài khoản Zalo đã kết nối:
+${zaloAccounts.map(a => `- ID: ${a.id} | ${a.displayName}`).join('\n')}` : '💬 Chưa có tài khoản Zalo.'}
+
+${zaloGroups.length > 0 ? `👥 Nhóm Zalo:
+${zaloGroups.map(g => `- ID: ${g.id} | ${g.groupName}`).join('\n')}` : '👥 Chưa có nhóm Zalo.'}
 `;
       } catch (e) {
         console.warn('[AI] Không lấy được existing resources:', e.message);
@@ -516,7 +578,77 @@ Data structure:
   "landingPage": null
 }
 
-### 5. type: "landing_page"
+### 5. type: "ask_campaign_type"
+Khi người dùng muốn tạo chiến dịch NHƯNG CHƯA chỉ rõ kênh gửi (Email / Zalo cá nhân / Zalo nhóm).
+Hỏi user chọn 1 trong 3 loại:
+
+Data structure:
+{
+  "campaignName": "Tên chiến dịch (đã suy luận từ prompt)",
+  "description": "Mô tả ngắn",
+  "mCampaignType": "mixed", // Loại mặc định
+  "content": "Bạn muốn tạo chiến dịch theo kênh nào?",
+  "campaignOptions": [
+    { "value": "email", "label": "📧 Email", "description": "Gửi email cho khách hàng" },
+    { "value": "zalo", "label": "💬 Zalo cá nhân", "description": "Gửi tin nhắn Zalo riêng từng người" },
+    { "value": "zalo_group", "label": "👥 Zalo nhóm", "description": "Gửi tin nhắn vào nhóm Zalo" }
+  ],
+  "data": {
+    "campaignName": "...",
+    "description": "...",
+    "mcpampaignType": "mixed"
+  }
+}
+
+### 5. type: "confirm_create"
+Khi người dùng đã chọn campaign type và AI đã tạo xong script.
+HIỂN THỊ SUMMARY và hỏi xác nhận trước khi tạo:
+
+Data structure:
+{
+  "type": "confirm_create",
+  "content": "Tôi đã thiết kế chiến dịch cho bạn. Nhấn 'Tạo chiến dịch' để lưu.",
+  "data": {
+    "campaignName": "Tên chiến dịch",
+    "description": "Mô tả chiến dịch",
+    "campaignType": "email | zalo | zalo_group",
+    "isAiDraft": true,
+    "nodes": [...],
+    "connections": [...],
+    "summary": {
+      "totalSteps": 5,
+      "channels": ["email"],
+      "duration": "7 ngày",
+      "estimatedReach": "Tự động gửi cho tất cả khách hàng phù hợp",
+      "steps": [
+        { "step": 1, "action": "Email chào mừng", "timing": "Ngay lập tức" },
+        { "step": 2, "action": "Chờ 3 ngày", "timing": "Sau bước 1" },
+        { "step": 3, "action": "Email nhắc ưu đãi", "timing": "Ngày 3" }
+      ]
+    }
+  }
+}
+
+### 7. type: "create_and_run"
+Khi người dùng muốn TẠO VÀ CHẠY CHIẾN DỊCH NGAY. Đây là chế độ tự động hoàn toàn - không cần xác nhận.
+**QUAN TRỌNG**: AI phải có đủ thông tin (hoặc tự suy luận hợp lý) để tạo chiến dịch hoàn chỉnh.
+- Tên chiến dịch, mục tiêu, kênh gửi, đối tượng phải rõ ràng
+- Tự động điền các thông số cần thiết (template, Zalo account, nội dung tin nhắn)
+- KHÔNG cần hỏi lại người dùng, tự tạo và chạy
+
+Data structure:
+{
+  "campaignName": "...",
+  "description": "...",
+  "campaignType": "mixed | email | zalo | zalo_group",
+  "isAiDraft": false,
+  "autoRun": true,
+  "nodes": [...],
+  "connections": [...],
+  "landingPage": null
+}
+
+### 8. type: "landing_page"
 Khi người dùng muốn TẠO LANDING PAGE và đã có ĐỦ thông tin.
 
 Data structure:
@@ -528,7 +660,7 @@ Data structure:
 
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
-  "type": "text" | "ask_more" | "template_draft" | "campaign_script" | "landing_page",
+  "type": "text" | "ask_more" | "template_draft" | "campaign_script" | "ask_campaign_type" | "confirm_create" | "create_and_run" | "landing_page",
   "content": "Lời nhắn cho người dùng (tiếng Việt, thân thiện)",
   "missing_fields": [] | ["tên sản phẩm", "mục tiêu email"],
   "data": null | { ... }
@@ -537,7 +669,39 @@ Data structure:
 Khi type="ask_more": content là câu hỏi cụ thể, missing_fields liệt kê những gì cần.
 Khi type="template_draft": content mô tả template vừa tạo, data chứa template.
 Khi type="campaign_script": content mô tả chiến dịch là DRAFT, data chứa script. Nhấn mạnh user cần nhấn "Tạo chiến dịch" để khởi tạo.
-Khi type="landing_page": content mô tả trang, data chứa html/css.`;
+Khi type="ask_campaign_type": content hỏi chọn kênh, campaignOptions chứa 3 lựa chọn, data chứa thông tin đã có.
+Khi type="confirm_create": content mô tả chiến dịch, data.summary chứa thông tin chi tiết. Nhấn mạnh user nhấn "Tạo chiến dịch" để lưu.
+Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script. KHÔNG cần xác nhận từ user.
+Khi type="landing_page": content mô tả trang, data chứa html/css.
+
+## LOGIC XỬ LÝ CHIẾN DỊCH:
+
+### Nguyên tắc quan trọng:
+- KHACH HANG: Luôn mac dinh lay tu FILE hoac GOOGLE SHEET do nguoi dung cung cap. KHONG can hoi lai ve doi tuong.
+- Neu nguoi dung upload file/sheet -> do chinh la danh sach khach hang -> dung audience: "all"
+- KHONG BAO GIO hoi "gui cho doi tuong nao" -> luon dung tat ca khach hang tu file/sheet
+
+### Khi user prompt "tao chien dich [san pham]":
+1. Neu CHUA chi ro kenh (email/zalo/zalo_group) -> type: "ask_campaign_type"
+2. Neu DA chi ro kenh va co du thong tin -> type: "confirm_create" voi audience: "all" (khach hang tu file/sheet)
+3. Neu THIEU thong tin khac (ten san pham, muc tieu...) -> type: "ask_more"
+
+### Các từ khóa xác định kênh:
+- "email" / "gửi mail" / "thư điện tử" → campaignType: "email"
+- "zalo" / "zalo cá nhân" / "tin nhắn zalo" → campaignType: "zalo"
+- "zalo nhóm" / "nhóm zalo" / "gửi nhóm" → campaignType: "zalo_group"
+- "cả hai" / "đa kênh" / "mixed" → campaignType: "mixed"
+
+### LUÔN luôn dùng audience: "all" vì khách hàng được lấy từ file/sheet:
+- KHÔNG hỏi về đối tượng
+- KHÔNG có từ khóa xác định audience
+- Luôn giả định khách hàng từ file/sheet của người dùng
+
+## HEURISTICS CHO type="create_and_run":
+- Người dùng nói "tạo chiến dịch", "chạy chiến dịch", "bắt đầu chiến dịch" mà KHÔNG có từ "xem trước", "draft", "thiết kế"
+- Người dùng mô tả rõ ràng mục tiêu: "quảng cáo khóa học", "gửi email chào hàng", "chiến dịch bán hàng"
+- Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
+- Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
     return this._runChat(systemPrompt, history, files);
   }
@@ -651,13 +815,33 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.`;
     jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
 
     try {
-      return JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      // Validate: must have DATA nodes
+      return this._validateWorkflowNodes(parsed);
     } catch {
       const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
         return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
       });
-      return JSON.parse(sanitized);
+      return this._validateWorkflowNodes(JSON.parse(sanitized));
     }
+  }
+
+  /**
+   * Validate workflow has DATA nodes. If not, add warning but still return.
+   */
+  _validateWorkflowNodes(parsed) {
+    if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
+      return parsed;
+    }
+
+    const hasDataNode = parsed.nodes.some(n => n.nodeType === 'data');
+    if (!hasDataNode) {
+      console.warn('[AI] Warning: Workflow has no DATA nodes. Consider adding condition, filter, or tag_contact nodes.');
+    } else {
+      console.log(`[AI] Workflow validated: ${parsed.nodes.length} nodes with DATA nodes`);
+    }
+
+    return parsed;
   }
 }
 

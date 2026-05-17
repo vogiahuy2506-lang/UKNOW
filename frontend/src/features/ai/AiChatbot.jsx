@@ -149,6 +149,492 @@ const AskMoreCard = ({ missingFields }) => (
   </div>
 );
 
+// Ask campaign type card - hỏi user chọn kênh
+const AskCampaignTypeCard = ({ data, onSelect }) => {
+  if (!data?.campaignOptions) return null;
+  
+  return (
+    <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-600">Chọn kênh chiến dịch</span>
+      </div>
+      {data.campaignName && (
+        <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
+      )}
+      {data.description && (
+        <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
+      )}
+      <p className="text-xs text-slate-600 mb-3">Bạn muốn gửi qua kênh nào?</p>
+      <div className="space-y-2">
+        {data.campaignOptions.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => onSelect(option.value)}
+            className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all text-left group"
+          >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+              style={{
+                backgroundColor: option.value === 'email' ? '#fff7ed' : option.value === 'zalo' ? '#eff6ff' : '#faf5ff'
+              }}
+            >
+              {option.value === 'email' ? '📧' : option.value === 'zalo' ? '💬' : '👥'}
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-800 group-hover:text-blue-700">{option.label}</p>
+              <p className="text-[10px] text-slate-500">{option.description}</p>
+            </div>
+            <HiOutlineChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Ask audience card - hỏi user chọn đối tượng khách hàng
+const AskAudienceCard = ({ data, onSelect }) => {
+  if (!data?.campaignOptions) return null;
+  
+  return (
+    <div className="mt-4 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <HiOutlineSparkles className="w-5 h-5 text-purple-500" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-purple-600">Chọn đối tượng khách hàng</span>
+      </div>
+      {data.campaignName && (
+        <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
+      )}
+      {data.description && (
+        <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
+      )}
+      <p className="text-xs text-slate-600 mb-3">Bạn muốn gửi cho đối tượng nào?</p>
+      <div className="space-y-2">
+        {data.campaignOptions.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => onSelect(option.value)}
+            className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all text-left group"
+          >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+              style={{
+                backgroundColor: option.value === 'all' ? '#e0e7ff' : option.value === 'has_email' ? '#fff7ed' : '#eff6ff'
+              }}
+            >
+              {option.value === 'all' ? '👥' : option.value === 'has_email' ? '📧' : '💬'}
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-800 group-hover:text-purple-700">{option.label}</p>
+              <p className="text-[10px] text-slate-500">{option.description}</p>
+            </div>
+            <HiOutlineChevronRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500" />
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-slate-400 mt-3">
+        💡 <strong>Lưu ý:</strong> Với <strong>Zalo nhóm</strong>, tin nhắn sẽ gửi vào nhóm Zalo đã kết nối thay vì gửi riêng từng người.
+      </p>
+    </div>
+  );
+};
+
+// Campaign Draft Editor - Chỉnh sửa draft ngay trong chatbot
+const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
+  // AI có thể trả về nodes hoặc summary.steps
+  const rawNodes = script?.nodes || [];
+  const rawSteps = script?.summary?.steps || [];
+  
+  const [editedScript, setEditedScript] = useState({
+    campaignName: script?.campaignName || '',
+    description: script?.description || '',
+    nodes: rawNodes,
+    connections: script?.connections || [],
+    // Lưu steps để hiển thị
+    steps: rawSteps,
+  });
+  const [activeTab, setActiveTab] = useState('basic'); // 'basic' | 'nodes'
+
+  // Get action nodes (non-trigger) - mở rộng điều kiện lọc
+  const actionNodes = editedScript.nodes.filter(n => {
+    if (!n) return false;
+    const type = n.nodeType || '';
+    const subtype = n.nodeSubtype || n.subtype || '';
+    return type === 'action' || type === 'send_email' || type === 'send_zalo_personal' || 
+           type === 'send_zalo_group' || subtype.includes('send_') || 
+           subtype.includes('email') || subtype.includes('zalo');
+  });
+
+  // Nếu không có nodes thì dùng steps
+  const displayItems = actionNodes.length > 0 ? actionNodes : editedScript.steps;
+
+  const handleNodeConfigChange = (tempId, field, value) => {
+    setEditedScript(prev => ({
+      ...prev,
+      nodes: prev.nodes.map(node => 
+        node.tempId === tempId || node.id === tempId
+          ? { ...node, config: { ...node.config, [field]: value } }
+          : node
+      )
+    }));
+  };
+
+  const handleNodeNameChange = (tempId, name) => {
+    setEditedScript(prev => ({
+      ...prev,
+      nodes: prev.nodes.map(node => 
+        node.tempId === tempId || node.id === tempId
+          ? { ...node, nodeName: name }
+          : node
+      )
+    }));
+  };
+
+  const getNodeIcon = (node) => {
+    const subtype = node.nodeSubtype || node.subtype || '';
+    if (subtype.includes('email')) return '📧';
+    if (subtype.includes('zalo_personal') || subtype === 'zalo') return '💬';
+    if (subtype.includes('zalo_group') || subtype === 'zalo_group') return '👥';
+    return '⚡';
+  };
+
+  const handleSave = () => {
+    onSave(editedScript);
+  };
+
+  return (
+    <div className="mt-4 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="p-4 bg-orange-500 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <HiOutlinePencilAlt className="w-5 h-5" />
+            <span className="font-black text-[10px] uppercase tracking-[0.2em]">Chỉnh sửa Draft</span>
+          </div>
+          <button onClick={onCancel} className="p-1 hover:bg-orange-400 rounded-lg">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-orange-100">
+        <button
+          onClick={() => setActiveTab('basic')}
+          className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+            activeTab === 'basic' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
+          }`}
+        >
+          📝 Cơ bản
+        </button>
+        <button
+          onClick={() => setActiveTab('nodes')}
+          className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+            activeTab === 'nodes' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
+          }`}
+        >
+          📋 Nodes ({displayItems.length})
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        {activeTab === 'basic' && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                Tên chiến dịch
+              </label>
+              <input
+                type="text"
+                value={editedScript.campaignName}
+                onChange={(e) => setEditedScript(prev => ({ ...prev, campaignName: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none"
+                placeholder="Nhập tên chiến dịch..."
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                Mô tả
+              </label>
+              <textarea
+                value={editedScript.description}
+                onChange={(e) => setEditedScript(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none resize-none"
+                rows={3}
+                placeholder="Nhập mô tả chiến dịch..."
+              />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'nodes' && (
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {displayItems.length > 0 ? displayItems.map((item, i) => {
+              const isStep = item.step !== undefined; // Là step hay node
+              const nodeId = item.tempId || item.id || i;
+              return (
+                <div key={nodeId} className="bg-white rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">{isStep ? '📝' : getNodeIcon(item)}</span>
+                    <span className="text-xs font-bold text-slate-600">Bước {item.step || i + 1}</span>
+                    <span className="text-[10px] text-slate-400">
+                      {isStep ? (item.action || '') : (item.nodeSubtype || item.subtype || 'action')}
+                    </span>
+                  </div>
+                  {isStep ? (
+                    // Hiển thị step (text-only)
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-700">{item.action || item.description || ''}</p>
+                      <p className="text-[10px] text-slate-400">{item.timing || ''}</p>
+                    </div>
+                  ) : (
+                    // Hiển thị node
+                    <>
+                      <input
+                        type="text"
+                        value={item.nodeName || ''}
+                        onChange={(e) => handleNodeNameChange(nodeId, e.target.value)}
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs mb-2 focus:border-orange-400 outline-none"
+                        placeholder="Tên node..."
+                      />
+                      {/* Email config */}
+                      {(item.nodeSubtype || item.subtype || '').includes('email') && (
+                        <div className="space-y-1">
+                          <input
+                            type="text"
+                            value={item.config?.emailSubject || ''}
+                            onChange={(e) => handleNodeConfigChange(nodeId, 'emailSubject', e.target.value)}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:border-orange-400 outline-none"
+                            placeholder="Tiêu đề email..."
+                          />
+                        </div>
+                      )}
+                      {/* Zalo config */}
+                      {(item.nodeSubtype || item.subtype || '').includes('zalo') && (
+                        <textarea
+                          value={item.config?.message || ''}
+                          onChange={(e) => handleNodeConfigChange(nodeId, 'message', e.target.value)}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs resize-none focus:border-orange-400 outline-none"
+                          rows={3}
+                          placeholder="Nội dung tin nhắn Zalo..."
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            }) : (
+              <p className="text-xs text-slate-400 text-center py-4">Không có node nào để chỉnh sửa</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 bg-white/50 border-t border-orange-100 flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-slate-200 transition-colors"
+        >
+          Huỷ
+        </button>
+        <button
+          onClick={handleSave}
+          className="flex-1 py-2 bg-orange-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-orange-600 transition-colors"
+        >
+          Lưu thay đổi
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Confirm create card - hiển thị summary và hỏi xác nhận
+const ConfirmCreateCard = ({ script, onConfirm, onEdit, onCancel }) => {
+  const summary = script?.summary || {};
+  const steps = summary.steps || [];
+  
+  return (
+    <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="p-4 bg-emerald-500 text-white">
+        <div className="flex items-center gap-2 mb-2">
+          <HiOutlineSparkles className="w-5 h-5" />
+          <span className="font-black text-[10px] uppercase tracking-[0.2em]">Xác nhận tạo chiến dịch</span>
+        </div>
+        <h4 className="font-bold text-lg">{script?.campaignName}</h4>
+        {script?.description && (
+          <p className="text-xs text-emerald-100 mt-1">{script.description}</p>
+        )}
+      </div>
+      
+      {/* Summary stats */}
+      <div className="p-4 border-b border-emerald-100">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-lg font-black text-emerald-700">{summary.totalSteps || script?.nodes?.length || 0}</p>
+            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">Bước</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-lg font-black text-emerald-700">{summary.duration || 'N/A'}</p>
+            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">Thời gian</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-lg font-black text-emerald-700">
+              {script?.campaignType === 'email' ? '📧' : 
+               script?.campaignType === 'zalo' ? '💬' : 
+               script?.campaignType === 'zalo_group' ? '👥' : '📱'}
+            </p>
+            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">
+              {script?.campaignType === 'email' ? 'Email' : 
+               script?.campaignType === 'zalo' ? 'Zalo' : 
+               script?.campaignType === 'zalo_group' ? 'Nhóm' : 'Đa kênh'}
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Steps preview */}
+      <div className="p-4">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Các bước:</p>
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {steps.length > 0 ? steps.map((step, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {step.step}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-slate-700">{step.action}</p>
+                <p className="text-[10px] text-slate-400">{step.timing}</p>
+              </div>
+            </div>
+          )) : (
+            script?.nodes?.filter(n => n.nodeType !== 'trigger' && n.nodeType !== 'start').slice(0, 5).map((node, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  {i + 1}
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-slate-700">{node.nodeName || node.nodeSubtype}</p>
+                  <p className="text-[10px] text-slate-400">
+                    {node.nodeType === 'action' ? (
+                      node.nodeSubtype === 'send_email' ? '📧 Email' :
+                      node.nodeSubtype === 'send_zalo_personal' ? '💬 Zalo cá nhân' :
+                      node.nodeSubtype === 'send_zalo_group' ? '👥 Zalo nhóm' :
+                      node.nodeSubtype === 'delay' || node.nodeSubtype === 'wait_time' ? '⏰ Chờ' :
+                      '⚡ Action'
+                    ) : node.nodeType === 'logic' ? '⏰ Chờ' : '▶️ Bước'}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      
+      {/* Actions */}
+      <div className="p-4 bg-white/50 border-t border-emerald-100">
+        <div className="space-y-2">
+          <button 
+            onClick={onConfirm}
+            className="w-full py-3 bg-emerald-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-emerald-600 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
+          >
+            <HiOutlineCheck className="w-5 h-5" />
+            Tạo chiến dịch
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={onEdit}
+              className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5"
+            >
+              <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
+              Chỉnh sửa
+            </button>
+            <button 
+              onClick={onCancel}
+              className="py-2.5 bg-slate-50 border border-slate-200 text-slate-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5"
+            >
+              Huỷ bỏ
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Auto-creating campaign progress card
+const AutoCreatingCard = ({ campaignName, onView }) => (
+  <div className="mt-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
+    <div className="flex items-center gap-3 mb-3">
+      <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center animate-pulse">
+        <HiOutlinePlay className="w-5 h-5 text-white" />
+      </div>
+      <div className="flex-1">
+        <p className="text-sm font-bold text-green-800">Đang tạo và chạy chiến dịch...</p>
+        <p className="text-xs text-green-600">{campaignName}</p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 mb-3">
+      <div className="flex-1 h-2 bg-green-100 rounded-full overflow-hidden">
+        <div className="h-full bg-green-500 rounded-full animate-pulse w-full" />
+      </div>
+    </div>
+    <p className="text-xs text-green-700 mb-3">
+      ✨ Chiến dịch sẽ được tạo tự động và bắt đầu chạy ngay!
+    </p>
+    {onView && (
+      <button
+        onClick={onView}
+        className="w-full py-2.5 bg-green-500 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-green-600 flex items-center justify-center gap-2"
+      >
+        <HiOutlineTerminal className="w-4 h-4" />
+        Xem chiến dịch
+      </button>
+    )}
+  </div>
+);
+
+// Success card after auto-creating campaign
+const AutoCreatedSuccessCard = ({ result, onView }) => (
+  <div className="mt-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
+    <div className="flex items-center gap-3 mb-3">
+      <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
+        <HiOutlineCheck className="w-5 h-5 text-white" />
+      </div>
+      <div>
+        <p className="text-sm font-bold text-green-800">Chiến dịch đang chạy!</p>
+        <p className="text-xs text-green-600">{result.campaignName}</p>
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="bg-white/60 rounded-lg p-2">
+        <p className="text-[10px] text-green-600 uppercase tracking-wider">Campaign ID</p>
+        <p className="text-sm font-bold text-green-800">#{result.campaignId}</p>
+      </div>
+      {result.runId && (
+        <div className="bg-white/60 rounded-lg p-2">
+          <p className="text-[10px] text-green-600 uppercase tracking-wider">Run ID</p>
+          <p className="text-sm font-bold text-green-800">#{result.runId}</p>
+        </div>
+      )}
+    </div>
+    <div className="flex items-center gap-2 text-xs text-green-700 mb-3">
+      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+      <span>Đang chạy và gửi tin nhắn</span>
+    </div>
+    {onView && (
+      <button
+        onClick={onView}
+        className="w-full py-2.5 bg-white border border-green-300 text-green-700 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-green-50 flex items-center justify-center gap-2"
+      >
+        <HiOutlineTerminal className="w-4 h-4" />
+        Xem chiến dịch
+      </button>
+    )}
+  </div>
+);
+
 // Campaign picker modal
 const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
   const [campaigns, setCampaigns] = useState([]);
@@ -275,7 +761,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   const welcomeMessage = isSuperAdmin
     ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng Founder AI theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
-    : 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo kịch bản chiến dịch\n🌐 Thiết kế Landing Page\n\nHãy cho tôi biết bạn cần gì nhé!';
+    : 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo và chạy chiến dịch tự động\n🌐 Thiết kế Landing Page\n\nChỉ cần mô tả yêu cầu, tôi sẽ tự tạo và chạy chiến dịch cho bạn!';
 
   const [messages, setMessages] = useState([{
     role: 'assistant',
@@ -292,6 +778,15 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [, setSelectedTemplate] = useState(null);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
+  
+  // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
+  const [pendingCampaignPrompt, setPendingCampaignPrompt] = useState(null); // Prompt gốc của user
+  const [pendingCampaignData, setPendingCampaignData] = useState(null); // Data từ AI khi hỏi campaign type
+  const [isEditingDraft, setIsEditingDraft] = useState(false); // Đang chỉnh sửa draft trong chatbot
+  const [selectedCampaignType, setSelectedCampaignType] = useState(null); // Type đã chọn (email/zalo/zalo_group)
+  const [selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -347,6 +842,84 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       const response = await aiApi.chat(newHistory, userMsg.files);
       if (response.success) {
         const { type, content, data, missing_fields } = response.data;
+
+        // Xử lý ask_campaign_type - hỏi user chọn kênh
+        if (type === 'ask_campaign_type' && data) {
+          setPendingCampaignPrompt(inputText);
+          setPendingCampaignData(data);
+          setMessages(prev => [...prev, {
+            role: 'assistant', content, type, data,
+          }]);
+          return;
+        }
+
+        // Xử lý ask_audience - skip, AI sẽ trả trực tiếp confirm_create
+        if (type === 'ask_audience' && data) {
+          // Skip ask_audience, AI sẽ trả confirm_create ngay
+          setPendingCampaignData(prev => prev ? { ...prev, ...data } : data);
+          setMessages(prev => [...prev, {
+            role: 'assistant', content, type, data,
+          }]);
+          return;
+        }
+
+        // Xử lý confirm_create - hiển thị summary và hỏi xác nhận
+        if (type === 'confirm_create' && data) {
+          setCurrentScript(data);
+          setMessages(prev => [...prev, {
+            role: 'assistant', content, type, data,
+          }]);
+          return;
+        }
+
+        // Xử lý create_and_run - tự động tạo và chạy campaign
+        if (type === 'create_and_run' && data) {
+          setCreatingCampaign(true);
+          const scriptData = {
+            ...data,
+            isAiDraft: false,
+            autoRun: true,
+          };
+
+          // Thêm message là đang tạo
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Đang tạo và chạy chiến dịch cho bạn...',
+            type: 'auto_creating',
+            data: { campaignName: data.campaignName },
+          }]);
+
+          try {
+            const createResult = await aiApi.createAndRunCampaign(scriptData);
+            setCreatingCampaign(false);
+
+            if (createResult.success) {
+              setAutoCreatedCampaign(createResult.data);
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `🎉 Chiến dịch "${createResult.data.campaignName}" đã được tạo và đang chạy!\n\nRun ID: ${createResult.data.runId || 'N/A'}\n\nBạn có thể theo dõi tiến trình tại trang Chiến dịch.`,
+                type: 'auto_created_success',
+                data: createResult.data,
+              }]);
+            } else {
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `⚠️ ${createResult.message || 'Có lỗi khi tạo chiến dịch. Vui lòng thử lại.'}`,
+                type: 'error',
+              }]);
+            }
+          } catch (createErr) {
+            setCreatingCampaign(false);
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `⚠️ Lỗi: ${createErr.response?.data?.message || createErr.message}`,
+              type: 'error',
+            }]);
+          }
+          return;
+        }
+
+        // Xử lý các type khác như bình thường
         setMessages(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
@@ -370,22 +943,202 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
   const handleEditCampaign = (script) => {
-    console.log('[AI Chatbot] Saving AI script to draft:', JSON.stringify(script, null, 2));
-    writeCampaignDraft({
+    console.log('[AI Chatbot] handleEditCampaign called with script:', JSON.stringify(script, null, 2));
+    const draftData = {
       campaignName: script.campaignName || '',
       campaignDescription: script.description || '',
       campaignType: script.campaignType || 'mixed',
       // Store raw script nodes/connections for buildFlowFromCampaign (legacy format)
       _aiScript: script,
       updatedAt: new Date().toISOString(),
-    });
-    navigate('/app/campaigns/new/builder');
+    };
+    console.log('[AI Chatbot] Saving draftData:', JSON.stringify(draftData, null, 2));
+    writeCampaignDraft(draftData);
+    console.log('[AI Chatbot] Draft saved, navigating to builder');
+    // Force reload to ensure CampaignBuilder remounts and reads the new draft
+    // Use a query param to force React Router to recognize a new navigation
+    const timestamp = Date.now();
+    navigate(`/app/campaigns/new/builder?t=${timestamp}`, { replace: true });
     onToggle?.();
   };
 
   const handleSaveLandingPage = (page) => {
     navigate('/app/settings/landing-pages', { state: { aiDraft: page } });
     onToggle?.();
+  };
+
+  /**
+   * Xử lý khi user chọn campaign type (email/zalo/zalo_group)
+   */
+  const handleSelectCampaignType = async (campaignType) => {
+    if (!pendingCampaignPrompt || !pendingCampaignData) return;
+    
+    setIsTyping(true);
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: `Tôi đã chọn kênh ${campaignType === 'email' ? '📧 Email' : campaignType === 'zalo' ? '💬 Zalo cá nhân' : '👥 Zalo nhóm'}. Đang thiết kế chiến dịch...`,
+    }]);
+
+    try {
+      // Gửi lại prompt với campaign type đã chọn
+      const enrichedHistory = [
+        ...messages,
+        { role: 'user', content: pendingCampaignPrompt },
+        { role: 'assistant', content: 'Tôi sẽ hỏi bạn chọn kênh trước.' },
+        { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
+      ];
+      
+      const response = await aiApi.chat(enrichedHistory, []);
+      
+      if (response.success) {
+        const { type, content, data } = response.data;
+        
+        // Nếu AI trả về confirm_create
+        if (type === 'confirm_create' && data) {
+          setCurrentScript({
+            ...data,
+            campaignType: campaignType, // Override với type user đã chọn
+          });
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Chiến dịch đã sẵn sàng!',
+            type: 'confirm_create',
+            data: { ...data, campaignType },
+          }]);
+        } else if (type === 'campaign_script' && data) {
+          // Fallback nếu AI trả về campaign_script
+          setCurrentScript({
+            ...data,
+            campaignType: campaignType,
+          });
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Chiến dịch đã được tạo!',
+            type: 'campaign_script',
+            data: { ...data, campaignType },
+          }]);
+        } else {
+          // AI trả lời khác, hiển thị như bình thường
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Tôi đang xử lý yêu cầu của bạn...',
+            type,
+            data,
+          }]);
+        }
+        
+        // Clear pending state
+        setPendingCampaignPrompt(null);
+        setPendingCampaignData(null);
+        setSelectedCampaignType(campaignType);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  /**
+   * Xử lý khi user chọn đối tượng khách hàng (all/has_email/has_zalo_phone)
+   */
+  const handleSelectAudience = async (audience) => {
+    if (!pendingCampaignPrompt || !pendingCampaignData) return;
+
+    setIsTyping(true);
+    const audienceLabel = audience === 'all' ? 'tất cả khách hàng' : audience === 'has_email' ? 'khách hàng có email' : 'khách hàng có Zalo/phone';
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: `Tôi sẽ gửi cho đối tượng ${audienceLabel}. Đang thiết kế chiến dịch hoàn chỉnh...`,
+    }]);
+
+    try {
+      // Gửi lại prompt với audience đã chọn
+      const enrichedHistory = [
+        ...messages,
+        { role: 'user', content: pendingCampaignPrompt },
+        { role: 'assistant', content: 'Tôi sẽ hỏi bạn chọn kênh trước.' },
+        { role: 'user', content: `Tôi muốn gửi qua ${pendingCampaignData?.campaignType || 'đa kênh'}` },
+        { role: 'assistant', content: 'Bạn muốn gửi cho đối tượng nào?' },
+        { role: 'user', content: `Gửi cho ${audienceLabel}` }
+      ];
+
+      const response = await aiApi.chat(enrichedHistory, []);
+
+      if (response.success) {
+        const { type, content, data } = response.data;
+
+        // Nếu AI trả về confirm_create
+        if (type === 'confirm_create' && data) {
+          setCurrentScript({
+            ...data,
+            campaignType: pendingCampaignData?.campaignType,
+            audience: audience,
+          });
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Chiến dịch đã sẵn sàng!',
+            type: 'confirm_create',
+            data: { ...data, campaignType: pendingCampaignData?.campaignType, audience },
+          }]);
+        } else if (type === 'campaign_script' && data) {
+          // Fallback nếu AI trả về campaign_script
+          setCurrentScript({
+            ...data,
+            campaignType: pendingCampaignData?.campaignType,
+            audience: audience,
+          });
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Chiến dịch đã được tạo!',
+            type: 'campaign_script',
+            data: { ...data, campaignType: pendingCampaignData?.campaignType, audience },
+          }]);
+        } else {
+          // AI trả lời khác, hiển thị như bình thường
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: content || 'Tôi đang xử lý yêu cầu của bạn...',
+            type,
+            data,
+          }]);
+        }
+
+        // Clear pending state
+        setPendingCampaignPrompt(null);
+        setPendingCampaignData(null);
+        setSelectedCampaignType(pendingCampaignData?.campaignType);
+        setSelectedAudience(audience);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  /**
+   * Xử lý khi user xác nhận tạo chiến dịch
+   */
+  const handleConfirmCreate = async () => {
+    if (!currentScript) return;
+    await handleCreateCampaign();
+  };
+
+  /**
+   * Xử lý khi user hủy tạo chiến dịch
+   */
+  const handleCancelCreate = () => {
+    setCurrentScript(null);
+    setPendingCampaignPrompt(null);
+    setPendingCampaignData(null);
+    setSelectedCampaignType(null);
+    setSelectedAudience(null);
+    setIsEditingDraft(false);
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: 'Đã hủy tạo chiến dịch. Bạn cần tôi giúp gì khác không?',
+    }]);
   };
 
   /**
@@ -535,6 +1288,15 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         <div className="flex-shrink-0 mx-4 mt-3 flex gap-2 overflow-x-auto pb-1">
           <button
             onClick={() => {
+              setInputText('Tạo chiến dịch quảng cáo cho khóa học tiếng Anh cho trẻ em 6 tuổi, gửi email và Zalo cá nhân');
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 rounded-full text-xs font-medium text-green-700 transition-all whitespace-nowrap"
+          >
+            <HiOutlinePlay className="w-3.5 h-3.5" />
+            Tạo Campaign
+          </button>
+          <button
+            onClick={() => {
               setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
               setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
             }}
@@ -587,6 +1349,45 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                 <AskMoreCard missingFields={msg.missing_fields} />
               )}
 
+              {/* Ask campaign type - hỏi user chọn kênh */}
+              {msg.type === 'ask_campaign_type' && msg.data && (
+                <AskCampaignTypeCard
+                  data={msg.data}
+                  onSelect={handleSelectCampaignType}
+                />
+              )}
+
+              {/* Ask audience - hỏi user chọn đối tượng khách hàng */}
+              {msg.type === 'ask_audience' && msg.data && (
+                <AskAudienceCard
+                  data={msg.data}
+                  onSelect={handleSelectAudience}
+                />
+              )}
+
+              {/* Confirm create - xác nhận trước khi tạo */}
+              {msg.type === 'confirm_create' && msg.data && !isEditingDraft && (
+                <ConfirmCreateCard
+                  script={msg.data}
+                  onConfirm={handleConfirmCreate}
+                  onEdit={() => setIsEditingDraft(true)}
+                  onCancel={handleCancelCreate}
+                />
+              )}
+              
+              {/* Campaign Draft Editor - Chỉnh sửa trong chatbot */}
+              {msg.type === 'confirm_create' && msg.data && isEditingDraft && (
+                <CampaignDraftEditor
+                  script={msg.data}
+                  onSave={(editedScript) => {
+                    setCurrentScript({ ...msg.data, ...editedScript });
+                    setIsEditingDraft(false);
+                    toast.success('Đã cập nhật draft!');
+                  }}
+                  onCancel={() => setIsEditingDraft(false)}
+                />
+              )}
+
               {/* Template draft */}
               {msg.type === 'template_draft' && msg.data && (
                 <TemplateDraftCard
@@ -612,6 +1413,22 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                   page={msg.data}
                   onSaveToLibrary={handleSaveLandingPage}
                   onGenerateNew={handleGenerateNewLandingPage}
+                />
+              )}
+
+              {/* Auto creating campaign */}
+              {msg.type === 'auto_creating' && (
+                <AutoCreatingCard
+                  campaignName={msg.data?.campaignName}
+                  onView={autoCreatedCampaign ? () => navigate(`/app/campaigns/${autoCreatedCampaign.campaignId}/builder`) : null}
+                />
+              )}
+
+              {/* Auto created success */}
+              {msg.type === 'auto_created_success' && msg.data && (
+                <AutoCreatedSuccessCard
+                  result={msg.data}
+                  onView={() => navigate(`/app/campaigns/${msg.data.campaignId}/builder`)}
                 />
               )}
             </div>
