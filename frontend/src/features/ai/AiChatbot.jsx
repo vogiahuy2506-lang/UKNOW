@@ -778,15 +778,15 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [, setSelectedTemplate] = useState(null);
-  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   
   // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
   const [pendingCampaignPrompt, setPendingCampaignPrompt] = useState(null); // Prompt gốc của user
   const [pendingCampaignData, setPendingCampaignData] = useState(null); // Data từ AI khi hỏi campaign type
   const [isEditingDraft, setIsEditingDraft] = useState(false); // Đang chỉnh sửa draft trong chatbot
-  const [selectedCampaignType, setSelectedCampaignType] = useState(null); // Type đã chọn (email/zalo/zalo_group)
-  const [selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
+  const [_selectedCampaignType, setSelectedCampaignType] = useState(null); // Type đã chọn (email/zalo/zalo_group)
+  const [_selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
