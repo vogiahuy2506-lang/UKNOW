@@ -109,6 +109,7 @@ const CampaignBuilder = () => {
   const pendingBaselineRef = useRef(false);
   const hasBaselineRef = useRef(false);
   const hasHydratedDraftRef = useRef(false);
+  const hasHydratedAiDraftRef = useRef(false);
   const isNewCampaign = !id || id === 'new';
   const shouldBlockNavigation = isRunning || isDirty;
   const navigationBlocker = useBrowserRouterBlocker(shouldBlockNavigation);
@@ -299,17 +300,45 @@ const CampaignBuilder = () => {
       if (isNewCampaign) {
         // Reset về state ban đầu khi tạo mới và hydrate từ draft tạm nếu có
         const draft = readCampaignDraft();
-        const aiScript = draft?._aiScript;
+        console.log('[CampaignBuilder] readCampaignDraft result:', JSON.stringify(draft, null, 2));
+        
+        // Check for AI script in different locations
+        let aiScript = draft?._aiScript;
+        
+        // Also check if nodes are directly on draft (AI returns script with nodes/connections)
+        if (!aiScript && draft?.nodes && Array.isArray(draft.nodes) && draft.nodes.length > 0) {
+          console.log('[CampaignBuilder] AI script nodes found directly on draft');
+          aiScript = {
+            campaignName: draft.campaignName,
+            description: draft.campaignDescription,
+            campaignType: draft.campaignType,
+            nodes: draft.nodes,
+            connections: draft.connections || [],
+          };
+        }
+        
+        console.log('[CampaignBuilder] aiScript from draft:', JSON.stringify(aiScript, null, 2));
         let draftNodes, draftEdges;
         if (aiScript && Array.isArray(aiScript.nodes)) {
           // Convert AI script (nodes+connections) to ReactFlow format
           const converted = buildFlowFromCampaign(aiScript);
+          console.log('[CampaignBuilder] buildFlowFromCampaign result:', JSON.stringify(converted, null, 2));
           draftNodes = converted.nodes;
           draftEdges = converted.edges;
         } else {
+          console.log('[CampaignBuilder] No AI script found, using direct nodes/edges');
           draftNodes = Array.isArray(draft?.nodes) ? draft.nodes : [];
           draftEdges = Array.isArray(draft?.edges) ? draft.edges : [];
         }
+        console.log('[CampaignBuilder] Setting nodes:', draftNodes.length, 'nodes');
+        console.log('[CampaignBuilder] Setting edges:', draftEdges.length, 'edges');
+        
+        // Mark that we hydrated from AI draft so the second useEffect doesn't override
+        if (aiScript && Array.isArray(aiScript.nodes) && aiScript.nodes.length > 0) {
+          hasHydratedAiDraftRef.current = true;
+          console.log('[CampaignBuilder] Marked hasHydratedAiDraftRef = true');
+        }
+        
         setCampaignName(draft?.campaignName || '');
         setCampaignDescription(draft?.campaignDescription || '');
         setCampaignType(draft?.campaignType || 'email');
@@ -371,6 +400,11 @@ const CampaignBuilder = () => {
   // When creating a new campaign, ask for name first
   useEffect(() => {
     if (isNewCampaign) {
+      // Skip if already hydrated from AI draft in the first useEffect
+      if (hasHydratedAiDraftRef.current) {
+        console.log('[CampaignBuilder] Skip second useEffect - already hydrated from AI draft');
+        return;
+      }
       const draft = readCampaignDraft();
       const hasPrefilledInfo = !!String(draft?.campaignName || '').trim();
       if (!hasPrefilledInfo) {

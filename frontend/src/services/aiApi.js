@@ -45,6 +45,17 @@ const aiApi = {
   },
 
   /**
+   * Create AND RUN campaign automatically (no confirmation).
+   * @param {object} script The campaign script from AI
+   */
+  createAndRunCampaign: async (script) => {
+    const response = await api.post('/ai/create-and-run-campaign', { script }, {
+      timeout: 120000
+    });
+    return response.data;
+  },
+
+  /**
    * Smart interactive chat.
    * @param {Array} history Array of { role, content }
    * @param {Array} files Array of current attached files

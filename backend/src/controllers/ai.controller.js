@@ -159,14 +159,27 @@ class AiController {
         });
       }
 
+      // Normalize AI nodes to match database schema (uses snake_case: node_type, node_subtype)
+      // AI returns: { nodeType: "action", nodeSubtype: "send_email" } but DB needs: { node_type: "send_email", node_subtype: "send_email" }
+      console.log('[AI Controller] Raw script nodes:', JSON.stringify(script.nodes, null, 2));
+      const normalizedNodes = this._normalizeNodes(script.nodes);
+      
+      // Normalize connections: support { source, target } or { sourceNodeId, targetNodeId }
+      const normalizedConnections = (script.connections || []).map(conn => ({
+        sourceNodeId: conn.sourceNodeId || conn.source || conn.from,
+        targetNodeId: conn.targetNodeId || conn.target || conn.to,
+        connectionType: conn.connectionType || 'default',
+        connectionLabel: conn.connectionLabel || '',
+      }));
+
       const createReq = {
         ...req,
         body: {
           campaignName: script.campaignName,
           description: script.description || '',
           campaignType: script.campaignType || 'mixed',
-          nodes: script.nodes,
-          connections: script.connections,
+          nodes: normalizedNodes,
+          connections: normalizedConnections,
         },
       };
 
@@ -217,6 +230,9 @@ class AiController {
         });
       }
 
+      // Normalize AI nodes trước khi đẩy vào campaign
+      const normalizedNodes = this._normalizeNodes(script.nodes);
+
       // Re-use campaignController.update logic to push nodes/connections
       const updateReq = {
         ...req,
@@ -225,7 +241,7 @@ class AiController {
           campaignName: script.campaignName,
           description: script.description,
           campaignType: script.campaignType || 'mixed',
-          nodes: script.nodes,
+          nodes: normalizedNodes,
           connections: script.connections,
         },
       };
@@ -283,6 +299,112 @@ class AiController {
       return res.status(500).json({
         success: false,
         message: error.message || 'Lỗi khi đẩy kịch bản vào chiến dịch',
+      });
+    }
+  }
+
+  /**
+   * POST /ai/create-and-run-campaign — Tạo VÀ CHẠY campaign tự động.
+   * Không cần xác nhận từ user.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async createAndRunCampaign(req, res) {
+    try {
+      const { script } = req.body;
+
+      if (!script || !script.nodes || !script.connections) {
+        return res.status(400).json({
+          success: false,
+          message: 'Script không hợp lệ. Cần có nodes và connections.',
+        });
+      }
+
+      // Normalize AI nodes trước khi tạo campaign
+      const normalizedNodes = this._normalizeNodes(script.nodes);
+      
+      // Bước 1: Tạo campaign
+      const createReq = {
+        ...req,
+        body: {
+          campaignName: script.campaignName,
+          description: script.description || '',
+          campaignType: script.campaignType || 'mixed',
+          nodes: normalizedNodes,
+          connections: script.connections,
+        },
+      };
+
+      const createRes = await new Promise((resolve, reject) => {
+        const mockRes = {
+          status: (code) => ({
+            json: (data) => resolve({ status: code, data }),
+          }),
+          json: (data) => resolve({ status: 200, data }),
+        };
+        campaignController.create(createReq, mockRes).catch(reject);
+      });
+
+      if (createRes.status >= 400) {
+        return res.status(createRes.status).json(createRes.data);
+      }
+
+      const campaignId = createRes.data.data?.id;
+      if (!campaignId) {
+        return res.status(500).json({
+          success: false,
+          message: 'Không lấy được ID chiến dịch sau khi tạo',
+        });
+      }
+
+      // Bước 2: Kích hoạt campaign (set status = active)
+      try {
+        await campaignCrudService.publishCampaign({
+          userId: req.user.id,
+          roleCode: req.user.role,
+          campaignId,
+        });
+      } catch (pubErr) {
+        console.warn('[AI] Không publish được campaign:', pubErr.message);
+      }
+
+      // Bước 3: Tạo run và thực thi
+      const runReq = {
+        ...req,
+        params: { id: campaignId },
+        body: {
+          runName: `AI Auto Run - ${new Date().toLocaleString('vi-VN')}`,
+          source: 'campaign_run',
+        },
+      };
+
+      const runRes = await new Promise((resolve, reject) => {
+        const mockRes = {
+          status: (code) => ({
+            json: (data) => resolve({ status: code, data }),
+          }),
+          json: (data) => resolve({ status: 200, data }),
+        };
+        campaignController.run(runReq, mockRes).catch(reject);
+      });
+
+      return res.json({
+        success: true,
+        message: `Đã tạo và kích hoạt chiến dịch "${script.campaignName}" thành công!`,
+        data: {
+          campaignId,
+          campaignName: script.campaignName,
+          runId: runRes.data?.data?.runId || null,
+          runName: runRes.data?.data?.runName || null,
+          status: 'running',
+        },
+      });
+    } catch (error) {
+      console.error('AI create and run campaign error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Lỗi khi tạo và chạy chiến dịch AI',
       });
     }
   }
@@ -349,6 +471,96 @@ class AiController {
       console.error('Save business profile error:', error);
       return res.status(error.status || 500).json({ success: false, message: error.message });
     }
+  }
+
+  /**
+   * Normalize AI nodes to match database schema.
+   * AI returns: { nodeType: "action", nodeSubtype: "send_email" } 
+   * DB needs: { node_type: "send_email", node_subtype: "send_email" }
+   * 
+   * @param {Array} nodes - Array of AI-generated nodes
+   * @returns {Array} Normalized nodes for database
+   */
+  _normalizeNodes(nodes) {
+    if (!Array.isArray(nodes)) return [];
+    
+    return nodes.map(node => {
+      // Support multiple formats: { nodeType, nodeSubtype } OR { type, subtype } OR AI format { type, id }
+      const nodeSubtype = node.nodeSubtype || node.subtype || node.node_subtype || '';
+      let nodeType = node.nodeType || node.type || node.node_type || '';
+
+      // Map based on nodeSubtype first (higher priority)
+      if (['send_email', 'email', 'email_send', 'email_action'].includes(nodeType) || 
+          ['send_email', 'email', 'email_send', 'email_action'].includes(nodeSubtype)) {
+        nodeType = 'send_email';
+      } else if (['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeType) || 
+                 ['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeSubtype)) {
+        nodeType = 'send_zalo_personal';
+      } else if (['send_zalo_group', 'zalo_group'].includes(nodeType) || 
+                 ['send_zalo_group', 'zalo_group'].includes(nodeSubtype)) {
+        nodeType = 'send_zalo_group';
+      } else if (['send_zalo_friend_request', 'zalo_friend'].includes(nodeType) || 
+                 ['send_zalo_friend_request', 'zalo_friend'].includes(nodeSubtype)) {
+        nodeType = 'send_zalo_friend_request';
+      } else if (['wait_time', 'wait', 'delay', 'schedule'].includes(nodeType) || 
+                 ['wait_time', 'wait', 'delay', 'schedule'].includes(nodeSubtype)) {
+        nodeType = 'delay';
+      } else if (['start', 'trigger', 'manual'].includes(nodeType) || 
+                 ['start', 'trigger', 'manual'].includes(nodeSubtype)) {
+        nodeType = 'trigger'; // DB enum uses 'trigger' not 'start'
+      } else if (nodeType === 'end') {
+        nodeType = 'end';
+      } else if (['condition', 'filter', 'branch', 'split'].includes(nodeType) || 
+                 ['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
+        nodeType = 'condition';
+      } else if (['zns', 'zalo_message'].includes(nodeType) || 
+                 ['zns', 'zalo_message'].includes(nodeSubtype)) {
+        nodeType = 'zns';
+      } else if (nodeType === 'sms' || nodeSubtype === 'sms') {
+        nodeType = 'sms';
+      } else if (!nodeType) {
+        nodeType = 'trigger';
+      }
+
+      // Support multiple ID formats: tempId, id, or AI format
+      const nodeId = node.tempId || node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Build config from AI format or standard format
+      let config = node.config || node.settings || {};
+      
+      // Handle AI format where email data is in top-level fields
+      if (node.type === 'email' || node.subtype === 'email') {
+        config = {
+          emailSubject: node.subject || '',
+          emailBody: node.bodyHtml || node.body || '',
+          bodyText: node.bodyText || '',
+          templateName: node.templateName || '',
+          templateMappings: [],
+          enableLinkTracking: true,
+          saveMessageLog: true,
+        };
+      }
+      
+      // Handle AI format where wait data is in { duration: { value, unit } }
+      if (node.type === 'wait' && node.duration) {
+        config = {
+          amount: node.duration.value || 1,
+          unit: node.duration.unit || 'days',
+        };
+      }
+
+      return {
+        id: nodeId,
+        tempId: nodeId,
+        node_type: nodeType,
+        node_subtype: nodeSubtype,
+        node_name: node.name || node.nodeName || node.templateName || 'Node',
+        node_description: node.description || node.nodeDescription || '',
+        position_x: node.position?.x || node.positionX || node.position_x || 0,
+        position_y: node.position?.y || node.positionY || node.position_y || 0,
+        config,
+      };
+    });
   }
 }
 
