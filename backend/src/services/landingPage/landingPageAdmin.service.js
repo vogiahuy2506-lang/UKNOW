@@ -158,10 +158,14 @@ class LandingPageAdminService {
       idUser: current.idUser,
     });
 
-    // Nếu slug thay đổi → xóa subdomain cũ, cấp subdomain mới
+    // Nếu slug thay đổi → xóa subdomain cũ, cấp subdomain mới (lỗi CF không fail request)
     if (slug !== current.slug) {
-      await landingPageDomainService.removeSubdomain(id);
-      await landingPageDomainService.autoProvisionSubdomain(id, slug);
+      await landingPageDomainService.removeSubdomain(id).catch((e) =>
+        console.warn('[LandingPageAdmin.update] removeSubdomain failed:', e.message)
+      );
+      await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
+        console.warn('[LandingPageAdmin.update] autoProvisionSubdomain failed:', e.message)
+      );
     }
 
     return updated;
@@ -184,8 +188,10 @@ class LandingPageAdminService {
       err.statusCode = 403;
       throw err;
     }
-    // Xóa subdomain Cloudflare trước khi xóa bản ghi (cascade FK xóa domain record)
-    await landingPageDomainService.removeSubdomain(id);
+    // Xóa subdomain Cloudflare trước khi xóa bản ghi (lỗi CF không fail request)
+    await landingPageDomainService.removeSubdomain(id).catch((e) =>
+      console.warn('[LandingPageAdmin.remove] removeSubdomain failed:', e.message)
+    );
 
     const ok = await landingPageRepository.deleteById(id);
     if (!ok) {
