@@ -1,6 +1,21 @@
 import db from '../config/database.js';
 import landingPageRepository from './landingPage.repository.js';
 
+const CF_COLS = `
+         d.cf_managed   AS "cfManaged",
+         d.cf_zone_id   AS "cfZoneId",
+         d.cf_record_id AS "cfRecordId"`;
+
+const BASE_COLS = `
+         d.id,
+         d.landing_page_id AS "landingPageId",
+         d.hostname,
+         d.verification_token AS "verificationToken",
+         d.status,
+         d.created_at AS "createdAt",
+         d.updated_at AS "updatedAt",
+         d.verified_at AS "verifiedAt",${CF_COLS}`;
+
 /**
  * Bảng `landing_page_domains` — hostname `www.*` gắn 1–1 với `landing_pages`.
  */
@@ -22,6 +37,9 @@ class LandingPageDomainRepository {
          d.created_at AS "createdAt",
          d.updated_at AS "updatedAt",
          d.verified_at AS "verifiedAt",
+         d.cf_managed   AS "cfManaged",
+         d.cf_zone_id   AS "cfZoneId",
+         d.cf_record_id AS "cfRecordId",
          lp.slug AS "landingSlug"
        FROM landing_page_domains d
        INNER JOIN landing_pages lp ON lp.id = d.landing_page_id
@@ -55,17 +73,9 @@ class LandingPageDomainRepository {
    */
   async findByLandingPageId(landingPageId) {
     const result = await db.query(
-      `SELECT
-         id,
-         landing_page_id AS "landingPageId",
-         hostname,
-         verification_token AS "verificationToken",
-         status,
-         created_at AS "createdAt",
-         updated_at AS "updatedAt",
-         verified_at AS "verifiedAt"
-       FROM landing_page_domains
-       WHERE landing_page_id = $1
+      `SELECT${BASE_COLS}
+       FROM landing_page_domains d
+       WHERE d.landing_page_id = $1
        LIMIT 1`,
       [landingPageId]
     );
@@ -99,15 +109,7 @@ class LandingPageDomainRepository {
   async findByLandingPageIdInScope(landingPageId, scope = {}) {
     const { clause, params } = landingPageRepository.buildLandingScopeCondition(scope);
     const result = await db.query(
-      `SELECT
-         d.id,
-         d.landing_page_id AS "landingPageId",
-         d.hostname,
-         d.verification_token AS "verificationToken",
-         d.status,
-         d.created_at AS "createdAt",
-         d.updated_at AS "updatedAt",
-         d.verified_at AS "verifiedAt"
+      `SELECT${BASE_COLS}
        FROM landing_page_domains d
        INNER JOIN landing_pages lp ON lp.id = d.landing_page_id
        WHERE d.landing_page_id = $${params.length + 1}
@@ -128,27 +130,48 @@ class LandingPageDomainRepository {
       hostname,
       verificationToken,
       status = 'pending_verification',
+      cfManaged = false,
+      cfZoneId = null,
+      cfRecordId = null,
     } = row;
     const result = await db.query(
       `INSERT INTO landing_page_domains
-         (landing_page_id, hostname, verification_token, status, created_at, updated_at, verified_at)
-       VALUES ($1, LOWER(TRIM($2)), $3, $4, NOW(), NOW(), NULL)
+         (landing_page_id, hostname, verification_token, status, cf_managed, cf_zone_id, cf_record_id, created_at, updated_at, verified_at)
+       VALUES ($1, LOWER(TRIM($2)), $3, $4, $5, $6, $7, NOW(), NOW(), $8)
        ON CONFLICT (landing_page_id) DO UPDATE SET
-         hostname = LOWER(TRIM(EXCLUDED.hostname)),
+         hostname          = LOWER(TRIM(EXCLUDED.hostname)),
          verification_token = EXCLUDED.verification_token,
-         status = EXCLUDED.status,
-         updated_at = NOW(),
-         verified_at = CASE WHEN EXCLUDED.status = 'active' THEN COALESCE(landing_page_domains.verified_at, NOW()) ELSE NULL END
+         status            = EXCLUDED.status,
+         cf_managed        = EXCLUDED.cf_managed,
+         cf_zone_id        = EXCLUDED.cf_zone_id,
+         cf_record_id      = EXCLUDED.cf_record_id,
+         updated_at        = NOW(),
+         verified_at       = CASE
+           WHEN EXCLUDED.status = 'active' THEN COALESCE(landing_page_domains.verified_at, NOW())
+           ELSE NULL
+         END
        RETURNING
          id,
          landing_page_id AS "landingPageId",
          hostname,
          verification_token AS "verificationToken",
          status,
+         cf_managed   AS "cfManaged",
+         cf_zone_id   AS "cfZoneId",
+         cf_record_id AS "cfRecordId",
          created_at AS "createdAt",
          updated_at AS "updatedAt",
          verified_at AS "verifiedAt"`,
-      [landingPageId, hostname, verificationToken, status]
+      [
+        landingPageId,
+        hostname,
+        verificationToken,
+        status,
+        cfManaged,
+        cfZoneId,
+        cfRecordId,
+        status === 'active' ? new Date() : null,
+      ]
     );
     return result.rows[0];
   }
@@ -180,6 +203,9 @@ class LandingPageDomainRepository {
          hostname,
          verification_token AS "verificationToken",
          status,
+         cf_managed   AS "cfManaged",
+         cf_zone_id   AS "cfZoneId",
+         cf_record_id AS "cfRecordId",
          created_at AS "createdAt",
          updated_at AS "updatedAt",
          verified_at AS "verifiedAt"`,

@@ -1,4 +1,22 @@
 /**
+ * Map backend/AI node subtypes to the canonical frontend nodeType used in nodeConfigs registry.
+ * AI may return 'interested_customers', backend stores it, but frontend expects 'read_interested_customers'.
+ */
+const SUBTYPE_ALIAS_MAP = {
+  interested_customers: 'read_interested_customers',
+  google_sheet: 'read_sheet',
+  manual: 'manual_trigger',
+  trigger: 'manual_trigger',
+  start: 'manual_trigger',
+};
+
+const normalizeSubtype = (subtype) => SUBTYPE_ALIAS_MAP[subtype] || subtype;
+
+const isTriggerSubtype = (subtype) =>
+  subtype === 'manual_trigger' || subtype === 'manual' || subtype === 'trigger' || subtype === 'start';
+
+
+/**
  * Build ReactFlow nodes/edges from campaign payload.
  *
  * Supports both:
@@ -22,18 +40,17 @@ export const buildFlowFromCampaign = (campaignData) => {
     const reactFlowNodes = aiNodes.map((node, index) => {
       let nodeType = 'task';
       // Handle different field names: nodeSubtype, type, nodeType
-      const nodeSubtype = node.nodeSubtype || node.type || node.nodeType || '';
+      const rawSubtype = node.nodeSubtype || node.type || node.nodeType || '';
+      const nodeSubtype = normalizeSubtype(rawSubtype);
       // Handle different field names: nodeName, name, label
       const nodeName = node.nodeName || node.name || node.label || 'Node';
       // Handle different field names: nodeDescription, description
       const nodeDescription = node.nodeDescription || node.description || '';
 
-      if (nodeSubtype === 'start' || nodeSubtype === 'manual' || nodeSubtype === 'read_landing_leads' || nodeSubtype === 'trigger') {
+      if (isTriggerSubtype(rawSubtype)) {
         nodeType = 'start';
-      } else if (nodeSubtype === 'end') {
+      } else if (rawSubtype === 'end') {
         nodeType = 'end';
-      } else if (nodeSubtype === 'send_email' || nodeSubtype === 'email_send') {
-        nodeType = 'task';
       }
 
       const nodeId = node.tempId || node.id || `node_${index + 1}`;
@@ -172,12 +189,13 @@ export const buildFlowFromCampaign = (campaignData) => {
   const fallbackNodes = legacyNodes.map((node, index) => {
     // Handle both tempId and id
     const nodeId = node.tempId || node.id || `node_${index + 1}`;
-    const nodeSubtype = node.nodeSubtype || node.nodeType || '';
+    const rawSubtype = node.nodeSubtype || node.nodeType || '';
+    const nodeSubtype = normalizeSubtype(rawSubtype);
     let nodeType = 'task';
 
-    if (nodeSubtype === 'start' || nodeSubtype === 'manual' || nodeSubtype === 'read_landing_leads') {
+    if (isTriggerSubtype(rawSubtype)) {
       nodeType = 'start';
-    } else if (nodeSubtype === 'end') {
+    } else if (rawSubtype === 'end') {
       nodeType = 'end';
     }
 
@@ -190,7 +208,7 @@ export const buildFlowFromCampaign = (campaignData) => {
       },
       data: {
         label: node.nodeName || node.label || '',
-        nodeType: node.nodeSubtype || node.nodeType || 'task',
+        nodeType: nodeSubtype,
         config: node.config || {},
       },
     };

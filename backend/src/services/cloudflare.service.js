@@ -77,23 +77,34 @@ class CloudflareService {
   }
 
   /**
-   * Get zone info by domain name
-   * @param {string} domain - e.g., "example.com"
+   * Get zone info by domain name.
+   * If CF_ZONE_NAME env is set, looks up that zone directly (avoids extractBaseDomain guessing).
+   * @param {string} domain - e.g., "slug.lp.uknow.vn" or "www.example.com"
    */
   async getZone(domain) {
-    const baseDomain = this.extractBaseDomain(domain);
+    const zoneName = process.env.CF_ZONE_NAME
+      ? String(process.env.CF_ZONE_NAME).trim().toLowerCase()
+      : this.extractBaseDomain(domain);
 
+    return this.getZoneByName(zoneName);
+  }
+
+  /**
+   * Look up a Cloudflare zone by exact name.
+   * @param {string} zoneName - e.g., "lp.uknow.vn" or "uknow.vn"
+   */
+  async getZoneByName(zoneName) {
     try {
       const response = await axios.get(`${this.baseUrl}/zones`, {
         headers: this.getHeaders(),
-        params: { name: baseDomain }
+        params: { name: zoneName },
       });
 
       const zone = response.data.result?.[0];
       if (!zone) {
         return {
           success: false,
-          message: `Zone not found for ${baseDomain}. Domain must be added to Cloudflare first.`
+          message: `Zone not found for ${zoneName}. Domain must be added to Cloudflare first.`,
         };
       }
 
@@ -101,7 +112,7 @@ class CloudflareService {
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.errors?.[0]?.message || 'Failed to get zone'
+        message: error.response?.data?.errors?.[0]?.message || 'Failed to get zone',
       };
     }
   }
@@ -257,9 +268,11 @@ class CloudflareService {
   }
 
   /**
-   * Setup CNAME for landing page (proxied through Cloudflare)
-   * @param {string} domain - Full domain, e.g., "landing.example.com"
+   * Setup CNAME for landing page (proxied through Cloudflare).
+   * Returns zoneId and recordId so they can be stored for future cleanup.
+   * @param {string} domain - Full domain, e.g., "www.landing.example.com"
    * @param {string} target - CNAME target, e.g., "lp.uknow.vn"
+   * @returns {Promise<{success:boolean, zoneId?:string, recordId?:string, message?:string}>}
    */
   async setupLandingPageDNS(domain, target) {
     const zoneResult = await this.getZone(domain);
@@ -270,26 +283,29 @@ class CloudflareService {
     const zoneId = zoneResult.zone.id;
     const name = this.extractSubdomain(domain, zoneResult.zone.name);
 
-    // Add CNAME record (proxied = Cloudflare handles SSL)
     const cnameResult = await this.addDnsRecord(zoneId, {
       type: 'CNAME',
       name,
       content: target,
       proxied: true,
-      ttl: 3600
+      ttl: 3600,
     });
 
     if (!cnameResult.success && !cnameResult.duplicate) {
       return cnameResult;
     }
 
+    let recordId = cnameResult.recordId || null;
+    if (cnameResult.duplicate || !recordId) {
+      const existing = await this.getDnsRecord(zoneId, name);
+      recordId = existing?.record?.id || null;
+    }
+
     return {
       success: true,
-      message: cnameResult.duplicate
-        ? 'CNAME record already exists'
-        : 'CNAME record created successfully',
-      proxied: true,
-      ssl: 'automatic'
+      zoneId,
+      recordId,
+      message: cnameResult.duplicate ? 'CNAME record already exists' : 'CNAME record created successfully',
     };
   }
 

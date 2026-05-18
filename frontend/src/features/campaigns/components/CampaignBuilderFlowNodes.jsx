@@ -1,7 +1,7 @@
 import { useState } from 'react';
 /* eslint-disable react-refresh/only-export-components -- nodeConfigs registry exported alongside node UI */
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
-import { HiOutlineChat, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineAdjustments, HiOutlineChat, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
 
 const NODE_CARD_CONTAINER_CLASS =
   'relative w-[148px] sm:w-[160px] md:w-[172px] bg-white rounded-xl shadow-sm border-2 transition-all duration-200 group';
@@ -55,7 +55,32 @@ export const nodeConfigs = {
       description: 'Gửi tin nhắn đến danh sách nhóm Zalo',
     },
   ],
-  logic: [],
+  logic: [
+    {
+      type: 'condition',
+      name: 'Điều kiện',
+      icon: HiOutlineAdjustments,
+      bgColor: '#EDE7F6',
+      iconColor: '#6A1B9A',
+      description: 'Rẽ nhánh theo điều kiện',
+    },
+    {
+      type: 'tag_contact',
+      name: 'Gắn tag',
+      icon: HiOutlineTag,
+      bgColor: '#E8F5E9',
+      iconColor: '#2E7D32',
+      description: 'Gắn / xóa tag cho contact',
+    },
+    {
+      type: 'update_attribute',
+      name: 'Cập nhật thuộc tính',
+      icon: HiOutlinePencil,
+      bgColor: '#FFF8E1',
+      iconColor: '#F9A825',
+      description: 'Cập nhật field của contact',
+    },
+  ],
   data: [
     {
       type: 'read_sheet',
