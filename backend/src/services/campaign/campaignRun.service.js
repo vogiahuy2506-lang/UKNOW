@@ -4198,6 +4198,37 @@ class CampaignRunService {
             || config.recipientField
             || (recipientType === 'uid' ? 'uid' : 'phone');
           const resolveZaloRecipients = () => {
+            // For node source: scan multiple field names per row so customers with
+            // zalo_phone (but no phone) or zalo_id (uid mode) are not silently skipped.
+            if (recipientSource === 'node' && String(sourceNodeId || '').trim()) {
+              const sourceItems = pickNodeItems(sourceNodeId);
+              const fallbackFields = recipientType === 'uid'
+                ? [sourceField, 'zalo_id', 'zaloId', 'uid'].filter((v, i, arr) => v && arr.indexOf(v) === i)
+                : [sourceField, 'phone', 'zalo_phone', 'zaloPhone'].filter((v, i, arr) => v && arr.indexOf(v) === i);
+
+              const dedupMap = new Map();
+              sourceItems.forEach((item) => {
+                for (const field of fallbackFields) {
+                  const raw = item?.[field];
+                  const values = Array.isArray(raw)
+                    ? raw.flatMap((inner) => campaignZaloSenderService.parseListText(inner))
+                    : campaignZaloSenderService.parseListText(raw);
+                  if (values.length === 0) continue;
+                  // First field with data wins for this row; add all its values then stop.
+                  values.forEach((value) => {
+                    const key = String(value || '').trim();
+                    if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
+                  });
+                  break;
+                }
+              });
+
+              const dedupedRecipients = Array.from(dedupMap.keys());
+              const recipientEntryMap = new Map(dedupMap.entries());
+              return { dedupedRecipients, recipientEntryMap };
+            }
+
+            // Manual source: original behaviour unchanged.
             const recipientEntries = collectEntriesFromSource({
               sourceMode: recipientSource,
               manualValue: manualPhones,

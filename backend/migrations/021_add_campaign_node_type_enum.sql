@@ -1,42 +1,38 @@
 -- Migration: Add campaign node type enum values
--- This migration adds support for AI-generated node types in campaign builder
+-- Safe version: drop default trước khi đổi type, dùng ::text intermediate cast,
+-- bọc mọi thứ trong exception handler để idempotent.
 
--- Drop existing type if exists and recreate with all values
 DO $$ BEGIN
-    DROP TYPE IF EXISTS campaign_node_type;
+    CREATE TYPE campaign_node_type AS ENUM (
+        'trigger', 'action', 'logic', 'condition',
+        'send_email', 'send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request',
+        'delay', 'wait', 'end', 'zns', 'sms', 'data', 'filter', 'branch', 'split'
+    );
 EXCEPTION
-    WHEN undefined_object THEN null;
+    WHEN duplicate_object THEN null;
 END $$;
 
-CREATE TYPE campaign_node_type AS ENUM (
-    'trigger',
-    'action',
-    'logic',
-    'condition',
-    'send_email',
-    'send_zalo_personal',
-    'send_zalo_group',
-    'send_zalo_friend_request',
-    'delay',
-    'wait',
-    'end',
-    'zns',
-    'sms',
-    'data',
-    'filter',
-    'branch',
-    'split'
-);
-
--- Add NOT NULL constraint and default value to campaign_nodes table
-ALTER TABLE campaign_nodes 
-    ALTER COLUMN node_type TYPE campaign_node_type USING node_type::campaign_node_type,
-    ALTER COLUMN node_type SET DEFAULT 'action';
-
--- Also update campaign_node_runs table if it exists
+-- Phải drop default trước khi đổi type (PostgreSQL không tự cast default)
 DO $$ BEGIN
-    ALTER TABLE campaign_node_runs 
-        ALTER COLUMN node_type TYPE campaign_node_type USING node_type::campaign_node_type;
-EXCEPTION
-    WHEN undefined_column THEN null;
+    ALTER TABLE campaign_nodes ALTER COLUMN node_type DROP DEFAULT;
+EXCEPTION WHEN OTHERS THEN null; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE campaign_nodes
+        ALTER COLUMN node_type TYPE campaign_node_type USING node_type::text::campaign_node_type;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'campaign_nodes.node_type type change skipped: %', SQLERRM;
 END $$;
+
+DO $$ BEGIN
+    ALTER TABLE campaign_nodes ALTER COLUMN node_type SET DEFAULT 'action';
+EXCEPTION WHEN OTHERS THEN null; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE campaign_node_runs ALTER COLUMN node_type DROP DEFAULT;
+EXCEPTION WHEN OTHERS THEN null; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE campaign_node_runs
+        ALTER COLUMN node_type TYPE campaign_node_type USING node_type::text::campaign_node_type;
+EXCEPTION WHEN OTHERS THEN null; END $$;

@@ -1,34 +1,29 @@
-import customDomainService from '../services/customDomain.service.js';
+import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
+import landingPagePublicService from '../services/landingPage/landingPagePublic.service.js';
 
 /**
- * Middleware to resolve custom domain to landing page.
- * Extracts the Host header and checks if it matches a custom domain.
- * If so, attaches the landing page data to the request.
+ * Middleware: resolve custom hostname → landing page slug → attach to req.
+ * Dùng bảng landing_page_domains (CF-managed auto-provisioned subdomains).
  */
 export const domainResolver = async (req, res, next) => {
   try {
-    // Get host from headers (remove port if present)
     const host = (req.headers.host || '').split(':')[0].toLowerCase();
+    if (!host) return next();
 
-    if (!host) {
-      return next();
-    }
-
-    // Try to resolve domain to landing page
-    const resolved = await customDomainService.resolveDomainToLandingPage(host);
-
-    if (resolved) {
-      // Attach resolved data to request for downstream handlers
-      req.customDomain = resolved.domain;
-      req.landingPage = resolved.landingPage;
-      req.isCustomDomain = true;
-      console.log(`[DomainResolver] Resolved ${host} -> Landing Page ID ${resolved.landingPage.id}`);
+    const slug = await landingPageDomainService.getPublishedSlugForHost(host);
+    if (slug) {
+      const payload = await landingPagePublicService.getPublishedPayload(slug);
+      if (payload) {
+        req.isCustomDomain = true;
+        req.customDomainSlug = slug;
+        req.landingPage = payload;
+        console.log(`[DomainResolver] ${host} → slug="${slug}" (id=${payload.id})`);
+      }
     }
 
     next();
   } catch (error) {
     console.error('[DomainResolver] Error:', error.message);
-    // Don't block the request on resolution errors
     next();
   }
 };

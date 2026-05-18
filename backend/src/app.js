@@ -44,6 +44,8 @@ import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
+import { domainResolver } from './middleware/domainResolver.js';
+import landingPagePublicController from './controllers/landingPagePublic.controller.js';
 
 /**
  * Khởi tạo Express app (không listen).
@@ -107,6 +109,9 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
+  // Resolve custom hostname (*.lp.founderai.biz) → landing page slug
+  app.use(domainResolver);
+
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
@@ -148,6 +153,14 @@ export function createApp() {
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Catch-all: serve landing page HTML khi request đến từ custom domain (*.lp.founderai.biz)
+  app.use((req, res, next) => {
+    if (req.isCustomDomain && req.landingPage) {
+      return landingPagePublicController.getByDomain(req, res);
+    }
+    next();
   });
 
   app.use((err, req, res, _next) => {

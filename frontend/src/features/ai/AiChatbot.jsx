@@ -1245,7 +1245,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   };
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}>
+    <div className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col overflow-hidden ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}>
       {/* Header */}
       <div className="flex-shrink-0 h-16 border-b border-slate-100 flex items-center justify-between px-5">
         <div className="flex items-center gap-3">

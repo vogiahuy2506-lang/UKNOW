@@ -1,4 +1,5 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
+import landingPageDomainService from './landingPageDomain.service.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import {
   prepareLandingHtmlOnSave,
@@ -95,13 +96,17 @@ class LandingPageAdminService {
       frontendOrigin: resolveFrontendOriginFromEnv(),
       apiBase: resolvePublicApiBaseFromEnv(),
     });
-    return landingPageRepository.insert({
+    const lp = await landingPageRepository.insert({
       slug,
       title: body?.title,
       htmlContent,
       isPublished: Boolean(body?.isPublished),
       idUser: userId,
     });
+
+    // Tự động cấp subdomain slug.lp.uknow.vn qua Cloudflare (lỗi CF không làm fail)
+    const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
+    return { ...lp, customDomain: domainResult.hostname, cfManaged: domainResult.cfManaged };
   }
 
   /**
@@ -152,6 +157,17 @@ class LandingPageAdminService {
       isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
       idUser: current.idUser,
     });
+
+    // Nếu slug thay đổi → xóa subdomain cũ, cấp subdomain mới (lỗi CF không fail request)
+    if (slug !== current.slug) {
+      await landingPageDomainService.removeSubdomain(id).catch((e) =>
+        console.warn('[LandingPageAdmin.update] removeSubdomain failed:', e.message)
+      );
+      await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
+        console.warn('[LandingPageAdmin.update] autoProvisionSubdomain failed:', e.message)
+      );
+    }
+
     return updated;
   }
 
@@ -172,6 +188,11 @@ class LandingPageAdminService {
       err.statusCode = 403;
       throw err;
     }
+    // Xóa subdomain Cloudflare trước khi xóa bản ghi (lỗi CF không fail request)
+    await landingPageDomainService.removeSubdomain(id).catch((e) =>
+      console.warn('[LandingPageAdmin.remove] removeSubdomain failed:', e.message)
+    );
+
     const ok = await landingPageRepository.deleteById(id);
     if (!ok) {
       const err = new Error('Không tìm thấy landing page');

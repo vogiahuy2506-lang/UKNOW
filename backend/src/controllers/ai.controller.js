@@ -2,6 +2,7 @@ import aiCampaignService from '../services/ai/aiCampaign.service.js';
 import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import campaignController from './campaign.controller.js';
+import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 
 class AiController {
   /**
@@ -510,10 +511,28 @@ class AiController {
         nodeType = 'trigger'; // DB enum uses 'trigger' not 'start'
       } else if (nodeType === 'end') {
         nodeType = 'end';
-      } else if (['condition', 'filter', 'branch', 'split'].includes(nodeType) || 
+      } else if (['condition', 'filter', 'branch', 'split'].includes(nodeType) ||
                  ['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
         nodeType = 'condition';
-      } else if (['zns', 'zalo_message'].includes(nodeType) || 
+      } else if (['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet',
+                  'read_landing_leads', 'read_courses_db'].includes(nodeSubtype)) {
+        // Source data node: giữ nguyên subtype làm node_type để campaign runner xử lý đúng
+        nodeType = nodeSubtype;
+      } else if (nodeType === 'data') {
+        // DATA node: dùng nodeSubtype làm node_type thực sự
+        if (['interested_customers', 'read_interested_customers'].includes(nodeSubtype)) {
+          nodeType = 'interested_customers';
+        } else if (['tag_contact', 'tag'].includes(nodeSubtype)) {
+          nodeType = 'tag_contact';
+        } else if (['update_attribute', 'update_field'].includes(nodeSubtype)) {
+          nodeType = 'update_attribute';
+        } else if (['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
+          nodeType = 'condition';
+        } else if (['wait', 'wait_time', 'delay'].includes(nodeSubtype)) {
+          nodeType = 'delay';
+        }
+        // nodeSubtype không xác định → giữ nguyên 'data'
+      } else if (['zns', 'zalo_message'].includes(nodeType) ||
                  ['zns', 'zalo_message'].includes(nodeSubtype)) {
         nodeType = 'zns';
       } else if (nodeType === 'sms' || nodeSubtype === 'sms') {
@@ -523,7 +542,7 @@ class AiController {
       }
 
       // Support multiple ID formats: tempId, id, or AI format
-      const nodeId = node.tempId || node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
+      const nodeId = node.tempId || node.id || `node_${Math.random().toString(36).substring(2, 11)}`;
       
       // Build config from AI format or standard format
       let config = node.config || node.settings || {};

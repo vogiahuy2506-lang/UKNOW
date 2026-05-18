@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import dns from 'dns/promises';
 import landingPageDomainRepository from '../../repositories/landingPageDomain.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
+import cloudflareService from '../cloudflare.service.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { resolveFrontendOriginFromEnv } from '../../utils/landingHtmlInjection.util.js';
 
@@ -80,8 +81,69 @@ function expectedTxtContent(token) {
   return `uknow-verify=${token}`;
 }
 
+function cnameTarget() {
+  return String(process.env.LP_CNAME_TARGET || 'lp.uknow.vn').trim();
+}
+
+function subdomainBase() {
+  return String(process.env.LP_SUBDOMAIN_BASE || process.env.LP_CNAME_TARGET || 'lp.uknow.vn').trim();
+}
+
+function buildAutoHostname(slug) {
+  return `${slug}.${subdomainBase()}`;
+}
+
 /**
- * Custom domain cho landing (TXT verify, quota = max_landing_pages).
+ * Build response object for getForLanding.
+ * CF-managed domains skip TXT verification — already active on creation.
+ */
+function buildDomainResponse(row) {
+  if (!row) {
+    return { configured: false, instructions: null, record: null };
+  }
+
+  const token = row.verificationToken;
+  const challenge = txtChallengeName(row.hostname);
+  const isActive = row.status === 'active';
+  const isCfManaged = Boolean(row.cfManaged);
+
+  let instructions;
+  let record = null;
+
+  if (isActive) {
+    instructions = isCfManaged
+      ? `Đã kích hoạt tự động qua Cloudflare. CNAME đã được tạo trỏ về ${cnameTarget()}. SSL được Cloudflare tự cấp trong vài phút.`
+      : `Đã kích hoạt. Trỏ DNS (CNAME) www về ${cnameTarget()} theo hướng dẫn vận hành; apex nên redirect 301 → www.`;
+  } else {
+    instructions = `Thêm bản ghi TXT tại DNS của bạn:\n- Tên (host): ${challenge}\n- Giá trị: ${expectedTxtContent(token)}\nSau đó bấm «Xác minh DNS».`;
+    record = {
+      type: 'TXT',
+      name: challenge,
+      value: expectedTxtContent(token),
+    };
+  }
+
+  return {
+    configured: true,
+    hostname: row.hostname,
+    status: row.status,
+    cfManaged: isCfManaged,
+    verifiedAt: row.verifiedAt,
+    instructions,
+    record,
+    cnameTarget: cnameTarget(),
+  };
+}
+
+/**
+ * Custom domain cho landing — hỗ trợ 2 chế độ:
+ *
+ * Mode 1 (Cloudflare tự động): nếu CLOUDFLARE_API_TOKEN được cấu hình VÀ
+ * base domain của hostname có trong tài khoản CF của platform →
+ * backend tự tạo CNAME record, domain active ngay, không cần user verify DNS.
+ *
+ * Mode 2 (Manual TXT verify): nếu CF không cấu hình hoặc zone không tìm thấy →
+ * user phải thêm TXT record rồi bấm «Xác minh DNS».
  */
 class LandingPageDomainService {
   /**
@@ -107,36 +169,16 @@ class LandingPageDomainService {
       throw err;
     }
     const row = await landingPageDomainRepository.findByLandingPageId(landingPageId);
-    if (!row) {
-      return {
-        configured: false,
-        instructions: null,
-        record: null,
-      };
-    }
-    const token = row.verificationToken;
-    const challenge = txtChallengeName(row.hostname);
-    return {
-      configured: true,
-      hostname: row.hostname,
-      status: row.status,
-      verifiedAt: row.verifiedAt,
-      instructions:
-        row.status === 'active'
-          ? `Đã kích hoạt. Trỏ DNS (CNAME) www về host frontend của nền tảng theo hướng dẫn vận hành; apex nên redirect 301 → www.`
-          : `Thêm bản ghi TXT tại DNS của bạn:\n- Tên (host): ${challenge}\n- Giá trị: ${expectedTxtContent(token)}\nSau đó bấm «Xác minh DNS».`,
-      record:
-        row.status === 'pending_verification'
-          ? {
-              type: 'TXT',
-              name: challenge,
-              value: expectedTxtContent(token),
-            }
-          : null,
-    };
+    return buildDomainResponse(row);
   }
 
   /**
+   * Gắn hostname cho landing page.
+   *
+   * Nếu Cloudflare được cấu hình và base domain nằm trong tài khoản CF →
+   * tự động tạo CNAME và kích hoạt ngay (cfManaged = true).
+   * Ngược lại → pending_verification với hướng dẫn TXT record.
+   *
    * @param {number} landingPageId
    * @param {string} hostname
    * @param {object} authUser
@@ -185,12 +227,46 @@ class LandingPageDomainService {
     }
 
     const token = crypto.randomBytes(18).toString('hex');
+
+    // --- Mode 1: Cloudflare tự động ---
+    if (cloudflareService.isConfigured()) {
+      const cfResult = await cloudflareService.setupLandingPageDNS(h, cnameTarget());
+      if (cfResult.success) {
+        console.log(`[LandingPageDomainService] CF auto-setup OK for ${h} → zone=${cfResult.zoneId} record=${cfResult.recordId}`);
+        try {
+          await landingPageDomainRepository.upsertForLanding({
+            landingPageId,
+            hostname: h,
+            verificationToken: token,
+            status: 'active',
+            cfManaged: true,
+            cfZoneId: cfResult.zoneId,
+            cfRecordId: cfResult.recordId,
+          });
+          return this.getForLanding(landingPageId, authUser);
+        } catch (e) {
+          if (e?.code === '23505') {
+            const err = new Error('Hostname đã tồn tại trên hệ thống');
+            err.statusCode = 409;
+            throw err;
+          }
+          throw e;
+        }
+      }
+      // Zone không thuộc CF account của platform → fall through sang Mode 2
+      console.log(`[LandingPageDomainService] CF zone not found for ${h}, falling back to manual TXT verify. Reason: ${cfResult.message}`);
+    }
+
+    // --- Mode 2: TXT verification thủ công ---
     try {
       await landingPageDomainRepository.upsertForLanding({
         landingPageId,
         hostname: h,
         verificationToken: token,
         status: 'pending_verification',
+        cfManaged: false,
+        cfZoneId: null,
+        cfRecordId: null,
       });
       return this.getForLanding(landingPageId, authUser);
     } catch (e) {
@@ -204,6 +280,9 @@ class LandingPageDomainService {
   }
 
   /**
+   * Xác minh DNS bằng TXT record (chỉ dành cho Mode 2 — manual).
+   * Nếu domain đã được CF quản lý và active → trả về ngay, không cần verify.
+   *
    * @param {number} landingPageId
    * @param {object} authUser
    */
@@ -214,6 +293,16 @@ class LandingPageDomainService {
       err.statusCode = 404;
       throw err;
     }
+
+    // CF-managed domain đã active ngay từ lúc tạo
+    if (row.cfManaged && row.status === 'active') {
+      return buildDomainResponse(row);
+    }
+
+    if (row.status === 'active') {
+      return buildDomainResponse(row);
+    }
+
     const name = txtChallengeName(row.hostname);
     const want = expectedTxtContent(row.verificationToken);
     let records = [];
@@ -238,6 +327,9 @@ class LandingPageDomainService {
   }
 
   /**
+   * Xóa custom domain (BYOD).
+   * Nếu domain được CF quản lý → tự động xóa CNAME record trên Cloudflare.
+   *
    * @param {number} landingPageId
    * @param {object} authUser
    */
@@ -248,8 +340,82 @@ class LandingPageDomainService {
       err.statusCode = 404;
       throw err;
     }
+
+    if (row.cfManaged && row.cfZoneId && row.cfRecordId) {
+      const cfResult = await cloudflareService.deleteDnsRecord(row.cfZoneId, row.cfRecordId);
+      if (cfResult.success) {
+        console.log(`[LandingPageDomainService] CF DNS record deleted for ${row.hostname}`);
+      } else {
+        console.warn(`[LandingPageDomainService] CF DNS cleanup failed for ${row.hostname}: ${cfResult.message}`);
+      }
+    }
+
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
     return { ok: true };
+  }
+
+  /**
+   * Tự động cấp subdomain `slug.lp.uknow.vn` khi tạo landing page.
+   * Gọi sau khi landing page đã được insert vào DB.
+   * Lỗi CF không làm fail toàn bộ — chỉ log warning.
+   *
+   * @param {number} landingPageId
+   * @param {string} slug
+   * @returns {Promise<{hostname:string, cfManaged:boolean}>}
+   */
+  async autoProvisionSubdomain(landingPageId, slug) {
+    const hostname = buildAutoHostname(slug);
+
+    if (!cloudflareService.isConfigured()) {
+      console.log(`[LandingPageDomainService] CF not configured, skipping auto-provision for ${hostname}`);
+      return { hostname, cfManaged: false };
+    }
+
+    const cfResult = await cloudflareService.setupLandingPageDNS(hostname, cnameTarget());
+    if (!cfResult.success) {
+      console.warn(`[LandingPageDomainService] CF auto-provision failed for ${hostname}: ${cfResult.message}`);
+      return { hostname, cfManaged: false };
+    }
+
+    const token = crypto.randomBytes(18).toString('hex');
+    try {
+      await landingPageDomainRepository.upsertForLanding({
+        landingPageId,
+        hostname,
+        verificationToken: token,
+        status: 'active',
+        cfManaged: true,
+        cfZoneId: cfResult.zoneId,
+        cfRecordId: cfResult.recordId,
+      });
+      console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
+      return { hostname, cfManaged: true };
+    } catch (e) {
+      console.warn(`[LandingPageDomainService] DB upsert failed for ${hostname}: ${e.message}`);
+      return { hostname, cfManaged: false };
+    }
+  }
+
+  /**
+   * Xóa subdomain tự động (gọi khi landing page bị xóa hoặc đổi slug).
+   * Lỗi CF không throw — chỉ log warning.
+   *
+   * @param {number} landingPageId
+   */
+  async removeSubdomain(landingPageId) {
+    const row = await landingPageDomainRepository.findByLandingPageId(landingPageId);
+    if (!row) return;
+
+    if (row.cfManaged && row.cfZoneId && row.cfRecordId) {
+      const cfResult = await cloudflareService.deleteDnsRecord(row.cfZoneId, row.cfRecordId);
+      if (!cfResult.success) {
+        console.warn(`[LandingPageDomainService] CF cleanup failed for ${row.hostname}: ${cfResult.message}`);
+      } else {
+        console.log(`[LandingPageDomainService] CF record removed for ${row.hostname}`);
+      }
+    }
+
+    await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
   }
 }
 
