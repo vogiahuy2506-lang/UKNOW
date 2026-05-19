@@ -2,6 +2,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
+import cloudinary from '../config/cloudinary.js';
 
 // Resolve temp_uploads directory relative to project root (where the process starts)
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -417,6 +418,25 @@ class UploadController {
         success: false,
         message: 'Không thể tạo signed URL'
       });
+    }
+  }
+
+  async uploadLogo(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có file ảnh' });
+      }
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'logos', resource_type: 'image', allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'] },
+          (err, data) => (err ? reject(err) : resolve(data))
+        );
+        stream.end(req.file.buffer);
+      });
+      return res.json({ success: true, data: { url: result.secure_url } });
+    } catch (error) {
+      console.error('Upload logo error:', error);
+      return res.status(500).json({ success: false, message: 'Upload logo thất bại' });
     }
   }
 }

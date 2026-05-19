@@ -7,6 +7,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
+import api from '../../services/api';
 
 const TONE_OPTIONS = [
   { value: 'professional', label: 'Chuyên nghiệp' },
@@ -241,7 +242,7 @@ const BusinessProfilePage = () => {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 400;
+        const MAX = 800;
         const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
         const w = Math.round(img.width * ratio);
         const h = Math.round(img.height * ratio);
@@ -249,10 +250,22 @@ const BusinessProfilePage = () => {
         canvas.width = w;
         canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setLogoPreview(dataUrl);
-        set('logo_url', dataUrl);
-        setIsUploadingLogo(false);
+        setLogoPreview(canvas.toDataURL('image/jpeg', 0.9));
+        canvas.toBlob(async (blob) => {
+          try {
+            const formData = new FormData();
+            formData.append('file', blob, 'logo.jpg');
+            const res = await api.post('/uploads/logo', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            set('logo_url', res.data.data.url);
+          } catch {
+            toast.error('Upload logo thất bại');
+            setLogoPreview('');
+          } finally {
+            setIsUploadingLogo(false);
+          }
+        }, 'image/jpeg', 0.9);
       };
       img.onerror = () => { toast.error('Không đọc được ảnh'); setIsUploadingLogo(false); };
       img.src = e.target.result;
