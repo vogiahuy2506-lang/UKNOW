@@ -368,7 +368,7 @@ const BusinessProfilePage = () => {
                     className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-orange-400 transition-all" />
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400">PNG, JPG, SVG, WebP. Tối đa 2MB. Kéo thả vào ô logo.</p>
+              <p className="text-[10px] text-slate-400">PNG, JPG, SVG, WebP. Kéo thả vào ô logo.</p>
             </div>
 
             {/* Cột phải — Tên công ty + Ngành nghề */}
