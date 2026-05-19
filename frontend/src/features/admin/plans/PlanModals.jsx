@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput } from './PlanInputs';
+import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields } from './PlanInputs';
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
 export const PlanFormModal = ({ plan, onClose, onSaved }) => {
@@ -21,6 +21,12 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    maxLandingPages: plan.maxLandingPages ?? '',
+    maxCampaigns: plan.maxCampaigns ?? '',
+    maxZaloAccounts: plan.maxZaloAccounts ?? '',
+    maxEmailAccounts: plan.maxEmailAccounts ?? '',
+    maxEmailTemplates: plan.maxEmailTemplates ?? '',
+    maxZaloTemplates: plan.maxZaloTemplates ?? '',
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -84,6 +90,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Backend sẽ chặn khi vượt ngưỡng." />
+
+      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">

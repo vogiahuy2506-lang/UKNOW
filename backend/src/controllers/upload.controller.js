@@ -131,7 +131,8 @@ class UploadController {
 
       // Tạo unique filename
       const fileId = uuidv4();
-      const originalName = req.file.originalname || 'upload';
+      const rawName = req.file.originalname || 'upload';
+      const originalName = Buffer.from(rawName, 'latin1').toString('utf8');
       const ext = path.extname(originalName);
       const tempFileName = `${fileId}${ext}`;
       const tempFilePath = path.join(this.tempDir, tempFileName);
@@ -157,6 +158,16 @@ class UploadController {
       });
     }
   }
+
+  /**
+   * Đọc file tạm thời dưới dạng Buffer.
+   */
+  async readTempFileBuffer(tempId, originalName) {
+    const ext = path.extname(originalName || '');
+    const tempFilePath = path.join(this.tempDir, `${tempId}${ext}`);
+    return fs.readFile(tempFilePath);
+  }
+
   // Upload files từ temp sang local uploads (dùng khi save template)
   /**
    * Di chuyển danh sách file tạm từ temp_uploads/ sang thư mục uploads local.

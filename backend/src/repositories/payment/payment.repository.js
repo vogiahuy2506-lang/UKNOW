@@ -46,19 +46,26 @@ export const findUserIdByEmail = async (email) => {
 };
 
 // Cập nhật active_plan_id + subscription_expires_at sau khi thanh toán thành công.
-// Nếu user còn thời hạn cũ chưa hết → gia hạn từ ngày hết hạn cũ (không mất ngày).
+// Đồng thời sync resource limits từ plan → users.max_* để áp dụng ngay.
 export const activateUserPlan = async (userId, planId) => {
     await db.query(
-        `UPDATE users
-         SET active_plan_id = $1,
+        `UPDATE users u
+         SET active_plan_id = p.id,
              subscription_expires_at = CASE
-               WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
-                 THEN subscription_expires_at + INTERVAL '1 month'
+               WHEN u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW()
+                 THEN u.subscription_expires_at + INTERVAL '1 month'
                ELSE NOW() + INTERVAL '1 month'
              END,
              subscription_reminder_count = 0,
+             max_landing_pages   = p.max_landing_pages,
+             max_campaigns       = p.max_campaigns,
+             max_zalo_accounts   = p.max_zalo_accounts,
+             max_email_accounts  = p.max_email_accounts,
+             max_email_templates = p.max_email_templates,
+             max_zalo_templates  = p.max_zalo_templates,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
+         FROM plans p
+         WHERE p.id = $1 AND u.id = $2`,
         [planId, userId]
     );
 };

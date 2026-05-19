@@ -22,4 +22,7 @@ export const emptyForm = () => ({
   maxEmployees: -1, isActive: true, features: [],
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
+  maxLandingPages: '', maxCampaigns: '',
+  maxZaloAccounts: '', maxEmailAccounts: '',
+  maxEmailTemplates: '', maxZaloTemplates: '',
 });

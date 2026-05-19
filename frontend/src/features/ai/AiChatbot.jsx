@@ -13,6 +13,30 @@ import {
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
+
+// Render AI message content — convert basic markdown to JSX
+function AiContent({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div className="text-sm leading-relaxed text-slate-800 space-y-1">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        // Bold: **text**
+        const parts = line.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
+          part.startsWith('**') && part.endsWith('**')
+            ? <strong key={j}>{part.slice(2, -2)}</strong>
+            : part
+        );
+        // Bullet: lines starting with - or *
+        if (/^[-*]\s/.test(line)) {
+          return <div key={i} className="flex gap-1.5"><span className="text-slate-400 shrink-0 mt-0.5">•</span><span>{parts.slice(1)}</span></div>;
+        }
+        return <p key={i}>{parts}</p>;
+      })}
+    </div>
+  );
+}
 import api from '../../services/api';
 import LandingPageCard from './components/LandingPageCard';
 import TemplateSelector from './components/TemplateSelector';
@@ -188,6 +212,69 @@ const AskCampaignTypeCard = ({ data, onSelect }) => {
           </button>
         ))}
       </div>
+    </div>
+  );
+};
+
+// Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
+const AskCampaignDetailsCard = ({ data, onSubmit }) => {
+  const [answers, setAnswers] = useState({});
+  if (!data?.questions?.length) return null;
+
+  const allAnswered = data.questions.every(q => answers[q.id]);
+
+  const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
+
+  const handleSubmit = () => {
+    if (!allAnswered) return;
+    const lines = data.questions.map(q => {
+      const opt = q.options.find(o => o.value === answers[q.id]);
+      return `${q.label} ${opt?.label || answers[q.id]}`;
+    });
+    onSubmit(lines.join('\n'), answers);
+  };
+
+  return (
+    <div className="mt-4 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-orange-600">
+          Thiết kế chiến dịch
+        </span>
+      </div>
+
+      {data.campaignName && (
+        <p className="text-sm font-bold text-slate-800">{data.campaignName}</p>
+      )}
+
+      {data.questions.map(q => (
+        <div key={q.id}>
+          <p className="text-xs font-semibold text-slate-600 mb-2">{q.label}</p>
+          <div className="flex flex-wrap gap-2">
+            {q.options.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => pick(q.id, opt.value)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                  answers[q.id] === opt.value
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <button
+        onClick={handleSubmit}
+        disabled={!allAnswered}
+        className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-orange-500 hover:bg-orange-600 text-white"
+      >
+        {allAnswered ? '✓ Tạo chiến dịch theo lựa chọn này' : 'Chọn hết các mục bên trên để tiếp tục'}
+      </button>
     </div>
   );
 };
@@ -771,6 +858,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [currentScript, setCurrentScript] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
@@ -809,16 +897,16 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ scroll khi messages đổi; isOpen chỉ là guard
   }, [messages]);
 
-  const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files);
+  const uploadFiles = async (files) => {
     if (!files.length) return;
     setIsUploading(true);
     try {
       const results = await Promise.all(files.map(async (file) => {
+        const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
         const fd = new FormData();
         fd.append('file', file);
         const res = await api.post('/uploads/temp', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-        return res.data.data;
+        return { ...res.data.data, previewUrl };
       }));
       setUploadedFiles(prev => [...prev, ...results]);
       toast.success(`Đã tải lên ${results.length} tệp`);
@@ -827,6 +915,31 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleFileUpload = (e) => uploadFiles(Array.from(e.target.files));
+
+  const fileChipMeta = (f) => {
+    const ext = (f.originalName || '').split('.').pop().toLowerCase();
+    if (f.previewUrl || ['jpg','jpeg','png','webp','gif'].includes(ext))
+      return { label: 'Ảnh', icon: null, bg: 'bg-blue-50 border-blue-200', text: 'text-blue-600' };
+    if (['xlsx','xls','csv'].includes(ext))
+      return { label: 'Excel', icon: null, bg: 'bg-green-50 border-green-200', text: 'text-green-600' };
+    if (ext === 'pdf')
+      return { label: 'PDF', icon: null, bg: 'bg-red-50 border-red-200', text: 'text-red-500' };
+    if (['doc','docx'].includes(ext))
+      return { label: 'Word', icon: null, bg: 'bg-sky-50 border-sky-200', text: 'text-sky-600' };
+    return { label: 'File', icon: null, bg: 'bg-slate-100 border-slate-200', text: 'text-slate-500' };
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragEnter = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDragging(false); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) uploadFiles(files);
   };
 
   const handleSend = async () => {
@@ -843,7 +956,15 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       if (response.success) {
         const { type, content, data, missing_fields } = response.data;
 
-        // Xử lý ask_campaign_type - hỏi user chọn kênh
+        // Xử lý ask_campaign_details - hỏi gộp tất cả câu hỏi 1 lần
+        if (type === 'ask_campaign_details' && data) {
+          setPendingCampaignPrompt(inputText);
+          setPendingCampaignData(data);
+          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          return;
+        }
+
+        // Xử lý ask_campaign_type - hỏi user chọn kênh (legacy)
         if (type === 'ask_campaign_type' && data) {
           setPendingCampaignPrompt(inputText);
           setPendingCampaignData(data);
@@ -970,6 +1091,42 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   /**
    * Xử lý khi user chọn campaign type (email/zalo/zalo_group)
    */
+  /**
+   * Xử lý khi user submit câu trả lời từ AskCampaignDetailsCard
+   * summaryText: chuỗi mô tả lựa chọn, answers: { channel, productCount, sendingStyle, audienceCount }
+   */
+  const handleCampaignDetailsSubmit = async (summaryText, answers) => {
+    if (!pendingCampaignPrompt) return;
+    setIsTyping(true);
+    setMessages(prev => [...prev, { role: 'user', content: summaryText }]);
+
+    try {
+      const enrichedHistory = [
+        ...messages,
+        { role: 'user', content: pendingCampaignPrompt },
+        { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
+        { role: 'user', content: summaryText },
+      ];
+      const response = await aiApi.chat(enrichedHistory, uploadedFiles);
+      if (response.success) {
+        const { type, content, data } = response.data;
+        if (type === 'confirm_create' && data) {
+          setCurrentScript({ ...data, ...answers });
+          setMessages(prev => [...prev, { role: 'assistant', content, type, data: { ...data, ...answers } }]);
+        } else {
+          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          if (type === 'campaign_script' && data) setCurrentScript({ ...data, ...answers });
+        }
+        setPendingCampaignPrompt(null);
+        setPendingCampaignData(null);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const handleSelectCampaignType = async (campaignType) => {
     if (!pendingCampaignPrompt || !pendingCampaignData) return;
     
@@ -1245,7 +1402,20 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   };
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col overflow-hidden ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}>
+    <div
+      className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col overflow-hidden ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-orange-50/90 border-2 border-dashed border-orange-400 rounded pointer-events-none">
+          <HiOutlinePaperClip className="w-10 h-10 text-orange-400" />
+          <p className="text-sm font-semibold text-orange-600">Thả file để tải lên</p>
+          <p className="text-xs text-orange-400">PDF, Word, Excel, ảnh đều được</p>
+        </div>
+      )}
       {/* Header */}
       <div className="flex-shrink-0 h-16 border-b border-slate-100 flex items-center justify-between px-5">
         <div className="flex items-center gap-3">
@@ -1265,20 +1435,19 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         </button>
       </div>
 
-      {/* Banner nhắc thiết lập hồ sơ — chỉ hiện cho user_admin */}
-      {!isSuperAdmin && !hasProfile && (
-        <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-          <HiOutlineSparkles className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-orange-800">Chưa có hồ sơ doanh nghiệp</p>
-            <p className="text-xs text-orange-600 mt-0.5">Thiết lập để AI cá nhân hóa nội dung theo đúng thương hiệu của bạn.</p>
-          </div>
+      {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
+      {!isSuperAdmin && (
+        <div className={`flex-shrink-0 mx-4 mt-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 ${hasProfile ? 'bg-slate-50 border border-slate-200' : 'bg-orange-50 border border-orange-200'}`}>
+          <HiOutlineSparkles className={`w-3.5 h-3.5 shrink-0 ${hasProfile ? 'text-slate-400' : 'text-orange-500'}`} />
+          <p className={`flex-1 text-xs ${hasProfile ? 'text-slate-500' : 'text-orange-700 font-medium'}`}>
+            {hasProfile ? 'AI đang dùng hồ sơ doanh nghiệp của bạn' : 'Chưa có hồ sơ — AI chưa biết về doanh nghiệp bạn'}
+          </p>
           <Link
             to="/app/settings/ai-profile"
             onClick={onToggle}
-            className="shrink-0 text-xs font-bold text-orange-600 hover:text-orange-700 underline underline-offset-2 whitespace-nowrap"
+            className={`shrink-0 text-xs font-semibold whitespace-nowrap ${hasProfile ? 'text-slate-500 hover:text-orange-500' : 'text-orange-600 hover:text-orange-700'}`}
           >
-            Thiết lập →
+            {hasProfile ? 'Xem →' : 'Thiết lập →'}
           </Link>
         </div>
       )}
@@ -1330,17 +1499,23 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI</span>
                 </div>
               )}
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-slate-800">{msg.content}</p>
+              <AiContent text={msg.content} />
 
               {/* Files */}
               {msg.files?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {msg.files.map((f, i) => (
-                    <div key={i} className="bg-white rounded-lg px-2 py-1 flex items-center gap-1.5 text-[10px] border border-slate-200">
-                      <HiOutlinePaperClip className="w-3 h-3 text-slate-400" />
-                      <span className="truncate max-w-[100px] font-medium text-slate-600">{f.originalName}</span>
-                    </div>
-                  ))}
+                  {msg.files.map((f, i) => {
+                    const { bg, text } = fileChipMeta(f);
+                    return (
+                      <div key={i} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-2 py-1`}>
+                        {f.previewUrl
+                          ? <img src={f.previewUrl} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
+                          : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
+                        }
+                        <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.originalName}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1350,6 +1525,13 @@ const AiChatbot = ({ isOpen, onToggle }) => {
               )}
 
               {/* Ask campaign type - hỏi user chọn kênh */}
+              {msg.type === 'ask_campaign_details' && msg.data && (
+                <AskCampaignDetailsCard
+                  data={msg.data}
+                  onSubmit={handleCampaignDetailsSubmit}
+                />
+              )}
+
               {msg.type === 'ask_campaign_type' && msg.data && (
                 <AskCampaignTypeCard
                   data={msg.data}
@@ -1448,46 +1630,62 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white">
-        {uploadedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {uploadedFiles.map(f => (
-              <div key={f.tempId} className="flex items-center gap-1.5 bg-slate-50 rounded-xl pl-3 pr-2 py-1.5 text-xs border border-slate-100">
-                <HiOutlinePaperClip className="w-3.5 h-3.5 text-slate-400" />
-                <span className="truncate max-w-[130px] font-semibold text-slate-600">{f.originalName}</span>
-                <button onClick={() => setUploadedFiles(p => p.filter(x => x.tempId !== f.tempId))} className="p-0.5 hover:text-red-500">
-                  <HiOutlineX className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="relative">
+      <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-slate-100 bg-white">
+        <div className={`rounded-2xl border transition-all outline-none ${isDragging ? 'border-orange-300 bg-orange-50/40' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
+          {/* File chips */}
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+              {uploadedFiles.map(f => {
+                const { bg, text } = fileChipMeta(f);
+                return (
+                  <div key={f.tempId} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-1.5 py-1`}>
+                    {f.previewUrl
+                      ? <img src={f.previewUrl} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
+                      : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
+                    }
+                    <span className="truncate max-w-[100px] text-xs font-medium text-slate-700 ml-1">{f.originalName}</span>
+                    <button onClick={() => setUploadedFiles(p => p.filter(x => x.tempId !== f.tempId))}
+                      className="p-0.5 ml-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0">
+                      <HiOutlineX className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Textarea */}
           <textarea
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Nhập yêu cầu... (Enter để gửi)"
-            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-4 pr-12 py-3.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 resize-none min-h-[90px] transition-all"
+            placeholder={isDragging ? 'Thả file vào đây...' : 'Nhập yêu cầu...'}
+            rows={2}
+            className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400"
+            style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
           />
-          <div className="absolute right-3 bottom-3 flex gap-1.5">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between px-2 pb-2">
             <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
-              className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl disabled:opacity-50">
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all disabled:opacity-50">
               {isUploading
-                ? <div className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
-                : <HiOutlinePaperClip className="w-4 h-4" />}
+                ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                : <HiOutlinePaperClip className="w-3.5 h-3.5" />}
+              <span>Đính kèm</span>
             </button>
-            <button onClick={handleSend} disabled={!inputText.trim() && !uploadedFiles.length}
-              className="p-2 bg-slate-900 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:shadow-none transition-all">
-              <HiOutlineChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-300">Enter để gửi</span>
+              <button onClick={handleSend} disabled={!inputText.trim() && !uploadedFiles.length}
+                className="w-8 h-8 flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all">
+                <HiOutlineChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-        <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Founder AI Marketing AI</p>
+        <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Kéo thả PDF, Word, Excel, ảnh vào đây</p>
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"
-        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" />
 
       {/* Campaign Picker Modal */}
       <CampaignPickerModal

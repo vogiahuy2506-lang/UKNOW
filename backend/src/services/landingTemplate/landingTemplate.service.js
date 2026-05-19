@@ -2,6 +2,7 @@ import landingTemplateRepository from '../../repositories/landingTemplate.reposi
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import uploadController from '../../controllers/upload.controller.js';
+import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 
 /**
  * Service for landing page templates and AI generation.
@@ -132,12 +133,22 @@ QUAN TRỌNG:
     for (const file of files) {
       try {
         const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-        parts.push({
-          inlineData: {
-            mimeType: file.contentType,
-            data: buffer.toString('base64'),
-          },
-        });
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          parts.push({
+            inlineData: {
+              mimeType: file.contentType,
+              data: buffer.toString('base64'),
+            },
+          });
+        } else {
+          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+          if (extractedText.trim()) {
+            parts.push({
+              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
+            });
+          }
+        }
       } catch (err) {
         console.warn(`[LandingTemplate] Could not read file ${file.tempId}:`, err.message);
       }

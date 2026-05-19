@@ -1,12 +1,19 @@
 import db from '../../config/database.js';
 
+const PLAN_COLS = `
+  id, code, name, price, description, features,
+  is_active AS "isActive", is_custom AS "isCustom",
+  max_employees AS "maxEmployees",
+  daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
+  daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
+  max_landing_pages AS "maxLandingPages", max_campaigns AS "maxCampaigns",
+  max_zalo_accounts AS "maxZaloAccounts", max_email_accounts AS "maxEmailAccounts",
+  max_email_templates AS "maxEmailTemplates", max_zalo_templates AS "maxZaloTemplates",
+  created_at AS "createdAt", updated_at AS "updatedAt"`;
+
 export async function findAllPlans() {
   const { rows } = await db.query(
-    `SELECT id, code, name, price, description, features, is_active AS "isActive", is_custom AS "isCustom", max_employees AS "maxEmployees",
-            daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit", 
-            daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
-            created_at AS "createdAt", updated_at AS "updatedAt"
-     FROM plans WHERE is_custom = FALSE ORDER BY price ASC, id ASC`
+    `SELECT ${PLAN_COLS} FROM plans WHERE is_custom = FALSE ORDER BY price ASC, id ASC`
   );
   return rows;
 }
@@ -40,32 +47,42 @@ export async function findPlanById(id) {
 }
 
 export async function createPlan({ code, name, price, description, features, maxEmployees, isActive,
-  isCustom = false, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit }) {
+  isCustom = false, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  maxLandingPages, maxCampaigns, maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
                         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                        max_landing_pages, max_campaigns, max_zalo_accounts, max_email_accounts,
+                        max_email_templates, max_zalo_templates,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())
      RETURNING *`,
-    [code, name, price, description || null, JSON.stringify(features || []), maxEmployees, isActive,
-     isCustom, dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null]
+    [code, name, price, description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
+     dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+     maxLandingPages ?? null, maxCampaigns ?? null, maxZaloAccounts ?? null, maxEmailAccounts ?? null,
+     maxEmailTemplates ?? null, maxZaloTemplates ?? null]
   );
   return rows[0];
 }
 
 export async function updatePlan(id, { name, price, description, features, maxEmployees, isActive,
-  dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit }) {
+  dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  maxLandingPages, maxCampaigns, maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const { rows } = await db.query(
     `UPDATE plans
      SET name = $1, price = $2, description = $3, features = $4,
          max_employees = $5, is_active = $6,
          daily_email_limit = $7, monthly_email_limit = $8,
          daily_zalo_limit = $9, monthly_zalo_limit = $10,
+         max_landing_pages = $11, max_campaigns = $12, max_zalo_accounts = $13,
+         max_email_accounts = $14, max_email_templates = $15, max_zalo_templates = $16,
          updated_at = NOW()
-     WHERE id = $11
+     WHERE id = $17
      RETURNING *`,
     [name, price, description || null, JSON.stringify(features || []), maxEmployees, isActive,
-     dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null, id]
+     dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+     maxLandingPages ?? null, maxCampaigns ?? null, maxZaloAccounts ?? null, maxEmailAccounts ?? null,
+     maxEmailTemplates ?? null, maxZaloTemplates ?? null, id]
   );
   return rows[0] || null;
 }
@@ -130,20 +147,28 @@ export async function findUserAdminByEmail(email) {
   return rows[0] || null;
 }
 
-/** Gán gói trực tiếp cho user (bỏ qua flow thanh toán) — cũng set subscription_expires_at. */
+/** Gán gói trực tiếp cho user — sync resource limits từ plan vào users.max_* ngay lập tức. */
 export async function assignPlanToUser(userId, planId) {
   const { rows } = await db.query(
-    `UPDATE users
-     SET active_plan_id = $1,
-         subscription_expires_at = CASE
-           WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
-             THEN subscription_expires_at + INTERVAL '1 month'
+    `UPDATE users u
+     SET active_plan_id            = p.id,
+         subscription_expires_at   = CASE
+           WHEN u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW()
+             THEN u.subscription_expires_at + INTERVAL '1 month'
            ELSE NOW() + INTERVAL '1 month'
          END,
          subscription_reminder_count = 0,
+         max_landing_pages   = p.max_landing_pages,
+         max_campaigns       = p.max_campaigns,
+         max_zalo_accounts   = p.max_zalo_accounts,
+         max_email_accounts  = p.max_email_accounts,
+         max_email_templates = p.max_email_templates,
+         max_zalo_templates  = p.max_zalo_templates,
          updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, username, email, full_name AS "fullName", active_plan_id AS "activePlanId", subscription_expires_at AS "subscriptionExpiresAt"`,
+     FROM plans p
+     WHERE p.id = $1 AND u.id = $2
+     RETURNING u.id, u.username, u.email, u.full_name AS "fullName",
+               u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt"`,
     [planId, userId]
   );
   return rows[0] || null;
@@ -154,7 +179,8 @@ export async function assignPlanToUser(userId, planId) {
  * `is_active = true` = "chưa bị admin xoá". Custom plan ẩn khỏi pricing nhờ filter `is_custom = false`.
  */
 export async function createAndAssignCustomPlan(userId, { code, name, price, description, maxEmployees,
-  dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit }) {
+  dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  maxLandingPages, maxCampaigns, maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -162,11 +188,15 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
     const planResult = await client.query(
       `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
                           daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                          max_landing_pages, max_campaigns, max_zalo_accounts, max_email_accounts,
+                          max_email_templates, max_zalo_templates,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,'[]',$5,true,true,$6,$7,$8,$9,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,'[]',$5,true,true,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, description || null, maxEmployees,
-       dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null]
+       dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+       maxLandingPages ?? null, maxCampaigns ?? null, maxZaloAccounts ?? null, maxEmailAccounts ?? null,
+       maxEmailTemplates ?? null, maxZaloTemplates ?? null]
     );
     const plan = planResult.rows[0];
 
@@ -179,10 +209,14 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, des
              ELSE NOW() + INTERVAL '1 month'
            END,
            subscription_reminder_count = 0,
+           max_landing_pages = $3, max_campaigns = $4, max_zalo_accounts = $5,
+           max_email_accounts = $6, max_email_templates = $7, max_zalo_templates = $8,
            updated_at = NOW()
        WHERE id = $2
        RETURNING id, username, email, full_name AS "fullName"`,
-      [plan.id, userId]
+      [plan.id, userId,
+       plan.max_landing_pages, plan.max_campaigns, plan.max_zalo_accounts,
+       plan.max_email_accounts, plan.max_email_templates, plan.max_zalo_templates]
     );
     const assignedUser = userResult.rows[0];
 
