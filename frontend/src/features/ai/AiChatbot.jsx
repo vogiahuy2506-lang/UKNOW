@@ -877,6 +877,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [_selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
 
   const messagesEndRef = useRef(null);
+  const isSendingRef = useRef(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -943,7 +944,9 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   };
 
   const handleSend = async () => {
+    if (isSendingRef.current) return;
     if (!inputText.trim() && !uploadedFiles.length) return;
+    isSendingRef.current = true;
     const userMsg = { role: 'user', content: inputText, files: [...uploadedFiles] };
     const newHistory = [...messages, userMsg];
     setMessages(newHistory);
@@ -1054,6 +1057,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
       }]);
     } finally {
       setIsTyping(false);
+      isSendingRef.current = false;
     }
   };
 
