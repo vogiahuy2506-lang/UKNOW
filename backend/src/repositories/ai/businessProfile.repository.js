@@ -9,7 +9,7 @@ class BusinessProfileRepository {
   async findByUserId(userId) {
     const { rows } = await db.query(
       `SELECT id, user_id, company_name, industry, products, target_audience,
-              tone, brand_color, extra_context, created_at, updated_at
+              tone, brand_color, logo_url, extra_context, created_at, updated_at
        FROM business_profiles WHERE user_id = $1`,
       [userId]
     );
