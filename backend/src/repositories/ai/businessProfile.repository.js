@@ -22,11 +22,11 @@ class BusinessProfileRepository {
    * @param {object} data
    * @returns {Promise<object>}
    */
-  async upsert(userId, { company_name, industry, products, target_audience, tone, brand_color, extra_context }) {
+  async upsert(userId, { company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context }) {
     const { rows } = await db.query(
       `INSERT INTO business_profiles
-         (user_id, company_name, industry, products, target_audience, tone, brand_color, extra_context, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+         (user_id, company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          company_name    = EXCLUDED.company_name,
          industry        = EXCLUDED.industry,
@@ -34,10 +34,11 @@ class BusinessProfileRepository {
          target_audience = EXCLUDED.target_audience,
          tone            = EXCLUDED.tone,
          brand_color     = EXCLUDED.brand_color,
+         logo_url        = EXCLUDED.logo_url,
          extra_context   = EXCLUDED.extra_context,
          updated_at      = NOW()
        RETURNING *`,
-      [userId, company_name, industry, products, target_audience, tone, brand_color, extra_context]
+      [userId, company_name, industry, products, target_audience, tone, brand_color, logo_url || null, extra_context]
     );
     return rows[0];
   }

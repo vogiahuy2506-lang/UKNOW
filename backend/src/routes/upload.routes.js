@@ -10,6 +10,7 @@ const upload = multer({
 });
 
 router.post('/temp', authMiddleware, upload.single('file'), uploadController.uploadTemp.bind(uploadController));
+router.post('/promote', authMiddleware, uploadController.promoteTemp.bind(uploadController));
 router.delete('/temp/:tempId', authMiddleware, uploadController.deleteTempFile.bind(uploadController));
 router.get('/signed-url/:key(*)', authMiddleware, uploadController.getSignedUrl.bind(uploadController));
 

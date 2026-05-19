@@ -457,7 +457,7 @@ class AiController {
    */
   async saveBusinessProfile(req, res) {
     try {
-      const { company_name, industry, products, target_audience, tone, brand_color, extra_context } = req.body;
+      const { company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context } = req.body;
       const profile = await businessProfileService.saveProfile(req.user.id, {
         company_name,
         industry,
@@ -465,6 +465,7 @@ class AiController {
         target_audience,
         tone,
         brand_color,
+        logo_url,
         extra_context,
       });
       return res.json({ success: true, data: profile, message: 'Đã lưu và cập nhật hồ sơ doanh nghiệp' });

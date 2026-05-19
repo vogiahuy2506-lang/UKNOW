@@ -86,14 +86,17 @@ class BusinessProfileService {
     if (Array.isArray(normalized.target_audience)) normalized.target_audience = JSON.stringify(normalized.target_audience);
     const profile = await businessProfileRepository.upsert(userId, normalized);
 
-    // Re-embed chunks
-    const chunks = buildChunksFromProfile(profile);
-    if (chunks.length > 0) {
-      const embeddings = await embedTexts(chunks.map(c => c.text));
-      const chunksWithEmbeddings = chunks.map((c, i) => ({ ...c, embedding: embeddings[i] }));
-
-      await businessProfileRepository.deleteChunksByUserId(userId);
-      await businessProfileRepository.insertChunks(userId, chunksWithEmbeddings);
+    // Re-embed chunks — không throw nếu embedding lỗi (pgvector/API có thể chưa sẵn sàng)
+    try {
+      const chunks = buildChunksFromProfile(profile);
+      if (chunks.length > 0) {
+        const embeddings = await embedTexts(chunks.map(c => c.text));
+        const chunksWithEmbeddings = chunks.map((c, i) => ({ ...c, embedding: embeddings[i] }));
+        await businessProfileRepository.deleteChunksByUserId(userId);
+        await businessProfileRepository.insertChunks(userId, chunksWithEmbeddings);
+      }
+    } catch (e) {
+      console.warn('[BusinessProfile] Embedding không khả dụng, bỏ qua RAG chunks:', e?.message || e);
     }
 
     return profile;

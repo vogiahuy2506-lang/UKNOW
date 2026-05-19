@@ -7,7 +7,6 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
-import api from '../../services/api';
 
 const TONE_OPTIONS = [
   { value: 'professional', label: 'Chuyên nghiệp' },
@@ -204,6 +203,7 @@ const BusinessProfilePage = () => {
   const [hasProfile, setHasProfile] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoDragging, setLogoDragging] = useState(false);
+  const [logoPreview, setLogoPreview] = useState('');
   const logoInputRef = useRef(null);
 
   useEffect(() => { fetchProfile(); }, []);
@@ -213,6 +213,7 @@ const BusinessProfilePage = () => {
       const res = await aiApi.getBusinessProfile();
       if (res.data) {
         setHasProfile(true);
+        setLogoPreview('');
         setForm({
           company_name:    res.data.company_name    || '',
           industry:        res.data.industry        || '',
@@ -220,7 +221,7 @@ const BusinessProfilePage = () => {
           target_audience: parseArrayField(res.data.target_audience),
           tone:            res.data.tone            || 'professional',
           brand_color:     res.data.brand_color     || '#FF6B35',
-          logo_url:        res.data.logo_url        || '',
+          logo_url:        res.data.logo_url         || '',
           extra_context:   res.data.extra_context   || '',
         });
       }
@@ -230,22 +231,34 @@ const BusinessProfilePage = () => {
 
   const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
-  const uploadLogo = async (file) => {
+  const uploadLogo = (file) => {
     if (!file || !file.type.startsWith('image/')) {
       toast.error('Vui lòng chọn file ảnh (PNG, JPG, WebP...)');
       return;
     }
     setIsUploadingLogo(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await api.post('/uploads/temp', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      const previewUrl = URL.createObjectURL(file);
-      set('logo_url', previewUrl);
-      set('_logoTempId', res.data.data.tempId);
-      toast.success('Đã tải logo lên');
-    } catch { toast.error('Tải logo thất bại'); }
-    finally { setIsUploadingLogo(false); }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setLogoPreview(dataUrl);
+        set('logo_url', dataUrl);
+        setIsUploadingLogo(false);
+      };
+      img.onerror = () => { toast.error('Không đọc được ảnh'); setIsUploadingLogo(false); };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => { toast.error('Không đọc được file'); setIsUploadingLogo(false); };
+    reader.readAsDataURL(file);
   };
 
   const handleLogoDrop = (e) => {
@@ -301,60 +314,67 @@ const BusinessProfilePage = () => {
           subtitle="Tên công ty và lĩnh vực hoạt động"
           accent="orange"
         >
-          <div className="grid grid-cols-2 gap-4">
-            {/* Cột trái — Logo preview */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Cột trái — Logo */}
             <div className="space-y-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Logo</label>
-              <div
-                className={`w-full aspect-video rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition-all cursor-pointer
-                  ${logoDragging ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}
-                onDragOver={e => { e.preventDefault(); setLogoDragging(true); }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setLogoDragging(false); }}
-                onDrop={handleLogoDrop}
-                onClick={() => logoInputRef.current?.click()}
-              >
-                {form.logo_url
-                  ? <img src={form.logo_url} alt="logo" onError={e => { e.target.style.display='none'; }}
-                      className="w-full h-full object-contain p-3" />
-                  : <div className="flex flex-col items-center gap-1.5 text-slate-300">
-                      <HiOutlinePhotograph className="w-8 h-8" />
-                      <span className="text-xs">Kéo thả hoặc nhấn để chọn</span>
-                    </div>
-                }
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Logo công ty</label>
+              <div className="flex gap-3 items-stretch">
+                {/* Preview box nhỏ */}
+                <div
+                  className={`shrink-0 w-36 h-36 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition-all cursor-pointer
+                    ${logoDragging ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'}`}
+                  onDragOver={e => { e.preventDefault(); setLogoDragging(true); }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setLogoDragging(false); }}
+                  onDrop={handleLogoDrop}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {(logoPreview || form.logo_url)
+                    ? <img src={logoPreview || form.logo_url} alt="logo" onError={e => { e.target.style.display='none'; }}
+                        className="w-full h-full object-contain p-2" />
+                    : <div className="flex flex-col items-center gap-1 text-slate-300">
+                        <HiOutlinePhotograph className="w-7 h-7" />
+                        <span className="text-[9px]">Logo</span>
+                      </div>
+                  }
+                </div>
+                {/* Controls bên phải */}
+                <div className="flex-1 flex flex-col justify-between gap-2">
+                  <p className="text-xs text-slate-500 leading-relaxed">Chọn 1 ảnh logo hoặc dán URL từ internet.</p>
+                  <button type="button" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}
+                    className="flex items-center justify-center gap-1.5 px-2 py-1.5 border border-slate-200 rounded-lg text-[11px] text-slate-600 hover:border-orange-400 hover:text-orange-500 transition-all disabled:opacity-50">
+                    {isUploadingLogo
+                      ? <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                      : <HiOutlineUpload className="w-3 h-3" />}
+                    Chọn file
+                  </button>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                    <div className="flex-1 h-px bg-slate-200" />hoặc<div className="flex-1 h-px bg-slate-200" />
+                  </div>
+                  <input type="url" value={form.logo_url} onChange={e => set('logo_url', e.target.value)}
+                    placeholder="Dán URL logo"
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-orange-400 transition-all" />
+                </div>
               </div>
+              <p className="text-[10px] text-slate-400">PNG, JPG, SVG, WebP. Tối đa 2MB. Kéo thả vào ô logo.</p>
             </div>
 
-            {/* Cột phải — Tên công ty + Ngành nghề + Upload */}
-            <div className="space-y-3">
+            {/* Cột phải — Tên công ty + Ngành nghề */}
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
                   Tên công ty <span className="text-red-400">*</span>
                 </label>
                 <input type="text" value={form.company_name} onChange={e => set('company_name', e.target.value)}
                   placeholder="VD: ABC Academy"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
+                <p className="text-[10px] text-slate-400">Tên đầy đủ của công ty hoặc tổ chức.</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Ngành nghề</label>
                 <input type="text" value={form.industry} onChange={e => set('industry', e.target.value)}
                   placeholder="VD: Giáo dục, Thương mại điện tử..."
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">URL Logo</label>
-                <div className="flex gap-2">
-                  <input type="url" value={form.logo_url} onChange={e => set('logo_url', e.target.value)}
-                    placeholder="https://example.com/logo.png"
-                    className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
-                  <button type="button" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-600 hover:border-orange-400 hover:text-orange-500 transition-all disabled:opacity-50">
-                    {isUploadingLogo
-                      ? <div className="w-3.5 h-3.5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                      : <HiOutlineUpload className="w-3.5 h-3.5" />}
-                    Chọn file
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400">Kéo thả file, chọn file từ máy hoặc dán logo URL vào ô trên.</p>
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
+                <p className="text-[10px] text-slate-400">Lĩnh vực hoạt động chính của công ty.</p>
               </div>
             </div>
           </div>
