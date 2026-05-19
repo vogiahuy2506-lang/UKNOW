@@ -47,9 +47,15 @@ export async function findExpiredUsers() {
 export async function expireUserPlan(userId) {
   await db.query(
     `UPDATE users
-     SET active_plan_id = NULL,
+     SET active_plan_id          = NULL,
          subscription_reminder_count = 0,
-         updated_at = CURRENT_TIMESTAMP
+         max_landing_pages        = NULL,
+         max_campaigns            = NULL,
+         max_zalo_accounts        = NULL,
+         max_email_accounts       = NULL,
+         max_email_templates      = NULL,
+         max_zalo_templates       = NULL,
+         updated_at               = CURRENT_TIMESTAMP
      WHERE id = $1`,
     [userId]
   );

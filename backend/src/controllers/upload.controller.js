@@ -131,7 +131,8 @@ class UploadController {
 
       // Tạo unique filename
       const fileId = uuidv4();
-      const originalName = req.file.originalname || 'upload';
+      const rawName = req.file.originalname || 'upload';
+      const originalName = Buffer.from(rawName, 'latin1').toString('utf8');
       const ext = path.extname(originalName);
       const tempFileName = `${fileId}${ext}`;
       const tempFilePath = path.join(this.tempDir, tempFileName);
@@ -157,6 +158,31 @@ class UploadController {
       });
     }
   }
+
+  /**
+   * Đọc file tạm thời dưới dạng Buffer.
+   */
+  async readTempFileBuffer(tempId, originalName) {
+    const ext = path.extname(originalName || '');
+    const tempFilePath = path.join(this.tempDir, `${tempId}${ext}`);
+    return fs.readFile(tempFilePath);
+  }
+
+  /** Promote 1 temp file lên permanent storage, trả về URL công khai. */
+  async promoteTemp(req, res) {
+    try {
+      if (!req.user?.id) return res.status(401).json({ success: false, message: 'Chưa xác thực' });
+      const { tempId, originalName } = req.body;
+      if (!tempId || !originalName) return res.status(400).json({ success: false, message: 'Thiếu tempId hoặc originalName' });
+      const results = await this.moveToS3([{ tempId, originalName }], req.user.id);
+      if (!results.length) return res.status(500).json({ success: false, message: 'Không thể lưu file' });
+      return res.json({ success: true, data: { url: results[0].url } });
+    } catch (err) {
+      console.error('promoteTemp error:', err);
+      return res.status(500).json({ success: false, message: 'Lỗi lưu file' });
+    }
+  }
+
   // Upload files từ temp sang local uploads (dùng khi save template)
   /**
    * Di chuyển danh sách file tạm từ temp_uploads/ sang thư mục uploads local.

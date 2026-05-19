@@ -124,6 +124,12 @@ CREATE TABLE plans (
   monthly_email_limit   INTEGER,
   daily_zalo_limit      INTEGER,
   monthly_zalo_limit    INTEGER,
+  max_landing_pages     INTEGER,
+  max_campaigns         INTEGER,
+  max_zalo_accounts     INTEGER,
+  max_email_accounts    INTEGER,
+  max_email_templates   INTEGER,
+  max_zalo_templates    INTEGER,
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

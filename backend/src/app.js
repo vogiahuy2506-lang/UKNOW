@@ -101,12 +101,13 @@ export function createApp() {
   // Ghi lại raw body để xác thực chữ ký HMAC-SHA256 của webhook
   app.use(
     express.json({
+      limit: '5mb',
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       },
     })
   );
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
   app.use(cookieParser());
 
   // Resolve custom hostname (*.lp.founderai.biz) → landing page slug

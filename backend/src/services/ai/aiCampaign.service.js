@@ -5,6 +5,7 @@ import landingTemplateService from '../landingTemplate/landingTemplate.service.j
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
 import db from '../../config/database.js';
+import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 
 class AiCampaignService {
   /**
@@ -459,18 +460,32 @@ D. ZALO NHÓM:
 2. Nếu KHÔNG có template phù hợp → tự soạn nội dung THỰC sự dựa trên thông tin doanh nghiệp/sản phẩm từ tài liệu đính kèm và RAG context. KHÔNG dùng placeholder như "[TÊN_SẢN_PHẨM]".
 3. Điền zaloAccountId bằng ID tài khoản Zalo từ danh sách tài nguyên. Nếu chưa có → null.
 4. Mỗi action node PHẢI có nội dung tin nhắn thực (emailSubject+emailBody hoặc message), không để trống.
-5. Chỉ trả về JSON, không giải thích gì bên ngoài.`
+5. Chỉ trả về JSON, không giải thích gì bên ngoài.
+6. QUY TẮC LOGO TRONG EMAIL HTML:
+   - Nếu hồ sơ có "Logo URL: https://..." → dùng <img src="{logo_url}" alt="{company_name}" style="max-width:150px;height:auto;">
+   - Nếu hồ sơ có "Logo URL: (chưa có...)" → KHÔNG dùng thẻ <img> cho logo. Thay bằng text header:
+     <div style="text-align:center;padding:20px 0"><span style="font-size:22px;font-weight:bold;color:{brand_color}">{company_name}</span></div>`
     });
 
     for (const file of files) {
       try {
         const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-        parts.push({
-          inlineData: {
-            mimeType: file.contentType,
-            data: buffer.toString('base64'),
-          },
-        });
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          parts.push({
+            inlineData: {
+              mimeType: file.contentType,
+              data: buffer.toString('base64'),
+            },
+          });
+        } else {
+          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+          if (extractedText.trim()) {
+            parts.push({
+              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
+            });
+          }
+        }
       } catch (err) {
         console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
       }
@@ -502,13 +517,14 @@ D. ZALO NHÓM:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
-      const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI.
-Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược và trả lời câu hỏi về tình trạng hoạt động của nền tảng.
+      const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI, và chuyên phân tích tài liệu/dữ liệu doanh nghiệp.
+Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược, trả lời câu hỏi về tình trạng hoạt động của nền tảng, và giải đáp/tổng hợp bất kỳ tài liệu nào được gửi kèm.
 
 ${contextBlock}
 
 QUY TẮC:
 - Luôn dựa trên dữ liệu thực được cung cấp ở trên, không được bịa số liệu.
+- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
 - Trả lời súc tích, rõ ràng. Dùng bullet points khi liệt kê.
 - Nếu người dùng hỏi về dữ liệu không có trong context (ví dụ: chi tiết từng user cụ thể), hãy nói rõ rằng bạn chỉ có số liệu tổng quan.
 - Có thể đưa ra nhận xét, phân tích xu hướng, và gợi ý hành động dựa trên số liệu.
@@ -602,12 +618,14 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
-    const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing và landing page.
+    const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing, landing page, và phân tích tài liệu/dữ liệu doanh nghiệp.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
-- Nếu thiếu thông tin cần thiết → type: "ask_more", hỏi cụ thể những gì còn thiếu.
-- Chỉ tạo nội dung khi đã có đủ thông tin từ người dùng.
+- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
+- Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
+- Nếu thiếu thông tin cần thiết để tạo template/chiến dịch/landing page → type: "ask_more", hỏi cụ thể những gì còn thiếu.
+- Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
 
 ${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
@@ -652,6 +670,9 @@ Data structure:
 }
 
 Khi viết bodyHtml: Hãy viết HTML đẹp, chuyên nghiệp với màu sắc hài hòa, font chữ rõ ràng, có heading/paragraph/button CTA, style INLINE.
+QUY TẮC LOGO:
+- Nếu hồ sơ doanh nghiệp có "Logo URL: https://..." → dùng <img src="{logo_url}" alt="{company_name}" style="max-width:150px;height:auto;display:block;margin:0 auto">
+- Nếu "Logo URL: (chưa có...)" hoặc không có → KHÔNG dùng <img> cho logo. Thay bằng: <div style="text-align:center;padding:20px 0"><span style="font-size:22px;font-weight:bold;color:{brand_color}">{company_name}</span></div>
 
 ### 4. type: "campaign_script"
 Khi người dùng muốn TẠO CHIẾN DỊCH và đã có ĐỦ thông tin.
@@ -717,26 +738,60 @@ Zalo nhóm campaign:
 
 LUẬT QUAN TRỌNG: Mỗi node PHẢI có đúng cặp nodeType + nodeSubtype như mẫu trên. KHÔNG được dùng nodeSubtype: "manual" cho tất cả node.
 
-### 5. type: "ask_campaign_type"
-Khi người dùng muốn tạo chiến dịch NHƯNG CHƯA chỉ rõ kênh gửi (Email / Zalo cá nhân / Zalo nhóm).
-Hỏi user chọn 1 trong 3 loại:
+### 5. type: "ask_campaign_details"
+Khi người dùng muốn tạo chiến dịch nhưng CHƯA có đủ thông tin để tạo ngay.
+Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ đơn giản, KHÔNG dùng từ chuyên môn.
+
+QUAN TRỌNG: Chỉ hỏi những gì thực sự cần. Nếu user đã nói rõ kênh → bỏ câu hỏi kênh.
 
 Data structure:
 {
-  "campaignName": "Tên chiến dịch (đã suy luận từ prompt)",
+  "campaignName": "Tên chiến dịch đã suy luận",
   "description": "Mô tả ngắn",
-  "mCampaignType": "mixed", // Loại mặc định
-  "content": "Bạn muốn tạo chiến dịch theo kênh nào?",
-  "campaignOptions": [
-    { "value": "email", "label": "📧 Email", "description": "Gửi email cho khách hàng" },
-    { "value": "zalo", "label": "💬 Zalo cá nhân", "description": "Gửi tin nhắn Zalo riêng từng người" },
-    { "value": "zalo_group", "label": "👥 Zalo nhóm", "description": "Gửi tin nhắn vào nhóm Zalo" }
-  ],
-  "data": {
-    "campaignName": "...",
-    "description": "...",
-    "mcpampaignType": "mixed"
-  }
+  "questions": [
+    {
+      "id": "channel",
+      "label": "Gửi qua đâu?",
+      "options": [
+        { "value": "email", "label": "📧 Email" },
+        { "value": "zalo", "label": "💬 Tin nhắn Zalo" },
+        { "value": "zalo_group", "label": "👥 Nhóm Zalo" }
+      ]
+    },
+    {
+      "id": "productCount",
+      "label": "Lần này muốn giới thiệu:",
+      "options": [
+        { "value": "1", "label": "1 sản phẩm / dịch vụ" },
+        { "value": "nhieu", "label": "Nhiều sản phẩm cùng lúc" }
+      ]
+    },
+    {
+      "id": "sendingStyle",
+      "label": "Cách gửi:",
+      "options": [
+        { "value": "1_lan", "label": "Gửi 1 lần là xong" },
+        { "value": "nhieu_dot", "label": "Gửi nhiều lần, cách nhau vài ngày" }
+      ]
+    },
+    {
+      "id": "audienceCount",
+      "label": "Tệp khách hàng:",
+      "options": [
+        { "value": "1_nhom", "label": "Tất cả chung 1 nhóm" },
+        { "value": "nhieu_nhom", "label": "Chia thành nhiều nhóm khác nhau" }
+      ]
+    },
+    {
+      "id": "dataSource",
+      "label": "Lấy danh sách khách từ đâu?",
+      "options": [
+        { "value": "db", "label": "👥 Khách hàng có sẵn trong hệ thống" },
+        { "value": "sheet", "label": "📊 File Excel / Google Sheet" },
+        { "value": "landing", "label": "📋 Danh sách đăng ký từ Landing Page" }
+      ]
+    }
+  ]
 }
 
 ### 5. type: "confirm_create"
@@ -799,37 +854,57 @@ Data structure:
 
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
-  "type": "text" | "ask_more" | "template_draft" | "campaign_script" | "ask_campaign_type" | "confirm_create" | "create_and_run" | "landing_page",
-  "content": "Lời nhắn cho người dùng (tiếng Việt, thân thiện)",
+  "type": "text" | "ask_more" | "template_draft" | "campaign_script" | "ask_campaign_details" | "confirm_create" | "create_and_run" | "landing_page",
+  "content": "Lời nhắn cho người dùng (tiếng Việt, thân thiện, KHÔNG dùng từ chuyên môn, KHÔNG dùng markdown **bold** hay *italic*, dùng text thuần, gạch đầu dòng bằng dấu -)",
   "missing_fields": [] | ["tên sản phẩm", "mục tiêu email"],
   "data": null | { ... }
 }
 
 Khi type="ask_more": content là câu hỏi cụ thể, missing_fields liệt kê những gì cần.
 Khi type="template_draft": content mô tả template vừa tạo, data chứa template.
-Khi type="campaign_script": content mô tả chiến dịch là DRAFT, data chứa script. Nhấn mạnh user cần nhấn "Tạo chiến dịch" để khởi tạo.
-Khi type="ask_campaign_type": content hỏi chọn kênh, campaignOptions chứa 3 lựa chọn, data chứa thông tin đã có.
-Khi type="confirm_create": content mô tả chiến dịch, data.summary chứa thông tin chi tiết. Nhấn mạnh user nhấn "Tạo chiến dịch" để lưu.
-Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script. KHÔNG cần xác nhận từ user.
+Khi type="campaign_script": content mô tả chiến dịch là DRAFT, data chứa script.
+Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa questions để hỏi user.
+Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
+Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
 Khi type="landing_page": content mô tả trang, data chứa html/css.
 
 ## LOGIC XỬ LÝ CHIẾN DỊCH:
 
-### Nguyên tắc quan trọng:
-- KHACH HANG: Luôn mac dinh lay tu FILE hoac GOOGLE SHEET do nguoi dung cung cap. KHONG can hoi lai ve doi tuong.
-- Neu nguoi dung upload file/sheet -> do chinh la danh sach khach hang -> dung audience: "all"
-- KHONG BAO GIO hoi "gui cho doi tuong nao" -> luon dung tat ca khach hang tu file/sheet
+### Nguyên tắc ngôn ngữ:
+- KHÔNG dùng: "campaign", "node", "trigger", "workflow", "drip", "sequence"
+- DÙNG thay thế: "chiến dịch", "bước", "khởi động", "quy trình", "gửi nhiều lần", "chuỗi tin nhắn"
 
 ### Khi user prompt "tao chien dich [san pham]":
-1. Neu CHUA chi ro kenh (email/zalo/zalo_group) -> type: "ask_campaign_type"
-2. Neu DA chi ro kenh va co du thong tin -> type: "confirm_create" voi audience: "all" (khach hang tu file/sheet)
-3. Neu THIEU thong tin khac (ten san pham, muc tieu...) -> type: "ask_more"
+1. Nếu CHƯA có đủ thông tin (kênh, cách gửi...) → type: "ask_campaign_details"
+2. Nếu ĐÃ có đủ thông tin (user trả lời xong ask_campaign_details) → type: "confirm_create"
+3. Nếu THIẾU thông tin khác (tên sản phẩm, mục tiêu...) → type: "ask_more"
+
+### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
+- channel: email/zalo/zalo_group → chọn đúng action node
+- productCount="nhieu" → nhiều action node, mỗi node 1 sản phẩm khác nhau
+- sendingStyle="nhieu_dot" → các action node có delayValue > 0 (3-7 ngày)
+- audienceCount="nhieu_nhom" → nhiều data node, mỗi node 1 phân khúc khách khác nhau
+- dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
+- dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
+  ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
+- dataSource="landing" → nodeSubtype: "read_landing_leads", config: {}
+
+Ví dụ campaign drip 2 đợt (sendingStyle=nhieu_dot, dataSource=db):
+nodes: trigger → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
+
+Ví dụ lấy từ sheet (dataSource=sheet):
+nodes: trigger → read_sheet(sheetUrl="") → action_wave1(delay=0) → end
+
+Ví dụ lấy từ landing page (dataSource=landing):
+nodes: trigger → read_landing_leads → action_wave1(delay=0) → end
+
+Ví dụ 2 sản phẩm gửi 1 lần (productCount=nhieu, sendingStyle=1_lan):
+nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days) → end
 
 ### Các từ khóa xác định kênh:
 - "email" / "gửi mail" / "thư điện tử" → campaignType: "email"
-- "zalo" / "zalo cá nhân" / "tin nhắn zalo" → campaignType: "zalo"
+- "zalo" / "tin nhắn zalo" → campaignType: "zalo"
 - "zalo nhóm" / "nhóm zalo" / "gửi nhóm" → campaignType: "zalo_group"
-- "cả hai" / "đa kênh" / "mixed" → campaignType: "mixed"
 
 ### LUÔN luôn dùng audience: "all" vì khách hàng được lấy từ file/sheet:
 - KHÔNG hỏi về đối tượng
@@ -852,22 +927,46 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.
    * @param {Array}  files    — [{tempId, originalName, contentType}]
    */
   async _runChat(systemPrompt, history, files) {
-    const geminiHistory = history.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content || '(no text)' }]
+    // Hàm đọc và đính kèm một file vào parts array
+    const attachFileToParts = async (parts, file) => {
+      try {
+        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
+        } else {
+          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+          if (extractedText.trim()) {
+            parts.push({
+              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+      }
+    };
+
+    // Build Gemini history — re-attach files từ TẤT CẢ tin nhắn trong lịch sử
+    const geminiHistory = await Promise.all(history.map(async (msg) => {
+      const parts = [{ text: msg.content || '(no text)' }];
+      if (msg.role === 'user' && Array.isArray(msg.files) && msg.files.length > 0) {
+        for (const file of msg.files) {
+          await attachFileToParts(parts, file);
+        }
+      }
+      return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
     }));
 
-    const lastMessage = geminiHistory[geminiHistory.length - 1];
-
+    // Đính kèm thêm files của tin nhắn hiện tại (nếu có, không trùng với history)
     if (files.length > 0) {
+      const lastMessage = geminiHistory[geminiHistory.length - 1];
+      const historyFileIds = new Set(
+        (history[history.length - 1]?.files || []).map(f => f.tempId)
+      );
       for (const file of files) {
-        try {
-          const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-          lastMessage.parts.push({
-            inlineData: { mimeType: file.contentType, data: buffer.toString('base64') },
-          });
-        } catch (err) {
-          console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+        if (!historyFileIds.has(file.tempId)) {
+          await attachFileToParts(lastMessage.parts, file);
         }
       }
     }

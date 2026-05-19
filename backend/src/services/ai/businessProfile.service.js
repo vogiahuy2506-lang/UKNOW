@@ -1,9 +1,41 @@
 import businessProfileRepository from '../../repositories/ai/businessProfile.repository.js';
 import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
 
+/** Parse JSON array field — fallback về text nếu không phải JSON. */
+function parseArrayField(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+}
+
+/** Serialize products array thành text đọc được cho AI. */
+function serializeProducts(products) {
+  const arr = parseArrayField(products);
+  if (!arr.length) return '';
+  return arr.map((p, i) => {
+    const parts = [`${i + 1}. ${p.name || 'Sản phẩm'}`];
+    if (p.price) parts.push(`Giá: ${p.price}`);
+    if (p.description) parts.push(p.description);
+    if (p.usp) parts.push(`Điểm nổi bật: ${p.usp}`);
+    return parts.join(' — ');
+  }).join('\n');
+}
+
+/** Serialize segments array thành text đọc được cho AI. */
+function serializeSegments(segments) {
+  const arr = parseArrayField(segments);
+  if (!arr.length) return '';
+  return arr.map((s, i) => {
+    const parts = [`${i + 1}. ${s.name || 'Phân khúc'}`];
+    if (s.description) parts.push(s.description);
+    if (s.painPoint) parts.push(`Vấn đề: ${s.painPoint}`);
+    return parts.join(' — ');
+  }).join('\n');
+}
+
 /**
  * Chuyển hồ sơ doanh nghiệp thành mảng chunks text để embed.
- * Mỗi field là 1 chunk riêng để tìm kiếm chính xác hơn.
+ * Hỗ trợ cả text thuần và JSON array cho products/target_audience.
  */
 function buildChunksFromProfile(profile) {
   const chunks = [];
@@ -14,19 +46,23 @@ function buildChunksFromProfile(profile) {
   if (profile.industry) {
     chunks.push({ text: `Ngành nghề: ${profile.industry}`, metadata: { field: 'industry' } });
   }
-  if (profile.products) {
-    chunks.push({ text: `Sản phẩm / Dịch vụ: ${profile.products}`, metadata: { field: 'products' } });
+
+  const productsText = serializeProducts(profile.products) || (typeof profile.products === 'string' ? profile.products : '');
+  if (productsText) {
+    chunks.push({ text: `Sản phẩm / Dịch vụ:\n${productsText}`, metadata: { field: 'products' } });
   }
-  if (profile.target_audience) {
-    chunks.push({ text: `Đối tượng khách hàng mục tiêu: ${profile.target_audience}`, metadata: { field: 'target_audience' } });
+
+  const segmentsText = serializeSegments(profile.target_audience) || (typeof profile.target_audience === 'string' ? profile.target_audience : '');
+  if (segmentsText) {
+    chunks.push({ text: `Đối tượng khách hàng mục tiêu:\n${segmentsText}`, metadata: { field: 'target_audience' } });
   }
+
   if (profile.tone || profile.brand_color) {
     const brandParts = [];
     if (profile.tone) brandParts.push(`Giọng điệu: ${profile.tone}`);
     if (profile.brand_color) brandParts.push(`Màu thương hiệu: ${profile.brand_color}`);
     chunks.push({ text: `Nhận diện thương hiệu — ${brandParts.join(', ')}`, metadata: { field: 'brand' } });
   }
-  // extra_context có thể dài — chia theo đoạn văn (~500 ký tự/chunk)
   if (profile.extra_context) {
     const paragraphs = profile.extra_context.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
     paragraphs.forEach((para, i) => {
@@ -44,16 +80,23 @@ class BusinessProfileService {
    * @returns {Promise<object>} profile đã lưu
    */
   async saveProfile(userId, profileData) {
-    const profile = await businessProfileRepository.upsert(userId, profileData);
+    // Serialize array fields thành JSON string trước khi lưu
+    const normalized = { ...profileData };
+    if (Array.isArray(normalized.products)) normalized.products = JSON.stringify(normalized.products);
+    if (Array.isArray(normalized.target_audience)) normalized.target_audience = JSON.stringify(normalized.target_audience);
+    const profile = await businessProfileRepository.upsert(userId, normalized);
 
-    // Re-embed chunks
-    const chunks = buildChunksFromProfile(profile);
-    if (chunks.length > 0) {
-      const embeddings = await embedTexts(chunks.map(c => c.text));
-      const chunksWithEmbeddings = chunks.map((c, i) => ({ ...c, embedding: embeddings[i] }));
-
-      await businessProfileRepository.deleteChunksByUserId(userId);
-      await businessProfileRepository.insertChunks(userId, chunksWithEmbeddings);
+    // Re-embed chunks — không throw nếu embedding lỗi (pgvector/API có thể chưa sẵn sàng)
+    try {
+      const chunks = buildChunksFromProfile(profile);
+      if (chunks.length > 0) {
+        const embeddings = await embedTexts(chunks.map(c => c.text));
+        const chunksWithEmbeddings = chunks.map((c, i) => ({ ...c, embedding: embeddings[i] }));
+        await businessProfileRepository.deleteChunksByUserId(userId);
+        await businessProfileRepository.insertChunks(userId, chunksWithEmbeddings);
+      }
+    } catch (e) {
+      console.warn('[BusinessProfile] Embedding không khả dụng, bỏ qua RAG chunks:', e?.message || e);
     }
 
     return profile;
@@ -111,10 +154,14 @@ class BusinessProfileService {
     const lines = [];
     if (profile.company_name) lines.push(`Tên công ty: ${profile.company_name}`);
     if (profile.industry) lines.push(`Ngành: ${profile.industry}`);
-    if (profile.products) lines.push(`Sản phẩm / dịch vụ: ${profile.products}`);
-    if (profile.target_audience) lines.push(`Khách mục tiêu: ${profile.target_audience}`);
+    const productsText = serializeProducts(profile.products) || (typeof profile.products === 'string' ? profile.products : '');
+    if (productsText) lines.push(`Sản phẩm / dịch vụ:\n${productsText}`);
+    const segmentsText = serializeSegments(profile.target_audience) || (typeof profile.target_audience === 'string' ? profile.target_audience : '');
+    if (segmentsText) lines.push(`Khách mục tiêu:\n${segmentsText}`);
     if (profile.tone) lines.push(`Giọng điệu: ${profile.tone}`);
     if (profile.brand_color) lines.push(`Màu thương hiệu: ${profile.brand_color}`);
+    if (profile.logo_url) lines.push(`Logo URL: ${profile.logo_url}`);
+    else lines.push(`Logo URL: (chưa có — dùng text header thay thế)`);
     if (profile.extra_context) lines.push(`Bổ sung: ${profile.extra_context}`);
     if (!lines.length) return '';
     return [
