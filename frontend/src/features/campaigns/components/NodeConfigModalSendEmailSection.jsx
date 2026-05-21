@@ -509,7 +509,7 @@ export const NodeConfigSendEmailSection = ({
                   type="radio"
                   name="sendMode"
                   value="all"
-                  checked={formData.sendMode === 'all'}
+                  checked={formData.sendMode === 'all' || !formData.sendMode}
                   onChange={(e) => setFormData((prev) => ({ ...prev, sendMode: e.target.value }))}
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
@@ -524,7 +524,23 @@ export const NodeConfigSendEmailSection = ({
                   name="sendMode"
                   value="schedule"
                   checked={formData.sendMode === 'schedule'}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, sendMode: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData((prev) => {
+                      const next = { ...prev, sendMode: e.target.value };
+                      if (e.target.value === 'schedule' && (!prev.emailSteps || prev.emailSteps.length === 0)) {
+                        next.emailSteps = [{
+                          id: `step-${Date.now()}`,
+                          delayValue: 0,
+                          delayUnit: 'minutes',
+                          delayFrom: 'start',
+                          enableLinkTracking: true,
+                          templateId: '',
+                          templateMappings: [],
+                        }];
+                      }
+                      return next;
+                    });
+                  }}
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
                 <div>
@@ -533,6 +549,12 @@ export const NodeConfigSendEmailSection = ({
                 </div>
               </label>
             </div>
+
+            {formData.sendMode === 'schedule' && (!formData.emailSteps || formData.emailSteps.length === 0) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                <strong>Lưu ý:</strong> Hãy thêm ít nhất 1 email bên tab "Danh sách email gửi" để gửi theo lịch.
+              </div>
+            )}
           </div>
         );
 

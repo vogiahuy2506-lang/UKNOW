@@ -137,42 +137,64 @@ const buildDefaultZaloStep = () => ({
   templateId: '',
 });
 
-const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all' }) => (
-  <div className="space-y-4">
-    <h4 className="font-medium text-gray-900">Hình thức gửi</h4>
+const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', stepsKey = 'zaloPersonalTemplateSteps' }) => {
+  const handleSendModeChange = (newMode) => {
+    setFormData((prev) => {
+      const next = { ...prev, [sendModeKey]: newMode };
+      if (newMode === 'schedule') {
+        const existingSteps = Array.isArray(prev[stepsKey]) ? prev[stepsKey] : [];
+        if (existingSteps.length === 0) {
+          next[stepsKey] = [buildDefaultZaloStep()];
+        }
+      }
+      return next;
+    });
+  };
 
-    <div className="flex flex-col gap-3">
-      <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
-        <input
-          type="radio"
-          name={sendModeKey}
-          value="all"
-          checked={formData[sendModeKey] === 'all'}
-          onChange={(e) => setFormData((prev) => ({ ...prev, [sendModeKey]: e.target.value }))}
-          className="mt-1 text-primary-500 focus:ring-primary-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Gửi cùng lúc</div>
-          <div className="text-xs text-gray-500 mt-1">Gửi tất cả tin nhắn ngay lập tức</div>
+  return (
+    <div className="space-y-4">
+      <h4 className="font-medium text-gray-900">Hình thức gửi</h4>
+
+      <div className="flex flex-col gap-3">
+        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+          <input
+            type="radio"
+            name={`${sendModeKey}-${stepsKey}`}
+            value="all"
+            checked={formData[sendModeKey] === 'all' || !formData[sendModeKey]}
+            onChange={() => handleSendModeChange('all')}
+            className="mt-1 text-primary-500 focus:ring-primary-500"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-900">Gửi cùng lúc</div>
+            <div className="text-xs text-gray-500 mt-1">Gửi tất cả tin nhắn ngay lập tức</div>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+          <input
+            type="radio"
+            name={`${sendModeKey}-${stepsKey}`}
+            value="schedule"
+            checked={formData[sendModeKey] === 'schedule'}
+            onChange={() => handleSendModeChange('schedule')}
+            className="mt-1 text-primary-500 focus:ring-primary-500"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-900">Theo lịch</div>
+            <div className="text-xs text-gray-500 mt-1">Gửi tin nhắn theo lịch trình đã cấu hình</div>
+          </div>
+        </label>
+      </div>
+
+      {formData[sendModeKey] === 'schedule' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+          <strong>Lưu ý:</strong> Khi chọn "Theo lịch", hệ thống sẽ gửi tin theo thứ tự từng template với thời gian chờ giữa các lần gửi.
+          Hãy đảm bảo đã thêm ít nhất 1 template bên dưới.
         </div>
-      </label>
-      <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
-        <input
-          type="radio"
-          name={sendModeKey}
-          value="schedule"
-          checked={formData[sendModeKey] === 'schedule'}
-          onChange={(e) => setFormData((prev) => ({ ...prev, [sendModeKey]: e.target.value }))}
-          className="mt-1 text-primary-500 focus:ring-primary-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Theo lịch</div>
-          <div className="text-xs text-gray-500 mt-1">Gửi tin nhắn theo lịch trình đã cấu hình</div>
-        </div>
-      </label>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const ZaloTemplateListSection = ({
   formData,
@@ -197,6 +219,17 @@ const ZaloTemplateListSection = ({
     [formData, stepsKey]
   );
   const sendMode = formData[sendModeKey] || 'all';
+
+  // Auto-create step when switching to schedule mode
+  useEffect(() => {
+    if (sendMode === 'schedule' && steps.length === 0) {
+      setFormData((prev) => ({
+        ...prev,
+        [stepsKey]: [buildDefaultZaloStep()],
+      }));
+    }
+  }, [sendMode, steps.length, setFormData, stepsKey]);
+
   const templateOptions = useMemo(
     () => templates.map((item) => ({
       id: item.id,
@@ -266,8 +299,27 @@ const ZaloTemplateListSection = ({
   };
 
   const handleTemplateSelect = async (index, value) => {
-    const selectedTemplateId = parseInt(value, 10) || '';
-    const selectedTemplateFromList = templates.find((template) => String(template.id) === String(selectedTemplateId)) || null;
+    const rawValue = String(value || '').trim();
+    if (!rawValue) {
+      setFormData((prev) => {
+        const currentSteps = Array.isArray(prev[stepsKey]) ? prev[stepsKey] : [];
+        return {
+          ...prev,
+          [stepsKey]: currentSteps.map((step, idx) => {
+            if (idx !== index) return step;
+            return {
+              ...step,
+              templateId: '',
+              templateMappings: [],
+            };
+          }),
+        };
+      });
+      return;
+    }
+
+    const selectedTemplateId = parseInt(rawValue, 10) || rawValue;
+    const selectedTemplateFromList = templates.find((template) => String(template.id) === rawValue || String(template.id) === selectedTemplateId) || null;
     let selectedTemplate = selectedTemplateFromList;
 
     if (selectedTemplateId && typeof fetchTemplateById === 'function') {
@@ -289,7 +341,7 @@ const ZaloTemplateListSection = ({
           if (idx !== index) return step;
           return {
             ...step,
-            templateId: selectedTemplateId,
+            templateId: rawValue,
             enableLinkTracking: step?.enableLinkTracking !== false,
             templateMappings: selectedTemplate
               ? buildTemplateStepMappings({
@@ -589,6 +641,19 @@ export const NodeConfigSendZaloPersonalSection = ({
     { id: 'templates', name: 'Danh sách template gửi', icon: HiOutlineDocument },
   ];
 
+  const handleSendModeChange = (newMode) => {
+    setFormData((prev) => {
+      const next = { ...prev, zaloPersonalSendMode: newMode };
+      if (newMode === 'schedule') {
+        const existingSteps = Array.isArray(prev.zaloPersonalTemplateSteps) ? prev.zaloPersonalTemplateSteps : [];
+        if (existingSteps.length === 0) {
+          next.zaloPersonalTemplateSteps = [buildDefaultZaloStep()];
+        }
+      }
+      return next;
+    });
+  };
+
   const renderSection = () => {
     if (selectedSection === 'sendMode') {
       return (
@@ -596,6 +661,7 @@ export const NodeConfigSendZaloPersonalSection = ({
           formData={formData}
           setFormData={setFormData}
           sendModeKey="zaloPersonalSendMode"
+          stepsKey="zaloPersonalTemplateSteps"
         />
       );
     }
@@ -974,6 +1040,7 @@ export const NodeConfigSendZaloGroupSection = ({
           formData={formData}
           setFormData={setFormData}
           sendModeKey="zaloGroupSendMode"
+          stepsKey="zaloGroupTemplateSteps"
         />
       );
     }
