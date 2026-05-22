@@ -651,24 +651,13 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
-    // RAG context từ hồ sơ doanh nghiệp (với fallback về full profile nếu vector search không khả dụng)
-    if (userId && history.length > 0) {
-      const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
-      if (lastUserMsg) {
-        try {
-          contextBlock = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
-        } catch (e) {
-          console.warn('[AI] Không lấy được RAG context:', e.message);
-        }
-        // Fallback: nếu RAG trả rỗng (pgvector chưa cài, chunks chưa embed), dùng full profile
-        if (!contextBlock) {
-          try {
-            const profile = await businessProfileService.getProfile(userId);
-            contextBlock = businessProfileService.formatProfileForPrompt(profile);
-          } catch (e) {
-            console.warn('[AI] Không lấy được business profile:', e.message);
-          }
-        }
+    // Luôn dùng full profile để AI thấy tất cả sản phẩm/thông tin mới nhất
+    if (userId) {
+      try {
+        const profile = await businessProfileService.getProfile(userId);
+        contextBlock = businessProfileService.formatProfileForPrompt(profile);
+      } catch (e) {
+        console.warn('[AI] Không lấy được business profile:', e.message);
       }
     }
 
