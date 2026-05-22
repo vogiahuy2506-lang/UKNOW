@@ -977,7 +977,9 @@ GOOGLE SHEET KHÔNG CÓ URL:
 - "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
 - productCount="nhieu" + user đề cập chủ đề/loại sản phẩm (vd: "khóa học AI", "tất cả khóa học") → tìm tất cả ID khóa phù hợp trong danh sách TÀI NGUYÊN và đặt vào interestedCourseIds. Nếu không match khóa nào → để interestedCourseIds: [] (lấy tất cả)
 - productCount="1" nhưng user CHƯA nói rõ tên sản phẩm/khóa học → type: "ask_more", missing_fields: ["Tên sản phẩm hoặc khóa học muốn giới thiệu"], message: "Bạn muốn giới thiệu sản phẩm hoặc khóa học nào? Vui lòng cho tôi biết tên nhé!"
-- productCount="1" + user đã nói tên khóa → tìm ID khớp trong TÀI NGUYÊN, đặt vào interestedCourseIds: [id]
+- productCount="1" + user đã nói tên sản phẩm/khóa → tìm ID khớp trong TÀI NGUYÊN:
+  • Nếu khớp → đặt interestedCourseIds: [id], dùng tên thật từ TÀI NGUYÊN để viết nội dung
+  • Nếu KHÔNG khớp (sản phẩm chưa có trong hệ thống) → interestedCourseIds: [], dùng tên user cung cấp để viết nội dung email/Zalo. KHÔNG tạo sản phẩm mới, KHÔNG báo lỗi. Ghi chú ngắn trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
 - dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
   ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
