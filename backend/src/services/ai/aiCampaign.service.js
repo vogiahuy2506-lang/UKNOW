@@ -21,14 +21,20 @@ class AiCampaignService {
          ORDER BY created_at DESC LIMIT 50`,
         [userId]
       );
-      return result.rows.map(r => ({
-        ...r,
-        name: String(r.name || '')
-          .replace(/&#8211;/g, '—').replace(/&#8212;/g, '—')
-          .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-          .replace(/&#039;/g, "'").replace(/&nbsp;/g, ' '),
-      }));
+      return result.rows.map(r => {
+        let name = String(r.name || '');
+        // Decode numeric entities first
+        name = name.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+        // Decode named entities
+        name = name
+          .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, ' ')
+          .replace(/&ndash;/g, '–').replace(/&mdash;/g, '—').replace(/&lsquo;/g, '‘')
+          .replace(/&rsquo;/g, '’').replace(/&ldquo;/g, '“').replace(/&rdquo;/g, '”');
+        // Strip HTML tags
+        name = name.replace(/<[^>]+>/g, '').trim();
+        return { ...r, name };
+      });
     } catch (e) {
       console.warn('[AI] Không lấy được danh sách khóa học:', e.message);
       return [];
