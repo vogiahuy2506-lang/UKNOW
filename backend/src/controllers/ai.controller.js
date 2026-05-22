@@ -3,6 +3,7 @@ import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import db from '../config/database.js';
 
 class AiController {
   /**
@@ -159,6 +160,9 @@ class AiController {
           message: 'Script không hợp lệ. Cần có nodes và connections.',
         });
       }
+
+      // Tự động tạo email templates từ inline content trước khi normalize
+      await this._autoCreateEmailTemplates(script.nodes, req.user.id);
 
       // Normalize AI nodes to match database schema (uses snake_case: node_type, node_subtype)
       // AI returns: { nodeType: "action", nodeSubtype: "send_email" } but DB needs: { node_type: "send_email", node_subtype: "send_email" }
@@ -322,9 +326,12 @@ class AiController {
         });
       }
 
+      // Tự động tạo email templates từ inline content
+      await this._autoCreateEmailTemplates(script.nodes, req.user.id);
+
       // Normalize AI nodes trước khi tạo campaign
       const normalizedNodes = this._normalizeNodes(script.nodes);
-      
+
       // Bước 1: Tạo campaign
       const createReq = {
         ...req,
@@ -483,6 +490,48 @@ class AiController {
    * @param {Array} nodes - Array of AI-generated nodes
    * @returns {Array} Normalized nodes for database
    */
+
+  /**
+   * Với mỗi send_email node có emailBody inline (emailTemplateId=null),
+   * tự động tạo template trong DB và gán emailTemplateId.
+   */
+  async _autoCreateEmailTemplates(nodes, userId) {
+    for (const node of nodes) {
+      const cfg = node.config || node.nodeConfig || {};
+      const nodeType = node.nodeType || node.type || node.node_type || '';
+      const isSendEmail = ['send_email', 'email', 'email_send'].includes(nodeType) ||
+        ['send_email', 'email', 'email_send'].includes(node.nodeSubtype || node.subtype || '');
+      if (!isSendEmail) continue;
+      if (cfg.emailTemplateId || !cfg.emailBody) continue;
+
+      try {
+        const name = node.nodeName || node.name || 'Email từ AI';
+        const { rows } = await db.query(
+          `INSERT INTO email_templates (id_user, template_name, template_code, subject, body_html, body_text, attachments, variables, category)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+          [
+            userId,
+            name,
+            `ai_${Date.now()}`,
+            cfg.emailSubject || name,
+            cfg.emailBody,
+            '',
+            JSON.stringify([]),
+            JSON.stringify([]),
+            'marketing',
+          ]
+        );
+        cfg.emailTemplateId = rows[0].id;
+        cfg.emailBody = '';
+        cfg.emailSubject = '';
+        node.config = cfg;
+        console.log(`[AI] Auto-created email template id=${rows[0].id} for node "${name}"`);
+      } catch (e) {
+        console.warn('[AI] Không tạo được email template tự động:', e.message);
+      }
+    }
+  }
+
   _normalizeNodes(nodes) {
     if (!Array.isArray(nodes)) return [];
     
