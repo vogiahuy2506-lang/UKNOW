@@ -16,9 +16,9 @@ class AiCampaignService {
   async getCourses(userId) {
     try {
       const result = await db.query(
-        `SELECT id, course_name AS name, course_code AS code
-         FROM courses WHERE id_user = $1 AND status = 'publish'
-         ORDER BY created_at DESC LIMIT 20`,
+        `SELECT id, course_name AS name, course_code AS code, status
+         FROM courses WHERE id_user = $1
+         ORDER BY created_at DESC LIMIT 50`,
         [userId]
       );
       return result.rows;
