@@ -1062,13 +1062,18 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     try {
       const parsed = JSON.parse(jsonStr);
-      // Validate: must have DATA nodes
       return this._validateWorkflowNodes(parsed);
     } catch {
-      const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
-        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-      });
-      return this._validateWorkflowNodes(JSON.parse(sanitized));
+      try {
+        const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (_match, p1) => {
+          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+        });
+        return this._validateWorkflowNodes(JSON.parse(sanitized));
+      } catch {
+        // JSON hoàn toàn không parse được → trả về text thay vì crash
+        console.warn('[AI] JSON parse failed, falling back to text response');
+        return { type: 'text', content: text, data: null, missing_fields: [] };
+      }
     }
   }
 
