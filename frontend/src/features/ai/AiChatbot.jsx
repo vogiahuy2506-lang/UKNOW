@@ -1661,7 +1661,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           <textarea
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
             placeholder={isDragging ? 'Thả file vào đây...' : 'Nhập yêu cầu...'}
             rows={2}
             className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400"
