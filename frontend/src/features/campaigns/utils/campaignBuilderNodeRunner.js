@@ -1165,7 +1165,10 @@ export const createCampaignNodeRunner = (deps) => {
       const maxSend = Math.max(1, parseInt(config.maxSendCount || 100, 10));
       const recipientMode = 'multiple';
       const sendAllAtOnce = config.sendMode !== 'schedule';
-      const steps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
+      const rawSteps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
+      const steps = rawSteps.length === 0 && config.emailTemplateId
+        ? [{ templateId: config.emailTemplateId, delayValue: config.delayValue || 0, delayUnit: config.delayUnit || 'days', delayFrom: 'start', enableLinkTracking: true, templateMappings: [] }]
+        : rawSteps;
       const unitToMs = (unit) => {
         if (unit === 'hours') return 60 * 60 * 1000;
         if (unit === 'days') return 24 * 60 * 60 * 1000;
