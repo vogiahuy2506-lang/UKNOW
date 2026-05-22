@@ -168,6 +168,9 @@ class AiController {
       // AI returns: { nodeType: "action", nodeSubtype: "send_email" } but DB needs: { node_type: "send_email", node_subtype: "send_email" }
       console.log('[AI Controller] Raw script nodes:', JSON.stringify(script.nodes, null, 2));
       const normalizedNodes = this._normalizeNodes(script.nodes);
+
+      // Auto-fill fromEmailId với SMTP channel đầu tiên của user
+      await this._autoFillEmailChannels(normalizedNodes, req.user.id);
       
       // Normalize connections: support { source, target } or { sourceNodeId, targetNodeId }
       const normalizedConnections = (script.connections || []).map(conn => ({
@@ -331,6 +334,9 @@ class AiController {
 
       // Normalize AI nodes trước khi tạo campaign
       const normalizedNodes = this._normalizeNodes(script.nodes);
+
+      // Auto-fill fromEmailId với SMTP channel đầu tiên của user
+      await this._autoFillEmailChannels(normalizedNodes, req.user.id);
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -529,6 +535,30 @@ class AiController {
       } catch (e) {
         console.warn('[AI] Không tạo được email template tự động:', e.message);
       }
+    }
+  }
+
+  async _autoFillEmailChannels(nodes, userId) {
+    try {
+      const { rows } = await db.query(
+        `SELECT id FROM email_settings WHERE id_user = $1 AND status = 'active' ORDER BY id ASC LIMIT 1`,
+        [userId]
+      );
+      if (!rows.length) return;
+      const defaultChannelId = rows[0].id;
+      for (const node of nodes) {
+        const cfg = node.config || {};
+        const nodeType = node.node_type || node.nodeType || node.type || '';
+        const isSendEmail = ['send_email', 'email', 'email_send'].includes(nodeType) ||
+          ['send_email', 'email', 'email_send'].includes(node.nodeSubtype || node.subtype || '');
+        if (!isSendEmail) continue;
+        if (!cfg.fromEmailId) {
+          cfg.fromEmailId = defaultChannelId;
+          node.config = cfg;
+        }
+      }
+    } catch (e) {
+      console.warn('[AI] Không lấy được email settings:', e.message);
     }
   }
 

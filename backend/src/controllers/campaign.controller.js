@@ -330,6 +330,25 @@ class CampaignController {
           );
           nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
         }
+
+        // Remap tempId references inside node configs to real DB IDs
+        const resolveId = (id) => {
+          if (id == null || String(id).trim() === '') return id;
+          const mapped = nodeIdMap[String(id)];
+          return mapped != null ? String(mapped) : String(id);
+        };
+        for (const node of nodes) {
+          const tempKey = String(node.tempId ?? node.id ?? '');
+          const dbId = nodeIdMap[tempKey];
+          if (dbId == null) continue;
+          const updatedConfig = this.normalizeNodeReferenceConfig(node.config || {}, resolveId);
+          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
+            await client.query(
+              'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+              [JSON.stringify(updatedConfig), dbId]
+            );
+          }
+        }
       }
 
       // Create connections (chỉ những connection có cả source và target nằm trong nodes)
@@ -498,6 +517,25 @@ class CampaignController {
             [id, node.nodeType, node.nodeSubtype, node.nodeName, node.nodeDescription, node.positionX || 0, node.positionY || 0, JSON.stringify(node.config || {}), executionOrder]
           );
           nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
+        }
+
+        // Remap tempId references inside node configs to real DB IDs
+        const resolveIdUpd = (id) => {
+          if (id == null || String(id).trim() === '') return id;
+          const mapped = nodeIdMap[String(id)];
+          return mapped != null ? String(mapped) : String(id);
+        };
+        for (const node of nodes) {
+          const tempKey = String(node.tempId ?? node.id ?? '');
+          const dbId = nodeIdMap[tempKey];
+          if (dbId == null) continue;
+          const updatedConfig = this.normalizeNodeReferenceConfig(node.config || {}, resolveIdUpd);
+          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
+            await client.query(
+              'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+              [JSON.stringify(updatedConfig), dbId]
+            );
+          }
         }
 
         // Create new connections (chỉ những connection có cả source và target nằm trong nodes vừa tạo)
