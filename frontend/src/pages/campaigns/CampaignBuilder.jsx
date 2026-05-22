@@ -851,12 +851,12 @@ const CampaignBuilder = () => {
    */
   const handleBackToCampaigns = () => {
     if (shouldBlockNavigation) {
-      pendingLeaveActionRef.current = () => navigate('/campaigns');
+      pendingLeaveActionRef.current = () => navigate('/app/campaigns');
       setLeaveConfirmContext(isRunning ? 'running' : 'dirty');
       setShowLeaveConfirmModal(true);
       return;
     }
-    navigate('/campaigns');
+    navigate('/app/campaigns');
   };
 
   const handleNameModalPrimary = () => {
