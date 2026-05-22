@@ -594,7 +594,7 @@ QUY TẮC:
         const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
 
         existingResources = `
-=== TÀI NGUYÊN CÓ SẴN ===
+=== TÀI NGUYÊN CÓ SẴN (được tải mới từ hệ thống tại thời điểm tin nhắn này — luôn phản ánh trạng thái hiện tại) ===
 Kênh phù hợp: ${recommendedType === 'email' ? 'Email (B2B)' : recommendedType === 'zalo' ? 'Zalo (B2C)' : 'Đa kênh'}
 
 📊 KHÁCH HÀNG TRONG DB:
