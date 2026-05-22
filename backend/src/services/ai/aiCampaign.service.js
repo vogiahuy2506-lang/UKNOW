@@ -979,7 +979,9 @@ GOOGLE SHEET KHÔNG CÓ URL:
 - productCount="1" nhưng user CHƯA nói rõ tên sản phẩm/khóa học → type: "ask_more", missing_fields: ["Tên sản phẩm hoặc khóa học muốn giới thiệu"], message: "Bạn muốn giới thiệu sản phẩm hoặc khóa học nào? Vui lòng cho tôi biết tên nhé!"
 - productCount="1" + user đã nói tên sản phẩm/khóa → tìm ID khớp trong TÀI NGUYÊN:
   • Nếu khớp → đặt interestedCourseIds: [id], dùng tên thật từ TÀI NGUYÊN để viết nội dung
-  • Nếu KHÔNG khớp (sản phẩm chưa có trong hệ thống) → interestedCourseIds: [], dùng tên user cung cấp để viết nội dung email/Zalo. KHÔNG tạo sản phẩm mới, KHÔNG báo lỗi. Ghi chú ngắn trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
+  • Nếu KHÔNG khớp (sản phẩm chưa có trong hệ thống):
+    - Nếu user CHƯA cung cấp mô tả/thông tin gì về sản phẩm đó → type: "ask_more", missing_fields: ["Thông tin sản phẩm"], message: "Sản phẩm '[tên]' chưa có trong hệ thống. Bạn có thể mô tả ngắn về sản phẩm này không? (ví dụ: mô tả, giá, điểm nổi bật) để tôi viết nội dung phù hợp hơn."
+    - Nếu user ĐÃ mô tả sản phẩm → dùng thông tin đó để viết nội dung, interestedCourseIds: [], KHÔNG tạo sản phẩm mới. Ghi chú trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
 - dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
   ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
