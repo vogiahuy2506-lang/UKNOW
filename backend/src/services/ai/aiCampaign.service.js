@@ -590,6 +590,17 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
 • end/end — kết thúc
 
 DELAY: KHÔNG tạo node wait/delay riêng. Delay đặt trong delayValue+delayUnit của action node tiếp theo.
+DELAY ĐƠN VỊ (bắt buộc chuyển đúng):
+- User nói "X phút" → delayValue: X, delayUnit: "minutes"
+- User nói "X giờ" → delayValue: X, delayUnit: "hours"
+- User nói "X ngày" → delayValue: X, delayUnit: "days"
+- KHÔNG làm tròn "3 giờ" thành "1 ngày" hay "0 ngày"
+
+ZALO NHÓM — LỌC THEO TÊN NHÓM:
+- Hệ thống KHÔNG thể lọc nhóm theo tên trong node config
+- Khi user đề cập tên nhóm cụ thể (vd: "nhóm Học viên K2023") → tạo chiến dịch bình thường với get_all_groups, thêm vào description: "⚠️ Vào Campaign Builder → node get_all_groups → chọn đúng nhóm '[tên nhóm]' trước khi chạy"
+- zaloSelectedGroupIds: [] (để trống, user tự chọn trong UI)
+
 Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send_zalo_group (KHÔNG dùng interested_customers cho nhóm)
 `;
       } catch (e) {
