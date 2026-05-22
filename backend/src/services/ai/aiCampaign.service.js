@@ -742,7 +742,14 @@ LUẬT QUAN TRỌNG: Mỗi node PHẢI có đúng cặp nodeType + nodeSubtype n
 Khi người dùng muốn tạo chiến dịch nhưng CHƯA có đủ thông tin để tạo ngay.
 Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ đơn giản, KHÔNG dùng từ chuyên môn.
 
-QUAN TRỌNG: Chỉ hỏi những gì thực sự cần. Nếu user đã nói rõ kênh → bỏ câu hỏi kênh.
+QUAN TRỌNG: Chỉ hỏi những gì thực sự cần. Bỏ câu hỏi nếu đã biết rõ từ lời user:
+- Đã nói rõ kênh (email/zalo/nhóm) → bỏ câu hỏi "channel"
+- Đã đề cập "landing page", "đăng ký", "form" → bỏ "dataSource", tự chọn landing
+- Đã đề cập "sheet", "excel", "file" → bỏ "dataSource", tự chọn sheet
+- Đã đề cập "khách hàng", "database", "hệ thống" → bỏ "dataSource", tự chọn db
+- User cung cấp email/SĐT cụ thể (vd: "gửi cho abc@gmail.com") → bỏ "dataSource", dùng db với filter email đó; nếu người đó chưa có trong DB thì trả lời bằng type "text" hướng dẫn thêm vào Danh sách khách trước
+- Chỉ 1 sản phẩm rõ ràng → bỏ "productCount"
+- Rõ ràng gửi 1 lần → bỏ "sendingStyle"
 
 Data structure:
 {
@@ -885,6 +892,7 @@ Khi type="landing_page": content mô tả trang, data chứa html/css.
 - sendingStyle="nhieu_dot" → các action node có delayValue > 0 (3-7 ngày)
 - audienceCount="nhieu_nhom" → nhiều data node, mỗi node 1 phân khúc khách khác nhau
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
+- dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "has_email", interestedLimit: 1 } (AI ghi chú email trong campaignName/description)
 - dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
   ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
 - dataSource="landing" → nodeSubtype: "read_landing_leads", config: {}
