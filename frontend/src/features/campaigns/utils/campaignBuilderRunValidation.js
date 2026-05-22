@@ -104,7 +104,10 @@ export const validateNodeForRun = (node) => {
   }
 
   if (nodeType === 'send_email') {
-    const steps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
+    const rawSteps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
+    const steps = rawSteps.length === 0 && config.emailTemplateId
+      ? [{ templateId: config.emailTemplateId }]
+      : rawSteps;
     if (!steps.length) {
       return { status: 'failed', message: 'Chưa chọn template email' };
     }
