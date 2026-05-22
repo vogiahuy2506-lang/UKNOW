@@ -21,7 +21,14 @@ class AiCampaignService {
          ORDER BY created_at DESC LIMIT 50`,
         [userId]
       );
-      return result.rows;
+      return result.rows.map(r => ({
+        ...r,
+        name: String(r.name || '')
+          .replace(/&#8211;/g, '—').replace(/&#8212;/g, '—')
+          .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'").replace(/&nbsp;/g, ' '),
+      }));
     } catch (e) {
       console.warn('[AI] Không lấy được danh sách khóa học:', e.message);
       return [];
