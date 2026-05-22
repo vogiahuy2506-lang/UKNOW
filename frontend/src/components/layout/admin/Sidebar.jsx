@@ -26,6 +26,7 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineCurrencyDollar,
   HiOutlineShieldCheck,
+  HiOutlineOfficeBuilding,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -72,6 +73,7 @@ const userMenuItems = [
     name: 'Thiết lập',
     icon: HiOutlineCog,
     children: [
+      { name: 'Hồ sơ doanh nghiệp', path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
       { name: 'Quản lý kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: 'Mẫu tin nhắn', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
       { name: 'Quản lý sản phẩm', path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
