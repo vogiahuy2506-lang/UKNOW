@@ -119,6 +119,9 @@ class CampaignNodeDataService {
           });
         } else {
           const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
+          const notPurchasedCourseIds = (Array.isArray(config.notPurchasedCourseIds) ? config.notPurchasedCourseIds : [])
+            .map((v) => parseInt(v, 10))
+            .filter((v) => Number.isFinite(v));
           interestedData = await customerInterestedService.getInterestedCustomersWithCourses({
             userId,
             /**
@@ -133,6 +136,7 @@ class CampaignNodeDataService {
             courseQuery,
             customerType,
             purchaseOrderStatusExpr,
+            notPurchasedCourseIds,
           });
         }
 

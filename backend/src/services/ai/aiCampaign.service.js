@@ -13,6 +13,21 @@ class AiCampaignService {
    * @param {number} userId
    * @returns {Promise<Array>}
    */
+  async getCourses(userId) {
+    try {
+      const result = await db.query(
+        `SELECT id, course_name AS name, course_code AS code
+         FROM courses WHERE id_user = $1 AND status = 'publish'
+         ORDER BY created_at DESC LIMIT 20`,
+        [userId]
+      );
+      return result.rows;
+    } catch (e) {
+      console.warn('[AI] Không lấy được danh sách khóa học:', e.message);
+      return [];
+    }
+  }
+
   async getEmailTemplates(userId) {
     try {
       const result = await db.query(
@@ -544,7 +559,7 @@ QUY TẮC:
     let existingResources = '';
     if (userId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses] =
           await Promise.all([
             this.getEmailTemplates(userId),
             this.getZaloAccounts(userId),
@@ -552,6 +567,7 @@ QUY TẮC:
             this.getZaloTemplates(userId),
             this.getRecommendedCampaignType(userId),
             this.getCustomerStats(userId),
+            this.getCourses(userId),
           ]);
 
         const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
@@ -562,6 +578,9 @@ Kênh phù hợp: ${recommendedType === 'email' ? 'Email (B2B)' : recommendedTyp
 
 📊 KHÁCH HÀNG TRONG DB:
 - Tổng: ${customerStats.total} | Có email: ${customerStats.hasEmail} | Có Zalo/phone: ${customerStats.hasZalo}
+
+📚 Khóa học / Sản phẩm (dùng id trong interestedCourseIds / notPurchasedCourseIds):
+${courses.length > 0 ? courses.map(c => `  - ID: ${c.id} | "${c.name}"`).join('\n') : '  (chưa có khóa học trong hệ thống)'}
 
 📧 Email Templates (emailTemplateId):
 ${emailTemplates.length > 0 ? emailTemplates.map(t => `  - ID: ${t.id} | "${t.name}" | Subject: ${t.subject}`).join('\n') : '  (chưa có — tự soạn nội dung inline)'}
@@ -577,7 +596,10 @@ ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.gro
 
 NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại này):
 • trigger/manual — điểm khởi đầu
-• data/interested_customers — lấy khách từ DB (config: interestedCustomerType, interestedLimit)
+• data/interested_customers — lấy khách từ DB (config: interestedCustomerType, interestedLimit, interestedCourseIds, notPurchasedCourseIds)
+  - interestedCustomerType: "interested"=chưa mua | "purchased"=đã mua | "both"=tất cả
+  - interestedCourseIds: [id1, id2] → chỉ lấy khách liên quan đến khóa học này
+  - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
 • data/read_sheet — đọc Google Sheet
 • data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trước get_all_friends/get_all_groups)
 • data/get_all_friends — lấy danh sách bạn bè
@@ -934,6 +956,10 @@ GOOGLE SHEET KHÔNG CÓ URL:
 - audienceCount="nhieu_nhom" → nhiều data node, mỗi node 1 phân khúc khách khác nhau
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
 - dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "has_email", interestedLimit: 1 } (AI ghi chú email trong campaignName/description)
+- "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
+- "chưa mua [khóa X]" → interestedCustomerType: "interested", interestedCourseIds: [id_khoaX]
+- "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
+- Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
 - dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
   ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
 - dataSource="landing" → nodeSubtype: "read_landing_leads", config: {}

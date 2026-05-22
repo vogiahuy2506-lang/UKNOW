@@ -16,6 +16,7 @@ class CustomerInterestedService {
     courseQuery,
     customerType,
     purchaseOrderStatusExpr,
+    notPurchasedCourseIds,
   }) {
     const campaignIdNum = Number.isFinite(parseInt(campaignId, 10))
       ? parseInt(campaignId, 10)
@@ -98,6 +99,20 @@ class CustomerInterestedService {
         whereCourseStatus = ` AND LOWER(COALESCE(crs.status, 'publish')) = ANY($${params.length})`;
       }
 
+      const excludeCourseIds = Array.isArray(notPurchasedCourseIds)
+        ? notPurchasedCourseIds.map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v))
+        : [];
+      let whereNotPurchased = '';
+      if (excludeCourseIds.length > 0) {
+        const placeholders = excludeCourseIds.map((_, idx) => `$${params.length + idx + 1}`).join(',');
+        params.push(...excludeCourseIds);
+        whereNotPurchased = ` AND cp.id_customer NOT IN (
+          SELECT id_customer FROM customer_purchases
+          WHERE id_user = $1 AND id_course IN (${placeholders})
+            AND LOWER(COALESCE(product_type, '')) != 'interested'
+        )`;
+      }
+
       const listParams = [...params, limit];
       const listQuery = `
         SELECT MIN(cp.id) AS id,
@@ -134,6 +149,7 @@ class CustomerInterestedService {
           ${whereCourse}
           ${whereCourseStatus}
           ${whereCourseQuery}
+          ${whereNotPurchased}
         GROUP BY cp.id_customer,
                  c.full_name,
                  c.email,
