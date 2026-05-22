@@ -215,13 +215,26 @@ export const createNodeConfigFormData = ({
   recipientFormula: config.recipientFormula || '',
   sendAllAtOnce: config.sendAllAtOnce || false,
   sendDelayMs: config.sendDelayMs || 0,
-  emailSteps: normalizeEmailSteps
-    ? (config.emailSteps || []).map((item) => ({
-        delayFrom: item.delayFrom || 'start',
-        enableLinkTracking: item.enableLinkTracking !== false,
-        ...item,
-      }))
-    : config.emailSteps || [],
+  emailSteps: (() => {
+    const steps = normalizeEmailSteps
+      ? (config.emailSteps || []).map((item) => ({
+          delayFrom: item.delayFrom || 'start',
+          enableLinkTracking: item.enableLinkTracking !== false,
+          ...item,
+        }))
+      : config.emailSteps || [];
+    if (steps.length === 0 && config.emailTemplateId) {
+      return [{
+        templateId: config.emailTemplateId,
+        delayValue: config.delayValue || 0,
+        delayUnit: config.delayUnit || 'days',
+        delayFrom: 'start',
+        enableLinkTracking: true,
+        templateMappings: config.templateMappings || [],
+      }];
+    }
+    return steps;
+  })(),
   ccEnabled: config.ccEnabled || false,
   ccSource: config.ccSource || 'manual',
   ccEmails: config.ccEmails || '',

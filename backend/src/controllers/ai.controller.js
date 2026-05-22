@@ -169,9 +169,10 @@ class AiController {
       console.log('[AI Controller] Raw script nodes:', JSON.stringify(script.nodes, null, 2));
       const normalizedNodes = this._normalizeNodes(script.nodes);
 
-      // Auto-fill fromEmailId với SMTP channel đầu tiên của user
+      // Auto-fill fromEmailId và zaloAccountId với channel đầu tiên của user
       await this._autoFillEmailChannels(normalizedNodes, req.user.id);
-      
+      await this._autoFillZaloAccounts(normalizedNodes, req.user.id);
+
       // Normalize connections: support { source, target } or { sourceNodeId, targetNodeId }
       const normalizedConnections = (script.connections || []).map(conn => ({
         sourceNodeId: conn.sourceNodeId || conn.source || conn.from,
@@ -337,6 +338,7 @@ class AiController {
 
       // Auto-fill fromEmailId với SMTP channel đầu tiên của user
       await this._autoFillEmailChannels(normalizedNodes, req.user.id);
+      await this._autoFillZaloAccounts(normalizedNodes, req.user.id);
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -559,6 +561,29 @@ class AiController {
       }
     } catch (e) {
       console.warn('[AI] Không lấy được email settings:', e.message);
+    }
+  }
+
+  async _autoFillZaloAccounts(nodes, userId) {
+    try {
+      const { rows } = await db.query(
+        `SELECT id FROM zalo_settings WHERE id_user = $1 AND is_active = true ORDER BY id ASC LIMIT 1`,
+        [userId]
+      );
+      if (!rows.length) return;
+      const defaultAccountId = rows[0].id;
+      const zaloNodeTypes = ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'select_zalo_account'];
+      for (const node of nodes) {
+        const cfg = node.config || {};
+        const nodeType = node.node_type || node.nodeType || node.type || '';
+        if (!zaloNodeTypes.includes(nodeType)) continue;
+        if (!cfg.zaloAccountId) {
+          cfg.zaloAccountId = defaultAccountId;
+          node.config = cfg;
+        }
+      }
+    } catch (e) {
+      console.warn('[AI] Không lấy được zalo settings:', e.message);
     }
   }
 
