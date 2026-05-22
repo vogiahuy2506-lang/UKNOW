@@ -18,21 +18,22 @@ import aiApi from '../../services/aiApi';
 function AiContent({ text }) {
   if (!text) return null;
   const lines = text.split('\n');
+  const renderInline = (str, baseKey) =>
+    str.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
+      part.startsWith('**') && part.endsWith('**')
+        ? <strong key={`${baseKey}-${j}`}>{part.slice(2, -2)}</strong>
+        : part
+    );
   return (
     <div className="text-sm leading-relaxed text-slate-800 space-y-1">
       {lines.map((line, i) => {
         if (!line.trim()) return <div key={i} className="h-1" />;
-        // Bold: **text**
-        const parts = line.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
-          part.startsWith('**') && part.endsWith('**')
-            ? <strong key={j}>{part.slice(2, -2)}</strong>
-            : part
-        );
         // Bullet: lines starting with - or *
         if (/^[-*]\s/.test(line)) {
-          return <div key={i} className="flex gap-1.5"><span className="text-slate-400 shrink-0 mt-0.5">•</span><span>{parts.slice(1)}</span></div>;
+          const content = line.replace(/^[-*]\s/, '');
+          return <div key={i} className="flex gap-1.5"><span className="text-slate-400 shrink-0 mt-0.5">•</span><span>{renderInline(content, i)}</span></div>;
         }
-        return <p key={i}>{parts}</p>;
+        return <p key={i}>{renderInline(line, i)}</p>;
       })}
     </div>
   );
