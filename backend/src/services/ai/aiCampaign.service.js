@@ -822,14 +822,6 @@ Data structure:
       ]
     },
     {
-      "id": "audienceCount",
-      "label": "Tệp khách hàng:",
-      "options": [
-        { "value": "1_nhom", "label": "Tất cả chung 1 nhóm" },
-        { "value": "nhieu_nhom", "label": "Chia thành nhiều nhóm khác nhau" }
-      ]
-    },
-    {
       "id": "dataSource",
       "label": "Lấy danh sách khách từ đâu?",
       "options": [
@@ -965,7 +957,6 @@ GOOGLE SHEET KHÔNG CÓ URL:
 - channel: email/zalo/zalo_group → chọn đúng action node
 - productCount="nhieu" → nhiều action node, mỗi node 1 sản phẩm khác nhau
 - sendingStyle="nhieu_dot" → các action node có delayValue > 0 (3-7 ngày)
-- audienceCount="nhieu_nhom" → nhiều data node, mỗi node 1 phân khúc khách khác nhau
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
 - dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "has_email", interestedLimit: 1 } (AI ghi chú email trong campaignName/description)
 - "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
