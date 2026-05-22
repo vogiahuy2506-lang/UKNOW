@@ -976,7 +976,7 @@ GOOGLE SHEET KHÔNG CÓ URL:
 - "chưa mua [khóa X]" → interestedCustomerType: "interested", interestedCourseIds: [id_khoaX]
 - "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
 - productCount="nhieu" + user đề cập chủ đề/loại sản phẩm (vd: "khóa học AI", "tất cả khóa học") → tìm tất cả ID khóa phù hợp trong danh sách TÀI NGUYÊN và đặt vào interestedCourseIds. Nếu không match khóa nào → để interestedCourseIds: [] (lấy tất cả)
-- productCount="1" nhưng user CHƯA nói rõ tên khóa học → type: "ask_more", missing_fields: ["Tên khóa học muốn giới thiệu"], liệt kê danh sách khóa học có sẵn để user chọn: "Bạn muốn giới thiệu khóa học nào? Danh sách hiện có:\n[liệt kê tên + ID từ TÀI NGUYÊN]"
+- productCount="1" nhưng user CHƯA nói rõ tên sản phẩm/khóa học → type: "ask_more", missing_fields: ["Tên sản phẩm hoặc khóa học muốn giới thiệu"], message: "Bạn muốn giới thiệu sản phẩm hoặc khóa học nào? Vui lòng cho tôi biết tên nhé!"
 - productCount="1" + user đã nói tên khóa → tìm ID khớp trong TÀI NGUYÊN, đặt vào interestedCourseIds: [id]
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
 - dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
