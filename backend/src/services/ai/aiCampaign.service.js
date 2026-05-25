@@ -157,6 +157,32 @@ class AiCampaignService {
   }
 
   /**
+   * Lấy danh sách landing pages của user (slug + title) để AI gợi ý filter leads.
+   * @param {number} userId
+   * @returns {Promise<Array>}
+   */
+  async getLandingPages(userId) {
+    try {
+      const result = await db.query(
+        `SELECT slug, COALESCE(title, slug) AS title, is_published
+         FROM landing_pages
+         WHERE id_user = $1
+         ORDER BY updated_at DESC
+         LIMIT 20`,
+        [userId]
+      );
+      return result.rows.map(r => ({
+        slug: r.slug,
+        title: r.title,
+        isPublished: r.is_published,
+      }));
+    } catch (e) {
+      console.warn('[AI] Không lấy được landing pages:', e.message);
+      return [];
+    }
+  }
+
+  /**
    * Lấy thông tin khuyến nghị campaign type dựa trên profile doanh nghiệp.
    * @param {number} userId
    * @returns {Promise<string>}
@@ -322,7 +348,7 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
   config: { "sheetUrl": "...", "sheetName": "Sheet1", "headerRow": 1, "dataStartRow": 2 }
 
 • nodeType: "data", nodeSubtype: "read_landing_leads"     ← leads từ landing page
-  config: {}
+  config: { "landingLeadsSlugs": ["slug-landing-page"] }  ← [] = lấy tất cả leads; điền slug từ danh sách Landing Pages trong TÀI NGUYÊN CÓ SẴN
 
 • nodeType: "data", nodeSubtype: "select_zalo_account"   ← BẮT BUỘC trước get_all_friends/get_all_groups
   config: { "zaloAccountId": <ID_TK_ZALO> }
@@ -580,7 +606,7 @@ QUY TẮC:
     let existingResources = '';
     if (userId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, landingPages] =
           await Promise.all([
             this.getEmailTemplates(userId),
             this.getZaloAccounts(userId),
@@ -589,6 +615,7 @@ QUY TẮC:
             this.getRecommendedCampaignType(userId),
             this.getCustomerStats(userId),
             this.getCourses(userId),
+            this.getLandingPages(userId),
           ]);
 
         const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
@@ -615,13 +642,17 @@ Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}
 
 ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}` : ''}
 
+🌐 Landing Pages (landingLeadsSlugs — dùng để lọc leads trong read_landing_leads):
+${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
+
 NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại này):
 • trigger/manual — điểm khởi đầu
 • data/interested_customers — lấy khách từ DB (config: interestedCustomerType, interestedLimit, interestedCourseIds, notPurchasedCourseIds)
   - interestedCustomerType: "interested"=chưa mua | "purchased"=đã mua | "both"=tất cả
   - interestedCourseIds: [id1, id2] → chỉ lấy khách liên quan đến khóa học này
   - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
-• data/read_sheet — đọc Google Sheet
+• data/read_sheet — đọc Google Sheet (config: sheetUrl BẮT BUỘC)
+• data/read_landing_leads — lấy leads từ landing page (config: landingLeadsSlugs: ["slug"] — lấy từ danh sách Landing Pages trong TÀI NGUYÊN)
 • data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trước get_all_friends/get_all_groups)
 • data/get_all_friends — lấy danh sách bạn bè
 • data/get_all_groups — lấy danh sách nhóm
@@ -780,6 +811,18 @@ Zalo nhóm campaign:
   "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"},{"sourceNodeId":"n4","targetNodeId":"n5"},{"sourceNodeId":"n5","targetNodeId":"n6"}]
 }
 
+Mixed campaign (Email + Zalo cùng lúc — 2 nhánh song song từ 1 data node):
+{ "campaignName": "...", "description": "...", "campaignType": "mixed", "isAiDraft": true,
+  "nodes": [
+    { "tempId": "n1", "nodeType": "trigger",  "nodeSubtype": "manual",               "nodeName": "Bắt đầu",         "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
+    { "tempId": "n2", "nodeType": "data",     "nodeSubtype": "interested_customers", "nodeName": "Danh sách khách", "nodeDescription": "Khách từ database", "positionX": 350, "positionY": 200, "config": { "interestedCustomerType": "both", "interestedLimit": 1000 } },
+    { "tempId": "n3", "nodeType": "action",   "nodeSubtype": "send_email",           "nodeName": "Email giới thiệu","nodeDescription": "Gửi ngay", "positionX": 600, "positionY": 100, "config": { "recipientSource": "node", "recipientNodeId": "n2", "recipientField": "email", "emailTemplateId": null, "emailSubject": "Tiêu đề email", "emailBody": "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto\">...</div>", "templateMappings": [], "enableLinkTracking": true, "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
+    { "tempId": "n4", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",   "nodeName": "Zalo giới thiệu","nodeDescription": "Gửi ngay", "positionX": 600, "positionY": 300, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "message": "Nội dung Zalo...", "zaloPersonalTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
+    { "tempId": "n5", "nodeType": "end",      "nodeSubtype": "end",                  "nodeName": "Kết thúc",        "nodeDescription": "", "positionX": 900, "positionY": 200, "config": {} }
+  ],
+  "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n2","targetNodeId":"n4"},{"sourceNodeId":"n3","targetNodeId":"n5"},{"sourceNodeId":"n4","targetNodeId":"n5"}]
+}
+
 LUẬT QUAN TRỌNG: Mỗi node PHẢI có đúng cặp nodeType + nodeSubtype như mẫu trên. KHÔNG được dùng nodeSubtype: "manual" cho tất cả node.
 
 ### 5. type: "ask_campaign_details"
@@ -789,10 +832,16 @@ Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ
 QUAN TRỌNG: Chỉ bỏ câu hỏi khi user đã nói RÕ RÀNG và CHẮC CHẮN:
 - Đã nói rõ kênh (email/zalo/nhóm) → bỏ câu hỏi "channel"
 - Đã đề cập "landing page", "đăng ký", "form" → bỏ "dataSource", tự chọn landing
-- Đã đề cập "sheet", "excel", "file" → bỏ "dataSource", tự chọn sheet
+- Đã đề cập "sheet", "excel", "file" → bỏ "dataSource", tự chọn sheet — nhưng SAU ĐÓ phải hỏi URL qua ask_more
 - Đã đề cập "khách hàng", "database", "hệ thống" → bỏ "dataSource", tự chọn db
 - User cung cấp email/SĐT cụ thể (vd: "gửi cho abc@gmail.com") → bỏ "dataSource", dùng db với filter email đó; nếu người đó chưa có trong DB thì trả lời bằng type "text" hướng dẫn thêm vào Danh sách khách trước
 - KHÔNG bỏ "productCount" hay "sendingStyle" trừ khi user nói thật sự rõ. Nếu không chắc → vẫn hỏi
+
+CÂU HỎI ĐỘNG — thêm vào questions khi cần:
+- Nếu channel=zalo hoặc channel=zalo_group VÀ có nhiều tài khoản Zalo (>1 trong TÀI NGUYÊN) → thêm câu hỏi "zaloAccount":
+  { "id": "zaloAccount", "label": "Dùng tài khoản Zalo nào?", "options": [{ "value": "<id>", "label": "<displayName>" }, ...] }
+- Nếu dataSource=landing VÀ có nhiều landing pages (>1 trong TÀI NGUYÊN) → thêm câu hỏi "landingPage":
+  { "id": "landingPage", "label": "Lấy leads từ trang nào?", "options": [{ "value": "<slug>", "label": "<title>" }, ...] }
 
 Data structure:
 {
@@ -953,15 +1002,17 @@ EMAIL CÓ GIF / ẢNH ĐỘNG:
 - Đề cập trong content: "Bạn cần thay URL ảnh placeholder bằng link GIF thực"
 
 GOOGLE SHEET KHÔNG CÓ URL:
-- Khi user đề cập "Google Sheet" / "file sheet" nhưng KHÔNG cung cấp URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], hỏi: "Bạn vui lòng chia sẻ đường dẫn Google Sheet để tôi cấu hình đúng?"
-- Chỉ dùng dataSource="sheet" khi user đã cung cấp URL hoặc chọn từ form
+- Khi user đề cập "Google Sheet" / "file sheet" / chọn dataSource="sheet" nhưng KHÔNG cung cấp URL → BẮT BUỘC type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? URL có dạng: https://docs.google.com/spreadsheets/d/..."
+- Chỉ tạo node read_sheet khi user đã cung cấp URL hợp lệ (bắt đầu bằng https://)
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
 - channel: email/zalo/zalo_group → chọn đúng action node
+- zaloAccount="<id>" → dùng ID đó làm zaloAccountId trong tất cả action/data node Zalo; nếu không có câu hỏi này → dùng tài khoản mặc định (firstZaloAccountId)
+- landingPage="<slug>" → dùng slug đó trong landingLeadsSlugs của read_landing_leads
 - productCount="nhieu" → nhiều action node, mỗi node 1 sản phẩm khác nhau
 - sendingStyle="nhieu_dot" → các action node có delayValue > 0 (3-7 ngày)
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
-- dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "has_email", interestedLimit: 1 } (AI ghi chú email trong campaignName/description)
+- dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 } — ghi email cụ thể vào description để user tự lọc trong Campaign Builder (interestedCustomerType chỉ nhận "both"|"interested"|"purchased")
 - "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
 - "chưa mua [khóa X]" → interestedCustomerType: "interested", interestedCourseIds: [id_khoaX]
 - "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
@@ -973,9 +1024,11 @@ GOOGLE SHEET KHÔNG CÓ URL:
     - Nếu user CHƯA cung cấp mô tả/thông tin gì về sản phẩm đó → type: "ask_more", missing_fields: ["Thông tin sản phẩm"], message: "Sản phẩm '[tên]' chưa có trong hệ thống. Bạn có thể mô tả ngắn về sản phẩm này không? (ví dụ: mô tả, giá, điểm nổi bật) để tôi viết nội dung phù hợp hơn."
     - Nếu user ĐÃ mô tả sản phẩm → dùng thông tin đó để viết nội dung, interestedCourseIds: [], KHÔNG tạo sản phẩm mới. Ghi chú trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
-- dataSource="sheet"   → nodeSubtype: "read_sheet", config: { sheetUrl: "", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
-  ⚠ Nếu user chọn sheet: thêm vào content câu nhắc "Bạn cần điền đường dẫn Google Sheet vào cấu hình sau khi tạo chiến dịch."
-- dataSource="landing" → nodeSubtype: "read_landing_leads", config: {}
+- dataSource="sheet" + user CHƯA cung cấp URL Google Sheet → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
+- dataSource="sheet" + user ĐÃ cung cấp URL → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
+- dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
+- dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }
+- dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
 
 Ví dụ campaign drip 2 đợt (sendingStyle=nhieu_dot, dataSource=db):
 nodes: trigger → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end

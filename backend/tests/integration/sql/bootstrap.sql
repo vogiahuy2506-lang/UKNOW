@@ -130,6 +130,8 @@ CREATE TABLE plans (
   max_email_accounts    INTEGER,
   max_email_templates   INTEGER,
   max_zalo_templates    INTEGER,
+  duration_days         INTEGER,
+  price_yearly          BIGINT,
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
