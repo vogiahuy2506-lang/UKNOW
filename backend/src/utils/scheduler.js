@@ -451,6 +451,16 @@ export const initScheduler = () => {
     console.error('[Scheduler] Không thể quét retry non-continuous quá hạn ban đầu:', error.message);
   });
 
+  // ── Reset daily_sent_count — chạy lúc 00:00 mỗi ngày ─────────────────────
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      const { rowCount } = await db.query('UPDATE email_settings SET daily_sent_count = 0');
+      console.log(`[Scheduler] Reset daily_sent_count: ${rowCount} email accounts`);
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi reset daily_sent_count:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');

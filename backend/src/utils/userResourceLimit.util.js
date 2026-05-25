@@ -111,6 +111,15 @@ export async function checkUserResourceLimit(input) {
     };
   }
 
+  if (normalizedLimit === 0) {
+    return {
+      allowed: false,
+      limit: 0,
+      currentCount: 0,
+      message: `Tính năng ${resourceConfig.label} không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.`,
+    };
+  }
+
   const countResult = await db.query(
     `SELECT COUNT(*)::int AS total
      FROM ${resourceConfig.table}

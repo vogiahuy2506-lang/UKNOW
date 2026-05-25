@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
+import { checkUserEmailSendLimit } from '../../utils/userSendLimit.util.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import campaignFlowService from './campaignFlow.service.js';
 import {
@@ -441,6 +442,17 @@ class CampaignEmailSenderService {
         error: `Email chưa tới giờ retry, hệ thống giữ lịch theo mốc ${retryDelayLabel} (chiến dịch sẽ thử lại khi tới hạn).`,
         retryScheduledAt: retryScheduleGuard.scheduledAtIso,
         retryAttemptCount: Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0,
+      };
+    }
+
+    const emailLimitCheck = await checkUserEmailSendLimit({ userId: campaign.id_user });
+    if (!emailLimitCheck.allowed) {
+      return {
+        to: customer?.email || '',
+        status: 'failed',
+        errorType: 'plan_send_limit_exceeded',
+        error: emailLimitCheck.message,
+        period: emailLimitCheck.period,
       };
     }
 
