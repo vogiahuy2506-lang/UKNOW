@@ -31,4 +31,9 @@ router.post('/create-and-run-campaign', aiController.createAndRunCampaign.bind(a
 router.get('/business-profile', aiController.getBusinessProfile.bind(aiController));
 router.put('/business-profile', aiController.saveBusinessProfile.bind(aiController));
 
+// Chat sessions (multi-session history)
+router.get('/sessions', aiController.getSessions.bind(aiController));
+router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiController));
+router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
+
 export default router;

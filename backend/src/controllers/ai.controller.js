@@ -4,6 +4,7 @@ import businessProfileService from '../services/ai/businessProfile.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import db from '../config/database.js';
+import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 
 class AiController {
   /**
@@ -50,7 +51,7 @@ class AiController {
    */
   async chat(req, res) {
     try {
-      const { history, files } = req.body;
+      const { history, files, sessionId } = req.body;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -66,9 +67,28 @@ class AiController {
         userRole: req.user.role,
       });
 
+      // Persist session + messages (bỏ qua lỗi DB để không block chat)
+      let finalSessionId = sessionId || null;
+      let sessionTitle = null;
+      try {
+        const lastUserMsg = history[history.length - 1];
+        const userContent = lastUserMsg?.content ?? '';
+
+        if (!finalSessionId) {
+          const title = userContent.slice(0, 80).trim() || 'Cuộc trò chuyện mới';
+          const session = await aiSessionRepo.createSession(req.user.id, title);
+          finalSessionId = session.id;
+          sessionTitle = session.title;
+        }
+
+        await aiSessionRepo.saveMessages(finalSessionId, userContent, response);
+      } catch (dbErr) {
+        console.warn('[AI] Không lưu được session:', dbErr.message);
+      }
+
       return res.json({
         success: true,
-        data: response,
+        data: { ...response, sessionId: finalSessionId, sessionTitle },
       });
     } catch (error) {
       console.error('AI chat error:', error);
@@ -76,6 +96,40 @@ class AiController {
         success: false,
         message: error.message || 'Lỗi khi xử lý trò chuyện AI',
       });
+    }
+  }
+
+  async getSessions(req, res) {
+    try {
+      const sessions = await aiSessionRepo.getUserSessions(req.user.id);
+      return res.json({ success: true, data: sessions });
+    } catch (error) {
+      console.error('Get AI sessions error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách session' });
+    }
+  }
+
+  async getSessionMessages(req, res) {
+    try {
+      const messages = await aiSessionRepo.getSessionMessages(Number(req.params.id), req.user.id);
+      if (messages === null) {
+        return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+      }
+      return res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('Get session messages error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi lấy tin nhắn' });
+    }
+  }
+
+  async deleteSession(req, res) {
+    try {
+      const deleted = await aiSessionRepo.deleteSession(Number(req.params.id), req.user.id);
+      if (!deleted) return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Delete session error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi xóa session' });
     }
   }
 

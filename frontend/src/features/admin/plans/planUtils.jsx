@@ -18,8 +18,9 @@ export const renderModal = (content, onClose, cls = MODAL_PANEL) =>
   );
 
 export const emptyForm = () => ({
-  code: '', name: '', price: 0, description: '',
+  code: '', name: '', price: 0, priceYearly: '', description: '',
   maxEmployees: -1, isActive: true, features: [],
+  durationDays: '',
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
   maxLandingPages: '', maxCampaigns: '',

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields } from './PlanInputs';
+import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
 export const PlanFormModal = ({ plan, onClose, onSaved }) => {
@@ -13,10 +13,12 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
     code: plan.code || '',
     name: plan.name || '',
     price: plan.price ?? 0,
+    priceYearly: plan.priceYearly ?? '',
     description: plan.description || '',
     maxEmployees: plan.maxEmployees ?? -1,
     isActive: plan.isActive ?? true,
     features: plan.features || [],
+    durationDays: plan.durationDays ?? '',
     dailyEmailLimit: plan.dailyEmailLimit ?? '',
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
@@ -69,8 +71,16 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
           {isEdit && <p className="text-xs text-gray-400 mt-1">Mã gói không thể thay đổi sau khi tạo.</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ) *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Giá tháng (VNĐ) *</label>
           <PriceInput value={form.price} onChange={(v) => set('price', v)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
+          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
+          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
@@ -183,12 +193,20 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
   const [form, setForm] = useState({
     name: plan.name || '',
     price: plan.price ?? 0,
+    priceYearly: plan.priceYearly ?? '',
     description: plan.description || '',
     maxEmployees: plan.maxEmployees ?? -1,
+    durationDays: plan.durationDays ?? '',
     dailyEmailLimit: plan.dailyEmailLimit ?? '',
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    maxLandingPages: plan.maxLandingPages ?? '',
+    maxCampaigns: plan.maxCampaigns ?? '',
+    maxZaloAccounts: plan.maxZaloAccounts ?? '',
+    maxEmailAccounts: plan.maxEmailAccounts ?? '',
+    maxEmailTemplates: plan.maxEmailTemplates ?? '',
+    maxZaloTemplates: plan.maxZaloTemplates ?? '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -225,8 +243,16 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
             onChange={(e) => set('name', e.target.value)} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Giá tháng (VNĐ)</label>
           <PriceInput value={form.price} onChange={(v) => set('price', v)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
+          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
+          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
@@ -240,6 +266,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} />
+
+      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Hủy</button>
@@ -381,10 +409,14 @@ const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, userEmai
 // ── CustomPlanModal — tạo gói riêng + gán ngay hoặc tạo link PayOS ───────────
 export const CustomPlanModal = ({ onClose, onSaved }) => {
   const [form, setForm] = useState({
-    userEmail: '', name: '', code: '', price: 0,
+    userEmail: '', name: '', code: '', price: 0, priceYearly: '',
     description: '', maxEmployees: -1,
+    durationDays: '',
     dailyEmailLimit: '', monthlyEmailLimit: '',
     dailyZaloLimit: '', monthlyZaloLimit: '',
+    maxLandingPages: '', maxCampaigns: '',
+    maxZaloAccounts: '', maxEmailAccounts: '',
+    maxEmailTemplates: '', maxZaloTemplates: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
@@ -464,6 +496,14 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
           <PriceInput value={form.price} onChange={(v) => set('price', v)} />
         </div>
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
+          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
+          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
           <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} />
         </div>
@@ -475,6 +515,8 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} />
+
+      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
       <div className="flex flex-col gap-2 pt-2">
         <button

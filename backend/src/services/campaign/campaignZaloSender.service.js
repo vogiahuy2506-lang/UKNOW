@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import crypto from 'node:crypto';
+import { checkUserZaloSendLimit } from '../../utils/userSendLimit.util.js';
 import path from 'node:path';
 import uploadController from '../../controllers/upload.controller.js';
 import { ThreadType, Zalo } from 'zca-js';
@@ -1683,6 +1684,10 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendPersonalMessageByQueue(payload = {}) {
+    if (payload?.userId) {
+      const limitCheck = await checkUserZaloSendLimit({ userId: payload.userId });
+      if (!limitCheck.allowed) throw new Error(limitCheck.message);
+    }
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
@@ -1905,6 +1910,10 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendGroupMessageByQueue(payload = {}) {
+    if (payload?.userId) {
+      const limitCheck = await checkUserZaloSendLimit({ userId: payload.userId });
+      if (!limitCheck.allowed) throw new Error(limitCheck.message);
+    }
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
