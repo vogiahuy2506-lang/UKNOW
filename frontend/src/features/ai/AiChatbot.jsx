@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import useIsMobile from '../../hooks/useIsMobile';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -868,7 +869,7 @@ const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
 
 // Landing page card - now imported from ./components/LandingPageCard.jsx
 
-const AiChatbot = ({ isOpen, onToggle }) => {
+const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
 
@@ -907,11 +908,46 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [showSessionList, setShowSessionList] = useState(false);
 
+  const isMobile = useIsMobile();
+  const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const panelDragStartXRef = useRef(0);
+  const panelDragStartWidthRef = useRef(panelWidth);
+
   const messagesEndRef = useRef(null);
   const isSendingRef = useRef(false);
   const fileInputRef = useRef(null);
   const hasInitializedRef = useRef(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isResizingPanel) return;
+
+    const handleMouseMove = (e) => {
+      const delta = panelDragStartXRef.current - e.clientX;
+      const nextWidth = Math.min(700, Math.max(320, panelDragStartWidthRef.current + delta));
+      onWidthChange?.(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingPanel(false);
+      onResizeEnd?.();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingPanel, onWidthChange, onResizeEnd]);
+
+  const handlePanelResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizingPanel(true);
+    panelDragStartXRef.current = e.clientX;
+    panelDragStartWidthRef.current = panelWidth;
+    onResizeStart?.();
+  };
 
   const loadSession = async (sessionId) => {
     try {
@@ -1566,12 +1602,23 @@ const AiChatbot = ({ isOpen, onToggle }) => {
 
   return (
     <div
-      className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl transition-all duration-300 z-40 flex flex-col overflow-hidden ${isOpen ? 'w-full sm:w-[420px] translate-x-0' : 'w-0 translate-x-full'}`}
+      className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl z-40 flex flex-col overflow-hidden ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
+      style={{
+        width: isMobile ? '100%' : `${panelWidth}px`,
+        transition: isResizingPanel ? 'none' : 'transform 0.3s ease-in-out',
+      }}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Drag handle — chỉ trên desktop */}
+      {!isMobile && isOpen && (
+        <div
+          className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-50 transition-colors ${isResizingPanel ? 'bg-orange-300' : 'hover:bg-orange-200'}`}
+          onMouseDown={handlePanelResizeStart}
+        />
+      )}
       {isDragging && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-orange-50/90 border-2 border-dashed border-orange-400 rounded pointer-events-none">
           <HiOutlinePaperClip className="w-10 h-10 text-orange-400" />
