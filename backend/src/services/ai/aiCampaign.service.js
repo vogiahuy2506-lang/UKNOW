@@ -604,9 +604,10 @@ QUY TẮC:
 
     // Thu thập existing resources cho non-admin users
     let existingResources = '';
+    let landingPages = [];
     if (userId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, landingPages] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages] =
           await Promise.all([
             this.getEmailTemplates(userId),
             this.getZaloAccounts(userId),
@@ -618,6 +619,7 @@ QUY TẮC:
             this.getLandingPages(userId),
           ]);
 
+        landingPages = _landingPages;
         const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
 
         existingResources = `
