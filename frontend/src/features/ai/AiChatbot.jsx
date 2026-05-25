@@ -924,10 +924,10 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'confirm_create'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'confirm_create', 'landing_page', 'template_draft', 'auto_created_success'];
 
-      const mappedMessages = dbMessages.map((m, i) => {
-        if (i === lastAssistantIdx && interactiveTypes.includes(m.type)) {
+      const mappedMessages = dbMessages.map((m) => {
+        if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
           return { role: m.role, content: m.content, type: m.type, data: m.data };
         }
         return { role: m.role, content: m.content };
@@ -1293,7 +1293,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     const enrichedPrompt = parts.join('. ');
 
     try {
-      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles);
+      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId);
       if (response.success) {
         const { title, html, css } = response.data;
         setMessages(prev => [...prev, {
@@ -1528,7 +1528,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     const fullPrompt = templateContext + pendingLandingPrompt;
 
     try {
-      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles);
+      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles, currentSessionId);
 
       if (response.success) {
         const { title, html, css, variables } = response.data;
