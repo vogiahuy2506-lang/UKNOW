@@ -7,8 +7,9 @@ import {
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck,
   HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat,
-  HiOutlineDatabase, HiOutlineFolderOpen,
+  HiOutlineFolderOpen,
   HiOutlineGlobeAlt,
+  HiOutlineClock, HiOutlinePlus, HiOutlineTrash,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
@@ -275,6 +276,68 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
         className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-orange-500 hover:bg-orange-600 text-white"
       >
         {allAnswered ? '✓ Tạo chiến dịch theo lựa chọn này' : 'Chọn hết các mục bên trên để tiếp tục'}
+      </button>
+    </div>
+  );
+};
+
+// Ask landing details card - hỏi gộp thông tin để tạo landing page
+const AskLandingDetailsCard = ({ data, onSubmit }) => {
+  const [answers, setAnswers] = useState({});
+  if (!data?.questions?.length) return null;
+
+  const allAnswered = data.questions.every(q => answers[q.id]);
+  const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
+
+  const handleSubmit = () => {
+    if (!allAnswered) return;
+    const lines = data.questions.map(q => {
+      const opt = q.options.find(o => o.value === answers[q.id]);
+      return `${q.label} ${opt?.label || answers[q.id]}`;
+    });
+    onSubmit(lines.join('\n'), answers);
+  };
+
+  return (
+    <div className="mt-4 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <HiOutlineGlobeAlt className="w-5 h-5 text-indigo-500" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-indigo-600">
+          Thiết kế Landing Page
+        </span>
+      </div>
+
+      {data.pageTitle && (
+        <p className="text-sm font-bold text-slate-800">{data.pageTitle}</p>
+      )}
+
+      {data.questions.map(q => (
+        <div key={q.id}>
+          <p className="text-xs font-semibold text-slate-600 mb-2">{q.label}</p>
+          <div className="flex flex-wrap gap-2">
+            {q.options.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => pick(q.id, opt.value)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                  answers[q.id] === opt.value
+                    ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <button
+        onClick={handleSubmit}
+        disabled={!allAnswered}
+        className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-600 text-white"
+      >
+        {allAnswered ? '✓ Tạo Landing Page theo lựa chọn này' : 'Chọn hết các mục bên trên để tiếp tục'}
       </button>
     </div>
   );
@@ -803,44 +866,6 @@ const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
   );
 };
 
-// Campaign script card
-const CampaignScriptCard = ({ script, onCreate, onEdit, onPushToExisting }) => (
-  <div className="mt-4 bg-orange-50/50 rounded-2xl p-4 border border-orange-100">
-    <div className="flex items-center gap-2 mb-3 text-orange-600">
-      <HiOutlineTerminal className="w-5 h-5" />
-      <span className="font-black text-[10px] uppercase tracking-[0.2em]">Kịch bản chiến dịch (Draft)</span>
-    </div>
-    <h4 className="font-bold text-slate-900 text-sm mb-1">{script.campaignName}</h4>
-    <p className="text-xs text-slate-500 mb-4 leading-relaxed">{script.description}</p>
-    <div className="space-y-2 mb-4">
-      {script.nodes?.filter(n => n.nodeType !== 'trigger').slice(0, 5).map((node, i) => (
-        <div key={i} className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded-full bg-white border border-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-500 shadow-sm">{i + 1}</div>
-          <div className="flex-1">
-            <p className="text-xs text-slate-700 font-bold">{node.nodeName || node.nodeSubtype}</p>
-            {node.config?.subject && <p className="text-[10px] text-slate-400 line-clamp-1 italic">Sub: {node.config.subject}</p>}
-            {node.config?.zaloAccountId && <p className="text-[10px] text-blue-400 line-clamp-1">Zalo Account: #{node.config.zaloAccountId}</p>}
-          </div>
-        </div>
-      ))}
-      {script.nodes?.length > 6 && <span className="text-[10px] text-slate-400 ml-9">+ {script.nodes.length - 6} bước nữa</span>}
-    </div>
-    <div className="space-y-2">
-      <button onClick={onCreate} className="w-full py-2.5 bg-orange-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-orange-600 flex items-center justify-center gap-2">
-        <HiOutlinePlay className="w-4 h-4" /> Tạo chiến dịch
-      </button>
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => onPushToExisting?.(script)} className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5">
-          <HiOutlineDatabase className="w-4 h-4 text-blue-500" /> Đẩy vào campaign có sẵn
-        </button>
-        <button onClick={() => onEdit?.(script)} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5">
-          <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" /> Tùy chỉnh
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
 // Landing page card - now imported from ./components/LandingPageCard.jsx
 
 const AiChatbot = ({ isOpen, onToggle }) => {
@@ -866,6 +891,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
+  const [pendingLandingData, setPendingLandingData] = useState(null);
   const [, setSelectedTemplate] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
@@ -877,10 +903,58 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const [_selectedCampaignType, setSelectedCampaignType] = useState(null); // Type đã chọn (email/zalo/zalo_group)
   const [_selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
 
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [showSessionList, setShowSessionList] = useState(false);
+
   const messagesEndRef = useRef(null);
   const isSendingRef = useRef(false);
   const fileInputRef = useRef(null);
+  const hasInitializedRef = useRef(false);
   const navigate = useNavigate();
+
+  const loadSession = async (sessionId) => {
+    try {
+      const res = await aiApi.getSessionMessages(sessionId);
+      const dbMessages = (res.data || []).map(m => ({ role: m.role, content: m.content }));
+      setMessages([{ role: 'assistant', content: welcomeMessage }, ...dbMessages]);
+      setCurrentSessionId(sessionId);
+      setShowSessionList(false);
+      // Reset pending states từ session cũ
+      setPendingCampaignPrompt(null);
+      setPendingCampaignData(null);
+      setPendingLandingPrompt(null);
+      setPendingLandingData(null);
+      setCurrentScript(null);
+    } catch { /* silent */ }
+  };
+
+  const startNewChat = () => {
+    setCurrentSessionId(null);
+    setMessages([{ role: 'assistant', content: welcomeMessage }]);
+    setShowSessionList(false);
+    setPendingCampaignPrompt(null);
+    setPendingCampaignData(null);
+    setPendingLandingPrompt(null);
+    setPendingLandingData(null);
+    setCurrentScript(null);
+  };
+
+  const handleDeleteSession = async (sessionId, e) => {
+    e.stopPropagation();
+    try {
+      await aiApi.deleteSession(sessionId);
+      const updated = sessions.filter(s => s.id !== sessionId);
+      setSessions(updated);
+      if (currentSessionId === sessionId) {
+        if (updated.length > 0) {
+          await loadSession(updated[0].id);
+        } else {
+          startNewChat();
+        }
+      }
+    } catch { /* silent */ }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -889,6 +963,17 @@ const AiChatbot = ({ isOpen, onToggle }) => {
         aiApi.getBusinessProfile()
           .then(res => setHasProfile(!!res.data))
           .catch(() => setHasProfile(true));
+      }
+      // Load sessions một lần khi panel mở lần đầu
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        aiApi.getSessions()
+          .then(res => {
+            const list = res.data || [];
+            setSessions(list);
+            if (list.length > 0) loadSession(list[0].id);
+          })
+          .catch(() => {});
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -956,14 +1041,29 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     setIsTyping(true);
 
     try {
-      const response = await aiApi.chat(newHistory, userMsg.files);
+      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId);
       if (response.success) {
-        const { type, content, data, missing_fields } = response.data;
+        const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
+        // Cập nhật session state
+        if (returnedSessionId && !currentSessionId) {
+          setCurrentSessionId(returnedSessionId);
+          setSessions(prev => [{ id: returnedSessionId, title: sessionTitle || inputText.slice(0, 60), updated_at: new Date().toISOString(), created_at: new Date().toISOString() }, ...prev]);
+        } else if (returnedSessionId) {
+          setSessions(prev => prev.map(s => s.id === returnedSessionId ? { ...s, updated_at: new Date().toISOString() } : s));
+        }
 
         // Xử lý ask_campaign_details - hỏi gộp tất cả câu hỏi 1 lần
         if (type === 'ask_campaign_details' && data) {
           setPendingCampaignPrompt(inputText);
           setPendingCampaignData(data);
+          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          return;
+        }
+
+        // Xử lý ask_landing_details - hỏi gộp thông tin để tạo landing page
+        if (type === 'ask_landing_details' && data) {
+          setPendingLandingPrompt(inputText);
+          setPendingLandingData(data);
           setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
@@ -1049,7 +1149,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
         }]);
-        if (type === 'campaign_script') setCurrentScript(data);
+        if (type === 'confirm_create') setCurrentScript(data);
       }
     } catch (error) {
       setMessages(prev => [...prev, {
@@ -1132,6 +1232,57 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     }
   };
 
+  const handleLandingDetailsSubmit = async (summaryText, answers) => {
+    if (!pendingLandingPrompt) return;
+    setIsTyping(true);
+    setMessages(prev => [...prev, { role: 'user', content: summaryText }]);
+
+    const goalLabels = {
+      lead: 'Thu thập thông tin đăng ký (lead form)',
+      product: 'Giới thiệu sản phẩm / dịch vụ',
+      event: 'Đăng ký sự kiện / hội thảo',
+      trial: 'Dùng thử miễn phí / nhận ưu đãi',
+    };
+    const audienceLabels = {
+      student: 'Học viên / người muốn học',
+      business: 'Doanh nghiệp / B2B',
+      consumer: 'Cá nhân phổ thông',
+      parent_child: 'Phụ huynh & trẻ em',
+    };
+
+    const parts = [pendingLandingPrompt];
+    if (answers.pageGoal) parts.push(`Mục tiêu trang: ${goalLabels[answers.pageGoal] || answers.pageGoal}`);
+    if (answers.targetAudience) parts.push(`Đối tượng: ${audienceLabels[answers.targetAudience] || answers.targetAudience}`);
+    if (answers.product && answers.product !== 'other' && pendingLandingData?.questions) {
+      const productQ = pendingLandingData.questions.find(q => q.id === 'product');
+      const productOpt = productQ?.options?.find(o => o.value === answers.product);
+      if (productOpt) parts.push(`Sản phẩm: ${productOpt.label}`);
+    }
+    const enrichedPrompt = parts.join('. ');
+
+    try {
+      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles);
+      if (response.success) {
+        const { title, html, css } = response.data;
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
+          type: 'landing_page',
+          data: { title, html, css },
+        }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `Có lỗi khi tạo landing page: ${err.response?.data?.message || err.message}`,
+      }]);
+    } finally {
+      setIsTyping(false);
+      setPendingLandingPrompt(null);
+      setPendingLandingData(null);
+    }
+  };
+
   const handleSelectCampaignType = async (campaignType) => {
     if (!pendingCampaignPrompt || !pendingCampaignData) return;
     
@@ -1167,18 +1318,6 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             type: 'confirm_create',
             data: { ...data, campaignType },
           }]);
-        } else if (type === 'campaign_script' && data) {
-          // Fallback nếu AI trả về campaign_script
-          setCurrentScript({
-            ...data,
-            campaignType: campaignType,
-          });
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Chiến dịch đã được tạo!',
-            type: 'campaign_script',
-            data: { ...data, campaignType },
-          }]);
         } else {
           // AI trả lời khác, hiển thị như bình thường
           setMessages(prev => [...prev, {
@@ -1188,7 +1327,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             data,
           }]);
         }
-        
+
         // Clear pending state
         setPendingCampaignPrompt(null);
         setPendingCampaignData(null);
@@ -1241,19 +1380,6 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             role: 'assistant',
             content: content || 'Chiến dịch đã sẵn sàng!',
             type: 'confirm_create',
-            data: { ...data, campaignType: pendingCampaignData?.campaignType, audience },
-          }]);
-        } else if (type === 'campaign_script' && data) {
-          // Fallback nếu AI trả về campaign_script
-          setCurrentScript({
-            ...data,
-            campaignType: pendingCampaignData?.campaignType,
-            audience: audience,
-          });
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Chiến dịch đã được tạo!',
-            type: 'campaign_script',
             data: { ...data, campaignType: pendingCampaignData?.campaignType, audience },
           }]);
         } else {
@@ -1435,10 +1561,66 @@ const AiChatbot = ({ isOpen, onToggle }) => {
             </div>
           </div>
         </div>
-        <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
-          <HiOutlineArrowRight className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={startNewChat}
+            title="Cuộc trò chuyện mới"
+            className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-orange-500 transition-colors"
+          >
+            <HiOutlinePlus className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setShowSessionList(v => !v)}
+            title="Lịch sử trò chuyện"
+            className={`p-2 rounded-xl transition-colors ${showSessionList ? 'bg-orange-50 text-orange-500' : 'hover:bg-slate-50 text-slate-400 hover:text-slate-600'}`}
+          >
+            <HiOutlineClock className="w-5 h-5" />
+          </button>
+          <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
+            <HiOutlineArrowRight className="w-5 h-5" />
+          </button>
+        </div>
       </div>
+
+      {/* Session list overlay */}
+      {showSessionList && (
+        <div className="absolute inset-x-0 top-16 bottom-0 bg-white z-10 flex flex-col border-t border-slate-100">
+          <div className="flex-1 overflow-y-auto">
+            {sessions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
+                <HiOutlineClock className="w-8 h-8" />
+                <p className="text-sm">Chưa có cuộc trò chuyện nào</p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-0.5">
+                {sessions.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => loadSession(session.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors group ${currentSessionId === session.id ? 'bg-orange-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <HiOutlineChat className="w-4 h-4 text-slate-300 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${currentSessionId === session.id ? 'text-orange-700' : 'text-slate-700'}`}>
+                        {session.title}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(session.updated_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteSession(session.id, e)}
+                      className="p-1 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all shrink-0"
+                    >
+                      <HiOutlineTrash className="w-3.5 h-3.5" />
+                    </button>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
       {!isSuperAdmin && (
@@ -1537,6 +1719,13 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                 />
               )}
 
+              {msg.type === 'ask_landing_details' && msg.data && (
+                <AskLandingDetailsCard
+                  data={msg.data}
+                  onSubmit={handleLandingDetailsSubmit}
+                />
+              )}
+
               {msg.type === 'ask_campaign_type' && msg.data && (
                 <AskCampaignTypeCard
                   data={msg.data}
@@ -1581,16 +1770,6 @@ const AiChatbot = ({ isOpen, onToggle }) => {
                   draft={msg.data}
                   onSave={() => {}}
                   onEdit={handleEditTemplate}
-                />
-              )}
-
-              {/* Campaign script */}
-              {msg.type === 'campaign_script' && msg.data && (
-                <CampaignScriptCard
-                  script={msg.data}
-                  onCreate={handleCreateCampaign}
-                  onEdit={handleEditCampaign}
-                  onPushToExisting={handlePushToExisting}
                 />
               )}
 

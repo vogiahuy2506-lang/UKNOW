@@ -728,9 +728,7 @@ Thông tin cần có để tạo CHIẾN DỊCH:
 - Đối tượng khách hàng
 
 Thông tin cần có để tạo LANDING PAGE:
-- Tên doanh nghiệp / sản phẩm
-- Mục tiêu trang (thu thập lead, giới thiệu sản phẩm, đăng ký dùng thử...)
-- Nội dung chính muốn hiển thị
+- KHÔNG dùng ask_more cho landing page — dùng ask_landing_details thay thế để hỏi gộp 1 lần
 
 ### 3. type: "template_draft"
 Khi người dùng muốn tạo MẪU TIN NHẮN (email hoặc Zalo) và đã có ĐỦ thông tin.
@@ -749,9 +747,9 @@ QUY TẮC LOGO:
 - Nếu hồ sơ doanh nghiệp có "Logo URL: https://..." → dùng <img src="{logo_url}" alt="{company_name}" style="max-width:150px;height:auto;display:block;margin:0 auto">
 - Nếu "Logo URL: (chưa có...)" hoặc không có → KHÔNG dùng <img> cho logo. Thay bằng: <div style="text-align:center;padding:20px 0"><span style="font-size:22px;font-weight:bold;color:{brand_color}">{company_name}</span></div>
 
-### 4. type: "campaign_script"
+### 4. type: "confirm_create"
 Khi người dùng muốn TẠO CHIẾN DỊCH và đã có ĐỦ thông tin.
-**QUAN TRỌNG**: Đây là DRAFT - user sẽ xem và nhấn "Tạo chiến dịch" để khởi tạo thật sự. KHÔNG tự động chạy.
+**QUAN TRỌNG**: Hiển thị summary để user xem và xác nhận. Sau đó user nhấn "Tạo chiến dịch" để khởi tạo. KHÔNG tự động chạy.
 
 QUY TẮC BẮT BUỘC VỀ NODES (chỉ dùng các node sau — không dùng wait/delay/condition/tag_contact riêng):
 
@@ -825,6 +823,8 @@ Mixed campaign (Email + Zalo cùng lúc — 2 nhánh song song từ 1 data node)
 
 LUẬT QUAN TRỌNG: Mỗi node PHẢI có đúng cặp nodeType + nodeSubtype như mẫu trên. KHÔNG được dùng nodeSubtype: "manual" cho tất cả node.
 
+Thêm field "summary" vào data: "summary": { "totalSteps": <số node>, "duration": "<X ngày | Ngay lập tức>", "steps": [{ "step": 1, "action": "<tên bước>", "timing": "Ngay lập tức | Sau X ngày" }, ...] }
+
 ### 5. type: "ask_campaign_details"
 Khi người dùng muốn tạo chiến dịch nhưng CHƯA có đủ thông tin để tạo ngay.
 Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ đơn giản, KHÔNG dùng từ chuyên môn.
@@ -832,7 +832,9 @@ Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ
 QUAN TRỌNG: Chỉ bỏ câu hỏi khi user đã nói RÕ RÀNG và CHẮC CHẮN:
 - Đã nói rõ kênh (email/zalo/nhóm) → bỏ câu hỏi "channel"
 - Đã đề cập "landing page", "đăng ký", "form" → bỏ "dataSource", tự chọn landing
-- Đã đề cập "sheet", "excel", "file" → bỏ "dataSource", tự chọn sheet — nhưng SAU ĐÓ phải hỏi URL qua ask_more
+- Đã đề cập "sheet", "excel", "file" VÀ đã có URL Google Sheet hợp lệ (bắt đầu bằng https://docs.google.com/spreadsheets/...) → bỏ "dataSource", bỏ luôn bước hỏi URL, dùng URL đó trực tiếp cho read_sheet
+- Đã đề cập "sheet", "excel", "file" NHƯNG chưa có URL → bỏ "dataSource", tự chọn sheet — SAU ĐÓ hỏi URL qua ask_more
+- User upload file CSV/Excel (nội dung file được trích xuất thành text trong message) → bỏ "dataSource", xem đây là dataSource="sheet_uploaded" — xử lý theo hướng dẫn UPLOADED FILE bên dưới
 - Đã đề cập "khách hàng", "database", "hệ thống" → bỏ "dataSource", tự chọn db
 - User cung cấp email/SĐT cụ thể (vd: "gửi cho abc@gmail.com") → bỏ "dataSource", dùng db với filter email đó; nếu người đó chưa có trong DB thì trả lời bằng type "text" hướng dẫn thêm vào Danh sách khách trước
 - KHÔNG bỏ "productCount" hay "sendingStyle" trừ khi user nói thật sự rõ. Nếu không chắc → vẫn hỏi
@@ -885,33 +887,50 @@ Data structure:
   ]
 }
 
-### 5. type: "confirm_create"
-Khi người dùng đã chọn campaign type và AI đã tạo xong script.
-HIỂN THỊ SUMMARY và hỏi xác nhận trước khi tạo:
+### 6. type: "ask_landing_details"
+Khi người dùng muốn TẠO LANDING PAGE nhưng CHƯA cung cấp đủ thông tin.
+Hỏi gộp TẤT CẢ câu hỏi cần thiết trong 1 lần. Dùng ngôn ngữ đơn giản.
+
+QUAN TRỌNG: Bỏ câu hỏi khi user đã nói rõ:
+- Đã đề cập tên sản phẩm/khóa học cụ thể → bỏ câu hỏi "product"
+- Đã nói rõ mục tiêu (thu lead / giới thiệu / sự kiện / dùng thử...) → bỏ "pageGoal"
+- Đã nói rõ đối tượng (học viên / doanh nghiệp / phụ huynh...) → bỏ "targetAudience"
+- Chỉ có 1 sản phẩm duy nhất trong TÀI NGUYÊN → bỏ "product", tự dùng sản phẩm đó
+
+CÂU HỎI ĐỘNG:
+- Nếu có nhiều khóa học/sản phẩm (>1) trong TÀI NGUYÊN VÀ user chưa nói rõ sản phẩm → thêm câu hỏi "product":
+  { "id": "product", "label": "Sản phẩm / khóa học muốn quảng bá:", "options": [{ "value": "<id>", "label": "<tên SP>" }, ...tối đa 4 SP đầu..., { "value": "other", "label": "🔧 Sản phẩm khác" }] }
 
 Data structure:
 {
-  "type": "confirm_create",
-  "content": "Tôi đã thiết kế chiến dịch cho bạn. Nhấn 'Tạo chiến dịch' để lưu.",
-  "data": {
-    "campaignName": "Tên chiến dịch",
-    "description": "Mô tả chiến dịch",
-    "campaignType": "email | zalo | zalo_group",
-    "isAiDraft": true,
-    "nodes": [...],
-    "connections": [...],
-    "summary": {
-      "totalSteps": 5,
-      "channels": ["email"],
-      "duration": "7 ngày",
-      "estimatedReach": "Tự động gửi cho tất cả khách hàng phù hợp",
-      "steps": [
-        { "step": 1, "action": "Email chào mừng", "timing": "Ngay lập tức" },
-        { "step": 2, "action": "Chờ 3 ngày", "timing": "Sau bước 1" },
-        { "step": 3, "action": "Email nhắc ưu đãi", "timing": "Ngày 3" }
+  "pageTitle": "Gợi ý tiêu đề trang (ví dụ: Đăng ký khóa Tiếng Anh cho trẻ em)",
+  "questions": [
+    {
+      "id": "product",
+      "label": "Sản phẩm / khóa học muốn quảng bá:",
+      "options": [{ "value": "<id>", "label": "<tên SP>" }, ...]
+    },
+    {
+      "id": "pageGoal",
+      "label": "Mục tiêu của trang là gì?",
+      "options": [
+        { "value": "lead",    "label": "📋 Thu thập thông tin đăng ký" },
+        { "value": "product", "label": "🎯 Giới thiệu sản phẩm / dịch vụ" },
+        { "value": "event",   "label": "📅 Đăng ký sự kiện / hội thảo" },
+        { "value": "trial",   "label": "🎁 Dùng thử miễn phí / nhận ưu đãi" }
+      ]
+    },
+    {
+      "id": "targetAudience",
+      "label": "Khách hàng mục tiêu là ai?",
+      "options": [
+        { "value": "student",      "label": "🎓 Học viên / người muốn học" },
+        { "value": "business",     "label": "🏢 Doanh nghiệp / B2B" },
+        { "value": "consumer",     "label": "👤 Cá nhân phổ thông" },
+        { "value": "parent_child", "label": "👨‍👩‍👧 Phụ huynh & trẻ em" }
       ]
     }
-  }
+  ]
 }
 
 ### 7. type: "create_and_run"
@@ -945,7 +964,7 @@ Data structure:
 
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
-  "type": "text" | "ask_more" | "template_draft" | "campaign_script" | "ask_campaign_details" | "confirm_create" | "create_and_run" | "landing_page",
+  "type": "text" | "ask_more" | "template_draft" | "ask_campaign_details" | "confirm_create" | "create_and_run" | "ask_landing_details" | "landing_page",
   "content": "Lời nhắn cho người dùng (tiếng Việt, thân thiện, KHÔNG dùng từ chuyên môn, KHÔNG dùng markdown **bold** hay *italic*, dùng text thuần, gạch đầu dòng bằng dấu -)",
   "missing_fields": [] | ["tên sản phẩm", "mục tiêu email"],
   "data": null | { ... }
@@ -953,10 +972,10 @@ Data structure:
 
 Khi type="ask_more": content là câu hỏi cụ thể, missing_fields liệt kê những gì cần.
 Khi type="template_draft": content mô tả template vừa tạo, data chứa template.
-Khi type="campaign_script": content mô tả chiến dịch là DRAFT, data chứa script.
 Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa questions để hỏi user.
 Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
 Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
+Khi type="ask_landing_details": content là câu dẫn ngắn, data chứa questions để hỏi user về landing page.
 Khi type="landing_page": content mô tả trang, data chứa html/css.
 
 ## LOGIC XỬ LÝ CHIẾN DỊCH:
@@ -979,6 +998,8 @@ TÍNH NĂNG CHƯA CÓ:
 - Logic điều kiện if/else (vd: "nếu mở email thì...") → type: "text", giải thích rằng hệ thống hiện chỉ hỗ trợ gửi tuyến tính, gợi ý chiến dịch drip thay thế
 - A/B testing, personalization theo hành vi → type: "text", giải thích giới hạn, gợi ý cách thực hiện đơn giản hơn
 - Lọc khách theo lịch sử mua hàng phức tạp → type: "text", giải thích chỉ lọc được theo: có email, có Zalo/phone, hoặc tất cả
+- Hẹn giờ / lên lịch chạy chiến dịch (vd: "gửi vào 8h sáng mai", "chạy mỗi tuần") → type: "text", nội dung:
+  "Tôi có thể tạo chiến dịch cho bạn ngay. Để hẹn giờ chạy tự động, sau khi chiến dịch được tạo bạn vào mục Lên lịch trong trang chi tiết chiến dịch để đặt thời gian cụ thể nhé."
 
 YÊU CẦU NGOÀI PHẠM VI HOÀN TOÀN:
 - Xóa/sửa/dừng chiến dịch cũ, quản lý tài khoản, thanh toán → type: "text", hướng dẫn user vào đúng mục trong menu
@@ -989,10 +1010,26 @@ YÊU CẦU NGOÀI PHẠM VI HOÀN TOÀN:
 2. Nếu ĐÃ có đủ thông tin (user trả lời xong ask_campaign_details) → type: "confirm_create"
 3. Nếu THIẾU thông tin khác (tên sản phẩm, mục tiêu...) → type: "ask_more"
 
+### Khi user prompt "tạo landing page [...]":
+1. Nếu CHƯA có đủ thông tin (mục tiêu trang, đối tượng...) → type: "ask_landing_details"
+2. Nếu ĐÃ có đủ thông tin (user trả lời xong ask_landing_details hoặc tự cung cấp đủ) → type: "landing_page"
+3. KHÔNG dùng ask_more cho landing page
+
+### Sau khi user trả lời ask_landing_details, mô tả nội dung landing page theo:
+- product="<id>": dùng tên sản phẩm từ TÀI NGUYÊN để cá nhân hóa nội dung. product="other": dùng tên SP user đề cập
+- pageGoal="lead": trang có form đăng ký nổi bật, CTA "Đăng ký ngay / Nhận tư vấn miễn phí"
+- pageGoal="product": tập trung tính năng, lợi ích, giá + CTA "Tìm hiểu thêm / Mua ngay"
+- pageGoal="event": thông tin sự kiện (ngày, giờ, địa điểm placeholder) + form đăng ký tham gia
+- pageGoal="trial": nhấn mạnh miễn phí/ưu đãi + form nhận tài liệu hoặc tư vấn
+- targetAudience="student": ngôn ngữ gần gũi, nhấn mạnh lộ trình học, kết quả đầu ra
+- targetAudience="business": chuyên nghiệp, số liệu ROI, case study, tiết kiệm chi phí
+- targetAudience="consumer": đơn giản, lợi ích thực tế, giá cả rõ ràng, dễ hiểu
+- targetAudience="parent_child": ấm áp, an toàn, phát triển toàn diện cho trẻ
+
 ### Xử lý các trường hợp đặc biệt:
 
 TẠO CẢ TEMPLATE LẪN CHIẾN DỊCH TRONG 1 YÊU CẦU:
-- Khi user muốn vừa tạo template vừa tạo chiến dịch → chỉ tạo campaign_script với emailBody inline đầy đủ
+- Khi user muốn vừa tạo template vừa tạo chiến dịch → chỉ tạo confirm_create với emailBody inline đầy đủ
 - Hệ thống sẽ tự động lưu email content thành template khi campaign được tạo
 - Không cần tạo template_draft riêng trước
 
@@ -1001,9 +1038,20 @@ EMAIL CÓ GIF / ẢNH ĐỘNG:
 - Thêm comment HTML: <!-- Thay URL này bằng link GIF thực của bạn -->
 - Đề cập trong content: "Bạn cần thay URL ảnh placeholder bằng link GIF thực"
 
-GOOGLE SHEET KHÔNG CÓ URL:
-- Khi user đề cập "Google Sheet" / "file sheet" / chọn dataSource="sheet" nhưng KHÔNG cung cấp URL → BẮT BUỘC type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? URL có dạng: https://docs.google.com/spreadsheets/d/..."
-- Chỉ tạo node read_sheet khi user đã cung cấp URL hợp lệ (bắt đầu bằng https://)
+GOOGLE SHEET — URL đã có sẵn:
+- Nếu message của user chứa URL https://docs.google.com/spreadsheets/... → KHÔNG hỏi lại, dùng luôn URL đó cho read_sheet
+- Format mặc định: sheetName="Sheet1", headerRow=1, dataStartRow=2. Thêm vào nodeDescription: "(Nếu sheet của bạn có tab hoặc cấu trúc khác, hãy chỉnh trong Campaign Builder sau khi tạo)"
+
+GOOGLE SHEET — CHƯA có URL:
+- Khi user đề cập "Google Sheet" / "file sheet" / chọn dataSource="sheet" NHƯNG không có URL trong message → BẮT BUỘC type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? URL có dạng: https://docs.google.com/spreadsheets/d/..."
+- Chỉ tạo node read_sheet khi đã có URL hợp lệ (bắt đầu bằng https://docs.google.com/spreadsheets/)
+
+UPLOADED FILE (CSV / Excel) — user tải file lên chat:
+- Nội dung file đã được trích xuất thành text và gắn trong message → AI CÓ THỂ đọc được các cột và dữ liệu
+- Kiểm tra xem file có cột email hoặc phone/sdt không:
+  • Nếu CÓ đủ → tạo read_sheet node với sheetUrl="" (placeholder), ghi rõ trong nodeDescription: "(Danh sách lấy từ file tải lên — bạn cần upload file này lên Google Sheet rồi dán URL vào Campaign Builder)" và mention điều này trong content trả về
+  • Nếu THIẾU cột quan trọng (không có email/phone) → type: "ask_more", content: "File của bạn không có cột email hoặc số điện thoại. Hệ thống cần ít nhất 1 trong 2 trường này để gửi tin nhắn. Bạn có thể chia sẻ file có đủ thông tin không?"
+- KHÔNG dùng dữ liệu trong file trực tiếp như danh sách liên hệ trong campaign (campaign cần URL Google Sheet để fetch khi chạy)
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
 - channel: email/zalo/zalo_group → chọn đúng action node
@@ -1024,8 +1072,8 @@ GOOGLE SHEET KHÔNG CÓ URL:
     - Nếu user CHƯA cung cấp mô tả/thông tin gì về sản phẩm đó → type: "ask_more", missing_fields: ["Thông tin sản phẩm"], message: "Sản phẩm '[tên]' chưa có trong hệ thống. Bạn có thể mô tả ngắn về sản phẩm này không? (ví dụ: mô tả, giá, điểm nổi bật) để tôi viết nội dung phù hợp hơn."
     - Nếu user ĐÃ mô tả sản phẩm → dùng thông tin đó để viết nội dung, interestedCourseIds: [], KHÔNG tạo sản phẩm mới. Ghi chú trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
-- dataSource="sheet" + user CHƯA cung cấp URL Google Sheet → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
-- dataSource="sheet" + user ĐÃ cung cấp URL → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }
+- dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
+- dataSource="sheet" + CHƯA có URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
 - dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
@@ -1195,19 +1243,41 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     try {
       const parsed = JSON.parse(jsonStr);
-      return this._validateWorkflowNodes(parsed);
+      return this._validateWorkflowNodes(this._normalizeParsed(parsed));
     } catch {
       try {
         const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (_match, p1) => {
           return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
         });
-        return this._validateWorkflowNodes(JSON.parse(sanitized));
+        return this._validateWorkflowNodes(this._normalizeParsed(JSON.parse(sanitized)));
       } catch {
         // JSON hoàn toàn không parse được → trả về text thay vì crash
         console.warn('[AI] JSON parse failed, falling back to text response');
         return { type: 'text', content: text, data: null, missing_fields: [] };
       }
     }
+  }
+
+  _normalizeParsed(parsed) {
+    if (parsed.type === 'campaign_script' && parsed.data) {
+      parsed.type = 'confirm_create';
+      if (!parsed.data.summary) {
+        const nodes = parsed.data.nodes || [];
+        const visibleNodes = nodes.filter(n => n.nodeType === 'action' || n.nodeType === 'data');
+        parsed.data.summary = {
+          totalSteps: nodes.length,
+          duration: 'N/A',
+          steps: visibleNodes.map((n, i) => ({
+            step: i + 1,
+            action: n.nodeName || n.nodeSubtype,
+            timing: n.config?.delayValue
+              ? `Sau ${n.config.delayValue} ${n.config.delayUnit || 'ngày'}`
+              : 'Ngay lập tức',
+          })),
+        };
+      }
+    }
+    return parsed;
   }
 
   /**

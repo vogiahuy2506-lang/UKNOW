@@ -59,11 +59,27 @@ const aiApi = {
    * Smart interactive chat.
    * @param {Array} history Array of { role, content }
    * @param {Array} files Array of current attached files
+   * @param {number|null} sessionId Active session ID (null = tạo session mới)
    */
-  chat: async (history, files = []) => {
-    const response = await api.post('/ai/chat', { history, files }, {
+  chat: async (history, files = [], sessionId = null) => {
+    const response = await api.post('/ai/chat', { history, files, sessionId }, {
       timeout: 120000
     });
+    return response.data;
+  },
+
+  getSessions: async () => {
+    const response = await api.get('/ai/sessions');
+    return response.data;
+  },
+
+  getSessionMessages: async (sessionId) => {
+    const response = await api.get(`/ai/sessions/${sessionId}/messages`);
+    return response.data;
+  },
+
+  deleteSession: async (sessionId) => {
+    const response = await api.delete(`/ai/sessions/${sessionId}`);
     return response.data;
   },
 
