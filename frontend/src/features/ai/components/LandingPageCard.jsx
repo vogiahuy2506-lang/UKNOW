@@ -68,7 +68,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
   };
 
   const deviceWidth = device === 'mobile' ? 'w-[375px]' : 'w-full';
-  const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-full';
+  const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-[400px]';
 
   return (
     <>
@@ -246,12 +246,12 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
               </button>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center bg-slate-800 p-4 overflow-auto">
+          <div className="flex-1 flex items-start justify-center bg-slate-800 p-4 overflow-auto">
             <div className={`transition-all ${device === 'mobile' ? 'w-[375px]' : 'w-full max-w-6xl'}`}>
-              <div className={`bg-white rounded-xl overflow-hidden shadow-2xl ${device === 'mobile' ? 'h-[667px]' : 'min-h-[600px]'}`}>
+              <div className={`bg-white rounded-xl overflow-hidden shadow-2xl ${device === 'mobile' ? 'h-[667px]' : ''}`}>
                 <iframe
                   srcDoc={fullHtml}
-                  className="w-full h-full border-0"
+                  className={`w-full border-0 ${device === 'mobile' ? 'h-full' : 'h-[2000px]'}`}
                   title="Landing Page Fullscreen Preview"
                   sandbox="allow-scripts allow-same-origin"
                 />

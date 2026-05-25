@@ -1180,7 +1180,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
         throw new Error('AI không phản hồi, vui lòng thử lại.');
       }
 
-      const text = result.candidates[0].content?.parts?.[0]?.text;
+      // Filter thought parts (Gemini 2.5 Flash thinking mode) — chỉ lấy output thực sự
+      const text = (result.candidates[0].content?.parts || [])
+        .filter(p => p.text && !p.thought)
+        .map(p => p.text)
+        .join('');
       if (!text) throw new Error('AI trả về kết quả rỗng.');
 
       return this._parseJson(text);

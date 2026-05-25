@@ -916,16 +916,48 @@ const AiChatbot = ({ isOpen, onToggle }) => {
   const loadSession = async (sessionId) => {
     try {
       const res = await aiApi.getSessionMessages(sessionId);
-      const dbMessages = (res.data || []).map(m => ({ role: m.role, content: m.content }));
-      setMessages([{ role: 'assistant', content: welcomeMessage }, ...dbMessages]);
+      const dbMessages = res.data || [];
+
+      // Tìm assistant message cuối cùng có type tương tác
+      let lastAssistantIdx = -1;
+      for (let i = dbMessages.length - 1; i >= 0; i--) {
+        if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
+      }
+      const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'confirm_create'];
+
+      const mappedMessages = dbMessages.map((m, i) => {
+        if (i === lastAssistantIdx && interactiveTypes.includes(m.type)) {
+          return { role: m.role, content: m.content, type: m.type, data: m.data };
+        }
+        return { role: m.role, content: m.content };
+      });
+
+      setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);
       setCurrentSessionId(sessionId);
       setShowSessionList(false);
-      // Reset pending states từ session cũ
-      setPendingCampaignPrompt(null);
-      setPendingCampaignData(null);
-      setPendingLandingPrompt(null);
-      setPendingLandingData(null);
-      setCurrentScript(null);
+
+      // Restore pending state cho card tương tác cuối cùng
+      const lastUserMsg = lastAssistantIdx > 0
+        ? [...dbMessages].slice(0, lastAssistantIdx).reverse().find(m => m.role === 'user')
+        : null;
+
+      if (lastAssistant?.type === 'ask_landing_details') {
+        setPendingLandingPrompt(lastUserMsg?.content || '');
+        setPendingLandingData(lastAssistant.data);
+        setPendingCampaignPrompt(null); setPendingCampaignData(null); setCurrentScript(null);
+      } else if (['ask_campaign_details', 'ask_campaign_type'].includes(lastAssistant?.type)) {
+        setPendingCampaignPrompt(lastUserMsg?.content || '');
+        setPendingCampaignData(lastAssistant.data);
+        setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
+      } else if (lastAssistant?.type === 'confirm_create') {
+        setCurrentScript(lastAssistant.data);
+        setPendingCampaignPrompt(null); setPendingCampaignData(null);
+        setPendingLandingPrompt(null); setPendingLandingData(null);
+      } else {
+        setPendingCampaignPrompt(null); setPendingCampaignData(null);
+        setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
+      }
     } catch { /* silent */ }
   };
 

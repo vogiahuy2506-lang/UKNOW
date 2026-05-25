@@ -122,9 +122,10 @@ VD: {{business_name}}, {{product_name}}, {{cta_text}}, {{headline}}, v.v.
 }
 
 QUAN TRỌNG:
-- Chỉ trả về JSON, không có văn bản giải thích bên ngoài
+- Trả về JSON trong một code block: \`\`\`json ... \`\`\`
 - HTML phải hoàn chỉnh, có thể dán trực tiếp vào iframe
-- Form phải có onsubmit="event.preventDefault(); ..." để test`;
+- BẮTBUỘC dùng SINGLE QUOTES trong mọi HTML attribute (class='...', href='...', onclick='...')
+- Không dùng double quotes trong HTML để tránh lỗi JSON encoding`;
 
     // 4. Call AI
     const parts = [{ text: systemPrompt }];
@@ -155,14 +156,14 @@ QUAN TRỌNG:
     }
 
     console.log('[LandingTemplate] Generating landing page...');
-    const { text } = await generateGeminiContent({
+    const { text, finishReason } = await generateGeminiContent({
       parts,
-      jsonMode: true,
+      jsonMode: false,
       temperature: 0.7,
     });
 
     // 6. Parse response
-    const result = this._parseJson(text);
+    const result = this._parseJson(text, finishReason);
     return {
       ...result,
       templateId: templateId || null,
@@ -173,17 +174,17 @@ QUAN TRỌNG:
   /**
    * Parse JSON from AI response.
    * @param {string} text
+   * @param {string} [finishReason]
    * @returns {object}
    */
-  _parseJson(text) {
+  _parseJson(text, finishReason) {
     let jsonStr = String(text || '').trim();
 
-    // Try to extract JSON from markdown code blocks
+    // Extract from markdown code blocks
     const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
       jsonStr = jsonMatch[1].trim();
     } else {
-      // Find first { and last }
       const firstBrace = jsonStr.indexOf('{');
       const lastBrace = jsonStr.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace !== -1) {
@@ -194,19 +195,40 @@ QUAN TRỌNG:
     // Remove trailing commas
     jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
 
+    // Attempt 1: direct parse
     try {
       return JSON.parse(jsonStr);
-    } catch {
-      // Try sanitization for escaped strings
-      try {
-        const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
-          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-        });
-        return JSON.parse(sanitized);
-      } catch {
-        throw new Error('Failed to parse AI response as JSON');
+    } catch { /* fall through */ }
+
+    // Attempt 2: sanitize whitespace inside string values
+    try {
+      const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
+        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+      });
+      return JSON.parse(sanitized);
+    } catch { /* fall through */ }
+
+    // Attempt 3: manually extract title + html via regex (handles unescaped quotes in HTML)
+    try {
+      const titleM = jsonStr.match(/"title"\s*:\s*"([^"]+)"/);
+      // html value: everything between "html": " and the next top-level field or end
+      const htmlM = jsonStr.match(/"html"\s*:\s*"([\s\S]+)"(?:\s*,\s*"(?:css|variables|config)"|[\s\S]*?\}$)/);
+      if (htmlM) {
+        const rawHtml = htmlM[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+        return {
+          title: titleM ? titleM[1] : '',
+          html: rawHtml,
+          css: '',
+          variables: {},
+          config: {},
+        };
       }
-    }
+    } catch { /* fall through */ }
+
+    const msg = finishReason === 'MAX_TOKENS'
+      ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy thử yêu cầu ngắn gọn hơn.'
+      : 'Failed to parse AI response as JSON';
+    throw new Error(msg);
   }
 }
 
