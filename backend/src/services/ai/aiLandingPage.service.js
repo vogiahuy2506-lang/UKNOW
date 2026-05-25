@@ -53,7 +53,7 @@ QUY TẮC KỸ THUẬT (bắt buộc):
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
 
-    const { text, blockReason } = await generateGeminiText({
+    const { text, blockReason, finishReason } = await generateGeminiText({
       prompt: fullPrompt,
       jsonMode: true,
       maxOutputTokens: 16384,
@@ -67,17 +67,32 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    let parsed;
-    try {
-      parsed = JSON.parse(stripJsonFences(text));
-    } catch {
-      const err = new Error('AI trả về không phải JSON hợp lệ. Thử lại hoặc rút ngắn yêu cầu.');
-      err.status = 502;
-      throw err;
-    }
+    let title = 'Landing';
+    let html = '';
 
-    const title = String(parsed?.title || '').trim() || 'Landing';
-    let html = String(parsed?.html || '').trim();
+    // Thử parse JSON trước; nếu fail (model truncate hoặc escape sai) → fallback extract HTML từ raw text
+    try {
+      const parsed = JSON.parse(stripJsonFences(text));
+      title = String(parsed?.title || '').trim() || 'Landing';
+      html = String(parsed?.html || '').trim();
+    } catch {
+      console.warn(`[LandingAI] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML từ raw text`);
+      // Fallback: tìm khối HTML trong raw text
+      const htmlMatch = text.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+      if (!htmlMatch) {
+        const err = new Error(
+          finishReason === 'MAX_TOKENS'
+            ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy thử yêu cầu ngắn gọn hơn.'
+            : 'AI trả về không phải HTML hợp lệ. Thử lại hoặc rút ngắn yêu cầu.'
+        );
+        err.status = 502;
+        throw err;
+      }
+      html = htmlMatch[0].trim();
+      // Lấy title từ thẻ <title> trong HTML
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) title = titleMatch[1].trim();
+    }
     if (!html.toLowerCase().includes('<!doctype')) {
       const err = new Error('Thiếu <!DOCTYPE html> trong phản hồi AI.');
       err.status = 502;
