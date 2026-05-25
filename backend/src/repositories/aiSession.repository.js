@@ -60,6 +60,24 @@ export async function saveMessages(sessionId, userContent, assistantMsg) {
   );
 }
 
+// Lưu một assistant message duy nhất (không có user message đi kèm)
+export async function saveAssistantMessage(sessionId, assistantMsg) {
+  await db.query(
+    `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
+     VALUES ($1, 'assistant', $2, $3, $4, NULL)`,
+    [
+      sessionId,
+      assistantMsg.content ?? '',
+      assistantMsg.type ?? null,
+      assistantMsg.data != null ? JSON.stringify(assistantMsg.data) : null,
+    ]
+  );
+  await db.query(
+    `UPDATE ai_chat_sessions SET updated_at = NOW() WHERE id = $1`,
+    [sessionId]
+  );
+}
+
 export async function deleteSession(sessionId, userId) {
   const { rowCount } = await db.query(
     `DELETE FROM ai_chat_sessions WHERE id = $1 AND id_user = $2`,

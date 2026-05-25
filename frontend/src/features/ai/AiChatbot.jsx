@@ -1293,7 +1293,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     const enrichedPrompt = parts.join('. ');
 
     try {
-      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles);
+      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId);
       if (response.success) {
         const { title, html, css } = response.data;
         setMessages(prev => [...prev, {
@@ -1528,7 +1528,7 @@ const AiChatbot = ({ isOpen, onToggle }) => {
     const fullPrompt = templateContext + pendingLandingPrompt;
 
     try {
-      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles);
+      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles, currentSessionId);
 
       if (response.success) {
         const { title, html, css, variables } = response.data;
