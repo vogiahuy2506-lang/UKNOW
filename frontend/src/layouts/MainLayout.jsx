@@ -102,6 +102,13 @@ const MainLayout = () => {
     };
   }, [location.pathname, isFullLayout]);
 
+  // Dispatch resize after the 300ms CSS transition so Recharts/ResizeObserver-based
+  // components (charts, etc.) re-measure at the correct content width.
+  useEffect(() => {
+    const t = setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
+    return () => clearTimeout(t);
+  }, [aiPanelOpen]);
+
   if (isMobile) {
     const mainClassName = isFullLayout
       ? 'flex-1 min-h-0 overflow-hidden p-0'
@@ -177,8 +184,8 @@ const MainLayout = () => {
       )}
 
       <div
-        className="flex-1 min-w-0 flex flex-col transition-all duration-300"
-        style={{ 
+        className={`flex-1 min-w-0 flex flex-col transition-all duration-300${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
+        style={{
           marginLeft: `${effectiveSidebarWidth}px`,
           marginRight: aiPanelOpen && !isMobile ? (window.innerWidth > 1024 ? '450px' : '400px') : '0px'
         }}

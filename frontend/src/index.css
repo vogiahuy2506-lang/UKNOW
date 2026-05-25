@@ -335,6 +335,28 @@ input[type='password']::-ms-clear {
   pointer-events: none;
 }
 
+/* ── AI Panel open: giảm grid columns khi chatbot chiếm 450px bên phải ─────
+   Tailwind breakpoints (xl, lg, md) dựa trên viewport width không đổi khi
+   chatbot mở, nhưng content area thực tế hẹp hơn nhiều. Class .ai-panel-open
+   được gắn vào wrapper bởi MainLayout để override về số cột phù hợp hơn.
+   Dùng !important để thắng specificity của Tailwind media-query rules. */
+.ai-panel-open .xl\:grid-cols-4,
+.ai-panel-open .lg\:grid-cols-4,
+.ai-panel-open .md\:grid-cols-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.ai-panel-open .xl\:grid-cols-3,
+.ai-panel-open .lg\:grid-cols-3,
+.ai-panel-open .md\:grid-cols-3 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.ai-panel-open .xl\:grid-cols-2,
+.ai-panel-open .lg\:grid-cols-2 {
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+}
+
 /* Ngắt trang khi in / «Lưu dưới dạng PDF» từ hộp thoại in trình duyệt */
 @media print {
   .pdf-print-page {
