@@ -627,6 +627,8 @@ export default {
     createFailed: 'Failed to create campaign',
     creating: 'Creating...',
     createAndDesign: 'Create & Design',
+    createModalTitle: 'Create New Campaign',
+    campaignNamePlaceholder: 'Enter campaign name...',
     duplicateModalTitle: 'Duplicate Campaign',
     newCampaignName: 'New campaign name',
     newCampaignNamePlaceholder: 'Enter new campaign name',

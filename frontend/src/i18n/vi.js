@@ -627,6 +627,8 @@ export default {
     createFailed: 'Không thể tạo chiến dịch',
     creating: 'Đang tạo...',
     createAndDesign: 'Tạo và thiết kế',
+    createModalTitle: 'Tạo chiến dịch mới',
+    campaignNamePlaceholder: 'Nhập tên chiến dịch...',
     duplicateModalTitle: 'Nhân bản chiến dịch',
     newCampaignName: 'Tên chiến dịch mới',
     newCampaignNamePlaceholder: 'Nhập tên chiến dịch mới',

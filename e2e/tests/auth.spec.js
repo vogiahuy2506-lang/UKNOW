@@ -9,29 +9,29 @@ test.describe('Auth', () => {
   test('form đăng nhập hiển thị', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible();
-    await expect(page.getByPlaceholder('Nhập tên đăng nhập')).toBeVisible();
-    await expect(page.getByPlaceholder('Nhập mật khẩu')).toBeVisible();
+    await expect(page.locator('input[autocomplete="username"]')).toBeVisible();
+    await expect(page.locator('input[autocomplete="current-password"]')).toBeVisible();
   });
 
   test('submit trống → validation', async ({ page }) => {
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
-    await expect(page.getByText(/Vui lòng nhập tên đăng nhập/)).toBeVisible();
+    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await expect(page.getByText(/Vui lòng nhập email/)).toBeVisible();
   });
 
   test('sai mật khẩu → vẫn ở /login', async ({ page }) => {
     await page.goto('/login');
-    await page.getByPlaceholder('Nhập tên đăng nhập').fill(USERNAME);
-    await page.getByPlaceholder('Nhập mật khẩu').fill(`wrong-${Date.now()}`);
-    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
+    await page.locator('input[autocomplete="username"]').fill(USERNAME);
+    await page.locator('input[autocomplete="current-password"]').fill(`wrong-${Date.now()}`);
+    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test('đăng nhập đúng → /app', async ({ page }) => {
     await page.goto('/login');
-    await page.getByPlaceholder('Nhập tên đăng nhập').fill(USERNAME);
-    await page.getByPlaceholder('Nhập mật khẩu').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
+    await page.locator('input[autocomplete="username"]').fill(USERNAME);
+    await page.locator('input[autocomplete="current-password"]').fill(PASSWORD);
+    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
     await page.waitForURL(/\/app(\/|$)/, { timeout: 20_000 });
     await expect(page.locator('aside').first()).toBeVisible();
   });
