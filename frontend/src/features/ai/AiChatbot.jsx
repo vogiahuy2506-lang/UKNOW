@@ -1352,6 +1352,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       parent_child: 'Phụ huynh & trẻ em',
     };
 
+    if (!hasProfile) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '⚠️ Bạn chưa có hồ sơ doanh nghiệp — AI sẽ tự suy luận nội dung từ mô tả của bạn. Để landing page chính xác hơn, hãy thiết lập hồ sơ tại Thiết lập → Hồ sơ AI.',
+      }]);
+    }
+
     const parts = [pendingLandingPrompt];
     if (answers.pageGoal) parts.push(`Mục tiêu trang: ${goalLabels[answers.pageGoal] || answers.pageGoal}`);
     if (answers.targetAudience) parts.push(`Đối tượng: ${audienceLabels[answers.targetAudience] || answers.targetAudience}`);
