@@ -6,7 +6,7 @@ test.describe('Thông tin tài khoản', () => {
     await page.locator('aside div.border-t').getByRole('button').first().click();
     await page.getByRole('button', { name: /Thông tin tài khoản/ }).click();
 
-    await expect(page.getByRole('heading', { name: 'Thông tin tài khoản' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hồ sơ' })).toBeVisible();
 
     const fullName = page.getByPlaceholder('Nhập họ và tên');
     await fullName.clear();
@@ -18,6 +18,6 @@ test.describe('Thông tin tài khoản', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Đóng', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Thông tin tài khoản' })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hồ sơ' })).not.toBeVisible();
   });
 });
