@@ -306,8 +306,8 @@ class OutboundMessageQueueService {
       const job = await this.queue.add(normalizedType, payload, {
         attempts: Number.isFinite(attempts) ? Math.max(1, attempts) : 4,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: 3000,
-        removeOnFail: 3000,
+        removeOnComplete: { count: 100, age: 86400 },
+        removeOnFail: { count: 200, age: 7 * 86400 },
         ...jobOptions,
       });
       await this.logQueueMetrics('enqueue', normalizedType, job?.id);
@@ -372,8 +372,8 @@ class OutboundMessageQueueService {
     const job = await this.queue.add(normalizedType, payload, {
       attempts: Number.isFinite(attempts) ? Math.max(1, attempts) : 4,
       backoff: { type: 'exponential', delay: 2000 },
-      removeOnComplete: 3000,
-      removeOnFail: 3000,
+      removeOnComplete: { count: 100, age: 86400 },
+      removeOnFail: { count: 200, age: 7 * 86400 },
       ...jobOptions,
     });
     await this.logQueueMetrics('enqueue_no_wait', normalizedType, job?.id);

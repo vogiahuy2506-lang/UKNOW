@@ -13,6 +13,8 @@ const MainLayout = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
+  const [aiPanelWidth, setAiPanelWidth] = useLocalStorageState('founder_ai_chatbot_width', 420);
+  const [isPanelResizing, setIsPanelResizing] = useState(false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(256);
   const location = useLocation();
@@ -184,10 +186,10 @@ const MainLayout = () => {
       )}
 
       <div
-        className={`flex-1 min-w-0 flex flex-col transition-all duration-300${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
+        className={`flex-1 min-w-0 flex flex-col${!isPanelResizing ? ' transition-all duration-300' : ''}${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
         style={{
           marginLeft: `${effectiveSidebarWidth}px`,
-          marginRight: aiPanelOpen && !isMobile ? (window.innerWidth > 1024 ? '450px' : '400px') : '0px'
+          marginRight: aiPanelOpen && !isMobile ? `${aiPanelWidth}px` : '0px',
         }}
       >
         <main ref={mainContentRef} className={mainClassName}>
@@ -196,7 +198,14 @@ const MainLayout = () => {
       </div>
 
       {/* AI Side Panel */}
-      <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
+      <AiChatbot
+        isOpen={aiPanelOpen}
+        onToggle={() => setAiPanelOpen(false)}
+        panelWidth={aiPanelWidth}
+        onWidthChange={setAiPanelWidth}
+        onResizeStart={() => setIsPanelResizing(true)}
+        onResizeEnd={() => { setIsPanelResizing(false); window.dispatchEvent(new Event('resize')); }}
+      />
 
       {/* AI Toggle Bar (Desktop) */}
       {!aiPanelOpen && (
