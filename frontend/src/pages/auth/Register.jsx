@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
+import { useI18n } from '../../i18n';
 import api from '../../services/api';
 import {
   HiOutlineLockClosed,
@@ -17,44 +18,39 @@ import {
 } from 'react-icons/hi';
 import { GoogleLogin } from '@react-oauth/google';
 
-const registerSchema = z.object({
+const registerSchema = (t) => z.object({
   username: z
     .string()
-    .min(3, 'Tên đăng nhập phải có ít nhất 3 ký tự')
-    .max(50, 'Tên đăng nhập không được quá 50 ký tự')
-    .regex(/^[A-Za-z0-9]+$/, 'Tên đăng nhập chỉ được chứa chữ cái không dấu và số'),
-  email: z.string().email('Email không hợp lệ'),
-  password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
+    .min(3, t('register.usernameMinLen'))
+    .max(50, t('register.usernameMaxLen'))
+    .regex(/^[A-Za-z0-9]+$/, t('register.usernamePattern')),
+  email: z.string().email(t('register.invalidEmail')),
+  password: z.string().min(6, t('auth.passwordMinLength')),
   confirmPassword: z.string(),
   fullName: z.string().optional(),
   phone: z.string().optional().refine(
     (v) => !v || /^[0-9]{10,11}$/.test(v),
-    { message: 'Số điện thoại không hợp lệ' }
+    { message: t('register.invalidPhone') }
   ),
 }).refine((d) => d.password === d.confirmPassword, {
-  message: 'Mật khẩu xác nhận không khớp',
+  message: t('auth.passwordMismatch'),
   path: ['confirmPassword'],
 });
 
 const RESEND_COOLDOWN = 60;
 
-const inputBase = 'w-full pl-10 pr-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-white/8 text-white placeholder:text-white/30';
-const inputNormal = `${inputBase} border-white/12 focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10`;
-const inputError  = `${inputBase} border-red-400/60 focus:border-red-400 focus:ring-4 focus:ring-red-400/10`;
-
+const inputClass = 'w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-sm bg-white';
 const FieldError = ({ msg }) => msg ? (
-  <p className="text-xs font-medium text-red-400 flex items-start gap-1 mt-1">
-    <span className="w-1 h-1 rounded-full bg-red-400 inline-block mt-1 flex-shrink-0" />
-    <span>{msg}</span>
-  </p>
+  <p className="text-xs text-red-500 mt-1">{msg}</p>
 ) : null;
 
 // ── Màn nhập OTP ─────────────────────────────────────────────────────────────
 const OtpStep = ({ email, formData, onBack }) => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { register: registerUser } = useAuthStore();
 
-  const [digits, setDigits]           = useState(['', '', '', '', '', '']);
+  const [digits, setDigits]            = useState(['', '', '', '', '', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending]  = useState(false);
   const [countdown, setCountdown]      = useState(RESEND_COOLDOWN);
@@ -102,10 +98,10 @@ const OtpStep = ({ email, formData, onBack }) => {
       await api.post('/verification/send-code', { email });
       setDigits(['', '', '', '', '', '']);
       startTimer();
-      toast.success('Đã gửi lại mã xác minh');
+      toast.success(t('register.resendSuccess'));
       document.getElementById('otp-0')?.focus();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể gửi lại mã');
+      toast.error(err?.response?.data?.message || t('register.resendFailed'));
     } finally {
       setIsResending(false);
     }
@@ -113,14 +109,14 @@ const OtpStep = ({ email, formData, onBack }) => {
 
   const handleSubmit = async () => {
     const code = digits.join('');
-    if (code.length < 6) { toast.error('Vui lòng nhập đủ 6 chữ số'); return; }
+    if (code.length < 6) { toast.error(t('auth.enterFullCode')); return; }
     setIsSubmitting(true);
     try {
       await registerUser({ ...formData, emailVerificationCode: code });
-      toast.success('Đăng ký thành công!');
+      toast.success(t('auth.registerSuccess'));
       navigate('/');
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Xác minh thất bại';
+      const msg = err?.response?.data?.message || t('auth.verificationFailed');
       toast.error(msg);
       if (err?.response?.status === 400) setDigits(['', '', '', '', '', '']);
     } finally {
@@ -131,21 +127,21 @@ const OtpStep = ({ email, formData, onBack }) => {
   const code = digits.join('');
 
   return (
-    <div className="w-full">
+    <div className="w-full max-w-[400px] mx-auto">
       <button type="button" onClick={onBack}
-        className="flex items-center gap-1.5 text-sm font-medium text-white/45 hover:text-white/75 mb-8 transition-colors"
+        className="flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 mb-8 transition-colors"
       >
         <HiOutlineArrowLeft className="w-4 h-4" />
-        Quay lại
+        {t('register.back')}
       </button>
 
       <div className="mb-8">
-        <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mb-5">
-          <HiOutlineMail className="w-7 h-7 text-orange-400" />
+        <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center mb-5">
+          <HiOutlineMail className="w-7 h-7 text-orange-500" />
         </div>
-        <h1 className="text-2xl font-black text-white mb-2">Xác minh email</h1>
-        <p className="text-white/50 text-sm leading-relaxed">Chúng tôi đã gửi mã xác minh 6 chữ số đến</p>
-        <p className="font-bold text-white text-sm mt-0.5">{email}</p>
+        <h1 className="text-2xl font-black text-slate-900 mb-2">{t('register.verifyEmail')}</h1>
+        <p className="text-slate-500 text-sm leading-relaxed">{t('register.enterOtpCode')}</p>
+        <p className="font-bold text-slate-800 text-sm mt-0.5">{email}</p>
       </div>
 
       {/* 6 ô OTP */}
@@ -161,7 +157,7 @@ const OtpStep = ({ email, formData, onBack }) => {
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={i === 0 ? handlePaste : undefined}
-            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all bg-white/8 text-white border-white/12 focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10"
+            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
           />
         ))}
       </div>
@@ -170,25 +166,25 @@ const OtpStep = ({ email, formData, onBack }) => {
         type="button"
         onClick={handleSubmit}
         disabled={isSubmitting || code.length < 6}
-        className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+        className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none text-sm"
       >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Đang xác minh...
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            {t('register.verifying')}
           </span>
-        ) : 'Xác nhận & Tạo tài khoản'}
+        ) : t('register.confirmButton')}
       </button>
 
-      <div className="mt-5 text-center text-sm text-white/45">
-        Không nhận được mã?{' '}
+      <div className="mt-5 text-center text-sm text-slate-500">
+        {t('register.didntReceiveCode')}{' '}
         {countdown > 0 ? (
-          <span className="text-white/30">Gửi lại sau {countdown}s</span>
+          <span className="text-slate-400">{t('register.resendAfter', { n: countdown })}</span>
         ) : (
           <button type="button" onClick={handleResend} disabled={isResending}
-            className="font-bold text-orange-400 hover:text-orange-300 transition-colors disabled:opacity-50"
+            className="font-bold text-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
           >
-            {isResending ? 'Đang gửi...' : 'Gửi lại'}
+            {isResending ? t('register.sending') : t('register.resendButton')}
           </button>
         )}
       </div>
@@ -198,6 +194,7 @@ const OtpStep = ({ email, formData, onBack }) => {
 
 // ── Form đăng ký ──────────────────────────────────────────────────────────────
 const Register = () => {
+  const { t } = useI18n();
   const [showPassword, setShowPassword]               = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [step, setStep]                               = useState('form');
@@ -210,11 +207,11 @@ const Register = () => {
     setIsSendingCode(true);
     try {
       const result = await googleLogin(credentialResponse.credential);
-      toast.success('Đăng nhập Google thành công!');
+      toast.success(t('register.googleLoginSuccess'));
       const role = result?.data?.user?.role;
       navigate(role === 'admin' ? '/admin' : '/app');
     } catch (error) {
-      const message = error.response?.data?.message || 'Đăng nhập Google thất bại';
+      const message = error.response?.data?.message || t('register.googleLoginFailed');
       toast.error(message);
     } finally {
       setIsSendingCode(false);
@@ -222,11 +219,11 @@ const Register = () => {
   };
 
   const handleGoogleError = () => {
-    toast.error('Lỗi khi kết nối với Google');
+    toast.error(t('register.googleError'));
   };
 
   const { register, handleSubmit, formState: { errors } } = useForm({
-    resolver: zodResolver(registerSchema),
+    resolver: zodResolver(registerSchema(t)),
   });
 
   const onSubmit = async (data) => {
@@ -245,49 +242,55 @@ const Register = () => {
       });
       setStep('otp');
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể gửi mã xác minh');
+      toast.error(err?.response?.data?.message || t('register.sendCodeFailed'));
     } finally {
       setIsSendingCode(false);
     }
   };
 
   if (step === 'otp' && otpData) {
-    return <OtpStep email={otpData.email} formData={otpData.formData} onBack={() => setStep('form')} />;
+    return (
+      <OtpStep
+        email={otpData.email}
+        formData={otpData.formData}
+        onBack={() => setStep('form')}
+      />
+    );
   }
 
   return (
-    <div className="w-full">
-      <div className="mb-7">
-        <h1 className="text-3xl font-black text-white tracking-tight mb-1.5">Đăng ký tài khoản</h1>
-        <p className="text-white/50 font-medium text-sm">Bắt đầu trải nghiệm Founder AI miễn phí</p>
+    <>
+      <div className="mb-8 lg:mb-10">
+        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">{t('register.registerTitle')}</h1>
+        <p className="text-slate-500 font-medium">{t('register.registerSubtitle')}</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Username & Email */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">
-              Tên đăng nhập <span className="text-red-400">*</span>
+            <label className="block text-sm font-bold text-slate-700">
+              {t('auth.usernameLabel')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
+              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type="text" {...register('username')}
-                className={errors.username ? inputError : inputNormal}
-                placeholder="john_doe"
+                className={errors.username ? `${inputClass} border-red-400` : inputClass}
+                placeholder={t('register.usernamePlaceholder')}
               />
             </div>
             <FieldError msg={errors.username?.message} />
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">
-              Email <span className="text-red-400">*</span>
+            <label className="block text-sm font-bold text-slate-700">
+              {t('common.email')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
+              <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type="email" {...register('email')}
-                className={errors.email ? inputError : inputNormal}
-                placeholder="name@company.com"
+                className={errors.email ? `${inputClass} border-red-400` : inputClass}
+                placeholder={t('register.emailPlaceholder')}
               />
             </div>
             <FieldError msg={errors.email?.message} />
@@ -295,39 +298,39 @@ const Register = () => {
         </div>
 
         {/* Full Name & Phone */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">Họ và tên</label>
+            <label className="block text-sm font-bold text-slate-700">{t('register.fullName')}</label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
-              <input type="text" {...register('fullName')} className={inputNormal} placeholder="Nguyễn Văn A" />
+              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input type="text" {...register('fullName')} className={inputClass} placeholder={t('register.fullNamePlaceholder')} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">Số điện thoại</label>
+            <label className="block text-sm font-bold text-slate-700">{t('register.phone')}</label>
             <div className="relative group">
-              <HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
-              <input type="tel" {...register('phone')} className={inputNormal} placeholder="0901234567" />
+              <HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input type="tel" {...register('phone')} className={`${inputClass} ${errors.phone ? 'border-red-400' : ''}`} placeholder={t('register.phonePlaceholder')} />
             </div>
             <FieldError msg={errors.phone?.message} />
           </div>
         </div>
 
         {/* Password & Confirm */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">
-              Mật khẩu <span className="text-red-400">*</span>
+            <label className="block text-sm font-bold text-slate-700">
+              {t('auth.password')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
+              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type={showPassword ? 'text' : 'password'} {...register('password')}
-                className={`${errors.password ? inputError : inputNormal} pr-10`}
+                className={`${errors.password ? `${inputClass} border-red-400` : inputClass} pr-10`}
                 placeholder="••••••••"
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-orange-400 transition-colors p-1">
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1">
                 {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
               </button>
             </div>
@@ -335,17 +338,17 @@ const Register = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-white/70">
-              Xác nhận <span className="text-red-400">*</span>
+            <label className="block text-sm font-bold text-slate-700">
+              {t('auth.confirmPassword')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-orange-400 transition-colors" />
+              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type={showConfirmPassword ? 'text' : 'password'} {...register('confirmPassword')}
-                className={`${errors.confirmPassword ? inputError : inputNormal} pr-10`}
+                className={`${errors.confirmPassword ? `${inputClass} border-red-400` : inputClass} pr-10`}
                 placeholder="••••••••"
               />
               <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-orange-400 transition-colors p-1">
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1">
                 {showConfirmPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
               </button>
             </div>
@@ -354,34 +357,34 @@ const Register = () => {
         </div>
 
         {/* Terms */}
-        <div className="flex items-start pt-1">
+        <div className="flex items-start pt-2">
           <input type="checkbox" required
-            className="w-4 h-4 mt-0.5 rounded border-white/20 text-orange-500 focus:ring-orange-500 cursor-pointer bg-white/8"
+            className="w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
           />
-          <span className="ml-2.5 text-xs text-white/55 font-medium leading-relaxed">
-            Tôi đồng ý với{' '}
-            <a href="#" className="text-orange-400 hover:text-orange-300 font-bold hover:underline transition-colors">Điều khoản sử dụng</a>
-            {' '}và{' '}
-            <a href="#" className="text-orange-400 hover:text-orange-300 font-bold hover:underline transition-colors">Chính sách bảo mật</a>
+          <span className="ml-2.5 text-xs text-slate-600 font-medium leading-relaxed">
+            {t('auth.termsAgree')}{' '}
+            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.terms')}</a>
+            {' '}{t('auth.and')}{' '}
+            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.privacyPolicy')}</a>
           </span>
         </div>
 
         <button type="submit" disabled={isSendingCode}
-          className="w-full py-4 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none mt-1"
+          className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
         >
           {isSendingCode ? (
             <span className="flex items-center justify-center gap-2">
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Đang gửi mã xác minh...
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {t('register.sendingCode')}
             </span>
-          ) : 'Tạo tài khoản'}
+          ) : t('register.registerButton')}
         </button>
       </form>
 
-      <div className="flex items-center my-6">
-        <div className="flex-1 border-t border-white/10" />
-        <span className="px-4 text-xs font-bold text-white/35 uppercase tracking-widest">hoặc</span>
-        <div className="flex-1 border-t border-white/10" />
+      <div className="flex items-center my-8">
+        <div className="flex-1 border-t border-slate-200" />
+        <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('common.or')}</span>
+        <div className="flex-1 border-t border-slate-200" />
       </div>
 
       <div className="w-full flex justify-center">
@@ -389,7 +392,7 @@ const Register = () => {
           clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
           onSuccess={handleGoogleSuccess}
           onError={handleGoogleError}
-          theme="filled_black"
+          theme="outline"
           size="large"
           width="100%"
           text="signup_with"
@@ -397,15 +400,15 @@ const Register = () => {
         />
       </div>
 
-      <div className="mt-6 text-center">
-        <p className="text-sm font-medium text-white/50">
-          Đã có tài khoản?{' '}
-          <Link to="/login" className="font-bold text-orange-400 hover:text-orange-300 transition-colors ml-1">
-            Đăng nhập ngay
+      <div className="mt-8 text-center">
+        <p className="text-sm font-medium text-slate-600">
+          {t('auth.alreadyHaveAccount')}{' '}
+          <Link to="/login" className="font-bold text-orange-500 hover:text-orange-600 transition-colors ml-1">
+            {t('auth.loginHere')}
           </Link>
         </p>
       </div>
-    </div>
+    </>
   );
 };
 
