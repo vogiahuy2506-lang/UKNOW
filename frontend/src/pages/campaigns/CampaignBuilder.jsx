@@ -7,6 +7,7 @@ import campaignBuilderApiService from '../../features/campaigns/services/campaig
 import fetchAllTemplateListPages from '../../features/templates/utils/fetchAllTemplateListPages';
 import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
 import useBrowserRouterBlocker from '../../features/campaigns/hooks/useBrowserRouterBlocker';
+import { useI18n } from '../../i18n';
 import {
   campaignFlowHasZaloPoolMulti,
   getAllowedActionNodeTypesByCampaignType,
@@ -38,8 +39,7 @@ const LOG_DETAIL_MIN_WIDTH = 220;
 const NODE_DROP_OFFSET_X = 76;
 const NODE_DROP_OFFSET_Y = 50;
 const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
-const RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE =
-  'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi lưu thay đổi.';
+const RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE = (t) => t('campaigns.runningCampaignBlock');
 const ZALO_NODE_TYPES = new Set([
   'select_zalo_account',
   'get_all_friends',
@@ -65,6 +65,7 @@ const isZaloExecutionNode = (node) => {
 };
 
 const CampaignBuilder = () => {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -362,7 +363,7 @@ const CampaignBuilder = () => {
         const campaignData = response.data?.data;
 
         if (!campaignData) {
-          toast.error('Không thể tải thông tin chiến dịch');
+          toast.error(t('campaigns.loadFailed'));
           navigate('/app/campaigns');
           return;
         }
@@ -389,7 +390,7 @@ const CampaignBuilder = () => {
         pendingBaselineRef.current = true;
       } catch (error) {
         console.error('Fetch campaign error:', error);
-        toast.error('Không thể tải thông tin chiến dịch');
+        toast.error(t('campaignBuilderExtra.loadFailed'));
         navigate('/app/campaigns');
       }
     };
@@ -513,7 +514,7 @@ const CampaignBuilder = () => {
         setEdges((eds) => eds.filter((e) => e.id !== selectedEdgeId));
         setSelectedEdgeId(null);
         setIsDirty(true);
-        toast.success('Đã xóa dây nối');
+        toast.success(t('campaignBuilderExtra.deleteConnection'));
         return;
       }
       if (selectedNode) {
@@ -556,26 +557,26 @@ const CampaignBuilder = () => {
       setSelectedEdgeId(null);
       setShowDeleteModal(false);
       setIsDirty(true);
-      toast.success('Đã xóa node');
+      toast.success(t('campaignBuilderExtra.deleteNode'));
     }
   };
 
   const handleSave = async () => {
     if (!campaignName.trim()) {
-      toast.error('Vui lòng nhập tên chiến dịch');
+      toast.error(t('campaignBuilderExtra.enterCampaignName'));
       return;
     }
 
     const triggerCount = nodes.filter((n) => isTriggerNodeType(n.data?.nodeType || n.type)).length;
     if (triggerCount > 1) {
-      toast.error('Một chiến dịch chỉ được có 1 node điểm khởi đầu. Vui lòng xóa bớt trigger.');
+      toast.error(t('campaignBuilderExtra.onlyOneTrigger'));
       return;
     }
 
     try {
       const hasRunningCampaignRun = await hasRunningCampaignRunBeforeSave();
       if (hasRunningCampaignRun) {
-        toast.error(RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE);
+        toast.error(RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE(t));
         return;
       }
 
@@ -638,16 +639,16 @@ const CampaignBuilder = () => {
       if (isNewCampaign && savedCampaignId) {
         navigate(`/app/campaigns/${savedCampaignId}/builder`, { replace: true });
       }
-      toast.success('Đã lưu chiến dịch');
+      toast.success(t('campaignBuilderExtra.saved'));
     } catch (error) {
       console.error('Save campaign error:', error);
       const statusCode = Number(error?.response?.status);
       if (statusCode === 409) {
-        toast.error(error.response?.data?.message || RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE);
+        toast.error(error.response?.data?.message || RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE(t));
         return;
       }
-      const msg = error.response?.data?.message || error.message || 'Không thể lưu chiến dịch';
-      toast.error(typeof msg === 'string' ? msg : 'Không thể lưu chiến dịch');
+      const msg = error.response?.data?.message || error.message || t('campaignBuilderExtra.saveFailed');
+      toast.error(typeof msg === 'string' ? msg : t('campaignBuilderExtra.saveFailed'));
     }
   };
 
@@ -704,8 +705,8 @@ const CampaignBuilder = () => {
       setNodeToConfig(null);
       toast.success(
         shouldStripFriendListNodes && friendNodeIds.length > 0
-          ? 'Đã lưu cấu hình node và gỡ node «Lấy danh sách bạn bè Zalo» (không dùng khi gửi bằng pool nhiều tài khoản).'
-          : 'Đã lưu cấu hình node'
+          ? t('campaignBuilderExtra.nodeConfigSavedPoolWarning')
+          : t('campaignBuilderExtra.nodeConfigSaved')
       );
     }
   };
@@ -789,7 +790,7 @@ const CampaignBuilder = () => {
     nodeId: params.nodeId,
     nodeType: params.nodeType,
     nodeName: params.nodeName,
-    message: params.message || 'Đang thực thi node',
+    message: params.message || t('campaignBuilderExtra.executingNode'),
     timestamp: new Date(),
     result: params.result ?? null,
   }), []);
@@ -861,18 +862,18 @@ const CampaignBuilder = () => {
 
   const handleNameModalPrimary = () => {
     if (!campaignName.trim()) {
-      toast.error('Vui lòng nhập tên chiến dịch');
+      toast.error(t('campaignBuilderExtra.enterCampaignName'));
       return;
     }
     handleSave();
   };
 
   const leaveModalTitle = leaveConfirmContext === 'running'
-    ? 'Xác nhận thoát Builder khi đang chạy'
-    : 'Bạn có thay đổi chưa lưu';
+    ? t('campaignBuilderExtra.confirmExitRunning')
+    : t('campaignBuilderExtra.unsavedChanges');
   const leaveModalMessage = leaveConfirmContext === 'running'
-    ? 'Chiến dịch đang chạy preview. Nếu rời trang Builder lúc này, tiến trình chạy sẽ bị dừng. Bạn có chắc chắn muốn thoát?'
-    : 'Bạn đang có thay đổi chưa lưu. Nếu thoát khỏi trang Builder, các thay đổi này sẽ bị mất. Bạn có chắc chắn muốn thoát?';
+    ? t('campaignBuilderExtra.campaignRunningWarning')
+    : t('campaignBuilderExtra.unsavedChangesWarning');
 
   return (
     <CampaignBuilderPageLayout

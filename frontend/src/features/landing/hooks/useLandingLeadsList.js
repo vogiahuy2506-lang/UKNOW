@@ -53,7 +53,7 @@ export default function useLandingLeadsList() {
       setPagination(data.pagination || { total: 0, page, pageSize, totalPages: 1 });
     } catch (e) {
       const msg =
-        e?.response?.data?.message || e?.message || 'Không thể tải danh sách';
+        e?.response?.data?.message || e?.message || 'Cannot load list';
       setErrorMessage(msg);
       setItems([]);
     } finally {
@@ -84,15 +84,15 @@ export default function useLandingLeadsList() {
     setIsExporting(true);
     try {
       const { truncated } = await downloadLandingLeadsAdminExportXlsx(appliedFilters);
-      toast.success('Đã tải file Excel.');
+      toast.success('Excel file downloaded.');
       if (truncated) {
         toast(
-          'Kết quả lọc vượt 10.000 bản ghi — file chỉ chứa 10.000 dòng mới nhất. Hãy thu hẹp bộ lọc nếu cần đầy đủ.',
+          'Filtered results exceed 10,000 records — file only contains 10,000 newest rows. Please narrow filters if you need complete data.',
           { duration: 6000, icon: '⚠️' }
         );
       }
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || 'Không thể xuất Excel';
+      const msg = e?.response?.data?.message || e?.message || 'Cannot export Excel';
       toast.error(msg);
     } finally {
       setIsExporting(false);

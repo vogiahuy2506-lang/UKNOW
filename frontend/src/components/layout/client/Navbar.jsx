@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { HiOutlineLogout, HiOutlineChevronDown, HiOutlineViewGrid } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
+import { useI18n } from '../../../i18n';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
 
 /**
@@ -22,6 +23,7 @@ const AVATAR_STYLES = {
 };
 
 function UserMenu({ user, logout }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -59,7 +61,7 @@ function UserMenu({ user, logout }) {
       {open && (
         <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
           <div className="px-4 py-2.5 border-b border-gray-100">
-            <p className="text-xs text-gray-400 leading-none mb-0.5">Tài khoản:</p>
+            <p className="text-xs text-gray-400 leading-none mb-0.5">{t('navbar.account')}</p>
             <p className="text-sm font-semibold text-gray-800 truncate">{user?.email || displayName}</p>
           </div>
           <Link
@@ -68,7 +70,7 @@ function UserMenu({ user, logout }) {
             className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <HiOutlineViewGrid className="w-4 h-4 text-gray-500" />
-            Trang quản trị
+            {t('navbar.adminDashboard')}
           </Link>
           <button
             onClick={handleLogout}

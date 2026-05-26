@@ -1,3 +1,4 @@
+import { useI18n } from '../../../i18n';
 import {
   HiOutlineClock,
   HiOutlineEye,
@@ -48,9 +49,13 @@ const CampaignRunMainTabs = ({
   stoppingRunIds,
   onStopRun,
   toastNotifier,
-}) => (
-  <>
-    <div className="border-b border-gray-200">
+}) => {
+  const { t } = useI18n();
+  const tt = (key, fallback) => t(key) || fallback;
+
+  return (
+    <>
+      <div className="border-b border-gray-200">
       <nav className="flex gap-6" aria-label="Tabs">
         <button
           type="button"
@@ -61,7 +66,7 @@ const CampaignRunMainTabs = ({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Chiến dịch đang hoạt động
+          {t('campaignRun.activeCampaigns')}
         </button>
         <button
           type="button"
@@ -72,7 +77,7 @@ const CampaignRunMainTabs = ({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Lịch chạy đã thiết lập
+          {t('campaignRun.scheduledCampaigns')}
         </button>
         <button
           type="button"
@@ -83,7 +88,7 @@ const CampaignRunMainTabs = ({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Chiến dịch đang tạm dừng
+          {t('campaignRun.pausedCampaigns')}
         </button>
       </nav>
     </div>
@@ -91,7 +96,7 @@ const CampaignRunMainTabs = ({
     {activeMainTab === 'active_campaigns' && (
       <div className="card">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Chiến dịch đang hoạt động</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('campaignRun.activeCampaigns')}</h2>
           <div className="mt-4">
             <div className="max-w-md flex items-center rounded-lg border border-gray-300 bg-white text-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
               <span className="pl-3 flex items-center text-gray-400" aria-hidden>
@@ -101,7 +106,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={activeCampaignSearch}
                 onChange={(e) => onActiveCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên chiến dịch hoặc ID"
+                placeholder={t('campaignRun.searchCampaignOrId')}
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -112,8 +117,8 @@ const CampaignRunMainTabs = ({
           <div className="p-12 text-center">
             <p className="text-gray-500">
               {campaigns.length === 0
-                ? 'Không có chiến dịch đang hoạt động'
-                : 'Không tìm thấy chiến dịch phù hợp'}
+                ? t('campaignRun.noActiveCampaigns')
+                : t('campaignRun.noMatchingCampaigns')}
             </p>
           </div>
         ) : (
@@ -122,22 +127,22 @@ const CampaignRunMainTabs = ({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
-                    ID chiến dịch
+                    {t('campaignRun.campaignId')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tên chiến dịch
+                    {t('campaignRun.campaignName')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Loại
+                    {t('campaignRun.type')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Người tạo
+                    {t('campaignRun.createdBy')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cập nhật lần cuối
+                    {t('campaignRun.lastUpdated')}
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Thao tác
+                    {t('campaignRun.actions')}
                   </th>
                 </tr>
               </thead>
@@ -168,21 +173,21 @@ const CampaignRunMainTabs = ({
                             {campaign.description && (
                               <div className="text-sm text-gray-500">{campaign.description}</div>
                             )}
-                            {/* Nhãn trạng thái lịch chạy + mở popup xem chi tiết các lịch */}
+                            {/* Schedule status label + popup to view schedule details */}
                             <div className="mt-1 flex flex-wrap items-center gap-2">
                               {scheduleCount === 0 ? (
-                                <span className="text-xs text-gray-500">Chưa có lịch chạy thiết lập</span>
+                                <span className="text-xs text-gray-500">{t('campaignRun.noSchedules')}</span>
                               ) : (
                                 <>
                                   <span className="badge badge-info text-xs font-normal">
-                                    Đã có {scheduleCount} lịch chạy thiết lập
+                                    {t('campaignRun.schedulesCount', { count: scheduleCount })}
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => onOpenCampaignSchedulesSummaryModal(campaign)}
                                     className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
                                   >
-                                    Xem lịch đã thiết lập
+                                    {t('campaignRun.viewSchedules')}
                                   </button>
                                 </>
                               )}
@@ -191,11 +196,11 @@ const CampaignRunMainTabs = ({
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="badge badge-warning flex items-center gap-1">
                                   <HiOutlineRefresh className="w-3 h-3 animate-spin" />
-                                  Đang chạy
+                                  {t('campaignRun.running')}
                                 </span>
                                 {isContinuousMode && (
                                   <span className="text-xs text-emerald-600 font-medium">
-                                    Chạy liên tục{pollIntervalMinutes ? ` (${pollIntervalMinutes} phút/lần)` : ''}
+                                    {t('campaignRun.continuousRunning', { interval: pollIntervalMinutes })}
                                   </span>
                                 )}
                               </div>
@@ -214,7 +219,7 @@ const CampaignRunMainTabs = ({
                         })()}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {campaign?.createdBy?.name || campaign?.creatorName || 'Không xác định'}
+                        {campaign?.createdBy?.name || campaign?.creatorName || t('campaignRun.unknown')}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {formatCampaignDateTime(campaign.updatedAt)}
@@ -225,17 +230,17 @@ const CampaignRunMainTabs = ({
                             <button
                               onClick={() => {
                                 if (!runningRun?.id) {
-                                  toastNotifier.error('Không tìm thấy lượt chạy để dừng');
+                                  toastNotifier.error(t('campaignRun.runNotFound'));
                                   return;
                                 }
                                 onStopRun(runningRun);
                               }}
                               className="btn btn-danger"
-                              title="Dừng lượt chạy"
+                              title={t('campaignRun.stopRun')}
                               disabled={isStopping || !runningRun?.id}
                             >
                               <HiOutlinePause className="w-4 h-4 mr-2" />
-                              {isStopping ? 'Đang dừng...' : 'Dừng chạy'}
+                              {isStopping ? t('campaignRun.stopping') : t('campaignRun.stop')}
                             </button>
                           ) : (
                             <button
@@ -243,33 +248,33 @@ const CampaignRunMainTabs = ({
                                 onOpenRunConfirmModal(campaign);
                               }}
                               className="btn btn-primary"
-                              title="Chạy ngay"
+                              title={t('campaignRun.runNow')}
                             >
                               <HiOutlinePlay className="w-4 h-4 mr-2" />
-                              Chạy ngay
+                              {t('campaignRun.runNow')}
                             </button>
                           )}
                           <button
                             onClick={() => {
                               if (isRunning) {
-                                toastNotifier.error('Chiến dịch đang chạy, tạm thời không thể lên lịch');
+                                toastNotifier.error(t('campaignRun.cannotScheduleWhileRunning'));
                                 return;
                               }
                               onOpenScheduleModal(campaign);
                             }}
                             className="btn btn-secondary"
-                            title="Thiết lập lịch chạy"
+                            title={t('campaignRun.setupSchedule')}
                           >
                             <HiOutlineClock className="w-4 h-4 mr-2" />
-                            Lên lịch
+                            {t('campaignRun.schedule')}
                           </button>
                           <button
                             onClick={() => onToggleCampaignLogs(campaign)}
                             className="btn btn-secondary"
-                            title={isShowingLogsForCampaign(campaign.id) ? 'Ẩn log' : 'Xem log'}
+                            title={isShowingLogsForCampaign(campaign.id) ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
                           >
                             <HiOutlineEye className="w-4 h-4 mr-2" />
-                            {isShowingLogsForCampaign(campaign.id) ? 'Ẩn log' : 'Xem log'}
+                            {isShowingLogsForCampaign(campaign.id) ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
                           </button>
                         </div>
                       </td>
@@ -286,7 +291,7 @@ const CampaignRunMainTabs = ({
     {activeMainTab === 'scheduled_campaigns' && (
       <div className="card">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Lịch chạy đã thiết lập</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('campaignRun.scheduledCampaigns')}</h2>
           <div className="mt-4">
             <div className="max-w-md flex items-center rounded-lg border border-gray-300 bg-white text-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
               <span className="pl-3 flex items-center text-gray-400" aria-hidden>
@@ -296,7 +301,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={scheduledCampaignSearch}
                 onChange={(e) => onScheduledCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên lịch, tên chiến dịch hoặc ID chiến dịch"
+                placeholder={t('campaignRun.searchScheduleOrCampaign')}
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -306,7 +311,7 @@ const CampaignRunMainTabs = ({
         {filteredSchedules.length === 0 ? (
           <div className="p-12 text-center">
             <p className="text-gray-500">
-              {schedules.length === 0 ? 'Chưa có lịch chạy nào' : 'Không tìm thấy chiến dịch phù hợp'}
+              {schedules.length === 0 ? t('campaignRun.noSchedules') : t('campaignRun.noMatchingCampaigns')}
             </p>
           </div>
         ) : (
@@ -314,13 +319,13 @@ const CampaignRunMainTabs = ({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên lịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chiến dịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">ID chiến dịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại lịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cron</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleName')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaigns.title')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">{t('campaignRun.campaignId')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleType')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.cron')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.status')}</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -338,7 +343,7 @@ const CampaignRunMainTabs = ({
                     <td className="px-6 py-4">
                       <span className="badge badge-info">
                         {schedule.scheduleType === 'weekly'
-                          ? `Hàng tuần (${getWeeklyDayLabel(getWeeklyDayFromCron(schedule.cronExpression))})`
+                          ? `${t('campaigns.scheduleWeekly')} (${getWeeklyDayLabel(getWeeklyDayFromCron(schedule.cronExpression))})`
                           : getScheduleTypeLabel(schedule.scheduleType)}
                       </span>
                     </td>
@@ -367,14 +372,14 @@ const CampaignRunMainTabs = ({
                         <button
                           onClick={() => onOpenScheduleDetailModal(schedule)}
                           className="text-blue-600 hover:text-blue-800"
-                          title="Xem chi tiết"
+                          title={t('campaignRun.viewDetails')}
                         >
                           <HiOutlineEye className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => onDeleteSchedule(schedule.id)}
                           className="text-red-600 hover:text-red-800"
-                          title="Xóa lịch"
+                          title={t('campaignRun.deleteSchedule')}
                         >
                           <HiOutlineTrash className="w-5 h-5" />
                         </button>
@@ -392,7 +397,7 @@ const CampaignRunMainTabs = ({
     {activeMainTab === 'paused_campaigns' && (
       <div className="card">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Chiến dịch đang tạm dừng</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('campaignRun.pausedCampaigns')}</h2>
           <div className="mt-4">
             <div className="max-w-md flex items-center rounded-lg border border-gray-300 bg-white text-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
               <span className="pl-3 flex items-center text-gray-400" aria-hidden>
@@ -402,7 +407,7 @@ const CampaignRunMainTabs = ({
                 type="text"
                 value={pausedCampaignSearch}
                 onChange={(e) => onPausedCampaignSearchChange(e.target.value)}
-                placeholder="Tìm theo tên chiến dịch hoặc ID"
+                placeholder={t('campaignRun.searchCampaignOrId')}
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -413,8 +418,8 @@ const CampaignRunMainTabs = ({
           <div className="p-12 text-center">
             <p className="text-gray-500">
               {pausedCampaigns.length === 0
-                ? 'Không có chiến dịch tạm dừng'
-                : 'Không tìm thấy chiến dịch phù hợp'}
+                ? t('campaignRun.noPausedCampaigns')
+                : t('campaignRun.noMatchingCampaigns')}
             </p>
           </div>
         ) : (
@@ -422,12 +427,12 @@ const CampaignRunMainTabs = ({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">ID chiến dịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên chiến dịch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Người tạo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cập nhật lần cuối</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">{t('campaignRun.campaignId')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.campaignName')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.type')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.createdBy')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.lastUpdated')}</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -455,7 +460,7 @@ const CampaignRunMainTabs = ({
                         })()}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {campaign?.createdBy?.name || campaign?.creatorName || 'Không xác định'}
+                        {campaign?.createdBy?.name || campaign?.creatorName || t('campaignRun.unknown')}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {formatCampaignDateTime(campaign.updatedAt)}
@@ -465,11 +470,11 @@ const CampaignRunMainTabs = ({
                           <button
                             onClick={() => onActivateCampaign(campaign.id)}
                             className="btn btn-primary"
-                            title="Kích hoạt chiến dịch"
+                            title={t('campaignRun.activateCampaign')}
                             disabled={isActivating}
                           >
                             <HiOutlinePlay className="w-4 h-4 mr-2" />
-                            {isActivating ? 'Đang kích hoạt...' : 'Kích hoạt'}
+                            {isActivating ? t('campaignRun.activating') : t('campaignRun.activate')}
                           </button>
                         </div>
                       </td>
@@ -482,7 +487,8 @@ const CampaignRunMainTabs = ({
         )}
       </div>
     )}
-  </>
-);
+    </>
+  );
+};
 
 export default CampaignRunMainTabs;

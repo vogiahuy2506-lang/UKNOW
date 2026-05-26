@@ -7,6 +7,7 @@ import {
 } from 'react-icons/hi';
 import { formatDateTime } from '../utils/customerDisplay.helpers';
 import { customerApiService } from '../services/customerApi.service';
+import { useI18n } from '../../../i18n';
 
 const buildRunDisplay = (runId, runName, runDisplayName) => {
   const normalized = String(runDisplayName || '').trim();
@@ -23,7 +24,7 @@ const buildRunDisplay = (runId, runName, runDisplayName) => {
  *
  * @param {{ file: { displayName?: string, storageKey?: string, url?: string } }} props
  */
-const AttachmentLink = ({ file }) => {
+const AttachmentLink = ({ file, t }) => {
   const [loading, setLoading] = useState(false);
 
   const handleView = async (e) => {
@@ -50,7 +51,7 @@ const AttachmentLink = ({ file }) => {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-sm text-gray-700 truncate">
-        {file?.displayName || 'Tệp đính kèm'}
+        {file?.displayName || t('zaloGroupMessages.attachment')}
       </span>
       {hasLink && (
         <button
@@ -64,14 +65,14 @@ const AttachmentLink = ({ file }) => {
           ) : (
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
           )}
-          Xem tệp
+          {t('zaloGroupMessages.viewFile')}
         </button>
       )}
     </div>
   );
 };
 
-const ZaloGroupMessageItem = ({ message }) => {
+const ZaloGroupMessageItem = ({ message, t }) => {
   const [showContent, setShowContent] = useState(false);
   const hasClicked = Number(message?.clickCount || 0) > 0;
   const hasCompletedOrder = Number(message?.completedOrderCount || 0) > 0;
@@ -93,23 +94,23 @@ const ZaloGroupMessageItem = ({ message }) => {
           {message?.accountName ? ` · TK: ${message.accountName}` : ''}
         </p>
         {message?.groupId && message?.groupName && (
-          <p className="text-xs text-gray-400 mt-0.5">Nhóm ID: {message.groupId}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t('zaloGroupJourney.sent')} ID: {message.groupId}</p>
         )}
         <div className="mt-2 flex items-center gap-1 flex-wrap">
-          <span className="badge badge-info">Đã gửi</span>
+          <span className="badge badge-info">{t('zaloGroupJourney.sent')}</span>
           {hasClicked && (
             <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>
-              Đã nhấp link
+              {t('zaloGroupJourney.clickedLink')}
             </span>
           )}
           {hasPendingOrder && !hasCompletedOrder && (
             <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>
-              Đơn chờ xử lý
+              {t('zaloGroupJourney.pendingOrder')}
             </span>
           )}
           {hasCompletedOrder && (
             <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>
-              Đơn đã mua
+              {t('zaloGroupJourney.completedOrder')}
             </span>
           )}
         </div>
@@ -118,19 +119,19 @@ const ZaloGroupMessageItem = ({ message }) => {
       <div className="px-5 py-4 space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm text-gray-700">
           <div>
-            <span className="text-xs text-gray-400">Lượt click</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickCount')}</span>
             <p>{Number(message?.clickCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">Khách phát sinh đơn</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.orderEvents')}</span>
             <p>{Number(message?.orderedCustomerCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">Đơn chờ xử lý</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.pendingOrder')}</span>
             <p>{Number(message?.pendingOrderCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">Đơn đã mua</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.completedOrder')}</span>
             <p>{Number(message?.completedOrderCount || 0)}</p>
           </div>
         </div>
@@ -141,22 +142,22 @@ const ZaloGroupMessageItem = ({ message }) => {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
-          {showContent ? 'Ẩn nội dung tin nhắn' : 'Xem nội dung tin nhắn'}
+          {showContent ? t('zaloGroupJourney.hideMessageContent') : t('zaloGroupJourney.showMessageContent')}
         </button>
 
         {showContent && (
           <div className="space-y-2">
             <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
-              {message?.messageText || 'Không có nội dung tin nhắn'}
+              {message?.messageText || t('zaloGroupJourney.noMessageContent')}
             </p>
             {attachments.length > 0 && (
               <div className="rounded-lg bg-white border border-gray-200 p-3">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                  Tệp đính kèm ({attachments.length})
+                  {t('zaloGroupMessages.attachment')} ({attachments.length})
                 </p>
                 <div className="space-y-1.5">
                   {attachments.map((file, index) => (
-                    <AttachmentLink key={`${file?.displayName || 'file'}-${index}`} file={file} />
+                    <AttachmentLink key={`${file?.displayName || 'file'}-${index}`} file={file} t={t} />
                   ))}
                 </div>
               </div>
@@ -180,6 +181,8 @@ const ZaloGroupMessageList = ({
   pagination = { page: 1, totalPages: 1, total: 0 },
   onChangePage = () => {},
 }) => {
+  const { t } = useI18n();
+
   return (
     <div className="space-y-4">
       {loading ? (
@@ -188,12 +191,12 @@ const ZaloGroupMessageList = ({
         </div>
       ) : messages.length === 0 ? (
         <div className="card py-12 text-center text-gray-400">
-          Chưa có tin nhắn Zalo nhóm nào được ghi nhận
+          {t('zaloGroupMessages.noMessages')}
         </div>
       ) : (
         <div className="space-y-3">
           {messages.map((message) => (
-            <ZaloGroupMessageItem key={message.id} message={message} />
+            <ZaloGroupMessageItem key={message.id} message={message} t={t} />
           ))}
         </div>
       )}
@@ -201,9 +204,9 @@ const ZaloGroupMessageList = ({
       {Number(pagination?.totalPages || 1) > 1 && (
         <div className="card px-6 py-4 flex items-center justify-between">
           <p className="text-sm text-gray-500">
-            Trang {pagination.page} / {pagination.totalPages}
+            {t('zaloGroupMessages.page')} {pagination.page} / {pagination.totalPages}
             {Number.isFinite(Number(pagination?.total))
-              ? ` · Tổng ${pagination.total} tin`
+              ? ` · ${t('zaloGroupMessages.total')} ${pagination.total} ${t('zaloGroupMessages.messages')}`
               : ''}
           </p>
           <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useI18n } from '../../../i18n';
 import DashboardInsightBlock from '../../dashboard/components/DashboardInsightBlock';
 import DashboardRechartsLegend from '../../dashboard/components/DashboardRechartsLegend';
 
@@ -36,6 +37,8 @@ export default function LandingPagesAdminStatsCharts({
   insightError = '',
   showInsight = false,
 }) {
+  const { t } = useI18n();
+
   const chartData = useMemo(() => {
     const list = Array.isArray(rows) ? rows : [];
     /** Top landing: ưu tiên tổng tương tác (xem + click + form) để slug /lp chỉ có view vẫn lên biểu đồ. */
@@ -61,7 +64,7 @@ export default function LandingPagesAdminStatsCharts({
   const insightBlock =
     showInsight ? (
       <DashboardInsightBlock
-        title="Insight · Top landing"
+        title={t('landingPagesStats.insightTopLanding')}
         text={insightText}
         isLoading={isInsightLoading}
         error={insightError}
@@ -71,11 +74,11 @@ export default function LandingPagesAdminStatsCharts({
   if (chartData.length === 0) {
     return (
       <div className="card p-5">
-        <h3 className="text-base font-semibold text-gray-900">Top landing (xem, tracking & form)</h3>
+        <h3 className="text-base font-semibold text-gray-900">{t('landingPagesStats.topLandingTitle')}</h3>
         <p className="text-xs text-gray-500 mt-1">
           {scopeAllTime
-            ? 'Chưa có dữ liệu (toàn thời gian).'
-            : 'Chưa có dữ liệu trong khoảng thời gian đã chọn.'}
+            ? t('landingPagesStats.noDataAllTime')
+            : t('landingPagesStats.noDataInRange')}
         </p>
         {insightBlock}
       </div>
@@ -84,12 +87,9 @@ export default function LandingPagesAdminStatsCharts({
 
   return (
     <div className="card p-5 overflow-x-auto">
-      <h3 className="text-base font-semibold text-gray-900">Top landing (xem, tracking & form)</h3>
+      <h3 className="text-base font-semibold text-gray-900">{t('landingPagesStats.topLandingTitle')}</h3>
       <p className="text-xs text-gray-500 mt-1 mb-4">
-        Top {topN} landing theo tổng (lượt xem + click tracking + gửi form)
-        {scopeAllTime ? ' — toàn thời gian' : ''}. Nhãn trục ngang là tiêu đề trang; gồm{' '}
-        <code className="text-[11px] bg-gray-100 px-1 rounded">/lp/…</code> và landing cố định{' '}
-        <code className="text-[11px] bg-gray-100 px-1 rounded">/l</code>.
+        {t('landingPagesStats.topLandingDescription', { topN, scopeAllTime })}
       </p>
       <div className="h-72 w-full min-w-[320px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -106,24 +106,24 @@ export default function LandingPagesAdminStatsCharts({
             <Tooltip
               formatter={(value, name) => {
                 const labelMap = {
-                  view: 'Lượt xem',
-                  click: 'Click (tracking)',
-                  form: 'Gửi form',
+                  view: t('landingPagesStats.views'),
+                  click: t('landingPagesStats.clicksTracking'),
+                  form: t('landingPagesStats.formSubmissions'),
                 };
                 return [formatN(value), labelMap[name] || name];
               }}
               labelFormatter={(label, payload) => {
                 const slug = payload?.[0]?.payload?.slug;
                 if (slug && String(slug) !== String(label)) {
-                  return `Tiêu đề: ${label} (slug: ${slug})`;
+                  return `${t('landingPagesStats.title')}: ${label} (${t('landingPagesStats.slug')}: ${slug})`;
                 }
-                return `Tiêu đề: ${label}`;
+                return `${t('landingPagesStats.title')}: ${label}`;
               }}
             />
             <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
-            <Bar dataKey="view" name="Lượt xem" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="click" name="Click (tracking)" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="form" name="Gửi form" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="view" name={t('landingPagesStats.views')} fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="click" name={t('landingPagesStats.clicksTracking')} fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="form" name={t('landingPagesStats.formSubmissions')} fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       </div>

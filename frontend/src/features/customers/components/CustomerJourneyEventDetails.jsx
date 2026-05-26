@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiCheck, HiOutlineClipboard, HiOutlineExternalLink } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import customerApiService from '../services/customerApi.service';
 
 const extractOriginalUrl = (url) => {
@@ -20,9 +21,10 @@ const truncateUrl = (url, max = 60) =>
   url && url.length > max ? `${url.slice(0, max)}…` : url;
 
 export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
+  const t = useI18n('customerJourney');
   const [copied, setCopied] = useState(false);
   const originalUrl = extractOriginalUrl(url);
-  const displayLabel = label || (originalUrl ? truncateUrl(originalUrl, 50) : 'Link trong email');
+  const displayLabel = label || (originalUrl ? truncateUrl(originalUrl, 50) : t('linkInEmail'));
 
   const handleCopy = () => {
     if (!originalUrl) return;
@@ -35,7 +37,7 @@ export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
   return (
     <div>
       <p className="text-sm font-medium text-gray-800 leading-snug">
-        Đã nhấp: <span className="text-orange-600">{displayLabel}</span>
+        {t('clicked')} <span className="text-orange-600">{displayLabel}</span>
       </p>
       {originalUrl && (
         <div className="mt-1 flex items-center gap-1 max-w-full">
@@ -45,7 +47,7 @@ export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
           <button
             type="button"
             onClick={handleCopy}
-            title={copied ? 'Đã sao chép!' : 'Sao chép link'}
+            title={copied ? t('copied') : t('copyLink')}
             className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
           >
             {copied
@@ -56,7 +58,7 @@ export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
             href={originalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            title="Mở link trong tab mới"
+            title={t('openLinkNewTab')}
             className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
           >
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
@@ -76,9 +78,10 @@ export const AttachmentEventDetail = ({
   directUrl,
   formatDateTime,
 }) => {
+  const t = useI18n('customerJourney');
   const [viewing, setViewing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const displayLabel = name || originalName || 'tệp đính kèm';
+  const displayLabel = name || originalName || t('attachment');
 
   const getFreshUrl = async ({ preview = false } = {}) => {
     if (fileId) {
@@ -94,10 +97,10 @@ export const AttachmentEventDetail = ({
     setViewing(true);
     try {
       const url = await getFreshUrl({ preview: true });
-      if (!url) throw new Error('Không nhận được URL xem tệp');
+      if (!url) throw new Error(t('fileUrlError'));
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
-      toast.error('Không thể mở tệp. Vui lòng thử lại.');
+      toast.error(t('openFileError'));
     } finally {
       setViewing(false);
     }
@@ -107,19 +110,19 @@ export const AttachmentEventDetail = ({
     if (!canOpen) return;
     try {
       const url = await getFreshUrl();
-      if (!url) throw new Error('Không nhận được URL tải tệp');
+      if (!url) throw new Error(t('fileUrlError'));
       await navigator.clipboard?.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Không thể sao chép link tệp.');
+      toast.error(t('copyFileError'));
     }
   };
 
   return (
     <div>
       <p className="text-sm font-medium text-gray-800 leading-snug">
-        Đã tải: <span className="text-indigo-600">{displayLabel}</span>
+        {t('downloaded')} <span className="text-indigo-600">{displayLabel}</span>
       </p>
       <div className="mt-1 flex items-center gap-1">
         <button
@@ -132,13 +135,13 @@ export const AttachmentEventDetail = ({
               : 'border-gray-200 text-gray-400 cursor-not-allowed'
           }`}
         >
-          {viewing ? 'Đang mở…' : 'Xem tệp'}
+          {viewing ? t('opening') : t('previewFile')}
         </button>
         <button
           type="button"
           onClick={handleCopyFileLink}
           disabled={!canOpen}
-          title={copied ? 'Đã sao chép!' : 'Sao chép link tải'}
+          title={copied ? t('copied') : t('copyFileLink')}
           className={`p-1 rounded transition-colors ${
             canOpen
               ? 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'

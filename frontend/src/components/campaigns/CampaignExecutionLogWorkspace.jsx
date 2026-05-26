@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../../i18n';
 import {
   formatCampaignDateTime,
   formatCampaignTime,
@@ -45,7 +46,7 @@ const formatLogCellValue = (columnKey, value) => {
     try {
       return JSON.stringify(value);
     } catch {
-      return '[Không hiển thị]';
+      return t('common.noDisplay', '[No display]');
     }
   }
   if (!shouldFormatDateTime) return String(value);
@@ -102,8 +103,8 @@ const CampaignExecutionLogWorkspace = ({
   logs = [],
   selectedLogId = null,
   onSelectLogId,
-  emptyListText = 'Chưa có log',
-  emptyDetailText = 'Chọn 1 log để xem chi tiết kết quả.',
+  emptyListText,
+  emptyDetailText,
   listWidth = 240,
   minListWidth = 200,
   minDetailWidth = 220,
@@ -111,6 +112,7 @@ const CampaignExecutionLogWorkspace = ({
   isResizingSplit = false,
   onSplitResizeStart,
 }) => {
+  const { t } = useI18n();
   const normalizedLogs = useMemo(() => normalizeLogs(logs), [logs]);
   const selectedLog = useMemo(
     () => normalizedLogs.find((log) => log.id === selectedLogId) || null,
@@ -214,12 +216,12 @@ const CampaignExecutionLogWorkspace = ({
         }}
       >
         <div className="px-2 py-1.5 bg-gray-50 border-b flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-700">Danh sách</div>
-          <div className="text-xs text-gray-500">{normalizedLogs.length} log</div>
+          <div className="text-sm font-medium text-gray-700">{t('campaignExecutionLog.logList')}</div>
+          <div className="text-xs text-gray-500">{normalizedLogs.length} {normalizedLogs.length === 1 ? 'log' : 'logs'}</div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {normalizedLogs.length === 0 ? (
-            <div className="p-2 text-sm text-gray-500">{emptyListText}</div>
+            <div className="p-2 text-sm text-gray-500">{emptyListText || t('campaignExecutionLog.noLogs')}</div>
           ) : (
             <div className="divide-y w-full">
               {normalizedLogs.map((log) => {
@@ -239,12 +241,12 @@ const CampaignExecutionLogWorkspace = ({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-900 truncate">
-                        {log.nodeName ? <span className="font-medium">{log.nodeName}</span> : <span className="font-medium">Hệ thống</span>}
+                        {log.nodeName ? <span className="font-medium">{log.nodeName}</span> : <span className="font-medium">{t('campaignExecutionLog.system')}</span>}
                         <span className="text-gray-500"> — {log.message}</span>
                       </div>
                       <div className="text-xs text-gray-400 flex items-center justify-between gap-1">
                         <span className="truncate">{formatCampaignTime(log.timestamp, '')}</span>
-                        {log.result && <span className="text-primary-600 flex-shrink-0">Có kết quả</span>}
+                        {log.result && <span className="text-primary-600 flex-shrink-0">{t('campaignExecutionLog.hasResult')}</span>}
                       </div>
                     </div>
                   </button>
@@ -263,7 +265,7 @@ const CampaignExecutionLogWorkspace = ({
           onMouseDown={onSplitResizeStart}
           role="separator"
           aria-orientation="vertical"
-          title="Kéo để thay đổi kích thước"
+          title={t('campaignBuilder.dragToResize')}
         >
           <div className="mx-auto h-full w-px bg-gray-200" />
         </div>
@@ -277,14 +279,14 @@ const CampaignExecutionLogWorkspace = ({
       >
         {!selectedLog ? (
           <div className="h-full flex items-center justify-center text-sm text-gray-500">
-            {emptyDetailText}
+            {emptyDetailText || t('campaignExecutionLog.noLogSelected')}
           </div>
         ) : (
           <div className="h-full flex flex-col min-h-0 min-w-0 overflow-hidden w-full">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-semibold text-gray-900">{selectedLog.nodeName || 'Hệ thống'}</span>
+                  <span className="font-semibold text-gray-900">{selectedLog.nodeName || t('campaignExecutionLog.system')}</span>
                   <span className="text-xs text-gray-500">{formatCampaignTime(selectedLog.timestamp, '')}</span>
                   <span className={`inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full ${statusStyles[selectedLog.status] || statusStyles.info}`}>
                     {selectedLog.status || 'info'}
@@ -300,7 +302,7 @@ const CampaignExecutionLogWorkspace = ({
                     activeSide === 'input' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  INPUT
+                  {t('campaignExecutionLog.input').toUpperCase()}
                 </button>
                 <button
                   onClick={() => setActiveSide('output')}
@@ -309,7 +311,7 @@ const CampaignExecutionLogWorkspace = ({
                   }`}
                   disabled={!hasResult}
                 >
-                  OUTPUT
+                  {t('campaignExecutionLog.output').toUpperCase()}
                 </button>
               </div>
             </div>
@@ -318,7 +320,7 @@ const CampaignExecutionLogWorkspace = ({
               {activeSide === 'input' && (
                 <div className="h-full min-h-0 min-w-0 flex flex-col">
                   <div className="px-2 py-1.5 border-b bg-gray-50 text-sm font-medium text-gray-700">
-                    Input
+                    {t('campaignExecutionLog.input')}
                   </div>
                   <pre className="flex-1 min-h-0 min-w-0 w-full overflow-auto p-2 text-xs bg-white">
                     {JSON.stringify(inputData ?? {}, null, 2)}
@@ -330,39 +332,39 @@ const CampaignExecutionLogWorkspace = ({
                 <div className="h-full min-h-0 min-w-0 flex flex-col overflow-hidden">
                   <div className="px-2 py-1.5 border-b bg-gray-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <TabButton id="schema" label="Schema" />
-                      <TabButton id="table" label="Table" />
-                      <TabButton id="json" label="JSON" />
+                      <TabButton id="schema" label={t('campaignExecutionLog.schema')} />
+                      <TabButton id="table" label={t('campaignExecutionLog.table')} />
+                      <TabButton id="json" label={t('campaignExecutionLog.json')} />
                     </div>
                     <div className="flex items-center gap-2">
                       {sendSummary && (
                         <>
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            Tổng đã gửi: {sendSummary.sentCount}
+                            {t('campaignExecutionLog.totalSent')}: {sendSummary.sentCount}
                           </span>
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                            Gửi lỗi: {sendSummary.failedCount}
+                            {t('campaignExecutionLog.sentFailed')}: {sendSummary.failedCount}
                           </span>
                         </>
                       )}
                       <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-gray-500">
                         <span>
-                          {outputData?.meta?.totalItems ? `${outputData.meta.totalItems} items` : `${items.length} items`}
+                          {outputData?.meta?.totalItems ? `${outputData.meta.totalItems} ${t('campaignExecutionLog.items')}` : `${items.length} ${t('campaignExecutionLog.items')}`}
                         </span>
                         {dataPayloadMeta?.hasAcc ? (
                           <span
                             className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                            title="Ước lượng kích thước JSON.stringify(items) theo UTF-8 (tích lũy trong log run)"
+                            title={t('mappingData.estimateJsonSize')}
                           >
-                            Payload ~{formatDataPayloadBytes(dataPayloadMeta.acc)}
+                            {t('campaignExecutionLog.payloadSize', { size: formatDataPayloadBytes(dataPayloadMeta.acc) })}
                           </span>
                         ) : null}
                         {dataPayloadMeta?.hasSavings ? (
                           <span
                             className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800"
-                            title="So sánh batch: kích thước nếu giữ đủ cột vs sau khi lọc cột"
+                            title={t('mappingData.compareBatchSize')}
                           >
-                            Tiết kiệm batch ~{formatDataPayloadBytes(dataPayloadMeta.savings)}
+                            {t('campaignExecutionLog.batchSavings', { size: formatDataPayloadBytes(dataPayloadMeta.savings) })}
                           </span>
                         ) : null}
                       </div>
@@ -372,7 +374,7 @@ const CampaignExecutionLogWorkspace = ({
                   {activeTab === 'schema' && (
                     <div className="flex-1 min-h-0 overflow-auto p-2">
                       {schema.length === 0 ? (
-                        <div className="text-sm text-gray-500">Không có schema.</div>
+                        <div className="text-sm text-gray-500">{t('campaignExecutionLog.noSchema')}</div>
                       ) : (
                         <div className="space-y-2">
                           {schema.map((f) => (
@@ -397,7 +399,7 @@ const CampaignExecutionLogWorkspace = ({
                       <div className="flex-1 min-h-0 min-w-0 w-full max-w-full overflow-auto">
                         <div className="w-full max-w-full overflow-x-auto">
                           {items.length === 0 ? (
-                            <div className="p-2 text-sm text-gray-500">Không có dữ liệu.</div>
+                            <div className="p-2 text-sm text-gray-500">{t('campaignExecutionLog.noData')}</div>
                           ) : (
                             <table className="w-max min-w-full text-xs border-collapse">
                               <thead className="sticky top-0 bg-gray-50 border-b">
@@ -476,7 +478,7 @@ const CampaignExecutionLogWorkspace = ({
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-500">Page Size</span>
+                          <span className="text-gray-500">{t('campaignExecutionLog.pageSize')}</span>
                           <select
                             className="border border-gray-200 rounded px-2 py-1 text-xs"
                             value={pageSize}

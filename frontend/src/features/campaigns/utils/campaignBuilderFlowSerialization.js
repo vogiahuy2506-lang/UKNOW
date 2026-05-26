@@ -47,6 +47,7 @@ export const buildFlowFromCampaign = (campaignData) => {
       // Handle different field names: nodeDescription, description
       const nodeDescription = node.nodeDescription || node.description || '';
 
+      // Keep original type mapping for backward compatibility
       if (isTriggerSubtype(rawSubtype)) {
         nodeType = 'start';
       } else if (rawSubtype === 'end') {
@@ -193,6 +194,7 @@ export const buildFlowFromCampaign = (campaignData) => {
     const nodeSubtype = normalizeSubtype(rawSubtype);
     let nodeType = 'task';
 
+    // Keep original type mapping for backward compatibility
     if (isTriggerSubtype(rawSubtype)) {
       nodeType = 'start';
     } else if (rawSubtype === 'end') {

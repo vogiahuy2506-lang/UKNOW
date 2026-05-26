@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineX } from 'react-icons/hi';
 import { changePassword } from '../services/authApi.service';
+import { useI18n } from '../../../i18n';
 
 /**
  * Modal đổi mật khẩu cho người dùng đang đăng nhập.
@@ -8,6 +9,7 @@ import { changePassword } from '../services/authApi.service';
  * @param {{ isOpen: boolean, onClose: () => void }} props
  */
 const ChangePasswordModal = ({ isOpen, onClose }) => {
+  const { t } = useI18n();
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
   const [loading, setLoading] = useState(false);
@@ -38,15 +40,15 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     setSuccess('');
 
     if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
-      setError('Vui lòng điền đầy đủ thông tin.');
+      setError(t('changePassword.validationRequired'));
       return;
     }
     if (form.newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
+      setError(t('changePassword.validationMinLength'));
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
-      setError('Xác nhận mật khẩu không khớp.');
+      setError(t('changePassword.validationMismatch'));
       return;
     }
 
@@ -57,22 +59,22 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         newPassword: form.newPassword,
       });
       if (res.success) {
-        setSuccess('Đổi mật khẩu thành công!');
+        setSuccess(t('changePassword.success'));
         setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       } else {
-        setError(res.message || 'Đổi mật khẩu thất bại.');
+        setError(res.message || t('changePassword.failed'));
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
+      setError(err?.response?.data?.message || t('changePassword.errorOccurred'));
     } finally {
       setLoading(false);
     }
   };
 
   const fields = [
-    { key: 'currentPassword', label: 'Mật khẩu hiện tại', showKey: 'current' },
-    { key: 'newPassword', label: 'Mật khẩu mới', showKey: 'new' },
-    { key: 'confirmPassword', label: 'Xác nhận mật khẩu mới', showKey: 'confirm' },
+    { key: 'currentPassword', label: t('changePassword.currentPassword'), showKey: 'current' },
+    { key: 'newPassword', label: t('changePassword.newPassword'), showKey: 'new' },
+    { key: 'confirmPassword', label: t('changePassword.confirmNewPassword'), showKey: 'confirm' },
   ];
 
   return (
@@ -85,7 +87,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <HiOutlineLockClosed className="w-5 h-5 text-primary-600" />
-            <h2 className="text-base font-semibold text-gray-900">Đổi mật khẩu</h2>
+            <h2 className="text-base font-semibold text-gray-900">{t('changePassword.title')}</h2>
           </div>
           <button
             onClick={handleClose}
@@ -138,10 +140,10 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={handleClose} className="btn btn-secondary">
-              Hủy
+              {t('changePassword.cancel')}
             </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Đang lưu...' : 'Đổi mật khẩu'}
+              {loading ? t('changePassword.saving') : t('changePassword.submit')}
             </button>
           </div>
         </form>

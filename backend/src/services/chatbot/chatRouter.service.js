@@ -1,0 +1,229 @@
+import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
+import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
+import ragEngineService from './ragEngine.service.js';
+import subAssistantService from './subAssistant.service.js';
+import webChatAdapter from './channelAdapters/webChat.adapter.js';
+import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
+import facebookAdapter from './channelAdapters/facebook.adapter.js';
+import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
+import businessProfileService from '../ai/businessProfile.service.js';
+import db from '../../config/database.js';
+
+const ADAPTERS = {
+  web: webChatAdapter,
+  zalo_oa: zaloOAAdapter,
+  facebook: facebookAdapter,
+  zalo_personal: zaloPersonalAdapter,
+};
+
+const MAX_HISTORY_MESSAGES = 20;
+
+class ChatRouterService {
+  /**
+   * Route an incoming message through the unified AI pipeline.
+   * @param {object} params
+   * @param {string} params.channel - 'web' | 'zalo_oa' | 'facebook' | 'zalo_personal'
+   * @param {number} params.userId
+   * @param {string} params.message - raw user message
+   * @param {string} [params.conversationId] - internal conversation ID
+   * @param {object} [params.visitorInfo] - visitor metadata
+   * @param {Array} [params.attachments] - files/images
+   */
+  async routeMessage({ channel, userId, message, conversationId, visitorInfo = {}, attachments = [] }) {
+    const adapter = ADAPTERS[channel];
+    if (!adapter) throw new Error(`Unknown channel: ${channel}`);
+
+    // 1. Get chatbot settings
+    const settings = await chatbotRepository.getSettings(userId, channel);
+    if (!settings?.is_enabled) {
+      return { type: 'disabled', content: null };
+    }
+
+    // 2. Get sub-assistant info
+    let subAssistant = null;
+    if (settings.id_sub_assistant) {
+      subAssistant = await subAssistantService.getById(settings.id_sub_assistant, userId);
+    }
+
+    // 3. Get conversation history for context
+    const history = await this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES);
+
+    // 4. Build RAG context from KB (use sub-assistant's linked KB or all KBs)
+    const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
+    const ragContext = await ragEngineService.buildContext(userId, message, {
+      kbId: linkedKbId,
+    });
+
+    // 5. Get business profile as fallback context
+    let profileContext = '';
+    try {
+      const profile = await businessProfileService.getProfile(userId);
+      if (profile) {
+        profileContext = businessProfileService.formatProfileForPrompt(profile);
+      }
+    } catch (e) {
+      console.warn('[ChatRouter] No business profile context:', e.message);
+    }
+
+    // 6. Build system prompt
+    const systemPrompt = this._buildSystemPrompt({
+      subAssistant,
+      settings,
+      ragContext,
+      profileContext,
+    });
+
+    // 7. Call AI
+    const aiResponse = await this._callAI({
+      systemPrompt,
+      history,
+      message,
+      model: settings.ai_model || 'gemini-2.5-flash',
+      temperature: parseFloat(settings.temperature || 0.7),
+      maxTokens: settings.max_tokens || 2048,
+    });
+
+    // 8. Log and send via adapter
+    await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
+    await this._logMessage(channel, conversationId, userId, { role: 'bot', content: aiResponse.text });
+
+    if (adapter.sendReply) {
+      await adapter.sendReply({ conversationId, message: aiResponse.text, attachments });
+    }
+
+    return { type: 'text', content: aiResponse.text };
+  }
+
+  _buildSystemPrompt({ subAssistant, settings, ragContext, profileContext }) {
+    const name = subAssistant?.name || 'Trợ lý AI';
+    const greeting = settings.welcome_message || subAssistant?.greeting_msg || 'Xin chào! Tôi có thể giúp gì cho bạn?';
+    const style = settings.response_style || 'friendly';
+
+    const styleInstructions = {
+      friendly: 'Thân thiện, gần gũi, dùng emoji phù hợp.',
+      professional: 'Chuyên nghiệp, ngắn gọn, súc tích.',
+      casual: 'Thân thiện nhưng thoải mái, có thể dùng tiếng lóng nhẹ.',
+    };
+
+    return `Bạn là ${name} — một trợ lý AI thông minh.
+
+## CÁCH HOẠT ĐỘNG
+- Trả lời câu hỏi dựa trên Knowledge Base được huấn luyện bên dưới
+- Luôn ưu tiên thông tin từ Knowledge Base
+- Nếu câu hỏi không liên quan đến Knowledge Base, trả lời dựa trên Business Profile hoặc kiến thức chung
+- KHÔNG bịa đặt thông tin không có trong Knowledge Base hoặc Business Profile
+- Nếu không tìm thấy thông tin phù hợp, hãy nói rõ và gợi ý liên hệ với doanh nghiệp
+
+## PHONG CÁCH TRẢ LỜI
+${styleInstructions[style] || styleInstructions.friendly}
+
+${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}
+
+## QUY TẮC QUAN TRỌNG
+- Trả lời bằng tiếng Việt, trừ khi người dùng hỏi bằng ngôn ngữ khác
+- Nếu thông tin có trong KB: "Theo như tài liệu của chúng tôi..."
+- Nếu thông tin KHÔNG có trong KB: "Tôi không tìm thấy thông tin này trong cơ sở dữ liệu của chúng tôi. Bạn vui lòng liên hệ [TÊN CÔNG TY] để được hỗ trợ."
+- KHÔNG dùng markdown **bold** hay *italic* — dùng text thuần
+- Số điện thoại / email: format chuẩn Việt Nam`;
+  }
+
+  async _callAI({ systemPrompt, history, message, model, temperature, maxTokens }) {
+    const chatHistory = history.map(m => ({
+      role: m.role === 'bot' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    chatHistory.push({ role: 'user', parts: [{ text: message }] });
+
+    const modelName = process.env.GEMINI_MODEL || model;
+    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: chatHistory,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      }),
+    });
+
+    const data = await response.json();
+    const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textResponse) throw new Error('AI returned empty response');
+
+    return { text: textResponse };
+  }
+
+  async _getHistory(channel, conversationId, limit) {
+    if (!conversationId) return [];
+    try {
+      if (channel === 'web') {
+        return chatbotRepository.getWebChatMessages(conversationId, { limit });
+      }
+      return chatbotRepository.getChannelMessages(conversationId, { limit });
+    } catch {
+      return [];
+    }
+  }
+
+  async _logMessage(channel, conversationId, userId, { role, content }) {
+    if (!conversationId || !content) return;
+    try {
+      if (channel === 'web') {
+        await chatbotRepository.addWebChatMessage(conversationId, userId, { role, content });
+      } else {
+        // For channel messages, we need to get the channel ID from the conversation
+        const conv = await db.query(
+          `SELECT id_channel FROM channel_conversations WHERE id = $1`,
+          [conversationId]
+        );
+        const channelId = conv.rows[0]?.id_channel;
+        if (channelId) {
+          await chatbotRepository.addChannelMessage(conversationId, userId, channelId, {
+            role,
+            content,
+            message_type: 'text',
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[ChatRouter] Failed to log message:', e.message);
+    }
+  }
+
+  // ── Public helpers ──────────────────────────────────────────────
+
+  /**
+   * Get the primary linked KB ID from a sub-assistant.
+   * Returns the first active KB linked to the sub-assistant.
+   */
+  async _getLinkedKbId(subAssistant, userId) {
+    try {
+      const kbs = await knowledgeBaseRepository.findAllByUser(userId);
+      const linked = kbs.find(
+        kb => String(kb.id_sub_assistant) === String(subAssistant.id) && kb.is_active !== false
+      );
+      return linked?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getWelcomeMessage(userId, channel) {
+    const settings = await chatbotRepository.getSettings(userId, channel);
+    if (!settings?.is_enabled) return null;
+    if (settings.welcome_message) return settings.welcome_message;
+    if (settings.id_sub_assistant) {
+      const sa = await subAssistantService.getById(settings.id_sub_assistant, userId);
+      if (sa?.greeting_msg) return sa.greeting_msg;
+    }
+    return 'Xin chào! Tôi có thể giúp gì cho bạn?';
+  }
+}
+
+export default new ChatRouterService();

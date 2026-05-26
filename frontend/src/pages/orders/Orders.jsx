@@ -3,6 +3,7 @@ import DashboardHeader from '../../features/dashboard/components/DashboardHeader
 import DashboardFilterPanel from '../../features/dashboard/components/DashboardFilterPanel';
 import DashboardOrdersListTable from '../../features/dashboard/components/DashboardOrdersListTable';
 import useOrdersList from '../../features/orders/hooks/useOrdersList';
+import { useI18n } from '../../i18n';
 
 // ─── Page skeleton ─────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ const OrdersSkeleton = () => (
  * @returns {JSX.Element}
  */
 const Orders = () => {
+  const { t } = useI18n();
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
   const {
@@ -100,7 +102,7 @@ const Orders = () => {
           d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
         />
       </svg>
-      <span className="font-medium">Hôm nay: {currentDateLabel}</span>
+      <span className="font-medium">{t('orders.today')}: {currentDateLabel}</span>
     </div>
   );
 
@@ -111,9 +113,9 @@ const Orders = () => {
         filters={filters}
         onOpenFilter={() => setIsFilterPanelOpen(true)}
         isLoading={isLoadingOrders}
-        title="Đơn hàng"
-        description="Theo dõi đơn hàng theo thời gian, kênh và chiến dịch"
-        filterButtonLabel="Bộ lọc"
+        title={t('orders.title')}
+        description={t('orders.description')}
+        filterButtonLabel={t('orders.filterButton')}
         extraActions={extraActions}
       />
 
@@ -128,8 +130,8 @@ const Orders = () => {
         setDateMode={setDateMode}
         activeQuickKey={activeQuickKey}
         setActiveQuickKey={setActiveQuickKey}
-        panelTitle="Bộ lọc đơn hàng"
-        panelDescription="Tùy chỉnh phạm vi đơn hàng hiển thị"
+        panelTitle={t('orders.panelTitle')}
+        panelDescription={t('orders.panelDescription')}
       />
 
       {/* Error banner */}

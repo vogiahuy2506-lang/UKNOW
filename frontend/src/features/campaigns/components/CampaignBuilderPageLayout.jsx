@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../../../i18n';
 import {
   HiOutlineArrowLeft,
   HiOutlineChevronLeft,
@@ -109,6 +110,7 @@ const CampaignBuilderPageLayout = ({
   leaveModalTitle,
   leaveModalMessage,
 }) => {
+  const { t, locale } = useI18n();
   const campaignTypeMeta = getCampaignTypeMeta(campaignType);
   const [isNodeMenuCollapsed, setIsNodeMenuCollapsed] = useState(false);
   const effectiveBuilderSidebarWidth = isNodeMenuCollapsed ? 52 : builderSidebarWidth;
@@ -123,7 +125,7 @@ const CampaignBuilderPageLayout = ({
           </button>
           <div className="min-w-0">
             <div className="text-sm text-gray-500 flex items-center gap-2 min-w-0">
-              <span className="font-medium text-primary-600 truncate">{campaignName || 'Chiến dịch mới'}</span>
+              <span className="font-medium text-primary-600 truncate">{campaignName || t('campaignBuilder.newCampaign')}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium border ${campaignTypeMeta.className}`}>
                 {campaignTypeMeta.label}
               </span>
@@ -132,22 +134,22 @@ const CampaignBuilderPageLayout = ({
                   : campaignStatus === 'paused' ? 'bg-yellow-100 text-yellow-700'
                     : 'bg-gray-100 text-gray-700'
               }`}>
-                {campaignStatus === 'active' ? 'Đang hoạt động'
-                  : campaignStatus === 'paused' ? 'Tạm dừng'
-                    : 'Nháp'}
+                {campaignStatus === 'active' ? t('campaignBuilder.active')
+                  : campaignStatus === 'paused' ? t('campaignBuilder.paused')
+                    : t('campaignBuilder.draft')}
               </span>
             </div>
             <div className="text-xs text-gray-400 mt-1">
               {isDirty ? (
-                <span className="text-amber-600 font-medium">Chưa lưu</span>
+                <span className="text-amber-600 font-medium">{t('campaignBuilder.unsaved')}</span>
               ) : lastSavedTime ? (
                 <>
-                  <span className="text-green-600 font-medium">✓ Đã lưu</span>
+                  <span className="text-green-600 font-medium">✓ {t('campaignBuilder.saved')}</span>
                   <span className="mx-1">—</span>
                   <span>{formatCampaignDateTime(lastSavedTime)}</span>
                 </>
               ) : (
-                <span className="text-amber-600 font-medium">Chưa lưu</span>
+                <span className="text-amber-600 font-medium">{t('campaignBuilder.unsaved')}</span>
               )}
             </div>
           </div>
@@ -161,7 +163,7 @@ const CampaignBuilderPageLayout = ({
             }`}
           >
             <HiOutlinePlay className="w-4 h-4" />
-            Chạy
+            {t('campaignBuilder.run')}
           </button>
           <button
             onClick={onStopRun}
@@ -171,14 +173,14 @@ const CampaignBuilderPageLayout = ({
             }`}
           >
             <HiOutlineStop className="w-4 h-4" />
-            Dừng
+            {t('campaignBuilder.stop')}
           </button>
           <button
             onClick={onOpenNameModal}
             className="px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-1.5 sm:gap-2"
           >
             <HiOutlineSave className="w-4 h-4" />
-            Lưu
+            {t('campaignBuilder.save')}
           </button>
         </div>
       </div>
@@ -195,7 +197,7 @@ const CampaignBuilderPageLayout = ({
               <button
                 onClick={() => setIsNodeMenuCollapsed(false)}
                 className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
-                title="Mở rộng menu node"
+                title={t('campaignBuilder.expandNodeMenu')}
               >
                 <HiOutlineChevronRight className="w-5 h-5" />
               </button>
@@ -207,7 +209,7 @@ const CampaignBuilderPageLayout = ({
                   <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Tìm kiếm"
+                    placeholder={t('campaignBuilder.search')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -216,7 +218,7 @@ const CampaignBuilderPageLayout = ({
                 <button
                   onClick={() => setIsNodeMenuCollapsed(true)}
                   className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
-                  title="Thu gọn menu node"
+                  title={t('campaignBuilder.collapseNodeMenu')}
                 >
                   <HiOutlineChevronLeft className="w-5 h-5" />
                 </button>
@@ -231,7 +233,7 @@ const CampaignBuilderPageLayout = ({
                 onClick={() => toggleCategory('Triggers')}
                 className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
               >
-                <span>Điểm khởi đầu (Triggers)</span>
+                <span>{t('campaignBuilder.triggers')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Triggers') ? '' : '-rotate-90'}`} />
               </button>
               {expandedCategories.includes('Triggers') && (
@@ -246,7 +248,7 @@ const CampaignBuilderPageLayout = ({
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
                         <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
                       </div>
-                      <span className="text-sm text-gray-700 leading-5">{node.name}</span>
+                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
                     </div>
                   ))}
                 </div>
@@ -258,7 +260,7 @@ const CampaignBuilderPageLayout = ({
                 onClick={() => toggleCategory('Actions')}
                 className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
               >
-                <span>Hành động (Actions)</span>
+                <span>{t('campaignBuilder.actions')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Actions') ? '' : '-rotate-90'}`} />
               </button>
               {expandedCategories.includes('Actions') && (
@@ -273,7 +275,7 @@ const CampaignBuilderPageLayout = ({
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
                         <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
                       </div>
-                      <span className="text-sm text-gray-700 leading-5">{node.name}</span>
+                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
                     </div>
                   ))}
                 </div>
@@ -285,7 +287,7 @@ const CampaignBuilderPageLayout = ({
                 onClick={() => toggleCategory('Data')}
                 className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
               >
-                <span>Dữ liệu (Data)</span>
+                <span>{t('campaignBuilder.data')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Data') ? '' : '-rotate-90'}`} />
               </button>
               {expandedCategories.includes('Data') && (
@@ -304,7 +306,7 @@ const CampaignBuilderPageLayout = ({
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
                         <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
                       </div>
-                      <span className="text-sm text-gray-700 leading-5">{node.name}</span>
+                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
                     </div>
                   ))}
                 </div>
@@ -322,7 +324,7 @@ const CampaignBuilderPageLayout = ({
             onMouseDown={onBuilderSidebarResizeStart}
             role="separator"
             aria-orientation="vertical"
-            title="Kéo để thay đổi kích thước"
+            title={t('campaignBuilder.dragToResize')}
           >
             <div className="mx-auto h-full w-px bg-gray-200" />
           </div>
@@ -355,14 +357,14 @@ const CampaignBuilderPageLayout = ({
         {selectedNode && (
           <div className="w-56 sm:w-60 md:w-64 xl:w-72 max-w-[52vw] bg-white border-l border-gray-200 flex flex-col">
             <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">Thuộc tính</h3>
+              <h3 className="font-medium text-gray-900">{t('campaignBuilder.properties')}</h3>
               <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
                 <HiOutlineX className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 p-3 sm:p-4 space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.name')}</label>
                 <input
                   type="text"
                   value={selectedNode.data.label || ''}
@@ -379,11 +381,11 @@ const CampaignBuilderPageLayout = ({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Loại</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.type')}</label>
                 <p className="text-sm text-gray-500 capitalize">{selectedNode.data.nodeType || selectedNode.type}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ID</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.id')}</label>
                 <p className="text-sm text-gray-500 font-mono">{selectedNode.id}</p>
               </div>
               <button
@@ -393,13 +395,13 @@ const CampaignBuilderPageLayout = ({
                 }}
                 className="w-full px-4 py-2 bg-primary-50 text-primary-600 text-sm font-medium rounded-lg hover:bg-primary-100 transition-colors"
               >
-                Cấu hình chi tiết
+                {t('campaignBuilder.configureDetails')}
               </button>
               <button
                 onClick={onDeleteNode}
                 className="w-full px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors"
               >
-                Xóa node
+                {t('campaignBuilder.deleteNode')}
               </button>
             </div>
           </div>
@@ -414,7 +416,7 @@ const CampaignBuilderPageLayout = ({
           onMouseDown={onLogResizeStart}
           role="separator"
           aria-orientation="horizontal"
-          title="Kéo để thay đổi kích thước"
+          title={t('campaignBuilder.dragToResize')}
         >
           <div className="mx-auto h-px w-full bg-gray-200" />
         </div>
@@ -426,13 +428,13 @@ const CampaignBuilderPageLayout = ({
         style={showRunLogs ? { height: `${runLogHeight}px` } : undefined}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-medium text-gray-900">Log chạy chiến dịch</div>
+          <div className="font-medium text-gray-900">{t('campaignBuilder.campaignRunLog')}</div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               onClick={() => setShowRunLogs((prev) => !prev)}
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
             >
-              {showRunLogs ? 'Thu gọn' : 'Mở rộng'}
+              {showRunLogs ? t('campaignBuilder.collapse') : t('campaignBuilder.expand')}
             </button>
             <button
               onClick={() => {
@@ -441,7 +443,7 @@ const CampaignBuilderPageLayout = ({
               }}
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
             >
-              Xóa log
+              {t('campaignBuilder.deleteLog')}
             </button>
           </div>
         </div>
@@ -451,8 +453,8 @@ const CampaignBuilderPageLayout = ({
               logs={runLogs}
               selectedLogId={selectedRunLogId}
               onSelectLogId={setSelectedRunLogId}
-              emptyListText="Chưa có log"
-              emptyDetailText="Chọn 1 log để xem chi tiết kết quả."
+              emptyListText={t('campaignExecutionLog.noLogs')}
+              emptyDetailText={t('campaignExecutionLog.noLogSelected')}
               listWidth={logListWidth}
               minListWidth={logListMinWidth}
               minDetailWidth={logDetailMinWidth}
@@ -469,8 +471,8 @@ const CampaignBuilderPageLayout = ({
       isOpen={showNameModal}
       onClose={() => setShowNameModal(false)}
       onPrimary={onNameModalPrimary}
-      title={isNewCampaign ? 'Tạo chiến dịch' : 'Chỉnh sửa thông tin chiến dịch'}
-      primaryLabel="Lưu"
+      title={isNewCampaign ? t('campaignBuilder.createCampaign') : t('campaignBuilder.editCampaignInfo')}
+      primaryLabel={t('campaignBuilder.save')}
       campaignName={campaignName}
       setCampaignName={setCampaignName}
       campaignType={campaignType}
@@ -484,9 +486,9 @@ const CampaignBuilderPageLayout = ({
       isOpen={showDeleteModal}
       onClose={() => setShowDeleteModal(false)}
       onConfirm={onConfirmDeleteNode}
-      title={`Xác nhận xóa node "${deleteNodeName}"`}
-      message="Bạn có chắc chắn muốn xóa node? Hành động này không thể hoàn tác."
-      confirmLabel="Xóa"
+      title={t('campaignBuilder.confirmDeleteNode')}
+      message={t('campaignBuilder.confirmDeleteNodeMessage')}
+      confirmLabel={t('campaignBuilder.deleteNode')}
       confirmButtonClassName="bg-red-500 text-white hover:bg-red-600"
     />
 
@@ -496,8 +498,8 @@ const CampaignBuilderPageLayout = ({
       onConfirm={onConfirmLeaveBuilder}
       title={leaveModalTitle}
       message={leaveModalMessage}
-      confirmLabel="Thoát trang"
-      cancelLabel="Ở lại"
+      confirmLabel={t('campaignBuilder.exitPage')}
+      cancelLabel={t('campaignBuilder.stay')}
       confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
       iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
       iconColorClassName="w-6 h-6 text-amber-600"

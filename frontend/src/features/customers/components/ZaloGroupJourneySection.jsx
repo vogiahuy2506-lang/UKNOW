@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { HiOutlineEye } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 
 const buildUniqueClickedLinks = (clickedEvents = []) => {
   const groupedByLink = new Map();
@@ -37,6 +38,7 @@ const ZaloGroupJourneyCard = ({
   clickedEvents = [],
   orderEvents = [],
   formatDateTime,
+  t,
 }) => {
   const [showMessageContent, setShowMessageContent] = useState(false);
   const clickedLinks = Array.isArray(message?.clickedLinks) && message.clickedLinks.length > 0
@@ -50,7 +52,7 @@ const ZaloGroupJourneyCard = ({
     <div className="rounded-xl border border-gray-200 overflow-hidden">
       <div className="w-full px-5 py-4 bg-gray-50 text-left">
         <p className="font-semibold text-gray-900 text-sm leading-snug truncate">
-          Nhóm #{message?.groupId || '--'}
+          {t('zaloGroupJourney.sent')} #{message?.groupId || '--'}
         </p>
         <p className="text-xs text-gray-400 mt-0.5">
           {formatDateTime(message?.sentAt)}
@@ -58,20 +60,20 @@ const ZaloGroupJourneyCard = ({
           {message?.accountName ? ` · TK: ${message.accountName}` : ''}
         </p>
         <div className="mt-2 flex items-center gap-1 flex-wrap">
-          <span className="badge badge-info">Đã gửi</span>
+          <span className="badge badge-info">{t('zaloGroupJourney.sent')}</span>
           {hasClicked && (
             <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>
-              Đã nhấp link
+              {t('zaloGroupJourney.clickedLink')}
             </span>
           )}
           {hasPending && !hasCompleted && (
             <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>
-              Đơn chờ xử lý
+              {t('zaloGroupJourney.pendingOrder')}
             </span>
           )}
           {hasCompleted && (
             <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>
-              Đơn đã mua
+              {t('zaloGroupJourney.completedOrder')}
             </span>
           )}
         </div>
@@ -80,33 +82,33 @@ const ZaloGroupJourneyCard = ({
       <div className="px-5 py-4 border-t border-gray-100 space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700">
           <div>
-            <span className="text-xs text-gray-400">Lượt click</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickCount')}</span>
             <p>{Number(message?.clickCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">Sự kiện click ghi nhận</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickEvents')}</span>
             <p>{clickedEvents.length}</p>
           </div>
           <div className="md:col-span-2">
-            <span className="text-xs text-gray-400">Link đã nhấp ({clickedLinks.length})</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickedLinks')} ({clickedLinks.length})</span>
             {clickedLinks.length > 0 ? (
               <div className="space-y-1 mt-1">
                 {clickedLinks.map((clickedLink) => (
                   <p key={clickedLink.linkKey} className="text-xs text-gray-500 break-all">
-                    - {clickedLink.targetUrl || 'Link đã nhấp'}
+                    - {clickedLink.targetUrl || t('zaloGroupJourney.clickedLinkItem')}
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-400">--</p>
+              <p className="text-gray-400">{t('zaloGroupJourney.noLinks')}</p>
             )}
           </div>
           <div>
-            <span className="text-xs text-gray-400">Sự kiện đơn hàng</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.orderEvents')}</span>
             <p>{orderEvents.length}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">Kênh</span>
+            <span className="text-xs text-gray-400">{t('zaloGroupJourney.channel')}</span>
             <p>{message?.channel || 'zalo_group'}</p>
           </div>
         </div>
@@ -117,11 +119,11 @@ const ZaloGroupJourneyCard = ({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
-          {showMessageContent ? 'Ẩn nội dung tin nhắn' : 'Xem nội dung tin nhắn'}
+          {showMessageContent ? t('zaloGroupJourney.hideMessageContent') : t('zaloGroupJourney.showMessageContent')}
         </button>
         {showMessageContent && (
           <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
-            {message?.messageText || 'Không có nội dung tin nhắn'}
+            {message?.messageText || t('zaloGroupJourney.noMessageContent')}
           </p>
         )}
       </div>
@@ -141,10 +143,12 @@ const ZaloGroupJourneySection = ({
   clickEventsByZaloMessageId = {},
   formatDateTime,
 }) => {
+  const { t } = useI18n();
+
   if (!Array.isArray(messages) || messages.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-        Lượt chạy này chưa có sự kiện Zalo nhóm.
+        {t('zaloGroupJourney.noEvents')}
       </div>
     );
   }
@@ -158,6 +162,7 @@ const ZaloGroupJourneySection = ({
           orderEvents={orderEventsByZaloMessageId[message.id] || []}
           clickedEvents={clickEventsByZaloMessageId[message.id] || []}
           formatDateTime={formatDateTime}
+          t={t}
         />
       ))}
     </div>

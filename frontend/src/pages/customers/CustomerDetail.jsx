@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlineArrowLeft,
   HiOutlineCalendar,
@@ -30,6 +31,7 @@ import {
 } from '../../features/customers/utils/customerJourney.helpers';
 
 const CustomerDetail = () => {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -72,7 +74,7 @@ const CustomerDetail = () => {
     } catch (error) {
       console.error('Fetch campaign detail error:', error);
       setCampaignDetail(null);
-      toast.error('Không thể tải chi tiết chiến dịch của khách hàng', {
+      toast.error(t('customerDetail.loadCampaignFailed'), {
         id: 'customer-campaign-detail-error',
       });
     } finally {
@@ -104,7 +106,7 @@ const CustomerDetail = () => {
       }
     } catch (error) {
       console.error('Fetch customer detail error:', error);
-      toast.error('Không thể tải thông tin khách hàng', { id: 'customer-detail-load-error' });
+      toast.error(t('customerDetail.loadFailed'), { id: 'customer-detail-load-error' });
       navigate('/app/customers');
     } finally {
       setIsLoading(false);
@@ -129,8 +131,8 @@ const CustomerDetail = () => {
 
   const displayName = useMemo(() => {
     const resolved = getCustomerDisplayName(customer);
-    return resolved || `Khách hàng #${id}`;
-  }, [customer, id]);
+    return resolved || `${t('customerDetail.customer')} #${id}`;
+  }, [customer, id, t]);
 
   const customerStats = useMemo(() => {
     const fromParticipations = participations.reduce(
@@ -158,21 +160,21 @@ const CustomerDetail = () => {
     if (selectedEmailDetail.sentAt) {
       timeline.push({
         key: 'sent',
-        label: 'Đã gửi email',
+        label: t('customerDetail.emailSent'),
         at: selectedEmailDetail.sentAt,
       });
     }
     if (selectedEmailDetail.firstOpenedAt) {
       timeline.push({
         key: 'opened',
-        label: 'Khách hàng đã mở email',
+        label: t('customerDetail.emailOpened'),
         at: selectedEmailDetail.firstOpenedAt,
       });
     }
     if (selectedEmailDetail.firstClickedAt) {
       timeline.push({
         key: 'clicked',
-        label: 'Khách hàng đã nhấp link trong email',
+        label: t('customerDetail.linkClicked'),
         at: selectedEmailDetail.firstClickedAt,
       });
     }
@@ -181,8 +183,8 @@ const CustomerDetail = () => {
       .filter((event) => event.idEmailMessage === selectedEmailDetail.emailMessageId)
       .map((event) => {
         let label = normalizeJourneyDescription(event);
-        if (String(event.eventType || '').toLowerCase() === 'course_interest') label = 'Để lại thông tin';
-        if (String(event.eventType || '').toLowerCase() === 'course_purchase') label = 'Mua hàng thành công';
+        if (String(event.eventType || '').toLowerCase() === 'course_interest') label = t('customerDetail.courseInterest');
+        if (String(event.eventType || '').toLowerCase() === 'course_purchase') label = t('customerDetail.coursePurchase');
         return {
           key: `journey-${event.id}`,
           label,
@@ -205,15 +207,15 @@ const CustomerDetail = () => {
         key: `purchase-${purchase.id || index}`,
         label:
           String(purchase.itemStatus || '').toLowerCase() === 'interested'
-            ? `Để lại thông tin: ${decodeHtmlEntities(purchase.courseName || purchase.productName || 'Khóa học')}`
-            : `Mua hàng thành công: ${decodeHtmlEntities(purchase.courseName || purchase.productName || 'Khóa học')}`,
+            ? `${t('customerDetail.courseInterest')}: ${decodeHtmlEntities(purchase.courseName || purchase.productName || t('customerDetail.courseName'))}`
+            : `${t('customerDetail.coursePurchase')}: ${decodeHtmlEntities(purchase.courseName || purchase.productName || t('customerDetail.courseName'))}`,
         at: purchase.purchaseDate,
       }));
 
     return [...timeline, ...journeyMatches, ...purchaseMatches]
       .filter((item) => item.at)
       .sort((a, b) => new Date(a.at) - new Date(b.at));
-  }, [selectedEmailDetail, campaignDetail]);
+  }, [selectedEmailDetail, campaignDetail, t]);
 
   const selectedEmailContentHtml = useMemo(
     () => sanitizeEmailHtmlForPreview(selectedEmailDetail?.bodyHtml || ''),
@@ -229,7 +231,7 @@ const CustomerDetail = () => {
   }
 
   if (!customer) {
-    return <div className="py-10 text-center text-gray-500">Không tìm thấy khách hàng</div>;
+    return <div className="py-10 text-center text-gray-500">{t('customerDetail.customerNotFound')}</div>;
   }
 
   return (
@@ -244,7 +246,7 @@ const CustomerDetail = () => {
           </button>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 truncate">{displayName}</h1>
-            <p className="text-sm text-gray-500">Chi tiết khách hàng và hành trình theo chiến dịch</p>
+            <p className="text-sm text-gray-500">{t('customerDetail.emailAndJourney')}</p>
           </div>
         </div>
         {selectedCampaignId ? (
@@ -252,21 +254,21 @@ const CustomerDetail = () => {
             onClick={() => refreshSnapshot(selectedCampaignId)}
             className="btn btn-secondary btn-sm"
           >
-            Làm mới số liệu
+            {t('customerDetail.refreshStats')}
           </button>
         ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <CustomerStatCard title="Số chiến dịch tham gia" value={customerStats.campaigns} icon={HiOutlineChartBar} />
-        <CustomerStatCard title="Email đã nhận" value={customerStats.received} icon={HiOutlineInbox} colorClass="text-blue-600" />
-        <CustomerStatCard title="Email đã mở" value={customerStats.opened} icon={HiOutlineEye} colorClass="text-green-600" />
-        <CustomerStatCard title="Email đã nhấp" value={customerStats.clicked} icon={HiOutlineCursorClick} colorClass="text-orange-600" />
+        <CustomerStatCard title={t('customers.campaignsParticipated')} value={customerStats.campaigns} icon={HiOutlineChartBar} />
+        <CustomerStatCard title={t('customerDetail.emailReceived')} value={customerStats.received} icon={HiOutlineInbox} colorClass="text-blue-600" />
+        <CustomerStatCard title={t('customerDetail.emailOpened')} value={customerStats.opened} icon={HiOutlineEye} colorClass="text-green-600" />
+        <CustomerStatCard title={t('customerDetail.emailClicked')} value={customerStats.clicked} icon={HiOutlineCursorClick} colorClass="text-orange-600" />
       </div>
 
       <div className="card">
         <div className="card-body">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('customerDetail.basicInfo')}</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="flex items-center gap-2 text-gray-700">
               <HiOutlineUser className="h-5 w-5 text-gray-400" />
@@ -282,14 +284,14 @@ const CustomerDetail = () => {
             </div>
             <div className="flex items-center gap-2 text-gray-700">
               <HiOutlineCalendar className="h-5 w-5 text-gray-400" />
-              <span>Tạo: {formatDateTime(customer.createdAt)}</span>
+              <span>{t('customerDetail.created')}: {formatDateTime(customer.createdAt)}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-700">
               <HiOutlineClock className="h-5 w-5 text-gray-400" />
-              <span>Cập nhật: {formatDateTime(customer.updatedAt)}</span>
+              <span>{t('customerDetail.updated')}: {formatDateTime(customer.updatedAt)}</span>
             </div>
             <div className="text-gray-700">
-              <span className="font-medium">Nguồn:</span> {customer.customerSource || '--'}
+              <span className="font-medium">{t('customerDetail.source')}:</span> {customer.customerSource || '--'}
             </div>
           </div>
         </div>
@@ -297,19 +299,19 @@ const CustomerDetail = () => {
 
       <div className="card">
         <div className="card-body">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Danh sách chiến dịch tham gia</h2>
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('customerDetail.participatedCampaigns')}</h2>
           {participations.length === 0 ? (
-            <div className="py-8 text-center text-gray-500">Khách hàng này chưa tham gia chiến dịch nào</div>
+            <div className="py-8 text-center text-gray-500">{t('customerDetail.noParticipatedCampaigns')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Chiến dịch</th>
-                    <th>Email nhận</th>
-                    <th>Đã mở</th>
-                    <th>Đã nhấp</th>
-                    <th>Lần cuối hoạt động</th>
+                    <th>{t('customerDetail.campaign')}</th>
+                    <th>{t('customerDetail.emailReceived')}</th>
+                    <th>{t('customers.opened')}</th>
+                    <th>{t('customerDetail.clicked')}</th>
+                    <th>{t('customerDetail.lastActivity')}</th>
                     <th className="w-28" />
                   </tr>
                 </thead>
@@ -321,7 +323,7 @@ const CustomerDetail = () => {
                     >
                       <td>
                         <div className="font-medium text-gray-900">{item.campaignName}</div>
-                        <div className="text-xs text-gray-500">Tham gia: {formatDateTime(item.joinedAt)}</div>
+                        <div className="text-xs text-gray-500">{t('customerDetail.joined')}: {formatDateTime(item.joinedAt)}</div>
                       </td>
                       <td><span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">{item.emailReceivedCount || 0}</span></td>
                       <td><span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">{item.emailOpenedCount || 0}</span></td>
@@ -335,7 +337,7 @@ const CustomerDetail = () => {
                           }}
                           className="btn btn-secondary btn-sm"
                         >
-                          Chi tiết
+                          {t('customerDetail.viewDetail')}
                         </button>
                       </td>
                     </tr>
@@ -349,118 +351,118 @@ const CustomerDetail = () => {
 
       <div className="card">
         <div className="card-body space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Chi tiết chiến dịch đã chọn</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('customerDetail.selectedCampaignDetail')}</h2>
 
           {isLoadingCampaignDetail ? (
-            <div className="py-8 text-center text-gray-500">Đang tải chi tiết chiến dịch...</div>
+            <div className="py-8 text-center text-gray-500">{t('customers.loadingDetail')}</div>
           ) : !campaignDetail ? (
-            <div className="py-8 text-center text-gray-500">Chọn một chiến dịch để xem chi tiết</div>
+            <div className="py-8 text-center text-gray-500">{t('customerDetail.selectCampaignToView')}</div>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-blue-600 font-medium">Theo chiến dịch</p>
+                  <p className="text-xs uppercase tracking-wide text-blue-600 font-medium">{t('customerDetail.byCampaign')}</p>
                   <div className="mt-3 space-y-2">
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Người tham gia:</span> {campaignDetail?.summaries?.byCampaign?.participantCount || 0}
+                      <span className="font-medium">{t('customerDetail.participants')}:</span> {campaignDetail?.summaries?.byCampaign?.participantCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Email nhận:</span> {campaignDetail?.summaries?.byCampaign?.emailReceivedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsReceived')}:</span> {campaignDetail?.summaries?.byCampaign?.emailReceivedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mở:</span> {campaignDetail?.summaries?.byCampaign?.emailOpenedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsOpened')}:</span> {campaignDetail?.summaries?.byCampaign?.emailOpenedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã nhấp:</span> {campaignDetail?.summaries?.byCampaign?.emailClickedCount || 0}
+                      <span className="font-medium">{t('customerDetail.clicked')}:</span> {campaignDetail?.summaries?.byCampaign?.emailClickedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mua:</span> {campaignDetail?.summaries?.byCampaign?.purchaseCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchased')}:</span> {campaignDetail?.summaries?.byCampaign?.purchaseCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Để lại thông tin:</span> {campaignDetail?.summaries?.byCampaign?.interestedCount || 0}
+                      <span className="font-medium">{t('customerDetail.leftInfo')}:</span> {campaignDetail?.summaries?.byCampaign?.interestedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Mua sau click:</span> {campaignDetail?.summaries?.byCampaign?.attributedFromClickCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchaseAfterClick')}:</span> {campaignDetail?.summaries?.byCampaign?.attributedFromClickCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Doanh thu:</span> {formatMoney(campaignDetail?.summaries?.byCampaign?.revenue || 0)}
+                      <span className="font-medium">{t('customerDetail.revenue')}:</span> {formatMoney(campaignDetail?.summaries?.byCampaign?.revenue || 0)}
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-purple-600 font-medium">Theo khách hàng</p>
+                  <p className="text-xs uppercase tracking-wide text-purple-600 font-medium">{t('customerDetail.byCustomer')}</p>
                   <div className="mt-3 space-y-2">
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Số chiến dịch:</span> {campaignDetail?.summaries?.byCustomer?.campaignCount || 0}
+                      <span className="font-medium">{t('customers.campaignCount')}:</span> {campaignDetail?.summaries?.byCustomer?.campaignCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Email nhận:</span> {campaignDetail?.summaries?.byCustomer?.emailReceivedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsReceived')}:</span> {campaignDetail?.summaries?.byCustomer?.emailReceivedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mở:</span> {campaignDetail?.summaries?.byCustomer?.emailOpenedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsOpened')}:</span> {campaignDetail?.summaries?.byCustomer?.emailOpenedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã nhấp:</span> {campaignDetail?.summaries?.byCustomer?.emailClickedCount || 0}
+                      <span className="font-medium">{t('customerDetail.clicked')}:</span> {campaignDetail?.summaries?.byCustomer?.emailClickedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mua:</span> {campaignDetail?.summaries?.byCustomer?.purchaseCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchased')}:</span> {campaignDetail?.summaries?.byCustomer?.purchaseCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Để lại thông tin:</span> {campaignDetail?.summaries?.byCustomer?.interestedCount || 0}
+                      <span className="font-medium">{t('customerDetail.leftInfo')}:</span> {campaignDetail?.summaries?.byCustomer?.interestedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Mua sau click:</span> {campaignDetail?.summaries?.byCustomer?.attributedFromClickCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchaseAfterClick')}:</span> {campaignDetail?.summaries?.byCustomer?.attributedFromClickCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Doanh thu:</span> {formatMoney(campaignDetail?.summaries?.byCustomer?.revenue || 0)}
+                      <span className="font-medium">{t('customerDetail.revenue')}:</span> {formatMoney(campaignDetail?.summaries?.byCustomer?.revenue || 0)}
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-gray-300 bg-gray-50 p-4">
-                  <p className="text-xs uppercase tracking-wide font-medium text-gray-600">Tổng thể hệ thống</p>
+                  <p className="text-xs uppercase tracking-wide font-medium text-gray-600">{t('customerDetail.overallSystem')}</p>
                   <div className="mt-3 space-y-2">
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Người tham gia:</span> {campaignDetail?.summaries?.overall?.participantCount || 0}
+                      <span className="font-medium">{t('customerDetail.participants')}:</span> {campaignDetail?.summaries?.overall?.participantCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Email nhận:</span> {campaignDetail?.summaries?.overall?.emailReceivedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsReceived')}:</span> {campaignDetail?.summaries?.overall?.emailReceivedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mở:</span> {campaignDetail?.summaries?.overall?.emailOpenedCount || 0}
+                      <span className="font-medium">{t('customerDetail.emailsOpened')}:</span> {campaignDetail?.summaries?.overall?.emailOpenedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã nhấp:</span> {campaignDetail?.summaries?.overall?.emailClickedCount || 0}
+                      <span className="font-medium">{t('customerDetail.clicked')}:</span> {campaignDetail?.summaries?.overall?.emailClickedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Đã mua:</span> {campaignDetail?.summaries?.overall?.purchaseCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchased')}:</span> {campaignDetail?.summaries?.overall?.purchaseCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Để lại thông tin:</span> {campaignDetail?.summaries?.overall?.interestedCount || 0}
+                      <span className="font-medium">{t('customerDetail.leftInfo')}:</span> {campaignDetail?.summaries?.overall?.interestedCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Mua sau click:</span> {campaignDetail?.summaries?.overall?.attributedFromClickCount || 0}
+                      <span className="font-medium">{t('customerDetail.purchaseAfterClick')}:</span> {campaignDetail?.summaries?.overall?.attributedFromClickCount || 0}
                     </p>
                     <p className="text-sm text-gray-700">
-                      <span className="font-medium">Doanh thu:</span> {formatMoney(campaignDetail?.summaries?.overall?.revenue || 0)}
+                      <span className="font-medium">{t('customerDetail.revenue')}:</span> {formatMoney(campaignDetail?.summaries?.overall?.revenue || 0)}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <h3 className="mb-3 text-base font-medium text-gray-900">Hành trình email trong chiến dịch</h3>
+                <h3 className="mb-3 text-base font-medium text-gray-900">{t('customerDetail.emailJourneyInCampaign')}</h3>
                 {campaignDetail.emails?.length ? (
                   <div className="overflow-x-auto">
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Tên email</th>
-                          <th>Gửi lúc</th>
-                          <th>Đã mở</th>
-                          <th>Đã nhấp</th>
-                          <th>Trạng thái</th>
+                          <th>{t('customerDetail.emailName')}</th>
+                          <th>{t('customerDetail.sentAt')}</th>
+                          <th>{t('customers.opened')}</th>
+                          <th>{t('customerDetail.clicked')}</th>
+                          <th>{t('customerDetail.status')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -471,7 +473,7 @@ const CustomerDetail = () => {
                                 {decodeHtmlEntities(email.emailTemplateName || email.subject || `Email ${email.emailIndex}`)}
                               </div>
                               <div className="text-xs text-gray-500">
-                                Tiêu đề: {decodeHtmlEntities(email.subject || '--')}
+                                {t('customerDetail.customerEmailSubject')}: {decodeHtmlEntities(email.subject || '--')}
                               </div>
                             </td>
                             <td>{formatDateTime(email.sentAt)}</td>
@@ -482,7 +484,7 @@ const CustomerDetail = () => {
                                 onClick={() => setSelectedEmailDetail(email)}
                                 className="inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700 hover:bg-primary-200"
                               >
-                                {email.openCount > 0 ? '✓ Đã mở' : 'Chưa mở'} - Xem chi tiết
+                                {email.openCount > 0 ? `✓ ${t('customers.opened')}` : t('customers.notOpened')} - {t('customers.viewDetail')}
                               </button>
                             </td>
                           </tr>
@@ -491,25 +493,25 @@ const CustomerDetail = () => {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">Chưa có dữ liệu email trong chiến dịch này.</div>
+                  <div className="text-sm text-gray-500">{t('customerDetail.noEmailData')}</div>
                 )}
               </div>
 
               <div>
-                <h3 className="mb-3 text-base font-medium text-gray-900">Khóa học đã mua/quan tâm từ chiến dịch</h3>
+                <h3 className="mb-3 text-base font-medium text-gray-900">{t('customerDetail.coursesFromCampaign')}</h3>
                 {campaignDetail.purchases?.length ? (
                   <div className="overflow-x-auto">
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Mã ĐH</th>
-                          <th>Tên khóa học</th>
-                          <th>Mã SP</th>
-                          <th>Trạng thái</th>
-                          <th>Giá trị</th>
-                          <th>Thời gian mua</th>
-                          <th>ID email gửi</th>
-                          <th>Sau click email</th>
+                          <th>{t('customerDetail.orderCode')}</th>
+                          <th>{t('customerDetail.course')}</th>
+                          <th>{t('customerDetail.productCode')}</th>
+                          <th>{t('customerDetail.status')}</th>
+                          <th>{t('customerDetail.value')}</th>
+                          <th>{t('customerDetail.purchaseTime')}</th>
+                          <th>{t('customerDetail.emailId')}</th>
+                          <th>{t('customerDetail.afterEmailClick')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -526,11 +528,11 @@ const CustomerDetail = () => {
                                   <span
                                     key={`${purchase.id}-${idx}`}
                                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                      displayStatus === 'Đã mua'
+                                      displayStatus === t('customerDetail.statusPurchased')
                                         ? 'bg-green-100 text-green-800'
-                                        : displayStatus === 'Để lại thông tin'
+                                        : displayStatus === t('customerDetail.statusLead')
                                           ? 'bg-yellow-100 text-yellow-800'
-                                            : displayStatus.includes('nhấn link')
+                                          : displayStatus.includes(t('customerDetail.statusClicked'))
                                             ? 'bg-blue-100 text-blue-800'
                                             : 'bg-gray-100 text-gray-700'
                                     }`}
@@ -555,11 +557,11 @@ const CustomerDetail = () => {
                             <td>
                               {purchase.attributedFromClick ? (
                                 <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                                  Có
+                                  {t('common.yes')}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                                  Không rõ
+                                  {t('common.unknown')}
                                 </span>
                               )}
                             </td>
@@ -569,12 +571,12 @@ const CustomerDetail = () => {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">Chưa có dữ liệu mua hàng từ chiến dịch này.</div>
+                  <div className="text-sm text-gray-500">{t('customerDetail.noPurchaseDataCampaign')}</div>
                 )}
               </div>
 
               <div>
-                <h3 className="mb-3 text-base font-medium text-gray-900">Timeline hành trình khách hàng</h3>
+                <h3 className="mb-3 text-base font-medium text-gray-900">{t('customerDetail.timelineTitle')}</h3>
                 {campaignDetail.journey?.length ? (
                   <div className="space-y-2">
                     {campaignDetail.journey.map((event) => (
@@ -590,7 +592,7 @@ const CustomerDetail = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">Chưa có dữ liệu hành trình cho chiến dịch này.</div>
+                  <div className="text-sm text-gray-500">{t('customerDetail.noJourneyData')}</div>
                 )}
               </div>
             </>
@@ -600,19 +602,19 @@ const CustomerDetail = () => {
 
       <div className="card">
         <div className="card-body">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Khóa học khách hàng đã mua/quan tâm</h2>
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('customerDetail.customerPurchasedCourses')}</h2>
           {customer.purchases?.length ? (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Đơn hàng</th>
-                    <th>Khóa học</th>
-                    <th>Trạng thái</th>
-                    <th>Giá trị</th>
-                    <th>Chiến dịch</th>
-                    <th>Sau click email</th>
-                    <th>Thời gian mua</th>
+                    <th>{t('customerDetail.order')}</th>
+                    <th>{t('customerDetail.course')}</th>
+                    <th>{t('customerDetail.status')}</th>
+                    <th>{t('customerDetail.value')}</th>
+                    <th>{t('customerDetail.campaign')}</th>
+                    <th>{t('customerDetail.afterEmailClick')}</th>
+                    <th>{t('customerDetail.purchaseTime')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -622,25 +624,25 @@ const CustomerDetail = () => {
                       <td>{decodeHtmlEntities(purchase.courseName || purchase.productName || '--')}</td>
                       <td>
                         <div className="flex flex-wrap gap-1">
-                          {(purchase.statuses || []).map((statusLabel, idx) => {
-                            const displayStatus = normalizeStatusLabel(statusLabel);
-                            return (
-                            <span
-                              key={`${purchase.id}-${idx}`}
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                displayStatus === 'Đã mua'
-                                  ? 'bg-green-100 text-green-800'
-                                  : displayStatus === 'Để lại thông tin'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : displayStatus.includes('nhấn link')
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-gray-100 text-gray-700'
-                              }`}
-                            >
-                              {displayStatus}
-                            </span>
-                            );
-                          })}
+                                {(purchase.statuses || []).map((statusLabel, idx) => {
+                                  const displayStatus = normalizeStatusLabel(statusLabel);
+                                  return (
+                                  <span
+                                    key={`${purchase.id}-${idx}`}
+                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                      displayStatus === t('customerDetail.statusPurchased')
+                                        ? 'bg-green-100 text-green-800'
+                                        : displayStatus === t('customerDetail.statusLead')
+                                          ? 'bg-yellow-100 text-yellow-800'
+                                          : displayStatus.includes(t('customerDetail.statusClicked'))
+                                            ? 'bg-blue-100 text-blue-800'
+                                            : 'bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    {displayStatus}
+                                  </span>
+                                  );
+                                })}
                         </div>
                       </td>
                       <td>{formatMoney(purchase.amount, purchase.currency)}</td>
@@ -648,11 +650,11 @@ const CustomerDetail = () => {
                       <td>
                         {purchase.attributedFromClick ? (
                           <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                            Có
+                            {t('common.yes')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                            Chưa rõ
+                            {t('common.unknown')}
                           </span>
                         )}
                       </td>
@@ -663,7 +665,7 @@ const CustomerDetail = () => {
               </table>
             </div>
           ) : (
-            <div className="py-6 text-sm text-gray-500">Khách hàng chưa có dữ liệu mua khóa học.</div>
+            <div className="py-6 text-sm text-gray-500">{t('customerDetail.noPurchaseData')}</div>
           )}
         </div>
       </div>
@@ -671,25 +673,25 @@ const CustomerDetail = () => {
       <Modal
         isOpen={Boolean(selectedEmailDetail)}
         onClose={() => setSelectedEmailDetail(null)}
-        title="Chi tiết email và hành trình"
+        title={t('customerDetail.emailAndJourneyTitle')}
         size="2xl"
       >
         {selectedEmailDetail ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm text-gray-500">Tên email</p>
+              <p className="text-sm text-gray-500">{t('customerDetail.emailName')}</p>
               <p className="font-medium text-gray-900">
                 {decodeHtmlEntities(selectedEmailDetail.emailTemplateName || selectedEmailDetail.subject || '--')}
               </p>
-              <p className="mt-2 text-sm text-gray-500">Tiêu đề gửi</p>
+              <p className="mt-2 text-sm text-gray-500">{t('customerDetail.customerEmailSubject')}</p>
               <p className="font-medium text-gray-900">{decodeHtmlEntities(selectedEmailDetail.subject || '--')}</p>
               <p className="mt-2 text-sm text-gray-500">
-                Gửi lúc: <span className="font-medium text-gray-800">{formatDateTime(selectedEmailDetail.sentAt)}</span>
+                {t('customerDetail.sentAt')}: <span className="font-medium text-gray-800">{formatDateTime(selectedEmailDetail.sentAt)}</span>
               </p>
             </div>
 
             <div>
-              <h4 className="mb-2 font-medium text-gray-900">Nội dung email</h4>
+              <h4 className="mb-2 font-medium text-gray-900">{t('customerDetail.emailContent')}</h4>
               {selectedEmailContentHtml ? (
                 <div
                   className="rounded-lg border border-gray-200 bg-white p-4 prose max-w-none"
@@ -697,13 +699,13 @@ const CustomerDetail = () => {
                 />
               ) : (
                 <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700 whitespace-pre-wrap">
-                  {decodeHtmlEntities(selectedEmailDetail.bodyText || 'Không có nội dung email.')}
+                  {decodeHtmlEntities(selectedEmailDetail.bodyText || t('customers.noEmailContent'))}
                 </div>
               )}
             </div>
 
             <div>
-              <h4 className="mb-2 font-medium text-gray-900">Timeline hành trình</h4>
+              <h4 className="mb-2 font-medium text-gray-900">{t('customerDetail.journeyTimeline')}</h4>
               {selectedEmailTimeline.length ? (
                 <div className="space-y-2">
                   {selectedEmailTimeline.map((item) => (
@@ -716,7 +718,7 @@ const CustomerDetail = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-gray-500">Chưa có timeline cho email này.</div>
+                <div className="text-sm text-gray-500">{t('customerDetail.noTimeline')}</div>
               )}
             </div>
           </div>

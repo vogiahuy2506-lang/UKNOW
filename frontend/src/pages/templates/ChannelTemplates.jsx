@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import EmailTemplates from './EmailTemplates';
+import { useI18n } from '../../i18n';
 
 const TABS = [
-  { key: 'email', label: 'Email' },
-  { key: 'zalo', label: 'Zalo' },
+  { key: 'email', label: 'channelTemplates.email' },
+  { key: 'zalo', label: 'channelTemplates.zalo' },
 ];
 
 const ChannelTemplates = () => {
+  const { t } = useI18n();
   const [active, setActive] = useState('email');
   const location = useLocation();
 
@@ -38,7 +40,7 @@ const ChannelTemplates = () => {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>

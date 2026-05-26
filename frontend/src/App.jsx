@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
+import { useI18n } from './i18n';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -29,6 +30,11 @@ import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
 import CustomDomainsPage from './pages/settings/CustomDomainsPage';
+import KnowledgeBasePage from './pages/settings/KnowledgeBasePage';
+import SubAssistantPage from './pages/settings/SubAssistantPage';
+import ChannelConnectionsPage from './pages/settings/ChannelConnectionsPage';
+import WebWidgetPage from './pages/settings/WebWidgetPage';
+import UnifiedInboxPage from './pages/settings/UnifiedInboxPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
@@ -55,14 +61,17 @@ import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
-const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
-    <div className="text-center">
-      <div className="spinner w-10 h-10 mx-auto mb-4"></div>
-      <p className="text-gray-500">Đang tải...</p>
+const LoadingScreen = () => {
+  const { t } = useI18n();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="spinner w-10 h-10 mx-auto mb-4"></div>
+        <p className="text-gray-500">{t('app.loading')}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Bảo vệ /app/* — yêu cầu đăng nhập + có gói
 const ProtectedRoute = ({ children }) => {
@@ -254,6 +263,11 @@ function App() {
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
             <Route path="settings/custom-domains" element={<OwnerRoute><CustomDomainsPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
+            <Route path="settings/knowledge-base" element={<OwnerRoute><KnowledgeBasePage /></OwnerRoute>} />
+            <Route path="settings/sub-assistants" element={<OwnerRoute><SubAssistantPage /></OwnerRoute>} />
+            <Route path="settings/chatbot-channels" element={<OwnerRoute><ChannelConnectionsPage /></OwnerRoute>} />
+            <Route path="settings/chatbot-widget" element={<OwnerRoute><WebWidgetPage /></OwnerRoute>} />
+            <Route path="settings/inbox" element={<OwnerRoute><UnifiedInboxPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />

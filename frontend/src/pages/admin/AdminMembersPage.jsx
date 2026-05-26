@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 const Tooltip = ({ label, children }) => (
@@ -23,7 +24,7 @@ import adminPlansApiService from '../../features/admin/services/adminPlansApi.se
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
-const ExpiryBadge = ({ expiresAt, hasPlan }) => {
+const ExpiryBadge = ({ expiresAt, hasPlan, t }) => {
   if (!expiresAt) return <span className="text-xs text-gray-400">—</span>;
 
   const now = Date.now();
@@ -33,7 +34,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
   if (!hasPlan && exp < now) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
-        Đã hết hạn
+        {t('plans.expired')}
       </span>
     );
   }
@@ -41,7 +42,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
     return (
       <div>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
-          ⚠ {daysLeft} ngày
+          ⚠ {daysLeft} {t('time.daysAgo', { n: daysLeft })}
         </span>
         <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>
@@ -51,7 +52,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
     return (
       <div>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 border border-amber-200">
-          {daysLeft} ngày
+          {daysLeft} {t('time.daysAgo', { n: daysLeft })}
         </span>
         <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>
@@ -60,7 +61,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
   return (
     <div>
       <span className="text-xs text-gray-600 font-medium">{exp.toLocaleDateString('vi-VN')}</span>
-      <p className="text-xs text-gray-400">còn {daysLeft} ngày</p>
+      <p className="text-xs text-gray-400">{t('plans.daysLeft', { n: daysLeft })}</p>
     </div>
   );
 };
@@ -86,18 +87,18 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   const [isSaving, setIsSaving]             = useState(false);
 
   const handleAssign = async () => {
-    if (!selectedPlanId) { toast.error('Vui lòng chọn gói'); return; }
+    if (!selectedPlanId) { toast.error(t('adminMembers.selectPlanRequired')); return; }
     try {
       setIsSaving(true);
       await adminPlansApiService.assignPlan(Number(selectedPlanId), member.email, {
         paymentMethod,
         note: note.trim() || null,
       });
-      toast.success('Gán gói thành công');
+      toast.success(t('adminMembers.assignSuccess'));
       onDone();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể gán gói');
+      toast.error(err?.response?.data?.message || t('adminMembers.assignFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -106,49 +107,49 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   return renderModal(
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Gán gói dịch vụ</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.assignPlan')}</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Thành viên: <strong>{member.fullName || member.username}</strong> ({member.email})
+          {t('adminMembers.member')}: <strong>{member.fullName || member.username}</strong> ({member.email})
         </p>
         {member.planName && (
-          <p className="text-sm text-gray-400 mt-0.5">Gói hiện tại: <strong>{member.planName}</strong></p>
+          <p className="text-sm text-gray-400 mt-0.5">{t('adminMembers.currentPlan')}: <strong>{member.planName}</strong></p>
         )}
       </div>
       <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-        Thao tác này gán gói trực tiếp, bỏ qua quy trình thanh toán.
+        {t('adminMembers.assignNote')}
       </p>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Chọn gói *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.selectPlan')}</label>
         <select className="input w-full" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
-          <option value="">-- Chọn gói --</option>
+          <option value="">{t('adminMembers.selectPlanPlaceholder')}</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} {p.price > 0 ? `— ${Number(p.price).toLocaleString('vi-VN')} đ` : '— Miễn phí'}
-              {!p.is_active ? ' (ẩn)' : ''}
+              {p.name} {p.price > 0 ? `— ${Number(p.price).toLocaleString('vi-VN')} đ` : t('adminMembers.free')}
+              {!p.is_active ? ` ${t('adminMembers.hidden')}` : ''}
             </option>
           ))}
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hình thức thanh toán *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>
         <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-          <option value="free">Miễn phí / Demo (không tính doanh thu)</option>
-          <option value="manual">Đã thu tiền ngoài (tính vào doanh thu)</option>
+          <option value="free">{t('adminMembers.freeDemo')}</option>
+          <option value="manual">{t('adminMembers.manualPayment')}</option>
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.note')}</label>
         <input
           className="input w-full"
-          placeholder="VD: Chuyển khoản MB Bank 12/05/2026..."
+          placeholder={t('adminMembers.placeholderNote')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
       </div>
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Hủy</button>
+        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
         <button type="button" className="btn btn-primary" onClick={handleAssign} disabled={isSaving}>
-          {isSaving ? 'Đang xử lý...' : 'Xác nhận gán'}
+          {isSaving ? t('adminMembers.confirming') : t('adminMembers.confirmAssign')}
         </button>
       </div>
     </div>,
@@ -187,7 +188,7 @@ const AdminMembersPage = () => {
       const res = await adminMembersApiService.getMembers(params);
       setMembers(res.data.data || []);
     } catch {
-      toast.error('Không thể tải danh sách thành viên');
+      toast.error(t('adminMembers.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -216,10 +217,10 @@ const AdminMembersPage = () => {
     try {
       setStatusUpdatingId(member.id);
       await adminMembersApiService.toggleStatus(member.id);
-      toast.success('Cập nhật trạng thái thành công');
+      toast.success(t('adminMembers.updateStatusSuccess'));
       fetchMembers();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái');
+      toast.error(err?.response?.data?.message || t('adminMembers.updateStatusFailed'));
     } finally {
       setStatusUpdatingId(null);
     }
@@ -233,7 +234,7 @@ const AdminMembersPage = () => {
       setPromoteConfirm(null);
       fetchMembers();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể nâng cấp tài khoản');
+      toast.error(err?.response?.data?.message || t('adminMembers.promoteFailed'));
     } finally {
       setIsPromoting(false);
     }
@@ -245,12 +246,12 @@ const AdminMembersPage = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý thành viên</h1>
-          <p className="text-gray-500 mt-1">Danh sách tất cả tài khoản user_admin trên hệ thống.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('adminMembers.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('adminMembers.systemAccountsDescription')}</p>
         </div>
         <button type="button" onClick={() => { fetchMembers(); fetchPlans(); }} className="btn btn-secondary" disabled={isLoading}>
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
-          Làm mới
+          {t('common.refresh')}
         </button>
       </div>
 
@@ -263,7 +264,7 @@ const AdminMembersPage = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm theo tên, email..."
+              placeholder={t('adminMembers.searchPlaceholder')}
               className="flex-1 py-1.5 pl-2 text-sm border-0 bg-transparent focus:ring-0 focus:outline-none"
             />
           </div>
@@ -272,9 +273,9 @@ const AdminMembersPage = () => {
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
           >
-            <option value="">Tất cả gói</option>
-            <option value="none">Chưa có gói</option>
-            <option value="custom">Gói riêng (Enterprise)</option>
+            <option value="">{t('adminMembers.filter.allPlans')}</option>
+            <option value="none">{t('adminMembers.filter.noPlan')}</option>
+            <option value="custom">{t('adminMembers.filter.enterprise')}</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -284,20 +285,20 @@ const AdminMembersPage = () => {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="">Tất cả trạng thái</option>
-            <option value="active">Đang hoạt động</option>
-            <option value="inactive">Đã khóa</option>
+            <option value="">{t('adminMembers.filter.allStatuses')}</option>
+            <option value="active">{t('adminMembers.filter.active')}</option>
+            <option value="inactive">{t('adminMembers.filter.inactive')}</option>
           </select>
           <select
             className="input py-1.5 text-sm flex-1 min-w-0"
             value={expiryFilter}
             onChange={(e) => setExpiryFilter(e.target.value)}
           >
-            <option value="">Tất cả hạn dùng</option>
-            <option value="expiring">Sắp hết hạn (≤ 7 ngày)</option>
-            <option value="expired">Đã hết hạn</option>
+            <option value="">{t('adminMembers.filter.allExpiry')}</option>
+            <option value="expiring">{t('adminMembers.filter.expiring')}</option>
+            <option value="expired">{t('adminMembers.filter.expired')}</option>
           </select>
-          <button type="submit" className="btn btn-primary py-1.5 text-sm whitespace-nowrap shrink-0">Tìm kiếm</button>
+          <button type="submit" className="btn btn-primary py-1.5 text-sm whitespace-nowrap shrink-0">{t('common.search')}</button>
         </form>
       </div>
 
@@ -306,19 +307,19 @@ const AdminMembersPage = () => {
         {isLoading ? (
           <div className="h-56 flex items-center justify-center"><div className="spinner w-8 h-8" /></div>
         ) : members.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">Không tìm thấy thành viên nào.</div>
+          <div className="py-16 text-center text-gray-400">{t('adminMembers.noMembersFound')}</div>
         ) : (
           <div className="table-container">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Thành viên</th>
-                  <th>Gói dịch vụ</th>
-                  <th>Nhân viên</th>
-                  <th>Trạng thái</th>
-                  <th>Hạn dùng</th>
-                  <th>Ngày đăng ký</th>
-                  <th>Hành động</th>
+                  <th>{t('adminMembers.table.member')}</th>
+                  <th>{t('adminMembers.table.servicePlan')}</th>
+                  <th>{t('adminMembers.table.employees')}</th>
+                  <th>{t('adminMembers.table.status')}</th>
+                  <th>{t('adminMembers.table.expiry')}</th>
+                  <th>{t('adminMembers.table.createdAt')}</th>
+                  <th>{t('adminMembers.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -342,13 +343,13 @@ const AdminMembersPage = () => {
                       <td>
                         {m.planName
                           ? <span className="badge badge-success">{m.planName}</span>
-                          : <span className="badge badge-gray">Chưa có gói</span>
+                          : <span className="badge badge-gray">{t('adminMembers.noPlan')}</span>
                         }
                       </td>
                       <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
                       <td>
                         <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
-                          {isActive ? 'Hoạt động' : 'Đã khóa'}
+                          {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
                         </span>
                       </td>
                       <td>
@@ -358,7 +359,7 @@ const AdminMembersPage = () => {
                       <td>
                         <div className="flex items-center gap-1">
                           {/* Gán gói */}
-                          <Tooltip label="Gán gói dịch vụ">
+                          <Tooltip label={t('adminMembers.assignPlan')}>
                             <button
                               onClick={() => setAssignMember(m)}
                               className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-primary-600"
@@ -368,7 +369,7 @@ const AdminMembersPage = () => {
                           </Tooltip>
 
                           {/* Khóa / Mở khóa */}
-                          <Tooltip label={isActive ? 'Khóa tài khoản' : 'Mở khóa'}>
+                          <Tooltip label={isActive ? t('adminMembers.lockAccount') : t('adminMembers.unlockAccount')}>
                             <button
                               onClick={() => handleToggleStatus(m)}
                               disabled={statusUpdatingId === m.id}
@@ -384,7 +385,7 @@ const AdminMembersPage = () => {
                           </Tooltip>
 
                           {/* Nâng Super Admin */}
-                          <Tooltip label="Nâng lên Super Admin">
+                          <Tooltip label={t('adminMembers.promoteToAdmin')}>
                             <button
                               onClick={() => setPromoteConfirm(m)}
                               className="p-2 rounded hover:bg-purple-50 transition-colors text-gray-400 hover:text-purple-600"
@@ -405,7 +406,7 @@ const AdminMembersPage = () => {
         {/* Summary */}
         {!isLoading && members.length > 0 && (
           <div className="px-5 py-3 border-t border-gray-100 text-sm text-gray-400">
-            {members.length} thành viên
+            {members.length} {t('adminMembers.table.member').toLowerCase()}
           </div>
         )}
       </div>
@@ -427,23 +428,20 @@ const AdminMembersPage = () => {
             <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
               <HiOutlineShieldCheck className="w-5 h-5 text-purple-600" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">Nâng lên Super Admin</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.promoteTitle')}</h2>
           </div>
           <p className="text-sm text-gray-600">
-            Bạn sắp nâng <strong>{promoteConfirm.fullName || promoteConfirm.username}</strong> ({promoteConfirm.email}) lên quyền <strong>Super Admin</strong>.
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            Tài khoản này sẽ có toàn quyền quản trị hệ thống. Hành động này không thể hoàn tác qua giao diện.
+            {t('adminMembers.promoteWarning')} <strong>{promoteConfirm.fullName || promoteConfirm.username}</strong> ({promoteConfirm.email}) {t('adminMembers.promoteToAdminLevel')}
           </p>
           <div className="flex justify-end gap-2 mt-6">
-            <button type="button" className="btn btn-secondary" onClick={() => setPromoteConfirm(null)} disabled={isPromoting}>Hủy</button>
+            <button type="button" className="btn btn-secondary" onClick={() => setPromoteConfirm(null)} disabled={isPromoting}>{t('common.cancel')}</button>
             <button
               type="button"
               className="btn btn-primary bg-purple-600 hover:bg-purple-700 border-purple-600"
               onClick={handlePromote}
               disabled={isPromoting}
             >
-              {isPromoting ? 'Đang xử lý...' : 'Xác nhận nâng cấp'}
+              {isPromoting ? t('adminMembers.promoting') : t('adminMembers.promoteConfirmBtn')}
             </button>
           </div>
         </div>,

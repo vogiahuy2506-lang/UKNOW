@@ -1,5 +1,6 @@
 import { HiOutlinePaperClip } from 'react-icons/hi';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
+import { useI18n } from '../../../i18n';
 
 const EmailTemplateAttachmentsModal = ({
   showAttachmentsModal,
@@ -10,6 +11,8 @@ const EmailTemplateAttachmentsModal = ({
   setDeletedAttachments,
   setFormData,
 }) => {
+  const { t } = useI18n();
+
   if (!showAttachmentsModal) return null;
 
   return (
@@ -20,7 +23,7 @@ const EmailTemplateAttachmentsModal = ({
     >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Danh sách tệp đã upload</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{t('emailAttachments.title')}</h3>
           <button
             onClick={() => setShowAttachmentsModal(false)}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -41,16 +44,16 @@ const EmailTemplateAttachmentsModal = ({
                         onClick={() => handleOpenAttachment(file)}
                         className="text-sm text-blue-600 hover:text-blue-700 truncate text-left"
                       >
-                        {file.name || file.originalName || `Tệp đính kèm ${index + 1}`}
+                        {file.name || file.originalName || `${t('emailAttachments.fileAttachment')} ${index + 1}`}
                       </button>
                     ) : (
                       <span className="text-sm text-gray-700 truncate">
-                        {file.name || file.originalName || `Tệp đính kèm ${index + 1}`}
+                        {file.name || file.originalName || `${t('emailAttachments.fileAttachment')} ${index + 1}`}
                       </span>
                     )}
                     {file.isTemp && (
                       <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full shrink-0">
-                        Tạm thời
+                        {t('emailAttachments.tempFile')}
                       </span>
                     )}
                   </div>
@@ -70,11 +73,11 @@ const EmailTemplateAttachmentsModal = ({
                     }}
                     className="text-xs text-red-600 hover:text-red-700 font-medium shrink-0"
                   >
-                    Xóa
+                    {t('emailAttachments.delete')}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500 whitespace-nowrap shrink-0">Tên hiển thị:</label>
+                  <label className="text-xs text-gray-500 whitespace-nowrap shrink-0">{t('emailAttachments.displayName')}</label>
                   <input
                     type="text"
                     value={file.displayName || ''}
@@ -86,25 +89,25 @@ const EmailTemplateAttachmentsModal = ({
                         ),
                       }))
                     }
-                    placeholder='VD: "Quà tặng", "Tài liệu miễn phí"'
+                    placeholder={t('emailAttachments.displayNamePlaceholder')}
                     className="flex-1 text-xs px-2.5 py-1.5 border border-gray-300 rounded-md focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
                 {file.displayName && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
-                    ✓ Sẽ chèn link xem file vào email: <span className="font-semibold">{file.displayName}</span>
+                    ✓ {t('emailAttachments.willInsertLink')} <span className="font-semibold">{file.displayName}</span>
                   </p>
                 )}
                 {!file.displayName && (
                   <p className="text-xs text-gray-400">
-                    Không có tên hiển thị → đính kèm trực tiếp vào email
+                    {t('emailAttachments.noDisplayName')}
                   </p>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Chưa có tệp nào.</p>
+          <p className="text-sm text-gray-500">{t('emailAttachments.noFiles')}</p>
         )}
         <div className="mt-5 flex justify-end">
           <button
@@ -112,7 +115,7 @@ const EmailTemplateAttachmentsModal = ({
             onClick={() => setShowAttachmentsModal(false)}
             className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            Đóng
+            {t('emailAttachments.close')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { HiOutlinePaperClip, HiOutlineX } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
 
 /**
@@ -18,16 +19,18 @@ const resolveAttachmentKey = (attachment) => {
  * Chuẩn hóa danh sách attachment của template để hiển thị trong modal preview.
  *
  * @param {object|null} template template hiện tại
+ * @param {Function} [t] translation function (optional, for fallback names)
  * @returns {Array<{name: string, url: string|null, key: string|null}>}
  */
-const normalizeTemplateAttachments = (template) => {
+const normalizeTemplateAttachments = (template, t) => {
   if (!template || typeof template !== 'object') return [];
   const attachments = Array.isArray(template.attachments) ? template.attachments : [];
+  const fallbackName = t ? t('templatePreview.attachment', { defaultValue: 'Tệp đính kèm' }) : 'Tệp đính kèm';
   return attachments
     .map((item, index) => {
       if (typeof item === 'string') {
         return {
-          name: `Tệp đính kèm ${index + 1}`,
+          name: `${fallbackName} ${index + 1}`,
           url: item,
           key: null,
         };
@@ -40,7 +43,7 @@ const normalizeTemplateAttachments = (template) => {
           || source.name
           || source.originalName
           || source.fileName
-          || `Tệp đính kèm ${index + 1}`
+          || `${fallbackName} ${index + 1}`
         ).trim(),
         url: String(source.url || source.link || source.attachmentUrl || '').trim() || null,
         key: resolveAttachmentKey(source),
@@ -64,16 +67,18 @@ const NodeConfigTemplatePreviewModal = ({
   isOpen,
   onClose,
   template,
-  subjectLabel = 'Tiêu đề',
+  subjectLabel,
   onOpenAttachment,
 }) => {
+  const { t } = useI18n();
+  const resolvedSubjectLabel = subjectLabel ?? t('templatePreview.subjectLabel', { defaultValue: 'Tiêu đề' });
   if (!isOpen || !template) return null;
 
   const templateTitle = String(template.templateName || 'Template').trim();
   const subject = String(template.subject || '').trim();
   const bodyHtml = String(template.bodyHtml || '').trim();
   const bodyText = String(template.bodyText || '').trim();
-  const attachments = normalizeTemplateAttachments(template);
+  const attachments = normalizeTemplateAttachments(template, t);
 
   const handleAttachmentClick = async (attachment) => {
     if (typeof onOpenAttachment === 'function') {
@@ -100,13 +105,13 @@ const NodeConfigTemplatePreviewModal = ({
             <h3 className="text-base font-semibold text-gray-900 truncate">{templateTitle}</h3>
             {subject && (
               <p className="text-sm text-gray-600 mt-1 truncate">
-                <span className="font-medium text-gray-700">{subjectLabel}: </span>
+                <span className="font-medium text-gray-700">{resolvedSubjectLabel}: </span>
                 {subject}
               </p>
             )}
             {attachments.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                <span className="font-medium text-gray-700">Tệp đính kèm:</span>
+                <span className="font-medium text-gray-700">{t('templatePreview.attachment')}</span>
                 <div className="flex flex-wrap gap-2">
                   {attachments.map((attachment, index) => (
                     <button
@@ -127,7 +132,7 @@ const NodeConfigTemplatePreviewModal = ({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100"
-            aria-label="Đóng xem trước template"
+            aria-label={t('templatePreview.closePreview')}
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -147,7 +152,7 @@ const NodeConfigTemplatePreviewModal = ({
             </div>
           ) : (
             <div className="bg-white border border-dashed border-gray-300 rounded-lg p-8 text-sm text-gray-500 text-center">
-              Template này chưa có nội dung để xem trước.
+              {t('templatePreview.noContent')}
             </div>
           )}
         </div>
@@ -158,7 +163,7 @@ const NodeConfigTemplatePreviewModal = ({
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
           >
-            Đóng
+            {t('templatePreview.close')}
           </button>
         </div>
       </div>

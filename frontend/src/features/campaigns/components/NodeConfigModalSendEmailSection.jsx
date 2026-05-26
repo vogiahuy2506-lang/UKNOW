@@ -10,6 +10,7 @@ import {
 } from 'react-icons/hi';
 import NodeConfigTemplatePreviewModal from './NodeConfigTemplatePreviewModal';
 import TemplateSearchSelect from './TemplateSearchSelect';
+import { useI18n } from '../../../i18n';
 
 /**
  * Section UI for send-email node configuration.
@@ -43,6 +44,7 @@ export const NodeConfigSendEmailSection = ({
   normalizeTemplateVariables,
   onOpenTemplateAttachment,
 }) => {
+  const { t } = useI18n();
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -141,13 +143,13 @@ export const NodeConfigSendEmailSection = ({
   };
 
   const emailSections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineMail },
-    { id: 'recipient', name: 'Email người nhận', icon: HiOutlineUserAdd },
-    { id: 'cc', name: 'CC', icon: HiOutlineMail, badge: formData.ccEnabled },
-    { id: 'bcc', name: 'BCC', icon: HiOutlineMail, badge: formData.bccEnabled },
-    { id: 'sendMode', name: 'Hình thức gửi', icon: HiOutlineLightningBolt },
-    { id: 'templates', name: 'Danh sách email gửi', icon: HiOutlineDocument },
-    { id: 'maxSend', name: 'Giới hạn gửi', icon: HiOutlineExclamationCircle, badge: formData.maxSendEnabled },
+    { id: 'basic', name: t('campaignNodeConfig.emailSend.basicInfo'), icon: HiOutlineMail },
+    { id: 'recipient', name: t('campaignNodeConfig.emailSend.recipientEmail'), icon: HiOutlineUserAdd },
+    { id: 'cc', name: t('campaignNodeConfig.emailSend.cc'), icon: HiOutlineMail, badge: formData.ccEnabled },
+    { id: 'bcc', name: t('campaignNodeConfig.emailSend.bcc'), icon: HiOutlineMail, badge: formData.bccEnabled },
+    { id: 'sendMode', name: t('campaignNodeConfig.emailSend.sendMode'), icon: HiOutlineLightningBolt },
+    { id: 'templates', name: t('campaignNodeConfig.emailSend.emailList'), icon: HiOutlineDocument },
+    { id: 'maxSend', name: t('campaignNodeConfig.emailSend.sendLimit'), icon: HiOutlineExclamationCircle, badge: formData.maxSendEnabled },
   ];
 
   const renderEmailSection = () => {
@@ -156,26 +158,26 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.emailSend.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="Gửi Email"
+                placeholder={t('campaignNodeConfig.emailSend.nodeNamePlaceholder')}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email gửi (SMTP đã cấu hình) <span className="text-red-500">*</span>
+                {t('campaignNodeConfig.emailSend.fromEmail')} <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.fromEmailId || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, fromEmailId: parseInt(e.target.value, 10) || '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               >
-                <option value="">-- Chọn email gửi --</option>
+                <option value="">{t('campaignNodeConfig.emailSend.selectFromEmail')}</option>
                 {emailSettings.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.email})
@@ -184,7 +186,7 @@ export const NodeConfigSendEmailSection = ({
               </select>
               {emailSettings.length === 0 && (
                 <p className="text-xs text-amber-600 mt-1">
-                  Chưa có SMTP đang hoạt động. Vào Cài đặt Email để thêm và bật trạng thái "active".
+                  {t('campaignNodeConfig.emailSend.noActiveSmtp')}
                 </p>
               )}
             </div>
@@ -198,7 +200,7 @@ export const NodeConfigSendEmailSection = ({
                 className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
               />
               <label htmlFor="saveMessageLog" className="text-sm text-gray-700">
-                Lưu lại lịch sử tin nhắn đã gửi cho từng khách hàng
+                {t('campaignNodeConfig.emailSend.saveMessageHistory')}
               </label>
             </div>
           </div>
@@ -207,7 +209,7 @@ export const NodeConfigSendEmailSection = ({
       case 'recipient':
         return (
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Email người nhận <span className="text-red-500">*</span></h4>
+            <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.recipientEmailLabel')} <span className="text-red-500">*</span></h4>
 
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -219,7 +221,7 @@ export const NodeConfigSendEmailSection = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientSource: e.target.value }))}
                   className="text-primary-500 focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-700">Nhập thủ công</span>
+                <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -230,32 +232,32 @@ export const NodeConfigSendEmailSection = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientSource: e.target.value }))}
                   className="text-primary-500 focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-700">Lấy từ node trước</span>
+                <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
               </label>
             </div>
 
             {formData.recipientSource === 'manual' ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Danh sách email</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.emailListLabel')}</label>
                 <textarea
                   value={formData.recipientEmails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientEmails: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   rows={6}
-                  placeholder="Nhập email, mỗi email trên một dòng hoặc cách nhau bằng dấu phẩy&#10;vd: email1@gmail.com, email2@gmail.com"
+                  placeholder={t('campaignNodeConfig.emailSend.emailListPlaceholder')}
                 />
-                <p className="text-xs text-gray-400 mt-1">Nhập nhiều email cách nhau bằng dấu phẩy hoặc xuống dòng</p>
+                <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.emailSend.emailListHint')}</p>
               </div>
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Chọn node dữ liệu</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                   <select
                     value={formData.recipientNodeId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, recipientNodeId: e.target.value, recipientField: '' }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   >
-                    <option value="">-- Chọn node phía trước --</option>
+                    <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                     {upstreamNodes.map((n) => (
                       <option key={n.id} value={n.id}>
                         {n.data?.label || n.data?.nodeType || n.type}
@@ -264,14 +266,14 @@ export const NodeConfigSendEmailSection = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Chọn cột email</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                   {sourceSchema.length ? (
                     <select
                       value={formData.recipientField}
                       onChange={(e) => setFormData((prev) => ({ ...prev, recipientField: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="">-- Chọn cột --</option>
+                      <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                       {sourceSchema.map((f) => (
                         <option key={f.key} value={f.key}>{f.key}</option>
                       ))}
@@ -282,10 +284,10 @@ export const NodeConfigSendEmailSection = ({
                       value={formData.recipientField}
                       onChange={(e) => setFormData((prev) => ({ ...prev, recipientField: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                      placeholder="VD: email"
+                      placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                     />
                   )}
-                  <p className="text-xs text-gray-400 mt-1">Chọn node phía trước và cột dữ liệu dùng để lấy email</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.emailSend.emailColumnHint')}</p>
                 </div>
               </div>
             )}
@@ -296,13 +298,13 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">CC (Carbon Copy)</h4>
+              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.cc')} (Carbon Copy)</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, ccEnabled: !prev.ccEnabled }))}
                 className={`px-3 py-1.5 text-xs rounded-lg ${formData.ccEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
               >
-                {formData.ccEnabled ? 'Đã bật' : 'Tắt'}
+                {formData.ccEnabled ? t('campaignNodeConfig.emailSend.ccEnabled') : t('campaignNodeConfig.emailSend.ccDisabled')}
               </button>
             </div>
 
@@ -318,7 +320,7 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">Nhập thủ công</span>
+                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -329,31 +331,31 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">Lấy từ node trước</span>
+                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
                   </label>
                 </div>
 
                 {formData.ccSource === 'manual' ? (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Danh sách email CC</label>
+                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.ccEmailList')}</label>
                     <textarea
                       value={formData.ccEmails}
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccEmails: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                       rows={4}
-                      placeholder="Nhập email, mỗi email trên một dòng hoặc cách nhau bằng dấu phẩy"
+                      placeholder={t('campaignNodeConfig.emailSend.ccEmailPlaceholder')}
                     />
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Chọn node dữ liệu</label>
+                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                       <select
                         value={formData.ccNodeId}
                         onChange={(e) => setFormData((prev) => ({ ...prev, ccNodeId: e.target.value, ccField: '' }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                       >
-                        <option value="">-- Chọn node phía trước --</option>
+                        <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                         {upstreamNodes.map((n) => (
                           <option key={n.id} value={n.id}>
                             {n.data?.label || n.data?.nodeType || n.type}
@@ -362,14 +364,14 @@ export const NodeConfigSendEmailSection = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Chọn cột email</label>
+                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                       {getSchemaForNodeId(formData.ccNodeId).length ? (
                         <select
                           value={formData.ccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, ccField: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                         >
-                          <option value="">-- Chọn cột --</option>
+                          <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                           {getSchemaForNodeId(formData.ccNodeId).map((f) => (
                             <option key={f.key} value={f.key}>{f.key}</option>
                           ))}
@@ -380,7 +382,7 @@ export const NodeConfigSendEmailSection = ({
                           value={formData.ccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, ccField: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                          placeholder="VD: email"
+                          placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                         />
                       )}
                     </div>
@@ -389,7 +391,7 @@ export const NodeConfigSendEmailSection = ({
               </>
             ) : (
               <div className="text-xs text-gray-500">
-                Bật chức năng CC để gửi bản sao email đến những người khác.
+                {t('campaignNodeConfig.emailSend.ccEnabledHint')}
               </div>
             )}
           </div>
@@ -399,13 +401,13 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">BCC (Blind Carbon Copy)</h4>
+              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.bcc')} (Blind Carbon Copy)</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, bccEnabled: !prev.bccEnabled }))}
                 className={`px-3 py-1.5 text-xs rounded-lg ${formData.bccEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
               >
-                {formData.bccEnabled ? 'Đã bật' : 'Tắt'}
+                {formData.bccEnabled ? t('campaignNodeConfig.emailSend.bccEnabled') : t('campaignNodeConfig.emailSend.bccDisabled')}
               </button>
             </div>
 
@@ -421,7 +423,7 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">Nhập thủ công</span>
+                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -432,31 +434,31 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">Lấy từ node trước</span>
+                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
                   </label>
                 </div>
 
                 {formData.bccSource === 'manual' ? (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Danh sách email BCC</label>
+                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.bccEmailList')}</label>
                     <textarea
                       value={formData.bccEmails}
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccEmails: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                       rows={4}
-                      placeholder="Nhập email, mỗi email trên một dòng hoặc cách nhau bằng dấu phẩy"
+                      placeholder={t('campaignNodeConfig.emailSend.bccEmailPlaceholder')}
                     />
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Chọn node dữ liệu</label>
+                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                       <select
                         value={formData.bccNodeId}
                         onChange={(e) => setFormData((prev) => ({ ...prev, bccNodeId: e.target.value, bccField: '' }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                       >
-                        <option value="">-- Chọn node phía trước --</option>
+                        <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                         {upstreamNodes.map((n) => (
                           <option key={n.id} value={n.id}>
                             {n.data?.label || n.data?.nodeType || n.type}
@@ -465,14 +467,14 @@ export const NodeConfigSendEmailSection = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Chọn cột email</label>
+                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                       {getSchemaForNodeId(formData.bccNodeId).length ? (
                         <select
                           value={formData.bccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, bccField: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                         >
-                          <option value="">-- Chọn cột --</option>
+                          <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                           {getSchemaForNodeId(formData.bccNodeId).map((f) => (
                             <option key={f.key} value={f.key}>{f.key}</option>
                           ))}
@@ -483,7 +485,7 @@ export const NodeConfigSendEmailSection = ({
                           value={formData.bccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, bccField: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                          placeholder="VD: email"
+                          placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                         />
                       )}
                     </div>
@@ -492,7 +494,7 @@ export const NodeConfigSendEmailSection = ({
               </>
             ) : (
               <div className="text-xs text-gray-500">
-                Bật chức năng BCC để gửi bản sao ẩn email đến những người khác.
+                {t('campaignNodeConfig.emailSend.bccEnabledHint')}
               </div>
             )}
           </div>
@@ -501,7 +503,7 @@ export const NodeConfigSendEmailSection = ({
       case 'sendMode':
         return (
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Hình thức gửi</h4>
+            <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendModeLabel')}</h4>
 
             <div className="flex flex-col gap-3">
               <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
@@ -514,8 +516,8 @@ export const NodeConfigSendEmailSection = ({
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
                 <div>
-                  <div className="text-sm font-medium text-gray-900">Gửi cùng lúc</div>
-                  <div className="text-xs text-gray-500 mt-1">Gửi tất cả email ngay lập tức</div>
+                  <div className="text-sm font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendSimultaneously')}</div>
+                  <div className="text-xs text-gray-500 mt-1">{t('campaignNodeConfig.emailSend.sendSimultaneouslyDesc')}</div>
                 </div>
               </label>
               <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
@@ -544,15 +546,15 @@ export const NodeConfigSendEmailSection = ({
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
                 <div>
-                  <div className="text-sm font-medium text-gray-900">Theo lịch</div>
-                  <div className="text-xs text-gray-500 mt-1">Gửi email theo lịch trình đã cấu hình</div>
+                  <div className="text-sm font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendSchedule')}</div>
+                  <div className="text-xs text-gray-500 mt-1">{t('campaignNodeConfig.emailSend.sendScheduleDesc')}</div>
                 </div>
               </label>
             </div>
 
             {formData.sendMode === 'schedule' && (!formData.emailSteps || formData.emailSteps.length === 0) && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-                <strong>Lưu ý:</strong> Hãy thêm ít nhất 1 email bên tab "Danh sách email gửi" để gửi theo lịch.
+                <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.emailSend.scheduleNote')}
               </div>
             )}
           </div>
@@ -562,20 +564,20 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">Danh sách email gửi</h4>
+              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.emailList')}</h4>
               <button
                 type="button"
                 onClick={handleAddEmailStep}
                 className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
               >
                 <HiOutlinePlus className="w-4 h-4" />
-                Thêm email
+                {t('campaignNodeConfig.emailSend.addEmail')}
               </button>
             </div>
 
             {(formData.emailSteps || []).length === 0 && (
               <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                Chưa có email nào. Hãy thêm email.
+                {t('campaignNodeConfig.emailSend.noEmailYet')}
               </div>
             )}
 
@@ -583,7 +585,7 @@ export const NodeConfigSendEmailSection = ({
               {(formData.emailSteps || []).map((step, idx) => (
                 <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-gray-800">Email #{idx + 1}</div>
+                    <div className="text-sm font-semibold text-gray-800">{t('campaignNodeConfig.emailSend.emailNumber', { n: idx + 1 })}</div>
                     {(formData.emailSteps || []).length > 1 && (
                       <button
                         type="button"
@@ -591,7 +593,7 @@ export const NodeConfigSendEmailSection = ({
                         className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
                       >
                         <HiOutlineTrash className="w-3.5 h-3.5" />
-                        Xóa
+                        {t('campaignNodeConfig.emailSend.delete')}
                       </button>
                     )}
                   </div>
@@ -599,7 +601,7 @@ export const NodeConfigSendEmailSection = ({
                   {formData.sendMode === 'schedule' && (
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Sau bao lâu gửi</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.howLongToSend')}</label>
                         <input
                           type="number"
                           min={0}
@@ -609,40 +611,40 @@ export const NodeConfigSendEmailSection = ({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Đơn vị</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.unit')}</label>
                         <select
                           value={step.delayUnit || 'minutes'}
                           onChange={(e) => handleEmailStepChange(idx, 'delayUnit', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                         >
-                          <option value="minutes">Phút</option>
-                          <option value="hours">Giờ</option>
-                          <option value="days">Ngày</option>
+                          <option value="minutes">{t('campaignNodeConfig.emailSend.minutes')}</option>
+                          <option value="hours">{t('campaignNodeConfig.emailSend.hours')}</option>
+                          <option value="days">{t('campaignNodeConfig.emailSend.days')}</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Tính từ</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.calculateFrom')}</label>
                         <select
                           value={step.delayFrom || 'start'}
                           onChange={(e) => handleEmailStepChange(idx, 'delayFrom', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                         >
-                          <option value="start">Lúc chạy</option>
-                          <option value="prev">Email trước</option>
+                          <option value="start">{t('campaignNodeConfig.emailSend.atRunTime')}</option>
+                          <option value="prev">{t('campaignNodeConfig.emailSend.fromPreviousEmail')}</option>
                         </select>
                       </div>
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Template Email</label>
+                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.emailTemplate')}</label>
                     <TemplateSearchSelect
                       value={step.templateId || ''}
                       options={emailTemplateOptions}
                       onChange={(nextValue) => handleEmailStepTemplateSelect(idx, nextValue)}
-                      placeholder="-- Chọn template --"
-                      searchPlaceholder="Tìm template email..."
-                      emptyText="Không tìm thấy template email phù hợp"
+                      placeholder={t('campaignNodeConfig.emailSend.selectTemplate')}
+                      searchPlaceholder={t('campaignNodeConfig.emailSend.searchTemplate')}
+                      emptyText={t('campaignNodeConfig.emailSend.noTemplateFound')}
                       onPreview={() => handlePreviewEmailTemplate(step.templateId)}
                     />
                   </div>
@@ -655,13 +657,13 @@ export const NodeConfigSendEmailSection = ({
                       className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
                     />
                     <span className="text-xs text-gray-700">
-                      Gửi link tracking click (tự rút gọn bằng short-link nội bộ)
+                      {t('campaignNodeConfig.emailSend.linkTracking')}
                     </span>
                   </label>
 
                   {(step.templateMappings || []).length > 0 && (
                     <div className="space-y-3">
-                      <div className="text-xs font-medium text-gray-700">Mapping biến template</div>
+                      <div className="text-xs font-medium text-gray-700">{t('campaignNodeConfig.emailSend.templateVariableMapping')}</div>
                       {(step.templateMappings || []).map((m, mIdx) => (
                         <div key={m.key || mIdx} className="bg-gray-50 rounded-lg p-3 space-y-3">
                           <div className="text-xs font-medium text-gray-800">{m.key}</div>
@@ -675,7 +677,7 @@ export const NodeConfigSendEmailSection = ({
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'sourceType', e.target.value)}
                                 className="text-primary-500 focus:ring-primary-500"
                               />
-                              <span className="text-xs text-gray-700">Thủ công</span>
+                              <span className="text-xs text-gray-700">{t('campaignNodeConfig.emailSend.manual')}</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -686,7 +688,7 @@ export const NodeConfigSendEmailSection = ({
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'sourceType', e.target.value)}
                                 className="text-primary-500 focus:ring-primary-500"
                               />
-                              <span className="text-xs text-gray-700">Từ node</span>
+                              <span className="text-xs text-gray-700">{t('campaignNodeConfig.emailSend.fromNode')}</span>
                             </label>
                           </div>
 
@@ -696,7 +698,7 @@ export const NodeConfigSendEmailSection = ({
                               value={m.value || ''}
                               onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'value', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-                              placeholder="Nhập giá trị"
+                              placeholder={t('campaignNodeConfig.emailSend.enterValue')}
                             />
                           ) : (
                             <div className="space-y-2">
@@ -705,7 +707,7 @@ export const NodeConfigSendEmailSection = ({
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'nodeId', e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                               >
-                                <option value="">-- Chọn node --</option>
+                                <option value="">{t('campaignNodeConfig.emailSend.selectNode')}</option>
                                 {upstreamNodes.map((n) => (
                                   <option key={n.id} value={n.id}>
                                     {n.data?.label || n.data?.nodeType || n.type}
@@ -718,7 +720,7 @@ export const NodeConfigSendEmailSection = ({
                                   onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'field', e.target.value)}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                                 >
-                                  <option value="">-- Chọn cột --</option>
+                                  <option value="">{t('campaignNodeConfig.emailSend.selectColumnData')}</option>
                                   {getSchemaForNodeId(m.nodeId || '').map((f) => (
                                     <option key={f.key} value={f.key}>{f.key}</option>
                                   ))}
@@ -729,7 +731,7 @@ export const NodeConfigSendEmailSection = ({
                                   value={m.field || ''}
                                   onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'field', e.target.value)}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-                                  placeholder="VD: ten_khach"
+                                  placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                                 />
                               )}
                             </div>
@@ -744,7 +746,7 @@ export const NodeConfigSendEmailSection = ({
 
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-xs text-blue-700">
-                <strong>Lưu ý:</strong> Mapping biến template để thay thế dữ liệu động trong email.
+                <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.emailSend.templateMappingNote')}
               </p>
             </div>
 
@@ -752,7 +754,7 @@ export const NodeConfigSendEmailSection = ({
               isOpen={isPreviewOpen}
               onClose={() => setIsPreviewOpen(false)}
               template={previewTemplate}
-              subjectLabel="Tiêu đề email"
+              subjectLabel={t('campaignNodeConfig.emailSend.subjectLabel')}
               onOpenAttachment={onOpenTemplateAttachment}
             />
           </div>
@@ -762,7 +764,7 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">Giới hạn số tin gửi</h4>
+              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.maxSendLimit')}</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({
@@ -772,13 +774,13 @@ export const NodeConfigSendEmailSection = ({
                 }))}
                 className={`px-3 py-1.5 text-xs rounded-lg ${formData.maxSendEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
               >
-                {formData.maxSendEnabled ? 'Đã bật' : 'Tắt'}
+                {formData.maxSendEnabled ? t('campaignNodeConfig.emailSend.ccEnabled') : t('campaignNodeConfig.emailSend.ccDisabled')}
               </button>
             </div>
 
             {formData.maxSendEnabled ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Số tin nhắn tối đa trong một lần chạy</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.maxMessagesPerRun')}</label>
                 <input
                   type="number"
                   min={1}
@@ -787,12 +789,12 @@ export const NodeConfigSendEmailSection = ({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  Giới hạn số lượng email tối đa sẽ gửi trong một lần chạy chiến dịch để tránh spam hoặc quá tải.
+                  {t('campaignNodeConfig.emailSend.maxSendNote')}
                 </p>
               </div>
             ) : (
               <div className="text-xs text-gray-500">
-                Mặc định sẽ gửi không giới hạn số lượng. Bật để thiết lập giới hạn.
+                {t('campaignNodeConfig.emailSend.unlimitedByDefault')}
               </div>
             )}
           </div>
@@ -807,7 +809,7 @@ export const NodeConfigSendEmailSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('campaignNodeConfig.emailSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {emailSections.map((section) => {

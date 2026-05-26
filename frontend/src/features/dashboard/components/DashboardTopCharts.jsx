@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useI18n } from '../../../i18n';
 import useIsMobile from '../../../hooks/useIsMobile';
 import DashboardInsightBlock from './DashboardInsightBlock';
 
@@ -17,37 +18,6 @@ const CHANNEL_COLOR = {
   zalo: '#0ea5e9',
   zalo_group: '#8b5cf6',
 };
-
-/** Nhãn kênh chiến dịch (tooltip / trục Y) */
-const CAMPAIGN_CHANNEL_LABEL = {
-  email: 'Email',
-  zalo: 'Zalo cá nhân',
-  zalo_group: 'Zalo nhóm',
-};
-
-/** Tên ngắn trên trục Y kèm tên chiến dịch */
-const CAMPAIGN_CHANNEL_SHORT = {
-  email: 'Email',
-  zalo: 'Zalo',
-  zalo_group: 'Zalo nhóm',
-};
-
-/**
- * Trả về nhãn kênh đầy đủ theo `campaignType` từ API.
- *
- * @param {string} [type]
- * @returns {string}
- */
-const getCampaignChannelLabel = (type) =>
-  CAMPAIGN_CHANNEL_LABEL[type] || 'Không xác định';
-
-/**
- * Tên kênh ngắn (gắn sau tên chiến dịch trên trục dọc).
- *
- * @param {string} [type]
- * @returns {string}
- */
-const getCampaignChannelShort = (type) => CAMPAIGN_CHANNEL_SHORT[type] || '';
 
 const COLOR_PENDING = '#f97316';
 const COLOR_COMPLETED = '#22c55e';
@@ -101,10 +71,11 @@ const OrderTooltip = ({ active, payload }) => {
  * Mở (open) chỉ có trên hành trình email; Zalo không có mở — vẫn hiển thị mở = 0 khi cần.
  */
 const CampaignClickSentTooltip = ({ active, payload }) => {
+  const { t } = useI18n();
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload || {};
   const realName = row._realName || '';
-  const channelLabel = row._channelLabel || getCampaignChannelLabel(row.campaignType);
+  const channelLabel = row._channelLabel || '';
   const sent = Number(row.sentCount || 0);
   const clicks = Number(row.clickCount || 0);
   const opens = Number(row.openCount || 0);
@@ -116,17 +87,17 @@ const CampaignClickSentTooltip = ({ active, payload }) => {
     <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-3 py-2.5 text-xs min-w-[200px] max-w-[280px]">
       <p className="font-semibold text-gray-700 mb-0.5 leading-snug">{realName}</p>
       <p className="text-[11px] text-gray-600 mb-1.5">
-        Kênh: <span className="font-semibold text-gray-800">{channelLabel}</span>
+        {t('dashboard.channel')}: <span className="font-semibold text-gray-800">{channelLabel}</span>
       </p>
       <p className="text-[11px] text-indigo-600 font-medium mb-1.5">
-        Tỷ lệ click / gửi: {ratePct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%
-        {sent === 0 ? ' (chưa có tin gửi)' : ''}
+        {t('dashboard.clickRateLabel')}: {ratePct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%
+        {sent === 0 ? ` (${t('dashboard.noSentYet')})` : ''}
       </p>
       <p className="text-[11px] text-gray-400 mb-2">
         {isEmail ? (
-          <>Mở email (hành trình): {formatNumber(opens)}</>
+          <>{t('dashboard.emailOpensJourney')}: {formatNumber(opens)}</>
         ) : (
-          <>Mở email: không áp dụng — chỉ chiến dịch Email mới có sự kiện mở.</>
+          <>{t('dashboard.emailOpensNotApplicable')}</>
         )}
       </p>
       {payload.map((entry) => (
@@ -269,8 +240,33 @@ const TopHorizontalChart = ({
   insightError = '',
   hideInsight = false,
 }) => {
+  const { t } = useI18n();
   const [sortKey, setSortKey] = useState(defaultSortKey || bars[0]?.key || 'total');
   const isMobile = useIsMobile();
+
+  const getCampaignChannelLabel = (type) => {
+    const labels = {
+      email: t('dashboard.channelEmail'),
+      zalo: t('dashboard.channelZaloPersonal'),
+      zalo_group: t('dashboard.channelZaloGroup'),
+    };
+    return labels[type] || t('dashboard.channelUnknown');
+  };
+
+  const getCampaignChannelShort = (type) => {
+    const labels = {
+      email: t('dashboard.channelEmailShort'),
+      zalo: t('dashboard.channelZaloShort'),
+      zalo_group: t('dashboard.channelZaloGroupShort'),
+    };
+    return labels[type] || '';
+  };
+
+  const CAMPAIGN_CHANNEL_SHORT = {
+    email: t('dashboard.channelEmailShort'),
+    zalo: t('dashboard.channelZaloShort'),
+    zalo_group: t('dashboard.channelZaloGroupShort'),
+  };
 
   // Y-axis label width and truncation limit depend on viewport
   const yAxisWidth = isMobile ? 120 : 260;
@@ -287,7 +283,7 @@ const TopHorizontalChart = ({
           </div>
         </div>
         <div className="flex items-center justify-center h-32 text-xs text-gray-400">
-          Không có dữ liệu trong khoảng thời gian này
+          {t('dashboard.noDataInPeriod')}
         </div>
       </div>
     );
@@ -463,12 +459,10 @@ const TopHorizontalChart = ({
       {isMultiBar && isCampaignClickSentChart && (
         <div className="mt-2 space-y-2 text-[11px] text-gray-500">
           <p className="text-right leading-relaxed">
-            Thanh trên: <span className="font-medium text-gray-700">click</span> — nền trơn, không vạch
-            trắng · Thanh dưới: <span className="font-medium text-gray-700">đã gửi</span> — có vạch trắng
-            dọc trong thanh. Cùng thang ngang; độ dài = số lượng.
+            {t('dashboard.clickBarDescription')}
           </p>
           <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-            <span className="text-gray-400 shrink-0">Màu theo kênh chiến dịch:</span>
+            <span className="text-gray-400 shrink-0">{t('dashboard.colorByChannel')}:</span>
             {(['email', 'zalo', 'zalo_group']).map((key) => (
               <span key={key} className="flex items-center gap-1">
                 <span
@@ -494,7 +488,7 @@ const TopHorizontalChart = ({
 
       {!hideInsight && (
         <DashboardInsightBlock
-          title="Insight"
+          title={t('dashboard.insight')}
           text={insightText}
           isLoading={isInsightLoading}
           error={insightError}
@@ -504,42 +498,13 @@ const TopHorizontalChart = ({
   );
 };
 
-const ORDER_BARS = [
-  { key: 'pendingCount',   name: 'Đơn chờ', color: COLOR_PENDING },
-  { key: 'completedCount', name: 'Đã mua',  color: COLOR_COMPLETED },
-];
-
-const ORDER_SORT_OPTIONS = [
-  { key: 'completedCount', label: 'Đã mua',  color: COLOR_COMPLETED },
-  { key: 'pendingCount',   label: 'Đơn chờ', color: COLOR_PENDING },
-];
-
-/** Thanh trên: số click; thanh dưới: số tin đã gửi (cùng thang trục); tỷ lệ hiển thị ở nhãn + tooltip */
-const CAMPAIGN_CLICK_SENT_BARS = [
-  { key: 'clickCount', name: 'Click', color: COLOR_CLICK },
-  { key: 'sentCount', name: 'Đã gửi', color: COLOR_SENT },
-];
-
-/**
- * Dashboard section: 3 horizontal bar charts for top ranked lists.
- *
- * - Top 5 courses/products ranked by orders (with sort toggle)
- * - Top 5 campaigns ranked by orders (with sort toggle)
- * - Top 5 campaigns ranked by clicks (descending, high → low)
- *
- * @param {object} props
- * @param {object} props.topListsData - { topCourses, topCampaignsByOrders, topCampaignsByClicks }
- * @param {object|null} [props.insights]
- * @param {boolean} [props.isInsightLoading]
- * @param {string} [props.insightError]
- * @returns {JSX.Element}
- */
 const DashboardTopCharts = ({
   topListsData,
   insights = null,
   isInsightLoading = false,
   insightError = '',
 }) => {
+  const { t } = useI18n();
   const topCourses = topListsData?.topCourses || [];
   const topCampaignsByOrders = topListsData?.topCampaignsByOrders || [];
 
@@ -548,12 +513,27 @@ const DashboardTopCharts = ({
     [topListsData?.topCampaignsByClicks]
   );
 
+  const ORDER_BARS = [
+    { key: 'pendingCount', name: t('dashboard.orderPending'), color: COLOR_PENDING },
+    { key: 'completedCount', name: t('dashboard.orderCompleted'), color: COLOR_COMPLETED },
+  ];
+
+  const ORDER_SORT_OPTIONS = [
+    { key: 'completedCount', label: t('dashboard.orderCompleted'), color: COLOR_COMPLETED },
+    { key: 'pendingCount', label: t('dashboard.orderPending'), color: COLOR_PENDING },
+  ];
+
+  const CAMPAIGN_CLICK_SENT_BARS = [
+    { key: 'clickCount', name: t('dashboard.click'), color: COLOR_CLICK },
+    { key: 'sentCount', name: t('dashboard.sent'), color: COLOR_SENT },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Top courses — full width */}
       <TopHorizontalChart
-        title="Top khóa học có nhiều đơn"
-        subtitle="Top 5"
+        title={t('dashboard.topCoursesByOrders')}
+        subtitle={t('dashboard.topFive')}
         data={topCourses}
         nameKey="productName"
         bars={ORDER_BARS}
@@ -568,8 +548,8 @@ const DashboardTopCharts = ({
       {/* Top campaigns by orders + top campaigns by clicks */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <TopHorizontalChart
-          title="Top chiến dịch có nhiều đơn"
-          subtitle="Top 5"
+          title={t('dashboard.topCampaignsByOrders')}
+          subtitle={t('dashboard.topFive')}
           data={topCampaignsByOrders}
           nameKey="campaignName"
           bars={ORDER_BARS}
@@ -581,8 +561,8 @@ const DashboardTopCharts = ({
           insightError={insightError}
         />
         <TopHorizontalChart
-          title="Top chiến dịch có nhiều click"
-          subtitle="Top 5 · Trục dọc kèm kênh (Email / Zalo / Zalo nhóm). Trên = click (thanh trơn), dưới = đã gửi (có vạch trắng); cùng thang; nhãn có % click/gửi"
+          title={t('dashboard.topCampaignsByClicks')}
+          subtitle={t('dashboard.clickChartSubtitle')}
           data={topCampaignsRate}
           nameKey="campaignName"
           bars={CAMPAIGN_CLICK_SENT_BARS}
@@ -613,6 +593,7 @@ export function DashboardTopChartsPrintSection({
   isInsightLoading = false,
   insightError = '',
 }) {
+  const { t } = useI18n();
   const topCourses = topListsData?.topCourses || [];
   const topCampaignsByOrders = topListsData?.topCampaignsByOrders || [];
   const topCampaignsRate = useMemo(
@@ -620,12 +601,27 @@ export function DashboardTopChartsPrintSection({
     [topListsData?.topCampaignsByClicks]
   );
 
+  const ORDER_BARS = [
+    { key: 'pendingCount', name: t('dashboard.orderPending'), color: COLOR_PENDING },
+    { key: 'completedCount', name: t('dashboard.orderCompleted'), color: COLOR_COMPLETED },
+  ];
+
+  const ORDER_SORT_OPTIONS = [
+    { key: 'completedCount', label: t('dashboard.orderCompleted'), color: COLOR_COMPLETED },
+    { key: 'pendingCount', label: t('dashboard.orderPending'), color: COLOR_PENDING },
+  ];
+
+  const CAMPAIGN_CLICK_SENT_BARS = [
+    { key: 'clickCount', name: t('dashboard.click'), color: COLOR_CLICK },
+    { key: 'sentCount', name: t('dashboard.sent'), color: COLOR_SENT },
+  ];
+
   return (
     <>
       <div className="pdf-print-page space-y-4">
         <TopHorizontalChart
-          title="Top khóa học có nhiều đơn"
-          subtitle="Top 5"
+          title={t('dashboard.topCoursesByOrders')}
+          subtitle={t('dashboard.topFive')}
           data={topCourses}
           nameKey="productName"
           bars={ORDER_BARS}
@@ -639,8 +635,8 @@ export function DashboardTopChartsPrintSection({
       </div>
       <div className="pdf-print-page space-y-4">
         <TopHorizontalChart
-          title="Top chiến dịch có nhiều đơn"
-          subtitle="Top 5"
+          title={t('dashboard.topCampaignsByOrders')}
+          subtitle={t('dashboard.topFive')}
           data={topCampaignsByOrders}
           nameKey="campaignName"
           bars={ORDER_BARS}
@@ -654,8 +650,8 @@ export function DashboardTopChartsPrintSection({
       </div>
       <div className="pdf-print-page space-y-4">
         <TopHorizontalChart
-          title="Top chiến dịch có nhiều click"
-          subtitle="Top 5 · Trục dọc kèm kênh (Email / Zalo / Zalo nhóm). Trên = click, dưới = đã gửi; nhãn có % click/gửi"
+          title={t('dashboard.topCampaignsByClicks')}
+          subtitle={t('dashboard.clickChartSubtitlePrint')}
           data={topCampaignsRate}
           nameKey="campaignName"
           bars={CAMPAIGN_CLICK_SENT_BARS}

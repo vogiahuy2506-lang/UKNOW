@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { HiOutlineMail, HiOutlineCheckCircle, HiOutlineArrowLeft } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -13,8 +14,9 @@ const GoogleIcon = () => (
 );
 
 const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
-  const [step, setStep] = useState(1); // 1: email, 2: verify
-  const [mode, setMode] = useState(initialMode); // login | register
+  const { t } = useI18n();
+  const [step, setStep] = useState(1);
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +35,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
 
   const handleSendCode = async () => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Vui lòng nhập email hợp lệ');
+      toast.error(t('emailAuth.invalidEmail'));
       return;
     }
 
@@ -41,9 +43,9 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
     try {
       await api.post('/verification/send-code', { email });
       setStep(2);
-      toast.success('Mã xác minh đã được gửi đến email của bạn!');
+      toast.success(t('emailAuth.codeSentSuccess'));
     } catch (error) {
-      const message = error.response?.data?.message || 'Không thể gửi mã xác minh';
+      const message = error.response?.data?.message || t('emailAuth.sendCodeFailed');
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -80,19 +82,17 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
   const handleVerify = async () => {
     const code = codeDigits.join('');
     if (code.length !== 6) {
-      toast.error('Vui lòng nhập đủ 6 số');
+      toast.error(t('emailAuth.enterFullCode'));
       return;
     }
 
     setIsLoading(true);
     try {
       await api.post('/verification/verify-code', { email, code });
-      toast.success('Xác minh thành công!');
-      // TODO: Xử lý đăng nhập/đăng ký thực tế với Google OAuth
-      // Hiện tại chỉ thông báo thành công
+      toast.success(t('emailAuth.verificationSuccess'));
       onClose();
     } catch (error) {
-      const message = error.response?.data?.message || 'Mã xác minh không đúng hoặc đã hết hạn';
+      const message = error.response?.data?.message || t('emailAuth.verificationFailed');
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -103,10 +103,10 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
     setIsLoading(true);
     try {
       await api.post('/verification/send-code', { email });
-      toast.success('Mã mới đã được gửi!');
+      toast.success(t('emailAuth.newCodeSent'));
       setCodeDigits(['', '', '', '', '', '']);
     } catch (error) {
-      toast.error('Không thể gửi lại mã');
+      toast.error(t('emailAuth.resendFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -130,12 +130,12 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
             <GoogleIcon />
           </div>
           <h2 className="text-xl font-bold text-white">
-            {mode === 'login' ? 'Đăng nhập với Email' : 'Đăng ký với Email'}
+            {mode === 'login' ? t('emailAuth.loginWithEmail') : t('emailAuth.registerWithEmail')}
           </h2>
           <p className="text-primary-100 text-sm mt-1">
             {step === 1 
-              ? 'Nhập email để nhận mã xác minh' 
-              : 'Nhập mã 6 số đã gửi đến email của bạn'
+              ? t('emailAuth.enterEmailForCode')
+              : t('emailAuth.enterCodeSentToEmail')
             }
           </p>
         </div>
@@ -148,7 +148,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email của bạn
+                    {t('emailAuth.yourEmail')}
                   </label>
                   <div className="relative">
                     <HiOutlineMail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -158,7 +158,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
                       onChange={(e) => setEmail(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSendCode()}
                       className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all bg-gray-50 focus:bg-white"
-                      placeholder="example@email.com"
+                      placeholder={t('emailAuth.emailPlaceholder')}
                       autoFocus
                     />
                   </div>
@@ -172,10 +172,10 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
                   {isLoading ? (
                     <span className="flex items-center justify-center">
                       <div className="spinner mr-2"></div>
-                      Đang gửi...
+                      {t('emailAuth.sending')}
                     </span>
                   ) : (
-                    'Gửi mã xác minh'
+                    t('emailAuth.sendCode')
                   )}
                 </button>
               </div>
@@ -185,7 +185,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
               {/* Verification Code */}
               <div className="space-y-6">
                 <p className="text-center text-gray-600 text-sm">
-                  Mã đã được gửi đến <span className="font-medium text-gray-900">{email}</span>
+                  {t('emailAuth.codeSentTo')} <span className="font-medium text-gray-900">{email}</span>
                 </p>
 
                 <div className="flex justify-center gap-2" onPaste={handlePaste}>
@@ -208,7 +208,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
                 {codeDigits.join('').length === 6 && (
                   <div className="flex items-center justify-center text-green-600">
                     <HiOutlineCheckCircle className="w-5 h-5 mr-1" />
-                    <span className="text-sm">Đã nhập đủ mã</span>
+                    <span className="text-sm">{t('emailAuth.fullCodeEntered')}</span>
                   </div>
                 )}
 
@@ -220,10 +220,10 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
                   {isLoading ? (
                     <span className="flex items-center justify-center">
                       <div className="spinner mr-2"></div>
-                      Đang xác minh...
+                      {t('emailAuth.verifying')}
                     </span>
                   ) : (
-                    'Xác minh'
+                    t('emailAuth.verify')
                   )}
                 </button>
 
@@ -233,14 +233,14 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
                     className="flex items-center text-gray-500 hover:text-gray-700"
                   >
                     <HiOutlineArrowLeft className="w-4 h-4 mr-1" />
-                    Đổi email
+                    {t('emailAuth.changeEmail')}
                   </button>
                   <button
                     onClick={handleResendCode}
                     disabled={isLoading}
                     className="text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50"
                   >
-                    Gửi lại mã
+                    {t('emailAuth.resendCode')}
                   </button>
                 </div>
               </div>
@@ -254,7 +254,7 @@ const EmailAuthModal = ({ isOpen, onClose, mode: initialMode = 'login' }) => {
             onClick={onClose}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
-            Đóng
+            {t('emailAuth.close')}
           </button>
         </div>
       </div>

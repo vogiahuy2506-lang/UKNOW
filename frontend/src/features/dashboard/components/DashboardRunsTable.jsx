@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useI18n } from '../../../i18n';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('vi-VN');
 const formatDate = (value) => {
@@ -8,30 +9,25 @@ const formatDate = (value) => {
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
-const STATUS_CONFIG = {
-  completed: { cls: 'badge-success', label: 'Hoàn thành' },
-  running: { cls: 'badge-info', label: 'Đang chạy' },
-  pending: { cls: 'badge-warning', label: 'Chờ chạy' },
-  failed: { cls: 'badge-error', label: 'Lỗi' },
-  cancelled: { cls: 'badge-gray', label: 'Đã hủy' },
+const getStatusConfig = (status, t) => {
+  const STATUS_CONFIG = {
+    completed: { cls: 'badge-success', label: t('runsTable.completed') },
+    running: { cls: 'badge-info', label: t('runsTable.running') },
+    pending: { cls: 'badge-warning', label: t('runsTable.pending') },
+    failed: { cls: 'badge-error', label: t('runsTable.failed') },
+    cancelled: { cls: 'badge-gray', label: t('runsTable.cancelled') },
+  };
+  return STATUS_CONFIG[String(status || '').toLowerCase()] || { cls: 'badge-gray', label: status || '—' };
 };
 
-const CHANNEL_CONFIG = {
-  email: { cls: 'bg-sky-100 text-sky-700', label: 'Email' },
-  zalo: { cls: 'bg-blue-100 text-blue-700', label: 'Zalo' },
-  zalo_group: { cls: 'bg-purple-100 text-purple-700', label: 'Zalo Group' },
+const getChannelConfig = (type, t) => {
+  const CHANNEL_CONFIG = {
+    email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
+    zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
+    zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },
+  };
+  return CHANNEL_CONFIG[String(type || '').toLowerCase()] || { cls: 'bg-gray-100 text-gray-700', label: type || '—' };
 };
-
-const ORDER_SORT_OPTIONS = [
-  { key: 'completedOrderCount', label: 'Đã đặt', color: 'text-green-600' },
-  { key: 'pendingOrderCount', label: 'Chờ xử lý', color: 'text-orange-500' },
-];
-
-const getStatusConfig = (status) =>
-  STATUS_CONFIG[String(status || '').toLowerCase()] || { cls: 'badge-gray', label: status || '—' };
-
-const getChannelConfig = (type) =>
-  CHANNEL_CONFIG[String(type || '').toLowerCase()] || { cls: 'bg-gray-100 text-gray-700', label: type || '—' };
 
 // ─── Sort icon ────────────────────────────────────────────────────────────────
 const SortIcon = ({ column, sortConfig }) => {
@@ -71,7 +67,9 @@ const FunnelIcon = ({ active }) => (
  * @param {object} props.sortConfig
  * @returns {JSX.Element}
  */
-const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, sortConfig }) => {
+const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, sortConfig, t: tFunc }) => {
+  const { t } = useI18n();
+  const translate = tFunc || t;
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const isFiltered = selected.length > 0;
@@ -115,7 +113,7 @@ const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, 
           type="button"
           className={`p-0.5 rounded transition-colors ${open ? 'bg-primary-50' : 'hover:bg-gray-100'}`}
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-          title={`Lọc theo ${label}`}
+          title={`${t('runsTable.channel')}: ${label}`}
         >
           <FunnelIcon active={isFiltered} />
         </button>
@@ -140,7 +138,7 @@ const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, 
                 checked={selected.length === 0}
                 onChange={toggleAll}
               />
-              <span className="text-xs font-medium text-gray-500">Tất cả</span>
+              <span className="text-xs font-medium text-gray-500">{translate('ordersTable.all')}</span>
             </label>
           </div>
           {/* Options */}
@@ -169,7 +167,7 @@ const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, 
                 className="text-xs text-red-400 hover:text-red-600 transition-colors"
                 onClick={() => { onChange([]); setOpen(false); }}
               >
-                Xóa bộ lọc
+                {translate('ordersTable.clearFilter')}
               </button>
             </div>
           )}
@@ -188,9 +186,12 @@ const FilterableTh = ({ options, selected, onChange, label, onSort, sortColumn, 
  * @param {function(string): void} props.onChangeSortKey
  * @param {function(string): void} props.onSort
  * @param {object} props.sortConfig
+ * @param {Array} props.orderSortOptions - ORDER_SORT_OPTIONS from parent
  * @returns {JSX.Element}
  */
-const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
+const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig, t: tFunc, orderSortOptions = [] }) => {
+  const { t } = useI18n();
+  const translate = tFunc || t;
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -202,6 +203,7 @@ const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const ORDER_SORT_OPTIONS = orderSortOptions;
   const activeMeta = ORDER_SORT_OPTIONS.find((o) => o.key === orderSortKey) || ORDER_SORT_OPTIONS[0];
 
   return (
@@ -216,7 +218,7 @@ const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
           className="inline-flex items-center gap-0.5 hover:text-gray-700 select-none shrink-0 whitespace-nowrap"
           onClick={() => onSort(orderSortKey)}
         >
-          <span>Đơn đặt</span>
+          <span>{translate('runsTable.orders')}</span>
           <SortIcon column={orderSortKey} sortConfig={sortConfig} />
         </button>
 
@@ -229,7 +231,7 @@ const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
               : 'bg-orange-50 border-orange-200 text-orange-500'
           } ${open ? 'ring-1 ring-offset-0 ring-primary-300' : ''}`}
           onClick={() => setOpen((v) => !v)}
-          title="Chọn loại sắp xếp"
+          title={translate('runsTable.selectSortType')}
         >
           {activeMeta.label}
           <svg className={`w-2.5 h-2.5 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -242,7 +244,7 @@ const OrderSortTh = ({ orderSortKey, onChangeSortKey, onSort, sortConfig }) => {
       {/* Dropdown */}
       {open && (
         <div className="absolute mt-1 min-w-[148px] bg-white rounded-xl border border-gray-200 shadow-xl z-30 overflow-hidden py-1">
-          {ORDER_SORT_OPTIONS.map((opt, idx) => (
+          {(ORDER_SORT_OPTIONS || []).map((opt, idx) => (
             <button
               key={opt.key}
               type="button"
@@ -282,24 +284,27 @@ const SkeletonRow = () => (
   </tr>
 );
 
-const EmptyState = ({ hasFilter }) => (
-  <tr>
-    <td colSpan={8} className="py-16 text-center">
-      <div className="flex flex-col items-center gap-3">
-        <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        <p className="text-sm font-medium text-gray-500">
-          {hasFilter ? 'Không có kết quả khớp với bộ lọc' : 'Chưa có lượt chạy trong phạm vi đã chọn'}
-        </p>
-        <p className="text-xs text-gray-400">
-          {hasFilter ? 'Thử xóa bộ lọc kênh hoặc trạng thái' : 'Điều chỉnh bộ lọc thời gian hoặc chiến dịch'}
-        </p>
-      </div>
-    </td>
-  </tr>
-);
+const EmptyState = ({ hasFilter }) => {
+  const { t } = useI18n();
+  return (
+    <tr>
+      <td colSpan={8} className="py-16 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p className="text-sm font-medium text-gray-500">
+            {hasFilter ? t('runsTable.noResultsFilter') : t('runsTable.noRunsInRange')}
+          </p>
+          <p className="text-xs text-gray-400">
+            {hasFilter ? t('runsTable.tryClearFilter') : t('runsTable.adjustTimeCampaign')}
+          </p>
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 /**
  * Hiển thị text rút gọn bằng dấu `...` và cho phép bấm để bung toàn bộ xuống dòng.
@@ -315,7 +320,9 @@ const EmptyState = ({ hasFilter }) => (
  * @param {string} [props.className=''] - CSS class bổ sung cho text.
  * @returns {JSX.Element}
  */
-const ExpandableCellText = ({ value, maxPreviewChars = 72, className = '' }) => {
+const ExpandableCellText = ({ value, maxPreviewChars = 72, className = '', t: tFunc }) => {
+  const { t } = useI18n();
+  const translate = tFunc || t;
   const [expanded, setExpanded] = useState(false);
   const safeValue = String(value || '');
   const canExpand = safeValue.length > maxPreviewChars;
@@ -340,27 +347,14 @@ const ExpandableCellText = ({ value, maxPreviewChars = 72, className = '' }) => 
           className="mt-0.5 text-[11px] font-medium text-primary-500 hover:text-primary-600 transition-colors"
           onClick={() => setExpanded((prev) => !prev)}
         >
-          {expanded ? 'Thu gọn' : 'Xem thêm'}
+          {expanded ? translate('runsTable.viewLess') : translate('runsTable.viewMore')}
         </button>
       )}
     </div>
   );
 };
 
-// ─── Channel & Status filter option definitions ───────────────────────────────
-const CHANNEL_FILTER_OPTIONS = [
-  { value: 'email',      label: 'Email',      badge: 'bg-sky-100 text-sky-700' },
-  { value: 'zalo',       label: 'Zalo',       badge: 'bg-blue-100 text-blue-700' },
-  { value: 'zalo_group', label: 'Zalo Group', badge: 'bg-purple-100 text-purple-700' },
-];
-
-const STATUS_FILTER_OPTIONS = [
-  { value: 'completed', label: 'Hoàn thành', badge: 'bg-green-100 text-green-700' },
-  { value: 'running',   label: 'Đang chạy',  badge: 'bg-blue-100 text-blue-700' },
-  { value: 'pending',   label: 'Chờ chạy',   badge: 'bg-yellow-100 text-yellow-700' },
-  { value: 'failed',    label: 'Lỗi',        badge: 'bg-red-100 text-red-700' },
-  { value: 'cancelled', label: 'Đã hủy',     badge: 'bg-gray-100 text-gray-600' },
-];
+// NOTE: CHANNEL_FILTER_OPTIONS and STATUS_FILTER_OPTIONS are defined inside the main component
 
 // ─── Main component ───────────────────────────────────────────────────────────
 /**
@@ -382,8 +376,42 @@ const STATUS_FILTER_OPTIONS = [
  * @returns {JSX.Element}
  */
 const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
+  const { t } = useI18n();
   const items = useMemo(() => runsData?.items || [], [runsData?.items]);
   const pagination = runsData?.pagination || { page: 1, totalPages: 1, total: 0 };
+
+  const STATUS_CONFIG = {
+    completed: { cls: 'badge-success', label: t('runsTable.completed') },
+    running: { cls: 'badge-info', label: t('runsTable.running') },
+    pending: { cls: 'badge-warning', label: t('runsTable.pending') },
+    failed: { cls: 'badge-error', label: t('runsTable.failed') },
+    cancelled: { cls: 'badge-gray', label: t('runsTable.cancelled') },
+  };
+
+  const CHANNEL_CONFIG = {
+    email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
+    zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
+    zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },
+  };
+
+  const ORDER_SORT_OPTIONS = [
+    { key: 'completedOrderCount', label: t('runsTable.ordered'), color: 'text-green-600' },
+    { key: 'pendingOrderCount', label: t('runsTable.pendingOrders'), color: 'text-orange-500' },
+  ];
+
+  const STATUS_FILTER_OPTIONS = [
+    { value: 'completed', label: t('runsTable.completed'), badge: 'bg-green-100 text-green-700' },
+    { value: 'running',   label: t('runsTable.running'),    badge: 'bg-blue-100 text-blue-700' },
+    { value: 'pending',   label: t('runsTable.pending'),    badge: 'bg-yellow-100 text-yellow-700' },
+    { value: 'failed',    label: t('runsTable.failed'),     badge: 'bg-red-100 text-red-700' },
+    { value: 'cancelled', label: t('runsTable.cancelled'),  badge: 'bg-gray-100 text-gray-600' },
+  ];
+
+  const CHANNEL_FILTER_OPTIONS = [
+    { value: 'email',      label: t('channel.email'),      badge: 'bg-sky-100 text-sky-700' },
+    { value: 'zalo',       label: t('channel.zalo'),       badge: 'bg-blue-100 text-blue-700' },
+    { value: 'zalo_group', label: t('channel.zaloGroup'),  badge: 'bg-purple-100 text-purple-700' },
+  ];
 
   const [searchQuery, setSearchQuery]     = useState('');
   const [sortConfig, setSortConfig]       = useState({ key: 'startedAt', direction: 'desc' });
@@ -458,12 +486,12 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
       {/* Card header */}
       <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Bảng lượt chạy</h3>
+          <h3 className="text-base font-semibold text-gray-900">{t('runsTable.title')}</h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            {formatNumber(pagination.total)} lượt chạy
+            {formatNumber(pagination.total)} {t('runsTable.runs')}
             {filteredAndSorted.length !== items.length && (
               <span className="ml-1 text-primary-500 font-medium">
-                · đang hiện {filteredAndSorted.length} kết quả
+                {t('runsTable.showingResults', { count: filteredAndSorted.length })}
               </span>
             )}
           </p>
@@ -480,7 +508,7 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
             type="text"
             className="input text-sm"
             style={{ paddingLeft: '2.25rem' }}
-            placeholder="Tìm theo tên chiến dịch, run..."
+            placeholder={t('runsTable.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -503,47 +531,51 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
             <tr>
               {/* Run / Campaign */}
               <th className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b min-w-[200px]">
-                Run / Chiến dịch
+                {t('runsTable.runCampaign')}
               </th>
 
-              {/* Kênh — filterable */}
+              {/* Channel — filterable */}
               <FilterableTh
-                label="Kênh"
+                label={t('runsTable.channel')}
                 options={CHANNEL_FILTER_OPTIONS}
                 selected={channelFilters}
                 onChange={setChannelFilters}
                 sortColumn={null}
                 sortConfig={sortConfig}
+                t={t}
               />
 
-              {/* Ngày chạy */}
-              <SortTh column="startedAt">Ngày chạy</SortTh>
+              {/* Start Date */}
+              <SortTh column="startedAt">{t('runsTable.startDate')}</SortTh>
 
-              {/* Tin đã gửi: đếm event email_sent / zalo_sent trên customer_journey */}
-              <SortTh column="journeySentCount">Tin đã gửi</SortTh>
+              {/* Messages Sent: count email_sent / zalo_sent events on customer_journey */}
+              <SortTh column="journeySentCount">{t('runsTable.messagesSent')}</SortTh>
 
-              {/* Email mở */}
-              <SortTh column="emailOpenedCount">Email mở</SortTh>
+              {/* Email Opened */}
+              <SortTh column="emailOpenedCount">{t('runsTable.emailOpened')}</SortTh>
 
               {/* Click — sort by combined email + zalo clicks */}
-              <SortTh column="totalClickCount">Click</SortTh>
+              <SortTh column="totalClickCount">{t('runsTable.click')}</SortTh>
 
-              {/* Đơn đặt — with sort mode picker */}
+              {/* Orders — with sort mode picker */}
               <OrderSortTh
                 orderSortKey={orderSortKey}
                 onChangeSortKey={(key) => { setOrderSortKey(key); }}
                 onSort={handleSort}
                 sortConfig={sortConfig}
+                t={t}
+                orderSortOptions={ORDER_SORT_OPTIONS}
               />
 
-              {/* Trạng thái — filterable */}
+              {/* Status — filterable */}
               <FilterableTh
-                label="Trạng thái"
+                label={t('runsTable.status')}
                 options={STATUS_FILTER_OPTIONS}
                 selected={statusFilters}
                 onChange={setStatusFilters}
                 sortColumn={null}
                 sortConfig={sortConfig}
+                t={t}
               />
             </tr>
           </thead>
@@ -553,8 +585,8 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
               : filteredAndSorted.length === 0
               ? <EmptyState hasFilter={isAnyFilter} />
               : filteredAndSorted.map((item) => {
-                  const statusCfg = getStatusConfig(item.status);
-                  const channelCfg = getChannelConfig(item.campaignType);
+                  const statusCfg = getStatusConfig(item.status, t);
+                  const channelCfg = getChannelConfig(item.campaignType, t);
 
                   return (
                     <tr key={item.runId} className="hover:bg-gray-50/80 transition-colors">
@@ -603,10 +635,10 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col gap-0.5 text-xs tabular-nums">
                           <span className={`font-semibold ${orderSortKey === 'completedOrderCount' ? 'text-green-600' : 'text-green-500'}`}>
-                            {formatNumber(item.completedOrderCount)} đặt
+                            {formatNumber(item.completedOrderCount)} {t('runsTable.ordered')}
                           </span>
                           <span className={`${orderSortKey === 'pendingOrderCount' ? 'text-orange-500 font-semibold' : 'text-orange-400'}`}>
-                            {formatNumber(item.pendingOrderCount)} chờ
+                            {formatNumber(item.pendingOrderCount)} {t('runsTable.pendingOrders')}
                           </span>
                         </div>
                       </td>
@@ -631,11 +663,11 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Trang trước
+          {t('runsTable.previousPage')}
         </button>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-sm text-gray-500">Trang</span>
+          <span className="text-sm text-gray-500">{t('runsTable.page')}</span>
           <span className="text-sm font-semibold text-gray-900">{pagination.page}</span>
           <span className="text-sm text-gray-400">/</span>
           <span className="text-sm text-gray-500">{pagination.totalPages}</span>
@@ -645,7 +677,7 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
           className="btn btn-secondary flex items-center gap-1.5 text-sm"
           disabled={isLoadingRuns || pagination.page >= pagination.totalPages}
           onClick={() => onChangePage(pagination.page + 1)}>
-          Trang sau
+          {t('runsTable.nextPage')}
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>

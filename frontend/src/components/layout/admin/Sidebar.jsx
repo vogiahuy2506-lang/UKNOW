@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
+import { useI18n } from '../../../i18n';
 import {
   HiOutlineHome,
   HiOutlineLightningBolt,
@@ -27,6 +28,10 @@ import {
   HiOutlineCurrencyDollar,
   HiOutlineShieldCheck,
   HiOutlineOfficeBuilding,
+  HiOutlineBookOpen,
+  HiOutlineCode,
+  HiOutlineChatAlt2,
+  HiOutlineInbox,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -35,25 +40,25 @@ import AccountProfileModal from '../../../features/auth/components/AccountProfil
 import ContextSwitcher from '../../ContextSwitcher';
 
 // Menu dành cho super_admin — quản trị hệ thống
-const superAdminMenuItems = [
+const superAdminMenuItems = (t) => [
   {
-    name: 'Dashboard',
+    name: t('nav.dashboard'),
     path: '/admin',
     icon: HiOutlineHome,
     end: true,
   },
   {
-    name: 'Quản lý thành viên',
+    name: t('nav.memberManagement'),
     path: '/admin/members',
     icon: HiOutlineShieldCheck,
   },
   {
-    name: 'Quản lý gói dịch vụ',
+    name: t('nav.planManagement'),
     path: '/admin/plans',
     icon: HiOutlineCurrencyDollar,
   },
   {
-    name: 'Đơn hàng',
+    name: t('nav.orders'),
     path: '/admin/orders',
     icon: HiOutlineClipboardList,
   },
@@ -62,58 +67,68 @@ const superAdminMenuItems = [
 // Menu dành cho user_admin và employee — vận hành marketing
 // ownerOnly: true  → chỉ user_admin thấy
 // permission: [...]  → employee thấy nếu có ÍT NHẤT 1 trong các permission này
-const userMenuItems = [
+const userMenuItems = (t) => [
   {
-    name: 'Dashboard',
+    name: t('nav.dashboard'),
     path: '/app',
     icon: HiOutlineHome,
     end: true,
   },
   {
-    name: 'Thiết lập',
+    name: t('nav.settings'),
     icon: HiOutlineCog,
     children: [
-      { name: 'Hồ sơ doanh nghiệp', path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
-      { name: 'Quản lý kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
-      { name: 'Mẫu tin nhắn', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: 'Quản lý sản phẩm', path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
+      { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
+      { name: t('nav.knowledgeBase'), path: '/app/settings/knowledge-base', icon: HiOutlineBookOpen, ownerOnly: true },
+      { name: t('nav.subAssistants'), path: '/app/settings/sub-assistants', icon: HiOutlineUsers, ownerOnly: true },
+      { name: t('nav.chatbotWidget'), path: '/app/settings/chatbot-widget', icon: HiOutlineCode, ownerOnly: true },
+      { name: t('nav.chatbotChannels'), path: '/app/settings/chatbot-channels', icon: HiOutlineChatAlt2, ownerOnly: true },
+      { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
+      { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
+      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
     ],
   },
   {
-    name: 'Landing page',
+    name: t('nav.landingPage'),
     icon: HiOutlineGlobeAlt,
     children: [
-      { name: 'Sản phẩm nổi bật', path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
-      { name: 'Đánh giá', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
-      { name: 'Trang HTML (/lp)', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
-      { name: 'Tên miền riêng', path: '/app/settings/custom-domains', icon: HiOutlineGlobeAlt, ownerOnly: true },
-      { name: 'Danh sách khách', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
+      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
+      { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+      { name: t('nav.customDomains'), path: '/app/settings/custom-domains', icon: HiOutlineGlobeAlt, ownerOnly: true },
+      { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
     ],
   },
   {
-    name: 'Chiến dịch',
+    name: t('nav.campaigns'),
     icon: HiOutlineLightningBolt,
     permission: ['campaigns_view', 'campaigns_create', 'campaigns_run'],
     children: [
-      { name: 'Quản lý chiến dịch', path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
-      { name: 'Tạo chiến dịch mới', path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
-      { name: 'Chạy chiến dịch', path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
+      { name: t('nav.campaignManagement'), path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
+      { name: t('nav.createCampaign'), path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
+      { name: t('nav.runCampaign'), path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
     ],
   },
   {
-    name: 'Khách hàng',
+    name: t('nav.customers'),
     path: '/app/customers',
     icon: HiOutlineUsers,
     permission: ['customers'],
   },
   {
-    name: 'Đơn hàng',
+    name: t('nav.inbox'),
+    path: '/app/settings/inbox',
+    icon: HiOutlineInbox,
+    ownerOnly: true,
+  },
+  {
+    name: t('nav.orders'),
     path: '/app/orders',
     icon: HiOutlineClipboardList,
     ownerOnly: true,
   },
   {
-    name: 'Nhân viên',
+    name: t('nav.employees'),
     path: '/app/settings/employees',
     icon: HiOutlineUserGroup,
     ownerOnly: true,
@@ -133,11 +148,12 @@ const userMenuItems = [
  * @param {function} onClose - Callback to close sidebar (mobile only)
  */
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
+  const { t } = useI18n();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', ['Thiết lập', 'Chiến dịch']);
+  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.settings'), t('nav.campaigns')]);
   const { user, logout, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
-  const menuItems = isSuperAdmin ? superAdminMenuItems : userMenuItems;
+  const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
   // Context-aware filtering: employee context dùng permissions do owner cấp,
   // self context (chủ tài khoản) thấy hết.
   const isEmployeeCtx = activeContext?.type === 'employee';
@@ -182,7 +198,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
         }
         return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
       }) ||
-        (item.name === 'Chiến dịch' && (location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder')));
+        (item.name === t('nav.campaigns') && (location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder')));
     }
     return false;
   };
@@ -236,9 +252,9 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           />
           {showLabels && (
             <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-900 leading-tight truncate">Founder AI</p>
+              <p className="text-sm font-bold text-gray-900 leading-tight truncate">{t('common.appName')}</p>
               <p className="text-[11px] text-gray-400 leading-tight truncate">
-                {isSuperAdmin ? 'System Admin' : 'Campaign Management'}
+                {isSuperAdmin ? t('sidebar.systemAdmin') : t('sidebar.campaignManagement')}
               </p>
             </div>
           )}
@@ -249,7 +265,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
-            aria-label="Đóng menu"
+            aria-label={t('sidebar.closeMenu')}
           >
             <HiOutlineX className="w-5 h-5 text-gray-500" />
           </button>
@@ -298,7 +314,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
                           : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
 
                       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
-                        ? 'Chỉnh sửa chiến dịch'
+                        ? t('sidebar.editCampaign')
                         : child.name;
 
                       const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${isActiveChild

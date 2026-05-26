@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
+import { useI18n } from '../i18n';
 import DashboardHeader from '../features/dashboard/components/DashboardHeader';
 import DashboardFilterPanel from '../features/dashboard/components/DashboardFilterPanel';
 import DashboardKpiCards from '../features/dashboard/components/DashboardKpiCards';
@@ -127,6 +128,7 @@ const DashboardSkeleton = () => (
  * @returns {JSX.Element}
  */
 const Dashboard = () => {
+  const { t } = useI18n();
   const printRef = useRef(null);
   /** Giữ tiêu đề tab gốc để khôi phục sau in — giảm chữ trên chân trang PDF khi trình duyệt bật đầu/cuối trang */
   const documentTitleForPrintRef = useRef(
@@ -204,7 +206,7 @@ const Dashboard = () => {
   const [insightError, setInsightError] = useState('');
   /** Có ít nhất một bản insight đã lưu trên DB (mỗi lần phân tích hợp lệ ghi đè). */
   const [hasStoredInsight, setHasStoredInsight] = useState(false);
-  /** 'none' | 'live' (vừa gọi API) | 'stored' (đang xem bản đã lưu). */
+  /** 'none' | 'live' | 'stored'. */
   const [insightViewSource, setInsightViewSource] = useState('none');
   const [storedInsightSavedAt, setStoredInsightSavedAt] = useState('');
 
@@ -274,7 +276,7 @@ const Dashboard = () => {
       setStoredInsightSavedAt('');
     } catch (error) {
       console.error('Generate dashboard insights error:', error);
-      setInsightError('Không thể phân tích insight lúc này. Vui lòng thử lại.');
+      setInsightError(t('dashboard.insightAnalysisFailed'));
     } finally {
       setIsGeneratingInsights(false);
     }
@@ -321,7 +323,7 @@ const Dashboard = () => {
               className="btn btn-primary flex items-center gap-2 shadow-sm"
               onClick={handleGenerateInsights}
               disabled={isLoading || isGeneratingInsights}
-              title="Phân tích chiến lược marketing đa kênh (Email, Zalo, Zalo Group): đơn theo thời gian, tương tác, phễu và gợi ý hành động — theo dữ liệu dashboard đang lọc."
+              title={t('dashboard.insightTooltip')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -331,14 +333,14 @@ const Dashboard = () => {
                   d="M13 10V3L4 14h7v7l9-11h-7z"
                 />
               </svg>
-              {isGeneratingInsights ? 'Đang phân tích…' : 'Phân tích insight'}
+              {isGeneratingInsights ? t('dashboard.analyzing') : t('dashboard.analyzeInsight')}
             </button>
             <button
               type="button"
               className="btn btn-secondary flex items-center gap-2 shadow-sm"
               onClick={() => handlePrintDashboard()}
               disabled={isLoading}
-              title="In / PDF: chọn «Lưu dưới dạng PDF». Bắt buộc bỏ chọn «Đầu trang và chân trang» (Chrome/Edge) để ẩn URL, ngày/giờ và tiêu đề — trình duyệt không cho tắt bằng CSS."
+              title={t('dashboard.printPdfTip')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -348,14 +350,14 @@ const Dashboard = () => {
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              In / PDF
+              {t('dashboard.printPdf')}
             </button>
             <button
               type="button"
               className="btn btn-secondary flex items-center gap-2 shadow-sm"
               onClick={handleLoadStoredInsight}
               disabled={isLoading || !hasStoredInsight}
-              title="Tải và hiển thị bản insight đã lưu trên máy chủ"
+              title={t('dashboard.savedInsightTip')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -365,7 +367,7 @@ const Dashboard = () => {
                   d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                 />
               </svg>
-              Xem insight đã lưu
+              {t('dashboard.viewSavedInsight')}
             </button>
           </div>
         }
@@ -408,9 +410,8 @@ const Dashboard = () => {
             />
           </svg>
           <span>
-            Đang hiển thị insight đã lưu trong hệ thống
-            {storedInsightSavedAt ? ` (lúc ${formatInsightSavedAt(storedInsightSavedAt)})` : ''}. Bấm &quot;Phân tích
-            insight&quot; để tạo bản mới theo dữ liệu và bộ lọc hiện tại.
+            {t('dashboard.storedInsight')}
+            {storedInsightSavedAt ? ` (lúc ${formatInsightSavedAt(storedInsightSavedAt)})` : ''}. {t('dashboard.storedInsightSuffix')}
           </span>
         </div>
       )}
@@ -420,9 +421,9 @@ const Dashboard = () => {
 
       {/* Overview insight — phân tích có cấu trúc + tóm tắt */}
       <div className="card p-5 md:p-6">
-        <h3 className="text-base font-semibold text-gray-900">Tổng quan insight</h3>
+        <h3 className="text-base font-semibold text-gray-900">{t('dashboard.insightOverview')}</h3>
         <p className="text-xs text-gray-400 mt-0.5">
-          Nhận xét chiến lược gửi Email, Zalo và Zalo Group; đối chiếu timeline gửi với đơn; phát hiện mâu thuẫn tổng quan vs biểu đồ khi có — theo số liệu và bộ lọc hiện tại.
+          {t('dashboard.insightTip')}
         </p>
         <div className="mt-4">
           <DashboardInsightOverview insights={insights} isLoading={isGeneratingInsights} error={insightError} />

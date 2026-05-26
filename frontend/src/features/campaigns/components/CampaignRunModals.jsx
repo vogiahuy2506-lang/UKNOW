@@ -3,6 +3,7 @@ import {
   HiOutlineExclamation,
   HiOutlineX,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import {
   formatCampaignDateTime,
@@ -22,9 +23,9 @@ import {
  * @param {string} cronExpression biểu thức cron
  * @returns {string} dạng «Lúc HH:mm» hoặc «—» nếu không parse được
  */
-const scheduleClockUiLabel = (cronExpression) => {
+const scheduleClockUiLabel = (cronExpression, t) => {
   const clock = formatScheduleRunClockFromCron(cronExpression);
-  return clock ? `Lúc ${clock}` : '—';
+  return clock ? t('campaignRunModals.atTime', { time: clock }) : '—';
 };
 
 /**
@@ -33,9 +34,9 @@ const scheduleClockUiLabel = (cronExpression) => {
  * @param {object} schedule bản ghi lịch chạy
  * @returns {string}
  */
-const getScheduleNextRunUiLabel = (schedule) => {
+const getScheduleNextRunUiLabel = (schedule, t) => {
   const at = resolveScheduleUiTimingDate(schedule);
-  if (!at) return 'Chưa xác định';
+  if (!at) return t('campaignRunModals.undetermined');
   return formatCampaignDateTime(at);
 };
 
@@ -84,29 +85,31 @@ const CampaignRunModals = ({
   campaignSchedulesModalCampaign = null,
   closeCampaignSchedulesSummaryModal,
   allSchedules = [],
-}) => (
-  <>
+}) => {
+  const { t } = useI18n();
+  return (
+    <>
     {showRunConfirmModal && (
       <FullScreenOverlay isOpen={showRunConfirmModal}>
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
           <div className="flex items-center justify-between p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">Xác nhận chạy chiến dịch</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.confirmRunCampaign')}</h3>
             <button onClick={closeRunConfirmModal} className="p-1 hover:bg-gray-100 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
           <div className="p-6 space-y-4">
             <p className="text-sm text-gray-600">
-              Bạn sắp chạy chiến dịch <span className="font-semibold text-gray-900">{runConfirmCampaign?.campaignName}</span>.
+              {t('campaignRunModals.aboutToRunCampaign')} <span className="font-semibold text-gray-900">{runConfirmCampaign?.campaignName}</span>.
             </p>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên lần chạy</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignRunModals.runName')}</label>
               <input
                 type="text"
                 value={runNameInput}
                 onChange={(e) => setRunNameInput(e.target.value)}
                 className="input"
-                placeholder="Nhập tên lần chạy"
+                placeholder={t('campaignRunModals.runNamePlaceholder')}
                 disabled={isRunResumeLocked}
               />
             </div>
@@ -114,7 +117,7 @@ const CampaignRunModals = ({
               <div className="rounded-lg border border-gray-200 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <label htmlFor="run-continuous-mode" className="text-sm font-medium text-gray-700">
-                    Chạy liên tục (quét khách mới theo chu kỳ)
+                    {t('campaignRunModals.continuousMode')}
                   </label>
                   <input
                     id="run-continuous-mode"
@@ -128,7 +131,7 @@ const CampaignRunModals = ({
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Chu kỳ quét khách mới (phút)
+                        {t('campaignRunModals.scanIntervalMinutes')}
                       </label>
                       <input
                         type="number"
@@ -140,17 +143,17 @@ const CampaignRunModals = ({
                         disabled={isRunResumeLocked}
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Hệ thống random mặc định 120-300 phút, bạn có thể nhập chu kỳ khác trước khi chạy.
+                        {t('campaignRunModals.scanIntervalHint')}
                       </p>
                       {isRunResumeLocked && (
                         <p className="text-xs text-amber-600 mt-1">
-                          Đang chạy tiếp run continuous cũ nên chu kỳ quét và tên lượt chạy được khóa theo run đã chọn.
+                          {t('campaignRunModals.resumeLockedHint')}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <label htmlFor="run-resume-mode" className="text-sm font-medium text-gray-700">
-                        Chạy tiếp lượt continuous cũ
+                        {t('campaignRunModals.resumeContinuous')}
                       </label>
                       <input
                         id="run-resume-mode"
@@ -163,7 +166,7 @@ const CampaignRunModals = ({
                     {runResumeMode && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Chọn lượt continuous cần chạy tiếp
+                          {t('campaignRunModals.selectContinuousRun')}
                         </label>
                         <select
                           value={runResumeFromId}
@@ -173,8 +176,8 @@ const CampaignRunModals = ({
                         >
                           <option value="">
                             {isLoadingContinuousResumeOptions
-                              ? 'Đang tải danh sách lượt continuous...'
-                              : 'Chọn lượt continuous'}
+                              ? t('campaignRunModals.loadingContinuousRuns')
+                              : t('campaignRunModals.selectContinuous')}
                           </option>
                           {(Array.isArray(continuousResumeRunOptions) ? continuousResumeRunOptions : []).map((item) => (
                             <option key={item.id} value={item.id}>
@@ -184,7 +187,7 @@ const CampaignRunModals = ({
                         </select>
                         {!isLoadingContinuousResumeOptions && (!continuousResumeRunOptions || continuousResumeRunOptions.length === 0) && (
                           <p className="text-xs text-amber-600 mt-1">
-                            Chưa có lượt continuous cũ để chạy tiếp.
+                            {t('campaignRunModals.noContinuousRuns')}
                           </p>
                         )}
                       </div>
@@ -196,10 +199,10 @@ const CampaignRunModals = ({
           </div>
           <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
             <button onClick={closeRunConfirmModal} className="btn btn-secondary" disabled={isSubmittingRun}>
-              Hủy
+              {t('campaignRunModals.cancel')}
             </button>
             <button onClick={handleRunNow} className="btn btn-primary" disabled={isSubmittingRun}>
-              {isSubmittingRun ? 'Đang chạy...' : 'Xác nhận chạy'}
+              {isSubmittingRun ? t('campaignRunModals.running') : t('campaignRunModals.confirmingRun')}
             </button>
           </div>
         </div>
@@ -210,7 +213,7 @@ const CampaignRunModals = ({
       <FullScreenOverlay isOpen={Boolean(stopRunConfirmTarget)}>
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
           <div className="flex items-center justify-between p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">Xác nhận dừng lượt chạy</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.confirmStopRun')}</h3>
             <button onClick={closeStopRunConfirmModal} className="p-1 hover:bg-gray-100 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
@@ -219,19 +222,19 @@ const CampaignRunModals = ({
             <div className="flex items-start gap-3 rounded-lg border border-red-100 bg-red-50 p-3">
               <HiOutlineExclamation className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
               <div className="text-sm text-red-700">
-                <p className="font-medium">Bạn sắp dừng một lượt chạy đang thực thi.</p>
+                <p className="font-medium">{t('campaignRunModals.aboutToStopRun')}</p>
                 <p className="mt-1">
-                  Sau khi dừng, lượt chạy sẽ ngừng xử lý các node tiếp theo.
+                  {t('campaignRunModals.stopRunHint')}
                 </p>
               </div>
             </div>
             <div className="text-sm text-gray-600 space-y-1">
               <p>
-                <span className="font-medium text-gray-900">Tên lượt chạy:</span>{' '}
+                <span className="font-medium text-gray-900">{t('campaignRunModals.runName2')}</span>{' '}
                 {String(stopRunConfirmTarget?.runName || '').trim() || `#${stopRunConfirmTarget?.id}`}
               </p>
               <p>
-                <span className="font-medium text-gray-900">ID lượt chạy:</span> {stopRunConfirmTarget?.id}
+                <span className="font-medium text-gray-900">{t('campaignRunModals.runId')}</span> {stopRunConfirmTarget?.id}
               </p>
             </div>
           </div>
@@ -241,14 +244,14 @@ const CampaignRunModals = ({
               className="btn btn-secondary"
               disabled={stoppingRunIds.has(Number(stopRunConfirmTarget?.id))}
             >
-              Hủy
+              {t('campaignRunModals.cancel')}
             </button>
             <button
               onClick={handleConfirmStopRun}
               className="btn btn-danger"
               disabled={stoppingRunIds.has(Number(stopRunConfirmTarget?.id))}
             >
-              {stoppingRunIds.has(Number(stopRunConfirmTarget?.id)) ? 'Đang dừng...' : 'Xác nhận dừng'}
+              {stoppingRunIds.has(Number(stopRunConfirmTarget?.id)) ? t('campaignRunModals.stopping') : t('campaignRunModals.confirmingStop')}
             </button>
           </div>
         </div>
@@ -260,7 +263,7 @@ const CampaignRunModals = ({
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
           <div className="flex items-center justify-between p-6 border-b">
             <h3 className="text-lg font-semibold text-gray-900">
-              Thiết lập lịch chạy - {selectedCampaign?.campaignName}
+              {t('campaignRunModals.setupSchedule')} - {selectedCampaign?.campaignName}
             </h3>
             <button onClick={closeScheduleModal} className="p-1 hover:bg-gray-100 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
@@ -270,20 +273,20 @@ const CampaignRunModals = ({
           <div className="p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tên lịch chạy
+                {t('campaignRunModals.scheduleName')}
               </label>
               <input
                 type="text"
                 value={scheduleForm.scheduleName}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleName: e.target.value })}
                 className="input"
-                placeholder="Nhập tên lịch chạy..."
+                placeholder={t('campaignRunModals.scheduleNamePlaceholder')}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Loại lịch
+                {t('campaignRunModals.scheduleType')}
               </label>
               <select
                 value={scheduleForm.scheduleType}
@@ -296,19 +299,19 @@ const CampaignRunModals = ({
                 }
                 className="input"
               >
-                <option value="once">Chạy 1 lần</option>
-                <option value="daily">Hàng ngày</option>
-                <option value="weekly">Hàng tuần</option>
-                <option value="monthly">Hàng tháng (Ngày 1)</option>
-                <option value="custom">Tùy chỉnh: Mỗi N ngày</option>
-                <option value="after_delay">Tùy chỉnh: Chạy sau N thời gian</option>
+                <option value="once">{t('campaignRunModals.runOnce')}</option>
+                <option value="daily">{t('campaignRunModals.daily')}</option>
+                <option value="weekly">{t('campaignRunModals.weekly')}</option>
+                <option value="monthly">{t('campaignRunModals.monthly')}</option>
+                <option value="custom">{t('campaignRunModals.customEveryNDays')}</option>
+                <option value="after_delay">{t('campaignRunModals.customAfterDelay')}</option>
               </select>
             </div>
 
             {scheduleForm.scheduleType === 'weekly' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Chạy vào thứ
+                  {t('campaignRunModals.runOnDay')}
                 </label>
                 <select
                   value={scheduleForm.weeklyDay || '1'}
@@ -327,7 +330,7 @@ const CampaignRunModals = ({
             {scheduleForm.scheduleType === 'once' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ngày chạy
+                  {t('campaignRunModals.runDate')}
                 </label>
                 <input
                   type="date"
@@ -342,7 +345,7 @@ const CampaignRunModals = ({
             {(scheduleForm.scheduleType === 'custom') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cứ cách bao nhiêu ngày thì chạy lại (tính từ hôm nay)
+                  {t('campaignRunModals.everyNthDay')}
                 </label>
                 <input
                   type="number"
@@ -351,7 +354,7 @@ const CampaignRunModals = ({
                   value={scheduleForm.customIntervalDays}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, customIntervalDays: e.target.value })}
                   className="input"
-                  placeholder="Ví dụ: 2"
+                  placeholder={t('campaignRunModals.exampleValue')}
                 />
               </div>
             )}
@@ -360,7 +363,7 @@ const CampaignRunModals = ({
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Chạy sau bao lâu kể từ hiện tại
+                    {t('campaignRunModals.runAfterDelay')}
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input
@@ -370,26 +373,26 @@ const CampaignRunModals = ({
                       value={scheduleForm.delayValue}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, delayValue: e.target.value })}
                       className="input"
-                      placeholder="Ví dụ: 2"
+                      placeholder={t('campaignRunModals.exampleValue')}
                     />
                     <select
                       value={scheduleForm.delayUnit}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, delayUnit: e.target.value })}
                       className="input"
                     >
-                      <option value="minutes">Phút</option>
-                      <option value="hours">Giờ</option>
-                      <option value="days">Ngày</option>
+                      <option value="minutes">{t('campaignRunModals.minutes')}</option>
+                      <option value="hours">{t('campaignRunModals.hours')}</option>
+                      <option value="days">{t('campaignRunModals.days')}</option>
                     </select>
                   </div>
                 </div>
                 {scheduleForm.delayPreviewAt ? (
                   <p className="text-xs text-gray-500">
-                    Dự kiến chạy lúc: {formatCampaignDateTime(scheduleForm.delayPreviewAt)}
+                    {t('campaignRunModals.estimatedRunTime')} {formatCampaignDateTime(scheduleForm.delayPreviewAt)}
                   </p>
                 ) : (
                   <p className="text-xs text-amber-600">
-                    Nhập số lượng thời gian hợp lệ để xem thời điểm chạy dự kiến.
+                    {t('campaignRunModals.enterValidTime')}
                   </p>
                 )}
               </div>
@@ -398,7 +401,7 @@ const CampaignRunModals = ({
             {scheduleForm.scheduleType !== 'after_delay' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Thời gian chạy
+                  {t('campaignRunModals.runTime')}
                 </label>
                 <input
                   type="time"
@@ -418,18 +421,18 @@ const CampaignRunModals = ({
                 className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
               />
               <label htmlFor="enabled" className="ml-2 text-sm text-gray-700">
-                Kích hoạt lịch chạy
+                {t('campaignRunModals.enableSchedule')}
               </label>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
             <button onClick={closeScheduleModal} className="btn btn-secondary">
-              Hủy
+              {t('campaignRunModals.cancel')}
             </button>
             <button onClick={handleSaveSchedule} className="btn btn-primary">
               <HiOutlineCalendar className="w-4 h-4 mr-2" />
-              Tạo lịch
+              {t('campaignRunModals.createSchedule')}
             </button>
           </div>
         </div>
@@ -441,7 +444,7 @@ const CampaignRunModals = ({
         <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
             <h3 className="text-lg font-semibold text-gray-900">
-              Chi tiết lịch chạy - {selectedSchedule.scheduleName}
+              {t('campaignRunModals.scheduleDetails')} - {selectedSchedule.scheduleName}
             </h3>
             <button onClick={closeScheduleDetailModal} className="p-1 hover:bg-gray-100 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
@@ -452,72 +455,72 @@ const CampaignRunModals = ({
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Chiến dịch</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.campaign')}</p>
                   <p className="font-medium text-gray-900">{selectedSchedule.campaignName}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Loại lịch</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.scheduleType2')}</p>
                   <p className="font-medium text-gray-900">
                     {selectedSchedule.scheduleType === 'weekly'
-                      ? `Hàng tuần (${getWeeklyDayLabel(getWeeklyDayFromCron(selectedSchedule.cronExpression))})`
+                      ? `${t('campaignRunModals.weekly')} (${getWeeklyDayLabel(getWeeklyDayFromCron(selectedSchedule.cronExpression))})`
                       : getScheduleTypeLabel(selectedSchedule.scheduleType)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Giờ chạy</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.runHour')}</p>
                   <p className="font-medium text-gray-900">
-                    {scheduleClockUiLabel(selectedSchedule.cronExpression)}
+                    {scheduleClockUiLabel(selectedSchedule.cronExpression, t)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Biểu thức Cron</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.cronExpression')}</p>
                   <code className="text-xs bg-white px-2 py-1 rounded border">{selectedSchedule.cronExpression}</code>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Trạng thái</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.status')}</p>
                   <span className={`badge ${getScheduleStatusClassName(selectedSchedule)}`}>
                     {getScheduleStatusLabel(selectedSchedule)}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Số lần đã chạy</p>
-                  <p className="font-medium text-gray-900">{selectedSchedule.runCount || 0} lần</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.runCount')}</p>
+                  <p className="font-medium text-gray-900">{selectedSchedule.runCount || 0} {t('campaignRunModals.times')}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Lần chạy cuối</p>
+                  <p className="text-sm text-gray-500">{t('campaignRunModals.lastRun')}</p>
                   <p className="font-medium text-gray-900">
                     {selectedSchedule.lastRunAt
                       ? formatCampaignDateTime(selectedSchedule.lastRunAt)
-                      : 'Chưa chạy lần nào'}
+                      : t('campaignRunModals.neverRun')}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">{getScheduleRunTimingFieldLabelVi(selectedSchedule)}</p>
                   <p className="font-medium text-gray-900">
-                    {getScheduleNextRunUiLabel(selectedSchedule)}
+                    {getScheduleNextRunUiLabel(selectedSchedule, t)}
                   </p>
                 </div>
               </div>
             </div>
 
             <div>
-              <h4 className="text-md font-semibold text-gray-900 mb-3">Lịch sử chạy</h4>
+              <h4 className="text-md font-semibold text-gray-900 mb-3">{t('campaignRunModals.runHistory')}</h4>
 
               {scheduleRuns.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  Chưa có lịch sử chạy
+                  {t('campaignRunModals.noRunHistory')}
                 </div>
               ) : (
                 <div className="overflow-x-auto border rounded-lg">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thời gian bắt đầu</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Người nhận</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thành công</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thất bại</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hoàn thành</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.startTime')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.status')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.recipient')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.success')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.failed')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.completed')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -533,9 +536,9 @@ const CampaignRunModals = ({
                               run.status === 'failed' ? 'badge-error' :
                               'badge-gray'
                             }`}>
-                              {run.status === 'completed' ? 'Hoàn thành' :
-                               run.status === 'running' ? 'Đang chạy' :
-                               run.status === 'failed' ? 'Thất bại' :
+                              {run.status === 'completed' ? t('campaignRunModals.completed') :
+                               run.status === 'running' ? t('campaignRunModals.inProgress') :
+                               run.status === 'failed' ? t('campaignRunModals.failed') :
                                run.status}
                             </span>
                           </td>
@@ -575,11 +578,11 @@ const CampaignRunModals = ({
               {isReadonlyOnceSchedule(selectedSchedule)
                 ? getScheduleStatusLabel(selectedSchedule)
                 : selectedSchedule.enabled
-                  ? 'Tắt lịch'
-                  : 'Bật lịch'}
+                  ? t('campaignRunModals.disableSchedule')
+                  : t('campaignRunModals.enableSchedule2')}
             </button>
             <button onClick={closeScheduleDetailModal} className="btn btn-secondary">
-              Đóng
+              {t('campaignRunModals.close')}
             </button>
           </div>
         </div>
@@ -591,7 +594,7 @@ const CampaignRunModals = ({
         <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Lịch chạy đã thiết lập</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.configuredSchedules')}</h3>
               <p className="text-sm text-gray-600 mt-0.5">
                 {campaignSchedulesModalCampaign.campaignName}
                 {campaignSchedulesModalCampaign.id != null && (
@@ -603,7 +606,7 @@ const CampaignRunModals = ({
               type="button"
               onClick={closeCampaignSchedulesSummaryModal}
               className="p-1 hover:bg-gray-100 rounded-lg"
-              aria-label="Đóng"
+              aria-label={t('campaignRunModals.closeAria')}
             >
               <HiOutlineX className="w-5 h-5" />
             </button>
@@ -615,7 +618,7 @@ const CampaignRunModals = ({
               if (list.length === 0) {
                 return (
                   <p className="text-sm text-gray-500 text-center py-6">
-                    Hiện không có lịch chạy nào gắn với chiến dịch này.
+                    {t('campaignRunModals.noSchedulesForCampaign')}
                   </p>
                 );
               }
@@ -638,11 +641,11 @@ const CampaignRunModals = ({
                         </div>
                         <p className="text-sm text-gray-600">{pattern}</p>
                         <p className="text-sm text-gray-800">
-                          <span className="font-medium">Đã chạy:</span> {runTimes} lần
+                          <span className="font-medium">{t('campaignRunModals.runs')}</span> {runTimes} {t('campaignRunModals.times')}
                         </p>
                         <p className="text-sm text-gray-800">
                           <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch)}:</span>{' '}
-                          {getScheduleNextRunUiLabel(sch)}
+                          {getScheduleNextRunUiLabel(sch, t)}
                         </p>
                       </li>
                     );
@@ -654,13 +657,14 @@ const CampaignRunModals = ({
 
           <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
             <button type="button" onClick={closeCampaignSchedulesSummaryModal} className="btn btn-secondary">
-              Đóng
+              {t('campaignRunModals.close')}
             </button>
           </div>
         </div>
       </FullScreenOverlay>
     )}
   </>
-);
+  );
+};
 
 export default CampaignRunModals;

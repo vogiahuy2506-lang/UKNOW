@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil } from 'react-icons/hi';
 import {
   createLandingPageAdmin,
@@ -28,6 +29,7 @@ const FIXED_LANDING_SLUG = 'l';
  * Quản trị landing HTML động — `/lp/:slug`. Khi Lưu, backend chuẩn hóa HTML (link tracking + script); iframe form do admin dán từ khối copy trong editor.
  */
 export default function LandingPagesAdminPage() {
+  const { t } = useI18n();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -68,7 +70,7 @@ export default function LandingPagesAdminPage() {
       setRows(list);
       setStatsPack(d);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Không thể tải dữ liệu landing');
+      toast.error(e?.response?.data?.message || t('landingPagesAdmin.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +94,7 @@ export default function LandingPagesAdminPage() {
     const fixedRow = {
       id: '__fixed_l',
       slug: FIXED_LANDING_SLUG,
-      title: 'Landing cố định (/l)',
+      title: t('landingPagesAdmin.fixedLanding'),
       isPublished: true,
       isFixed: true,
       updatedAt: null,
@@ -121,7 +123,7 @@ export default function LandingPagesAdminPage() {
     const slug = String(form.slug || '').trim().toLowerCase();
     const rawTrim = (form.htmlContent || '').trim();
     const emptyHint =
-      '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><p class="p-4 text-gray-500 text-sm">Nhập slug và HTML — xem trước mô phỏng bản sau khi Lưu (tracking + script; dán iframe từ modal nếu cần xem form).</p></body></html>';
+      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><p class="p-4 text-gray-500 text-sm">${t('landingPagesAdmin.previewPlaceholder')}</p></body></html>`;
     if (!slug || slug === FIXED_LANDING_SLUG) {
       return rawTrim || emptyHint;
     }
@@ -163,7 +165,7 @@ export default function LandingPagesAdminPage() {
       });
       setModalOpen(true);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Không tải được chi tiết');
+      toast.error(e?.response?.data?.message || t('landingPagesAdmin.loadDetailFailed'));
     }
   };
 
@@ -176,11 +178,11 @@ export default function LandingPagesAdminPage() {
   const save = async () => {
     const slug = String(form.slug || '').trim().toLowerCase();
     if (!slug) {
-      toast.error('Vui lòng nhập slug');
+      toast.error(t('landingPagesAdmin.slugRequired'));
       return;
     }
     if (slug === FIXED_LANDING_SLUG) {
-      toast.error('Slug "l" dành cho landing cố định tại /l — không lưu qua CMS này.');
+      toast.error(t('landingPagesAdmin.reservedSlug'));
       return;
     }
     setSaving(true);
@@ -192,7 +194,7 @@ export default function LandingPagesAdminPage() {
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
         });
-        toast.success('Đã cập nhật');
+        toast.success(t('landingPagesAdmin.updated'));
       } else {
         await createLandingPageAdmin({
           slug,
@@ -200,12 +202,12 @@ export default function LandingPagesAdminPage() {
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
         });
-        toast.success('Đã tạo landing page');
+        toast.success(t('landingPagesAdmin.created'));
       }
       closeModal();
       reloadAll();
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || 'Không lưu được');
+      toast.error(e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -213,13 +215,13 @@ export default function LandingPagesAdminPage() {
 
   const remove = async (row) => {
     if (row.isFixed) return;
-    if (!window.confirm('Xóa landing page này?')) return;
+    if (!window.confirm(t('landingPagesAdmin.confirmDelete'))) return;
     try {
       await deleteLandingPageAdmin(row.id);
-      toast.success('Đã xóa');
+        toast.success(t('landingPagesAdmin.deleted'));
       reloadAll();
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Không xóa được');
+      toast.error(e?.response?.data?.message || t('landingPagesAdmin.deleteFailed'));
     }
   };
 
@@ -227,48 +229,43 @@ export default function LandingPagesAdminPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Landing — trang HTML</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">{t('landingPagesAdmin.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Dán HTML vào editor — khi <strong>Lưu</strong>, server đổi link <code className="text-xs bg-gray-100 px-1 rounded">http(s)</code> trên{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">&lt;a&gt;</code> sang URL tracking và chèn{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">lp-track.js</code>. Iframe form: copy trong modal và dán vào HTML (không tự chèn). Hàng <strong>slug l</strong> là landing cố định{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">/l</code>{' '}
-            — chỉ xem số liệu.
+            {t('landingPagesAdmin.description')}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button type="button" className="btn btn-secondary flex items-center gap-2" onClick={() => reloadAll()} disabled={loading}>
             <HiOutlineRefresh className="w-4 h-4" />
-            Tải lại
+            {t('landingPagesAdmin.reload')}
           </button>
           <button type="button" className="btn btn-primary flex items-center gap-2" onClick={openCreate}>
             <HiOutlinePlus className="w-4 h-4" />
-            Tạo mới
+            {t('landingPagesAdmin.createNew')}
           </button>
         </div>
       </div>
 
       <div className="card overflow-x-auto">
         {loading ? (
-          <p className="p-6 text-sm text-gray-500">Đang tải…</p>
+          <p className="p-6 text-sm text-gray-500">{t('landingPagesAdmin.loading')}</p>
         ) : (
           <>
             {rows.length === 0 ? (
               <p className="px-4 pt-4 text-sm text-gray-500">
-                Chưa có landing HTML động trong CMS; bảng vẫn hiển thị dòng <code className="text-xs bg-gray-100 px-1 rounded">l</code>{' '}
-                (landing cố định /l) kèm số liệu.
+                {t('landingPagesAdmin.noDynamicYet')}
               </p>
             ) : null}
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-                  <th className="p-3 font-medium">Slug</th>
-                  <th className="p-3 font-medium">Tiêu đề</th>
-                  <th className="p-3 font-medium">Công bố</th>
-                  <th className="p-3 font-medium tabular-nums">Xem</th>
-                  <th className="p-3 font-medium tabular-nums">Click (tracking)</th>
-                  <th className="p-3 font-medium tabular-nums">Form</th>
-                  <th className="p-3 font-medium">Cập nhật</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.slug')}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.titleCol')}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.published')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.views')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.clicks')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.forms')}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.updated')}</th>
                   <th className="p-3 w-32" />
                 </tr>
               </thead>
@@ -281,11 +278,11 @@ export default function LandingPagesAdminPage() {
                     <td className="p-3 font-mono text-xs">
                       {r.slug}
                       {r.isFixed ? (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-sky-700 font-sans">cố định</span>
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-sky-700 font-sans">{t('landingPagesAdmin.fixed')}</span>
                       ) : null}
                     </td>
                     <td className="p-3 text-gray-800">{r.title || '—'}</td>
-                    <td className="p-3">{r.isPublished ? 'Có' : 'Không'}</td>
+                    <td className="p-3">{r.isPublished ? t('common.yes') : t('common.no')}</td>
                     <td className="p-3 tabular-nums text-gray-700">{Number(r.viewCount || 0).toLocaleString('vi-VN')}</td>
                     <td className="p-3 tabular-nums text-gray-700">{Number(r.clickCount || 0).toLocaleString('vi-VN')}</td>
                     <td className="p-3 tabular-nums text-gray-700">{Number(r.submitCount || 0).toLocaleString('vi-VN')}</td>
@@ -300,7 +297,7 @@ export default function LandingPagesAdminPage() {
                           <button
                             type="button"
                             className="p-2 rounded-lg text-gray-600 hover:bg-gray-100"
-                            title="Sửa"
+                            title={t('common.edit')}
                             onClick={() => openEdit(r)}
                           >
                             <HiOutlinePencil className="w-4 h-4" />
@@ -308,7 +305,7 @@ export default function LandingPagesAdminPage() {
                           <button
                             type="button"
                             className="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                            title="Xóa"
+                            title={t('common.delete')}
                             onClick={() => remove(r)}
                           >
                             <HiOutlineTrash className="w-4 h-4" />

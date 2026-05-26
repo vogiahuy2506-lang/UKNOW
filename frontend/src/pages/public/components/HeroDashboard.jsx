@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LuTrendingDown, LuTrendingUp, LuChevronDown, LuX } from 'react-icons/lu';
 import HeroGauge from './HeroGauge';
+import { useI18n } from '../../../i18n';
 
 function TogglePill({ options, active, onChange }) {
   return (
@@ -20,13 +21,13 @@ function TogglePill({ options, active, onChange }) {
   );
 }
 
-function CardClicks() {
-  const [activeTab, setActiveTab] = useState('Impressions');
+function CardClicks({ t }) {
+  const [activeTab, setActiveTab] = useState(t('heroDashboard.impressions') || 'Impressions');
   return (
     <div className="bg-white rounded-2xl p-5 flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[13px] font-semibold text-[#ef4d23]">Clicks</span>
-        <span className="text-[13px] text-neutral-500">This Month</span>
+        <span className="text-[13px] font-semibold text-[#ef4d23]">{t('heroDashboard.clicks') || 'Clicks'}</span>
+        <span className="text-[13px] text-neutral-500">{t('dashboard.thisMonth') || 'This Month'}</span>
       </div>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-[28px] font-semibold text-neutral-900">6,896</span>
@@ -35,20 +36,20 @@ function CardClicks() {
           -3,382 (33%)
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-3">Compared to yesterday</p>
-      <p className="text-[12px] text-neutral-500 text-center mb-1">Month Target achieved</p>
+      <p className="text-[11px] text-neutral-400 mb-3">{t('heroDashboard.comparedToYesterday') || 'Compared to yesterday'}</p>
+      <p className="text-[12px] text-neutral-500 text-center mb-1">{t('heroDashboard.monthTarget') || 'Month Target achieved'}</p>
       <HeroGauge value={92} showLabels min="389K" max="425K" />
-      <TogglePill options={['Impressions', 'Clicks']} active={activeTab} onChange={setActiveTab} />
+      <TogglePill options={[t('heroDashboard.impressions') || 'Impressions', t('heroDashboard.clicks') || 'Clicks']} active={activeTab} onChange={setActiveTab} />
     </div>
   );
 }
 
-function CardForm() {
+function CardForm({ t }) {
   return (
     <div className="bg-white rounded-2xl p-5 flex flex-col gap-3">
       {[
-        { label: 'Show figures for', value: 'This month' },
-        { label: 'Compare period by', value: 'Month-to-date (MTD)' },
+        { label: t('heroDashboard.showFiguresFor') || 'Show figures for', value: t('dashboard.thisMonth') || 'This month' },
+        { label: t('heroDashboard.comparePeriodBy') || 'Compare period by', value: t('heroDashboard.mtd') || 'Month-to-date (MTD)' },
       ].map(({ label, value }) => (
         <div key={label}>
           <p className="text-[12px] text-neutral-700 mb-1">{label}</p>
@@ -59,8 +60,8 @@ function CardForm() {
         </div>
       ))}
       {[
-        { label: 'Set targets (This month)', value: 10 },
-        { label: 'Set targets (This year)', value: 100 },
+        { label: t('heroDashboard.setTargetsThisMonth') || 'Set targets (This month)', value: 10 },
+        { label: t('heroDashboard.setTargetsThisYear') || 'Set targets (This year)', value: 100 },
       ].map(({ label, value }) => (
         <div key={label}>
           <p className="text-[12px] text-neutral-700 mb-1">{label}</p>
@@ -75,9 +76,9 @@ function CardForm() {
       ))}
       <div className="flex items-center gap-3 mt-1">
         <button className="bg-[#ef4d23] text-white text-[13px] font-medium rounded-lg px-5 py-2">
-          Save
+          {t('common.save') || 'Save'}
         </button>
-        <button className="text-[13px] text-neutral-500 underline">Cancel</button>
+        <button className="text-[13px] text-neutral-500 underline">{t('common.cancel') || 'Cancel'}</button>
         <button className="ml-auto text-neutral-400 hover:text-neutral-600">
           <LuX className="w-4 h-4" />
         </button>
@@ -86,13 +87,13 @@ function CardForm() {
   );
 }
 
-function CardVideoStarts() {
-  const [activeTab, setActiveTab] = useState('Video Clicks');
+function CardVideoStarts({ t }) {
+  const [activeTab, setActiveTab] = useState(t('heroDashboard.videoClicks') || 'Video Clicks');
   return (
     <div className="bg-white rounded-2xl p-5 flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[13px] font-semibold text-[#ef4d23]">Video Starts</span>
-        <span className="text-[13px] text-neutral-500">today</span>
+        <span className="text-[13px] font-semibold text-[#ef4d23]">{t('heroDashboard.videoStarts') || 'Video Starts'}</span>
+        <span className="text-[13px] text-neutral-500">{t('dashboard.today') || 'today'}</span>
       </div>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-[28px] font-semibold text-neutral-900">0</span>
@@ -101,21 +102,22 @@ function CardVideoStarts() {
           0
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-3">Compared to yesterday</p>
+      <p className="text-[11px] text-neutral-400 mb-3">{t('heroDashboard.comparedToYesterday') || 'Compared to yesterday'}</p>
       <HeroGauge value={68} color="#9ca3af" />
-      <TogglePill options={['Video Clicks', 'Video Starts']} active={activeTab} onChange={setActiveTab} />
+      <TogglePill options={[t('heroDashboard.videoClicks') || 'Video Clicks', t('heroDashboard.videoStarts') || 'Video Starts']} active={activeTab} onChange={setActiveTab} />
     </div>
   );
 }
 
 export default function HeroDashboard() {
+  const { t } = useI18n();
   return (
     <div className="px-3 sm:px-4 w-full">
       <div className="bg-[#f5f2ee] rounded-3xl p-4 sm:p-6 w-full max-w-[880px] mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          <CardClicks />
-          <CardForm />
-          <CardVideoStarts />
+          <CardClicks t={t} />
+          <CardForm t={t} />
+          <CardVideoStarts t={t} />
         </div>
       </div>
     </div>

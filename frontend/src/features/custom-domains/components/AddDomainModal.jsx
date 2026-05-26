@@ -6,9 +6,11 @@ import {
 import { toast } from 'react-hot-toast';
 import customDomainApi from '../../../services/customDomainApi';
 import api from '../../../services/api';
+import { useI18n } from '../../../i18n';
 
 const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
-  const [step, setStep] = useState('form'); // 'form' | 'instructions' | 'success'
+  const { t } = useI18n();
+  const [step, setStep] = useState('form');
   const [loading, setLoading] = useState(false);
   const [landingPages, setLandingPages] = useState([]);
   const [instructions, setInstructions] = useState(null);
@@ -44,14 +46,13 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
     e.preventDefault();
 
     if (!formData.domain.trim()) {
-      toast.error('Vui lòng nhập tên miền');
+      toast.error(t('addDomain.enterDomain'));
       return;
     }
 
-    // Basic validation
     const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/;
     if (!domainRegex.test(formData.domain.trim())) {
-      toast.error('Tên miền không hợp lệ');
+      toast.error(t('addDomain.invalidDomain'));
       return;
     }
 
@@ -68,7 +69,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
         setStep('instructions');
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể thêm tên miền');
+      toast.error(error.response?.data?.message || t('addDomain.addDomainFailed'));
     } finally {
       setLoading(false);
     }
@@ -96,9 +97,9 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
             <div>
               <h2 className="font-bold text-slate-800">
-                {step === 'form' && 'Thêm tên miền riêng'}
-                {step === 'instructions' && 'Cấu hình DNS'}
-                {step === 'success' && 'Hoàn tất'}
+                {step === 'form' && t('addDomain.addPrivateDomain')}
+                {step === 'instructions' && t('addDomain.configureDNS')}
+                {step === 'success' && t('addDomain.completed')}
               </h2>
             </div>
           </div>
@@ -114,30 +115,30 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Tên miền <span className="text-red-500">*</span>
+                  {t('addDomain.domainNameRequired')}
                 </label>
                 <input
                   type="text"
                   value={formData.domain}
                   onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                  placeholder="VD: landing.congty.com"
+                  placeholder={t('addDomain.domainPlaceholder')}
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10"
                 />
                 <p className="text-xs text-slate-500 mt-2">
-                  Nhập domain của bạn (không cần http:// hoặc https://)
+                  {t('addDomain.domainHint')}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Landing Page <span className="text-slate-400 font-normal">(tùy chọn)</span>
+                  {t('addDomain.landingPage')} <span className="text-slate-400 font-normal">{t('addDomain.landingPageOptional')}</span>
                 </label>
                 <select
                   value={formData.landingPageId}
                   onChange={(e) => setFormData({ ...formData, landingPageId: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10"
                 >
-                  <option value="">-- Chọn landing page --</option>
+                  <option value="">{t('addDomain.selectLandingPage')}</option>
                   {landingPages.map((lp) => (
                     <option key={lp.id} value={lp.id}>
                       {lp.title || lp.slug} {lp.isPublished ? '' : '(Nháp)'}
@@ -145,7 +146,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 mt-2">
-                  Chọn landing page để kết nối với domain này
+                  {t('addDomain.landingPageHint')}
                 </p>
               </div>
 
@@ -153,11 +154,11 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="flex items-start gap-3">
                   <HiOutlineInformationCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                   <div className="text-sm text-blue-700">
-                    <p className="font-semibold mb-1">Sau khi thêm domain:</p>
+                    <p className="font-semibold mb-1">{t('addDomain.afterAddingDomain')}</p>
                     <ol className="list-decimal list-inside space-y-1 text-blue-600">
-                      <li>Bạn sẽ nhận được hướng dẫn cấu hình DNS</li>
-                      <li>Thêm các bản ghi DNS theo hướng dẫn</li>
-                      <li>Quay lại để xác minh domain</li>
+                      <li>{t('addDomain.addDnsRecords')}</li>
+                      <li>{t('addDomain.addDnsToProvider')}</li>
+                      <li>{t('addDomain.returnToVerify')}</li>
                     </ol>
                   </div>
                 </div>
@@ -172,9 +173,9 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="flex items-start gap-3">
                   <HiOutlineInformationCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                   <div className="text-sm text-amber-700">
-                    <p className="font-semibold mb-1">Thêm các bản ghi DNS sau vào dashboard của nhà cung cấp domain của bạn:</p>
+                    <p className="font-semibold mb-1">{t('addDomain.addDnsRecordsToProvider')}</p>
                     <p className="mt-2 text-amber-600">
-                      Sau khi thêm xong, quay lại và nhấn "Đã thêm DNS" để xác minh.
+                      {t('addDomain.afterAddingDns')}
                     </p>
                   </div>
                 </div>
@@ -193,14 +194,14 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                     </div>
                     <div className="space-y-2">
                       <div>
-                        <span className="text-xs text-slate-500">Giá trị:</span>
+                        <span className="text-xs text-slate-500">{t('addDomain.value')}</span>
                         <p className="text-sm font-mono bg-white px-3 py-2 rounded-lg border border-slate-200 mt-1 break-all">
                           {record.value}
                         </p>
                       </div>
                       <div>
-                        <span className="text-xs text-slate-500">TTL:</span>
-                        <p className="text-sm font-medium">{record.ttl} giây</p>
+                        <span className="text-xs text-slate-500">{t('addDomain.ttl')}</span>
+                        <p className="text-sm font-medium">{t('addDomain.ttlSeconds', { ttl: record.ttl })}</p>
                       </div>
                     </div>
                   </div>
@@ -209,7 +210,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
 
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <HiOutlineDocumentText className="w-4 h-4" />
-                <span>Bạn cũng cần thêm CNAME cho www: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{instructions.cnameTarget}</code></span>
+                <span>{t('addDomain.cnameForWww')} <code className="bg-slate-100 px-1.5 py-0.5 rounded">{instructions.cnameTarget}</code></span>
               </div>
             </div>
           )}
@@ -220,17 +221,16 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <HiOutlineCheck className="w-10 h-10 text-green-600" />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Tên miền đã được thêm!</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">{t('addDomain.domainAdded')}</h3>
               <p className="text-slate-600 mb-6">
-                Domain <strong>{newDomain?.domain}</strong> đã được thêm thành công.
-                {newDomain?.landingPageId && ' Landing page sẽ được hiển thị khi domain được xác minh.'}
+                {t('addDomain.domainAddedSuccess', { domain: newDomain?.domain })}
               </p>
               <div className="bg-slate-50 rounded-xl p-4 text-left">
-                <p className="text-sm font-semibold text-slate-700 mb-2">Các bước tiếp theo:</p>
+                <p className="text-sm font-semibold text-slate-700 mb-2">{t('addDomain.nextSteps')}</p>
                 <ol className="text-sm text-slate-600 space-y-1 list-decimal list-inside">
-                  <li>Thêm các bản ghi DNS theo hướng dẫn</li>
-                  <li>Đợi DNS propogate (5-30 phút)</li>
-                  <li>Quay lại trang quản lý domain để xác minh</li>
+                  <li>{t('addDomain.addDnsRecordsStep')}</li>
+                  <li>{t('addDomain.waitDnsPropagate')}</li>
+                  <li>{t('addDomain.returnToVerifyDomain')}</li>
                 </ol>
               </div>
             </div>
@@ -246,7 +246,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 onClick={onClose}
                 className="flex-1 py-3 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
               >
-                Huỷ
+                {t('addDomain.cancel')}
               </button>
               <button
                 type="submit"
@@ -257,7 +257,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 {loading ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  'Tiếp tục'
+                  t('addDomain.continue')
                 )}
               </button>
             </div>
@@ -270,7 +270,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 onClick={() => setStep('form')}
                 className="flex-1 py-3 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
               >
-                Quay lại
+                {t('addDomain.back')}
               </button>
               <button
                 type="button"
@@ -278,7 +278,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
                 className="flex-1 py-3 bg-green-500 text-white font-semibold rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
               >
                 <HiOutlineCheck className="w-4 h-4" />
-                Đã thêm DNS
+                {t('addDomain.dnsAdded')}
               </button>
             </div>
           )}
@@ -289,7 +289,7 @@ const AddDomainModal = ({ isOpen, onClose, onSuccess }) => {
               onClick={handleDone}
               className="w-full py-3 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600 transition-colors"
             >
-              Xong
+              {t('addDomain.done')}
             </button>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { HiOutlineCheck, HiOutlineSelector, HiOutlineOfficeBuilding, HiOutlineUser } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '../i18n';
 
 /**
  * Context Switcher — cho phép user chuyển giữa tài khoản cá nhân và
@@ -9,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
  * Chỉ render khi user có ít nhất 1 membership.
  */
 const ContextSwitcher = ({ showLabels = true }) => {
+  const { t } = useI18n();
   const { user, activeContext, switchContext } = useAuthStore();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -28,8 +30,8 @@ const ContextSwitcher = ({ showLabels = true }) => {
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const currentLabel = isEmployeeCtx
-    ? activeContext.ownerName || activeContext.ownerUsername || 'Doanh nghiệp'
-    : user?.fullName || user?.username || 'Tài khoản của tôi';
+    ? activeContext.ownerName || activeContext.ownerUsername || t('contextSwitcher.workingFor')
+    : user?.fullName || user?.username || t('contextSwitcher.myAccount');
 
   const currentInitial = (
     (isEmployeeCtx ? activeContext.ownerName : user?.fullName || user?.username)?.[0] || 'T'
@@ -47,11 +49,11 @@ const ContextSwitcher = ({ showLabels = true }) => {
     navigate('/app');
   };
 
-  // ─── Dropdown panel — dùng chung cho cả 2 mode ──────────────────────────
+  // ─── Dropdown panel ──────────────────────────────
   const DropdownPanel = ({ className = '' }) => (
     <div className={`bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 z-50 ${className}`}>
       <p className="px-3 pt-1 pb-2 text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-        Chuyển ngữ cảnh
+        {t('contextSwitcher.switchContext')}
       </p>
 
       {/* Self */}
@@ -68,7 +70,7 @@ const ContextSwitcher = ({ showLabels = true }) => {
           <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
             {user?.fullName || user?.username}
           </p>
-          <p className="text-[11px] text-gray-500 truncate mt-0.5">Tài khoản cá nhân</p>
+          <p className="text-[11px] text-gray-500 truncate mt-0.5">{t('contextSwitcher.personalAccount')}</p>
         </div>
         {!isEmployeeCtx && <HiOutlineCheck className="w-4 h-4 text-primary-600 flex-shrink-0" />}
       </button>
@@ -76,7 +78,7 @@ const ContextSwitcher = ({ showLabels = true }) => {
       {/* Memberships */}
       <div className="border-t border-gray-100 mt-1 pt-1">
         <p className="px-3 pt-1 pb-1.5 text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-          Làm việc cho ({memberships.length})
+          {t('contextSwitcher.workingFor')} ({memberships.length})
         </p>
         {memberships.map((m) => {
           const isActive = isEmployeeCtx && String(activeContext.ownerId) === String(m.ownerId);
@@ -95,7 +97,7 @@ const ContextSwitcher = ({ showLabels = true }) => {
                 <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
                   {m.ownerName || m.ownerUsername}
                 </p>
-                <p className="text-[11px] text-gray-500 truncate mt-0.5">Nhân viên</p>
+                <p className="text-[11px] text-gray-500 truncate mt-0.5">{t('contextSwitcher.employee')}</p>
               </div>
               {isActive && <HiOutlineCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />}
             </button>
@@ -116,7 +118,7 @@ const ContextSwitcher = ({ showLabels = true }) => {
               ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md hover:shadow-lg'
               : 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-sm hover:shadow-md'
           }`}
-          title={isEmployeeCtx ? `Đang làm việc cho: ${currentLabel}` : 'Tài khoản cá nhân'}
+          title={isEmployeeCtx ? `${t('contextSwitcher.workingAs')}: ${currentLabel}` : t('contextSwitcher.personalAccount')}
         >
           <span className="text-sm font-bold">{currentInitial}</span>
           {/* Badge chỉ báo có context để switch */}
@@ -158,12 +160,12 @@ const ContextSwitcher = ({ showLabels = true }) => {
             {isEmployeeCtx ? (
               <>
                 <HiOutlineOfficeBuilding className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">Đang làm việc</span>
+                <span className="truncate">{t('contextSwitcher.workingAs')}</span>
               </>
             ) : (
               <>
                 <HiOutlineUser className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">Tài khoản cá nhân</span>
+                <span className="truncate">{t('contextSwitcher.personalAccount')}</span>
               </>
             )}
           </p>

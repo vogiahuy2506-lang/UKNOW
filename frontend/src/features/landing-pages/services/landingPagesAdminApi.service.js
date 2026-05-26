@@ -1,7 +1,68 @@
 import api from '../../../services/api.js';
 
 /**
- * Danh sách landing page (admin) — dùng CMS và node Builder (lọc slug).
+ * Lấy danh sách template landing page.
+ * 
+ * @param {object} [params] category filter
+ * @returns {Promise<object[]>}
+ */
+export async function fetchLandingTemplates(params = {}) {
+  const { data } = await api.get('/landing-templates', { params });
+  return data?.success ? data.data : [];
+}
+
+/**
+ * Lấy categories của template.
+ * 
+ * @returns {Promise<object[]>}
+ */
+export async function fetchLandingTemplateCategories() {
+  const { data } = await api.get('/landing-templates/categories');
+  return data?.success ? data.data : [];
+}
+
+/**
+ * Lấy chi tiết một template.
+ * 
+ * @param {number} id
+ * @returns {Promise<object>}
+ */
+export async function fetchLandingTemplateById(id) {
+  const { data } = await api.get(`/landing-templates/${id}`);
+  if (!data?.success) throw new Error(data?.message || 'Không tải được');
+  return data.data;
+}
+
+/**
+ * Lấy HTML structure của template.
+ * 
+ * @param {number} id
+ * @returns {Promise<object>}
+ */
+export async function fetchLandingTemplateHtml(id) {
+  const { data } = await api.get(`/landing-templates/${id}/html`);
+  if (!data?.success) throw new Error(data?.message || 'Không tải được');
+  return data.data;
+}
+
+/**
+ * Sinh HTML landing page với template (AI).
+ * 
+ * @param {{ prompt: string, templateId?: number, title?: string }} params
+ * @returns {Promise<object>}
+ */
+export async function generateLandingWithTemplate({ prompt, templateId, title } = {}) {
+  const { data } = await api.post(
+    '/landing-templates/generate',
+    { prompt, templateId, title },
+    { timeout: 120000 }
+  );
+  if (!data?.success) throw new Error(data?.message || 'Không sinh được');
+  return data.data;
+}
+
+/**
+ * Lấy danh sách landing page (admin) — dùng CMS và node Builder (lọc slug).
  *
  * @returns {Promise<object[]>}
  */

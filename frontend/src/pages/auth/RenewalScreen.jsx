@@ -3,8 +3,10 @@ import { HiOutlineRefresh, HiOutlineLogout, HiOutlineClock, HiOutlineArrowRight 
 import { useAuthStore } from '../../stores/authStore';
 import Navbar from '../../components/layout/client/Navbar';
 import Footer from '../../components/layout/client/Footer';
+import { useI18n } from '../../i18n';
 
 const RenewalScreen = () => {
+  const { t } = useI18n();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -29,42 +31,40 @@ const RenewalScreen = () => {
             <HiOutlineClock className="w-8 h-8 text-primary-600" />
           </div>
 
-          <h2 className="text-2xl font-bold text-gray-900">Gói của bạn đã hết hạn</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{t('renewal.title')}</h2>
 
           {expiredDate && (
             <p className="text-sm text-gray-400 mt-1">
-              Hết hạn ngày {expiredDate}
+              {t('renewal.expiredOn')} {expiredDate}
             </p>
           )}
 
           <p className="text-gray-500 mt-4 text-sm leading-relaxed">
-            Chào mừng bạn trở lại! Gia hạn gói để tiếp tục sử dụng tất cả tính năng —
-            dữ liệu chiến dịch, khách hàng và landing page của bạn vẫn được giữ nguyên.
+            {t('renewal.welcomeBack')}
           </p>
 
           <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mt-5 text-left">
-            <p className="text-xs text-orange-700 font-medium">Lưu ý</p>
+            <p className="text-xs text-orange-700 font-medium">{t('renewal.note')}</p>
             <p className="text-xs text-orange-600 mt-0.5 leading-relaxed">
-              Trong thời gian chờ gia hạn, bạn không thể gửi email và Zalo mới.
-              Dữ liệu hiện có không bị xóa.
+              {t('renewal.noteMessage')}
             </p>
           </div>
 
           <div className="flex flex-col gap-3 mt-8">
             <button onClick={() => navigate('/about')} className="btn btn-primary w-full">
               <HiOutlineRefresh className="w-4 h-4 mr-2" />
-              Gia hạn ngay
+              {t('renewal.renewNow')}
             </button>
             <button
               onClick={() => navigate('/about')}
               className="btn btn-secondary w-full text-sm"
             >
-              Xem các gói dịch vụ
+              {t('renewal.viewPlans')}
               <HiOutlineArrowRight className="w-4 h-4 ml-2" />
             </button>
             <button onClick={handleLogout} className="btn btn-secondary w-full text-sm text-gray-400">
               <HiOutlineLogout className="w-4 h-4 mr-2" />
-              Đăng xuất
+              {t('renewal.logout')}
             </button>
           </div>
         </div>

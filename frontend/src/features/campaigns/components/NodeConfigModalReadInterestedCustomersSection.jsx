@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../../i18n';
 import {
   HiOutlineDocument,
   HiOutlineDocumentText,
@@ -11,21 +12,9 @@ import { fetchInterestedCustomerCoursesLocal } from '../utils/nodeConfigModal.he
 import { INTERESTED_CUSTOMER_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
-const INTERESTED_COURSE_STATUS_LABELS = {
-  publish: 'Publish (Công khai)',
-  draft: 'Draft (Nháp)',
-  pending: 'Pending (Chờ duyệt)',
-  private: 'Private (Riêng tư)',
-  trash: 'Trash (Đã xóa)',
-};
 const INTERESTED_COURSE_STATUS_OPTIONS = ['publish', 'draft', 'pending', 'private'];
 
 const normalizeCourseStatus = (status) => String(status || '').trim().toLowerCase() || 'publish';
-
-const getCourseStatusLabel = (status) => {
-  const normalized = normalizeCourseStatus(status);
-  return INTERESTED_COURSE_STATUS_LABELS[normalized] || normalized;
-};
 
 const getCourseStatusClassName = (status) => {
   const normalized = normalizeCourseStatus(status);
@@ -73,7 +62,21 @@ export const NodeConfigReadInterestedCustomersSection = ({
   setTestPreviewSearchQuery,
   campaignId,
 }) => {
+  const { t } = useI18n();
   const [lastAutoLoadTestKey, setLastAutoLoadTestKey] = useState('');
+
+  const INTERESTED_COURSE_STATUS_LABELS = {
+    publish: t('readInterestedCustomers.publish', { defaultValue: 'Publish (Công khai)' }),
+    draft: t('readInterestedCustomers.draft', { defaultValue: 'Draft (Nháp)' }),
+    pending: t('readInterestedCustomers.pending', { defaultValue: 'Pending (Chờ duyệt)' }),
+    private: t('readInterestedCustomers.private', { defaultValue: 'Private (Riêng tư)' }),
+    trash: t('readInterestedCustomers.trash', { defaultValue: 'Trash (Đã xóa)' }),
+  };
+
+  const getCourseStatusLabel = (status) => {
+    const normalized = normalizeCourseStatus(status);
+    return INTERESTED_COURSE_STATUS_LABELS[normalized] || normalized;
+  };
 
   const selectedCourseIds = (Array.isArray(formData.interestedCourseIds) ? formData.interestedCourseIds : [])
     .map((v) => parseInt(v, 10))
@@ -139,24 +142,24 @@ export const NodeConfigReadInterestedCustomersSection = ({
   const selectedDataCols = Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : [];
 
   const readInterestedCustomersSections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
+    { id: 'basic', name: t('nodeConfig.basicInfo'), icon: HiOutlineDocument },
     {
       id: 'filter',
-      name: 'Lọc khóa học',
+      name: t('nodeConfig.filterCourses'),
       icon: HiOutlineSearch,
       badge: selectedCourseIds.length > 0,
       badgeLabel: selectedCourseIds.length,
     },
     {
       id: 'columns',
-      name: 'Cột dữ liệu',
+      name: t('nodeConfig.dataColumns'),
       icon: HiOutlineTable,
       badge: selectedDataCols.length > 0,
       badgeLabel: selectedDataCols.length,
     },
     {
       id: 'test',
-      name: 'Lựa chọn khách',
+      name: t('nodeConfig.selectCustomers'),
       icon: HiOutlinePlay,
       badge: testPreviewItems.length > 0,
       badgeLabel: testPreviewItems.length,
@@ -176,7 +179,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
       });
       setTestPreviewItems(Array.isArray(data?.items) ? data.items : []);
     } catch {
-      toast.error('Không thể tải dữ liệu thử');
+      toast.error(t('nodeConfig.cannotLoadPreview'));
     } finally {
       setIsLoadingTestPreview(false);
     }
@@ -217,31 +220,31 @@ export const NodeConfigReadInterestedCustomersSection = ({
     switch (selectedReadInterestedCustomersSection) {
       case 'basic': {
         const customerTypeOpts = [
-          { value: 'interested', label: 'Để lại thông tin', desc: 'Khách có trạng thái on-hold / interested' },
-          { value: 'purchased', label: 'Đã mua khóa học', desc: 'Khách có đơn hàng completed / processing' },
-          { value: 'both', label: 'Cả hai', desc: 'Bao gồm cả để lại thông tin lẫn đã mua' },
+          { value: 'interested', label: t('nodeConfig.interestedStatus'), desc: t('nodeConfig.interestedDesc') },
+          { value: 'purchased', label: t('nodeConfig.purchased'), desc: t('nodeConfig.purchasedDesc') },
+          { value: 'both', label: t('nodeConfig.both'), desc: t('nodeConfig.bothDesc') },
         ];
         const dataSourceOpts = [
-          { value: 'database', label: 'Database Founder AI Campaign', desc: 'Lấy dữ liệu từ database của hệ thống' },
-          { value: 'api', label: 'API Founder AI', desc: 'Lấy dữ liệu từ WooCommerce API (orders)' },
+          { value: 'database', label: t('nodeConfig.database'), desc: t('nodeConfig.databaseDesc') },
+          { value: 'api', label: t('nodeConfig.api'), desc: t('nodeConfig.apiDesc') },
         ];
         const currentCustomerType = formData.interestedCustomerType || 'interested';
         const currentDataSource = formData.interestedDataSource || 'database';
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeConfig.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="Lấy dữ liệu khách"
+                placeholder={t('nodeConfig.placeholderNodeName')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nguồn dữ liệu</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('nodeConfig.dataSource')}</label>
               <div className="space-y-2">
                 {dataSourceOpts.map((opt) => (
                   <label
@@ -287,7 +290,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lọc theo điều kiện</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('nodeConfig.filterByCondition')}</label>
               <div className="space-y-2">
                 {customerTypeOpts.map((opt) => (
                   <label
@@ -318,7 +321,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Số bản ghi tối đa</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeConfig.maxRecords')}</label>
               <input
                 type="number"
                 min={1}
@@ -329,19 +332,19 @@ export const NodeConfigReadInterestedCustomersSection = ({
               />
               <p className="text-xs text-gray-500 mt-1">
                 {currentCustomerType === 'purchased'
-                  ? 'Node sẽ lấy các khách đã mua khóa học (completed / processing).'
+                  ? t('nodeConfig.purchasedNote')
                   : currentCustomerType === 'both'
-                    ? 'Node sẽ lấy tất cả khách: cả để lại thông tin lẫn đã mua.'
-                    : 'Node sẽ lấy các khách có trạng thái để lại thông tin (on-hold / interested).'}
+                    ? t('nodeConfig.bothNote')
+                    : t('nodeConfig.interestedNote')}
               </p>
             </div>
 
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-sm text-blue-700">
-                <strong>Lưu ý:</strong>{' '}
+                <strong>{t('nodeConfig.note')}</strong>{' '}
                 {currentDataSource === 'database'
-                  ? 'Nếu đang sửa chiến dịch cụ thể thì ưu tiên lấy dữ liệu trong chiến dịch đó, nếu không sẽ lấy toàn bộ dữ liệu của tài khoản.'
-                  : 'Dữ liệu sẽ được lấy trực tiếp từ WooCommerce API của founderai.biz. Đảm bảo đã cấu hình đúng thông tin API key.'}
+                  ? t('nodeConfig.databaseTip')
+                  : t('nodeConfig.apiTip')}
               </p>
             </div>
           </div>
@@ -353,7 +356,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Lọc theo khóa học</label>
+                <label className="block text-sm font-medium text-gray-700">{t('nodeConfig.filterCourses')}</label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -361,7 +364,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     onClick={() => setFormData((prev) => ({ ...prev, interestedCourseIds: selectableIds }))}
                     disabled={!selectableIds.length}
                   >
-                    Chọn tất cả
+                    {t('nodeConfig.selectAll')}
                   </button>
                   <button
                     type="button"
@@ -369,7 +372,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     onClick={() => setFormData((prev) => ({ ...prev, interestedCourseIds: [] }))}
                     disabled={!selectedCourseIds.length}
                   >
-                    Bỏ chọn
+                    {t('nodeConfig.deselectAll')}
                   </button>
                 </div>
               </div>
@@ -377,7 +380,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
               {selectedCourseIds.length > 0 && (
                 <div className="mb-3 p-2 bg-primary-50 rounded-lg">
                   <p className="text-xs text-primary-700">
-                    <strong>{selectedCourseIds.length}</strong> khóa học đã được chọn
+                    <strong>{selectedCourseIds.length}</strong> {t('nodeConfig.coursesSelected', { count: selectedCourseIds.length, defaultValue: `khóa học đã được chọn` })}
                   </p>
                 </div>
               )}
@@ -385,7 +388,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder="Tìm kiếm khóa học theo tên hoặc mã..."
+                  placeholder={t('nodeConfig.searchCourses')}
                   value={courseSearchQuery}
                   onChange={(e) => {
                     const nextQuery = e.target.value;
@@ -396,7 +399,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 />
               </div>
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">Lọc theo trạng thái</p>
+                <p className="text-xs font-medium text-gray-600 mb-2">{t('nodeConfig.filterByStatus')}</p>
                 <div className="flex flex-wrap gap-2">
                   {INTERESTED_COURSE_STATUS_OPTIONS.map((status) => {
                     const checked = selectedCourseStatuses.includes(status);
@@ -422,12 +425,12 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 {isLoadingInterestedCourses ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">Đang tải danh sách khóa học...</p>
+                    <p className="text-sm text-gray-500">{t('nodeConfig.loadingCourses')}</p>
                   </div>
                 ) : interestedCourseOptions.length === 0 ? (
                   <div className="text-center py-8">
                     <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Chưa có khóa học phù hợp dữ liệu quan tâm.</p>
+                    <p className="text-sm text-gray-500">{t('nodeConfig.noCourses')}</p>
                   </div>
                 ) : (
                   (() => {
@@ -449,7 +452,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                         <div className="text-center py-8">
                           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                           <p className="text-sm text-gray-500">
-                            Không tìm thấy khóa học phù hợp với bộ lọc hiện tại
+                            {t('nodeConfig.noCoursesMatch')}
                           </p>
                         </div>
                       );
@@ -484,7 +487,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                                   {courseCode && <span className="text-gray-500 ml-1">({courseCode})</span>}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
-                                  <span>{totalItems} khách hàng</span>
+                                  <span>{t('nodeConfig.customers', { count: totalItems, defaultValue: `${totalItems} khách hàng` })}</span>
                                   <span>•</span>
                                   <span className={getCourseStatusClassName(courseStatus)}>
                                     {getCourseStatusLabel(courseStatus)}
@@ -500,13 +503,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                <strong>Lưu ý:</strong> Không chọn khóa học = lấy tất cả khách theo điều kiện đã chọn.
+                <strong>{t('nodeConfig.note')}</strong> {t('nodeConfig.noCoursesFilter')}
               </p>
             </div>
 
             <div className="bg-amber-50 p-3 rounded-lg">
               <p className="text-sm text-amber-700">
-                <strong>Mẹo:</strong> Sử dụng bộ lọc khóa học để thu hẹp đối tượng nhận email hoặc tin nhắn, giúp nội dung phù hợp hơn với từng nhóm khách hàng.
+                <strong>{t('nodeConfig.tip')}</strong> {t('nodeConfig.filterTip')}
               </p>
             </div>
           </div>
@@ -516,12 +519,12 @@ export const NodeConfigReadInterestedCustomersSection = ({
         return (
           <div className="space-y-4">
             <NodeConfigDataColumnPicker
-              title="Chỉ giữ các trường khách cần dùng"
+              title={t('nodeConfig.keepCustomerFields')}
               options={INTERESTED_CUSTOMER_COLUMN_OPTIONS}
               selectedKeys={selectedDataCols}
               setFormData={setFormData}
               formField="dataSelectedColumns"
-              hint="API/DB vẫn trả đủ cột; server chỉ giữ các trường đã chọn trong bộ nhớ và log. Luôn giữ thêm customerId và id. Hãy chọn email/phone nếu node sau cần gửi tin."
+              hint={t('nodeConfig.keepFieldsHint')}
             />
           </div>
         );
@@ -617,26 +620,26 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     : 'bg-primary-600 text-white hover:bg-primary-700'
                 }`}
               >
-                {isLoadingTestPreview ? 'Đang tải...' : testPreviewItems.length > 0 ? 'Tải lại' : 'Tải dữ liệu thử'}
+                {isLoadingTestPreview ? t('nodeConfig.loading') : testPreviewItems.length > 0 ? t('nodeConfig.reload') : t('nodeConfig.loadTestData')}
               </button>
               {testPreviewItems.length > 0 && (
                 <span className="text-sm text-gray-500">
-                  {testPreviewItems.length} bản ghi · đã chọn{' '}
+                  {testPreviewItems.length} {t('nodeConfig.records', { defaultValue: 'bản ghi' })} · {t('nodeConfig.selected', { defaultValue: 'đã chọn' })}{' '}
                   {interestedSelectionMode === 'fixed' ? (
                     <strong className="text-primary-700">{selectedTestIds.length}</strong>
                   ) : interestedSelectionMode === 'all_exclude' ? (
                     <strong className="text-red-600">{excludedTestIds.length}</strong>
                   ) : (
-                    <strong className="text-primary-700">tất cả</strong>
+                    <strong className="text-primary-700">{t('nodeConfig.all')}</strong>
                   )}
                 </span>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               {[
-                { value: 'all', label: 'Tất cả', desc: 'Mặc định lấy toàn bộ, continuous sẽ cập nhật khách mới.' },
-                { value: 'fixed', label: 'Cố định', desc: 'Chỉ chạy danh sách đã chọn, không nhận khách mới ngoài danh sách.' },
-                { value: 'all_exclude', label: 'Tất cả trừ', desc: 'Lấy tất cả nhưng loại trừ những khách đã tick.' },
+                { value: 'all', label: t('nodeConfig.all'), desc: t('nodeConfig.allDesc') },
+                { value: 'fixed', label: t('nodeConfig.fixed'), desc: t('nodeConfig.fixedDesc') },
+                { value: 'all_exclude', label: t('nodeConfig.allExclude'), desc: t('nodeConfig.allExcludeDesc') },
               ].map((option) => (
                 <label
                   key={option.value}
@@ -673,26 +676,26 @@ export const NodeConfigReadInterestedCustomersSection = ({
               ))}
             </div>
             <p className="text-xs text-gray-500">
-              Nhấn để thử lấy dữ liệu theo cấu hình hiện tại. Kết quả chỉ để xem trước, không ảnh hưởng đến chiến dịch.
+              {t('nodeConfig.testPreviewNote')}
             </p>
 
             {isLoadingTestPreview ? (
               <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                <p className="text-sm text-gray-500">Đang tải dữ liệu...</p>
+                <p className="text-sm text-gray-500">{t('nodeConfig.loadingData')}</p>
               </div>
             ) : testPreviewItems.length === 0 ? (
               <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
                 <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Chưa có dữ liệu</p>
-                <p className="text-xs text-gray-400 mt-1">Nhấn "Tải dữ liệu thử" để xem trước danh sách khách hàng</p>
+                <p className="text-sm text-gray-500">{t('nodeConfig.noData')}</p>
+                <p className="text-xs text-gray-400 mt-1">{t('nodeConfig.loadTestDataHint')}</p>
               </div>
             ) : (
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <input
                     type="text"
-                    placeholder="Tìm theo tên, email, SĐT..."
+                    placeholder={t('nodeConfig.searchByName')}
                     value={testPreviewSearchQuery}
                     onChange={(e) => setTestPreviewSearchQuery(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
@@ -704,8 +707,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
                   >
                     {interestedSelectionMode === 'all'
-                      ? 'Đang lấy tất cả'
-                      : allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                      ? t('nodeConfig.takingAll')
+                      : allSelected ? t('nodeConfig.deselectAll2') : t('nodeConfig.selectAll2')}
                   </button>
                 </div>
 
@@ -713,7 +716,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   <div className="max-h-96 overflow-y-auto">
                     {filteredPreview.length === 0 ? (
                       <div className="p-6 text-center">
-                        <p className="text-sm text-gray-500">Không tìm thấy kết quả phù hợp</p>
+                        <p className="text-sm text-gray-500">{t('nodeConfig.noResults')}</p>
                       </div>
                     ) : (
                       filteredPreview.map((item, idx) => {
@@ -735,7 +738,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                             />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-900 truncate">
-                                {item.fullName || '(Chưa có tên)'}
+                                {item.fullName || t('nodeConfig.noName')}
                               </div>
                               <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
                                 {item.email && <span>{item.email}</span>}
@@ -753,8 +756,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
                                     : 'bg-green-100 text-green-700'
                                 }`}>
                                   {item.orderStatus === 'on-hold' || item.itemStatus === 'interested'
-                                    ? 'Để lại TT'
-                                    : 'Đã mua'}
+                                    ? t('nodeConfig.interested')
+                                    : t('nodeConfig.purchasedShort')}
                                 </span>
                               </div>
                             </div>
@@ -769,8 +772,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
                     <p className={`text-xs ${interestedSelectionMode === 'all_exclude' ? 'text-red-700' : 'text-primary-700'}`}>
                       {interestedSelectionMode === 'fixed'
-                        ? <>Đã chọn <strong>{selectedTestIds.length}</strong> khách hàng. Khi chạy node sẽ chỉ lấy những khách hàng này.</>
-                        : <>Đã loại trừ <strong>{excludedTestIds.length}</strong> khách hàng. Continuous vẫn lấy khách mới nhưng bỏ qua danh sách loại trừ.</>}
+                        ? <>{t('nodeConfig.selectedCount', { count: selectedTestIds.length, defaultValue: `Đã chọn ${selectedTestIds.length} khách hàng. Khi chạy node sẽ chỉ lấy những khách hàng này.` })}</>
+                        : <>{t('nodeConfig.excludedCount', { count: excludedTestIds.length, defaultValue: `Đã loại trừ ${excludedTestIds.length} khách hàng. Continuous vẫn lấy khách mới nhưng bỏ qua danh sách loại trừ.` })}</>}
                     </p>
                     <button
                       type="button"
@@ -782,7 +785,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                       }))}
                       className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
                     >
-                      Xóa chọn
+                      {t('nodeConfig.clearSelection')}
                     </button>
                   </div>
                 )}
@@ -791,12 +794,12 @@ export const NodeConfigReadInterestedCustomersSection = ({
 
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-sm text-green-700">
-                <strong>Lưu ý:</strong>{' '}
+                <strong>{t('nodeConfig.note')}</strong>{' '}
                 {interestedSelectionMode === 'all'
-                  ? 'Đang ở chế độ lấy tất cả (mặc định). Continuous sẽ tự lấy thêm khách mới theo chu kỳ.'
+                  ? t('nodeConfig.allModeNote')
                   : interestedSelectionMode === 'fixed'
-                    ? 'Đang ở chế độ cố định. Chỉ những khách hàng đã tích mới đi vào luồng.'
-                    : 'Đang ở chế độ tất cả trừ. Continuous sẽ lấy thêm khách mới, trừ những khách đã tích loại trừ.'}
+                    ? t('nodeConfig.fixedModeNote')
+                    : t('nodeConfig.allExcludeModeNote')}
               </p>
             </div>
           </div>
@@ -812,7 +815,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('nodeConfig.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readInterestedCustomersSections.map((section) => {

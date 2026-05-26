@@ -9,6 +9,7 @@ import {
 } from '../../features/landing/services/landingFeaturedCoursesApi.service.js';
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service.js';
 import { normalizePublicFileUrlForEmbed } from '../../features/landing/utils/publicFileUrl.js';
+import { useI18n } from '../../i18n';
 
 const emptyForm = () => ({
   titleVi: '',
@@ -28,6 +29,7 @@ const emptyForm = () => ({
  * 2. Thêm / sửa / xóa qua API; ảnh upload tạm `/api/uploads/temp` rồi lưu như testimonials; xóa bản ghi xóa file uploads.
  */
 const LandingFeaturedCoursesPage = () => {
+  const { t } = useI18n();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,7 +52,7 @@ const LandingFeaturedCoursesPage = () => {
       const list = await fetchAdminLandingFeaturedCourses();
       setRows(list);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Không thể tải danh sách');
+      toast.error(e?.response?.data?.message || t('landingFeaturedCourses.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -125,9 +127,9 @@ const LandingFeaturedCoursesPage = () => {
         return { ...prev, imageUrl: '' };
       });
       setPendingImage({ tempId: tempData.tempId, originalName: tempData.originalName || file.name });
-      toast.success('Đã tải ảnh lên — bấm Lưu để áp dụng');
+      toast.success(t('landingFeaturedCourses.imageUploaded'));
     } catch {
-      toast.error('Upload ảnh thất bại');
+      toast.error(t('landingFeaturedCourses.uploadFailed'));
     } finally {
       setUploadingFile(false);
     }
@@ -160,39 +162,39 @@ const LandingFeaturedCoursesPage = () => {
       payload.imageUrl = String(form.imageUrl).trim() || null;
     }
     if (!payload.titleVi || !payload.titleEn) {
-      toast.error('Tiêu đề (VI) và (EN) là bắt buộc');
+      toast.error(t('landingFeaturedCourses.titleViRequired'));
       return;
     }
     if (!payload.linkUrl) {
-      toast.error('Link khóa học là bắt buộc (http/https)');
+      toast.error(t('landingFeaturedCourses.linkRequired'));
       return;
     }
     try {
       setSaving(true);
       if (editingId) {
         await updateLandingFeaturedCourse(editingId, payload);
-        toast.success('Đã cập nhật');
+        toast.success(t('landingFeaturedCourses.updated'));
       } else {
         await createLandingFeaturedCourse(payload);
-        toast.success('Đã thêm khóa học');
+        toast.success(t('landingFeaturedCourses.created'));
       }
       closeModal();
       await load(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể lưu');
+      toast.error(t('landingFeaturedCourses.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (row) => {
-    if (!window.confirm(`Xóa khóa học: "${row.titleVi}"?`)) return;
+    if (!window.confirm(t('landingFeaturedCourses.deleteConfirm', { title: row.titleVi }))) return;
     try {
       await deleteLandingFeaturedCourse(row.id);
-      toast.success('Đã xóa');
+      toast.success(t('landingFeaturedCourses.deleted'));
       await load(true);
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể xóa');
+    } catch {
+      toast.error(t('landingFeaturedCourses.deleteFailed'));
     }
   };
 
@@ -200,9 +202,9 @@ const LandingFeaturedCoursesPage = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Landing — khóa học nổi bật</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('landingFeaturedCourses.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Quản lý thẻ khóa học trên trang <code className="text-xs bg-gray-100 px-1 rounded">/l</code> — ảnh bấm mở link.
+            {t('landingFeaturedCourses.description')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -213,7 +215,7 @@ const LandingFeaturedCoursesPage = () => {
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             <HiOutlineRefresh className={refreshing ? 'animate-spin' : ''} />
-            Làm mới
+            {t('landingFeaturedCourses.refresh')}
           </button>
           <button
             type="button"
@@ -221,30 +223,30 @@ const LandingFeaturedCoursesPage = () => {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
           >
             <HiOutlinePlus />
-            Thêm khóa học
+            {t('landingFeaturedCourses.addCourse')}
           </button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Đang tải...</p>
+        <p className="text-gray-500">{t('landingFeaturedCourses.loading')}</p>
       ) : (
         <div className="overflow-x-auto border border-gray-200 rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Tiêu đề (VI)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Link</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">Ảnh</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">Hiển thị</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700">Thao tác</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingFeaturedCourses.titleVi')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingFeaturedCourses.link')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">{t('landingFeaturedCourses.image')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingFeaturedCourses.visible')}</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700">{t('landingFeaturedCourses.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
-                    Chưa có bản ghi — trang landing dùng nội dung mặc định trong code.
+                    {t('landingFeaturedCourses.noRecords')}
                   </td>
                 </tr>
               ) : (
@@ -263,7 +265,7 @@ const LandingFeaturedCoursesPage = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block"
-                          title="Xem ảnh"
+                          title={t('landingFeaturedCourses.viewImage')}
                         >
                           <img
                             src={normalizePublicFileUrlForEmbed(r.imageUrl)}
@@ -275,21 +277,21 @@ const LandingFeaturedCoursesPage = () => {
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-center">{r.isActive ? 'Có' : 'Không'}</td>
+                    <td className="px-3 py-2 text-center">{r.isActive ? t('landingFeaturedCourses.yes') : t('landingFeaturedCourses.no')}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 hover:bg-primary-50 rounded"
                       >
-                        <HiOutlinePencil /> Sửa
+                        <HiOutlinePencil /> {t('landingFeaturedCourses.edit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(r)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-red-600 hover:bg-red-50 rounded ml-2"
                       >
-                        <HiOutlineTrash /> Xóa
+                        <HiOutlineTrash /> {t('landingFeaturedCourses.delete')}
                       </button>
                     </td>
                   </tr>
@@ -303,11 +305,11 @@ const LandingFeaturedCoursesPage = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? 'Sửa khóa học' : 'Thêm khóa học'}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? t('landingFeaturedCourses.editCourse') : t('landingFeaturedCourses.createCourse')}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tiêu đề (VI) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.titleVi')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.titleVi}
@@ -316,7 +318,7 @@ const LandingFeaturedCoursesPage = () => {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tiêu đề (EN) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.titleEn')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.titleEn}
@@ -327,7 +329,7 @@ const LandingFeaturedCoursesPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Nhãn (VI)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.tagVi')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.tagVi}
@@ -335,7 +337,7 @@ const LandingFeaturedCoursesPage = () => {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Nhãn (EN)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.tagEn')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.tagEn}
@@ -345,16 +347,14 @@ const LandingFeaturedCoursesPage = () => {
               </div>
               <label className="block">
                 <span className="text-xs font-medium text-gray-600">
-                  URL ảnh (http/https, tùy chọn — hoặc upload bên dưới; để trống = không ảnh)
+                  {t('landingFeaturedCourses.imageUrlLabel')}
                 </span>
                 <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
                   <span className="block">
-                    Ưu tiên khi lưu: nếu vừa có URL vừa chọn file upload, hệ thống dùng ảnh từ upload (đường dẫn do
-                    server tạo).
+                    {t('landingFeaturedCourses.imageUrlNote1')}
                   </span>
                   <span className="block">
-                    Khi đã chọn file upload tạm, ô URL ảnh bị khóa — bấm «Bỏ chọn ảnh upload» bên dưới để nhập lại
-                    URL.
+                    {t('landingFeaturedCourses.imageUrlNote2')}
                   </span>
                 </p>
                 <input
@@ -365,34 +365,34 @@ const LandingFeaturedCoursesPage = () => {
                   onChange={(e) => setField('imageUrl', e.target.value)}
                   placeholder="https://..."
                   disabled={Boolean(pendingImage)}
-                  title={pendingImage ? 'Đang có ảnh upload tạm — bỏ chọn ảnh để nhập URL' : ''}
+                  title={pendingImage ? t('landingFeaturedCourses.imageDisabledNote') : ''}
                 />
               </label>
               <div className="rounded-lg border border-dashed border-gray-300 p-3">
                 <p className="text-xs text-gray-600 mb-2">
-                  Upload ảnh (lưu vào thư mục uploads khi bấm Lưu; xóa bản ghi sẽ xóa file nếu là ảnh upload hệ thống)
+                  {t('landingFeaturedCourses.uploadImageLabel')}
                 </p>
                 <input type="file" accept="image/*" onChange={onPickImage} disabled={uploadingFile} className="text-sm" />
                 {pendingImage && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-primary-600">Chờ lưu: {pendingImage.originalName}</p>
+                    <p className="text-xs text-primary-600">{t('landingFeaturedCourses.pendingSave', { name: pendingImage.originalName })}</p>
                     <button
                       type="button"
                       onClick={clearPendingImage}
                       className="text-xs font-medium text-gray-700 underline hover:text-primary-600"
                     >
-                      Bỏ chọn ảnh upload
+                      {t('landingFeaturedCourses.cancelUpload')}
                     </button>
                   </div>
                 )}
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">Link khóa học * (http/https)</span>
+                <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.courseLink')}</span>
                 <input
                   className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                   value={form.linkUrl}
                   onChange={(e) => setField('linkUrl', e.target.value)}
-                  placeholder="https://founderai.biz/..."
+                  placeholder={t('landingFeaturedCourses.courseLinkPlaceholder')}
                   required
                 />
               </label>
@@ -402,7 +402,7 @@ const LandingFeaturedCoursesPage = () => {
                   checked={form.isActive}
                   onChange={(e) => setField('isActive', e.target.checked)}
                 />
-                <span className="text-gray-700">Đang hiển thị trên landing</span>
+                <span className="text-gray-700">{t('landingFeaturedCourses.isActiveLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-4">
                 <button
@@ -410,14 +410,14 @@ const LandingFeaturedCoursesPage = () => {
                   onClick={closeModal}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
-                  Hủy
+                  {t('landingFeaturedCourses.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {saving ? 'Đang lưu...' : 'Lưu'}
+                  {saving ? t('landingFeaturedCourses.saving') : t('landingFeaturedCourses.save')}
                 </button>
               </div>
             </form>

@@ -66,7 +66,7 @@ export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBa
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
  * @returns {{ iframeBlock: string, scriptBlock: string, combined: string }}
  */
-export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }) {
+export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }, t = (k) => k) {
   const s = String(slug || '').trim().toLowerCase();
   const origin = String(frontendOrigin || '').replace(/\/+$/, '');
   const api = normalizeLandingLpTrackApiBase(apiBase);
@@ -76,7 +76,7 @@ export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }
   const embedUrl = `${origin}/embed/lead-form?slug=${encodeURIComponent(s)}`;
   const scriptSrc = `${origin}/lp-track.js`;
   /** Không bọc section — dán đúng vị trí layout; chiều cao iframe được lp-track.js chỉnh qua postMessage từ trang embed. */
-  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="Đăng ký Founder AI" loading="lazy"></iframe>\n`;
+  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="${t('landingEnhancements.registerFounderAI')}" loading="lazy"></iframe>\n`;
   const scriptBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
   return {
     iframeBlock,

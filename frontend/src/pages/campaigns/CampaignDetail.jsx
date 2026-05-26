@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import { getCampaignEngagementStatDefinitions } from '../../utils/campaignDetailEngagementLabels';
 import {
   HiOutlineArrowLeft,
@@ -10,10 +11,8 @@ import {
   HiOutlinePause,
 } from 'react-icons/hi';
 
-const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
-  'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi tạm dừng.';
-
 const CampaignDetail = () => {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
@@ -35,7 +34,7 @@ const CampaignDetail = () => {
       const response = await api.get(`/campaigns/${id}`);
       setCampaign(response.data.data);
     } catch (error) {
-      toast.error('Không thể tải thông tin chiến dịch');
+      toast.error(t('campaigns.loadFailed'));
       navigate('/app/campaigns');
     } finally {
       setIsLoading(false);
@@ -51,7 +50,7 @@ const CampaignDetail = () => {
         const hasRunningCampaignRun = campaignRuns.some((run) => run.status === 'running');
 
         if (hasRunningCampaignRun) {
-          toast.error(RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE);
+          toast.error(t('campaigns.runningCampaignBlock'));
           return;
         }
       }
@@ -59,11 +58,11 @@ const CampaignDetail = () => {
       await api.put(`/campaigns/${id}`, {
         status: newStatus,
       });
-      toast.success(newStatus === 'active' ? 'Đã kích hoạt chiến dịch' : 'Đã tạm dừng chiến dịch');
+      toast.success(newStatus === 'active' ? t('campaigns.activateSuccess') : t('campaigns.pauseSuccess'));
       // Reload campaign data
       fetchCampaign();
     } catch (error) {
-      toast.error('Không thể cập nhật trạng thái chiến dịch');
+      toast.error(t('campaigns.updateFailed'));
     }
   };
 
@@ -92,7 +91,7 @@ const CampaignDetail = () => {
           </button>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 truncate">{campaign.campaignName}</h1>
-            <p className="text-gray-500 mt-1">{campaign.description || 'Không có mô tả'}</p>
+            <p className="text-gray-500 mt-1">{campaign.description || t('common.noDescription')}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -101,7 +100,7 @@ const CampaignDetail = () => {
             className="btn btn-secondary"
           >
             <HiOutlinePencil className="w-5 h-5 mr-2" />
-            Chỉnh sửa
+            {t('campaigns.edit')}
           </button>
           {campaign.status === 'active' ? (
             <button
@@ -109,7 +108,7 @@ const CampaignDetail = () => {
               className="btn btn-warning"
             >
               <HiOutlinePause className="w-5 h-5 mr-2" />
-              Tạm dừng
+              {t('campaigns.pause')}
             </button>
           ) : (
             <button
@@ -117,7 +116,7 @@ const CampaignDetail = () => {
               className="btn btn-primary"
             >
               <HiOutlinePlay className="w-5 h-5 mr-2" />
-              Kích hoạt
+              {t('campaigns.activate')}
             </button>
           )}
         </div>
@@ -126,7 +125,7 @@ const CampaignDetail = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card p-6">
-          <p className="text-sm text-gray-500">Tổng khách hàng</p>
+          <p className="text-sm text-gray-500">{t('campaigns.totalCustomers')}</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
             {campaign.totalCustomers?.toLocaleString() || 0}
           </p>
@@ -169,14 +168,14 @@ const CampaignDetail = () => {
 
       {/* Details */}
       <div className="card p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin chi tiết</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('campaigns.details')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-sm text-gray-500">Loại chiến dịch</p>
+            <p className="text-sm text-gray-500">{t('campaigns.campaignType')}</p>
             <p className="font-medium capitalize">{campaign.campaignType}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Trạng thái</p>
+            <p className="text-sm text-gray-500">{t('campaigns.status')}</p>
             <span
               className={`badge ${
                 campaign.status === 'active'
@@ -186,19 +185,19 @@ const CampaignDetail = () => {
                   : 'badge-warning'
               }`}
             >
-              {campaign.status === 'active' ? 'Đang hoạt động' :
-               campaign.status === 'paused' ? 'Tạm dừng' :
-               'Nháp'}
+              {campaign.status === 'active' ? t('campaigns.active') :
+               campaign.status === 'paused' ? t('campaigns.paused') :
+               t('campaigns.draft')}
             </span>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Ngày tạo</p>
+            <p className="text-sm text-gray-500">{t('campaigns.createdAt')}</p>
             <p className="font-medium">
               {new Date(campaign.createdAt).toLocaleDateString('vi-VN')}
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Cập nhật lần cuối</p>
+            <p className="text-sm text-gray-500">{t('campaigns.lastUpdated')}</p>
             <p className="font-medium">
               {new Date(campaign.updatedAt).toLocaleDateString('vi-VN')}
             </p>
@@ -209,7 +208,7 @@ const CampaignDetail = () => {
       {/* Nodes preview */}
       {campaign.nodes && campaign.nodes.length > 0 && (
         <div className="card p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Các bước trong quy trình</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('campaigns.processSteps')}</h3>
           <div className="space-y-3">
             {campaign.nodes.map((node, index) => (
               <div

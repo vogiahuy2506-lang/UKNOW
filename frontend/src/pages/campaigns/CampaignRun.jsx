@@ -10,6 +10,7 @@ import CampaignRunMainTabs from '../../features/campaigns/components/CampaignRun
 import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
 import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
+import { useI18n } from '../../i18n';
 import {
   buildDelayedRunDate,
   buildCronExpression,
@@ -23,14 +24,14 @@ import {
   isStoppedOnceSchedule,
 } from '../../features/campaigns/utils/campaignRunSchedule.helpers';
 
-const WEEKLY_DAY_OPTIONS = [
-  { value: '1', label: 'Thứ 2' },
-  { value: '2', label: 'Thứ 3' },
-  { value: '3', label: 'Thứ 4' },
-  { value: '4', label: 'Thứ 5' },
-  { value: '5', label: 'Thứ 6' },
-  { value: '6', label: 'Thứ 7' },
-  { value: '0', label: 'Chủ nhật' },
+const WEEKLY_DAY_OPTIONS = (t) => [
+  { value: '1', label: t('campaigns.monday') },
+  { value: '2', label: t('campaigns.tuesday') },
+  { value: '3', label: t('campaigns.wednesday') },
+  { value: '4', label: t('campaigns.thursday') },
+  { value: '5', label: t('campaigns.friday') },
+  { value: '6', label: t('campaigns.saturday') },
+  { value: '0', label: t('campaigns.sunday') },
 ];
 const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
 const DEFAULT_CONTINUOUS_MODE = false;
@@ -66,6 +67,7 @@ const normalizeContinuousPollIntervalMinutes = (rawValue) => {
 };
 
 const CampaignRun = () => {
+  const { t } = useI18n();
   const [campaigns, setCampaigns] = useState([]);
   const [pausedCampaigns, setPausedCampaigns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -183,7 +185,7 @@ const CampaignRun = () => {
       const response = await campaignRunApiService.getCampaignsByStatus('active', 100);
       setCampaigns(response.data.data.items || []);
     } catch (error) {
-      toast.error('Không thể tải danh sách chiến dịch');
+      toast.error(t('campaigns.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +196,7 @@ const CampaignRun = () => {
       const response = await campaignRunApiService.getCampaignsByStatus('paused', 100);
       setPausedCampaigns(response.data.data.items || []);
     } catch (error) {
-      toast.error('Không thể tải danh sách chiến dịch tạm dừng');
+      toast.error(t('campaigns.loadPausedFailed'));
     }
   };
 
@@ -203,7 +205,7 @@ const CampaignRun = () => {
       const response = await campaignRunApiService.getCampaignSchedules();
       setSchedules(response.data.data || []);
     } catch (error) {
-      console.error('Không thể tải lịch chạy:', error);
+      console.error(t('campaigns.loadScheduleFailed'), error);
     }
   };
 
@@ -229,7 +231,7 @@ const CampaignRun = () => {
       setRunningCampaigns(running);
       setRunningRunByCampaign(runningMap);
     } catch (error) {
-      console.error('Không thể kiểm tra trạng thái chạy:', error);
+      console.error(t('campaigns.checkRunStatusFailed'), error);
     }
   };
 
@@ -250,7 +252,7 @@ const CampaignRun = () => {
       setSelectedRunDetail(full);
       executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
     } catch (error) {
-      toast.error('Không thể tải log chạy chiến dịch');
+      toast.error(t('campaigns.loadLogsFailed'));
     } finally {
       setIsLoadingRunDetail(false);
     }
@@ -261,8 +263,8 @@ const CampaignRun = () => {
       const response = await campaignRunApiService.getCampaignRuns(`scheduleId=${scheduleId}&limit=20`);
       setScheduleRuns(response.data.data || []);
     } catch (error) {
-      console.error('Không thể tải lịch sử chạy:', error);
-      toast.error('Không thể tải lịch sử chạy');
+      console.error(t('campaigns.loadHistoryFailed'), error);
+      toast.error(t('campaigns.loadHistoryFailed'));
     }
   };
   
@@ -339,20 +341,20 @@ const CampaignRun = () => {
           );
           const startedAtLabel = run?.startedAt
             ? new Date(run.startedAt).toLocaleString('vi-VN')
-            : 'không rõ thời gian';
+            : t('campaigns.unknownTime');
           const statusLabel = String(run?.status || '').trim() || 'unknown';
           return {
             id: runId,
             runName,
             pollIntervalMinutes,
-            label: `#${runId} - ${runName} (${statusLabel}, bắt đầu: ${startedAtLabel}, quét: ${pollIntervalMinutes} phút)`,
+            label: `#${runId} - ${runName} (${statusLabel}, ${t('campaigns.startedAt')}: ${startedAtLabel}, ${t('campaigns.pollInterval')}: ${pollIntervalMinutes} ${t('campaigns.minutes')})`,
           };
         })
         .filter((item) => Number.isFinite(item.id));
       setContinuousResumeRunOptions(options);
     } catch (error) {
       setContinuousResumeRunOptions([]);
-      toast.error('Không thể tải danh sách lượt continuous cũ');
+      toast.error(t('campaigns.loadContinuousRunsFailed'));
     } finally {
       setIsLoadingContinuousResumeOptions(false);
     }
@@ -360,7 +362,7 @@ const CampaignRun = () => {
 
   const openRunConfirmModal = async (campaign) => {
     if (isCampaignRunningById(campaign.id)) {
-      toast.error('Chiến dịch đang chạy, vui lòng chờ hoàn tất');
+      toast.error(t('campaigns.runningBlockRunConfirm'));
       return;
     }
     const isGroupCampaign = isZaloGroupCampaign(campaign);
@@ -393,7 +395,7 @@ const CampaignRun = () => {
   const handleRunNow = async () => {
     if (!runConfirmCampaign?.id) return;
     if (isCampaignRunningById(runConfirmCampaign.id)) {
-      toast.error('Chiến dịch đang chạy, không thể chạy thêm');
+      toast.error(t('campaigns.runningBlockNoRun'));
       return;
     }
     setIsSubmittingRun(true);
@@ -407,7 +409,7 @@ const CampaignRun = () => {
         ? selectedResumeRunId
         : null;
       if (effectiveContinuousMode && runResumeMode && !continueRunId) {
-        toast.error('Vui lòng chọn lượt continuous cũ để chạy tiếp');
+        toast.error(t('campaigns.selectContinuousRun'));
         return;
       }
       await campaignRunApiService.runCampaign(runConfirmCampaign.id, {
@@ -424,11 +426,11 @@ const CampaignRun = () => {
           : {}),
         ...(continueRunId ? { continueRunId } : {}),
       });
-      toast.success('Đã bắt đầu chạy chiến dịch');
+      toast.success(t('campaigns.startSuccess'));
       await checkRunningCampaigns();
       closeRunConfirmModal(true);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể chạy chiến dịch');
+      toast.error(t('campaigns.runFailed'));
     } finally {
       setIsSubmittingRun(false);
     }
@@ -476,7 +478,7 @@ const CampaignRun = () => {
         setSelectedRunDetail(null);
       }
     } catch (error) {
-      toast.error('Không thể tải log chạy chiến dịch');
+      toast.error(t('campaigns.loadLogsFailed'));
     } finally {
       setIsLoadingRunDetail(false);
     }
@@ -591,7 +593,7 @@ const CampaignRun = () => {
           executionLogDeltaCursorRef.current = getMaxExecutionLogUpdatedAt(full.executionLogs);
         }
       } catch (error) {
-        console.error('Không thể cập nhật log chạy chiến dịch:', error);
+        console.error(t('campaigns.updateRunLogFailed'), error);
       }
     };
 
@@ -623,7 +625,7 @@ const CampaignRun = () => {
 
   const openScheduleModal = (campaign) => {
     if (isCampaignRunningById(campaign.id)) {
-      toast.error('Chiến dịch đang chạy, tạm thời không thể lên lịch');
+      toast.error(t('campaigns.runningBlockSchedule'));
       return;
     }
     setSelectedCampaign(campaign);
@@ -650,47 +652,47 @@ const CampaignRun = () => {
 
   const handleSaveSchedule = async () => {
     if (selectedCampaign?.id && isCampaignRunningById(selectedCampaign.id)) {
-      toast.error('Chiến dịch đang chạy, tạm thời không thể lên lịch');
+      toast.error(t('campaigns.runningBlockSchedule'));
       return;
     }
 
     if (!scheduleForm.scheduleName.trim()) {
-      toast.error('Vui lòng nhập tên lịch chạy');
+      toast.error(t('campaigns.scheduleNameRequired'));
       return;
     }
 
     if (scheduleForm.scheduleType !== 'after_delay' && !scheduleForm.scheduleTime) {
-      toast.error('Vui lòng chọn thời gian chạy');
+      toast.error(t('campaigns.scheduleTimeRequired'));
       return;
     }
 
     if (scheduleForm.scheduleType === 'once' && !scheduleForm.scheduleDate) {
-      toast.error('Vui lòng chọn ngày chạy');
+      toast.error(t('campaigns.scheduleDateRequired'));
       return;
     }
 
     if (scheduleForm.scheduleType === 'weekly' && !scheduleForm.weeklyDay) {
-      toast.error('Vui lòng chọn thứ chạy');
+      toast.error(t('campaigns.scheduleDayRequired'));
       return;
     }
 
     if (scheduleForm.scheduleType === 'custom') {
       const intervalDays = Number.parseInt(scheduleForm.customIntervalDays, 10);
       if (!Number.isFinite(intervalDays) || intervalDays <= 0) {
-        toast.error('Vui lòng nhập số ngày lặp lại hợp lệ');
+        toast.error(t('campaigns.intervalRequired'));
         return;
       }
     }
 
     if (scheduleForm.scheduleType === 'after_delay' && !scheduleForm.delayPreviewAt) {
-      toast.error('Vui lòng nhập thời gian trễ hợp lệ');
+      toast.error(t('campaigns.delayRequired'));
       return;
     }
 
     const cronExpression = buildCronExpression(scheduleForm);
     
     if (!cronExpression) {
-      toast.error('Không thể tạo biểu thức thời gian');
+      toast.error(t('campaigns.createCronFailed'));
       return;
     }
 
@@ -703,11 +705,11 @@ const CampaignRun = () => {
         enabled: scheduleForm.enabled,
       });
       
-      toast.success('Đã tạo lịch chạy chiến dịch');
+      toast.success(t('campaigns.scheduleCreated'));
       closeScheduleModal();
       fetchSchedules();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể tạo lịch chạy');
+      toast.error(t('campaigns.createScheduleFailed'));
     }
   };
 
@@ -733,16 +735,16 @@ const CampaignRun = () => {
   ]);
 
   const handleDeleteSchedule = async (scheduleId) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa lịch chạy này?')) {
+    if (!confirm(t('campaigns.confirmDeleteSchedule'))) {
       return;
     }
 
     try {
       await campaignRunApiService.deleteCampaignSchedule(scheduleId);
-      toast.success('Đã xóa lịch chạy');
+      toast.success(t('campaigns.scheduleDeleted'));
       fetchSchedules();
     } catch (error) {
-      toast.error('Không thể xóa lịch chạy');
+      toast.error(t('campaigns.deleteScheduleFailed'));
     }
   };
 
@@ -750,11 +752,11 @@ const CampaignRun = () => {
     const targetSchedule = schedules.find((item) => item.id === scheduleId);
     if (isReadonlyOnceSchedule(targetSchedule)) {
       if (isStoppedOnceSchedule(targetSchedule)) {
-        toast.error('Lịch chạy 1 lần đã dừng, không thể chỉnh sửa');
+        toast.error(t('campaigns.scheduleOneTimeStopped'));
         return;
       }
       if (isCompletedOnceSchedule(targetSchedule)) {
-        toast.error('Lịch chạy 1 lần đã hoàn thành, không thể bật lại');
+        toast.error(t('campaigns.scheduleOneTimeCompleted'));
         return;
       }
       return;
@@ -764,7 +766,7 @@ const CampaignRun = () => {
       currentStatus === false &&
       isCampaignRunningById(targetSchedule.campaignId)
     ) {
-      toast.error('Chiến dịch đang chạy, chưa thể bật lịch');
+      toast.error(t('campaigns.cannotEnableScheduleWhileRunning'));
       return;
     }
 
@@ -772,7 +774,7 @@ const CampaignRun = () => {
       await campaignRunApiService.updateCampaignSchedule(scheduleId, {
         enabled: !currentStatus,
       });
-      toast.success(currentStatus ? 'Đã tắt lịch chạy' : 'Đã bật lịch chạy');
+      toast.success(currentStatus ? t('campaigns.scheduleDisabled') : t('campaigns.scheduleEnabled'));
       fetchSchedules();
       
       // Nếu đang mở modal detail, cập nhật selectedSchedule
@@ -783,7 +785,7 @@ const CampaignRun = () => {
         });
       }
     } catch (error) {
-      toast.error('Không thể cập nhật lịch chạy');
+      toast.error(t('campaigns.updateScheduleFailed'));
     }
   };
 
@@ -796,17 +798,17 @@ const CampaignRun = () => {
   const handleActivateCampaign = async (campaignId) => {
     if (!campaignId) return;
     if (isCampaignRunningById(campaignId)) {
-      toast.error('Chiến dịch đang chạy, vui lòng chờ hoàn tất');
+      toast.error(t('campaigns.runningBlockActivate'));
       return;
     }
 
     setActivatingCampaignIds((prev) => new Set(prev).add(campaignId));
     try {
       await campaignRunApiService.publishCampaign(campaignId);
-      toast.success('Đã kích hoạt chiến dịch');
+      toast.success(t('campaigns.campaignActivated'));
       await Promise.all([fetchActiveCampaigns(), fetchPausedCampaigns()]);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể kích hoạt chiến dịch');
+      toast.error(t('campaigns.activateCampaignFailed'));
     } finally {
       setActivatingCampaignIds((prev) => {
         const next = new Set(prev);
@@ -821,7 +823,7 @@ const CampaignRun = () => {
     const campaignId = run?.campaignId;
     if (!Number.isFinite(runId) || !campaignId) return;
     if (!isCampaignRunningById(campaignId)) {
-      toast.error('Lượt chạy hiện không ở trạng thái đang chạy');
+      toast.error(t('campaigns.runNotInRunningStatus'));
       return;
     }
     setStopRunConfirmTarget(run);
@@ -845,7 +847,7 @@ const CampaignRun = () => {
     setStoppingRunIds((prev) => new Set(prev).add(runId));
     try {
       await campaignRunApiService.stopCampaignRun(runId);
-      toast.success('Đã dừng lượt chạy');
+      toast.success(t('campaigns.runStopped'));
       await checkRunningCampaigns();
       if (selectedRunDetail?.id === runId && selectedCampaignForLogs?.id) {
         executionLogDeltaCursorRef.current = null;
@@ -863,7 +865,7 @@ const CampaignRun = () => {
       }
       setStopRunConfirmTarget(null);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể dừng lượt chạy');
+      toast.error(t('campaigns.stopRunFailed'));
     } finally {
       setStoppingRunIds((prev) => {
         const next = new Set(prev);
@@ -888,8 +890,8 @@ const CampaignRun = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Chạy chiến dịch</h1>
-        <p className="text-gray-500 mt-1">Chạy ngay hoặc thiết lập lịch chạy cho các chiến dịch đang hoạt động</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('campaigns.runCampaign')}</h1>
+        <p className="text-gray-500 mt-1">{t('campaigns.runCampaignDescription')}</p>
       </div>
 
       <CampaignRunMainTabs

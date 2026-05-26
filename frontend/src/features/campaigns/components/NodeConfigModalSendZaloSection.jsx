@@ -6,6 +6,7 @@ import {
   HiOutlinePlus,
   HiOutlineTrash,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import NodeConfigTemplatePreviewModal from './NodeConfigTemplatePreviewModal';
 import TemplateSearchSelect from './TemplateSearchSelect';
 
@@ -66,67 +67,70 @@ const DataSourceSelector = ({
   onFieldChange,
   fieldLabel,
   nodeSchema = [],
-}) => (
-  <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Nguồn dữ liệu</label>
-      <select
-        value={sourceMode}
-        onChange={(e) => onSourceModeChange(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-      >
-        <option value="manual">Nhập thủ công</option>
-        <option value="node">Lấy từ node trước đó</option>
-      </select>
-    </div>
-
-    {sourceMode === 'manual' ? (
+}) => {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-3 rounded-lg border border-gray-200 p-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{manualLabel}</label>
-        <textarea
-          rows={4}
-          value={manualValue}
-          onChange={(e) => onManualValueChange(e.target.value)}
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.dataSource')}</label>
+        <select
+          value={sourceMode}
+          onChange={(e) => onSourceModeChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder={manualPlaceholder}
-        />
+        >
+          <option value="manual">{t('zaloNodeSend.manualInput')}</option>
+          <option value="node">{t('zaloNodeSend.getFromPreviousNode')}</option>
+        </select>
       </div>
-    ) : (
-      <>
+
+      {sourceMode === 'manual' ? (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Node dữ liệu</label>
-          <select
-            value={selectedNodeId}
-            onChange={(e) => onNodeIdChange(e.target.value)}
+          <label className="block text-sm font-medium text-gray-700 mb-1">{manualLabel}</label>
+          <textarea
+            rows={4}
+            value={manualValue}
+            onChange={(e) => onManualValueChange(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">-- Chọn node --</option>
-            {upstreamNodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.data?.label || node.data?.nodeType || node.type}
-              </option>
-            ))}
-          </select>
+            placeholder={manualPlaceholder}
+          />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{fieldLabel}</label>
-          <select
-            value={selectedField}
-            onChange={(e) => onFieldChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">-- Chọn cột --</option>
-            {nodeSchema.map((column) => (
-              <option key={column.key} value={column.key}>
-                {column.key}
-              </option>
-            ))}
-          </select>
-        </div>
-      </>
-    )}
-  </div>
-);
+      ) : (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.dataNode')}</label>
+            <select
+              value={selectedNodeId}
+              onChange={(e) => onNodeIdChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">{t('zaloNodeSend.selectNode')}</option>
+              {upstreamNodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.data?.label || node.data?.nodeType || node.type}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{fieldLabel}</label>
+            <select
+              value={selectedField}
+              onChange={(e) => onFieldChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">{t('zaloNodeSend.selectColumn')}</option>
+              {nodeSchema.map((column) => (
+                <option key={column.key} value={column.key}>
+                  {column.key}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const buildDefaultZaloStep = () => ({
   id: `zalo-step-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -138,6 +142,7 @@ const buildDefaultZaloStep = () => ({
 });
 
 const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', stepsKey = 'zaloPersonalTemplateSteps' }) => {
+  const { t } = useI18n();
   const handleSendModeChange = (newMode) => {
     setFormData((prev) => {
       const next = { ...prev, [sendModeKey]: newMode };
@@ -153,7 +158,7 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-900">Hình thức gửi</h4>
+      <h4 className="font-medium text-gray-900">{t('zaloNodeSend.sendMode')}</h4>
 
       <div className="flex flex-col gap-3">
         <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
@@ -166,8 +171,8 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
             className="mt-1 text-primary-500 focus:ring-primary-500"
           />
           <div>
-            <div className="text-sm font-medium text-gray-900">Gửi cùng lúc</div>
-            <div className="text-xs text-gray-500 mt-1">Gửi tất cả tin nhắn ngay lập tức</div>
+            <div className="text-sm font-medium text-gray-900">{t('zaloNodeSend.sendSimultaneously')}</div>
+            <div className="text-xs text-gray-500 mt-1">{t('zaloNodeSend.sendSimultaneouslyDesc')}</div>
           </div>
         </label>
         <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
@@ -180,16 +185,15 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
             className="mt-1 text-primary-500 focus:ring-primary-500"
           />
           <div>
-            <div className="text-sm font-medium text-gray-900">Theo lịch</div>
-            <div className="text-xs text-gray-500 mt-1">Gửi tin nhắn theo lịch trình đã cấu hình</div>
+            <div className="text-sm font-medium text-gray-900">{t('zaloNodeSend.bySchedule')}</div>
+            <div className="text-xs text-gray-500 mt-1">{t('zaloNodeSend.byScheduleDesc')}</div>
           </div>
         </label>
       </div>
 
       {formData[sendModeKey] === 'schedule' && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-          <strong>Lưu ý:</strong> Khi chọn "Theo lịch", hệ thống sẽ gửi tin theo thứ tự từng template với thời gian chờ giữa các lần gửi.
-          Hãy đảm bảo đã thêm ít nhất 1 template bên dưới.
+          {t('zaloNodeSend.scheduleNote')}
         </div>
       )}
     </div>
@@ -211,6 +215,7 @@ const ZaloTemplateListSection = ({
   normalizeTemplateVariables,
   onOpenTemplateAttachment,
 }) => {
+  const { t } = useI18n();
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -430,7 +435,7 @@ const ZaloTemplateListSection = ({
 
       {steps.length === 0 && (
         <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-          Chưa có template nào. Hãy thêm template.
+          {t('zaloNodeSend.noTemplateYet')}
         </div>
       )}
 
@@ -438,7 +443,7 @@ const ZaloTemplateListSection = ({
         {steps.map((step, idx) => (
           <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-gray-800">Template #{idx + 1}</div>
+              <div className="text-sm font-semibold text-gray-800">{t('zaloNodeSend.templateNumber', { number: idx + 1 })}</div>
               {steps.length > 1 && (
                 <button
                   type="button"
@@ -446,7 +451,7 @@ const ZaloTemplateListSection = ({
                   className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
                 >
                   <HiOutlineTrash className="w-3.5 h-3.5" />
-                  Xóa
+                  {t('zaloNodeSend.delete')}
                 </button>
               )}
             </div>
@@ -454,7 +459,7 @@ const ZaloTemplateListSection = ({
             {sendMode === 'schedule' && (
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Sau bao lâu gửi</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.afterHowLong')}</label>
                   <input
                     type="number"
                     min={0}
@@ -464,40 +469,40 @@ const ZaloTemplateListSection = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Đơn vị</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.unit')}</label>
                   <select
                     value={step.delayUnit || 'minutes'}
                     onChange={(e) => handleStepChange(idx, 'delayUnit', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                   >
-                    <option value="minutes">Phút</option>
-                    <option value="hours">Giờ</option>
-                    <option value="days">Ngày</option>
+                    <option value="minutes">{t('zaloNodeSend.minutes')}</option>
+                    <option value="hours">{t('zaloNodeSend.hours')}</option>
+                    <option value="days">{t('zaloNodeSend.days')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Tính từ</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.calculatedFrom')}</label>
                   <select
                     value={step.delayFrom || 'start'}
                     onChange={(e) => handleStepChange(idx, 'delayFrom', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                   >
-                    <option value="start">Lúc chạy</option>
-                    <option value="prev">Template trước</option>
+                    <option value="start">{t('zaloNodeSend.atStart')}</option>
+                    <option value="prev">{t('zaloNodeSend.fromPreviousTemplate')}</option>
                   </select>
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Template Zalo</label>
+              <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.zaloTemplate')}</label>
               <TemplateSearchSelect
                 value={step.templateId || ''}
                 options={templateOptions}
                 onChange={(nextValue) => handleTemplateSelect(idx, nextValue)}
-                placeholder="-- Chọn template --"
-                searchPlaceholder="Tìm template Zalo..."
-                emptyText="Không tìm thấy template Zalo phù hợp"
+                placeholder={t('zaloNodeSend.selectTemplate')}
+                searchPlaceholder={t('zaloNodeSend.searchTemplate')}
+                emptyText={t('zaloNodeSend.noMatchingTemplate')}
                 onPreview={() => handlePreviewTemplate(step.templateId)}
               />
             </div>
@@ -510,13 +515,13 @@ const ZaloTemplateListSection = ({
                 className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
               />
               <span className="text-xs text-gray-700">
-                Gửi link tracking click (tự rút gọn bằng short-link nội bộ)
+                {t('zaloNodeSend.sendTrackingLink')}
               </span>
             </label>
 
             {(step.templateMappings || []).length > 0 && (
               <div className="space-y-3">
-                <div className="text-xs font-medium text-gray-700">Mapping biến template</div>
+                <div className="text-xs font-medium text-gray-700">{t('zaloNodeSend.mappingVariables')}</div>
                 {(step.templateMappings || []).map((mapping, mappingIndex) => {
                   const selectedNodeId = String(mapping?.nodeId || defaultSourceNodeId || '').trim();
                   const schema = selectedNodeId && typeof getSchemaForNodeId === 'function'
@@ -536,7 +541,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'sourceType', e.target.value)}
                             className="text-primary-500 focus:ring-primary-500"
                           />
-                          <span className="text-xs text-gray-700">Thủ công</span>
+                          <span className="text-xs text-gray-700">{t('zaloNodeSend.manual')}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -547,7 +552,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'sourceType', e.target.value)}
                             className="text-primary-500 focus:ring-primary-500"
                           />
-                          <span className="text-xs text-gray-700">Từ node</span>
+                          <span className="text-xs text-gray-700">{t('zaloNodeSend.fromNode')}</span>
                         </label>
                       </div>
                       {mappingSourceType === 'manual' ? (
@@ -556,7 +561,7 @@ const ZaloTemplateListSection = ({
                           value={mapping?.value || ''}
                           onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'value', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-                          placeholder="Nhập giá trị thủ công"
+                          placeholder={t('zaloNodeSend.enterManualValue')}
                         />
                       ) : (
                         <div className="space-y-2">
@@ -565,7 +570,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'nodeId', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                           >
-                            <option value="">-- Chọn node --</option>
+                            <option value="">{t('zaloNodeSend.selectNode')}</option>
                             {upstreamNodes.map((upstreamNode) => (
                               <option key={upstreamNode.id} value={upstreamNode.id}>
                                 {upstreamNode.data?.label || upstreamNode.data?.nodeType || upstreamNode.type}
@@ -577,7 +582,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'field', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                           >
-                            <option value="">-- Chọn cột --</option>
+                            <option value="">{t('zaloNodeSend.selectColumn')}</option>
                             {schema.map((column) => (
                               <option key={column.key} value={column.key}>
                                 {column.key}
@@ -597,7 +602,7 @@ const ZaloTemplateListSection = ({
 
       <div className="bg-blue-50 p-3 rounded-lg">
         <p className="text-xs text-blue-700">
-          <strong>Lưu ý:</strong> Chọn template để dùng đúng nội dung đã quản lý trong mục template Zalo.
+          {t('zaloNodeSend.templateNote')}
         </p>
       </div>
 
@@ -605,7 +610,7 @@ const ZaloTemplateListSection = ({
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         template={previewTemplate}
-        subjectLabel="Tiêu đề tin nhắn"
+        subjectLabel={t('zaloNodeSend.messageSubject')}
         onOpenAttachment={onOpenTemplateAttachment}
       />
     </div>
@@ -631,14 +636,15 @@ export const NodeConfigSendZaloPersonalSection = ({
   normalizeTemplateVariables,
   onOpenTemplateAttachment,
 }) => {
+  const { t } = useI18n();
   const recipientType = String(formData.zaloRecipientType || 'phone').trim() === 'uid'
     ? 'uid'
     : 'phone';
 
   const sections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineMail },
-    { id: 'sendMode', name: 'Hình thức gửi', icon: HiOutlineLightningBolt },
-    { id: 'templates', name: 'Danh sách template gửi', icon: HiOutlineDocument },
+    { id: 'basic', name: t('zaloNodeSend.basicInfo'), icon: HiOutlineMail },
+    { id: 'sendMode', name: t('zaloNodeSend.sendMode'), icon: HiOutlineLightningBolt },
+    { id: 'templates', name: t('zaloNodeSend.templateList'), icon: HiOutlineDocument },
   ];
 
   const handleSendModeChange = (newMode) => {
@@ -674,8 +680,8 @@ export const NodeConfigSendZaloPersonalSection = ({
           templates={zaloTemplates}
           sendModeKey="zaloPersonalSendMode"
           stepsKey="zaloPersonalTemplateSteps"
-          title="Danh sách template gửi"
-          addLabel="Thêm template"
+          title={t('zaloNodeSend.templateList')}
+          addLabel={t('zaloNodeSend.addTemplate')}
           fetchTemplateById={fetchTemplateById}
           upstreamNodes={upstreamNodes}
           getSchemaForNodeId={getSchemaForNodeId}
@@ -689,18 +695,18 @@ export const NodeConfigSendZaloPersonalSection = ({
     return (
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
           <input
             type="text"
             value={formData.label}
             onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            placeholder="Gửi tin nhắn Zalo cá nhân"
+            placeholder={t('zaloNodeSend.placeholderNodeName')}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Loại người nhận</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.recipientType')}</label>
           <select
             value={recipientType}
             onChange={(e) => setFormData((prev) => ({
@@ -710,8 +716,8 @@ export const NodeConfigSendZaloPersonalSection = ({
             }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            <option value="phone">Số điện thoại (mặc định)</option>
-            <option value="uid">UID Zalo</option>
+            <option value="phone">{t('zaloNodeSend.phoneNumber')}</option>
+            <option value="uid">{t('zaloNodeSend.uidZalo')}</option>
           </select>
         </div>
 
@@ -720,19 +726,19 @@ export const NodeConfigSendZaloPersonalSection = ({
           onSourceModeChange={(value) => setFormData((prev) => ({ ...prev, zaloRecipientSource: value }))}
           manualValue={formData.zaloRecipientPhones || ''}
           onManualValueChange={(value) => setFormData((prev) => ({ ...prev, zaloRecipientPhones: value }))}
-          manualLabel={recipientType === 'uid' ? 'Danh sách UID Zalo' : 'Danh sách số điện thoại'}
-          manualPlaceholder={recipientType === 'uid' ? 'VD: 123456789012345678' : 'VD: 0912345678, 0987654321'}
+          manualLabel={recipientType === 'uid' ? t('zaloNodeSend.uidList') : t('zaloNodeSend.phoneList')}
+          manualPlaceholder={recipientType === 'uid' ? t('zaloNodeSend.uidExample') : t('zaloNodeSend.phoneListExample')}
           upstreamNodes={upstreamNodes}
           selectedNodeId={formData.zaloRecipientNodeId || ''}
           onNodeIdChange={(value) => setFormData((prev) => ({ ...prev, zaloRecipientNodeId: value }))}
           selectedField={formData.zaloRecipientField || ''}
           onFieldChange={(value) => setFormData((prev) => ({ ...prev, zaloRecipientField: value }))}
-          fieldLabel={recipientType === 'uid' ? 'Cột UID' : 'Cột số điện thoại'}
+          fieldLabel={recipientType === 'uid' ? t('zaloNodeSend.uidColumn') : t('zaloNodeSend.phoneColumn')}
           nodeSchema={phoneSourceSchema}
         />
 
         <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-          Tài khoản gửi và chế độ pool nhiều tài khoản được cấu hình tại node «Chọn tài khoản Zalo» phía trước trên sơ đồ.
+          {t('zaloNodeSend.accountNote')}
         </div>
       </div>
     );
@@ -742,7 +748,7 @@ export const NodeConfigSendZaloPersonalSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('zaloNodeSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -791,6 +797,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
   selectedTemplate = null,
   normalizeTemplateVariables,
 }) => {
+  const { t } = useI18n();
   const templateVariables = selectedTemplate
     ? normalizeTemplateVariables(selectedTemplate)
     : [];
@@ -828,18 +835,18 @@ export const NodeConfigSendZaloFriendRequestSection = ({
   return (
   <div className="space-y-4">
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
       <input
         type="text"
         value={formData.label}
         onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-        placeholder="Gửi lời mời kết bạn Zalo"
+        placeholder={t('zaloNodeSend.sendZaloFriendRequestPlaceholder')}
       />
     </div>
 
     <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-      Tài khoản gửi lời mời (một hoặc pool nhiều tài khoản) được cấu hình tại node «Chọn tài khoản Zalo» phía trước trên sơ đồ.
+      {t('zaloNodeSend.accountNote')}
     </div>
 
     <DataSourceSelector
@@ -847,56 +854,56 @@ export const NodeConfigSendZaloFriendRequestSection = ({
       onSourceModeChange={(value) => setFormData((prev) => ({ ...prev, zaloFriendSource: value }))}
       manualValue={formData.zaloFriendPhones || ''}
       onManualValueChange={(value) => setFormData((prev) => ({ ...prev, zaloFriendPhones: value }))}
-      manualLabel="Danh sách số điện thoại"
-      manualPlaceholder="VD: 0912345678, 0987654321"
+      manualLabel={t('zaloNodeSend.phoneList')}
+      manualPlaceholder={t('zaloNodeSend.phoneListExample')}
       upstreamNodes={upstreamNodes}
       selectedNodeId={formData.zaloFriendNodeId || ''}
       onNodeIdChange={(value) => setFormData((prev) => ({ ...prev, zaloFriendNodeId: value }))}
       selectedField={formData.zaloFriendField || ''}
       onFieldChange={(value) => setFormData((prev) => ({ ...prev, zaloFriendField: value }))}
-      fieldLabel="Cột số điện thoại"
+      fieldLabel={t('zaloNodeSend.phoneColumn')}
       nodeSchema={phoneSourceSchema}
     />
 
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        Nguồn nội dung lời mời <span className="text-red-500">*</span>
+        {t('zaloNodeSend.contentSource')} <span className="text-red-500">*</span>
       </label>
       <select
         value={formData.zaloFriendContentMode || 'manual'}
         onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendContentMode: e.target.value }))}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
       >
-        <option value="manual">Nhập lời mời thủ công</option>
-        <option value="template">Chọn từ template Zalo</option>
+        <option value="manual">{t('zaloNodeSend.manualInvite')}</option>
+        <option value="template">{t('zaloNodeSend.fromTemplate')}</option>
       </select>
     </div>
 
     {(formData.zaloFriendContentMode || 'manual') === 'manual' ? (
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Lời nhắn mời kết bạn <span className="text-red-500">*</span>
+          {t('zaloNodeSend.friendRequestMessage')} <span className="text-red-500">*</span>
         </label>
         <textarea
           rows={3}
           value={formData.zaloFriendRequestMessage || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendRequestMessage: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder="Xin chào, hãy kết bạn với tôi!"
+          placeholder={t('zaloNodeSend.friendRequestPlaceholder')}
         />
       </div>
     ) : (
       <div className="space-y-3 rounded-lg border border-gray-200 p-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Template Zalo <span className="text-red-500">*</span>
+            {t('zaloNodeSend.selectZaloTemplate')} <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.zaloFriendTemplateId || ''}
             onChange={(e) => handleTemplateChange(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            <option value="">-- Chọn template --</option>
+            <option value="">{t('zaloNodeSend.selectTemplate')}</option>
             {zaloTemplates.map((template) => (
               <option key={template.id} value={template.id}>
                 {template.templateName}
@@ -907,7 +914,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
 
         {templateVariables.length > 0 && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Mapping biến template</label>
+            <label className="block text-sm font-medium text-gray-700">{t('zaloNodeSend.mappingVariables')}</label>
             {(formData.zaloFriendTemplateMappings || []).map((mapping, idx) => (
               <div key={`${mapping.key}-${idx}`} className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <input
@@ -928,8 +935,8 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                   })}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="manual">Giá trị thủ công</option>
-                  <option value="node">Lấy từ node phía trước</option>
+                  <option value="manual">{t('zaloNodeSend.manualValue')}</option>
+                  <option value="node">{t('zaloNodeSend.getFromPrevious')}</option>
                 </select>
                 {(mapping.sourceType === 'recipient_field' ? 'node' : (mapping.sourceType || 'manual')) === 'node' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -946,7 +953,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                       })}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="">-- Chọn node --</option>
+                      <option value="">{t('zaloNodeSend.selectNode')}</option>
                       {upstreamNodes.map((node) => (
                         <option key={node.id} value={node.id}>
                           {node.data?.label || node.data?.nodeType || node.type}
@@ -965,7 +972,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                       })}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="">-- Chọn cột --</option>
+                      <option value="">{t('zaloNodeSend.selectColumn')}</option>
                       {(mapping.nodeId
                         ? (typeof getSchemaForNodeId === 'function' ? getSchemaForNodeId(mapping.nodeId) : [])
                         : phoneSourceSchema
@@ -989,7 +996,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                       return { ...prev, zaloFriendTemplateMappings: next };
                     })}
                     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    placeholder="Giá trị thủ công"
+                    placeholder={t('zaloNodeSend.manualValue')}
                   />
                 )}
               </div>
@@ -998,10 +1005,6 @@ export const NodeConfigSendZaloFriendRequestSection = ({
         )}
       </div>
     )}
-
-    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-      Node sẽ tự tìm user theo số điện thoại rồi gửi lời mời kết bạn từ tài khoản đã chọn.
-    </div>
   </div>
   );
 };
@@ -1025,12 +1028,13 @@ export const NodeConfigSendZaloGroupSection = ({
   normalizeTemplateVariables,
   onOpenTemplateAttachment,
 }) => {
+  const { t } = useI18n();
   const selectedGroupCount = parseListText(formData.zaloGroupIds || '').length;
 
   const sections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineMail },
-    { id: 'sendMode', name: 'Hình thức gửi', icon: HiOutlineLightningBolt },
-    { id: 'templates', name: 'Danh sách template gửi', icon: HiOutlineDocument },
+    { id: 'basic', name: t('zaloNodeSend.basicInfo'), icon: HiOutlineMail },
+    { id: 'sendMode', name: t('zaloNodeSend.sendMode'), icon: HiOutlineLightningBolt },
+    { id: 'templates', name: t('zaloNodeSend.templateList'), icon: HiOutlineDocument },
   ];
 
   const renderSection = () => {
@@ -1053,8 +1057,8 @@ export const NodeConfigSendZaloGroupSection = ({
           templates={zaloTemplates}
           sendModeKey="zaloGroupSendMode"
           stepsKey="zaloGroupTemplateSteps"
-          title="Danh sách template gửi"
-          addLabel="Thêm template"
+          title={t('zaloNodeSend.templateList')}
+          addLabel={t('zaloNodeSend.addTemplate')}
           fetchTemplateById={fetchTemplateById}
           upstreamNodes={upstreamNodes}
           getSchemaForNodeId={getSchemaForNodeId}
@@ -1068,13 +1072,13 @@ export const NodeConfigSendZaloGroupSection = ({
     return (
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
           <input
             type="text"
             value={formData.label}
             onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            placeholder="Gửi tin nhắn nhóm Zalo"
+            placeholder={t('zaloNodeSend.sendZaloGroupPlaceholder')}
           />
         </div>
 
@@ -1083,21 +1087,21 @@ export const NodeConfigSendZaloGroupSection = ({
           onSourceModeChange={(value) => setFormData((prev) => ({ ...prev, zaloGroupSource: value }))}
           manualValue={formData.zaloGroupIds || ''}
           onManualValueChange={(value) => setFormData((prev) => ({ ...prev, zaloGroupIds: value }))}
-          manualLabel="Danh sách Group ID"
-          manualPlaceholder="VD: 1234567890123456789"
+          manualLabel={t('zaloNodeSend.groupIdList')}
+          manualPlaceholder={t('zaloNodeSend.groupIdExample')}
           upstreamNodes={upstreamNodes}
           selectedNodeId={formData.zaloGroupNodeId || ''}
           onNodeIdChange={(value) => setFormData((prev) => ({ ...prev, zaloGroupNodeId: value }))}
           selectedField={formData.zaloGroupField || ''}
           onFieldChange={(value) => setFormData((prev) => ({ ...prev, zaloGroupField: value }))}
-          fieldLabel="Cột Group ID"
+          fieldLabel={t('zaloNodeSend.groupIdColumn')}
           nodeSchema={groupSourceSchema}
         />
 
         <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
           {selectedGroupCount > 0
-            ? `Đang có ${selectedGroupCount} nhóm trong danh sách gửi.`
-            : 'Bạn có thể lấy Group ID từ node trước hoặc nhập thủ công (mỗi dòng 1 id).'}
+            ? t('zaloNodeSend.sendingGroupCount', { count: selectedGroupCount })
+            : t('zaloNodeSend.getGroupIdHint')}
         </div>
       </div>
     );
@@ -1107,7 +1111,7 @@ export const NodeConfigSendZaloGroupSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('zaloNodeSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {

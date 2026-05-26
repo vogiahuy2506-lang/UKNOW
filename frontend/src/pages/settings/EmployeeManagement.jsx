@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlinePlus,
   HiOutlineRefresh,
@@ -16,17 +17,16 @@ import {
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 
-// keys: danh sách các permission key được bật/tắt cùng nhau khi toggle checkbox
-const PERMISSION_FIELDS = [
-  { keys: ['email_settings', 'zalo_settings'], label: 'Quản lý kênh gửi' },
-  { keys: ['email_templates', 'zalo_templates'], label: 'Mẫu tin nhắn' },
-  { keys: ['courses'],          label: 'Quản lý sản phẩm' },
-  { keys: ['landing_pages'],    label: 'Landing pages' },
-  { keys: ['campaigns_view'],   label: 'Chiến dịch — xem' },
-  { keys: ['campaigns_create'], label: 'Chiến dịch — tạo' },
-  { keys: ['campaigns_run'],    label: 'Chiến dịch — chạy' },
-  { keys: ['customers'],        label: 'Khách hàng' },
-  { keys: ['leads'],            label: 'Leads landing page' },
+const PERMISSION_FIELDS = (t) => [
+  { keys: ['email_settings', 'zalo_settings'], label: t('employee.permissions.channelManagement') },
+  { keys: ['email_templates', 'zalo_templates'], label: t('employee.permissions.messageTemplates') },
+  { keys: ['courses'],          label: t('employee.permissions.productManagement') },
+  { keys: ['landing_pages'],    label: t('employee.permissions.landingPages') },
+  { keys: ['campaigns_view'],   label: t('employee.permissions.campaignView') },
+  { keys: ['campaigns_create'], label: t('employee.permissions.campaignCreate') },
+  { keys: ['campaigns_run'],    label: t('employee.permissions.campaignRun') },
+  { keys: ['customers'],        label: t('employee.permissions.customers') },
+  { keys: ['leads'],            label: t('employee.permissions.leads') },
 ];
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
@@ -34,10 +34,10 @@ const MODAL_SM = 'relative z-10 w-full max-w-md  max-h-[85vh] rounded-xl bg-whit
 const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl overflow-hidden flex flex-col';
 const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
 
-const renderModal = (content, onClose, panelClass = MODAL_MD) =>
+const renderModal = (content, onClose, panelClass = MODAL_MD, t) =>
   createPortal(
     <div className={MODAL_OVERLAY}>
-      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label="Đóng" />
+      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label={t('common.close')} />
       <div className={panelClass}>{content}</div>
     </div>,
     document.body
@@ -46,7 +46,7 @@ const renderModal = (content, onClose, panelClass = MODAL_MD) =>
 const limitLabel = (val) => (val === null || val === undefined ? '∞' : String(val));
 
 // ── LimitField ───────────────────────────────────────────────────────────────
-const LimitField = ({ label, value, onChange, max }) => {
+const LimitField = ({ label, value, onChange, max, t }) => {
   const isUnlimited = value === null || value === undefined;
   const [text, setText] = useState(isUnlimited ? '' : String(value));
 
@@ -92,7 +92,7 @@ const LimitField = ({ label, value, onChange, max }) => {
           checked={isUnlimited}
           onChange={handleCheck}
         />
-        <span className="text-sm text-gray-600">Không giới hạn</span>
+        <span className="text-sm text-gray-600">{t('employee.unlimited')}</span>
       </label>
       <input
         type="text"
@@ -101,12 +101,12 @@ const LimitField = ({ label, value, onChange, max }) => {
         className={`input w-full ${exceedsMax ? 'border-red-400 focus:ring-red-400' : ''}`}
         disabled={isUnlimited}
         value={text}
-        placeholder="Nhập số lượng..."
+        placeholder={t('employee.enterQuantity')}
         onChange={handleChange}
         onBlur={handleBlur}
       />
       {exceedsMax && (
-        <p className="text-xs text-red-500">Vượt quá giới hạn tối đa của gói ({max.toLocaleString()})</p>
+        <p className="text-xs text-red-500">{t('employee.exceedsMaxLimit', { max: max.toLocaleString() })}</p>
       )}
     </div>
   );
@@ -114,6 +114,7 @@ const LimitField = ({ label, value, onChange, max }) => {
 
 // ── Component chính ──────────────────────────────────────────────────────────
 const EmployeeManagement = () => {
+  const { t } = useI18n();
   const [employees, setEmployees]     = useState([]);
   const [isLoading, setIsLoading]     = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -180,7 +181,7 @@ const EmployeeManagement = () => {
         if (updated) setSelectedEmployee(updated);
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể tải danh sách nhân viên');
+      toast.error(err?.response?.data?.message || t('employee.loadFailed'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -224,10 +225,10 @@ const EmployeeManagement = () => {
         fullName: values.fullName?.trim() || null,
         email:    values.email.trim(),
       });
-      toast.success('Cập nhật thông tin thành công');
+      toast.success(t('employee.updateInfoSuccess'));
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật thông tin');
+      toast.error(err?.response?.data?.message || t('employee.updateInfoFailed'));
     } finally {
       setIsSavingInfo(false);
     }
@@ -238,10 +239,10 @@ const EmployeeManagement = () => {
     try {
       setIsSavingPerm(true);
       await userManagementApiService.updateEmployeePermissions(selectedEmployee.id, permState);
-      toast.success('Cập nhật quyền hạn thành công');
+      toast.success(t('employee.updatePermSuccess'));
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật quyền hạn');
+      toast.error(err?.response?.data?.message || t('employee.updatePermFailed'));
     } finally {
       setIsSavingPerm(false);
     }
@@ -252,10 +253,10 @@ const EmployeeManagement = () => {
     try {
       setIsSavingLimits(true);
       await userManagementApiService.updateSendLimits(selectedEmployee.id, limitsState);
-      toast.success('Cập nhật giới hạn lượt gửi thành công');
+      toast.success(t('employee.updateLimitsSuccess'));
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật giới hạn lượt gửi');
+      toast.error(err?.response?.data?.message || t('employee.updateLimitsFailed'));
     } finally {
       setIsSavingLimits(false);
     }
@@ -270,12 +271,12 @@ const EmployeeManagement = () => {
         email:    values.email.trim(),
         fullName: values.fullName?.trim() || null,
       });
-      toast.success('Đã gửi lời mời kích hoạt đến email nhân viên');
+      toast.success(t('employee.inviteSent'));
       setShowCreateModal(false);
       createNewForm.reset();
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể tạo tài khoản nhân viên');
+      toast.error(err?.response?.data?.message || t('employee.createFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -285,12 +286,12 @@ const EmployeeManagement = () => {
     try {
       setIsCreating(true);
       await userManagementApiService.linkEmployee(values.email.trim());
-      toast.success('Liên kết tài khoản nhân viên thành công');
+      toast.success(t('employee.linkSuccess'));
       setShowCreateModal(false);
       createLinkForm.reset();
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể liên kết tài khoản');
+      toast.error(err?.response?.data?.message || t('employee.linkFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -302,10 +303,10 @@ const EmployeeManagement = () => {
     try {
       setStatusUpdatingId(emp.id);
       await userManagementApiService.updateEmployeeStatus(emp.id, newStatus);
-      toast.success('Cập nhật trạng thái thành công');
+      toast.success(t('employee.updateStatusSuccess'));
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái');
+      toast.error(err?.response?.data?.message || t('employee.updateStatusFailed'));
     } finally {
       setStatusUpdatingId(null);
     }
@@ -316,10 +317,10 @@ const EmployeeManagement = () => {
     try {
       setIsResetting(true);
       await userManagementApiService.resetEmployeePassword(resetConfirmEmp.id);
-      toast.success('Reset thành công. Mật khẩu mặc định: digiso@2026');
+      toast.success(t('employee.resetSuccess'));
       setResetConfirmEmp(null);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể reset mật khẩu');
+      toast.error(err?.response?.data?.message || t('employee.resetFailed'));
     } finally {
       setIsResetting(false);
     }
@@ -329,9 +330,9 @@ const EmployeeManagement = () => {
     try {
       setResendingInviteId(emp.id);
       await userManagementApiService.resendInvite(emp.id);
-      toast.success('Đã gửi lại lời mời đến email nhân viên');
+      toast.success(t('employee.resendInviteSuccess'));
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể gửi lại lời mời');
+      toast.error(err?.response?.data?.message || t('employee.resendInviteFailed'));
     } finally {
       setResendingInviteId(null);
       fetchEmployees(true);
@@ -342,21 +343,21 @@ const EmployeeManagement = () => {
     try {
       setIsDeleting(true);
       await userManagementApiService.deleteEmployee(deleteConfirmEmp.id);
-      toast.success('Đã xóa nhân viên khỏi team');
+      toast.success(t('employee.deleteSuccess'));
       setDeleteConfirmEmp(null);
       if (selectedEmployee?.id === deleteConfirmEmp.id) setSelectedEmployee(null);
       fetchEmployees(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể xóa nhân viên');
+      toast.error(err?.response?.data?.message || t('employee.deleteFailed'));
     } finally {
       setIsDeleting(false);
     }
   };
 
   const TABS = [
-    { key: 'info',        label: 'Thông tin' },
-    { key: 'permissions', label: 'Phân quyền' },
-    { key: 'limits',      label: 'Giới hạn gửi' },
+    { key: 'info',        label: t('employee.infoTab') },
+    { key: 'permissions', label: t('employee.permissionsTab') },
+    { key: 'limits',      label: t('employee.limitsTab') },
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -365,13 +366,13 @@ const EmployeeManagement = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý nhân viên</h1>
-          <p className="text-gray-500 mt-1">Click vào nhân viên để chỉnh thông tin, quyền hạn và giới hạn gửi.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('employee.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('employee.description')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => fetchEmployees(true)} className="btn btn-secondary" disabled={isRefreshing}>
             <HiOutlineRefresh className="w-5 h-5 mr-2" />
-            Làm mới
+            {t('employee.refresh')}
           </button>
           <button
             type="button"
@@ -379,7 +380,7 @@ const EmployeeManagement = () => {
             onClick={() => { setCreateTab('new'); createNewForm.reset(); createLinkForm.reset(); setShowCreateModal(true); }}
           >
             <HiOutlinePlus className="w-5 h-5 mr-2" />
-            Thêm nhân viên
+            {t('employee.addEmployee')}
           </button>
         </div>
       </div>
@@ -389,19 +390,19 @@ const EmployeeManagement = () => {
         {isLoading ? (
           <div className="h-56 flex items-center justify-center"><div className="spinner w-8 h-8" /></div>
         ) : employees.length === 0 ? (
-          <div className="py-16 text-center text-gray-500">Chưa có tài khoản nhân viên nào.</div>
+          <div className="py-16 text-center text-gray-500">{t('employee.noEmployees')}</div>
         ) : (
           <div className="table-container">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Tên đăng nhập</th>
-                  <th>Họ tên</th>
-                  <th>Email</th>
-                  <th>Trạng thái</th>
-                  <th>Giới hạn Email</th>
-                  <th>Giới hạn Zalo</th>
-                  <th>Ngày thêm</th>
+                  <th>{t('auth.username')}</th>
+                  <th>{t('employee.fullName')}</th>
+                  <th>{t('employee.email')}</th>
+                  <th>{t('employee.status')}</th>
+                  <th>{t('employee.emailLimit')}</th>
+                  <th>{t('employee.zaloLimit')}</th>
+                  <th>{t('employee.dateAdded')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -418,22 +419,22 @@ const EmployeeManagement = () => {
                       <td className="text-sm text-gray-600">{emp.email}</td>
                       <td>
                         {emp.status === 'pending_activation' ? (
-                          <span className="badge badge-warning">Chờ kích hoạt</span>
+                          <span className="badge badge-warning">{t('employee.pendingActivation')}</span>
                         ) : (
                           <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
-                            {isActive ? 'Đang hoạt động' : 'Đã khóa'}
+                            {isActive ? t('employee.statusActive') : t('employee.statusLocked')}
                           </span>
                         )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.dailyEmailLimit)}/ngày
+                        {limitLabel(emp.dailyEmailLimit)}{t('employee.perDay')}
                         <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthlyEmailLimit)}/tháng
+                        {limitLabel(emp.monthlyEmailLimit)}{t('employee.perMonth')}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.dailyZaloLimit)}/ngày
+                        {limitLabel(emp.dailyZaloLimit)}{t('employee.perDay')}
                         <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthlyZaloLimit)}/tháng
+                        {limitLabel(emp.monthlyZaloLimit)}{t('employee.perMonth')}
                       </td>
                       <td className="text-sm text-gray-500">
                         {emp.joinedAt ? new Date(emp.joinedAt).toLocaleDateString('vi-VN') : '—'}
@@ -461,11 +462,9 @@ const EmployeeManagement = () => {
               className="btn btn-secondary shrink-0"
               onClick={() => setSelectedEmployee(null)}
             >
-              Đóng
+              {t('common.close')}
             </button>
           </div>
-
-          {/* Tab switcher */}
           <div className="flex border-b border-gray-200 px-6">
             {TABS.map(({ key, label }) => (
               <button
@@ -492,20 +491,20 @@ const EmployeeManagement = () => {
                 {/* Form thông tin */}
                 <form onSubmit={editForm.handleSubmit(onSubmitInfo)} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.username')}</label>
                     <input type="text" className="input w-full bg-gray-50" value={selectedEmployee.username} disabled />
-                    <p className="text-xs text-gray-400 mt-1">Tên đăng nhập không thể thay đổi.</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('employee.usernameCannotChange')}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.fullName')}</label>
                     <input type="text" className="input w-full" {...editForm.register('fullName')} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
                     <input
                       type="email"
                       className="input w-full"
-                      {...editForm.register('email', { required: 'Vui lòng nhập email' })}
+                      {...editForm.register('email', { required: t('employee.emailRequired') })}
                     />
                     {editForm.formState.errors.email && (
                       <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.email.message}</p>
@@ -513,14 +512,14 @@ const EmployeeManagement = () => {
                   </div>
                   <div className="flex justify-end">
                     <button type="submit" className="btn btn-primary" disabled={isSavingInfo}>
-                      {isSavingInfo ? 'Đang lưu...' : 'Lưu thay đổi'}
+                      {isSavingInfo ? t('employee.saving') : t('employee.save')}
                     </button>
                   </div>
                 </form>
 
                 {/* Quản lý tài khoản */}
                 <div className="border-t border-gray-100 pt-5 space-y-3">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Quản lý tài khoản</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('employee.accountManagement')}</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedEmployee.status !== 'pending_activation' && (
                       <button
@@ -537,8 +536,8 @@ const EmployeeManagement = () => {
                           <HiOutlineLockOpen className="w-4 h-4 mr-2" />
                         )}
                         {statusUpdatingId === selectedEmployee.id
-                          ? 'Đang cập nhật...'
-                          : selectedEmployee.memberStatus === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
+                          ? t('employee.saving')
+                          : selectedEmployee.memberStatus === 'active' ? t('employee.lockAccount') : t('employee.unlockAccount')}
                       </button>
                     )}
                     {selectedEmployee.status === 'pending_activation' ? (
@@ -549,7 +548,7 @@ const EmployeeManagement = () => {
                         className="btn btn-secondary"
                       >
                         <HiOutlineMail className="w-4 h-4 mr-2" />
-                        {resendingInviteId === selectedEmployee.id ? 'Đang gửi...' : 'Gửi lại lời mời'}
+                        {resendingInviteId === selectedEmployee.id ? t('employee.sendingInvite') : t('employee.sendInviteAgain')}
                       </button>
                     ) : (
                       <button
@@ -558,7 +557,7 @@ const EmployeeManagement = () => {
                         className="btn btn-secondary"
                       >
                         <HiOutlineKey className="w-4 h-4 mr-2" />
-                        Reset mật khẩu
+                        {t('employee.resetPassword')}
                       </button>
                     )}
                     <button
@@ -567,7 +566,7 @@ const EmployeeManagement = () => {
                       className="btn btn-secondary text-red-600 hover:bg-red-50"
                     >
                       <HiOutlineTrash className="w-4 h-4 mr-2" />
-                      Xóa khỏi team
+                      {t('employee.removeFromTeam')}
                     </button>
                   </div>
                 </div>
@@ -599,7 +598,7 @@ const EmployeeManagement = () => {
                 </div>
                 <div className="flex justify-end pt-2">
                   <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
-                    {isSavingPerm ? 'Đang lưu...' : 'Lưu quyền hạn'}
+                    {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}
                   </button>
                 </div>
               </div>
@@ -611,17 +610,19 @@ const EmployeeManagement = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <HiOutlineMail className="w-5 h-5 text-blue-500" />
-                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Email</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.emailLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <LimitField
-                      label="Giới hạn / ngày"
+                      t={t}
+                      label={t('employee.limitPerDay')}
                       value={limitsState.dailyEmailLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, dailyEmailLimit: v }))}
                       max={planLimits.dailyEmail ?? undefined}
                     />
                     <LimitField
-                      label="Giới hạn / tháng"
+                      t={t}
+                      label={t('employee.limitPerMonth')}
                       value={limitsState.monthlyEmailLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyEmailLimit: v }))}
                       max={planLimits.monthlyEmail ?? undefined}
@@ -632,17 +633,19 @@ const EmployeeManagement = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <HiOutlineChat className="w-5 h-5 text-green-500" />
-                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Zalo</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.zaloLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <LimitField
-                      label="Giới hạn / ngày"
+                      t={t}
+                      label={t('employee.limitPerDay')}
                       value={limitsState.dailyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, dailyZaloLimit: v }))}
                       max={planLimits.dailyZalo ?? undefined}
                     />
                     <LimitField
-                      label="Giới hạn / tháng"
+                      t={t}
+                      label={t('employee.limitPerMonth')}
                       value={limitsState.monthlyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyZaloLimit: v }))}
                       max={planLimits.monthlyZalo ?? undefined}
@@ -661,25 +664,26 @@ const EmployeeManagement = () => {
                       [limitsState.monthlyZaloLimit,  planLimits.monthlyZalo],
                     ].some(([v, m]) => m !== null && m !== undefined && v !== null && v > m)}
                   >
-                    {isSavingLimits ? 'Đang lưu...' : 'Lưu giới hạn'}
+                    {isSavingLimits ? t('employee.saving') : t('employee.saveLimits')}
                   </button>
                 </div>
               </div>
             )}
           </div>
         </div>,
-        () => setSelectedEmployee(null)
+        () => setSelectedEmployee(null),
+        t
       )}
 
       {/* ── Modal thêm nhân viên (2 tab) ──────────────────────────────────────── */}
       {showCreateModal && renderModal(
         <div>
           <div className="flex items-start justify-between gap-4 mb-5">
-            <h2 className="text-xl font-semibold text-gray-900">Thêm nhân viên</h2>
-            <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Đóng</button>
+            <h2 className="text-xl font-semibold text-gray-900">{t('employee.addEmployeeTitle')}</h2>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('employee.close')}</button>
           </div>
           <div className="flex border-b border-gray-200 mb-5">
-            {[{ key: 'new', label: 'Tạo tài khoản mới' }, { key: 'link', label: 'Link tài khoản có sẵn' }].map(({ key, label }) => (
+            {[{ key: 'new', label: t('employee.createAccount') }, { key: 'link', label: t('employee.linkExistingAccount') }].map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
@@ -695,18 +699,18 @@ const EmployeeManagement = () => {
           {createTab === 'new' ? (
             <form onSubmit={createNewForm.handleSubmit(onSubmitCreateNew)} className="space-y-4">
               <p className="text-sm text-gray-500">
-                Dùng khi email <strong>chưa có</strong> trong hệ thống. Hệ thống sẽ gửi email mời kích hoạt tài khoản đến nhân viên.
+              {t('employee.createNewAccountTip')}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.username')} *</label>
                   <input
                     type="text"
                     className="input w-full"
                     {...createNewForm.register('username', {
-                      required: 'Vui lòng nhập tên đăng nhập',
-                      minLength: { value: 3, message: 'Tối thiểu 3 ký tự' },
-                      pattern: { value: /^[A-Za-z0-9]+$/, message: 'Chỉ được chứa chữ cái và số' },
+                      required: t('employee.usernameRequired'),
+                      minLength: { value: 3, message: t('employee.usernameMinLength') },
+                      pattern: { value: /^[A-Za-z0-9]+$/, message: t('employee.usernamePattern') },
                     })}
                   />
                   {createNewForm.formState.errors.username && (
@@ -714,97 +718,100 @@ const EmployeeManagement = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
                   <input
                     type="email"
                     className="input w-full"
-                    {...createNewForm.register('email', { required: 'Vui lòng nhập email' })}
+                      {...createNewForm.register('email', { required: t('employee.emailRequired') })}
                   />
                   {createNewForm.formState.errors.email && (
                     <p className="text-red-500 text-sm mt-1">{createNewForm.formState.errors.email.message}</p>
                   )}
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.fullName')}</label>
                   <input type="text" className="input w-full" {...createNewForm.register('fullName')} />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Hủy</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('common.cancel')}</button>
                 <button type="submit" className="btn btn-primary" disabled={isCreating}>
-                  {isCreating ? 'Đang tạo...' : 'Tạo tài khoản'}
+                  {isCreating ? t('employee.creating') : t('employee.createAccount')}
                 </button>
               </div>
             </form>
           ) : (
             <form onSubmit={createLinkForm.handleSubmit(onSubmitCreateLink)} className="space-y-4">
               <p className="text-sm text-gray-500">
-                Dùng khi email <strong>đã có</strong> trong hệ thống. Người dùng có thể đang thuộc nhiều doanh nghiệp khác nhau — thêm họ vào team của bạn sẽ không ảnh hưởng đến các mối quan hệ hiện tại.
+              {t('employee.linkAccountTip')}
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
                 <input
                   type="email"
                   className="input w-full"
-                  placeholder="email@example.com"
-                  {...createLinkForm.register('email', { required: 'Vui lòng nhập email' })}
+                  placeholder={t('employee.emailPlaceholder')}
+                  {...createLinkForm.register('email', { required: t('employee.emailRequired') })}
                 />
                 {createLinkForm.formState.errors.email && (
                   <p className="text-red-500 text-sm mt-1">{createLinkForm.formState.errors.email.message}</p>
                 )}
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Hủy</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('common.cancel')}</button>
                 <button type="submit" className="btn btn-primary" disabled={isCreating}>
-                  {isCreating ? 'Đang liên kết...' : 'Liên kết tài khoản'}
+                  {isCreating ? t('employee.linking') : t('employee.linkExistingAccount')}
                 </button>
               </div>
             </form>
           )}
         </div>,
         () => { if (!isCreating) setShowCreateModal(false); },
-        MODAL_CREATE
+        MODAL_CREATE,
+        t
       )}
 
       {/* ── Modal confirm reset mật khẩu ─────────────────────────────────────── */}
       {resetConfirmEmp && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Xác nhận reset mật khẩu</h2>
-          <p className="text-sm text-gray-500 mt-2">Reset mật khẩu cho <strong>{resetConfirmEmp.username}</strong>?</p>
-          <p className="text-sm text-gray-500 mt-1">Mật khẩu sau khi reset: <strong>digiso@2026</strong></p>
+          <h2 className="text-xl font-semibold text-gray-900">{t('employee.confirmResetTitle')}</h2>
+          <p className="text-sm text-gray-500 mt-2">{t('employee.confirmResetMessage')} <strong>{resetConfirmEmp.username}</strong>?</p>
+          <p className="text-sm text-gray-500 mt-1">{t('employee.newPassword')}: <strong>{t('employee.defaultPassword')}</strong></p>
           <div className="flex justify-end gap-2 mt-6">
-            <button type="button" className="btn btn-secondary" onClick={() => setResetConfirmEmp(null)} disabled={isResetting}>Hủy</button>
+            <button type="button" className="btn btn-secondary" onClick={() => setResetConfirmEmp(null)} disabled={isResetting}>{t('common.cancel')}</button>
             <button type="button" className="btn btn-primary" onClick={handleConfirmReset} disabled={isResetting}>
-              {isResetting ? 'Đang reset...' : 'Xác nhận'}
+              {isResetting ? t('employee.resetting') : t('employee.confirm')}
             </button>
           </div>
         </div>,
         () => { if (!isResetting) setResetConfirmEmp(null); },
-        MODAL_SM
+        MODAL_SM,
+        t
       )}
 
       {/* ── Modal confirm xóa nhân viên ──────────────────────────────────────── */}
       {deleteConfirmEmp && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Xác nhận xóa nhân viên</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t('employee.confirmDeleteTitle')}</h2>
           <p className="text-sm text-gray-500 mt-2">
-            Xóa <strong>{deleteConfirmEmp.username}</strong> khỏi team?
-            Tài khoản của họ vẫn còn nhưng sẽ không còn là nhân viên của bạn.
+            {t('employee.confirmDeleteMessage')} <strong>{deleteConfirmEmp.username}</strong>?
+            {t('employee.deleteWarning')}
           </p>
           <div className="flex justify-end gap-2 mt-6">
-            <button type="button" className="btn btn-secondary" onClick={() => setDeleteConfirmEmp(null)} disabled={isDeleting}>Hủy</button>
+            <button type="button" className="btn btn-secondary" onClick={() => setDeleteConfirmEmp(null)} disabled={isDeleting}>{t('common.cancel')}</button>
             <button
               type="button"
               className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
               onClick={handleConfirmDelete}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Đang xóa...' : 'Xác nhận xóa'}
+              {isDeleting ? t('employee.deleting') : t('employee.confirmDelete')}
             </button>
           </div>
         </div>,
         () => { if (!isDeleting) setDeleteConfirmEmp(null); },
-        MODAL_SM
+        MODAL_SM,
+        t
       )}
     </div>
   );

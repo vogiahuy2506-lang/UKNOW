@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '../../../i18n';
 import customerApiService from '../../customers/services/customerApi.service';
 import {
   decodeHtmlEntities,
@@ -294,6 +295,7 @@ const buildJourneySourceLabel = ({
  * @param {function} props.onNavigateCustomer - (campaignId, customerId) => void
  */
 const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
+  const { t } = useI18n();
   const [customer, setCustomer] = useState(null);
   const [journey, setJourney] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -437,8 +439,8 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
         eventType: p.itemStatus === 'interested' ? 'course_interest' : 'course_purchase',
         label:
           p.itemStatus === 'interested'
-            ? `Để lại thông tin: ${p.courseName || p.productName || 'Khóa học'}`
-            : `Mua hàng: ${p.courseName || p.productName || 'Khóa học'}`,
+            ? `${t('ordersTable.expressedInterest')}: ${p.courseName || p.productName || t('common.none')}`
+            : `${t('ordersTable.purchasedCourse')}: ${p.courseName || p.productName || t('common.none')}`,
         sourceLabel: buildJourneySourceLabel({
           eventType: p.itemStatus === 'interested' ? 'order_pending' : 'order_completed',
           idEmailMessage: p.idEmailMessage,
@@ -463,8 +465,8 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
   const channelCfg = getChannelCfg(order.campaignType);
 
   const displayName = customer
-    ? (getCustomerDisplayName(customer) || `Khách hàng #${order.customerId}`)
-    : (order.customerName || `Khách hàng #${order.customerId || '?'}`);
+    ? (getCustomerDisplayName(customer) || `${t('ordersTable.customer')} #${order.customerId}`)
+    : (order.customerName || `${t('ordersTable.customer')} #${order.customerId || '?'}`);
 
   const customerEmail = customer?.email || order.customerEmail;
   const customerPhone = customer?.phone || order.customerPhone;
@@ -487,7 +489,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60 shrink-0">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Chi tiết đơn hàng</h3>
+            <h3 className="text-sm font-semibold text-gray-900">{t('ordersTable.orderDetail')}</h3>
             <p className="text-xs text-gray-400 mt-0.5">#{order.orderId}</p>
           </div>
           <button type="button" onClick={onClose}
@@ -509,23 +511,23 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
           {/* Sản phẩm */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Sản phẩm</p>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.product')}</p>
             <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
-              <DetailRow label="Tên sản phẩm" value={order.productName} />
-              {order.orderRef && <DetailRow label="Mã đơn hàng" value={order.orderRef} />}
-              <DetailRow label="Số tiền">
+              <DetailRow label={t('ordersTable.productName')} value={order.productName} />
+              {order.orderRef && <DetailRow label={t('ordersTable.orderRef')} value={order.orderRef} />}
+              <DetailRow label={t('ordersTable.amount')}>
                 <span className="text-base font-semibold text-gray-900">
                   {formatCurrency(order.amount, order.currency)}
                 </span>
               </DetailRow>
-              {order.paymentMethod && <DetailRow label="Phương thức thanh toán" value={order.paymentMethod} />}
-              <DetailRow label="Ngày đặt" value={formatDateOnly(order.orderDate)} />
+              {order.paymentMethod && <DetailRow label={t('ordersTable.paymentMethod')} value={order.paymentMethod} />}
+              <DetailRow label={t('ordersTable.orderDateLabel')} value={formatDateOnly(order.orderDate)} />
             </div>
           </section>
 
           {/* Khách hàng */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Khách hàng</p>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.customer')}</p>
             {isLoadingDetail && !customer ? (
               <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
                 {[60, 80, 50].map((w, i) => (
@@ -534,12 +536,12 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
               </div>
             ) : (
               <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
-                <DetailRow label="Tên" value={displayName} />
-                <DetailRow label="Email" value={customerEmail} />
-                <DetailRow label="Số điện thoại" value={customerPhone} />
-                {customerZaloId && <DetailRow label="Zalo ID" value={customerZaloId} />}
+                <DetailRow label={t('ordersTable.customerName')} value={displayName} />
+                <DetailRow label={t('ordersTable.customerEmail')} value={customerEmail} />
+                <DetailRow label={t('ordersTable.phone')} value={customerPhone} />
+                {customerZaloId && <DetailRow label={t('ordersTable.zaloId')} value={customerZaloId} />}
                 {customer?.customerSource && (
-                  <DetailRow label="Nguồn khách hàng" value={customer.customerSource} />
+                  <DetailRow label={t('ordersTable.customerSource')} value={customer.customerSource} />
                 )}
               </div>
             )}
@@ -547,10 +549,10 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
           {/* Chiến dịch / Lượt chạy */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Nguồn</p>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.orderSource')}</p>
             <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
-              <DetailRow label="Chiến dịch" value={order.campaignName} />
-              <DetailRow label="Lượt chạy" value={order.runName || 'Không có lượt chạy'} />
+              <DetailRow label={t('ordersTable.campaign')} value={order.campaignName} />
+              <DetailRow label={t('ordersTable.run')} value={order.runName || t('ordersTable.noRunAvailable')} />
             </div>
           </section>
 
@@ -558,7 +560,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
           {order.customerId && order.campaignId && (
             <section>
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                Hành trình trong chiến dịch
+                {t('ordersTable.campaignJourney')}
               </p>
 
               {isLoadingDetail && !journey ? (
@@ -579,7 +581,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  <p className="text-xs">Chưa có sự kiện hành trình</p>
+                  <p className="text-xs">{t('ordersTable.noJourneyEvents')}</p>
                 </div>
               ) : (
                 <div className="relative">
@@ -619,7 +621,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              Xem hồ sơ khách hàng
+              {t('ordersTable.viewCustomerProfile')}
             </button>
           </div>
         )}
@@ -630,11 +632,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
 // ─── Status filter tabs ───────────────────────────────────────────────────────
 
-const STATUS_TABS = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'pending', label: 'Đơn chờ', color: 'text-orange-600' },
-  { key: 'completed', label: 'Đã hoàn thành', color: 'text-green-600' },
-];
+// NOTE: STATUS_TABS is defined inside the main component after useI18n is available
 
 // ─── Skeleton & Empty ─────────────────────────────────────────────────────────
 
@@ -649,24 +647,27 @@ const SkeletonRow = () => (
   </tr>
 );
 
-const EmptyState = ({ hasFilter }) => (
-  <tr>
-    <td colSpan={7} className="py-16 text-center">
-      <div className="flex flex-col items-center gap-3">
-        <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-            d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-        </svg>
-        <p className="text-sm font-medium text-gray-500">
-          {hasFilter ? 'Không có đơn hàng khớp với bộ lọc' : 'Chưa có đơn hàng trong phạm vi đã chọn'}
-        </p>
-        <p className="text-xs text-gray-400">
-          {hasFilter ? 'Thử thay đổi bộ lọc trạng thái hoặc kênh' : 'Điều chỉnh bộ lọc thời gian hoặc chiến dịch'}
-        </p>
-      </div>
-    </td>
-  </tr>
-);
+const EmptyState = ({ hasFilter }) => {
+  const { t } = useI18n();
+  return (
+    <tr>
+      <td colSpan={7} className="py-16 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
+              d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+          <p className="text-sm font-medium text-gray-500">
+            {hasFilter ? t('ordersTable.noOrdersMatchFilter') : t('ordersTable.noOrdersInRange')}
+          </p>
+          <p className="text-xs text-gray-400">
+            {hasFilter ? t('ordersTable.tryChangeFilter') : t('ordersTable.adjustTimeCampaign')}
+          </p>
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 // ─── Sort icon ────────────────────────────────────────────────────────────────
 
@@ -707,9 +708,28 @@ const DashboardOrdersListTable = ({
   ordersStatusFilter,
   onChangePage,
 }) => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const items = useMemo(() => ordersData?.items || [], [ordersData?.items]);
   const pagination = ordersData?.pagination || { page: 1, totalPages: 1, total: 0 };
+
+  const ORDER_STATUS_CONFIG = {
+    pending: { cls: 'bg-orange-100 text-orange-700', label: t('ordersTable.pending') },
+    completed: { cls: 'bg-green-100 text-green-700', label: t('ordersTable.completed') },
+    other: { cls: 'bg-gray-100 text-gray-500', label: t('ordersTable.all') },
+  };
+
+  const CHANNEL_CONFIG = {
+    email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
+    zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
+    zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },
+  };
+
+  const STATUS_TABS = [
+    { key: 'all', label: t('ordersTable.all') },
+    { key: 'pending', label: t('ordersTable.pending'), color: 'text-orange-600' },
+    { key: 'completed', label: t('ordersTable.completed'), color: 'text-green-600' },
+  ];
 
   const [searchQuery, setSearchQuery] = useState('');
   const [channelFilters, setChannelFilters] = useState([]);
@@ -807,9 +827,9 @@ const DashboardOrdersListTable = ({
 
   // Channel filter header
   const CHANNEL_OPTIONS = [
-    { value: 'email', label: 'Email', badge: 'bg-sky-100 text-sky-700' },
-    { value: 'zalo', label: 'Zalo', badge: 'bg-blue-100 text-blue-700' },
-    { value: 'zalo_group', label: 'Zalo Group', badge: 'bg-purple-100 text-purple-700' },
+    { value: 'email', label: t('channel.email'), badge: 'bg-sky-100 text-sky-700' },
+    { value: 'zalo', label: t('channel.zalo'), badge: 'bg-blue-100 text-blue-700' },
+    { value: 'zalo_group', label: t('channel.zaloGroup'), badge: 'bg-purple-100 text-purple-700' },
   ];
   const isChannelFiltered = channelFilters.length > 0;
   const allChannelSelected = channelFilters.length === 0;
@@ -822,8 +842,8 @@ const DashboardOrdersListTable = ({
 
   // Status filter header
   const STATUS_OPTIONS = [
-    { value: 'pending', label: 'Đơn chờ', badge: 'bg-orange-100 text-orange-700' },
-    { value: 'completed', label: 'Đã hoàn thành', badge: 'bg-green-100 text-green-700' },
+    { value: 'pending', label: t('ordersTable.pending'), badge: 'bg-orange-100 text-orange-700' },
+    { value: 'completed', label: t('ordersTable.completed'), badge: 'bg-green-100 text-green-700' },
   ];
   const isStatusFiltered = statusFilters.length > 0;
 
@@ -839,12 +859,12 @@ const DashboardOrdersListTable = ({
       <div className="p-4 md:p-5 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Bảng đơn hàng</h3>
+            <h3 className="text-base font-semibold text-gray-900">{t('ordersTable.title')}</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {formatNumber(pagination.total)} đơn
+              {formatNumber(pagination.total)} {t('ordersTable.orders')}
               {filtered.length !== items.length && (
                 <span className="ml-1 text-primary-500 font-medium">
-                  · đang hiện {filtered.length} kết quả
+                  {t('ordersTable.showingResults', { count: filtered.length })}
                 </span>
               )}
             </p>
@@ -861,7 +881,7 @@ const DashboardOrdersListTable = ({
               type="text"
               className="input text-sm"
               style={{ paddingLeft: '2.25rem' }}
-              placeholder="Tìm sản phẩm, chiến dịch, run..."
+              placeholder={t('ordersTable.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -905,22 +925,22 @@ const DashboardOrdersListTable = ({
         <table className="table">
           <thead>
             <tr>
-              {/* Sản phẩm */}
+              {/* Product */}
               <th className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b min-w-[180px]">
-                Sản phẩm
+                {t('ordersTable.product')}
               </th>
 
-              {/* Trạng thái — sortable + filterable */}
+              {/* Status — sortable + filterable */}
               <th
                 className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b whitespace-nowrap relative"
               >
                 <div className="flex items-center gap-0.5">
-                  <span>Trạng thái</span>
+                  <span>{t('ordersTable.status')}</span>
                   <button
                     type="button"
                     className={`p-0.5 rounded transition-colors ${statusDropOpen ? 'bg-primary-50' : 'hover:bg-gray-100'}`}
                     onClick={() => setStatusDropOpen((v) => !v)}
-                    title="Lọc theo trạng thái"
+                    title={t('ordersTable.filterByStatus')}
                   >
                     <svg
                       className={`w-3 h-3 ml-0.5 shrink-0 ${isStatusFiltered ? 'text-primary-500 fill-primary-500' : 'text-gray-400 fill-none'}`}
@@ -950,7 +970,7 @@ const DashboardOrdersListTable = ({
                           checked={statusFilters.length === 0}
                           onChange={() => setStatusFilters([])}
                         />
-                        <span className="text-xs font-medium text-gray-500">Tất cả</span>
+                        <span className="text-xs font-medium text-gray-500">{t('ordersTable.all')}</span>
                       </label>
                     </div>
                     <div className="py-1">
@@ -976,7 +996,7 @@ const DashboardOrdersListTable = ({
                           className="text-xs text-red-400 hover:text-red-600 transition-colors"
                           onClick={() => { setStatusFilters([]); setStatusDropOpen(false); }}
                         >
-                          Xóa bộ lọc
+                          {t('ordersTable.clearFilter')}
                         </button>
                       </div>
                     )}
@@ -984,22 +1004,22 @@ const DashboardOrdersListTable = ({
                 )}
               </th>
 
-              {/* Chiến dịch / Lượt chạy */}
+              {/* Campaign / Run */}
               <th className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b min-w-[200px]">
-                Chiến dịch / Lượt chạy
+                {t('ordersTable.campaignRun')}
               </th>
 
-              {/* Kênh — filterable */}
+              {/* Channel — filterable */}
               <th
                 className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b whitespace-nowrap relative"
               >
                 <div className="flex items-center gap-0.5">
-                  <span>Kênh</span>
+                  <span>{t('ordersTable.channel')}</span>
                   <button
                     type="button"
                     className={`p-0.5 rounded transition-colors ${channelDropOpen ? 'bg-primary-50' : 'hover:bg-gray-100'}`}
                     onClick={() => setChannelDropOpen((v) => !v)}
-                    title="Lọc theo kênh"
+                    title={t('ordersTable.filterByChannel')}
                   >
                     <svg
                       className={`w-3 h-3 ml-0.5 shrink-0 ${isChannelFiltered ? 'text-primary-500 fill-primary-500' : 'text-gray-400 fill-none'}`}
@@ -1027,7 +1047,7 @@ const DashboardOrdersListTable = ({
                           checked={allChannelSelected}
                           onChange={() => setChannelFilters([])}
                         />
-                        <span className="text-xs font-medium text-gray-500">Tất cả</span>
+                        <span className="text-xs font-medium text-gray-500">{t('ordersTable.all')}</span>
                       </label>
                     </div>
                     <div className="py-1">
@@ -1046,7 +1066,7 @@ const DashboardOrdersListTable = ({
                         <button type="button"
                           className="text-xs text-red-400 hover:text-red-600 transition-colors"
                           onClick={() => { setChannelFilters([]); setChannelDropOpen(false); }}>
-                          Xóa bộ lọc
+                          {t('ordersTable.clearFilter')}
                         </button>
                       </div>
                     )}
@@ -1054,11 +1074,11 @@ const DashboardOrdersListTable = ({
                 )}
               </th>
 
-              {/* Số tiền */}
-              <SortTh column="amount">Số tiền</SortTh>
+              {/* Amount */}
+              <SortTh column="amount">{t('ordersTable.amount')}</SortTh>
 
-              {/* Ngày */}
-              <SortTh column="orderDate">Ngày</SortTh>
+              {/* Date */}
+              <SortTh column="orderDate">{t('ordersTable.orderDate')}</SortTh>
             </tr>
           </thead>
           <tbody>
@@ -1076,20 +1096,20 @@ const DashboardOrdersListTable = ({
                       className="hover:bg-primary-50/40 transition-colors cursor-pointer"
                       onClick={() => setSelectedOrder(item)}
                     >
-                      {/* Sản phẩm */}
+                      {/* Product */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="font-medium text-gray-900 text-sm leading-snug">
-                          {item.productName || `Đơn #${item.orderId}`}
+                          {item.productName || `${t('ordersTable.order')} #${item.orderId}`}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">ID: {item.orderId}</div>
                       </td>
 
-                      {/* Trạng thái */}
+                      {/* Status */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <span className={`badge text-xs ${statusCfg.cls}`}>{statusCfg.label}</span>
                       </td>
 
-                      {/* Chiến dịch / Lượt chạy */}
+                      {/* Campaign / Run */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="text-sm font-medium text-gray-800 leading-snug truncate max-w-[220px]">
                           {item.campaignName || '—'}
@@ -1099,11 +1119,11 @@ const DashboardOrdersListTable = ({
                             {item.runName}
                           </div>
                         ) : (
-                          <div className="text-xs text-gray-300 mt-0.5">Không có lượt chạy</div>
+                          <div className="text-xs text-gray-300 mt-0.5">{t('ordersTable.noRun')}</div>
                         )}
                       </td>
 
-                      {/* Kênh */}
+                      {/* Channel */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <span className={`badge ${channelCfg.cls} text-xs`}>{channelCfg.label}</span>
                       </td>
@@ -1133,11 +1153,11 @@ const DashboardOrdersListTable = ({
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Trang trước
+          {t('ordersTable.previousPage')}
         </button>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-sm text-gray-500">Trang</span>
+          <span className="text-sm text-gray-500">{t('ordersTable.page')}</span>
           <span className="text-sm font-semibold text-gray-900">{pagination.page}</span>
           <span className="text-sm text-gray-400">/</span>
           <span className="text-sm text-gray-500">{pagination.totalPages}</span>
@@ -1147,7 +1167,7 @@ const DashboardOrdersListTable = ({
           className="btn btn-secondary flex items-center gap-1.5 text-sm"
           disabled={isLoadingOrders || pagination.page >= pagination.totalPages}
           onClick={() => onChangePage(pagination.page + 1)}>
-          Trang sau
+          {t('ordersTable.nextPage')}
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>

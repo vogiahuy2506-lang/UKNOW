@@ -6,48 +6,50 @@ import {
   HiOutlineChat, HiOutlineCheckCircle, HiOutlineArrowRight,
 } from 'react-icons/hi';
 import { submitContactForm } from '../../services/contactApi.service';
+import { useI18n } from '../../i18n';
 
-const COMPANY_SIZES = [
-  { value: '', label: 'Chọn quy mô doanh nghiệp...' },
-  { value: '1-10', label: '1-10 nhân viên' },
-  { value: '11-50', label: '11-50 nhân viên' },
-  { value: '51-200', label: '51-200 nhân viên' },
-  { value: '201-500', label: '201-500 nhân viên' },
-  { value: '500+', label: 'Trên 500 nhân viên' },
+const COMPANY_SIZES = (t) => [
+  { value: '', label: t('contact.companySizePlaceholder') },
+  { value: '1-10', label: t('contact.companySize1') },
+  { value: '11-50', label: t('contact.companySize2') },
+  { value: '51-200', label: t('contact.companySize3') },
+  { value: '201-500', label: t('contact.companySize4') },
+  { value: '500+', label: t('contact.companySize5') },
 ];
 
-const CONTACT_CHANNELS = [
+const CONTACT_CHANNELS = (t) => [
   {
     icon: HiOutlineMail,
-    label: 'Email',
-    value: 'hello@founderai.vn',
+    label: t('contact.email'),
+    value: t('contact.emailValue'),
     href: 'mailto:hello@founderai.vn',
-    description: 'Phản hồi trong 24 giờ',
+    description: t('contact.emailDesc'),
   },
   {
     icon: HiOutlinePhone,
-    label: 'Hotline',
-    value: '1900 6868',
+    label: t('contact.hotline'),
+    value: t('contact.hotlineValue'),
     href: 'tel:19006868',
-    description: 'T2-T7, 8:00 - 17:30',
+    description: t('contact.hotlineDesc'),
   },
   {
     icon: HiOutlineChat,
-    label: 'Zalo OA',
-    value: 'Founder AI Official',
+    label: t('contact.zalo'),
+    value: t('contact.zaloValue'),
     href: 'https://zalo.me/founderai',
-    description: 'Hỗ trợ trực tuyến',
+    description: t('contact.zaloDesc'),
   },
   {
     icon: HiOutlineLocationMarker,
-    label: 'Văn phòng',
-    value: 'Hà Nội, Việt Nam',
+    label: t('contact.office'),
+    value: t('contact.officeValue'),
     href: null,
-    description: 'Tầng 5, Tòa nhà ABC',
+    description: t('contact.officeDesc'),
   },
 ];
 
 export default function ContactPage() {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     name: '', email: '', phone: '', company: '', companySize: '', message: '',
   });
@@ -64,22 +66,22 @@ export default function ContactPage() {
     if (submitting) return;
 
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
-      toast.error('Vui lòng điền họ tên, email và lời nhắn');
+      toast.error(t('contact.validationRequired'));
       return;
     }
     if (form.message.trim().length < 10) {
-      toast.error('Lời nhắn cần ít nhất 10 ký tự');
+      toast.error(t('contact.validationMinLength'));
       return;
     }
 
     setSubmitting(true);
     try {
       const res = await submitContactForm(form);
-      toast.success(res.data?.message || 'Đã gửi thành công!');
+      toast.success(res.data?.message || t('contact.sentSuccess'));
       setSubmitted(true);
       setForm({ name: '', email: '', phone: '', company: '', companySize: '', message: '' });
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không gửi được, vui lòng thử lại');
+      toast.error(err?.response?.data?.message || t('contact.errorMessage'));
     } finally {
       setSubmitting(false);
     }
@@ -91,11 +93,10 @@ export default function ContactPage() {
       {/* Hero */}
       <div className="max-w-7xl mx-auto px-6 text-center mb-12 pt-10">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4">
-          Liên hệ với chúng tôi
+          {t('contact.title')}
         </h1>
         <p className="text-base md:text-lg text-white/70 max-w-2xl mx-auto">
-          Có câu hỏi về sản phẩm, cần tư vấn gói doanh nghiệp hay muốn hợp tác?
-          Đội ngũ Founder AI sẵn sàng hỗ trợ bạn.
+          {t('contact.subtitle')}
         </p>
       </div>
 
@@ -108,9 +109,9 @@ export default function ContactPage() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-5">
                   <HiOutlineCheckCircle className="w-9 h-9 text-green-600" />
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mb-2">Cảm ơn bạn!</h3>
+                <h3 className="text-2xl font-black text-slate-900 mb-2">{t('contact.successTitle')}</h3>
                 <p className="text-slate-600 mb-6 max-w-md mx-auto">
-                  Yêu cầu của bạn đã được ghi nhận. Đội ngũ Founder AI sẽ liên hệ lại trong vòng 24 giờ làm việc.
+                  {t('contact.successMessage')}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
@@ -118,13 +119,13 @@ export default function ContactPage() {
                     onClick={() => setSubmitted(false)}
                     className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
                   >
-                    Gửi yêu cầu khác
+                    {t('contact.sendAnother')}
                   </button>
                   <Link
                     to="/pricing"
                     className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:shadow-lg transition-all"
                   >
-                    Xem bảng giá <HiOutlineArrowRight className="w-4 h-4" />
+                    {t('contact.viewPricing')} <HiOutlineArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               </div>
@@ -132,57 +133,57 @@ export default function ContactPage() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-1">
-                    Gửi yêu cầu tư vấn
+                    {t('contact.formTitle')}
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Điền thông tin bên dưới, chúng tôi sẽ phản hồi trong 24 giờ.
+                    {t('contact.formSubtitle')}
                   </p>
                 </div>
 
                 {/* Row 1: Name + Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
-                    label="Họ và tên"
+                    label={t('contact.nameLabel')}
                     required
                     name="name"
                     value={form.name}
                     onChange={handleChange}
-                    placeholder="Nguyễn Văn A"
+                    placeholder={t('contact.namePlaceholder')}
                   />
                   <FormField
-                    label="Email"
+                    label={t('contact.emailLabel')}
                     required
                     type="email"
                     name="email"
                     value={form.email}
                     onChange={handleChange}
-                    placeholder="ban@congty.com"
+                    placeholder={t('contact.emailPlaceholder')}
                   />
                 </div>
 
                 {/* Row 2: Phone + Company */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
-                    label="Số điện thoại"
+                    label={t('contact.phoneLabel')}
                     type="tel"
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
-                    placeholder="0912 345 678"
+                    placeholder={t('contact.phonePlaceholder')}
                   />
                   <FormField
-                    label="Tên công ty"
+                    label={t('contact.companyLabel')}
                     name="company"
                     value={form.company}
                     onChange={handleChange}
-                    placeholder="Công ty TNHH ABC"
+                    placeholder={t('contact.companyPlaceholder')}
                   />
                 </div>
 
                 {/* Row 3: Company size */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    Quy mô doanh nghiệp
+                    {t('contact.companySizeLabel')}
                   </label>
                   <select
                     name="companySize"
@@ -190,7 +191,7 @@ export default function ContactPage() {
                     onChange={handleChange}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all"
                   >
-                    {COMPANY_SIZES.map((opt) => (
+                    {COMPANY_SIZES(t).map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
@@ -199,7 +200,7 @@ export default function ContactPage() {
                 {/* Row 4: Message */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    Bạn cần chúng tôi hỗ trợ điều gì? <span className="text-red-500">*</span>
+                    {t('contact.messageLabel')} <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     name="message"
@@ -207,7 +208,7 @@ export default function ContactPage() {
                     onChange={handleChange}
                     rows={5}
                     required
-                    placeholder="Mô tả nhu cầu, mục tiêu hoặc câu hỏi của bạn..."
+                    placeholder={t('contact.messagePlaceholder')}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none"
                   />
                   <div className="text-xs text-slate-400 mt-1 text-right">
@@ -220,16 +221,16 @@ export default function ContactPage() {
                   disabled={submitting}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {submitting ? 'Đang gửi...' : (
-                    <>Gửi yêu cầu <HiOutlineArrowRight className="w-4 h-4" /></>
+                  {submitting ? t('contact.submitting') : (
+                    <>{t('contact.submitButton')} <HiOutlineArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
 
                 <p className="text-xs text-slate-400">
-                  Bằng việc gửi form, bạn đồng ý với{' '}
+                  {t('contact.privacyNote')}{' '}
                   <a href="/privacy-policy" className="text-orange-600 hover:underline">
-                    Chính sách bảo mật
-                  </a> của chúng tôi.
+                    {t('contact.privacyLink')}
+                  </a>.
                 </p>
               </form>
             )}
@@ -239,13 +240,13 @@ export default function ContactPage() {
         {/* RIGHT: Contact info (2 cols) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border border-orange-100 p-6">
-            <h3 className="text-lg font-black text-slate-900 mb-1">Kênh liên hệ</h3>
+            <h3 className="text-lg font-black text-slate-900 mb-1">{t('contact.contactChannels')}</h3>
             <p className="text-sm text-slate-600 mb-5">
-              Chọn cách thuận tiện nhất cho bạn.
+              {t('contact.contactChannelsSubtitle')}
             </p>
 
             <div className="space-y-3">
-              {CONTACT_CHANNELS.map((channel) => {
+              {CONTACT_CHANNELS(t).map((channel) => {
                 const Icon = channel.icon;
                 const content = (
                   <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
@@ -285,22 +286,22 @@ export default function ContactPage() {
 
           {/* CTA secondary */}
           <div className="bg-slate-900 rounded-2xl p-6 text-white">
-            <h4 className="font-black text-lg mb-2">Đã sẵn sàng bắt đầu?</h4>
+            <h4 className="font-black text-lg mb-2">{t('contact.readyToStart')}</h4>
             <p className="text-sm text-slate-300 mb-4">
-              Đăng ký dùng thử 14 ngày miễn phí — không cần thẻ tín dụng.
+              {t('contact.freeTrial')}
             </p>
             <div className="flex flex-col gap-2">
               <Link
                 to="/register"
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-slate-900 font-bold hover:bg-slate-100 transition-colors text-sm"
               >
-                Đăng ký miễn phí <HiOutlineArrowRight className="w-4 h-4" />
+                {t('contact.registerFree')} <HiOutlineArrowRight className="w-4 h-4" />
               </Link>
               <Link
                 to="/pricing"
                 className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-semibold hover:bg-slate-800 transition-colors text-sm"
               >
-                Xem bảng giá
+                {t('contact.viewPricing')}
               </Link>
             </div>
           </div>

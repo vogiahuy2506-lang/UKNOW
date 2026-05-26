@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlineAcademicCap,
   HiOutlineSearch,
@@ -9,22 +10,23 @@ import {
   HiOutlineRefresh,
 } from 'react-icons/hi';
 
-const COURSE_STATUS_LABELS = {
-  publish: 'Publish (Công khai)',
-  draft: 'Draft (Nháp)',
-  pending: 'Pending (Chờ duyệt)',
-  private: 'Private (Riêng tư)',
-  trash: 'Trash (Đã xóa)',
-};
+const COURSE_STATUS_LABELS = (t) => ({
+  publish: t('courses.publish'),
+  draft: t('courses.draft'),
+  pending: t('courses.pending'),
+  private: t('courses.private'),
+  trash: t('courses.trash'),
+});
 
 const normalizeCourseStatus = (status) => {
   const normalized = String(status || '').trim().toLowerCase();
   return normalized || 'publish';
 };
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, t }) => {
   const normalizedStatus = normalizeCourseStatus(status);
-  const label = COURSE_STATUS_LABELS[normalizedStatus] || normalizedStatus;
+  const labels = COURSE_STATUS_LABELS(t);
+  const label = labels[normalizedStatus] || normalizedStatus;
   const statusClassName =
     normalizedStatus === 'publish'
       ? 'bg-green-100 text-green-700'
@@ -48,7 +50,7 @@ const formatDate = (v) => {
 };
 
 const formatPrice = (price) => {
-  if (!price || price === 0) return 'Miễn phí';
+  if (!price || price === 0) return t('courses.free');
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',
@@ -56,6 +58,7 @@ const formatPrice = (price) => {
 };
 
 const Courses = () => {
+  const { t } = useI18n();
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -85,7 +88,7 @@ const Courses = () => {
         totalPages: data.pagination?.totalPages ?? 1,
       }));
     } catch (error) {
-      toast.error('Không thể tải danh sách khóa học');
+      toast.error(t('courses.loadFailed'));
       console.error('Error fetching courses:', error);
     } finally {
       setIsLoading(false);
@@ -104,14 +107,14 @@ const Courses = () => {
       const res = await api.post('/courses/sync');
 
       if (res.data?.success) {
-        toast.success(res.data.message || 'Đồng bộ thành công');
+        toast.success(res.data.message || t('courses.syncSuccess'));
         // Refresh danh sách sau khi sync
         await fetchCourses();
       } else {
-        toast.error(res.data?.message || 'Đồng bộ thất bại');
+        toast.error(res.data?.message || t('courses.syncFailed'));
       }
     } catch (error) {
-      toast.error('Không thể đồng bộ khóa học');
+      toast.error(t('courses.syncError'));
       console.error('Error syncing courses:', error);
     } finally {
       setIsSyncing(false);
@@ -123,9 +126,9 @@ const Courses = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý khóa học</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('courses.courseManagement')}</h1>
           <p className="mt-1 text-gray-500">
-            Danh sách khóa học được đồng bộ tự động từ Founder AI mỗi ngày lúc 00:30
+            {t('courses.courseDescription')}
           </p>
         </div>
         <button
@@ -134,7 +137,7 @@ const Courses = () => {
           className="btn btn-primary flex items-center gap-2"
         >
           <HiOutlineRefresh className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
+          {isSyncing ? t('courses.syncing') : t('courses.syncNow')}
         </button>
       </div>
 
@@ -149,12 +152,12 @@ const Courses = () => {
               type="text"
               value={pendingSearch}
               onChange={(e) => setPendingSearch(e.target.value)}
-              placeholder="Tìm kiếm khóa học theo tên..."
+              placeholder={t('courses.searchPlaceholder')}
               className="w-full py-2 pr-3 text-sm bg-transparent border-0 rounded-lg focus:outline-none"
             />
           </div>
           <button type="submit" className="btn btn-secondary shrink-0">
-            Tìm kiếm
+            {t('common.search')}
           </button>
         </form>
       </div>
@@ -168,7 +171,7 @@ const Courses = () => {
         ) : courses.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-gray-400 gap-3">
             <HiOutlineAcademicCap className="w-10 h-10" />
-            <p>Không có khóa học nào</p>
+            <p>{t('courses.noCourses')}</p>
           </div>
         ) : (
           <>
@@ -177,19 +180,19 @@ const Courses = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Mã khóa học
+                      {t('courses.courseCode')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tên khóa học
+                      {t('courses.courseName')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Giá
+                      {t('courses.price')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Trạng thái
+                      {t('common.status')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Cập nhật lần cuối
+                      {t('courses.lastUpdated')}
                     </th>
                   </tr>
                 </thead>
@@ -234,7 +237,7 @@ const Courses = () => {
             {/* Pagination */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">Tổng: {pagination.total} khóa học</p>
+                <p className="text-sm text-gray-500">{t('courses.totalCourses', { total: pagination.total })}</p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
