@@ -978,6 +978,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const hasInitializedRef = useRef(false);
   const tabsScrollRef = useRef(null);
   const tabsDragRef = useRef({ dragging: false, startX: 0, scrollLeft: 0, moved: false });
+  const currentSessionIdRef = useRef(null);
+  const sessionMessagesCache = useRef(new Map()); // sessionId → messages[] (for background generation)
+  const pendingTabIdRef = useRef(new Set()); // non-rendering check
+  const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -1010,7 +1014,43 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     onResizeStart?.();
   };
 
+  // Keep currentSessionIdRef in sync so async closures can check the current session
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  const markTabPending = (sessionId) => {
+    if (!sessionId) return;
+    pendingTabIdRef.current.add(sessionId);
+    setPendingTabIds(new Set(pendingTabIdRef.current));
+  };
+  const clearTabPending = (sessionId) => {
+    if (!sessionId) return;
+    pendingTabIdRef.current.delete(sessionId);
+    setPendingTabIds(new Set(pendingTabIdRef.current));
+  };
+  // Creates a session-aware setMessages wrapper. Updates cache always; updates display only if user is still on this session.
+  const makeUpdater = (sessionId, baseMessages) => {
+    let snapshot = baseMessages;
+    return (updater) => {
+      snapshot = typeof updater === 'function' ? updater(snapshot) : updater;
+      if (sessionId) {
+        sessionMessagesCache.current.set(sessionId, snapshot);
+        if (currentSessionIdRef.current === sessionId) setMessages(updater);
+      } else {
+        setMessages(updater); // new session (no ID yet): use normal update
+      }
+    };
+  };
+
   const loadSession = async (sessionId) => {
+    // If this session has cached messages (background generation in-progress or just completed), load from cache
+    if (sessionMessagesCache.current.has(sessionId)) {
+      setCurrentSessionId(sessionId);
+      setMessages(sessionMessagesCache.current.get(sessionId));
+      setIsTyping(pendingTabIdRef.current.has(sessionId));
+      return;
+    }
     try {
       const res = await aiApi.getSessionMessages(sessionId);
       const dbMessages = res.data || [];
@@ -1160,9 +1200,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (isSendingRef.current) return;
     if (!inputText.trim() && !uploadedFiles.length) return;
     isSendingRef.current = true;
+
+    // Background-safe session tracking
+    let mySessionId = currentSessionId;
+    const update = makeUpdater(mySessionId, [...messages]);
+    if (mySessionId) markTabPending(mySessionId);
+
     const userMsg = { role: 'user', content: inputText, files: [...uploadedFiles] };
     const newHistory = [...messages, userMsg];
-    setMessages(newHistory);
+    update(newHistory);
     setInputText('');
     setUploadedFiles([]);
     setIsTyping(true);
@@ -1173,6 +1219,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
         // Cập nhật session state
         if (returnedSessionId && !currentSessionId) {
+          mySessionId = returnedSessionId;
+          markTabPending(mySessionId);
           setCurrentSessionId(returnedSessionId);
           setSessions(prev => [{ id: returnedSessionId, title: sessionTitle || inputText.slice(0, 60), updated_at: new Date().toISOString(), created_at: new Date().toISOString() }, ...prev]);
         } else if (returnedSessionId) {
@@ -1183,7 +1231,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type === 'ask_campaign_details' && data) {
           setPendingCampaignPrompt(inputText);
           setPendingCampaignData(data);
-          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
 
@@ -1191,7 +1239,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type === 'ask_landing_details' && data) {
           setPendingLandingPrompt(inputText);
           setPendingLandingData(data);
-          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
 
@@ -1199,42 +1247,29 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type === 'ask_campaign_type' && data) {
           setPendingCampaignPrompt(inputText);
           setPendingCampaignData(data);
-          setMessages(prev => [...prev, {
-            role: 'assistant', content, type, data,
-          }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
 
         // Xử lý ask_audience - skip, AI sẽ trả trực tiếp confirm_create
         if (type === 'ask_audience' && data) {
-          // Skip ask_audience, AI sẽ trả confirm_create ngay
           setPendingCampaignData(prev => prev ? { ...prev, ...data } : data);
-          setMessages(prev => [...prev, {
-            role: 'assistant', content, type, data,
-          }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
 
         // Xử lý confirm_create - hiển thị summary và hỏi xác nhận
         if (type === 'confirm_create' && data) {
           setCurrentScript(data);
-          setMessages(prev => [...prev, {
-            role: 'assistant', content, type, data,
-          }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
 
         // Xử lý create_and_run - tự động tạo và chạy campaign
         if (type === 'create_and_run' && data) {
           setCreatingCampaign(true);
-          const scriptData = {
-            ...data,
-            isAiDraft: false,
-            autoRun: true,
-          };
-
-          // Thêm message là đang tạo
-          setMessages(prev => [...prev, {
+          const scriptData = { ...data, isAiDraft: false, autoRun: true };
+          update(prev => [...prev, {
             role: 'assistant',
             content: content || 'Đang tạo và chạy chiến dịch cho bạn...',
             type: 'auto_creating',
@@ -1244,17 +1279,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           try {
             const createResult = await aiApi.createAndRunCampaign(scriptData);
             setCreatingCampaign(false);
-
             if (createResult.success) {
               setAutoCreatedCampaign(createResult.data);
-              setMessages(prev => [...prev, {
+              update(prev => [...prev, {
                 role: 'assistant',
                 content: `🎉 Chiến dịch "${createResult.data.campaignName}" đã được tạo và đang chạy!\n\nRun ID: ${createResult.data.runId || 'N/A'}\n\nBạn có thể theo dõi tiến trình tại trang Chiến dịch.`,
                 type: 'auto_created_success',
                 data: createResult.data,
               }]);
             } else {
-              setMessages(prev => [...prev, {
+              update(prev => [...prev, {
                 role: 'assistant',
                 content: `⚠️ ${createResult.message || 'Có lỗi khi tạo chiến dịch. Vui lòng thử lại.'}`,
                 type: 'error',
@@ -1262,7 +1296,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             }
           } catch (createErr) {
             setCreatingCampaign(false);
-            setMessages(prev => [...prev, {
+            update(prev => [...prev, {
               role: 'assistant',
               content: `⚠️ Lỗi: ${createErr.response?.data?.message || createErr.message}`,
               type: 'error',
@@ -1272,20 +1306,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }
 
         // Xử lý các type khác như bình thường
-        setMessages(prev => [...prev, {
+        update(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
         }]);
         if (type === 'confirm_create') setCurrentScript(data);
       }
     } catch (error) {
-      setMessages(prev => [...prev, {
+      update(prev => [...prev, {
         role: 'assistant',
         content: `⚠️ Lỗi: ${error.response?.data?.message || error.message}`
       }]);
     } finally {
       setIsTyping(false);
       isSendingRef.current = false;
+      clearTabPending(mySessionId);
     }
   };
 
@@ -1330,7 +1365,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const handleCampaignDetailsSubmit = async (summaryText, answers) => {
     if (!pendingCampaignPrompt) return;
     setIsTyping(true);
-    setMessages(prev => [...prev, { role: 'user', content: summaryText }]);
+    const mySessionId = currentSessionId;
+    const update = makeUpdater(mySessionId, [...messages]);
+    if (mySessionId) markTabPending(mySessionId);
+    update(prev => [...prev, { role: 'user', content: summaryText }]);
 
     try {
       const enrichedHistory = [
@@ -1344,9 +1382,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
           setCurrentScript({ ...data, ...answers });
-          setMessages(prev => [...prev, { role: 'assistant', content, type, data: { ...data, ...answers } }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data: { ...data, ...answers } }]);
         } else {
-          setMessages(prev => [...prev, { role: 'assistant', content, type, data }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
           if (type === 'campaign_script' && data) setCurrentScript({ ...data, ...answers });
         }
         setPendingCampaignPrompt(null);
@@ -1356,13 +1394,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
     } finally {
       setIsTyping(false);
+      clearTabPending(mySessionId);
     }
   };
 
   const handleLandingDetailsSubmit = async (summaryText, answers) => {
     if (!pendingLandingPrompt) return;
     setIsTyping(true);
-    setMessages(prev => [...prev, { role: 'user', content: summaryText }]);
+    const mySessionId = currentSessionId;
+    const update = makeUpdater(mySessionId, [...messages]);
+    if (mySessionId) markTabPending(mySessionId);
+    update(prev => [...prev, { role: 'user', content: summaryText }]);
 
     const goalLabels = {
       lead: 'Thu thập thông tin đăng ký (lead form)',
@@ -1403,7 +1445,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId, summaryText);
       if (response.success) {
         const { title, html, css } = response.data;
-        setMessages(prev => [...prev, {
+        update(prev => [...prev, {
           role: 'assistant',
           content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
@@ -1411,12 +1453,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }]);
       }
     } catch (err) {
-      setMessages(prev => [...prev, {
+      update(prev => [...prev, {
         role: 'assistant',
         content: `Có lỗi khi tạo landing page: ${err.response?.data?.message || err.message}`,
       }]);
     } finally {
       setIsTyping(false);
+      clearTabPending(mySessionId);
       setPendingLandingPrompt(null);
       setPendingLandingData(null);
     }
@@ -1746,6 +1789,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
             }`}
           >
+            {pendingTabIds.has(session.id) && currentSessionId !== session.id && (
+              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-0.5" title="Đang xử lý ngầm..." />
+            )}
             <span
               className="truncate flex-1 cursor-pointer"
               onMouseDown={(e) => e.stopPropagation()}
