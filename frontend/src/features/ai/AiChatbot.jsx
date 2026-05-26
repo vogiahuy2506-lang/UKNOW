@@ -284,7 +284,8 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
 
 // Ask landing details card - hỏi gộp thông tin để tạo landing page
 const AskLandingDetailsCard = ({ data, onSubmit }) => {
-  const [answers, setAnswers] = useState({});
+  // formFields mặc định 'basic' — không bắt buộc thay đổi
+  const [answers, setAnswers] = useState({ formFields: 'basic' });
   if (!data?.questions?.length) return null;
 
   const allAnswered = data.questions.every(q => answers[q.id]);
@@ -296,6 +297,9 @@ const AskLandingDetailsCard = ({ data, onSubmit }) => {
       const opt = q.options.find(o => o.value === answers[q.id]);
       return `${q.label} ${opt?.label || answers[q.id]}`;
     });
+    if (answers.formFields === 'extended') {
+      lines.push('Form thu thập thêm: Nghề nghiệp (occupation) và Lĩnh vực quan tâm (interestArea)');
+    }
     onSubmit(lines.join('\n'), answers);
   };
 
@@ -332,6 +336,36 @@ const AskLandingDetailsCard = ({ data, onSubmit }) => {
           </div>
         </div>
       ))}
+
+      {/* Câu hỏi cố định: form fields — luôn hiển thị */}
+      <div className="pt-1 border-t border-indigo-100">
+        <p className="text-xs font-semibold text-slate-600 mb-1">📋 Thông tin form đăng ký</p>
+        <p className="text-[10px] text-slate-400 mb-2">
+          Mặc định thu thập: <span className="font-medium text-slate-500">Họ, Tên, Email, SĐT</span>
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => pick('formFields', 'basic')}
+            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+              answers.formFields === 'basic'
+                ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+            }`}
+          >
+            Chỉ thông tin cơ bản
+          </button>
+          <button
+            onClick={() => pick('formFields', 'extended')}
+            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+              answers.formFields === 'extended'
+                ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+            }`}
+          >
+            + Nghề nghiệp & Lĩnh vực
+          </button>
+        </div>
+      </div>
 
       <button
         onClick={handleSubmit}

@@ -97,7 +97,16 @@ ${ragContext ? ragContext + '\n' : ''}
 1. Sử dụng Tailwind CSS (CDN) cho styling
 2. HTML phải là FRAGMENT - không cần html/head/body tags
 3. Nội dung phải SÚC TÍNH, THUYẾT PHỤC, PHÙ HỢP thương hiệu
-4. Form đăng ký phải có: tên, email, số điện thoại
+4. Form đăng ký PHẢI dùng đúng các thuộc tính name sau để hệ thống lưu lead tự động:
+   - Thêm data-lp-lead-form='1' vào thẻ <form>
+   - input name='lastName' (Họ - bắt buộc)
+   - input name='firstName' (Tên - bắt buộc)
+   - input type='email' name='email' (Email - bắt buộc)
+   - input type='tel' name='phone' (Số điện thoại - bắt buộc)
+   - Nếu yêu cầu thêm trường nghề nghiệp: input name='occupation'
+   - Nếu yêu cầu thêm trường lĩnh vực: input name='interestArea'
+   - Checkbox name='marketingConsent' với label ngắn gọn đồng ý nhận thông tin (KHÔNG bắt buộc check trước)
+   - KHÔNG thêm thuộc tính onsubmit vào form (hệ thống xử lý tự động qua script)
 5. Call-to-Action rõ ràng, nổi bật
 6. Responsive trên mobile
 7. Sử dụng emoji hợp lý cho visual appeal
