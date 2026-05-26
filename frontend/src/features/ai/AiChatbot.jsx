@@ -10,7 +10,7 @@ import {
   HiOutlineMail, HiOutlineChat,
   HiOutlineFolderOpen,
   HiOutlineGlobeAlt,
-  HiOutlineClock, HiOutlinePlus, HiOutlineTrash,
+  HiOutlinePlus,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
@@ -966,7 +966,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  const [showSessionList, setShowSessionList] = useState(false);
 
   const isMobile = useIsMobile();
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -977,6 +976,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const isSendingRef = useRef(false);
   const fileInputRef = useRef(null);
   const hasInitializedRef = useRef(false);
+  const tabsScrollRef = useRef(null);
+  const tabsDragRef = useRef({ dragging: false, startX: 0, scrollLeft: 0, moved: false });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -1031,7 +1032,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);
       setCurrentSessionId(sessionId);
-      setShowSessionList(false);
 
       // Restore pending state cho card tương tác cuối cùng
       const lastUserMsg = lastAssistantIdx > 0
@@ -1704,80 +1704,81 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
             <HiOutlineSparkles className="w-5 h-5 text-white" />
           </div>
-          <div className="min-w-0">
+          <div>
             <h3 className="font-bold text-slate-800 text-sm">Founder AI AI Assistant</h3>
-            <div className="flex items-center gap-1 max-w-[180px]">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0" />
-              {currentSessionId && sessions.find(s => s.id === currentSessionId) ? (
-                <span className="text-[10px] text-orange-500 font-semibold truncate">
-                  {sessions.find(s => s.id === currentSessionId).title}
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cuộc trò chuyện mới</span>
-              )}
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sẵn sàng</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={startNewChat}
-            title="Cuộc trò chuyện mới"
-            className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-orange-500 transition-colors"
-          >
-            <HiOutlinePlus className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowSessionList(v => !v)}
-            title="Lịch sử trò chuyện"
-            className={`p-2 rounded-xl transition-colors ${showSessionList ? 'bg-orange-50 text-orange-500' : 'hover:bg-slate-50 text-slate-400 hover:text-slate-600'}`}
-          >
-            <HiOutlineClock className="w-5 h-5" />
-          </button>
           <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
             <HiOutlineArrowRight className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Session list overlay */}
-      {showSessionList && (
-        <div className="absolute inset-x-0 top-16 bottom-0 bg-white z-10 flex flex-col border-t border-slate-100">
-          <div className="flex-1 overflow-y-auto">
-            {sessions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
-                <HiOutlineClock className="w-8 h-8" />
-                <p className="text-sm">Chưa có cuộc trò chuyện nào</p>
-              </div>
-            ) : (
-              <div className="p-2 space-y-0.5">
-                {sessions.map(session => (
-                  <button
-                    key={session.id}
-                    onClick={() => loadSession(session.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors group ${currentSessionId === session.id ? 'bg-orange-50' : 'hover:bg-slate-50'}`}
-                  >
-                    <HiOutlineChat className="w-4 h-4 text-slate-300 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${currentSessionId === session.id ? 'text-orange-700' : 'text-slate-700'}`}>
-                        {session.title}
-                      </p>
-                      <p className="text-[10px] text-slate-400">
-                        {new Date(session.updated_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteSession(session.id, e)}
-                      className="p-1 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all shrink-0"
-                    >
-                      <HiOutlineTrash className="w-3.5 h-3.5" />
-                    </button>
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Session tabs — kéo ngang để xem thêm */}
+      <div
+        ref={tabsScrollRef}
+        className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-slate-100 overflow-x-auto select-none"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', cursor: 'grab' }}
+        onMouseDown={(e) => {
+          tabsDragRef.current = { dragging: true, startX: e.clientX, scrollLeft: tabsScrollRef.current.scrollLeft, moved: false };
+          tabsScrollRef.current.style.cursor = 'grabbing';
+        }}
+        onMouseMove={(e) => {
+          if (!tabsDragRef.current.dragging) return;
+          const dx = e.clientX - tabsDragRef.current.startX;
+          if (Math.abs(dx) > 4) tabsDragRef.current.moved = true;
+          tabsScrollRef.current.scrollLeft = tabsDragRef.current.scrollLeft - dx;
+        }}
+        onMouseUp={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
+        onMouseLeave={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
+      >
+        {sessions.map(session => (
+          <div
+            key={session.id}
+            title={session.title}
+            className={`shrink-0 group flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-[11px] font-semibold transition-all min-w-[60px] max-w-[130px] ${
+              currentSessionId === session.id
+                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+            }`}
+          >
+            <span
+              className="truncate flex-1 cursor-pointer"
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={() => { if (!tabsDragRef.current.moved) loadSession(session.id); }}
+            >
+              {session.title}
+            </span>
+            <span
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => { if (!tabsDragRef.current.moved) handleDeleteSession(session.id, e); }}
+              className={`shrink-0 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${
+                currentSessionId === session.id ? 'hover:bg-orange-400' : 'hover:bg-slate-200'
+              }`}
+            >
+              <HiOutlineX className="w-3 h-3" />
+            </span>
           </div>
-        </div>
-      )}
+        ))}
+        <button
+          onMouseUp={() => { if (!tabsDragRef.current.moved) startNewChat(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          title="Cuộc trò chuyện mới"
+          className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+            !currentSessionId
+              ? 'bg-orange-50 text-orange-500 border border-orange-200'
+              : 'text-slate-400 hover:bg-slate-100 hover:text-orange-500'
+          }`}
+        >
+          <HiOutlinePlus className="w-3 h-3 shrink-0" />
+          Mới
+        </button>
+      </div>
 
       {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
       {!isSuperAdmin && (
