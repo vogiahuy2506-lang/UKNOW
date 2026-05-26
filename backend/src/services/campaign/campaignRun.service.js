@@ -1928,7 +1928,7 @@ class CampaignRunService {
           `[CampaignRun][Continuous] run=${runId} configured_poll_ms=${configuredContinuousPollIntervalMs}`
         );
       }
-      const trackingBaseUrl = String(process.env.TRACKING_BASE_URL || '').trim() || 'http://localhost:5000';
+      const trackingBaseUrl = (String(process.env.TRACKING_BASE_URL || '').trim() || 'http://localhost:5000').replace(/\/+$/, '');
       const UTM_SOURCE_BY_ZALO_CHANNEL = {
         personal: 'zalo_person_campaign',
         group: 'zalo_group_campaign',

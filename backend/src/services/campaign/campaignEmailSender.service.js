@@ -595,7 +595,7 @@ class CampaignEmailSenderService {
     }
 
     const trackingToken = uuidv4();
-    const trackingBaseUrl = String(process.env.TRACKING_BASE_URL || '').trim() || 'http://localhost:5000';
+    const trackingBaseUrl = (String(process.env.TRACKING_BASE_URL || '').trim() || 'http://localhost:5000').replace(/\/+$/, '');
 
     /**
      * Theo yêu cầu nghiệp vụ mới:
