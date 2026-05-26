@@ -21,15 +21,20 @@ class AiLandingPageService {
    */
   async generate({ userId, prompt, titleHint = '' }) {
     const businessCtx = await businessProfileService.getContextForLandingAi(userId, prompt);
+    const hasBusinessCtx = String(businessCtx || '').trim().length > 0;
     const hintLine = String(titleHint || '').trim()
       ? `Gợi ý tiêu đề trang (title / <title>): "${String(titleHint).trim()}".`
       : 'Không có gợi ý tiêu đề — bạn tự đặt title phù hợp.';
+
+    const noProfileNote = hasBusinessCtx ? '' : `LƯU Ý: Chưa có hồ sơ doanh nghiệp — hãy tự suy luận ngành nghề, tên công ty, sản phẩm và khách hàng mục tiêu hợp lý từ yêu cầu của người dùng bên dưới.\n\n`;
 
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing tại Việt Nam.
 
 Nhiệm vụ: tạo MỘT trang landing HTML5 hoàn chỉnh, đẹp, responsive, theo đúng yêu cầu người dùng.
 
-${businessCtx ? `${businessCtx}\n\n` : ''}YÊU CẦU NỘI DUNG / CHỦ ĐỀ TỪ NGƯỜI DÙNG:
+QUAN TRỌNG: TUYỆT ĐỐI KHÔNG dùng placeholder dạng {{variable}}, [text], hoặc "Lorem ipsum" — hãy viết nội dung thật, cụ thể, tiếng Việt tự nhiên ngay trong HTML.
+
+${hasBusinessCtx ? `${businessCtx}\n\n` : noProfileNote}YÊU CẦU NỘI DUNG / CHỦ ĐỀ TỪ NGƯỜI DÙNG:
 """${prompt}"""
 
 ${hintLine}
@@ -100,6 +105,11 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     }
     if (!html.includes('cdn.tailwindcss.com')) {
       const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
+      err.status = 502;
+      throw err;
+    }
+    if (/\{\{[^}]+\}\}/.test(html)) {
+      const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại hoặc bổ sung hồ sơ doanh nghiệp để AI có đủ context.');
       err.status = 502;
       throw err;
     }
