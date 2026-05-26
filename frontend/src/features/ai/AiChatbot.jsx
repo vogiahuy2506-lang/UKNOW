@@ -222,9 +222,18 @@ const AskCampaignTypeCard = ({ data, onSelect }) => {
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
 const AskCampaignDetailsCard = ({ data, onSubmit }) => {
   const [answers, setAnswers] = useState({});
+  const [emailChoice, setEmailChoice] = useState(null); // 'new' | 'existing'
+  const [emailTemplateName, setEmailTemplateName] = useState('');
   if (!data?.questions?.length) return null;
 
-  const allAnswered = data.questions.every(q => answers[q.id]);
+  const isEmailChannel = answers.channel === 'email';
+  const emailChoiceRequired = isEmailChannel;
+  const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
+
+  const allAnswered =
+    data.questions.every(q => answers[q.id]) &&
+    (!emailChoiceRequired || emailChoice !== null) &&
+    (!emailTemplateRequired || emailTemplateName.trim().length > 0);
 
   const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
 
@@ -234,7 +243,14 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
       const opt = q.options.find(o => o.value === answers[q.id]);
       return `${q.label} ${opt?.label || answers[q.id]}`;
     });
-    onSubmit(lines.join('\n'), answers);
+    if (isEmailChannel) {
+      if (emailChoice === 'existing') {
+        lines.push(`Nội dung email: Dùng mẫu email có sẵn tên "${emailTemplateName.trim()}"`);
+      } else {
+        lines.push('Nội dung email: Tạo nội dung mới bằng AI');
+      }
+    }
+    onSubmit(lines.join('\n'), { ...answers, emailChoice, emailTemplateName: emailTemplateName.trim() });
   };
 
   return (
@@ -270,6 +286,39 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
           </div>
         </div>
       ))}
+
+      {isEmailChannel && (
+        <div>
+          <p className="text-xs font-semibold text-slate-600 mb-2">📧 Nội dung email:</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'new', label: '✨ Tạo nội dung mới' },
+              { value: 'existing', label: '📄 Dùng mẫu có sẵn' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setEmailChoice(opt.value)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                  emailChoice === opt.value
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {emailChoice === 'existing' && (
+            <input
+              type="text"
+              placeholder="Nhập tên mẫu email..."
+              value={emailTemplateName}
+              onChange={e => setEmailTemplateName(e.target.value)}
+              className="mt-2 w-full px-3 py-2 text-xs border border-orange-200 rounded-xl bg-white focus:outline-none focus:border-orange-400 placeholder-slate-400"
+            />
+          )}
+        </div>
+      )}
 
       <button
         onClick={handleSubmit}
@@ -1370,12 +1419,35 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (mySessionId) markTabPending(mySessionId);
     update(prev => [...prev, { role: 'user', content: summaryText }]);
 
+    // Nếu user chọn dùng mẫu email có sẵn, fetch template content để nhúng vào prompt
+    let emailTemplateContext = '';
+    if (answers.emailChoice === 'existing' && answers.emailTemplateName) {
+      try {
+        const searchRes = await api.get('/email-templates', {
+          params: { search: answers.emailTemplateName, limit: 1 },
+        });
+        const found = searchRes.data?.data?.items?.[0];
+        if (found) {
+          const detailRes = await api.get(`/email-templates/${found.id}`);
+          const tpl = detailRes.data?.data;
+          if (tpl) {
+            emailTemplateContext = `\n\nSử dụng mẫu email có sẵn (KHÔNG tạo nội dung mới):\nTên mẫu: ${tpl.templateName}\nTiêu đề email: ${tpl.subject || ''}\nNội dung HTML:\n${tpl.bodyHtml || tpl.bodyText || ''}`;
+            answers = { ...answers, emailTemplateId: found.id };
+          }
+        } else {
+          toast(`⚠️ Không tìm thấy mẫu email "${answers.emailTemplateName}", AI sẽ tạo nội dung mới.`, { icon: '⚠️' });
+        }
+      } catch {
+        // silently fall back to AI-generated content
+      }
+    }
+
     try {
       const enrichedHistory = [
         ...messages,
         { role: 'user', content: pendingCampaignPrompt },
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
-        { role: 'user', content: summaryText },
+        { role: 'user', content: summaryText + emailTemplateContext },
       ];
       const response = await aiApi.chat(enrichedHistory, uploadedFiles);
       if (response.success) {
