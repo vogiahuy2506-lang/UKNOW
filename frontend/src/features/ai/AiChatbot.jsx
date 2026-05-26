@@ -286,21 +286,25 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
 const AskLandingDetailsCard = ({ data, onSubmit }) => {
   // formFields mặc định 'basic' — không bắt buộc thay đổi
   const [answers, setAnswers] = useState({ formFields: 'basic' });
+  const [customFieldsText, setCustomFieldsText] = useState('');
   if (!data?.questions?.length) return null;
 
   const allAnswered = data.questions.every(q => answers[q.id]);
+  const canSubmit = allAnswered && (answers.formFields !== 'custom' || customFieldsText.trim().length > 0);
   const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
 
   const handleSubmit = () => {
-    if (!allAnswered) return;
+    if (!canSubmit) return;
     const lines = data.questions.map(q => {
       const opt = q.options.find(o => o.value === answers[q.id]);
       return `${q.label} ${opt?.label || answers[q.id]}`;
     });
     if (answers.formFields === 'extended') {
       lines.push('Form thu thập thêm: Nghề nghiệp (occupation) và Lĩnh vực quan tâm (interestArea)');
+    } else if (answers.formFields === 'custom' && customFieldsText.trim()) {
+      lines.push(`Form thu thập thêm các trường tùy chỉnh: ${customFieldsText.trim()}`);
     }
-    onSubmit(lines.join('\n'), answers);
+    onSubmit(lines.join('\n'), { ...answers, customFields: customFieldsText.trim() });
   };
 
   return (
@@ -364,15 +368,37 @@ const AskLandingDetailsCard = ({ data, onSubmit }) => {
           >
             + Nghề nghiệp & Lĩnh vực
           </button>
+          <button
+            onClick={() => pick('formFields', 'custom')}
+            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+              answers.formFields === 'custom'
+                ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+            }`}
+          >
+            Tự chọn trường khác
+          </button>
         </div>
+        {answers.formFields === 'custom' && (
+          <div className="mt-2">
+            <textarea
+              value={customFieldsText}
+              onChange={e => setCustomFieldsText(e.target.value)}
+              placeholder="Nhập tên các trường bạn muốn thu thập, ví dụ: Công ty, Chức vụ, Ngành hàng, Doanh thu hàng tháng..."
+              rows={2}
+              className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Mỗi trường cách nhau bằng dấu phẩy</p>
+          </div>
+        )}
       </div>
 
       <button
         onClick={handleSubmit}
-        disabled={!allAnswered}
+        disabled={!canSubmit}
         className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-600 text-white"
       >
-        {allAnswered ? '✓ Tạo Landing Page theo lựa chọn này' : 'Chọn hết các mục bên trên để tiếp tục'}
+        {canSubmit ? '✓ Tạo Landing Page theo lựa chọn này' : answers.formFields === 'custom' ? 'Nhập tên trường để tiếp tục' : 'Chọn hết các mục bên trên để tiếp tục'}
       </button>
     </div>
   );
@@ -1366,6 +1392,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const productQ = pendingLandingData.questions.find(q => q.id === 'product');
       const productOpt = productQ?.options?.find(o => o.value === answers.product);
       if (productOpt) parts.push(`Sản phẩm: ${productOpt.label}`);
+    }
+    if (answers.formFields === 'extended') {
+      parts.push('Form lead thu thập thêm: Nghề nghiệp và Lĩnh vực quan tâm');
+    } else if (answers.formFields === 'custom' && answers.customFields) {
+      parts.push(`Form lead thu thập thêm các trường: ${answers.customFields}`);
     }
     const enrichedPrompt = parts.join('. ');
 
