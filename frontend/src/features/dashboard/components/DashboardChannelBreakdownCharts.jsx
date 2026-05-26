@@ -1,4 +1,5 @@
 import { Cell, Label, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { useI18n } from '../../../i18n';
 import DashboardInsightBlock from './DashboardInsightBlock';
 
 const CHANNEL_COLORS = {
@@ -7,26 +8,33 @@ const CHANNEL_COLORS = {
   zalo_group: '#8b5cf6',
 };
 
-const CHANNEL_LABELS = {
-  email: 'Email',
-  zalo: 'Zalo',
-  zalo_group: 'Zalo Group',
-};
-
 const formatNumber = (v) => Number(v || 0).toLocaleString('vi-VN');
+
+/**
+ * Get channel label from translation function
+ */
+const getChannelLabel = (key, t) => {
+  const labels = {
+    email: t('channelBreakdown.channelEmail') || 'Email',
+    zalo: t('channelBreakdown.channelZalo') || 'Zalo',
+    zalo_group: t('channelBreakdown.channelZaloGroup') || 'Zalo Group',
+  };
+  return labels[key] || key;
+};
 
 /**
  * Custom tooltip for donut charts.
  */
-const DonutTooltip = ({ active, payload }) => {
+const DonutTooltip = ({ active, payload, t: _t }) => {
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
+  const channelKey = payload[0]?.payload?.key;
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-3 py-2 text-xs min-w-[120px]">
       <div className="flex items-center gap-1.5 mb-0.5">
         <span
           className="w-2 h-2 rounded-full shrink-0"
-          style={{ background: CHANNEL_COLORS[payload[0]?.payload?.key] || '#9ca3af' }}
+          style={{ background: CHANNEL_COLORS[channelKey] || '#9ca3af' }}
         />
         <span className="font-medium text-gray-700">{name}</span>
       </div>
@@ -41,14 +49,15 @@ const DonutTooltip = ({ active, payload }) => {
  * Filters out zero-value channels so the donut doesn't render ghost slices.
  *
  * @param {{ email: number, zalo: number, zalo_group: number }} values
+ * @param {function} t - Translation function
  * @returns {{ key: string, name: string, value: number, color: string }[]}
  */
-const buildChartData = (values) =>
+const buildChartData = (values, t) =>
   Object.entries(values)
     .filter(([, v]) => v > 0)
     .map(([key, value]) => ({
       key,
-      name: CHANNEL_LABELS[key] || key,
+      name: getChannelLabel(key, t),
       value,
       color: CHANNEL_COLORS[key] || '#9ca3af',
     }));
@@ -72,7 +81,8 @@ const DonutCard = ({
   isInsightLoading = false,
   insightError = '',
 }) => {
-  const data = buildChartData(values);
+  const { t } = useI18n();
+  const data = buildChartData(values, t);
   const total = Object.values(values).reduce((sum, v) => sum + v, 0);
 
   return (
@@ -81,7 +91,7 @@ const DonutCard = ({
 
       {total === 0 ? (
         <div className="flex items-center justify-center flex-1 h-32 text-xs text-gray-400">
-          Không có dữ liệu trong khoảng thời gian này
+          {t('channelBreakdown.noDataInRange')}
         </div>
       ) : (
         <>
@@ -114,7 +124,7 @@ const DonutCard = ({
                           fontSize={11}
                           fill="#9ca3af"
                         >
-                          Tổng
+                          {t('channelBreakdown.total')}
                         </text>
                         <text
                           x={cx}
@@ -133,7 +143,7 @@ const DonutCard = ({
                   position="center"
                 />
               </Pie>
-              <Tooltip content={<DonutTooltip />} />
+              <Tooltip content={<DonutTooltip t={t} />} />
             </PieChart>
           </ResponsiveContainer>
 
@@ -161,7 +171,7 @@ const DonutCard = ({
       )}
 
       <DashboardInsightBlock
-        title="Insight"
+        title={t('dashboardInsightOverview.title')}
         text={insightText}
         isLoading={isInsightLoading}
         error={insightError}
@@ -197,6 +207,7 @@ const DashboardChannelBreakdownCharts = ({
   oneColumn = false,
   onlyBreakdownKey = null,
 }) => {
+  const { t } = useI18n();
   const channels = overview?.channels || {};
   const journeyEvents = overview?.journeyEvents || {};
 
@@ -222,21 +233,21 @@ const DashboardChannelBreakdownCharts = ({
   const breakdownDefs = [
     {
       id: 'click',
-      title: 'Cơ cấu Click theo kênh',
+      title: t('channelBreakdown.clickBreakdown'),
       values: clickValues,
       accentColor: '#6366f1',
       insightText: insights?.charts?.channelBreakdown?.click || '',
     },
     {
       id: 'completed',
-      title: 'Cơ cấu Đã mua theo kênh',
+      title: t('channelBreakdown.completedBreakdown'),
       values: completedValues,
       accentColor: '#22c55e',
       insightText: insights?.charts?.channelBreakdown?.completed || '',
     },
     {
       id: 'pending',
-      title: 'Cơ cấu Đơn chờ theo kênh',
+      title: t('channelBreakdown.pendingBreakdown'),
       values: pendingValues,
       accentColor: '#f97316',
       insightText: insights?.charts?.channelBreakdown?.pending || '',

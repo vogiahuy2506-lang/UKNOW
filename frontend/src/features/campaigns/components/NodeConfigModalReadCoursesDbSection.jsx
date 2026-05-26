@@ -4,21 +4,20 @@ import {
   HiOutlineSearch,
   HiOutlineShoppingCart,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 
-const COURSE_STATUS_LABELS = {
-  publish: 'Publish (Công khai)',
-  draft: 'Draft (Nháp)',
-  pending: 'Pending (Chờ duyệt)',
-  private: 'Private (Riêng tư)',
-  trash: 'Trash (Đã xóa)',
-};
 const COURSE_STATUS_OPTIONS = ['publish', 'draft', 'pending', 'private'];
 
 const normalizeCourseStatus = (status) => String(status || '').trim().toLowerCase() || 'publish';
 
-const getCourseStatusLabel = (status) => {
+const getCourseStatusLabel = (status, t) => {
   const normalized = normalizeCourseStatus(status);
-  return COURSE_STATUS_LABELS[normalized] || normalized;
+  if (normalized === 'publish') return t('readCoursesDb.statusPublish');
+  if (normalized === 'draft') return t('readCoursesDb.statusDraft');
+  if (normalized === 'pending') return t('readCoursesDb.statusPending');
+  if (normalized === 'private') return t('readCoursesDb.statusPrivate');
+  if (normalized === 'trash') return t('readCoursesDb.statusTrash');
+  return normalized;
 };
 
 const getCourseStatusClassName = (status) => {
@@ -51,6 +50,7 @@ export const NodeConfigReadCoursesDbSection = ({
   isLoadingCoursesPreview,
   coursesPreviewItems,
 }) => {
+  const { t } = useI18n();
   const [lastAutoLoadCoursesKey, setLastAutoLoadCoursesKey] = useState('');
   const selectedCoursesDbIds = (Array.isArray(formData.coursesDbSelectedIds) ? formData.coursesDbSelectedIds : [])
     .map((v) => parseInt(v, 10))
@@ -103,10 +103,10 @@ export const NodeConfigReadCoursesDbSection = ({
   };
 
   const readCoursesDbSections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
+    { id: 'basic', name: t('readCoursesDb.basicInfo'), icon: HiOutlineDocument },
     {
       id: 'select',
-      name: 'Lọc theo khóa học',
+      name: t('readCoursesDb.filterByCourse'),
       icon: HiOutlineSearch,
       badge: selectedCoursesDbIds.length > 0,
       badgeLabel: selectedCoursesDbIds.length,
@@ -119,17 +119,17 @@ export const NodeConfigReadCoursesDbSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('readCoursesDb.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="Đọc dữ liệu khóa học"
+                placeholder={t('readCoursesDb.readCoursesPlaceholder')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Số bản ghi tối đa</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('readCoursesDb.maxRecords')}</label>
               <input
                 type="number"
                 min={1}
@@ -138,11 +138,11 @@ export const NodeConfigReadCoursesDbSection = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, coursesDbLimit: parseInt(e.target.value, 10) || 1000 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
-              <p className="text-xs text-gray-500 mt-1">Giới hạn số lượng khóa học được tải từ database</p>
+              <p className="text-xs text-gray-500 mt-1">{t('readCoursesDb.maxRecordsHint')}</p>
             </div>
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-sm text-blue-700">
-                <strong>Lưu ý:</strong> Node này sẽ lấy dữ liệu khóa học từ database để sử dụng trong các bước tiếp theo của chiến dịch.
+                <strong>{t('readCoursesDb.note')}:</strong> {t('readCoursesDb.readCoursesNote')}
               </p>
             </div>
           </div>
@@ -153,7 +153,7 @@ export const NodeConfigReadCoursesDbSection = ({
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Lọc theo khóa học</label>
+                <label className="block text-sm font-medium text-gray-700">{t('readCoursesDb.filterByCourse')}</label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -161,7 +161,7 @@ export const NodeConfigReadCoursesDbSection = ({
                     disabled={isLoadingCoursesPreview}
                     className="px-3 py-1.5 text-xs rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition-colors"
                   >
-                    {isLoadingCoursesPreview ? 'Đang tải...' : 'Tải danh sách'}
+                    {isLoadingCoursesPreview ? t('readCoursesDb.loading') : t('readCoursesDb.loadList')}
                   </button>
                   <button
                     type="button"
@@ -169,7 +169,7 @@ export const NodeConfigReadCoursesDbSection = ({
                     onClick={() => setFormData((prev) => ({ ...prev, coursesDbSelectedIds: [] }))}
                     disabled={!selectedCoursesDbIds.length}
                   >
-                    Bỏ chọn
+                    {t('readCoursesDb.deselect')}
                   </button>
                 </div>
               </div>
@@ -177,7 +177,7 @@ export const NodeConfigReadCoursesDbSection = ({
               {selectedCoursesDbIds.length > 0 && (
                 <div className="mb-3 p-2 bg-primary-50 rounded-lg">
                   <p className="text-xs text-primary-700">
-                    <strong>1</strong> khóa học đã được chọn
+                    <strong>1</strong> {t('readCoursesDb.courseSelected')}
                   </p>
                 </div>
               )}
@@ -185,14 +185,14 @@ export const NodeConfigReadCoursesDbSection = ({
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder="Tìm kiếm khóa học theo tên hoặc mã..."
+                  placeholder={t('readCoursesDb.searchCourse')}
                   value={formData.coursesDbSearchTerm || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, coursesDbSearchTerm: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">Lọc theo trạng thái</p>
+                <p className="text-xs font-medium text-gray-600 mb-2">{t('readCoursesDb.filterByStatus')}</p>
                 <div className="flex flex-wrap gap-2">
                   {COURSE_STATUS_OPTIONS.map((status) => {
                     const activeStatuses = (Array.isArray(formData.coursesDbStatuses) ? formData.coursesDbStatuses : [])
@@ -209,7 +209,7 @@ export const NodeConfigReadCoursesDbSection = ({
                             : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                         }`}
                       >
-                        {getCourseStatusLabel(status)}
+                        {getCourseStatusLabel(status, t)}
                       </button>
                     );
                   })}
@@ -220,13 +220,13 @@ export const NodeConfigReadCoursesDbSection = ({
                 {isLoadingCoursesPreview ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">Đang tải danh sách khóa học...</p>
+                    <p className="text-sm text-gray-500">{t('readCoursesDb.loadingCoursesList')}</p>
                   </div>
                 ) : coursesPreviewItems.length === 0 ? (
                   <div className="text-center py-8">
                     <HiOutlineShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Chưa có khóa học nào được tải</p>
-                    <p className="text-xs text-gray-400 mt-1">Nhấn "Tải danh sách" để xem danh sách khóa học</p>
+                    <p className="text-sm text-gray-500">{t('readCoursesDb.noCourses')}</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('readCoursesDb.pressLoadList')}</p>
                   </div>
                 ) : (
                   (() => {
@@ -242,7 +242,7 @@ export const NodeConfigReadCoursesDbSection = ({
                       return (
                         <div className="text-center py-8">
                           <HiOutlineShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Không tìm thấy khóa học phù hợp với từ khóa "{formData.coursesDbSearchTerm}"</p>
+                          <p className="text-sm text-gray-500">{t('readCoursesDb.noCoursesFound', { searchTerm: formData.coursesDbSearchTerm })}</p>
                         </div>
                       );
                     }
@@ -252,9 +252,9 @@ export const NodeConfigReadCoursesDbSection = ({
                         {filteredCourses.map((course, idx) => {
                           const courseId = parseInt(course.id, 10);
                           const checked = Number.isFinite(courseId) && selectedCoursesDbIds.includes(courseId);
-                          const courseName = String(course.courseName || `Khóa học #${idx + 1}`);
+                          const courseName = String(course.courseName || `${t('readCoursesDb.course')} #${idx + 1}`);
                           const courseCode = String(course.courseCode || '').trim();
-                          const price = course.price ? `${course.price.toLocaleString()}đ` : 'Chưa có giá';
+                          const price = course.price ? `${course.price.toLocaleString()}đ` : t('readCoursesDb.noPrice');
                           return (
                             <label
                               key={`${course.id || 'none'}-${idx}`}
@@ -281,7 +281,7 @@ export const NodeConfigReadCoursesDbSection = ({
                                     <>
                                       <span>•</span>
                                       <span className={getCourseStatusClassName(course.status)}>
-                                        {getCourseStatusLabel(course.status)}
+                                        {getCourseStatusLabel(course.status, t)}
                                       </span>
                                     </>
                                   )}
@@ -296,13 +296,13 @@ export const NodeConfigReadCoursesDbSection = ({
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                <strong>Lưu ý:</strong> Không chọn khóa học = lấy tất cả khóa học theo điều kiện đã chọn ở phần "Thông tin cơ bản".
+                <strong>{t('readCoursesDb.note')}:</strong> {t('readCoursesDb.noSelectionNote')}
               </p>
             </div>
 
             <div className="bg-amber-50 p-3 rounded-lg">
               <p className="text-sm text-amber-700">
-                <strong>Mẹo:</strong> Sử dụng bộ lọc khóa học để thu hẹp dữ liệu theo nhu cầu chiến dịch của bạn.
+                <strong>{t('readCoursesDb.tip')}:</strong> {t('readCoursesDb.tipContent')}
               </p>
             </div>
           </div>
@@ -317,7 +317,7 @@ export const NodeConfigReadCoursesDbSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('readCoursesDb.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readCoursesDbSections.map((section) => {

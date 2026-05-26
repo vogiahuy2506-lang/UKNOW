@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineLightningBolt, HiOutlineX } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
 import { buildSchemaFromRows } from '../utils/campaignBuilderRuntime';
@@ -56,6 +57,7 @@ const NodeConfigModal = ({
   runLogs = [],
   campaignId = null,
 }) => {
+  const { t } = useI18n();
   const nodeType = node?.data?.nodeType;
   const existingConfig = node?.data?.config || {};
 
@@ -438,13 +440,13 @@ const NodeConfigModal = ({
           nextUrl = freshUrl;
         }
       } catch (error) {
-        toast.error(error?.response?.data?.message || 'Không thể tạo link xem file');
+        toast.error(error?.response?.data?.message || t('errors.cannotCreateFileLink'));
         return;
       }
     }
 
     if (!nextUrl) {
-      toast.error('Không tìm thấy đường dẫn tệp đính kèm');
+      toast.error(t('errors.fileAttachmentNotFound'));
       return;
     }
 
@@ -612,7 +614,7 @@ const NodeConfigModal = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
@@ -622,7 +624,7 @@ const NodeConfigModal = ({
               />
             </div>
             <div className="text-sm text-gray-500">
-              Cấu hình chi tiết cho node "{config?.name || nodeType}" sẽ được bổ sung sau.
+              {t('campaignBuilder.pendingConfig', { name: config?.name || nodeType })}
             </div>
           </div>
         );
@@ -640,8 +642,8 @@ const NodeConfigModal = ({
             <Icon className="w-5 h-5" style={{ color: config?.iconColor || '#5C6BC0' }} />
           </div>
           <div>
-            <span className="text-sm text-gray-500">Cấu hình:</span>
-            <span className="text-primary-600 font-medium ml-1">{config?.name || 'Node'}</span>
+            <span className="text-sm text-gray-500">{t('campaignBuilder.configuring')}</span>
+            <span className="text-primary-600 font-medium ml-1">{config?.name || t('campaignBuilder.nodeName')}</span>
           </div>
           <button onClick={onClose} className="ml-auto p-1 hover:bg-gray-100 rounded-lg">
             <HiOutlineX className="w-5 h-5" />

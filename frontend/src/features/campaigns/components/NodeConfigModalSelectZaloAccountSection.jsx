@@ -11,7 +11,10 @@
  * @param {Array<{id: string, displayName: string, status: string, isActive: boolean, isDefault: boolean}>} props.zaloAccounts
  * @returns {JSX.Element}
  */
+import { useI18n } from '../../../i18n';
+
 export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zaloAccounts = [] }) => {
+  const { t } = useI18n();
   const sortedAccounts = [...zaloAccounts].sort((a, b) => {
     if (a.isDefault && !b.isDefault) return -1;
     if (!a.isDefault && b.isDefault) return 1;
@@ -54,13 +57,13 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloAccount.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder="Chọn tài khoản Zalo"
+          placeholder={t('zaloAccount.nodeNamePlaceholder')}
         />
       </div>
 
@@ -96,17 +99,16 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
             }}
           />
           <span className="text-sm text-gray-800">
-            <span className="font-medium text-gray-900">Gửi qua nhiều tài khoản Zalo (pool)</span>
+            <span className="font-medium text-gray-900">{t('zaloAccount.poolMode')}</span>
             <span className="block mt-1 text-gray-600 leading-snug">
-              Tick các tài khoản bên dưới để tạo nhóm gửi. Mỗi số điện thoại nhận tin sẽ được gắn cố định một tài khoản
-              trong nhóm; hệ thống phân bổ ngẫu nhiên theo từng lượt gửi để chia đều tải.
+              {t('zaloAccount.poolModeDescription')}
             </span>
           </span>
         </label>
 
         {poolEnabled ? (
           <div className="space-y-2 pl-1">
-            <div className="text-sm font-medium text-gray-700">Chọn tài khoản dùng cho chiến dịch</div>
+            <div className="text-sm font-medium text-gray-700">{t('zaloAccount.selectAccountsForCampaign')}</div>
             <div className="max-h-44 overflow-y-auto space-y-2 border border-gray-100 rounded p-2">
               {sortedAccounts.map((acc) => {
                 const idStr = String(acc.id || '');
@@ -120,34 +122,33 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
                       onChange={(e) => togglePoolAccount(idStr, e.target.checked)}
                     />
                     {acc.displayName || idStr}
-                    {acc.isDefault ? ' (Mặc định)' : ''}
+                    {acc.isDefault ? ` ${t('zaloAccount.default')}` : ''}
                   </label>
                 );
               })}
             </div>
             {sortedAccounts.length === 0 && (
-              <p className="text-xs text-amber-700">Chưa có tài khoản Zalo. Vui lòng thêm ở Cài đặt Zalo.</p>
+              <p className="text-xs text-amber-700">{t('zaloAccount.noAccounts')}</p>
             )}
             <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">
-              Khi bật pool: node «Lấy danh sách bạn bè Zalo» sẽ bị <strong>gỡ khỏi sơ đồ</strong> khi bạn bấm Lưu (không dùng
-              làm nguồn gửi). Trên palette, node này cũng bị ẩn; preview và chạy thật sẽ không thực hiện bước lấy danh sách bạn bè.
+              {t('zaloAccount.poolModeNote')}
             </p>
           </div>
         ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tài khoản Zalo gửi <span className="text-red-500">*</span>
+              {t('zaloAccount.zaloAccountRequired')} <span className="text-red-500">*</span>
             </label>
             <select
               value={formData.zaloAccountId || ''}
               onChange={(e) => handleSingleAccountChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="">-- Chọn tài khoản --</option>
+              <option value="">-- {t('zaloAccount.selectAccount')} --</option>
               {sortedAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.displayName}
-                  {account.isDefault ? ' (Mặc định)' : ''}
+                  {account.isDefault ? ` ${t('zaloAccount.default')}` : ''}
                 </option>
               ))}
             </select>
@@ -157,13 +158,13 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
 
       {sortedAccounts.length === 0 && (
         <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-          Chưa có tài khoản Zalo khả dụng. Vui lòng vào trang Cài đặt Zalo để đăng nhập tài khoản.
+          {t('zaloAccount.noAccountsAvailable')}
         </div>
       )}
 
       {!poolEnabled && formData.zaloAccountId && (
         <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-          Tài khoản được chọn sẽ dùng làm nguồn gửi cho các node Zalo ở phía sau (trừ khi bật pool nhiều tài khoản ở trên).
+          {t('zaloAccount.selectedAccountNote')}
         </div>
       )}
     </div>

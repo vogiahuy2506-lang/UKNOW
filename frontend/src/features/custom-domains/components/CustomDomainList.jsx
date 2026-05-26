@@ -6,35 +6,38 @@ import {
   HiOutlineLockClosed, HiOutlineInformationCircle
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
+import { useI18n } from '../../../i18n';
 import customDomainApi from '../../../services/customDomainApi';
 import AddDomainModal from './AddDomainModal';
-
-const STATUS_CONFIG = {
-  pending: { label: 'Chờ xác minh', color: 'bg-yellow-100 text-yellow-700', icon: HiOutlineInformationCircle },
-  verifying: { label: 'Đang xác minh', color: 'bg-blue-100 text-blue-700', icon: HiOutlineRefresh },
-  active: { label: 'Hoạt động', color: 'bg-green-100 text-green-700', icon: HiOutlineShieldCheck },
-  failed: { label: 'Thất bại', color: 'bg-red-100 text-red-700', icon: HiOutlineShieldExclamation },
-  suspended: { label: 'Tạm ngưng', color: 'bg-gray-100 text-gray-700', icon: HiOutlineLockClosed },
-};
-
-const VERIFICATION_STATUS_CONFIG = {
-  pending: { label: 'Chưa xác minh', color: 'bg-yellow-100 text-yellow-700' },
-  in_progress: { label: 'Đang xác minh', color: 'bg-blue-100 text-blue-700' },
-  verified: { label: 'Đã xác minh', color: 'bg-green-100 text-green-700' },
-  failed: { label: 'Xác minh thất bại', color: 'bg-red-100 text-red-700' },
-};
 
 /**
  * Custom Domain List Component.
  */
 const CustomDomainList = () => {
+  const { t } = useI18n();
   const [domains, setDomains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [verifyingId, setVerifyingId] = useState(null);
 
+  const STATUS_CONFIG = {
+    pending: { label: t('customDomainList.pendingVerification'), color: 'bg-yellow-100 text-yellow-700', icon: HiOutlineInformationCircle },
+    verifying: { label: t('customDomainList.verifyingStatus'), color: 'bg-blue-100 text-blue-700', icon: HiOutlineRefresh },
+    active: { label: t('customDomainList.active'), color: 'bg-green-100 text-green-700', icon: HiOutlineShieldCheck },
+    failed: { label: t('customDomainList.failed'), color: 'bg-red-100 text-red-700', icon: HiOutlineShieldExclamation },
+    suspended: { label: t('customDomainList.suspended'), color: 'bg-gray-100 text-gray-700', icon: HiOutlineLockClosed },
+  };
+
+  const VERIFICATION_STATUS_CONFIG = {
+    pending: { label: t('customDomainList.notVerified'), color: 'bg-yellow-100 text-yellow-700' },
+    in_progress: { label: t('customDomainList.verificationInProgress'), color: 'bg-blue-100 text-blue-700' },
+    verified: { label: t('customDomainList.verified'), color: 'bg-green-100 text-green-700' },
+    failed: { label: t('customDomainList.verificationFailed'), color: 'bg-red-100 text-red-700' },
+  };
+
   useEffect(() => {
     fetchDomains();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDomains = async () => {
@@ -44,7 +47,7 @@ const CustomDomainList = () => {
       setDomains(res.data || []);
     } catch (error) {
       console.error('Failed to fetch domains:', error);
-      toast.error('Không thể tải danh sách domain');
+      toast.error(t('customDomainList.cantLoadDomains'));
     } finally {
       setLoading(false);
     }
@@ -55,27 +58,27 @@ const CustomDomainList = () => {
     try {
       const res = await customDomainApi.verify(domain.id);
       if (res.success && res.data?.success) {
-        toast.success('Xác minh domain thành công!');
+        toast.success(t('customDomainList.verifySuccess'));
       } else {
-        toast.error(res.data?.message || 'Xác minh thất bại');
+        toast.error(res.data?.message || t('customDomainList.verifyFailed'));
       }
       await fetchDomains();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi xác minh domain');
+      toast.error(error.response?.data?.message || t('customDomainList.verifyError'));
     } finally {
       setVerifyingId(null);
     }
   };
 
   const handleDelete = async (domain) => {
-    if (!confirm(`Xóa domain "${domain.domain}"?`)) return;
+    if (!confirm(t('customDomainList.deleteDomainConfirm', { domain: domain.domain }))) return;
 
     try {
       await customDomainApi.delete(domain.id);
-      toast.success('Đã xóa domain');
+      toast.success(t('customDomainList.deletedDomain'));
       await fetchDomains();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi xóa domain');
+      toast.error(error.response?.data?.message || t('customDomainList.deleteError'));
     }
   };
 
@@ -108,9 +111,9 @@ const CustomDomainList = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Tên miền riêng</h2>
+          <h2 className="text-xl font-bold text-slate-800">{t('customDomainList.customDomainTitle')}</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Kết nối landing page với tên miền của bạn
+            {t('customDomainList.description')}
           </p>
         </div>
         <button
@@ -118,7 +121,7 @@ const CustomDomainList = () => {
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600 transition-colors"
         >
           <HiOutlinePlus className="w-4 h-4" />
-          Thêm tên miền
+          {t('customDomainList.addDomain')}
         </button>
       </div>
 
@@ -128,16 +131,16 @@ const CustomDomainList = () => {
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <HiOutlineGlobeAlt className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className="font-bold text-slate-700 mb-2">Chưa có tên miền riêng</h3>
+          <h3 className="font-bold text-slate-700 mb-2">{t('customDomainList.noDomains')}</h3>
           <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-            Thêm tên miền riêng để hiển thị landing page của bạn với domain của riêng bạn thay vì dùng subdomain của UKNOW.
+            {t('customDomainList.addFirstDomain')}
           </p>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600 transition-colors"
           >
             <HiOutlinePlus className="w-4 h-4" />
-            Thêm tên miền đầu tiên
+            {t('customDomainList.addFirstDomainButton')}
           </button>
         </div>
       ) : (
@@ -159,7 +162,7 @@ const CustomDomainList = () => {
                   {/* Landing Page */}
                   {domain.landing_page_slug && (
                     <div className="flex items-center gap-2 ml-8 mb-3">
-                      <span className="text-xs text-slate-500">Landing page:</span>
+                      <span className="text-xs text-slate-500">{t('customDomainList.landingPage')}:</span>
                       <a
                         href={`/app/settings/landing-pages/${domain.landing_page_id}`}
                         className="text-xs font-medium text-orange-600 hover:text-orange-700 flex items-center gap-1"
@@ -173,7 +176,7 @@ const CustomDomainList = () => {
                   {/* Status Details */}
                   <div className="flex flex-wrap gap-4 ml-8 text-xs text-slate-500">
                     <div className="flex items-center gap-1.5">
-                      <span>Xác minh:</span>
+                      <span>{t('customDomainList.verification')}:</span>
                       <span className={`font-medium ${
                         domain.verification_status === 'verified' ? 'text-green-600' :
                         domain.verification_status === 'failed' ? 'text-red-600' : 'text-yellow-600'
@@ -182,13 +185,13 @@ const CustomDomainList = () => {
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span>SSL:</span>
+                      <span>{t('customDomainList.ssl')}:</span>
                       <span className={`font-medium ${
                         domain.ssl_status === 'active' ? 'text-green-600' :
                         domain.ssl_status === 'failed' ? 'text-red-600' : 'text-yellow-600'
                       }`}>
-                        {domain.ssl_status === 'active' ? 'Đã bật' :
-                         domain.ssl_status === 'failed' ? 'Lỗi' : 'Đang xử lý'}
+                        {domain.ssl_status === 'active' ? t('customDomainList.sslActive') :
+                         domain.ssl_status === 'failed' ? t('customDomainList.sslError') : t('customDomainList.sslProcessing')}
                       </span>
                     </div>
                   </div>
@@ -212,12 +215,12 @@ const CustomDomainList = () => {
                       {verifyingId === domain.id ? (
                         <>
                           <div className="w-3 h-3 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-                          Đang xác minh...
+                          {t('customDomainList.verifying')}
                         </>
                       ) : (
                         <>
                           <HiOutlineRefresh className="w-3.5 h-3.5" />
-                          Xác minh
+                          {t('customDomainList.verify')}
                         </>
                       )}
                     </button>
@@ -226,14 +229,14 @@ const CustomDomainList = () => {
                   {domain.status === 'active' && (
                     <span className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-600 font-medium text-xs rounded-lg">
                       <HiOutlineCheck className="w-3.5 h-3.5" />
-                      Đã kích hoạt
+                      {t('customDomainList.activated')}
                     </span>
                   )}
 
                   <button
                     onClick={() => handleDelete(domain)}
                     className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Xóa"
+                    title={t('customDomainList.delete')}
                   >
                     <HiOutlineTrash className="w-4 h-4" />
                   </button>

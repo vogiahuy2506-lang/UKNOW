@@ -1,4 +1,5 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../../../i18n';
 import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../../landing/constants/founder-landing-options.js';
 import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
 import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
@@ -33,6 +34,7 @@ const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checke
  * @param {function} props.setFormData
  */
 function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setFormData }) {
+  const { t } = useI18n();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const toggleOne = useCallback(
@@ -70,14 +72,14 @@ function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setF
             onClick={selectAll}
             className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Chọn tất cả
+            {t('nodeConfig.selectAll')}
           </button>
           <button
             type="button"
             onClick={clearAll}
             className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Bỏ chọn
+            {t('nodeConfig.deselectAll')}
           </button>
         </div>
       </div>
@@ -107,11 +109,12 @@ function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setF
  * @param {function} props.setFormData
  */
 export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
+  const { t } = useI18n();
   const occupations = Array.isArray(formData.landingLeadsOccupations) ? formData.landingLeadsOccupations : [];
   const interests = Array.isArray(formData.landingLeadsInterests) ? formData.landingLeadsInterests : [];
   const slugs = Array.isArray(formData.landingLeadsSlugs) ? formData.landingLeadsSlugs : [];
 
-  const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: 'Landing React (/l)' }]);
+  const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: t('nodeConfigLanding.landingReactSlug', { defaultValue: 'Landing React (/l)' }) }]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,16 +130,10 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-600">
-        Lấy lead đã gửi từ form landing công khai. Để trống bộ lọc nghề/lĩnh vực / landing slug nghĩa là{' '}
-        <strong>không lọc</strong> theo tiêu đó (vẫn áp dụng khoảng ngày nếu bật).
+        {t('nodeConfigLanding.pageDescription')}
       </p>
       <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
-        <strong>Chiến dịch chạy liên tục (continuous):</strong> node này được hỗ trợ. Mỗi chu kỳ hệ thống đọc lại
-        cơ sở dữ liệu và chỉ đưa vào các bước sau những lead <em>chưa</em> xuất hiện ở các chu kỳ trước (theo{' '}
-        <code className="rounded bg-white/80 px-1">leadId</code> hoặc cặp email + điện thoại). Chu kỳ đầu lấy đủ bản
-        ghi khớp bộ lọc; các chu kỳ sau chỉ lead mới. Slug trong form nhúng (
-        <code className="rounded bg-white/80 px-1">?slug=…</code>) phải trùng slug lưu trên lead (vd landing cố định{' '}
-        <code className="rounded bg-white/80 px-1">l</code>).
+        <strong>{t('nodeConfigLanding.continuousCampaignNote')}</strong>
       </p>
 
       <div className="flex items-center gap-2">
@@ -148,14 +145,14 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           className="h-4 w-4 rounded border-gray-300 text-primary-600"
         />
         <label htmlFor="landing-use-dates" className="text-sm font-medium text-gray-800">
-          Giới hạn theo ngày gửi (từ — đến)
+          {t('nodeConfigLanding.limitByDate')}
         </label>
       </div>
 
       {formData.landingLeadsUseDateRange ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Từ ngày</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('nodeConfigLanding.fromDate')}</label>
             <input
               type="date"
               value={formData.landingLeadsDateFrom || ''}
@@ -164,7 +161,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Đến ngày</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('nodeConfigLanding.toDate')}</label>
             <input
               type="date"
               value={formData.landingLeadsDateTo || ''}
@@ -174,11 +171,11 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           </div>
         </div>
       ) : (
-        <p className="text-xs text-gray-500">Đang lấy toàn bộ lead (theo thứ tự mới nhất), trừ khi bật lọc ngày ở trên.</p>
+        <p className="text-xs text-gray-500">{t('nodeConfigLanding.takingAllLeads')}</p>
       )}
 
       <LandingLeadsMultiFilterBlock
-        title="Lọc theo nghề nghiệp (có thể chọn nhiều)"
+        title={t('nodeConfigLanding.filterByOccupation')}
         options={founder_OCCUPATION_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
         fieldKey="landingLeadsOccupations"
         selected={occupations}
@@ -186,7 +183,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       />
 
       <LandingLeadsMultiFilterBlock
-        title="Lọc theo landing / slug nguồn (để trống = tất cả slug)"
+        title={t('nodeConfigLanding.filterBySlug')}
         options={slugOptions}
         fieldKey="landingLeadsSlugs"
         selected={slugs}
@@ -194,7 +191,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       />
 
       <LandingLeadsMultiFilterBlock
-        title="Lọc theo lĩnh vực quan tâm (có thể chọn nhiều)"
+        title={t('nodeConfigLanding.filterByInterest')}
         options={founder_INTEREST_OPTIONS.map((o) => ({ value: o.value, label: o.labelVi }))}
         fieldKey="landingLeadsInterests"
         selected={interests}
@@ -203,7 +200,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Số bản ghi tối đa (1–{LANDING_LEADS_MAX_RECORDS.toLocaleString('vi-VN')})
+          {t('nodeConfigLanding.maxRecords', { max: LANDING_LEADS_MAX_RECORDS.toLocaleString('vi-VN') })}
         </label>
         <input
           type="number"
@@ -221,12 +218,12 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       </div>
 
       <NodeConfigDataColumnPicker
-        title="Chỉ giữ các trường lead cần dùng"
+        title={t('nodeConfigLanding.keepFields')}
         options={LANDING_LEAD_COLUMN_OPTIONS}
         selectedKeys={Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : []}
         setFormData={setFormData}
         formField="dataSelectedColumns"
-        hint="Truy vấn DB vẫn lấy đủ cột; server chỉ giữ các trường đã chọn khi chạy flow. Luôn giữ thêm leadId và id."
+        hint={t('nodeConfigLanding.keepFieldsHint')}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import { useLandingFeaturedCourses } from '../../features/landing/hooks/useLandi
 import { useLandingTestimonials } from '../../features/landing/hooks/useLandingTestimonials.js';
 import { useFounderLandingForm } from '../../features/landing/hooks/useFounderLandingForm.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
+import { LANDING_COPY } from '../../features/landing/constants/landingCopy.js';
 
 /**
  * Trang landing công khai Founder AI — layout bám mock `founder-landing-v2.html`, song ngữ VI/EN.
@@ -19,7 +20,8 @@ import { useRecordLandingView } from '../../features/landing-pages/hooks/useReco
  * Phông chữ: Roboto (`font-landing`) cho toàn trang.
  */
 export default function FounderLandingPage() {
-  const { locale, setLocale, copy } = useLandingLocale();
+  const { locale, setLocale } = useLandingLocale();
+  const copy = LANDING_COPY[locale];
   useRecordLandingView('l');
   const { form, setField, submitting, error, success, submit } = useFounderLandingForm(locale, {
     landingPageSlug: 'l',

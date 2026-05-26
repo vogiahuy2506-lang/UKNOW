@@ -9,16 +9,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useI18n } from '../../../i18n';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
 import DashboardInsightBlock from './DashboardInsightBlock';
 import DashboardRechartsLegend from './DashboardRechartsLegend';
-
-const CHANNEL_OPTIONS = [
-  { id: 'all', label: 'Tất cả', color: 'gray' },
-  { id: 'email', label: 'Email', color: 'sky' },
-  { id: 'zalo', label: 'Zalo', color: 'blue' },
-  { id: 'zalo_group', label: 'Zalo Group', color: 'purple' },
-];
 
 const CHANNEL_TAB_STYLES = {
   gray: 'bg-gray-700 text-white border-gray-700',
@@ -77,12 +71,6 @@ const TOOLTIP_METRIC_ROWS = [
   { email: 'emailDownloads', zalo: null,          zaloGroup: null             },
 ];
 
-const TOOLTIP_COLUMNS = [
-  { label: 'Email',      field: 'email'     },
-  { label: 'Zalo',       field: 'zalo'      },
-  { label: 'Zalo Group', field: 'zaloGroup' },
-];
-
 /** Strip the " (Channel)" suffix for compact column display */
 const stripChannelSuffix = (name) => name.replace(/\s*\([^)]*\)\s*$/, '');
 
@@ -101,11 +89,18 @@ const calcRatio = (value, sent) =>
  * @param {string}  props.label
  * @param {string}  props.activeChannel
  * @param {boolean} props.isMonthlyView
+ * @param {object}  props.labels - Translation labels for tooltip columns
  */
-const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView }) => {
+const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, labels = {} }) => {
   if (!active || !payload?.length) return null;
 
   const dateLabel = getTooltipLabel(label, isMonthlyView);
+
+  const tooltipColumns = [
+    { label: labels.email || 'Email', field: 'email' },
+    { label: labels.zalo || 'Zalo', field: 'zalo' },
+    { label: labels.zaloGroup || 'Zalo Group', field: 'zaloGroup' },
+  ];
 
   // Build a lookup map: dataKey → recharts entry (value + color)
   const dataMap = Object.fromEntries(payload.map((e) => [e.dataKey, e]));
@@ -176,10 +171,10 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView }
       <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-4 py-3">
         <p className="text-xs font-semibold text-gray-500 mb-3">{dateLabel}</p>
         <div className="flex divide-x divide-gray-100">
-          {TOOLTIP_COLUMNS.map((col, colIdx) => (
+          {tooltipColumns.map((col, colIdx) => (
             <div
               key={col.label}
-              className={`min-w-[130px] ${colIdx > 0 ? 'pl-3' : ''} ${colIdx < TOOLTIP_COLUMNS.length - 1 ? 'pr-3' : ''}`}
+              className={`min-w-[130px] ${colIdx > 0 ? 'pl-3' : ''} ${colIdx < tooltipColumns.length - 1 ? 'pr-3' : ''}`}
             >
               <p className="text-[11px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wide">
                 {col.label}
@@ -284,6 +279,8 @@ const DashboardChannelTabs = ({
   isInsightLoading = false,
   insightError = '',
 }) => {
+  const t = useI18n('dashboardChannelTabs');
+
   const rawTimeline = analytics?.timeline || [];
   const timeline = isMonthlyView ? aggregateToMonthly(rawTimeline) : rawTimeline;
 
@@ -294,11 +291,17 @@ const DashboardChannelTabs = ({
   );
 
   const chartTitle = {
-    all: 'Tương tác tổng hợp theo kênh',
-    email: 'Hiệu quả Email + Đơn hàng Email',
-    zalo: 'Hiệu quả Zalo + Đơn hàng Zalo',
-    zalo_group: 'Hiệu quả Zalo Group + Đơn hàng Zalo Group',
+    all: t('interactionByChannel'),
+    email: t('emailEffectivenessOrders'),
+    zalo: t('zaloEffectivenessOrders'),
+    zalo_group: t('zaloGroupEffectivenessOrders'),
   }[activeChannel] || '';
+
+  const tooltipLabels = {
+    email: t('email'),
+    zalo: t('zalo'),
+    zaloGroup: t('zaloGroup'),
+  };
 
   return (
     <div className="card p-5 md:p-6">
@@ -308,14 +311,19 @@ const DashboardChannelTabs = ({
           <h3 className="text-base font-semibold text-gray-900">{chartTitle}</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             {activeChannel === 'all'
-              ? 'Chọn một kênh cụ thể để xem thêm đơn hàng phân theo kênh'
-              : 'Tương tác + đơn hàng riêng cho kênh đã chọn'}
+              ? t('selectChannelForOrders')
+              : t('interactionOrdersForChannel')}
           </p>
         </div>
 
         {/* Channel tabs */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-gray-100 shrink-0">
-          {CHANNEL_OPTIONS.map((item) => (
+          {[
+            { id: 'all', label: t('all'), color: 'gray' },
+            { id: 'email', label: t('email'), color: 'sky' },
+            { id: 'zalo', label: t('zalo'), color: 'blue' },
+            { id: 'zalo_group', label: t('zaloGroup'), color: 'purple' },
+          ].map((item) => (
             <button
               key={item.id}
               type="button"
@@ -339,7 +347,7 @@ const DashboardChannelTabs = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
               d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
           </svg>
-          <p className="text-sm">Chưa có dữ liệu cho kênh này trong khoảng thời gian đã chọn</p>
+          <p className="text-sm">{t('noDataForChannel')}</p>
         </div>
       ) : (
         <div className="h-72">
@@ -360,7 +368,7 @@ const DashboardChannelTabs = ({
                 axisLine={false}
                 tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v}
               />
-              <Tooltip content={<ChannelTooltip activeChannel={activeChannel} isMonthlyView={isMonthlyView} />} />
+              <Tooltip content={<ChannelTooltip activeChannel={activeChannel} isMonthlyView={isMonthlyView} labels={tooltipLabels} />} />
               <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
               {chartConfig.map((line) => (
                 <Line
@@ -380,7 +388,7 @@ const DashboardChannelTabs = ({
       )}
 
       <DashboardInsightBlock
-        title="Insight · Tương tác theo kênh"
+        title={t('channelTabs.insightByChannel', { defaultValue: 'Insight · Tương tác theo kênh' })}
         text={insightText}
         isLoading={isInsightLoading}
         error={insightError}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlineLightningBolt,
   HiOutlineUsers,
@@ -12,19 +13,20 @@ import {
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatDateOnly } from '../../features/customers/utils/customerDisplay.helpers';
 
-const STATUS_MAP = {
-  active: { label: 'Đang hoạt động', cls: 'badge-success' },
-  draft: { label: 'Nháp', cls: 'badge-gray' },
-  paused: { label: 'Tạm dừng', cls: 'badge-warning' },
-  completed: { label: 'Hoàn thành', cls: 'badge-info' },
-};
+const STATUS_MAP = (t) => ({
+  active: { label: t('campaigns.active'), cls: 'badge-success' },
+  draft: { label: t('campaigns.draft'), cls: 'badge-gray' },
+  paused: { label: t('campaigns.paused'), cls: 'badge-warning' },
+  completed: { label: t('campaigns.completed'), cls: 'badge-info' },
+});
 
-const StatusBadge = ({ status }) => {
-  const s = STATUS_MAP[status] || { label: status || '--', cls: 'badge-gray' };
+const StatusBadge = ({ status, t }) => {
+  const s = STATUS_MAP(t)[status] || { label: status || '--', cls: 'badge-gray' };
   return <span className={`badge ${s.cls}`}>{s.label}</span>;
 };
 
 const Customers = () => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +59,7 @@ const Customers = () => {
         totalPages: Math.max(1, Math.ceil(visibleCampaigns.length / 20)),
       }));
     } catch {
-      toast.error('Không thể tải danh sách chiến dịch');
+      toast.error(t('customers.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -73,9 +75,9 @@ const Customers = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Khách hàng</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('customers.title')}</h1>
         <p className="mt-1 text-gray-500">
-          Chọn chiến dịch để xem danh sách khách hàng tham gia
+          {t('customers.selectCampaign')}
         </p>
       </div>
 
@@ -90,12 +92,12 @@ const Customers = () => {
               type="text"
               value={pendingSearch}
               onChange={(e) => setPendingSearch(e.target.value)}
-              placeholder="Tìm kiếm chiến dịch..."
+              placeholder={t('customers.searchPlaceholder')}
               className="w-full py-2 pr-3 text-sm bg-transparent border-0 rounded-lg focus:outline-none"
             />
           </div>
           <button type="submit" className="btn btn-secondary shrink-0">
-            Tìm kiếm
+            {t('common.search')}
           </button>
         </form>
       </div>
@@ -109,7 +111,7 @@ const Customers = () => {
         ) : campaigns.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-gray-400 gap-3">
             <HiOutlineLightningBolt className="w-10 h-10" />
-            <p>Không có chiến dịch nào</p>
+            <p>{t('campaigns.noCampaigns')}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -141,11 +143,11 @@ const Customers = () => {
                     })()}
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
-                    <span>Tạo lúc {formatDateOnly(c.createdAt)}</span>
-                    <span>Người tạo: {c?.createdBy?.name || c?.creatorName || 'Không xác định'}</span>
+                    <span>{t('customers.createdAt')} {formatDateOnly(c.createdAt)}</span>
+                    <span>{t('customers.creator')}: {c?.createdBy?.name || c?.creatorName || t('customers.unknownCreator')}</span>
                     <span className="flex items-center gap-1">
                       <HiOutlineUsers className="w-4 h-4" />
-                      {c.totalSent ?? 0} đã gửi
+                      {t('customers.sentCount', { count: c.totalSent ?? 0 })}
                     </span>
                   </div>
                 </div>
@@ -160,7 +162,7 @@ const Customers = () => {
         {/* Pagination */}
         {pagination.totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-            <p className="text-sm text-gray-500">Tổng: {pagination.total} chiến dịch</p>
+            <p className="text-sm text-gray-500">{t('customers.total', { total: pagination.total })}</p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}

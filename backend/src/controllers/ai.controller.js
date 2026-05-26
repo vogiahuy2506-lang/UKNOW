@@ -8,6 +8,51 @@ import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 
 class AiController {
   /**
+   * Generate campaign script from AI (V2 - Registry-based, multi-step support).
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async generateCampaignV2(req, res) {
+    try {
+      const { prompt, files } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập yêu cầu cho AI',
+        });
+      }
+
+      const script = await aiCampaignService.generateCampaignWithRegistry({
+        prompt,
+        files: files || [],
+        userId: req.user.id,
+      });
+
+      const validation = aiCampaignService.validateCampaignScript(script);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: 'AI tạo script không hợp lệ: ' + validation.errors.join(', '),
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: script,
+        warnings: validation.warnings,
+      });
+    } catch (error) {
+      console.error('AI generate campaign V2 error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xử lý yêu cầu AI',
+      });
+    }
+  }
+
+  /**
    * Generate campaign script from AI.
    *
    * @param {import('express').Request} req
@@ -95,6 +140,43 @@ class AiController {
       return res.status(error.status || 500).json({
         success: false,
         message: error.message || 'Lỗi khi xử lý trò chuyện AI',
+      });
+    }
+  }
+
+  /**
+   * Smart interactive chat V2 - sử dụng CampaignNodeRegistry (multi-step support).
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async chatV2(req, res) {
+    try {
+      const { history, files } = req.body;
+
+      if (!history || !history.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu lịch sử trò chuyện',
+        });
+      }
+
+      const response = await aiCampaignService.processSmartChatV2({
+        history,
+        files: files || [],
+        userId: req.user.id,
+        userRole: req.user.role,
+      });
+
+      return res.json({
+        success: true,
+        data: response,
+      });
+    } catch (error) {
+      console.error('AI chat V2 error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xử lý trò chuyện AI V2',
       });
     }
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import customerApiService from '../../features/customers/services/customerApi.service';
 import {
   formatDateOnly,
@@ -49,6 +50,7 @@ const CustomerStatusBadge = ({ status, campaignType }) => {
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 const CampaignCustomers = () => {
+  const { t } = useI18n();
   const { campaignId } = useParams();
   const navigate = useNavigate();
 
@@ -78,7 +80,8 @@ const CampaignCustomers = () => {
     if (!campaignId) return;
     customerApiService.getCampaignById(campaignId)
       .then((res) => setCampaign(res.data?.data || null))
-      .catch(() => toast.error('Không thể tải thông tin chiến dịch'));
+      .catch(() => toast.error(t('campaignCustomers.loadCampaignFailed')));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   useEffect(() => {
@@ -110,10 +113,11 @@ const CampaignCustomers = () => {
         totalPages: payload.pagination?.totalPages ?? 1,
       }));
     } catch {
-      toast.error('Không thể tải danh sách khách hàng');
+      toast.error(t('campaignCustomers.loadCustomersFailed'));
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   const fetchGroupMessages = useCallback(async (page = 1) => {
@@ -132,10 +136,11 @@ const CampaignCustomers = () => {
         totalPages: payload.pagination?.totalPages ?? 1,
       }));
     } catch {
-      toast.error('Không thể tải danh sách tin nhắn Zalo nhóm');
+      toast.error(t('campaignCustomers.loadMessagesFailed'));
     } finally {
       setGroupMessagesLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId, groupMessagesPagination.limit]);
 
   useEffect(() => {
@@ -169,14 +174,14 @@ const CampaignCustomers = () => {
         <button
           onClick={() => navigate('/app/customers')}
           className="p-2 rounded-lg hover:bg-gray-100 shrink-0 transition-colors"
-          aria-label="Quay lai"
+          aria-label={t('campaignCustomers.goBackAriaLabel')}
         >
           <HiOutlineArrowLeft className="w-5 h-5" />
         </button>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 truncate">
-              {campaign?.campaignName ?? 'Đang tải...'}
+              {campaign?.campaignName ?? t('customers.loadingDetail')}
             </h1>
             {campaign?.campaignType ? (
               <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
@@ -187,7 +192,7 @@ const CampaignCustomers = () => {
             ) : null}
           </div>
           <p className="text-sm text-gray-500 mt-0.5">
-            Danh sách khách hàng tham gia chiến dịch
+            {t('campaignCustomers.customerListTitle')}
           </p>
         </div>
       </div>
@@ -203,7 +208,7 @@ const CampaignCustomers = () => {
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            Danh sách khách hàng
+            {t('campaignCustomers.customerListTab')}
           </button>
           <button
             type="button"
@@ -217,7 +222,7 @@ const CampaignCustomers = () => {
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            Tin đã gửi & lượt click
+            {t('campaignCustomers.messagesTab')}
           </button>
         </div>
       )}
@@ -234,12 +239,12 @@ const CampaignCustomers = () => {
                 type="text"
                 value={pendingSearch}
                 onChange={(e) => setPendingSearch(e.target.value)}
-                placeholder="Tim ten, email, so dien thoai..."
+                placeholder={t('campaignCustomers.searchCustomer')}
                 className="w-full py-2 pr-3 text-sm bg-transparent border-0 focus:outline-none"
               />
             </div>
             <button type="submit" className="btn btn-secondary shrink-0">
-              Tìm kiếm
+              {t('campaignCustomers.search')}
             </button>
           </form>
         </div>
@@ -260,12 +265,12 @@ const CampaignCustomers = () => {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Khách hàng</th>
-                    <th>Email</th>
-                    <th>Điện thoại</th>
-                    <th>Trạng thái</th>
-                    <th>Ngày tham gia</th>
-                    <th className="text-right">Hành động</th>
+                    <th>{t('campaignCustomers.customer')}</th>
+                    <th>{t('campaignCustomers.email')}</th>
+                    <th>{t('campaignCustomers.phone')}</th>
+                    <th>{t('campaignCustomers.status')}</th>
+                    <th>{t('campaignCustomers.joinDate')}</th>
+                    <th className="text-right">{t('campaignCustomers.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,7 +283,7 @@ const CampaignCustomers = () => {
                   ) : customers.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-gray-400">
-                        Không có khách hàng nào trong chiến dịch này
+                        {t('customers.noCustomersInCampaign')}
                       </td>
                     </tr>
                   ) : (
@@ -329,7 +334,7 @@ const CampaignCustomers = () => {
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors whitespace-nowrap"
                             >
                               <HiOutlineUser className="w-3.5 h-3.5" />
-                              Chi tiết
+                              {t('campaignCustomers.detail')}
                             </button>
                             {!isZaloGroupCampaign && (
                               <button
@@ -337,7 +342,7 @@ const CampaignCustomers = () => {
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100 hover:border-primary-300 transition-colors whitespace-nowrap"
                               >
                                 <HiOutlineEye className="w-3.5 h-3.5" />
-                                Hành trình
+                                {t('campaignCustomers.journey')}
                               </button>
                             )}
                           </div>
@@ -352,7 +357,11 @@ const CampaignCustomers = () => {
             {pagination.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
                 <p className="text-sm text-gray-500">
-                  {(pagination.page - 1) * 20 + 1}–{Math.min(pagination.page * 20, pagination.total)} trong {pagination.total} khách hàng
+                  {t('campaignCustomers.paginationInfo', {
+                    start: (pagination.page - 1) * 20 + 1,
+                    end: Math.min(pagination.page * 20, pagination.total),
+                    total: pagination.total,
+                  })}
                 </p>
                 <div className="flex items-center gap-2">
                   <button

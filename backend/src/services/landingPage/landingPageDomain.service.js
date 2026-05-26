@@ -74,11 +74,11 @@ function assertValidWwwHostname(hostname) {
 }
 
 function txtChallengeName(hostname) {
-  return `_uknow-verify.${hostname}`;
+  return `_founderai-verify.${hostname}`;
 }
 
 function expectedTxtContent(token) {
-  return `uknow-verify=${token}`;
+  return `founderai-verify=${token}`;
 }
 
 function cnameTarget() {

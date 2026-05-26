@@ -6,13 +6,13 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { useAdminStats } from '../../features/admin/hooks/useAdminStats';
+import { useI18n } from '../../i18n';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt    = (n) => Number(n || 0).toLocaleString('vi-VN');
 const fmtVnd = (n) => `${fmt(n)} đ`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
-const STATUS_LABEL = { completed: 'Hoàn thành', pending: 'Chờ thanh toán', cancelled: 'Đã hủy' };
 const STATUS_CLASS  = { completed: 'badge-success', pending: 'badge-warning', cancelled: 'badge-gray' };
 const PLAN_COLORS  = ['#f97316', '#3b82f6', '#8b5cf6', '#10b981'];
 
@@ -51,13 +51,13 @@ const KpiCard = ({ icon: Icon, label, value, sub, color = 'text-primary-600', bg
 );
 
 // ── Custom Tooltip cho BarChart ───────────────────────────────────────────────
-const RevenueTooltip = ({ active, payload, label }) => {
+const RevenueTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
       <p className="font-medium text-gray-700 mb-1">{label}</p>
-      <p className="text-primary-600">Doanh thu: <strong>{fmtVnd(payload[0]?.value)}</strong></p>
-      <p className="text-gray-500">Đơn hoàn thành: <strong>{payload[1]?.value}</strong></p>
+      <p className="text-primary-600">{t('adminDashboard.revenue')}: <strong>{fmtVnd(payload[0]?.value)}</strong></p>
+      <p className="text-gray-500">{t('adminDashboard.completedOrders')}: <strong>{payload[1]?.value}</strong></p>
     </div>
   );
 };
@@ -78,9 +78,16 @@ const PieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 const AdminDashboard = () => {
+  const { t } = useI18n();
   const printRef = useRef(null);
   const docTitleRef = useRef(typeof document !== 'undefined' ? document.title : '');
   const { data, isLoading, error, refetch } = useAdminStats();
+
+  const STATUS_LABEL = {
+    completed: t('adminDashboard.completed'),
+    pending: t('adminDashboard.pendingPayment'),
+    cancelled: t('adminDashboard.cancelledStatus'),
+  };
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -101,7 +108,7 @@ const AdminDashboard = () => {
   if (error) return (
     <div className="card p-10 text-center">
       <p className="text-red-500 mb-3">{error}</p>
-      <button onClick={refetch} className="btn btn-primary">Thử lại</button>
+      <button onClick={refetch} className="btn btn-primary">{t('adminDashboard.retry')}</button>
     </div>
   );
 
@@ -124,22 +131,22 @@ const AdminDashboard = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard hệ thống</h1>
-          <p className="text-gray-500 mt-1">Tổng quan toàn bộ nền tảng Founder AI</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('adminDashboard.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('adminDashboard.description')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handlePrint}
-            title="In / PDF: chọn «Lưu dưới dạng PDF». Bỏ chọn «Đầu trang và chân trang» để ẩn URL và ngày."
+            title={t('adminDashboard.pdfTip')}
             className="btn btn-secondary"
           >
             <HiOutlinePrinter className="w-4 h-4 mr-2" />
-            In / PDF
+            {t('adminDashboard.printPdf')}
           </button>
           <button type="button" onClick={refetch} className="btn btn-secondary">
             <HiOutlineRefresh className="w-4 h-4 mr-2" />
-            Làm mới
+            {t('adminDashboard.refresh')}
           </button>
         </div>
       </div>
@@ -148,30 +155,30 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           icon={HiOutlineUsers}
-          label="Thành viên có gói"
+          label={t('adminDashboard.activeMembers')}
           value={fmt(kpi.activeMembers)}
-          sub={`/ ${fmt(kpi.totalMembers)} tổng thành viên`}
+          sub={`/ ${fmt(kpi.totalMembers)} ${t('adminDashboard.totalMembers')}`}
           color="text-blue-600" bg="bg-blue-50"
         />
         <KpiCard
           icon={HiOutlineCurrencyDollar}
-          label="Doanh thu tháng này"
+          label={t('adminDashboard.revenueThisMonth')}
           value={fmtVnd(kpi.revenueThisMonth)}
-          sub={`${fmt(kpi.completedOrdersThisMonth)} đơn hoàn thành`}
+          sub={`${fmt(kpi.completedOrdersThisMonth)} ${t('adminDashboard.ordersCompletedThisMonth')}`}
           color="text-green-600" bg="bg-green-50"
         />
         <KpiCard
           icon={HiOutlineClipboardList}
-          label="Đơn hàng tháng này"
+          label={t('adminDashboard.ordersThisMonthLabel')}
           value={fmt(kpi.ordersThisMonth)}
-          sub={`${fmt(kpi.pendingOrdersThisMonth)} chờ thanh toán`}
+          sub={`${fmt(kpi.pendingOrdersThisMonth)} ${t('adminDashboard.pendingOrdersThisMonth')}`}
           color="text-orange-600" bg="bg-orange-50"
         />
         <KpiCard
           icon={HiOutlineChartBar}
-          label="Tổng nhân viên"
+          label={t('adminDashboard.totalEmployees')}
           value={fmt(kpi.totalEmployees)}
-          sub={`${fmt(kpi.totalMembers)} chủ tài khoản`}
+          sub={`${fmt(kpi.totalMembers)} ${t('adminDashboard.accountOwners')}`}
           color="text-purple-600" bg="bg-purple-50"
         />
       </div>
@@ -180,18 +187,18 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Doanh thu 6 tháng */}
         <div className="card p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Doanh thu 6 tháng gần nhất</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">{t('adminDashboard.last6MonthsRevenue')}</h2>
           {chartRevenue.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-10">Chưa có dữ liệu</p>
+            <p className="text-sm text-gray-400 text-center py-10">{t('adminDashboard.noData')}</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={chartRevenue} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} width={42} />
-                <Tooltip content={<RevenueTooltip />} />
-                <Bar dataKey="revenue" name="Doanh thu" fill="#f97316" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="orders"  name="Đơn hoàn thành" fill="#fed7aa" radius={[4, 4, 0, 0]} />
+                <Tooltip content={<RevenueTooltip t={t} />} />
+                <Bar dataKey="revenue" name={t('adminDashboard.revenue')} fill="#f97316" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="orders"  name={t('adminDashboard.completedOrders')} fill="#fed7aa" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -199,9 +206,9 @@ const AdminDashboard = () => {
 
         {/* Phân bố gói */}
         <div className="card p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Phân bố theo gói dịch vụ</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">{t('adminDashboard.servicePlanDistribution')}</h2>
           {chartPlan.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-10">Chưa có dữ liệu</p>
+            <p className="text-sm text-gray-400 text-center py-10">{t('adminDashboard.noData')}</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -218,7 +225,7 @@ const AdminDashboard = () => {
                   ))}
                 </Pie>
                 <Legend formatter={(v) => <span className="text-sm text-gray-600">{v}</span>} />
-                <Tooltip formatter={(v, name) => [`${v} thành viên`, name]} />
+                <Tooltip formatter={(v, name) => [`${v} ${t('adminDashboard.members')}`, name]} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -230,11 +237,11 @@ const AdminDashboard = () => {
         {/* Đơn hàng gần nhất */}
         <div className="card">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">Đơn hàng gần nhất</h2>
+            <h2 className="text-sm font-semibold text-gray-700">{t('adminDashboard.recentOrders')}</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {recentOrders.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Chưa có đơn hàng</p>
+              <p className="text-sm text-gray-400 text-center py-8">{t('adminDashboard.noOrders')}</p>
             ) : recentOrders.map((o) => (
               <div key={o.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -255,11 +262,11 @@ const AdminDashboard = () => {
         {/* Thành viên mới */}
         <div className="card">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">Thành viên mới nhất</h2>
+            <h2 className="text-sm font-semibold text-gray-700">{t('adminDashboard.recentMembers')}</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {recentMembers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Chưa có thành viên</p>
+              <p className="text-sm text-gray-400 text-center py-8">{t('adminDashboard.noMembers')}</p>
             ) : recentMembers.map((m) => (
               <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -276,7 +283,7 @@ const AdminDashboard = () => {
                 <div className="text-right shrink-0">
                   {m.planName
                     ? <span className="badge badge-success text-xs">{m.planName}</span>
-                    : <span className="badge badge-gray text-xs">Chưa có gói</span>
+                    : <span className="badge badge-gray text-xs">{t('adminDashboard.noPlan')}</span>
                   }
                   <p className="text-xs text-gray-400 mt-0.5">{fmtDate(m.createdAt)}</p>
                 </div>
@@ -291,8 +298,8 @@ const AdminDashboard = () => {
         {/* Title */}
         <div className="flex items-center justify-between border-b border-gray-300 pb-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard hệ thống — Founder AI</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Xuất lúc {printDate}</p>
+            <h1 className="text-2xl font-bold">{t('adminDashboard.printTitle')}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{t('adminDashboard.printedAt')} {printDate}</p>
           </div>
           <p className="text-xs text-gray-400">founderai.biz</p>
         </div>
@@ -300,10 +307,10 @@ const AdminDashboard = () => {
         {/* KPI grid */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Thành viên có gói',   value: `${fmt(kpi.activeMembers)} / ${fmt(kpi.totalMembers)}` },
-            { label: 'Doanh thu tháng này', value: fmtVnd(kpi.revenueThisMonth) },
-            { label: 'Đơn tháng này',       value: fmt(kpi.ordersThisMonth) },
-            { label: 'Tổng nhân viên',      value: fmt(kpi.totalEmployees) },
+            { label: t('adminDashboard.activeMembers'),   value: `${fmt(kpi.activeMembers)} / ${fmt(kpi.totalMembers)}` },
+            { label: t('adminDashboard.revenueThisMonth'), value: fmtVnd(kpi.revenueThisMonth) },
+            { label: t('adminDashboard.ordersThisMonth'), value: fmt(kpi.ordersThisMonth) },
+            { label: t('adminDashboard.totalEmployees'),      value: fmt(kpi.totalEmployees) },
           ].map(({ label, value }) => (
             <div key={label} className="border border-gray-200 rounded-xl p-4">
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
@@ -315,18 +322,18 @@ const AdminDashboard = () => {
         {/* Charts */}
         <div className="grid grid-cols-2 gap-6 mb-8">
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Doanh thu 6 tháng gần nhất</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">{t('adminDashboard.last6MonthsRevenue')}</h2>
             <BarChart width={500} height={220} data={chartRevenue} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} width={38} />
-              <Tooltip content={<RevenueTooltip />} />
+              <Tooltip content={<RevenueTooltip t={t} />} />
               <Bar dataKey="revenue" fill="#f97316" radius={[4, 4, 0, 0]} />
               <Bar dataKey="orders"  fill="#fed7aa" radius={[4, 4, 0, 0]} />
             </BarChart>
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Phân bố theo gói dịch vụ</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">{t('adminDashboard.servicePlanDistribution')}</h2>
             <PieChart width={480} height={220}>
               <Pie data={chartPlan} cx="50%" cy="50%" innerRadius={55} outerRadius={90}
                 dataKey="value" labelLine={false} label={<PieLabel />}>
@@ -341,11 +348,16 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-2 gap-6">
           {/* Đơn hàng gần nhất */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-2">Đơn hàng gần nhất</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('adminDashboard.recentOrders')}</h2>
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-gray-50">
-                  {['Email', 'Gói', 'Số tiền', 'Trạng thái'].map((h) => (
+                  {[
+                    t('adminDashboard.email'),
+                    t('adminDashboard.plan'),
+                    t('adminDashboard.amount'),
+                    t('adminDashboard.status'),
+                  ].map((h) => (
                     <th key={h} className="text-left px-2 py-1.5 border border-gray-200 font-medium text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -365,11 +377,16 @@ const AdminDashboard = () => {
 
           {/* Thành viên mới */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-2">Thành viên mới nhất</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('adminDashboard.recentMembers')}</h2>
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-gray-50">
-                  {['Tên', 'Email', 'Gói', 'Ngày đăng ký'].map((h) => (
+                  {[
+                    t('adminDashboard.name'),
+                    t('adminDashboard.email'),
+                    t('adminDashboard.plan'),
+                    t('adminDashboard.registrationDate'),
+                  ].map((h) => (
                     <th key={h} className="text-left px-2 py-1.5 border border-gray-200 font-medium text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -379,7 +396,7 @@ const AdminDashboard = () => {
                   <tr key={m.id} className="border-b border-gray-100">
                     <td className="px-2 py-1.5 border border-gray-200">{m.fullName || m.username}</td>
                     <td className="px-2 py-1.5 border border-gray-200 truncate max-w-[120px]">{m.email}</td>
-                    <td className="px-2 py-1.5 border border-gray-200">{m.planName || 'Chưa có gói'}</td>
+                    <td className="px-2 py-1.5 border border-gray-200">{m.planName || t('adminDashboard.noPlan')}</td>
                     <td className="px-2 py-1.5 border border-gray-200 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
                   </tr>
                 ))}

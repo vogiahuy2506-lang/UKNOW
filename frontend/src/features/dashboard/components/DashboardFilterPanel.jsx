@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '../../../i18n';
 
 const CHANNEL_BADGE = {
   email: 'bg-sky-100 text-sky-700',
@@ -18,6 +19,7 @@ const CHANNEL_BADGE = {
  * @returns {JSX.Element}
  */
 const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const dropdownRef = useRef(null);
@@ -63,10 +65,10 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
 
   const triggerLabel =
     selectedIds.length === 0
-      ? 'Tất cả chiến dịch'
+      ? t('common.all')
       : selectedIds.length === 1
-      ? options.find((o) => o.id === selectedIds[0])?.label || '1 chiến dịch'
-      : `${selectedIds.length} chiến dịch đã chọn`;
+      ? options.find((o) => o.id === selectedIds[0])?.label || '1'
+      : `${selectedIds.length}`;
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -119,8 +121,8 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
               </svg>
               <input
                 type="text"
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-primary-400 focus:ring-1 focus:ring-primary-400 transition-base placeholder-gray-400"
-                placeholder="Tìm chiến dịch..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-primary-400 focus:ring-1 focus:ring-primary-400 transition-base"
+                placeholder={t('dashboard.searchCampaign')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoFocus
@@ -139,7 +141,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
                   onChange={toggleAllFiltered}
                 />
                 <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700">
-                  {allFilteredSelected ? 'Bỏ chọn tất cả' : `Chọn tất cả (${filtered.length})`}
+                  {allFilteredSelected ? t('dashboard.deselectAll') : `${t('dashboard.selectAll')} (${filtered.length})`}
                 </span>
               </label>
             </div>
@@ -149,7 +151,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
           <div className="max-h-48 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-xs text-gray-400 text-center">
-                Không tìm thấy chiến dịch phù hợp
+                {t('dashboard.noMatchingCampaign')}
               </div>
             ) : (
               filtered.map((opt) => {
@@ -184,14 +186,14 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
           {selectedIds.length > 0 && (
             <div className="px-3 py-2 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
               <span className="text-xs text-primary-600 font-medium">
-                Đã chọn {selectedIds.length} chiến dịch
+                {t('dashboard.selectedCount', { count: selectedIds.length })}
               </span>
               <button
                 type="button"
                 className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                 onClick={() => onChange([])}
               >
-                Xóa tất cả
+                {t('dashboard.clearAll')}
               </button>
             </div>
           )}
@@ -202,19 +204,19 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
 };
 
 const CAMPAIGN_TYPE_OPTIONS = [
-  { value: 'all', label: 'Tất cả' },
-  { value: 'email', label: 'Email' },
-  { value: 'zalo', label: 'Zalo' },
-  { value: 'zalo_group', label: 'Zalo group' },
+  { value: 'all', label: '' }, // Will use common.all
+  { value: 'email', label: '' }, // Will use channel.email
+  { value: 'zalo', label: '' }, // Will use channel.zalo
+  { value: 'zalo_group', label: '' }, // Will use channel.zaloGroup
 ];
 
 const QUICK_RANGES = [
-  { key: '7d',  label: '7 ngày',   days: 6  },
-  { key: '30d', label: '30 ngày',  days: 29 },
-  { key: '90d', label: '90 ngày',  days: 89 },
-  { key: '3m',  label: '3 tháng',  months: 3  },
-  { key: '6m',  label: '6 tháng',  months: 6  },
-  { key: '12m', label: '12 tháng', months: 12 },
+  { key: '7d',  labelKey: 'dashboard.days7',   days: 6  },
+  { key: '30d', labelKey: 'dashboard.days30',  days: 29 },
+  { key: '90d', labelKey: 'dashboard.days90',  days: 89 },
+  { key: '3m',  labelKey: 'dashboard.months3', months: 3  },
+  { key: '6m',  labelKey: 'dashboard.months6', months: 6  },
+  { key: '12m', labelKey: 'dashboard.months12', months: 12 },
 ];
 
 /**
@@ -267,9 +269,10 @@ const DashboardFilterPanel = ({
   campaignOptions, onApply,
   dateMode, setDateMode,
   activeQuickKey, setActiveQuickKey,
-  panelTitle = 'Bộ lọc Dashboard',
-  panelDescription = 'Tùy chỉnh phạm vi dữ liệu hiển thị',
+  panelTitle,
+  panelDescription,
 }) => {
+  const { t } = useI18n();
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -344,14 +347,14 @@ const DashboardFilterPanel = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">{panelTitle}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{panelDescription}</p>
+            <h3 className="text-base font-semibold text-gray-900">{panelTitle || t('dashboard.filterPanel')}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{panelDescription || t('dashboard.filterPanelDesc')}</p>
           </div>
           <button
             type="button"
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-base"
             onClick={onClose}
-            aria-label="Đóng bộ lọc"
+            aria-label={t('dashboard.closeFilter')}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -375,7 +378,7 @@ const DashboardFilterPanel = ({
                 }`}
                 onClick={handleSwitchToQuick}
               >
-                Chọn nhanh
+                {t('dashboard.quickSelect')}
               </button>
               <button
                 type="button"
@@ -386,7 +389,7 @@ const DashboardFilterPanel = ({
                 }`}
                 onClick={handleSwitchToCustom}
               >
-                Khoảng thời gian
+                {t('dashboard.dateRange')}
               </button>
             </div>
 
@@ -404,7 +407,7 @@ const DashboardFilterPanel = ({
                     }`}
                     onClick={() => applyQuickRange(range)}
                   >
-                    {range.label}
+                    {t(range.labelKey)}
                   </button>
                 ))}
               </div>
@@ -414,7 +417,7 @@ const DashboardFilterPanel = ({
             {dateMode === 'custom' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Từ ngày</label>
+                  <label className="block text-xs text-gray-500 mb-1.5">{t('dashboard.fromDate')}</label>
                   <input
                     type="date"
                     className="input text-sm"
@@ -423,7 +426,7 @@ const DashboardFilterPanel = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Đến ngày</label>
+                  <label className="block text-xs text-gray-500 mb-1.5">{t('dashboard.toDate')}</label>
                   <input
                     type="date"
                     className="input text-sm"
@@ -437,7 +440,7 @@ const DashboardFilterPanel = ({
 
           {/* Campaign type */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Loại kênh</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.channelType')}</p>
             <div className="flex flex-wrap gap-2">
               {CAMPAIGN_TYPE_OPTIONS.map((opt) => (
                 <button
@@ -450,7 +453,7 @@ const DashboardFilterPanel = ({
                   }`}
                   onClick={() => setDraftFilters((prev) => ({ ...prev, campaignType: opt.value }))}
                 >
-                  {opt.label}
+                  {opt.value === 'all' ? t('common.all') : t(`channel.${opt.value.replace('_', '')}`, t(`channel.${opt.value}`))}
                 </button>
               ))}
             </div>
@@ -459,7 +462,7 @@ const DashboardFilterPanel = ({
           {/* Campaign multi-select — custom checkbox dropdown */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              Chiến dịch cụ thể
+              {t('dashboard.specificCampaigns')}
             </p>
             <CampaignCheckboxDropdown
               options={campaignOptions}
@@ -467,7 +470,7 @@ const DashboardFilterPanel = ({
               onChange={handleCampaignChange}
             />
             <p className="text-xs text-gray-400 mt-2">
-              Không chọn = lấy tất cả chiến dịch trong bộ lọc trên.
+              {t('dashboard.noSelectionHint')}
             </p>
           </div>
         </div>
@@ -475,10 +478,10 @@ const DashboardFilterPanel = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0 bg-gray-50/50">
           <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
-            Hủy
+            {t('dashboard.cancel')}
           </button>
           <button type="button" className="btn btn-primary flex-1" onClick={handleApply}>
-            Áp dụng bộ lọc
+            {t('dashboard.applyFilter')}
           </button>
         </div>
       </div>

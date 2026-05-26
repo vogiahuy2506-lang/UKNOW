@@ -6,6 +6,7 @@ import {
   HiOutlinePlay,
 } from 'react-icons/hi';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
+import { useI18n } from '../../../i18n';
 
 /**
  * Section UI cho node lấy danh sách bạn bè Zalo.
@@ -18,6 +19,8 @@ export const NodeConfigGetAllFriendsSection = ({
   setFormData,
   upstreamNodes = [],
 }) => {
+  const { t } = useI18n();
+
   /**
    * Resolve friend id from normalized/raw preview item.
    *
@@ -205,7 +208,7 @@ export const NodeConfigGetAllFriendsSection = ({
   const handleLoadPreview = async () => {
     const accountId = resolvePreviewAccountId();
     if (!accountId) {
-      toast.error('Chưa có tài khoản Zalo để tải danh sách bạn bè. Vui lòng cấu hình node "Chọn tài khoản Zalo" trước.');
+      toast.error(t('zaloGetLists.noAccountToLoadFriends'));
       return;
     }
     try {
@@ -224,9 +227,9 @@ export const NodeConfigGetAllFriendsSection = ({
       });
       const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
       setPreviewItems(items);
-      toast.success(`Đã tải ${items.length} bạn bè Zalo`);
+      toast.success(t('zaloGetLists.loadedFriends', { count: items.length }));
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || 'Không thể tải danh sách bạn bè Zalo';
+      const message = error?.response?.data?.message || error?.message || t('zaloGetLists.cannotLoadFriends');
       toast.error(message);
       setPreviewItems([]);
     } finally {
@@ -258,10 +261,10 @@ export const NodeConfigGetAllFriendsSection = ({
   ]);
 
   const sections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
+    { id: 'basic', name: t('zaloGetLists.basicInfo'), icon: HiOutlineDocument },
     {
       id: 'select',
-      name: 'Lựa chọn bạn bè',
+      name: t('zaloGetLists.selectFriends'),
       icon: HiOutlinePlay,
       badge: selectedFriendIds.length > 0,
       badgeLabel: selectedFriendIds.length,
@@ -271,19 +274,19 @@ export const NodeConfigGetAllFriendsSection = ({
   const renderBasicSection = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder="Lấy danh sách bạn bè Zalo"
+          placeholder={t('zaloGetLists.nodeNamePlaceholder')}
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng mỗi trang</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.pageSize')}</label>
           <input
             type="number"
             min={1}
@@ -294,7 +297,7 @@ export const NodeConfigGetAllFriendsSection = ({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Trang</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.page')}</label>
           <input
             type="number"
             min={1}
@@ -306,7 +309,7 @@ export const NodeConfigGetAllFriendsSection = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Node nguồn tài khoản Zalo</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.zaloAccountNode')}</label>
         {accountSourceNodes.length > 0 ? (
           <select
             value={selectedAccountSourceNodeId}
@@ -324,22 +327,22 @@ export const NodeConfigGetAllFriendsSection = ({
             {accountSourceNodes.map((item) => (
               <option key={item.nodeId} value={item.nodeId}>
                 {item.nodeName}
-                {item.accountId ? ` (ID ${item.accountId})` : ''}
+                {item.accountId ? ` (${t('zaloGetLists.accountIdPrefix')} ${item.accountId})` : ''}
               </option>
             ))}
           </select>
         ) : (
           <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm">
-            Chưa có node <strong>Chọn tài khoản Zalo</strong> ở phía trước. Vui lòng thêm node này trước khi tải dữ liệu thử.
+            {t('zaloGetLists.noZaloAccountNode')}
           </div>
         )}
       </div>
 
       <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-        <strong>Tài khoản dùng để tải thử:</strong>{' '}
+        <strong>{t('zaloGetLists.testAccount')}</strong>{' '}
         {resolvePreviewAccountId()
-          ? `ID ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` · từ node "${selectedAccountSourceNode.nodeName}"` : ''}`
-          : 'Chưa xác định từ flow hiện tại'}
+          ? `${t('zaloGetLists.accountIdPrefix')} ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` ${t('zaloGetLists.fromNode')} "${selectedAccountSourceNode.nodeName}"` : ''}`
+          : t('zaloGetLists.accountNotDetermined')}
       </div>
     </div>
   );
@@ -357,19 +360,19 @@ export const NodeConfigGetAllFriendsSection = ({
               : 'bg-primary-600 text-white hover:bg-primary-700'
           }`}
         >
-          {isLoadingPreview ? 'Đang tải...' : previewItems.length > 0 ? 'Tải lại' : 'Tải dữ liệu thử'}
+          {isLoadingPreview ? t('zaloGetLists.loading') : previewItems.length > 0 ? t('zaloGetLists.reload') : t('zaloGetLists.loadTestData')}
         </button>
         {previewItems.length > 0 && (
           <span className="text-sm text-gray-500">
-            {previewItems.length} bạn bè
+            {previewItems.length} {t('zaloGetLists.friends')}
             {friendSelectionMode === 'fixed' && (
               <>
-                {' '}· đã chọn <strong className="text-primary-700">{selectedFriendIds.length}</strong>
+                {' '}· {t('zaloGetLists.selected')} <strong className="text-primary-700">{selectedFriendIds.length}</strong>
               </>
             )}
             {friendSelectionMode === 'all_exclude' && (
               <>
-                {' '}· đã loại trừ <strong className="text-red-600">{excludedFriendIds.length}</strong>
+                {' '}· {t('zaloGetLists.excluded')} <strong className="text-red-600">{excludedFriendIds.length}</strong>
               </>
             )}
           </span>
@@ -377,9 +380,9 @@ export const NodeConfigGetAllFriendsSection = ({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {[
-          { value: 'all', label: 'Tất cả', desc: 'Mặc định lấy toàn bộ, continuous sẽ cập nhật khách mới.' },
-          { value: 'fixed', label: 'Cố định', desc: 'Chỉ chạy danh sách đã chọn, không nhận khách mới ngoài danh sách.' },
-          { value: 'all_exclude', label: 'Tất cả trừ', desc: 'Lấy tất cả nhưng loại trừ những người đã tick.' },
+          { value: 'all', label: t('zaloGetLists.all'), desc: t('zaloGetLists.allDesc') },
+          { value: 'fixed', label: t('zaloGetLists.fixed'), desc: t('zaloGetLists.fixedDesc') },
+          { value: 'all_exclude', label: t('zaloGetLists.allExclude'), desc: t('zaloGetLists.allExcludeDesc') },
         ].map((option) => (
           <label
             key={option.value}
@@ -416,26 +419,26 @@ export const NodeConfigGetAllFriendsSection = ({
         ))}
       </div>
       <p className="text-xs text-gray-500">
-        Nhấn để lấy danh sách bạn bè theo tài khoản Zalo đã chọn. Kết quả chỉ để cấu hình và xem trước.
+        {t('zaloGetLists.previewNote')}
       </p>
 
       {isLoadingPreview ? (
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-500">Đang tải danh sách bạn bè...</p>
+          <p className="text-sm text-gray-500">{t('zaloGetLists.loadingFriends')}</p>
         </div>
       ) : previewItems.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Chưa có dữ liệu</p>
-          <p className="text-xs text-gray-400 mt-1">Nhấn "Tải dữ liệu thử" để xem trước và tích chọn bạn bè</p>
+          <p className="text-sm text-gray-500">{t('zaloGetLists.noData')}</p>
+          <p className="text-xs text-gray-400 mt-1">{t('zaloGetLists.loadPreviewHint')}</p>
         </div>
       ) : (
         <div>
           <div className="flex items-center gap-2 mb-2">
             <input
               type="text"
-              placeholder="Tìm theo tên, số điện thoại hoặc uid..."
+              placeholder={t('zaloGetLists.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
@@ -447,8 +450,8 @@ export const NodeConfigGetAllFriendsSection = ({
               className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
             >
               {friendSelectionMode === 'all'
-                ? 'Đang lấy tất cả'
-                : allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                ? t('zaloGetLists.takingAll')
+                : allSelected ? t('zaloGetLists.deselectAll') : t('zaloGetLists.selectAll')}
             </button>
           </div>
 
@@ -456,7 +459,7 @@ export const NodeConfigGetAllFriendsSection = ({
             <div className="max-h-96 overflow-y-auto">
               {filteredPreviewItems.length === 0 ? (
                 <div className="p-6 text-center">
-                  <p className="text-sm text-gray-500">Không tìm thấy bạn bè phù hợp</p>
+                  <p className="text-sm text-gray-500">{t('zaloGetLists.noFriendsFound')}</p>
                 </div>
               ) : (
                 filteredPreviewItems.map((item, idx) => {
@@ -480,10 +483,10 @@ export const NodeConfigGetAllFriendsSection = ({
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900 truncate">
-                          {displayName || '(Chưa có tên hiển thị)'}
+                          {displayName || t('zaloGetLists.noDisplayName')}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5 truncate">
-                          uid: {friendId || '(không xác định)'}
+                          {t('zaloGetLists.uidPrefix')} {friendId || t('zaloGetLists.undefined')}
                           {phoneNumber ? ` · ${phoneNumber}` : ''}
                         </div>
                       </div>
@@ -498,8 +501,8 @@ export const NodeConfigGetAllFriendsSection = ({
             <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
               <p className={`text-xs ${friendSelectionMode === 'all_exclude' ? 'text-red-700' : 'text-primary-700'}`}>
                 {friendSelectionMode === 'fixed'
-                  ? <>Đã chọn <strong>{selectedFriendIds.length}</strong> bạn bè. Khi chạy node sẽ chỉ lấy các bạn bè đã chọn.</>
-                  : <>Đã loại trừ <strong>{excludedFriendIds.length}</strong> bạn bè. Continuous vẫn lấy khách mới nhưng bỏ qua các bạn đã loại trừ.</>}
+                  ? <>{t('zaloGetLists.friendsSelected', { count: selectedFriendIds.length })}</>
+                  : <>{t('zaloGetLists.friendsExcluded', { count: excludedFriendIds.length })}</>}
               </p>
               <button
                 type="button"
@@ -511,7 +514,7 @@ export const NodeConfigGetAllFriendsSection = ({
                 }))}
                 className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
               >
-                Xóa chọn
+                {t('zaloGetLists.clearSelection')}
               </button>
             </div>
           )}
@@ -520,12 +523,12 @@ export const NodeConfigGetAllFriendsSection = ({
 
       <div className="bg-green-50 p-3 rounded-lg">
         <p className="text-sm text-green-700">
-          <strong>Lưu ý:</strong>{' '}
+          <strong>{t('campaignNodeConfig.trigger.note')}:</strong>{' '}
           {friendSelectionMode === 'all'
-            ? 'Đang ở chế độ lấy tất cả (mặc định). Continuous sẽ tự lấy thêm bạn bè mới theo chu kỳ.'
+            ? t('zaloGetLists.allModeNote')
             : friendSelectionMode === 'fixed'
-              ? 'Đang ở chế độ cố định. Chỉ những bạn bè đã tích mới đi vào luồng.'
-              : 'Đang ở chế độ tất cả trừ. Continuous sẽ lấy thêm bạn mới, trừ những bạn đã tích loại trừ.'}
+              ? t('zaloGetLists.fixedModeNote')
+              : t('zaloGetLists.allExcludeModeNote')}
         </p>
       </div>
     </div>
@@ -535,7 +538,7 @@ export const NodeConfigGetAllFriendsSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('zaloGetLists.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -576,17 +579,12 @@ export const NodeConfigGetAllFriendsSection = ({
   );
 };
 
-/**
- * Section UI cho node lấy thông tin nhóm Zalo.
- *
- * @param {Object} props section props
- * @returns {JSX.Element}
- */
 export const NodeConfigGetAllGroupsSection = ({
   formData,
   setFormData,
   upstreamNodes = [],
 }) => {
+  const { t: t2 } = useI18n();
   const [selectedSection, setSelectedSection] = useState('basic');
   const [previewItems, setPreviewItems] = useState([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -690,7 +688,7 @@ export const NodeConfigGetAllGroupsSection = ({
   const handleLoadPreview = async () => {
     const accountId = resolvePreviewAccountId();
     if (!accountId) {
-      toast.error('Chưa có tài khoản Zalo để tải thông tin nhóm. Vui lòng cấu hình node "Chọn tài khoản Zalo" trước.');
+      toast.error(t2('zaloGetLists.noAccountToLoadGroups'));
       return;
     }
     try {
@@ -699,9 +697,9 @@ export const NodeConfigGetAllGroupsSection = ({
       const response = await campaignBuilderApiService.getPreviewZaloGroups({ accountId });
       const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
       setPreviewItems(items);
-      toast.success(`Đã tải ${items.length} nhóm Zalo`);
+      toast.success(t2('zaloGetLists.loadedGroups', { count: items.length }));
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || 'Không thể tải thông tin nhóm Zalo';
+      const message = error?.response?.data?.message || error?.message || t2('zaloGetLists.cannotLoadGroups');
       toast.error(message);
       setPreviewItems([]);
     } finally {
@@ -731,10 +729,10 @@ export const NodeConfigGetAllGroupsSection = ({
   ]);
 
   const sections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
+    { id: 'basic', name: t2('zaloGetLists.basicInfo'), icon: HiOutlineDocument },
     {
       id: 'select',
-      name: 'Lựa chọn nhóm',
+      name: t2('zaloGetLists.selectGroups'),
       icon: HiOutlinePlay,
       badge: selectedGroupIds.length > 0,
       badgeLabel: selectedGroupIds.length,
@@ -744,22 +742,22 @@ export const NodeConfigGetAllGroupsSection = ({
   const renderBasicSection = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t2('zaloGetLists.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder="Lấy thông tin nhóm Zalo"
+          placeholder={t2('zaloGetLists.groupNodeNamePlaceholder')}
         />
       </div>
 
       <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-        Node này lấy thông tin nhóm từ tài khoản đã chọn ở node <strong>Chọn tài khoản Zalo</strong>.
+        {t2('zaloGetLists.nodeInfoGroup')}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Node nguồn tài khoản Zalo</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t2('zaloGetLists.zaloAccountNode')}</label>
         {accountSourceNodes.length > 0 ? (
           <select
             value={selectedAccountSourceNodeId}
@@ -777,22 +775,22 @@ export const NodeConfigGetAllGroupsSection = ({
             {accountSourceNodes.map((item) => (
               <option key={item.nodeId} value={item.nodeId}>
                 {item.nodeName}
-                {item.accountId ? ` (ID ${item.accountId})` : ''}
+                {item.accountId ? ` (${t2('zaloGetLists.accountIdPrefix')} ${item.accountId})` : ''}
               </option>
             ))}
           </select>
         ) : (
           <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm">
-            Chưa có node <strong>Chọn tài khoản Zalo</strong> ở phía trước. Vui lòng thêm node này trước khi tải dữ liệu thử.
+            {t2('zaloGetLists.noZaloAccountNode')}
           </div>
         )}
       </div>
 
       <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-        <strong>Tài khoản dùng để tải thử:</strong>{' '}
+        <strong>{t2('zaloGetLists.testAccount')}</strong>{' '}
         {resolvePreviewAccountId()
-          ? `ID ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` · từ node "${selectedAccountSourceNode.nodeName}"` : ''}`
-          : 'Chưa xác định từ flow hiện tại'}
+          ? `${t2('zaloGetLists.accountIdPrefix')} ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` ${t2('zaloGetLists.fromNode')} "${selectedAccountSourceNode.nodeName}"` : ''}`
+          : t2('zaloGetLists.accountNotDetermined')}
       </div>
     </div>
   );
@@ -810,35 +808,35 @@ export const NodeConfigGetAllGroupsSection = ({
               : 'bg-primary-600 text-white hover:bg-primary-700'
           }`}
         >
-          {isLoadingPreview ? 'Đang tải...' : previewItems.length > 0 ? 'Tải lại' : 'Tải dữ liệu thử'}
+          {isLoadingPreview ? t2('zaloGetLists.loading') : previewItems.length > 0 ? t2('zaloGetLists.reload') : t2('zaloGetLists.loadTestData')}
         </button>
         {previewItems.length > 0 && (
           <span className="text-sm text-gray-500">
-            {previewItems.length} nhóm · đã chọn <strong className="text-primary-700">{selectedGroupIds.length}</strong>
+            {previewItems.length} {t2('zaloGetLists.groups')} · {t2('zaloGetLists.selected')} <strong className="text-primary-700">{selectedGroupIds.length}</strong>
           </span>
         )}
       </div>
       <p className="text-xs text-gray-500">
-        Nhấn để lấy thông tin nhóm theo tài khoản Zalo đã chọn. Kết quả chỉ để cấu hình và xem trước.
+        {t2('zaloGetLists.previewNote')}
       </p>
 
       {isLoadingPreview ? (
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-500">Đang tải thông tin nhóm...</p>
+          <p className="text-sm text-gray-500">{t2('zaloGetLists.loadingGroups')}</p>
         </div>
       ) : previewItems.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Chưa có dữ liệu</p>
-          <p className="text-xs text-gray-400 mt-1">Nhấn "Tải dữ liệu thử" để xem trước và tích chọn nhóm</p>
+          <p className="text-sm text-gray-500">{t2('zaloGetLists.noData')}</p>
+          <p className="text-xs text-gray-400 mt-1">{t2('zaloGetLists.loadPreviewHintGroup')}</p>
         </div>
       ) : (
         <div>
           <div className="flex items-center gap-2 mb-2">
             <input
               type="text"
-              placeholder="Tìm theo tên nhóm hoặc group id..."
+              placeholder={t2('zaloGetLists.searchGroupPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
@@ -848,7 +846,7 @@ export const NodeConfigGetAllGroupsSection = ({
               onClick={toggleAllFiltered}
               className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
             >
-              {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+              {allSelected ? t2('zaloGetLists.deselectAll') : t2('zaloGetLists.selectAll')}
             </button>
           </div>
 
@@ -856,7 +854,7 @@ export const NodeConfigGetAllGroupsSection = ({
             <div className="max-h-96 overflow-y-auto">
               {filteredPreviewItems.length === 0 ? (
                 <div className="p-6 text-center">
-                  <p className="text-sm text-gray-500">Không tìm thấy nhóm phù hợp</p>
+                  <p className="text-sm text-gray-500">{t2('zaloGetLists.noGroupsFound')}</p>
                 </div>
               ) : (
                 filteredPreviewItems.map((item, idx) => {
@@ -879,10 +877,10 @@ export const NodeConfigGetAllGroupsSection = ({
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900 truncate">
-                          {groupName || '(Chưa có tên nhóm)'}
+                          {groupName || t2('zaloGetLists.noGroupName')}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5 truncate">
-                          groupId: {groupId || '(không xác định)'}
+                          {t2('zaloGetLists.groupIdPrefix')}: {groupId || t2('zaloGetLists.undefined')}
                         </div>
                       </div>
                     </label>
@@ -895,8 +893,8 @@ export const NodeConfigGetAllGroupsSection = ({
           {selectedGroupIds.length > 0 && (
             <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
               <p className="text-xs text-primary-700">
-                Đã chọn <strong>{selectedGroupIds.length}</strong> nhóm. Khi chạy node sẽ chỉ lấy các nhóm đã tích.
-                {isGroupSelectionSnapshotLocked ? ' Đang khóa snapshot từ thao tác "Chọn tất cả".' : ''}
+                {t2('zaloGetLists.groupsSelected', { count: selectedGroupIds.length })}
+                {isGroupSelectionSnapshotLocked ? ` ${t2('zaloGetLists.snapshotLocked')}` : ''}
               </p>
               <button
                 type="button"
@@ -907,7 +905,7 @@ export const NodeConfigGetAllGroupsSection = ({
                 }))}
                 className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
               >
-                Xóa chọn
+                {t2('zaloGetLists.clearSelection')}
               </button>
             </div>
           )}
@@ -916,7 +914,7 @@ export const NodeConfigGetAllGroupsSection = ({
 
       <div className="bg-green-50 p-3 rounded-lg">
         <p className="text-sm text-green-700">
-          <strong>Lưu ý:</strong> Node này cho phép chọn nhiều nhóm và bắt buộc chọn ít nhất 1 nhóm trước khi lưu.
+          <strong>{t2('campaignNodeConfig.trigger.note')}:</strong> {t2('zaloGetLists.selectAtLeastOneGroup')}
         </p>
       </div>
     </div>
@@ -926,7 +924,7 @@ export const NodeConfigGetAllGroupsSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t2('zaloGetLists.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {

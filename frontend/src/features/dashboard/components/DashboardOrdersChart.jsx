@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useI18n } from '../../../i18n';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
 import DashboardInsightBlock from './DashboardInsightBlock';
 import DashboardRechartsLegend from './DashboardRechartsLegend';
@@ -24,9 +25,9 @@ const formatTooltipDate = (value) => {
 };
 
 /** Lines config for "Tổng hợp" tab (combined all channels) */
-const SUMMARY_LINES = [
-  { key: 'pendingOrders',   name: 'Đơn chờ xử lý', color: '#f97316', dash: false },
-  { key: 'completedOrders', name: 'Đơn đã đặt',    color: '#22c55e', dash: false },
+const SUMMARY_LINES = (t) => [
+  { key: 'pendingOrders',   name: t('dashboard.pendingOrders'), color: '#f97316', dash: false },
+  { key: 'completedOrders', name: t('dashboard.completedOrders'), color: '#22c55e', dash: false },
 ];
 
 /**
@@ -34,18 +35,18 @@ const SUMMARY_LINES = [
  * Solid lines = pending orders, dashed lines = completed orders.
  * Grouped by channel for clear visual separation.
  */
-const COMPARE_LINES = [
-  { key: 'emailPendingOrders',      name: 'Email – Chờ',      color: '#f97316', dash: false },
-  { key: 'emailCompletedOrders',    name: 'Email – Đặt',      color: '#fb923c', dash: true  },
-  { key: 'zaloPendingOrders',       name: 'Zalo – Chờ',       color: '#2563eb', dash: false },
-  { key: 'zaloCompletedOrders',     name: 'Zalo – Đặt',       color: '#60a5fa', dash: true  },
-  { key: 'zaloGroupPendingOrders',  name: 'Zalo Group – Chờ', color: '#7c3aed', dash: false },
-  { key: 'zaloGroupCompletedOrders',name: 'Zalo Group – Đặt', color: '#c084fc', dash: true  },
+const COMPARE_LINES = (t) => [
+  { key: 'emailPendingOrders',      name: `${t('channel.email')} – ${t('status.pending')}`,      color: '#f97316', dash: false },
+  { key: 'emailCompletedOrders',   name: `${t('channel.email')} – ${t('status.completed')}`,     color: '#fb923c', dash: true  },
+  { key: 'zaloPendingOrders',      name: `${t('channel.zalo')} – ${t('status.pending')}`,       color: '#2563eb', dash: false },
+  { key: 'zaloCompletedOrders',    name: `${t('channel.zalo')} – ${t('status.completed')}`,      color: '#60a5fa', dash: true  },
+  { key: 'zaloGroupPendingOrders', name: `${t('channel.zaloGroup')} – ${t('status.pending')}`,  color: '#7c3aed', dash: false },
+  { key: 'zaloGroupCompletedOrders',name:`${t('channel.zaloGroup')} – ${t('status.completed')}`, color: '#c084fc', dash: true  },
 ];
 
-const VIEW_TABS = [
-  { id: 'summary', label: 'Tổng hợp'     },
-  { id: 'compare', label: 'So sánh kênh' },
+const VIEW_TABS = (t) => [
+  { id: 'summary', label: t('dashboard.summary')    },
+  { id: 'compare', label: t('dashboard.compareChannels') },
 ];
 
 /**
@@ -56,8 +57,9 @@ const VIEW_TABS = [
  *
  * @param {boolean} isMonthlyView - Use month-year label when true
  * @param {string}  viewMode      - 'summary' | 'compare'
+ * @param {function} t            - Translation function
  */
-const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode }) => {
+const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t }) => {
   if (!active || !payload?.length) return null;
 
   const dateLabel = isMonthlyView ? formatMonthTooltip(label) : formatTooltipDate(label);
@@ -67,19 +69,19 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode }) => {
   if (viewMode === 'compare') {
     const COLS = [
       {
-        label: 'Email',
-        pending:   { key: 'emailPendingOrders',       label: 'Chờ' },
-        completed: { key: 'emailCompletedOrders',      label: 'Đặt' },
+        label: t('channel.email'),
+        pending:   { key: 'emailPendingOrders',       label: t('status.pending') },
+        completed: { key: 'emailCompletedOrders',      label: t('status.completed') },
       },
       {
-        label: 'Zalo',
-        pending:   { key: 'zaloPendingOrders',         label: 'Chờ' },
-        completed: { key: 'zaloCompletedOrders',        label: 'Đặt' },
+        label: t('channel.zalo'),
+        pending:   { key: 'zaloPendingOrders',         label: t('status.pending') },
+        completed: { key: 'zaloCompletedOrders',        label: t('status.completed') },
       },
       {
-        label: 'Zalo Group',
-        pending:   { key: 'zaloGroupPendingOrders',    label: 'Chờ' },
-        completed: { key: 'zaloGroupCompletedOrders',  label: 'Đặt' },
+        label: t('channel.zaloGroup'),
+        pending:   { key: 'zaloGroupPendingOrders',    label: t('status.pending') },
+        completed: { key: 'zaloGroupCompletedOrders',  label: t('status.completed') },
       },
     ];
 
@@ -171,6 +173,7 @@ const DashboardOrdersChart = ({
   onViewModeChange,
   lockedViewMode = null,
 }) => {
+  const { t } = useI18n();
   const [internalViewMode, setInternalViewMode] = useState('summary');
   const isControlled =
     lockedViewMode == null && viewModeProp != null && typeof onViewModeChange === 'function';
@@ -183,7 +186,8 @@ const DashboardOrdersChart = ({
   };
 
   const chartData   = isMonthlyView ? aggregateToMonthly(timeline) : timeline;
-  const activeLines = viewMode === 'compare' ? COMPARE_LINES : SUMMARY_LINES;
+  const activeLines = viewMode === 'compare' ? COMPARE_LINES(t) : SUMMARY_LINES(t);
+  const tabs = VIEW_TABS(t);
 
   const hasData = chartData.some((item) =>
     activeLines.some((line) => (item[line.key] || 0) > 0)
@@ -198,11 +202,11 @@ const DashboardOrdersChart = ({
       {/* Card header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Đơn hàng theo thời gian</h3>
+          <h3 className="text-base font-semibold text-gray-900">{t('dashboard.ordersOverTime')}</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             {viewMode === 'compare'
-              ? 'So sánh đơn hàng theo từng loại kênh chiến dịch'
-              : 'Tổng hợp tất cả kênh chiến dịch'}
+              ? t('dashboard.compareOrdersByChannel')
+              : t('dashboard.summaryAllChannels')}
           </p>
         </div>
 
@@ -210,7 +214,7 @@ const DashboardOrdersChart = ({
           {/* View mode tabs — ẩn khi in PDF (lockedViewMode) */}
           {!lockedViewMode && (
             <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100">
-              {VIEW_TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -232,13 +236,13 @@ const DashboardOrdersChart = ({
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100">
               <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
               <span className="text-xs font-medium text-orange-700">
-                {Number(totalPending).toLocaleString('vi-VN')} chờ
+                {Number(totalPending).toLocaleString('vi-VN')} {t('dashboard.pendingOrdersBadge')}
               </span>
             </div>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-100">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
               <span className="text-xs font-medium text-green-700">
-                {Number(totalCompleted).toLocaleString('vi-VN')} đã đặt
+                {Number(totalCompleted).toLocaleString('vi-VN')} {t('dashboard.completedOrdersBadge')}
               </span>
             </div>
           </div>
@@ -252,7 +256,7 @@ const DashboardOrdersChart = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
-          <p className="text-sm">Chưa có dữ liệu đơn hàng trong khoảng thời gian này</p>
+          <p className="text-sm">{t('dashboard.noOrderDataInPeriod')}</p>
         </div>
       ) : (
         <div className="h-72">
@@ -275,7 +279,7 @@ const DashboardOrdersChart = ({
               />
               <Tooltip
                 content={
-                  <OrdersTooltip isMonthlyView={isMonthlyView} viewMode={viewMode} />
+                  <OrdersTooltip isMonthlyView={isMonthlyView} viewMode={viewMode} t={t} />
                 }
               />
               <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
@@ -298,7 +302,7 @@ const DashboardOrdersChart = ({
       )}
 
       <DashboardInsightBlock
-        title="Insight · Đơn hàng theo thời gian"
+        title={t('dashboard.insightOrdersOverTime')}
         text={insightText}
         isLoading={isInsightLoading}
         error={insightError}

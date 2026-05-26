@@ -17,3 +17,31 @@ export const findAllPlans = async () => {
     );
     return rows;
 };
+
+export const getUserFeatures = async (userId) => {
+    const { rows } = await db.query(
+        `SELECT COALESCE(p.features, '[]'::JSONB) as features
+         FROM users u
+         JOIN plans p ON p.id = u.active_plan_id
+         WHERE u.id = $1`,
+        [userId]
+    );
+    
+    if (!rows[0]?.features) return [];
+    
+    const features = rows[0].features;
+    if (Array.isArray(features)) return features;
+    if (typeof features === 'object') return Object.keys(features).filter(k => features[k]);
+    return [];
+};
+
+export const getPlanByUserId = async (userId) => {
+    const { rows } = await db.query(
+        `SELECT p.*
+         FROM users u
+         JOIN plans p ON p.id = u.active_plan_id
+         WHERE u.id = $1`,
+        [userId]
+    );
+    return rows[0] || null;
+};

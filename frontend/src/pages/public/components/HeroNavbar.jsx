@@ -3,12 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LuChevronRight, LuChevronDown, LuMenu, LuX, LuLayoutDashboard, LuLogOut } from 'react-icons/lu';
 import { useAuthStore } from '../../../stores/authStore';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
-
-const NAV_LINKS = [
-  { label: 'Trang chủ', to: '/' },
-  { label: 'Bảng giá', to: '/pricing' },
-  { label: 'Liên hệ', to: '/contact' },
-];
+import LanguageSwitcher from '../../../components/LanguageSwitcher';
+import { useI18n } from '../../../i18n';
 
 const AVATAR_STYLES = {
   admin: 'from-purple-500 to-violet-600',
@@ -17,6 +13,7 @@ const AVATAR_STYLES = {
 };
 
 function UserMenu({ user, logout }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -36,7 +33,7 @@ function UserMenu({ user, logout }) {
   const dashboardPath = user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/app';
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
   const initial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
-  const displayName = user?.fullName || user?.username || 'Tài khoản';
+  const displayName = user?.fullName || user?.username || t('navbar.myAccount');
 
   return (
     <div className="relative" ref={ref}>
@@ -54,7 +51,7 @@ function UserMenu({ user, logout }) {
       {open && (
         <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
           <div className="px-4 py-2.5 border-b border-gray-100">
-            <p className="text-[11px] text-gray-400 leading-none mb-0.5">Tài khoản:</p>
+            <p className="text-[11px] text-gray-400 leading-none mb-0.5">{t('navbar.account')}</p>
             <p className="text-[13px] font-semibold text-gray-800 truncate">{user?.email || displayName}</p>
           </div>
           <Link
@@ -63,14 +60,14 @@ function UserMenu({ user, logout }) {
             className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <LuLayoutDashboard className="w-4 h-4 text-gray-400" />
-            Trang quản trị
+            {t('navbar.adminDashboard')}
           </Link>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
           >
             <LuLogOut className="w-4 h-4" />
-            Đăng xuất
+            {t('navbar.logout')}
           </button>
         </div>
       )}
@@ -79,11 +76,18 @@ function UserMenu({ user, logout }) {
 }
 
 export default function HeroNavbar() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuthStore();
   const { pathname } = useLocation();
 
   const isActive = (to) => to === '/' ? pathname === '/' : pathname.startsWith(to);
+
+  const navLinks = [
+    { label: t('navbar.home'), to: '/' },
+    { label: t('navbar.pricing'), to: '/pricing' },
+    { label: t('navbar.contact'), to: '/contact' },
+  ];
 
   return (
     <div className="flex justify-center pt-4 sm:pt-6 px-3 sm:px-4">
@@ -96,7 +100,7 @@ export default function HeroNavbar() {
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-6 flex-1">
-            {NAV_LINKS.map(({ label, to }) => (
+            {navLinks.map(({ label, to }) => (
               <Link
                 key={label}
                 to={to}
@@ -113,6 +117,8 @@ export default function HeroNavbar() {
 
           {/* Right cluster */}
           <div className="ml-auto flex items-center gap-2">
+            <LanguageSwitcher />
+
             {isAuthenticated ? (
               <div className="hidden md:block">
                 <UserMenu user={user} logout={logout} />
@@ -123,14 +129,14 @@ export default function HeroNavbar() {
                   to="/login"
                   className="text-[13px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors px-3 py-2"
                 >
-                  Đăng nhập
+                  {t('navbar.login')}
                 </Link>
                 <Link
                   to="/register"
                   className="inline-flex items-center gap-2 text-[13px] font-semibold text-white rounded-full px-4 py-2"
                   style={{ backgroundColor: '#ef4d23' }}
                 >
-                  Đăng ký
+                  {t('navbar.register')}
                   <span className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
                     <LuChevronRight className="w-3 h-3" />
                   </span>
@@ -151,7 +157,7 @@ export default function HeroNavbar() {
         {/* Mobile dropdown */}
         {open && (
           <div className="absolute top-full left-2 right-2 mt-2 bg-white rounded-2xl shadow-lg border border-neutral-200 p-3 z-20">
-            {NAV_LINKS.map(({ label, to }) => (
+            {navLinks.map(({ label, to }) => (
               <Link
                 key={label}
                 to={to}
@@ -185,7 +191,7 @@ export default function HeroNavbar() {
                     onClick={() => setOpen(false)}
                     className="block px-4 py-2.5 text-[14px] font-medium text-neutral-700 hover:bg-neutral-50 rounded-xl transition-colors"
                   >
-                    Đăng nhập
+                    {t('navbar.login')}
                   </Link>
                   <Link
                     to="/register"
@@ -193,7 +199,7 @@ export default function HeroNavbar() {
                     className="block px-4 py-2.5 text-[14px] font-semibold text-white rounded-xl transition-colors text-center"
                     style={{ backgroundColor: '#ef4d23' }}
                   >
-                    Đăng ký
+                    {t('navbar.register')}
                   </Link>
                 </>
               )}

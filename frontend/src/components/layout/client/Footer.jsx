@@ -1,32 +1,33 @@
 import { Link } from 'react-router-dom';
 import { FaFacebookF, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
+import { useI18n } from '../../../i18n';
 
-const COLUMNS = [
+const COLUMNS = (t) => [
   {
-    title: 'Sản phẩm',
+    title: t('footer.product'),
     links: [
-      { label: 'Tính năng', to: '/#features' },
-      { label: 'Landing Page', to: '/#features' },
-      { label: 'Bảng giá', to: '/pricing' },
-      { label: 'Cập nhật', to: '/about' },
+      { label: t('footer.features'), to: '/#features' },
+      { label: t('footer.landingPage'), to: '/#features' },
+      { label: t('footer.pricing'), to: '/pricing' },
+      { label: t('footer.updates'), to: '/about' },
     ],
   },
   {
-    title: 'Nền tảng',
+    title: t('footer.platform'),
     links: [
-      { label: 'Email Marketing', to: '/#features' },
-      { label: 'Zalo Automation', to: '/#features' },
-      { label: 'CRM & Lead', to: '/#features' },
-      { label: 'Báo cáo', to: '/#features' },
+      { label: t('footer.emailMarketing'), to: '/#features' },
+      { label: t('footer.zaloAutomation'), to: '/#features' },
+      { label: t('footer.crmLead'), to: '/#features' },
+      { label: t('footer.reports'), to: '/#features' },
     ],
   },
   {
-    title: 'Công ty',
+    title: t('footer.company'),
     links: [
-      { label: 'Giới thiệu', to: '/about' },
-      { label: 'Liên hệ', to: '/contact' },
-      { label: 'Chính sách', href: '/privacy-policy' },
+      { label: t('footer.about'), to: '/about' },
+      { label: t('footer.contact'), to: '/contact' },
+      { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
     ],
   },
 ];
@@ -38,6 +39,8 @@ const SOCIAL_LINKS = [
 ];
 
 export default function Footer() {
+  const { t } = useI18n();
+
   return (
     <footer className="px-4 sm:px-6 pt-6 pb-5 relative">
       <div className="absolute inset-0 bg-white/40 backdrop-blur-md" />
@@ -51,8 +54,7 @@ export default function Footer() {
               <img src={founderaiLogo} alt="Founder AI" className="h-9 w-auto object-contain" />
             </Link>
             <p className="text-[14px] leading-relaxed text-slate-500 max-w-[260px]">
-              Nền tảng automation marketing all-in-one — xây dựng Landing Page,
-              quản lý Lead và tự động hóa Email / Zalo cho doanh nghiệp Việt Nam.
+              {t('footer.description')}
             </p>
             <div className="flex items-center gap-2 mt-1">
               {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
@@ -71,7 +73,7 @@ export default function Footer() {
           </div>
 
           {/* Link columns */}
-          {COLUMNS.map((col) => (
+          {COLUMNS(t).map((col) => (
             <div key={col.title} className="flex flex-col gap-4">
               <h4 className="text-[13px] font-medium text-neutral-400">{col.title}</h4>
               <ul className="flex flex-col gap-3">
@@ -102,14 +104,14 @@ export default function Footer() {
 
       {/* Bottom bar — ngoài card */}
       <div className="relative flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 px-2">
-        <span className="text-[13px] text-neutral-500">© 2026 Founder AI. All rights reserved.</span>
+        <span className="text-[13px] text-neutral-500">{t('footer.copyright')}</span>
         <div className="flex items-center gap-4">
           <a href="/privacy-policy" className="text-[13px] text-neutral-500 hover:text-neutral-700 transition-colors">
-            Chính sách bảo mật
+            {t('footer.privacy')}
           </a>
           <span className="text-neutral-300">|</span>
           <Link to="/contact" className="text-[13px] text-neutral-500 hover:text-neutral-700 transition-colors">
-            Điều khoản sử dụng
+            {t('footer.termsOfUse')}
           </Link>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import EmailTemplateListSection from '../../features/templates/components/EmailTemplateListSection';
 import EmailTemplateEditorModal from '../../features/templates/components/EmailTemplateEditorModal';
 import EmailTemplatePreviewModal from '../../features/templates/components/EmailTemplatePreviewModal';
@@ -20,16 +21,13 @@ import {
 } from '../../features/templates/utils/emailTemplateEditor.helpers';
 
 const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
+  const { t } = useI18n();
   const templateApiService = isZaloTemplate ? zaloTemplateApiService : emailTemplateApiService;
   const templateKindLabel = isZaloTemplate ? 'zalo' : 'email';
-  const subjectLabel = isZaloTemplate ? 'Tiêu đề tin nhắn' : 'Tiêu đề email';
-  const pageTitle = isZaloTemplate ? 'Thư viện Template Zalo' : 'Thư viện Template';
-  const pageDescription = isZaloTemplate
-    ? 'Quản lý và thiết kế các mẫu tin nhắn Zalo cho chiến dịch của bạn'
-    : 'Quản lý và thiết kế các mẫu email chuyên nghiệp cho chiến dịch của bạn';
-  const emptyDescription = isZaloTemplate
-    ? 'Bắt đầu tạo mẫu tin nhắn Zalo đầu tiên để dùng trong các chiến dịch chăm sóc khách hàng.'
-    : 'Bắt đầu tạo mẫu email đầu tiên của bạn để sử dụng trong các chiến dịch marketing.';
+  const subjectLabel = isZaloTemplate ? t('templates.zaloSubject') : t('templates.emailSubject');
+  const pageTitle = isZaloTemplate ? t('templates.zaloLibraryTitle') : t('templates.libraryTitle');
+  const pageDescription = isZaloTemplate ? t('templates.zaloTemplateDescription') : t('templates.templateDescription');
+  const emptyDescription = isZaloTemplate ? t('templates.firstZaloTemplateTip') : t('templates.firstTemplateTip');
   const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -126,7 +124,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       setTemplates(aggregated);
     } catch (error) {
       setTemplates([]);
-      toast.error('Không thể tải danh sách template');
+      toast.error(t('templates.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +225,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       // Auto-fill displayName trống theo thứ tự toàn bộ danh sách
       const withAutoName = (att, globalIndex) => ({
         ...att,
-        displayName: att.displayName?.trim() || `Quà tặng ${globalIndex + 1}`,
+        displayName: att.displayName?.trim() || t('templates.giftNumber', { number: globalIndex + 1 }),
       });
       const namedAll = allAttachments.map(withAutoName);
       const namedTemp = namedAll.filter(att => att.isTemp && att.tempId);
@@ -254,17 +252,17 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       
       if (editingTemplate) {
         await templateApiService.updateTemplate(editingTemplate.id, payload);
-        toast.success('Cập nhật template thành công');
+        toast.success(t('templates.updateSuccess'));
       } else {
         await templateApiService.createTemplate(payload);
-        toast.success('Tạo template thành công');
+        toast.success(t('templates.createSuccess'));
       }
       setShowEditorModal(false);
       setEditingTemplate(null);
       resetForm();
       fetchTemplates();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      toast.error(error.response?.data?.message || t('templates.error'));
     }
   };
 
@@ -277,7 +275,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       }
       openEditorWithTemplateDetail(detail, template);
     } catch (error) {
-      toast.error('Không thể tải nội dung template');
+      toast.error(t('templates.loadContentFailed'));
     }
   };
 
@@ -285,7 +283,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     if (!lockedTemplate || isCreatingLockedTemplateCopy) return;
     setIsCreatingLockedTemplateCopy(true);
     try {
-      const copiedName = `${lockedTemplate.templateName || 'Template'} (Bản sao)`;
+      const copiedName = `${lockedTemplate.templateName || 'Template'} (${t('common.copy')})`;
       const response = await templateApiService.createTemplate({
         templateName: copiedName,
         subject: lockedTemplate.subject || '',
@@ -300,14 +298,14 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         ? await fetchTemplateDetail(copiedTemplateId)
         : null;
 
-      toast.success('Đã tạo bản sao template, bạn có thể chỉnh sửa bản sao này');
+      toast.success(t('templates.copyCreated'));
       setLockedTemplate(null);
       await fetchTemplates();
       if (copiedTemplateDetail) {
         openEditorWithTemplateDetail(copiedTemplateDetail, response?.data?.data || null);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể tạo bản sao template');
+      toast.error(error.response?.data?.message || t('templates.copyFailed'));
     } finally {
       setIsCreatingLockedTemplateCopy(false);
     }
@@ -319,7 +317,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       setPreviewTemplate(detail || template);
       setShowPreviewModal(true);
     } catch (error) {
-      toast.error('Không thể tải nội dung template');
+      toast.error(t('templates.loadContentFailed'));
     }
   };
 
@@ -327,7 +325,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     try {
       const detail = await fetchTemplateDetail(template.id);
       await templateApiService.createTemplate({
-        templateName: `${detail?.templateName || template.templateName} (Copy)`,
+        templateName: `${detail?.templateName || template.templateName} (${t('common.copy')})`,
         subject: detail?.subject || template.subject,
         bodyHtml: detail?.bodyHtml || '',
         bodyText: detail?.bodyText || '',
@@ -335,21 +333,21 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         category: detail?.category || template.category,
         variables: Array.isArray(detail?.variables) ? detail.variables : [],
       });
-      toast.success('Đã sao chép template');
+      toast.success(t('templates.copied'));
       fetchTemplates();
     } catch (error) {
-      toast.error('Không thể sao chép template');
+      toast.error(t('templates.copyToClipboardFailed'));
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa template này?')) return;
+    if (!confirm(t('templates.confirmDelete'))) return;
     try {
       await templateApiService.deleteTemplate(id);
-      toast.success('Đã xóa template');
+      toast.success(t('templates.deleted'));
       fetchTemplates();
     } catch (error) {
-      toast.error('Không thể xóa template');
+      toast.error(t('templates.deleteFailed'));
     }
   };
 
@@ -553,10 +551,10 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         ],
       }));
 
-      toast.success('Upload thành công');
+      toast.success(t('templates.uploadSuccess'));
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Upload thất bại');
+      toast.error(t('templates.uploadFailed'));
     } finally {
       setIsUploading(false);
       event.target.value = '';
@@ -575,7 +573,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
    */
   const handleOpenAttachment = async (attachment) => {
     if (attachment?.isTemp) {
-      toast.error('Tệp tạm chưa thể xem, vui lòng lưu template trước');
+      toast.error(t('templates.temporaryNotViewable'));
       return;
     }
 
@@ -590,13 +588,13 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
           nextUrl = freshUrl;
         }
       } catch (error) {
-        toast.error(error?.response?.data?.message || 'Không thể tạo link xem file');
+        toast.error(error?.response?.data?.message || t('templates.createLinkFailed'));
         return;
       }
     }
 
     if (!nextUrl) {
-      toast.error('Không tìm thấy đường dẫn tệp');
+      toast.error(t('templates.fileNotFound'));
       return;
     }
 
@@ -663,11 +661,11 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
   const handleAddSuggestedVariable = (suggestedVar) => {
     const exists = variables.some((v) => v.key === suggestedVar.key);
     if (exists) {
-      toast('Biến này đã có trong danh sách', { icon: 'ℹ️' });
+      toast(t('templates.variableAlreadyExists'), { icon: 'ℹ️' });
       return;
     }
     setVariables((prev) => [...prev, { ...suggestedVar }]);
-    toast.success(`Đã thêm biến {{${suggestedVar.key}}}`);
+    toast.success(t('templates.variableAddedWithKey', { key: suggestedVar.key }));
   };
 
   return (
@@ -693,7 +691,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         title={pageTitle}
         description={pageDescription}
         emptyDescription={emptyDescription}
-        searchPlaceholder={isZaloTemplate ? 'Tìm kiếm template Zalo...' : 'Tìm kiếm template...'}
+        searchPlaceholder={isZaloTemplate ? t('templates.searchZaloPlaceholder') : t('templates.searchPlaceholder')}
       />
 
       <EmailTemplateEditorModal
@@ -752,18 +750,18 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       <FullScreenOverlay isOpen={Boolean(lockedTemplate)} className="p-4">
         <div className="w-full max-w-lg bg-white rounded-xl shadow-xl border border-gray-200 p-5 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-gray-900">Template đang được dùng trong chiến dịch đã kích hoạt</h3>
+            <h3 className="text-base font-semibold text-gray-900">{t('templates.lockedTitle')}</h3>
             <p className="text-sm text-gray-600">
-              Template này đang được dùng bởi ít nhất một chiến dịch đang kích hoạt. Để tránh ảnh hưởng chiến dịch đang chạy, vui lòng tạo bản sao rồi chỉnh sửa trên bản sao đó.
+              {t('templates.lockedDescription')}
             </p>
           </div>
 
           {Array.isArray(lockedTemplate?.activeUsage?.activeCampaigns) && lockedTemplate.activeUsage.activeCampaigns.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-medium text-amber-800 mb-1">Chiến dịch đang dùng template:</p>
+              <p className="text-xs font-medium text-amber-800 mb-1">{t('templates.activeCampaignsUsingTemplate')}:</p>
               <ul className="text-sm text-amber-900 space-y-1">
                 {lockedTemplate.activeUsage.activeCampaigns.map((campaign) => (
-                  <li key={campaign.id}>- {campaign.campaignName || `Chiến dịch #${campaign.id}`}</li>
+                  <li key={campaign.id}>- {campaign.campaignName || `${t('templates.campaign')} #${campaign.id}`}</li>
                 ))}
               </ul>
             </div>
@@ -776,7 +774,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
               disabled={isCreatingLockedTemplateCopy}
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
             >
-              Đóng
+              {t('common.close')}
             </button>
             <button
               type="button"
@@ -784,7 +782,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
               disabled={isCreatingLockedTemplateCopy}
               className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
             >
-              {isCreatingLockedTemplateCopy ? 'Đang tạo...' : 'Tạo bản sao để chỉnh sửa'}
+              {isCreatingLockedTemplateCopy ? t('templates.creating') : t('templates.createCopyToEditLocked')}
             </button>
           </div>
         </div>

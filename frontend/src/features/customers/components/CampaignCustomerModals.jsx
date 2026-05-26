@@ -11,6 +11,7 @@ import {
   HiOutlineUser,
   HiOutlineX,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import customerApiService from '../services/customerApi.service';
 import {
   decodeHtmlEntities,
@@ -30,11 +31,11 @@ const getInitial = (customer) => {
   return name ? name[0].toUpperCase() : '?';
 };
 
-const buildRunDisplayName = (runId, runName) => {
+const buildRunDisplayName = (runId, runName, t) => {
   const normalizedName = String(runName || '').trim();
   if (normalizedName) return normalizedName;
-  if (runId != null && runId !== '') return `Lượt chạy #${runId}`;
-  return 'Lượt chạy chưa xác định';
+  if (runId != null && runId !== '') return `${t('campaignCustomerModals.run')} #${runId}`;
+  return t('campaignCustomerModals.unknownRun');
 };
 
 const hasInterestedStatus = (purchase) => {
@@ -99,18 +100,18 @@ const buildUniqueClickedLinks = (clickedEvents = []) => {
   });
 };
 
-const CustomerStatusBadge = ({ status }) => {
+const CustomerStatusBadge = ({ status, t }) => {
   const statusMap = {
-    completed: { label: 'Đã mua', cls: 'badge-success' },
-    purchased: { label: 'Đã mua', cls: 'badge-success' },
-    processing: { label: 'Đã mua', cls: 'badge-success' },
-    'on-hold': { label: 'Để lại thông tin', cls: 'badge-warning' },
-    onhold: { label: 'Để lại thông tin', cls: 'badge-warning' },
-    on_hold: { label: 'Để lại thông tin', cls: 'badge-warning' },
-    lead: { label: 'Để lại thông tin', cls: 'badge-warning' },
-    email_clicked: { label: 'Đã click link', cls: 'badge-info' },
-    email_opened: { label: 'Đã xem email', cls: 'badge-info' },
-    email_sent: { label: 'Đã nhận email', cls: 'badge-gray' },
+    completed: { label: t('campaignCustomerModals.purchased'), cls: 'badge-success' },
+    purchased: { label: t('campaignCustomerModals.purchased'), cls: 'badge-success' },
+    processing: { label: t('campaignCustomerModals.purchased'), cls: 'badge-success' },
+    'on-hold': { label: t('campaignCustomerModals.leftInfo'), cls: 'badge-warning' },
+    onhold: { label: t('campaignCustomerModals.leftInfo'), cls: 'badge-warning' },
+    on_hold: { label: t('campaignCustomerModals.leftInfo'), cls: 'badge-warning' },
+    lead: { label: t('campaignCustomerModals.leftInfo'), cls: 'badge-warning' },
+    email_clicked: { label: t('campaignCustomerModals.clicked'), cls: 'badge-info' },
+    email_opened: { label: t('campaignCustomerModals.opened'), cls: 'badge-info' },
+    email_sent: { label: t('campaignCustomerModals.sent'), cls: 'badge-gray' },
   };
   if (!status) return null;
   const statusConfig = statusMap[status] || { label: status, cls: 'badge-gray' };
@@ -130,6 +131,7 @@ const getFileIcon = (fileName) => {
 };
 
 const BaseModal = ({ isOpen, onClose, title, children }) => {
+  const { t } = useI18n();
   const closeBtnRef = useRef(null);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ const BaseModal = ({ isOpen, onClose, title, children }) => {
             ref={closeBtnRef}
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0"
-            aria-label="Dong"
+            aria-label={t('common.close')}
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -180,7 +182,7 @@ const BaseModal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
+const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose, t }) => {
   const [journeyData, setJourneyData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
@@ -199,13 +201,13 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
         const res = await customerApiService.getCustomerCampaignJourney(customer.id, campaignId);
         if (!cancelled) setJourneyData(res.data?.data || null);
       } catch {
-        if (!cancelled) toast.error('Không thể tải dữ liệu khóa học');
+        if (!cancelled) toast.error(t('campaignCustomerModals.cantLoadCourseData'));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [isOpen, customer?.id, campaignId]);
+  }, [isOpen, customer?.id, campaignId, t]);
 
   const purchases = journeyData?.purchases || [];
   const emailsById = Object.fromEntries(
@@ -238,7 +240,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Chi tiết khách hàng — ${displayName || 'Khách hàng'}`}
+      title={`${t('campaignCustomerModals.customerDetail')} — ${displayName || t('campaignCustomerModals.customer')}`}
     >
       <div className="p-6 space-y-8">
         <section>
@@ -259,11 +261,11 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                 </div>
                 <div className="flex items-center gap-2.5 text-sm text-gray-700">
                   <HiOutlineCalendar className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span>Tham gia {formatDateOnly(customer?.createdAt)}</span>
+                  <span>{t('campaignCustomerModals.joined')} {formatDateOnly(customer?.createdAt)}</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-sm">
                   <HiOutlineUser className="w-4 h-4 text-gray-400 shrink-0" />
-                  <CustomerStatusBadge status={status} />
+                  <CustomerStatusBadge status={status} t={t} />
                 </div>
               </div>
             </div>
@@ -273,7 +275,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
         <section>
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <HiOutlineInformationCircle className="w-5 h-5 text-primary-500" />
-            Khóa học quan tâm / đã mua từ chiến dịch
+            {t('campaignCustomerModals.coursesFromCampaign')}
           </h3>
 
           {loading ? (
@@ -282,7 +284,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
             </div>
           ) : purchases.length === 0 ? (
             <div className="py-8 text-center text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
-              Chưa có dữ liệu khóa học từ chiến dịch này
+              {t('campaignCustomerModals.noCourseData')}
             </div>
           ) : (
             <div className="space-y-2">
@@ -335,13 +337,13 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                           {decodeHtmlEntities(p.courseName || p.productName || '--')}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {p.orderId ? `#${p.orderId}` : 'Chưa có mã ĐH'}
-                          {p.courseCode ? ` · Mã SP: ${p.courseCode}` : ''}
+                          {p.orderId ? `#${p.orderId}` : t('campaignCustomerModals.noOrderCode')}
+                          {p.courseCode ? ` · ${t('campaignCustomerModals.productCode')}: ${p.courseCode}` : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {purchased && <span className="badge badge-success">Đã mua</span>}
-                        {interested && !purchased && <span className="badge badge-warning">Để lại TT</span>}
+                        {purchased && <span className="badge badge-success">{t('campaignCustomerModals.purchased')}</span>}
+                        {interested && !purchased && <span className="badge badge-warning">{t('campaignCustomerModals.leadShort')}</span>}
                         <HiOutlineChevronDown
                           className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                         />
@@ -352,32 +354,32 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                       <div className="px-4 py-3 border-t border-gray-100 space-y-2 text-sm text-gray-700">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                           <div>
-                            <span className="text-xs text-gray-400">Mã đơn hàng</span>
+                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.orderCode')}</span>
                             <p className="font-mono font-medium">{p.orderId ? `#${p.orderId}` : '--'}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">Mã sản phẩm</span>
+                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.productCode')}</span>
                             <p className="font-mono">{p.courseCode || '--'}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">Để lại thông tin</span>
-                            <p>{interested ? <span className="badge badge-warning">Có</span> : <span className="text-gray-400">Không</span>}</p>
+                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.leftInfo')}</span>
+                            <p>{interested ? <span className="badge badge-warning">{t('common.yes')}</span> : <span className="text-gray-400">{t('common.no')}</span>}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">Đã mua</span>
-                            <p>{purchased ? <span className="badge badge-success">Có</span> : <span className="text-gray-400">Không</span>}</p>
+                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.purchased')}</span>
+                            <p>{purchased ? <span className="badge badge-success">{t('common.yes')}</span> : <span className="text-gray-400">{t('common.no')}</span>}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">Hoạt động cuối</span>
+                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.lastActivity')}</span>
                             <p>{formatDateTime(p.purchaseDate)}</p>
                           </div>
                           {p.idEmailMessage && (
                             <div>
-                              <span className="text-xs text-gray-400">Sau click email</span>
+                              <span className="text-xs text-gray-400">{t('campaignCustomerModals.afterClick')}</span>
                               <p>
                                 {(p.attributedFromClick || linkedOrderEvents.length > 0)
-                                  ? <span className="badge badge-info">Có</span>
-                                  : <span className="text-gray-400">Không rõ</span>}
+                                  ? <span className="badge badge-info">{t('common.yes')}</span>
+                                  : <span className="text-gray-400">{t('common.unknown')}</span>}
                               </p>
                             </div>
                           )}
@@ -388,7 +390,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                               {p.idEmailMessage && (
                                 <div>
-                                  <span className="text-xs text-gray-400">ID email gửi</span>
+                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailId')}</span>
                                   <p>
                                     <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-700 border border-blue-100">
                                       #{p.idEmailMessage}
@@ -398,7 +400,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                               )}
                               {p.idZaloMessage && (
                                 <div>
-                                  <span className="text-xs text-gray-400">ID tin Zalo</span>
+                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.zaloMessageId')}</span>
                                   <p className="flex flex-wrap items-center gap-1.5">
                                     <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-xs font-mono text-orange-700 border border-orange-100">
                                       #{p.idZaloMessage}
@@ -417,53 +419,53 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                               )}
                               {emailIndex != null && (
                                 <div>
-                                  <span className="text-xs text-gray-400">Thứ tự email</span>
-                                  <p className="font-medium text-gray-800">Email #{emailIndex}</p>
+                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailOrder')}</span>
+                                  <p className="font-medium text-gray-800">{t('customerDetail.emailIndex', { index: emailIndex })}</p>
                                 </div>
                               )}
                               {(linkedEmail?.runId != null || linkedEmail?.runName) && (
                                 <div className="col-span-2">
-                                  <span className="text-xs text-gray-400">Lượt chạy chiến dịch</span>
+                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.campaignRun')}</span>
                                   <p className="font-medium text-gray-800">
-                                    #{linkedEmail?.runId || '--'} · {buildRunDisplayName(linkedEmail?.runId, linkedEmail?.runName)}
+                                    #{linkedEmail?.runId || '--'} · {buildRunDisplayName(linkedEmail?.runId, linkedEmail?.runName, t)}
                                   </p>
                                 </div>
                               )}
                             </div>
                             {emailSubject && (
                               <div>
-                                <span className="text-xs text-gray-400">Tiêu đề email</span>
+                                <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailSubject')}</span>
                                 <p className="font-medium text-gray-800 leading-snug">{emailSubject}</p>
                               </div>
                             )}
-                            {linkedZaloMessage && (
-                              <div className="space-y-1">
-                                <span className="text-xs text-gray-400">Tin nhắn Zalo liên kết</span>
-                                <p className="text-sm text-gray-700">
-                                  {linkedZaloMessage.channel === 'zalo_group'
-                                    ? `${linkedZaloMessage.groupName || linkedZaloMessage.groupId || '--'}`
-                                    : (linkedZaloMessage.recipientValue || 'Zalo cá nhân')}
-                                </p>
-                                {linkedZaloMessage.channel === 'zalo_group' && linkedZaloMessage.groupId && linkedZaloMessage.groupName && (
-                                  <p className="text-xs text-gray-500">Nhóm ID: {linkedZaloMessage.groupId}</p>
-                                )}
+                              {linkedZaloMessage && (
+                                <div className="space-y-1">
+                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.zaloMessageLinked')}</span>
+                                  <p className="text-sm text-gray-700">
+                                    {linkedZaloMessage.channel === 'zalo_group'
+                                      ? `${linkedZaloMessage.groupName || linkedZaloMessage.groupId || '--'}`
+                                      : (linkedZaloMessage.recipientValue || t('campaignCustomerModals.zaloPersonal'))}
+                                  </p>
+                                  {linkedZaloMessage.channel === 'zalo_group' && linkedZaloMessage.groupId && linkedZaloMessage.groupName && (
+                                    <p className="text-xs text-gray-500">{t('campaignCustomerModals.groupId')}: {linkedZaloMessage.groupId}</p>
+                                  )}
                                 {zaloClickedLinks.length > 0 && (
                                   <div className="space-y-1">
-                                    <p className="text-xs text-gray-400">Các link đã nhấp ({zaloClickedLinks.length})</p>
+                                    <p className="text-xs text-gray-400">{t('campaignCustomerModals.clickedLinks')} ({zaloClickedLinks.length})</p>
                                     {zaloClickedLinks.map((clickedLink) => (
                                       <p key={clickedLink.linkKey} className="text-xs text-gray-500 break-all">
-                                        - {clickedLink.targetUrl || clickedLink.label || 'Link đã nhấp'}
+                                        - {clickedLink.targetUrl || clickedLink.label || t('campaignCustomerModals.clickedLink')}
                                       </p>
                                     ))}
                                   </div>
                                 )}
                                 {linkedZaloAttachments.length > 0 && (
                                   <div className="pt-1">
-                                    <p className="text-xs text-gray-400">Tệp đính kèm ({linkedZaloAttachments.length})</p>
+                                    <p className="text-xs text-gray-400">{t('campaignCustomerModals.attachments')} ({linkedZaloAttachments.length})</p>
                                     <div className="space-y-1 mt-1">
                                       {linkedZaloAttachments.map((file, index) => (
                                         <p key={`${file?.displayName || 'file'}-${index}`} className="text-xs text-gray-600">
-                                          - {file?.displayName || 'Tệp đính kèm'}
+                                          - {file?.displayName || t('campaignCustomerModals.attachment')}
                                         </p>
                                       ))}
                                     </div>
@@ -484,7 +486,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
                                 >
                                   <HiOutlineEye className="w-3.5 h-3.5" />
-                                  {isShowingEmailContent ? 'Ẩn nội dung email' : 'Xem nội dung email'}
+                                  {isShowingEmailContent ? t('campaignCustomerModals.hideEmailContent') : t('campaignCustomerModals.viewEmailContent')}
                                 </button>
                                 {isShowingEmailContent && <EmailContentViewer email={linkedEmail} />}
                               </div>
@@ -502,22 +504,22 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
                                 >
                                   <HiOutlineEye className="w-3.5 h-3.5" />
-                                  {isShowingZaloContent ? 'Ẩn nội dung tin nhắn Zalo' : 'Xem nội dung tin nhắn Zalo'}
+                                  {isShowingZaloContent ? t('campaignCustomerModals.hideZaloContent') : t('campaignCustomerModals.viewZaloContent')}
                                 </button>
                                 {isShowingZaloContent && (
                                   <div className="mt-2 space-y-2">
                                     <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
-                                      {linkedZaloMessage.messageText || 'Không có nội dung tin nhắn'}
+                                      {linkedZaloMessage.messageText || t('campaignCustomerModals.noZaloContent')}
                                     </p>
                                     {linkedZaloAttachments.length > 0 && (
                                       <div className="rounded-lg bg-white border border-gray-200 p-3">
                                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                          Tệp đính kèm ({linkedZaloAttachments.length})
+                                          {t('campaignCustomerModals.attachments')} ({linkedZaloAttachments.length})
                                         </p>
                                         <div className="space-y-1.5">
                                           {linkedZaloAttachments.map((file, index) => (
                                             <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700">
-                                              - {file?.displayName || 'Tệp đính kèm'}
+                                              - {file?.displayName || t('campaignCustomerModals.attachment')}
                                             </p>
                                           ))}
                                         </div>
@@ -529,12 +531,13 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                             )}
                             {(p.attributedFromClick || linkedOrderEvents.length > 0) && emailJourney && (
                               <div className="pt-1">
-                                <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Hành trình email dẫn đến đơn hàng</p>
+                                <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">{t('campaignCustomerModals.emailJourneyLeadingOrder')}</p>
                                 <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
                                   <Journey4States
                                     journey={emailJourney}
                                     emailSubject={emailSubject}
                                     orderEvents={linkedOrderEvents}
+                                    t={t}
                                   />
                                 </div>
                               </div>
@@ -580,7 +583,7 @@ const wrapEmailPreviewHtml = (html) => `<!doctype html>
   <style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}table{border-collapse:collapse}</style>
 </head><body>${html || ''}</body></html>`;
 
-const EmailStateBadge = ({ journey, orderEvents = [] }) => {
+const EmailStateBadge = ({ journey, orderEvents = [], t }) => {
   if (!journey?.sent) return null;
   const inferredOpen = !journey.opened && (journey.clicked || journey.attachmentDownloaded);
   const isOpened = journey.opened || inferredOpen;
@@ -588,27 +591,27 @@ const EmailStateBadge = ({ journey, orderEvents = [] }) => {
   const hasCompleted = orderEvents.some((e) => String(e.eventType || '').toLowerCase() === 'order_completed');
   return (
     <div className="flex items-center gap-1 flex-wrap justify-end">
-      <span className="badge badge-info">Đã gửi</span>
+      <span className="badge badge-info">{t('campaignCustomerModals.sent')}</span>
       {isOpened && (
-        <span className="badge" style={{ background: '#fffde7', color: '#f57f17' }}>Đã mở</span>
+        <span className="badge" style={{ background: '#fffde7', color: '#f57f17' }}>{t('campaignCustomerModals.opened')}</span>
       )}
       {journey.clicked && (
-        <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>Đã nhấp</span>
+        <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
       )}
       {journey.attachmentDownloaded && (
-        <span className="badge" style={{ background: '#f3e8ff', color: '#7c3aed' }}>Đã tải tệp</span>
+        <span className="badge" style={{ background: '#f3e8ff', color: '#7c3aed' }}>{t('campaignCustomerModals.downloaded')}</span>
       )}
       {hasPending && !hasCompleted && (
-        <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>Đơn chờ xử lý</span>
+        <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
       )}
       {hasCompleted && (
-        <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>Đã đặt hàng</span>
+        <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.ordered')}</span>
       )}
     </div>
   );
 };
 
-const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
+const Journey4States = ({ journey, emailSubject, orderEvents = [], t }) => {
   const inferredOpen = !journey.opened && (journey.clicked || journey.attachmentDownloaded);
   const isOpened = journey.opened || inferredOpen;
   const openedAt = journey.openedAt
@@ -625,7 +628,7 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
     });
   }
   if (isOpened) {
-    events.push({ key: 'opened', color: 'bg-yellow-400', label: 'Đã mở', at: openedAt });
+    events.push({ key: 'opened', color: 'bg-yellow-400', label: t('campaignCustomerModals.opened'), at: openedAt });
   }
   const clickedLinks = Array.isArray(journey.clickedLinks) && journey.clickedLinks.length > 0
     ? journey.clickedLinks
@@ -671,7 +674,7 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
         key: `order_pending_${orderEvent.id || idx}`,
         type: 'order_pending',
         color: 'bg-amber-500',
-        label: 'Đơn hàng chờ xử lý',
+        label: t('campaignCustomerModals.pendingOrder'),
         orderId: eventData.order_id,
         orderNumber: eventData.order_number,
         total: eventData.total,
@@ -684,7 +687,7 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
         key: `order_completed_${orderEvent.id || idx}`,
         type: 'order_completed',
         color: 'bg-green-500',
-        label: 'Đơn hàng hoàn thành',
+        label: t('campaignCustomerModals.orderCompleted'),
         orderId: eventData.order_id,
         orderNumber: eventData.order_number,
         total: eventData.total,
@@ -704,7 +707,7 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
   });
 
   if (!allEvents.length) {
-    return <p className="text-sm text-gray-400">Chưa có hoạt động nào được ghi nhận</p>;
+    return <p className="text-sm text-gray-400">{t('campaignCustomerModals.noActivities')}</p>;
   }
 
   return (
@@ -718,7 +721,7 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
               ? (
                 <>
                   <p className="text-sm font-medium text-gray-800 leading-snug">
-                    Đã gửi:{s.sentSubject && <> <span className="text-blue-600">{s.sentSubject}</span></>}
+                    {t('campaignCustomerModals.sent')}:{s.sentSubject && <> <span className="text-blue-600">{s.sentSubject}</span></>}
                   </p>
                   {s.at && <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(s.at)}</p>}
                 </>
@@ -739,9 +742,9 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
                               <div key={i} className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
                                 <div className="font-medium">{product.product_name}</div>
                                 <div className="flex items-center gap-2 mt-0.5 text-gray-500">
-                                  <span>Mã SP: {product.product_id}</span>
+                                  <span>{t('campaignCustomerModals.productCode')}: {product.product_id}</span>
                                   <span>•</span>
-                                  <span>SL: {product.quantity}</span>
+                                  <span>{t('campaignCustomerModals.quantity')}: {product.quantity}</span>
                                   <span>•</span>
                                   <span>{formatMoney(product.total, s.currency)}</span>
                                 </div>
@@ -766,10 +769,10 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [] }) => {
   );
 };
 
-const EmailContentViewer = ({ email }) => {
+const EmailContentViewer = ({ email, t }) => {
   const senderDisplay = email.senderName
     ? `${email.senderName} <${email.senderEmail || ''}>`
-    : (email.senderEmail || 'Hệ thống chiến dịch');
+    : (email.senderEmail || t('campaignCustomerModals.systemCampaign'));
   const recipientDisplay = email.recipientName
     ? `${email.recipientName} <${email.recipientEmail || ''}>`
     : (email.recipientEmail || '--');
@@ -790,17 +793,17 @@ const EmailContentViewer = ({ email }) => {
     <div className="mt-3 rounded-xl border border-gray-200 overflow-hidden bg-white">
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 space-y-1.5">
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">Tiêu đề</span>
+          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.subject')}</span>
           <p className="text-sm font-semibold text-gray-900 leading-snug">
             {decodeHtmlEntities(email.subject || email.emailTemplateName || '--')}
           </p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">Người gửi</span>
+          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.sender')}</span>
           <p className="text-xs text-gray-600">{senderDisplay}</p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">Người nhận</span>
+          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.recipient')}</span>
           <p className="text-xs text-gray-600">{recipientDisplay}</p>
         </div>
       </div>
@@ -809,13 +812,13 @@ const EmailContentViewer = ({ email }) => {
         {rawHtml ? (
           <iframe
             srcDoc={safeHtml}
-            title="Nội dung email"
+            title={t('campaignCustomerModals.emailContent')}
             className="w-full h-full border-0"
             sandbox="allow-same-origin"
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Không có nội dung HTML
+            {t('campaignCustomerModals.noHtmlContent')}
           </div>
         )}
       </div>
@@ -823,7 +826,7 @@ const EmailContentViewer = ({ email }) => {
       {attachments.length > 0 && (
         <div className="px-4 py-3 border-t border-gray-100">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-            Tệp đính kèm ({attachments.length})
+            {t('campaignCustomerModals.attachments')} ({attachments.length})
           </p>
           <div className="space-y-1.5">
             {attachments.map((att, i) => (
@@ -839,14 +842,14 @@ const EmailContentViewer = ({ email }) => {
   );
 };
 
-const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [] }) => {
+const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [], t }) => {
   const [showContent, setShowContent] = useState(false);
 
   const headerLabel = decodeHtmlEntities(
-    email.subject || email.emailTemplateName || `Email ${email.emailIndex ?? ''}`
+    email.subject || email.emailTemplateName || `${t('campaignCustomerModals.email')} ${email.emailIndex ?? ''}`
   );
   const sentEventSubject = decodeHtmlEntities(
-    email.subject || email.emailTemplateName || `Email ${email.emailIndex ?? ''}`
+    email.subject || email.emailTemplateName || `${t('campaignCustomerModals.email')} ${email.emailIndex ?? ''}`
   );
 
   const journey = email.emailJourney || {
@@ -883,7 +886,7 @@ const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [] }) =
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <EmailStateBadge journey={journey} orderEvents={orderEvents} />
+          <EmailStateBadge journey={journey} orderEvents={orderEvents} t={t} />
           <svg
             className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -899,6 +902,7 @@ const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [] }) =
             journey={journey}
             emailSubject={sentEventSubject}
             orderEvents={orderEvents}
+            t={t}
           />
           {hasContent && (
             <div className="pt-1">
@@ -908,9 +912,9 @@ const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [] }) =
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
               >
                 <HiOutlineEye className="w-3.5 h-3.5" />
-                {showContent ? 'Ẩn nội dung email' : 'Xem nội dung email'}
+                {showContent ? t('campaignCustomerModals.hideEmailContent') : t('campaignCustomerModals.viewEmailContent')}
               </button>
-              {showContent && <EmailContentViewer email={email} />}
+              {showContent && <EmailContentViewer email={email} t={t} />}
             </div>
           )}
         </div>
@@ -919,7 +923,7 @@ const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = [] }) =
   );
 };
 
-const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
+const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [], t }) => {
   const [showMessageContent, setShowMessageContent] = useState(false);
   const clickedLinks = Array.isArray(message?.clickedLinks) && message.clickedLinks.length > 0
     ? message.clickedLinks
@@ -931,18 +935,18 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
   const runLabel = message?.runDisplayName
     || ((message?.runId != null || message?.runName)
       ? (message?.runName
-        ? `Run #${message?.runId || '--'} · ${message.runName}`
-        : `Run #${message?.runId || '--'}`)
+        ? `${t('campaignCustomerModals.run')} #${message?.runId || '--'} · ${message.runName}`
+        : `${t('campaignCustomerModals.run')} #${message?.runId || '--'}`)
       : null);
   const zaloTitle = message?.channel === 'zalo_group'
     ? `${message?.groupName || message?.groupId || '--'}`
-    : (message?.recipientValue || 'Tin nhắn Zalo');
+    : (message?.recipientValue || t('campaignCustomerModals.zaloMessage'));
   const journeyStates = [];
 
   if (message?.sentAt) {
     journeyStates.push({
       key: `zalo_sent_${message.id}`,
-      label: 'Đã gửi tin nhắn Zalo',
+      label: t('campaignCustomerModals.sentZaloMessage'),
       at: message.sentAt,
       color: 'bg-blue-400',
     });
@@ -951,7 +955,7 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
     clickedLinks.forEach((clickedLink, index) => {
       journeyStates.push({
         key: `zalo_clicked_${message.id}_${clickedLink?.linkKey || index}`,
-        label: clickedLink?.targetUrl ? 'Đã nhấp link trong tin nhắn' : 'Đã nhấp link',
+        label: clickedLink?.targetUrl ? t('campaignCustomerModals.clickedLinkInMessage') : t('campaignCustomerModals.clickedLink'),
         at: clickedLink?.clickedAt || message?.lastClickedAt || message?.firstClickedAt || null,
         color: 'bg-orange-400',
         clickedUrl: clickedLink?.targetUrl || null,
@@ -963,7 +967,7 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
     if (eventType === 'order_pending') {
       journeyStates.push({
         key: `zalo_order_pending_${event.id || index}`,
-        label: 'Đơn hàng chờ xử lý',
+        label: t('campaignCustomerModals.pendingOrder'),
         at: event?.eventAt || null,
         color: 'bg-amber-500',
       });
@@ -972,7 +976,7 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
     if (eventType === 'order_completed') {
       journeyStates.push({
         key: `zalo_order_completed_${event.id || index}`,
-        label: 'Đơn hàng hoàn thành',
+        label: t('campaignCustomerModals.orderCompleted'),
         at: event?.eventAt || null,
         color: 'bg-green-500',
       });
@@ -992,18 +996,18 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
           {runLabel ? ` · ${runLabel}` : ''}
         </p>
         {message?.channel === 'zalo_group' && message?.groupId && message?.groupName && (
-          <p className="text-xs text-gray-400 mt-0.5">Nhóm ID: {message.groupId}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t('campaignCustomerModals.groupId')}: {message.groupId}</p>
         )}
         <div className="mt-2 flex items-center gap-1 flex-wrap">
-          <span className="badge badge-info">Đã gửi</span>
+          <span className="badge badge-info">{t('campaignCustomerModals.sent')}</span>
           {hasClicked && (
-            <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>Đã nhấp</span>
+            <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
           )}
           {hasPending && !hasCompleted && (
-            <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>Đơn chờ xử lý</span>
+            <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
           )}
           {hasCompleted && (
-            <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>Đơn đã mua</span>
+            <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.orderCompleted')}</span>
           )}
         </div>
       </div>
@@ -1033,22 +1037,22 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
-          {showMessageContent ? 'Ẩn nội dung tin nhắn' : 'Xem nội dung tin nhắn'}
+          {showMessageContent ? t('campaignCustomerModals.hideZaloContent') : t('campaignCustomerModals.viewZaloContent')}
         </button>
         {showMessageContent && (
           <div className="space-y-2">
             <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
-              {message?.messageText || 'Không có nội dung tin nhắn'}
+              {message?.messageText || t('campaignCustomerModals.noZaloContent')}
             </p>
             {attachments.length > 0 && (
               <div className="rounded-lg bg-white border border-gray-200 p-3">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                  Tệp đính kèm ({attachments.length})
+                  {t('campaignCustomerModals.attachments')} ({attachments.length})
                 </p>
                 <div className="space-y-1.5">
                   {attachments.map((file, index) => (
                     <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700">
-                      - {file?.displayName || 'Tệp đính kèm'}
+                      - {file?.displayName || t('campaignCustomerModals.attachment')}
                     </p>
                   ))}
                 </div>
@@ -1061,7 +1065,7 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [] }) => {
   );
 };
 
-const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
+const JourneyModal = ({ customer, campaignId, isOpen, onClose, t }) => {
   const [journeyData, setJourneyData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -1077,12 +1081,13 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
         const res = await customerApiService.getCustomerCampaignJourney(customer.id, campaignId);
         if (!cancelled) setJourneyData(res.data?.data || null);
       } catch {
-        if (!cancelled) toast.error('Không thể tải hành trình email');
+        if (!cancelled) toast.error(t('campaignCustomerModals.cantLoadJourney'));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, customer?.id, campaignId]);
 
   const emails = [...(journeyData?.emails || [])].sort((a, b) => {
@@ -1176,7 +1181,7 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Hành trình khách hàng — ${displayName || 'Khách hàng'}`}
+      title={`${t('campaignCustomerModals.journeyTitle')} — ${displayName || t('campaignCustomerModals.customer')}`}
     >
       <div className="p-6 space-y-3">
         {loading ? (
@@ -1186,7 +1191,7 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
         ) : runGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
             <HiOutlineMail className="w-10 h-10" />
-            <p>Chưa có email nào được gửi trong chiến dịch này</p>
+            <p>{t('campaignCustomerModals.noEmailsInCampaign')}</p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -1194,12 +1199,12 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
               <section key={String(group.runId || 'unknown')} className="space-y-3">
                 <div className="rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
                   <p className="text-xs uppercase tracking-wide text-primary-700 font-semibold">
-                    Lượt chạy chiến dịch
+                    {t('campaignCustomerModals.campaignRun')}
                   </p>
                   <p className="text-sm text-gray-800 mt-0.5">
                     <span className="font-semibold">#{group.runId || '--'}</span>
                     {' · '}
-                    {buildRunDisplayName(group.runId, group.runName)}
+                    {buildRunDisplayName(group.runId, group.runName, t)}
                   </p>
                 </div>
                 <div className="space-y-3">
@@ -1211,18 +1216,19 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
                         isExpanded={expandedId === email.emailMessageId}
                         onToggle={() => toggleExpand(email.emailMessageId)}
                         orderEvents={orderEventsByEmailId[email.emailMessageId] || []}
+                        t={t}
                       />
                     ))
                   ) : (
                     <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                      Lượt chạy này chưa có email nào.
+                      {t('campaignCustomerModals.noEmailsInRun')}
                     </div>
                   )}
                 </div>
                 {hasAnyZaloJourneyData && (
                   <div className="space-y-3">
                     <p className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-                      Hành trình Zalo
+                      {t('campaignCustomerModals.zaloJourney')}
                     </p>
                     {group.zaloMessages?.length ? (() => {
                       const zaloGroupMessages = group.zaloMessages.filter(
@@ -1248,13 +1254,14 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
                               message={message}
                               orderEvents={orderEventsByZaloMessageId[message.id] || []}
                               clickedEvents={clickEventsByZaloMessageId[message.id] || []}
+                              t={t}
                             />
                           ))}
                         </div>
                       );
                     })() : (
                       <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                        Lượt chạy này chưa có sự kiện Zalo.
+                        {t('campaignCustomerModals.noZaloEvents')}
                       </div>
                     )}
                   </div>

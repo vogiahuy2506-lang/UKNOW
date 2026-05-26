@@ -1,5 +1,6 @@
 import { normalizeDashboardInsightForUi } from '../utils/dashboardInsightStorage.util';
 import InsightMarkdownBody, { renderBoldSegments } from './InsightMarkdownBody';
+import { useI18n } from '../../../i18n';
 
 /**
  * Hiển thị khối insight tổng quan có cấu trúc (sau khi Gemini trả JSON đầy đủ).
@@ -15,26 +16,26 @@ const SectionTitle = ({ children }) => (
   <h4 className="text-sm font-semibold text-gray-800 mt-4 first:mt-0">{children}</h4>
 );
 
-const MetricCard = ({ label, data }) => {
+const MetricCard = ({ label, data, t }) => {
   if (!data || typeof data !== 'object') return null;
   return (
     <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs">
       <p className="font-medium text-gray-700 mb-1">{label}</p>
       {data.value != null && (
         <p className="text-gray-600">
-          <span className="text-gray-400">Giá trị: </span>
+          <span className="text-gray-400">{t('dashboardInsightOverview.value')}: </span>
           {renderBoldSegments(String(data.value))}
         </p>
       )}
       {data.benchmark != null && (
         <p className="text-gray-600 mt-0.5">
-          <span className="text-gray-400">Tham chiếu: </span>
+          <span className="text-gray-400">{t('dashboardInsightOverview.reference')}: </span>
           {renderBoldSegments(String(data.benchmark))}
         </p>
       )}
       {data.assessment != null && (
         <p className="text-gray-600 mt-0.5">
-          <span className="text-gray-400">Đánh giá: </span>
+          <span className="text-gray-400">{t('dashboardInsightOverview.assessment')}: </span>
           {renderBoldSegments(String(data.assessment))}
         </p>
       )}
@@ -48,10 +49,12 @@ const MetricCard = ({ label, data }) => {
 };
 
 const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) => {
+  const { t } = useI18n();
+
   if (isLoading) {
     return (
       <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500 animate-pulse">
-        Đang phân tích insight…
+        {t('dashboardInsightOverview.analyzing')}
       </div>
     );
   }
@@ -64,7 +67,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
   if (!insights) return null;
 
-  /** Cùng logic chuẩn hóa với khi lưu/đọc insight — tránh tổng quan rơi nhánh “Tóm tắt” trong khi vẫn có charts. */
+  /** Cùng logic chuẩn hóa với khi lưu/đọc insight — tránh tổng quan rơi nhánh "Tóm tắt" trong khi vẫn có charts. */
   const insightsNorm = normalizeDashboardInsightForUi(insights) ?? insights;
 
   const km = insightsNorm.key_metrics_analysis;
@@ -75,7 +78,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
     if (!text) return null;
     return (
       <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Tóm tắt</p>
+        <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('dashboardInsightOverview.summary')}</p>
         <div className="text-sm text-gray-700 leading-relaxed">
           <InsightMarkdownBody text={text} />
         </div>
@@ -87,23 +90,23 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
     <div className="space-y-2 text-sm text-gray-700">
       {insightsNorm.overview && (
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
-          <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">Tóm tắt tổng quan</p>
+          <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">{t('dashboardInsightOverview.overviewSummary')}</p>
           <div className="leading-relaxed text-gray-800">
             <InsightMarkdownBody text={String(insightsNorm.overview)} />
           </div>
         </div>
       )}
 
-      <SectionTitle>Chỉ số chính</SectionTitle>
+      <SectionTitle>{t('dashboardInsightOverview.keyMetrics')}</SectionTitle>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <MetricCard label="Mở / Open" data={km.open_rate} />
-        <MetricCard label="Click / Gửi" data={km.click_rate} />
-        <MetricCard label="Chuyển đổi (click → mua)" data={km.conversion_rate} />
+        <MetricCard label={t('dashboardInsightOverview.openRate')} data={km.open_rate} t={t} />
+        <MetricCard label={t('dashboardInsightOverview.clickRate')} data={km.click_rate} t={t} />
+        <MetricCard label={t('dashboardInsightOverview.conversionRate')} data={km.conversion_rate} t={t} />
       </div>
 
       {Array.isArray(insightsNorm.insights) && insightsNorm.insights.length > 0 && (
         <>
-          <SectionTitle>Insight nổi bật</SectionTitle>
+          <SectionTitle>{t('dashboardInsightOverview.insights')}</SectionTitle>
           <ul className="space-y-2">
             {insightsNorm.insights.map((item, idx) => (
               <li
@@ -112,7 +115,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-semibold text-gray-800">
-                    {renderBoldSegments(item.title || `Insight ${idx + 1}`)}
+                    {renderBoldSegments(item.title || `${t('dashboardInsightOverview.insightNumber')} ${idx + 1}`)}
                   </span>
                   {item.type && (
                     <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{item.type}</span>
@@ -128,7 +131,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
                 )}
                 {item.impact && (
                   <div className="text-gray-500 mt-1">
-                    <span className="text-gray-400">Tác động: </span>
+                    <span className="text-gray-400">{t('dashboardInsightOverview.impact')}: </span>
                     {renderBoldSegments(String(item.impact))}
                   </div>
                 )}
@@ -140,17 +143,17 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
       {insightsNorm.channel_analysis && typeof insightsNorm.channel_analysis === 'object' && (
         <>
-          <SectionTitle>Phân tích theo kênh</SectionTitle>
+          <SectionTitle>{t('dashboardInsightOverview.channelAnalysis')}</SectionTitle>
           <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.channel_analysis.best_channel && (
               <p>
-                <span className="text-gray-400">Kênh nổi bật: </span>
+                <span className="text-gray-400">{t('dashboardInsightOverview.bestChannel')}: </span>
                 {renderBoldSegments(String(insightsNorm.channel_analysis.best_channel))}
               </p>
             )}
             {insightsNorm.channel_analysis.underperforming_channel && (
               <p>
-                <span className="text-gray-400">Kênh yếu: </span>
+                <span className="text-gray-400">{t('dashboardInsightOverview.weakChannel')}: </span>
                 {renderBoldSegments(String(insightsNorm.channel_analysis.underperforming_channel))}
               </p>
             )}
@@ -165,17 +168,17 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
       {insightsNorm.funnel_analysis && typeof insightsNorm.funnel_analysis === 'object' && (
         <>
-          <SectionTitle>Phễu (funnel)</SectionTitle>
+          <SectionTitle>{t('dashboardInsightOverview.funnel')}</SectionTitle>
           <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.funnel_analysis.bottleneck && (
               <p>
-                <span className="text-gray-400">Nút thắt: </span>
+                <span className="text-gray-400">{t('dashboardInsightOverview.bottleneck')}: </span>
                 {renderBoldSegments(String(insightsNorm.funnel_analysis.bottleneck))}
               </p>
             )}
             {insightsNorm.funnel_analysis.drop_off_stage && (
               <p>
-                <span className="text-gray-400">Rơi nhiều ở: </span>
+                <span className="text-gray-400">{t('dashboardInsightOverview.dropOffAt')}: </span>
                 {renderBoldSegments(String(insightsNorm.funnel_analysis.drop_off_stage))}
               </p>
             )}
@@ -190,7 +193,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
       {insightsNorm.top_product_insight && typeof insightsNorm.top_product_insight === 'object' && (
         <>
-          <SectionTitle>Sản phẩm / khóa học</SectionTitle>
+          <SectionTitle>{t('dashboardInsightOverview.productCourse')}</SectionTitle>
           <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.top_product_insight.observation && (
               <div className="text-gray-700 leading-relaxed">
@@ -199,7 +202,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
             )}
             {insightsNorm.top_product_insight.action && (
               <div className="text-gray-600 flex flex-wrap items-baseline gap-x-1 gap-y-1">
-                <span className="text-gray-400 shrink-0">Hành động:</span>
+                <span className="text-gray-400 shrink-0">{t('dashboardInsightOverview.action')}:</span>
                 <div className="min-w-0 flex-1">
                   <InsightMarkdownBody text={String(insightsNorm.top_product_insight.action)} />
                 </div>
@@ -211,16 +214,16 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
       {Array.isArray(insightsNorm.action_plan) && insightsNorm.action_plan.length > 0 && (
         <>
-          <SectionTitle>Kế hoạch hành động</SectionTitle>
+          <SectionTitle>{t('dashboardInsightOverview.actionPlan')}</SectionTitle>
           <ol className="list-decimal list-inside space-y-2 text-xs">
             {insightsNorm.action_plan.map((ap, idx) => (
               <li key={idx} className="rounded-lg border border-gray-100 bg-white px-3 py-2">
                 <div className="font-medium text-gray-800">
-                  <InsightMarkdownBody text={String(ap.action || 'Hành động')} />
+                  <InsightMarkdownBody text={String(ap.action || t('dashboardInsightOverview.action'))} />
                 </div>
                 {ap.expected_result && (
                   <div className="text-gray-600 mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-1">
-                    <span className="text-gray-500 shrink-0">Kỳ vọng:</span>
+                    <span className="text-gray-500 shrink-0">{t('dashboardInsightOverview.expectedResult')}:</span>
                     <div className="min-w-0 flex-1">
                       <InsightMarkdownBody text={String(ap.expected_result)} />
                     </div>
@@ -228,7 +231,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
                 )}
                 {ap.timeline && (
                   <div className="text-gray-500 mt-0.5">
-                    <span className="text-gray-400">Thời gian: </span>
+                    <span className="text-gray-400">{t('dashboardInsightOverview.timeline')}: </span>
                     {renderBoldSegments(String(ap.timeline))}
                   </div>
                 )}
@@ -241,7 +244,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       {insightsNorm.risk_warning && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
           <div className="flex flex-wrap items-baseline gap-x-1 gap-y-1">
-            <span className="font-semibold shrink-0">Cảnh báo:</span>
+            <span className="font-semibold shrink-0">{t('dashboardInsightOverview.warning')}:</span>
             <div className="min-w-0 flex-1">
               <InsightMarkdownBody text={String(insightsNorm.risk_warning)} />
             </div>

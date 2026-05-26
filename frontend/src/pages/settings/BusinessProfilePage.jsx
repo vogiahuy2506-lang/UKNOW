@@ -8,13 +8,14 @@ import {
 import toast from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
 import api from '../../services/api';
+import { useI18n } from '../../i18n';
 
-const TONE_OPTIONS = [
-  { value: 'professional', label: 'Chuyên nghiệp' },
-  { value: 'friendly',     label: 'Thân thiện' },
-  { value: 'formal',       label: 'Trang trọng' },
-  { value: 'casual',       label: 'Gần gũi, trẻ trung' },
-  { value: 'inspiring',    label: 'Truyền cảm hứng' },
+  const TONE_OPTIONS = (t) => [
+  { value: 'professional', label: t('businessProfile.professional') },
+  { value: 'friendly',     label: t('businessProfile.friendly') },
+  { value: 'formal',       label: t('businessProfile.formal') },
+  { value: 'casual',       label: t('businessProfile.casual') },
+  { value: 'inspiring',    label: t('businessProfile.inspiring') },
 ];
 
 const EMPTY_PRODUCT = () => ({ name: '', price: '', description: '', usp: '' });
@@ -65,6 +66,7 @@ const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' 
 
 // ── ProductList ───────────────────────────────────────────────────────────────
 const ProductList = ({ products, onChange }) => {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState({});
 
   const add = () => {
@@ -85,7 +87,7 @@ const ProductList = ({ products, onChange }) => {
               {i + 1}
             </span>
             <span className="flex-1 text-sm font-medium text-slate-700 truncate">
-              {p.name || `Sản phẩm ${i + 1}`}
+              {p.name || `${t('businessProfile.productName')} ${i + 1}`}
               {p.price && <span className="ml-2 text-xs text-slate-400 font-normal">{p.price}</span>}
             </span>
             <button type="button" onClick={(e) => { e.stopPropagation(); remove(i); }}
@@ -97,27 +99,27 @@ const ProductList = ({ products, onChange }) => {
           {expanded[i] && (
             <div className="p-3 grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Tên sản phẩm *</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.productName')} *</label>
                 <input type="text" value={p.name} onChange={e => update(i, 'name', e.target.value)}
-                  placeholder="VD: Khóa học Python"
+                  placeholder={t('businessProfile.productNamePlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Giá</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.price')}</label>
                 <input type="text" value={p.price} onChange={e => update(i, 'price', e.target.value)}
-                  placeholder="VD: 2.9tr / tháng"
+                  placeholder={t('businessProfile.pricePlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Mô tả ngắn</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.shortDescription')}</label>
                 <input type="text" value={p.description} onChange={e => update(i, 'description', e.target.value)}
-                  placeholder="VD: Lập trình từ cơ bản đến nâng cao, học online"
+                  placeholder={t('businessProfile.shortDescriptionPlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Điểm nổi bật (USP)</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.usp')}</label>
                 <input type="text" value={p.usp} onChange={e => update(i, 'usp', e.target.value)}
-                  placeholder="VD: Học xong có việc ngay, cam kết hoàn tiền 100%"
+                  placeholder={t('businessProfile.uspPlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
             </div>
@@ -127,7 +129,7 @@ const ProductList = ({ products, onChange }) => {
       <button type="button" onClick={add}
         className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-orange-400 hover:text-orange-500 transition-all">
         <HiOutlinePlus className="w-4 h-4" />
-        Thêm sản phẩm / dịch vụ
+        {t('businessProfile.addProduct')}
       </button>
     </div>
   );
@@ -135,6 +137,7 @@ const ProductList = ({ products, onChange }) => {
 
 // ── SegmentList ───────────────────────────────────────────────────────────────
 const SegmentList = ({ segments, onChange }) => {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState({});
 
   const add = () => {
@@ -155,7 +158,7 @@ const SegmentList = ({ segments, onChange }) => {
               {i + 1}
             </span>
             <span className="flex-1 text-sm font-medium text-slate-700 truncate">
-              {s.name || `Nhóm khách ${i + 1}`}
+              {s.name || `${t('businessProfile.segmentName')} ${i + 1}`}
             </span>
             <button type="button" onClick={(e) => { e.stopPropagation(); remove(i); }}
               className="p-1 text-slate-400 hover:text-red-500 transition-colors">
@@ -166,21 +169,21 @@ const SegmentList = ({ segments, onChange }) => {
           {expanded[i] && (
             <div className="p-3 space-y-2">
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Tên nhóm khách *</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.segmentName')} *</label>
                 <input type="text" value={s.name} onChange={e => update(i, 'name', e.target.value)}
-                  placeholder="VD: Sinh viên IT 18-25 tuổi"
+                  placeholder={t('businessProfile.segmentNamePlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Đặc điểm</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.characteristics')}</label>
                 <input type="text" value={s.description} onChange={e => update(i, 'description', e.target.value)}
-                  placeholder="VD: Chưa có kinh nghiệm, muốn học lập trình để tìm việc"
+                  placeholder={t('businessProfile.characteristicsPlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Vấn đề / Nỗi đau chính</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.painPoint')}</label>
                 <input type="text" value={s.painPoint} onChange={e => update(i, 'painPoint', e.target.value)}
-                  placeholder="VD: Không biết bắt đầu từ đâu, sợ học khó"
+                  placeholder={t('businessProfile.painPointPlaceholder')}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
             </div>
@@ -190,7 +193,7 @@ const SegmentList = ({ segments, onChange }) => {
       <button type="button" onClick={add}
         className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition-all">
         <HiOutlinePlus className="w-4 h-4" />
-        Thêm nhóm khách hàng
+        {t('businessProfile.addSegment')}
       </button>
     </div>
   );
@@ -198,6 +201,7 @@ const SegmentList = ({ segments, onChange }) => {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const BusinessProfilePage = () => {
+  const { t } = useI18n();
   const [form, setForm]             = useState(EMPTY_FORM);
   const [isLoading, setIsLoading]   = useState(true);
   const [isSaving, setIsSaving]     = useState(false);
@@ -207,6 +211,7 @@ const BusinessProfilePage = () => {
   const [logoPreview, setLogoPreview] = useState('');
   const logoInputRef = useRef(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchProfile(); }, []);
 
   const fetchProfile = async () => {
@@ -226,7 +231,7 @@ const BusinessProfilePage = () => {
           extra_context:   res.data.extra_context   || '',
         });
       }
-    } catch { toast.error('Không thể tải hồ sơ'); }
+    } catch { toast.error(t('businessProfile.loadFailed')); }
     finally { setIsLoading(false); }
   };
 
@@ -234,7 +239,7 @@ const BusinessProfilePage = () => {
 
   const uploadLogo = (file) => {
     if (!file || !file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn file ảnh (PNG, JPG, WebP...)');
+      toast.error(t('businessProfile.imageRequired'));
       return;
     }
     setIsUploadingLogo(true);
@@ -260,17 +265,17 @@ const BusinessProfilePage = () => {
             });
             set('logo_url', res.data.data.url);
           } catch {
-            toast.error('Upload logo thất bại');
+            toast.error(t('businessProfile.uploadFailed'));
             setLogoPreview('');
           } finally {
             setIsUploadingLogo(false);
           }
         }, 'image/jpeg', 0.9);
       };
-      img.onerror = () => { toast.error('Không đọc được ảnh'); setIsUploadingLogo(false); };
+      img.onerror = () => { toast.error(t('businessProfile.readImageFailed')); setIsUploadingLogo(false); };
       img.src = e.target.result;
     };
-    reader.onerror = () => { toast.error('Không đọc được file'); setIsUploadingLogo(false); };
+    reader.onerror = () => { toast.error(t('businessProfile.readFileFailed')); setIsUploadingLogo(false); };
     reader.readAsDataURL(file);
   };
 
@@ -283,18 +288,18 @@ const BusinessProfilePage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.company_name.trim()) { toast.error('Vui lòng nhập tên công ty'); return; }
+    if (!form.company_name.trim()) { toast.error(t('businessProfile.companyRequired')); return; }
     setIsSaving(true);
     try {
       await aiApi.saveBusinessProfile(form);
       setHasProfile(true);
-      toast.success('Đã lưu hồ sơ. AI sẽ dùng thông tin này từ bây giờ.');
-    } catch { toast.error('Lưu thất bại, vui lòng thử lại'); }
+      toast.success(t('businessProfile.saveSuccess'));
+    } catch { toast.error(t('businessProfile.saveFailed')); }
     finally { setIsSaving(false); }
   };
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-40 text-slate-400 text-sm">Đang tải...</div>
+    <div className="flex items-center justify-center h-40 text-slate-400 text-sm">{t('common.loading')}</div>
   );
 
   return (
@@ -305,9 +310,9 @@ const BusinessProfilePage = () => {
           <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
         </div>
         <div>
-          <h2 className="text-base font-bold text-slate-800">Hồ sơ doanh nghiệp AI</h2>
+          <h2 className="text-base font-bold text-slate-800">{t('businessProfile.title')}</h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Cung cấp thông tin một lần — AI tự động cá nhân hóa mọi nội dung theo doanh nghiệp của bạn.
+            {t('businessProfile.description')}
           </p>
         </div>
       </div>
@@ -315,7 +320,7 @@ const BusinessProfilePage = () => {
       {hasProfile && (
         <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0" />
-          AI đang sử dụng hồ sơ này. Cập nhật bất cứ lúc nào nếu thông tin thay đổi.
+          {t('businessProfile.inUseNote')}
         </div>
       )}
 
@@ -323,14 +328,14 @@ const BusinessProfilePage = () => {
         {/* Thông tin cơ bản */}
         <SectionCard
           icon={HiOutlineOfficeBuilding}
-          title="Thông tin cơ bản"
-          subtitle="Tên công ty và lĩnh vực hoạt động"
+          title={t('businessProfile.basicInfo')}
+          subtitle={t('businessProfile.basicInfoSubtitle')}
           accent="orange"
         >
           <div className="grid grid-cols-2 gap-6">
             {/* Cột trái — Logo */}
             <div className="space-y-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Logo công ty</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.companyLogo')}</label>
               <div className="flex gap-3 items-stretch">
                 {/* Preview box nhỏ */}
                 <div
@@ -352,42 +357,42 @@ const BusinessProfilePage = () => {
                 </div>
                 {/* Controls bên phải */}
                 <div className="flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-xs text-slate-500 leading-relaxed">Chọn 1 ảnh logo hoặc dán URL từ internet.</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{t('businessProfile.logoFormats')}</p>
                   <button type="button" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}
                     className="flex items-center justify-center gap-1.5 px-2 py-1.5 border border-slate-200 rounded-lg text-[11px] text-slate-600 hover:border-orange-400 hover:text-orange-500 transition-all disabled:opacity-50">
                     {isUploadingLogo
                       ? <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
                       : <HiOutlineUpload className="w-3 h-3" />}
-                    Chọn file
+                    {t('businessProfile.selectFile')}
                   </button>
                   <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                    <div className="flex-1 h-px bg-slate-200" />hoặc<div className="flex-1 h-px bg-slate-200" />
+                    <div className="flex-1 h-px bg-slate-200" />{t('businessProfile.orUrl')}<div className="flex-1 h-px bg-slate-200" />
                   </div>
                   <input type="url" value={form.logo_url} onChange={e => set('logo_url', e.target.value)}
-                    placeholder="Dán URL logo"
+                    placeholder={t('businessProfile.pasteUrl')}
                     className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-orange-400 transition-all" />
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400">PNG, JPG, SVG, WebP. Kéo thả vào ô logo.</p>
+              <p className="text-[10px] text-slate-400">{t('businessProfile.logoFormats')}</p>
             </div>
 
             {/* Cột phải — Tên công ty + Ngành nghề */}
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                  Tên công ty <span className="text-red-400">*</span>
+                  {t('businessProfile.companyName')} <span className="text-red-400">*</span>
                 </label>
                 <input type="text" value={form.company_name} onChange={e => set('company_name', e.target.value)}
-                  placeholder="VD: ABC Academy"
+                  placeholder={t('businessProfile.companyNamePlaceholder')}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
-                <p className="text-[10px] text-slate-400">Tên đầy đủ của công ty hoặc tổ chức.</p>
+                <p className="text-[10px] text-slate-400">{t('businessProfile.companyNameFull')}</p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Ngành nghề</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.industry')}</label>
                 <input type="text" value={form.industry} onChange={e => set('industry', e.target.value)}
-                  placeholder="VD: Giáo dục, Thương mại điện tử..."
+                  placeholder={t('businessProfile.industryPlaceholder')}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
-                <p className="text-[10px] text-slate-400">Lĩnh vực hoạt động chính của công ty.</p>
+                <p className="text-[10px] text-slate-400">{t('businessProfile.industryNote')}</p>
               </div>
             </div>
           </div>
@@ -398,8 +403,8 @@ const BusinessProfilePage = () => {
         {/* Sản phẩm / dịch vụ */}
         <SectionCard
           icon={HiOutlineCube}
-          title="Sản phẩm / Dịch vụ"
-          subtitle="Thêm từng sản phẩm riêng để AI hiểu chính xác hơn"
+          title={t('businessProfile.products')}
+          subtitle={t('businessProfile.productsSubtitle')}
           accent="orange"
         >
           <ProductList products={form.products} onChange={v => set('products', v)} />
@@ -408,8 +413,8 @@ const BusinessProfilePage = () => {
         {/* Khách hàng mục tiêu */}
         <SectionCard
           icon={HiOutlineUserGroup}
-          title="Nhóm khách hàng mục tiêu"
-          subtitle="Mô tả từng nhóm khách để AI nhắm đúng đối tượng khi viết nội dung"
+          title={t('businessProfile.targetAudience')}
+          subtitle={t('businessProfile.targetAudienceSubtitle')}
           accent="blue"
         >
           <SegmentList segments={form.target_audience} onChange={v => set('target_audience', v)} />
@@ -418,21 +423,21 @@ const BusinessProfilePage = () => {
         {/* Thương hiệu */}
         <SectionCard
           icon={HiOutlineColorSwatch}
-          title="Nhận diện thương hiệu"
-          subtitle="Giọng điệu và màu sắc đặc trưng"
+          title={t('businessProfile.brandIdentity')}
+          subtitle={t('businessProfile.brandIdentitySubtitle')}
           accent="purple"
         >
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Giọng điệu</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.tone')}</label>
                 <select value={form.tone} onChange={e => set('tone', e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all bg-white">
-                  {TONE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {TONE_OPTIONS(t).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Màu thương hiệu</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.brandColor')}</label>
                 <div className="flex items-center gap-2">
                   <input type="color" value={form.brand_color} onChange={e => set('brand_color', e.target.value)}
                     className="w-9 h-9 rounded-lg border border-slate-200 cursor-pointer p-0.5 shrink-0" />
@@ -448,12 +453,12 @@ const BusinessProfilePage = () => {
         {/* Thông tin bổ sung */}
         <SectionCard
           icon={HiOutlineDocumentText}
-          title="Thông tin bổ sung"
-          subtitle="Câu chuyện thương hiệu, cam kết, lợi thế cạnh tranh, khuyến mãi..."
+          title={t('businessProfile.additionalInfo')}
+          subtitle={t('businessProfile.additionalInfoSubtitle')}
           accent="slate"
         >
           <textarea value={form.extra_context} onChange={e => set('extra_context', e.target.value)}
-            placeholder="VD: Cam kết hoàn tiền 100% trong 7 ngày. Đã đào tạo hơn 5.000 học viên từ 2019. Giảng viên từng làm tại Google, VNG..."
+            placeholder={t('businessProfile.additionalInfoPlaceholder')}
             rows={4}
             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all resize-none" />
         </SectionCard>
@@ -462,8 +467,8 @@ const BusinessProfilePage = () => {
           <button type="submit" disabled={isSaving}
             className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 active:scale-95 transition-all disabled:opacity-60 shadow-md shadow-orange-500/25">
             {isSaving
-              ? <><HiOutlineRefresh className="w-4 h-4 animate-spin" />Đang lưu...</>
-              : <><HiOutlineSave className="w-4 h-4" />Lưu hồ sơ</>}
+              ? <><HiOutlineRefresh className="w-4 h-4 animate-spin" />{t('businessProfile.savingProfile')}</>
+              : <><HiOutlineSave className="w-4 h-4" />{t('businessProfile.saveProfile')}</>}
           </button>
         </div>
       </form>

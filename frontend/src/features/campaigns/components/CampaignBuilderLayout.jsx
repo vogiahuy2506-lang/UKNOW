@@ -3,6 +3,7 @@ import ReactFlow, { Background, Controls, MarkerType, MiniMap, useReactFlow } fr
 import toast from 'react-hot-toast';
 import { HiOutlineExclamationCircle, HiOutlineX } from 'react-icons/hi';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
+import { useI18n } from '../../../i18n';
 
 export const CampaignNameModal = ({
   isOpen,
@@ -18,6 +19,7 @@ export const CampaignNameModal = ({
   campaignDescription,
   setCampaignDescription,
 }) => {
+  const { t } = useI18n();
   if (!isOpen) return null;
 
   return (
@@ -31,44 +33,44 @@ export const CampaignNameModal = ({
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên chiến dịch</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.campaignName')}</label>
             <input
               type="text"
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Nhập tên chiến dịch..."
+              placeholder={t('campaignBuilder.campaignNamePlaceholder')}
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Miêu tả</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.description')}</label>
             <textarea
               value={campaignDescription}
               onChange={(e) => setCampaignDescription(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-              placeholder="Nhập miêu tả chiến dịch..."
+              placeholder={t('campaignBuilder.descriptionPlaceholder')}
               rows={4}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Loại chiến dịch</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.campaignType')}</label>
             <select
               value={campaignType}
               onChange={(e) => setCampaignType?.(e.target.value)}
               disabled={isTypeLocked}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
             >
-              <option value="email">Email</option>
-              <option value="zalo">Zalo cá nhân</option>
-              <option value="zalo_group">Zalo nhóm</option>
-              {campaignType === 'mixed' ? <option value="mixed">Kết hợp (legacy)</option> : null}
+              <option value="email">{t('campaignBuilder.email')}</option>
+              <option value="zalo">{t('campaignBuilder.zaloPersonal')}</option>
+              <option value="zalo_group">{t('campaignBuilder.zaloGroup')}</option>
+              {campaignType === 'mixed' ? <option value="mixed">{t('campaignBuilder.mixed')}</option> : null}
             </select>
           </div>
         </div>
         <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
           <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-            Hủy
+            {t('campaignBuilder.cancel')}
           </button>
           <button
             onClick={onPrimary}
@@ -152,6 +154,7 @@ export const FlowCanvas = ({
   /** Khi flow đã bật pool đa TK Zalo — không cho thả node «Lấy danh sách bạn bè» lên canvas */
   suppressGetAllFriendsPalette = false,
 }) => {
+  const { t } = useI18n();
   const reactFlowWrapper = useRef(null);
   const { project } = useReactFlow();
 
@@ -174,18 +177,16 @@ export const FlowCanvas = ({
       const isDataNode = !isTriggerNode && !isActionNode;
       const isRestrictedDataNode = isDataNode && allowedDataTypes && !allowedDataTypes.has(nodeType);
       if (isActionNode && !allowedActionTypes.has(nodeType)) {
-        toast.error(`Loại chiến dịch ${campaignType?.toUpperCase()} không hỗ trợ node này`);
+        toast.error(t('campaignBuilder.nodeTypeNotSupported', { type: campaignType?.toUpperCase() }));
         return;
       }
       if (isRestrictedDataNode) {
-        toast.error(`Loại chiến dịch ${campaignType?.toUpperCase()} không hỗ trợ node này`);
+        toast.error(t('campaignBuilder.nodeTypeNotSupported', { type: campaignType?.toUpperCase() }));
         return;
       }
 
       if (nodeType === 'get_all_friends' && suppressGetAllFriendsPalette) {
-        toast.error(
-          'Đang bật gửi bằng pool nhiều tài khoản Zalo — không dùng node «Lấy danh sách bạn bè».'
-        );
+        toast.error(t('campaignBuilder.poolModeGetFriendsWarning'));
         return;
       }
 
@@ -214,14 +215,20 @@ export const FlowCanvas = ({
         nodeName = newName;
       }
 
+      // Determine node type for ReactFlow
+      // All nodes from palette use 'task' type (TaskNode component)
+      // Trigger nodes use 'start' type (StartNode component)
+      const isTrigger = isTriggerNodeType(nodeType);
+      const flowNodeType = isTrigger ? 'start' : 'task';
+
       const newNode = {
-        id: `${data.nodeType}-${Date.now()}`,
-        type: data.nodeType === 'start' ? 'start' : data.nodeType === 'end' ? 'end' : 'task',
+        id: `${nodeType}-${Date.now()}`,
+        type: flowNodeType,
         position,
-        data: { label: nodeName, nodeType: data.nodeType },
+        data: { label: nodeName, nodeType: nodeType },
       };
 
-      if (isTriggerNodeType(data.nodeType)) {
+      if (isTriggerNodeType(nodeType)) {
         const existingTrigger = nodes.find((n) => isTriggerNodeType(n.data?.nodeType || n.type));
         setNodes((nds) => {
           const withoutTriggers = nds.filter((n) => !isTriggerNodeType(n.data?.nodeType || n.type));
@@ -234,6 +241,7 @@ export const FlowCanvas = ({
         setNodes((nds) => [...nds, newNode]);
       }
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       campaignType,
       getAllowedActionNodeTypesByCampaignType,

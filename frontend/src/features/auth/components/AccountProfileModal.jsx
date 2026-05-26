@@ -16,37 +16,23 @@ import {
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getMyOrders } from '../services/authApi.service';
-
-const ROLE_LABELS = {
-  admin: 'Quản trị hệ thống',
-  user: 'Thành viên',
-  employee: 'Nhân viên',
-};
-
-const PERMISSION_LABELS = {
-  manage_campaigns: 'Quản lý chiến dịch',
-  manage_contacts: 'Quản lý khách hàng',
-  manage_templates: 'Quản lý mẫu tin',
-  manage_channels: 'Quản lý kênh gửi',
-  manage_landing_pages: 'Quản lý landing page',
-  view_analytics: 'Xem báo cáo',
-};
+import { useI18n } from '../../../i18n';
 
 const PROFILE_FORM_INITIAL_STATE = { fullName: '', email: '', phone: '' };
 
-function formatDate(isoString) {
+function formatDate(isoString, _t) {
   if (!isoString) return '—';
   return new Date(isoString).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function formatPrice(price) {
-  if (price === null || price === undefined) return 'Liên hệ';
-  if (price === 0) return 'Miễn phí';
+function formatPrice(price, t) {
+  if (price === null || price === undefined) return t('accountProfileModal.contactForPrice');
+  if (price === 0) return t('accountProfileModal.free');
   return `${Number(price).toLocaleString('vi-VN')} ₫`;
 }
 
 /** Single usage row with a progress bar. */
-function UsageBar({ icon: Icon, label, used, limit }) {
+function UsageBar({ icon: Icon, label, used, limit, t }) {
   if (limit === null || limit === undefined) {
     return (
       <div className="flex items-center justify-between py-1">
@@ -54,7 +40,7 @@ function UsageBar({ icon: Icon, label, used, limit }) {
           {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
           {label}
         </span>
-        <span className="text-xs font-medium text-gray-400">Không giới hạn</span>
+        <span className="text-xs font-medium text-gray-400">{t('accountProfileModal.unlimited')}</span>
       </div>
     );
   }
@@ -84,7 +70,7 @@ function UsageBar({ icon: Icon, label, used, limit }) {
 }
 
 /** Plan + usage section shown for user_admin. */
-function PlanSection({ data }) {
+function PlanSection({ data, t }) {
   const hasPlan = !!data?.activePlanId;
   const hasLimits =
     data?.dailyEmailLimit !== null ||
@@ -107,8 +93,8 @@ function PlanSection({ data }) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
         <HiOutlineTag className="w-6 h-6 text-gray-300 mx-auto mb-1" />
-        <p className="text-sm text-gray-500">Tài khoản chưa được gán gói dịch vụ</p>
-        <p className="text-xs text-gray-400 mt-0.5">Liên hệ quản trị viên để được hỗ trợ</p>
+        <p className="text-sm text-gray-500">{t('accountProfileModal.noPlanAssigned')}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{t('accountProfileModal.contactAdmin')}</p>
       </div>
     );
   }
@@ -126,16 +112,16 @@ function PlanSection({ data }) {
               <span className="text-xs text-primary-600 font-mono">{data.activePlanCode}</span>
             )}
           </div>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(data.activePlanPrice)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(data.activePlanPrice, t)}</p>
           {data.activePlanPrice > 0 && (
-            <p className="text-xs text-gray-400">/tháng</p>
+            <p className="text-xs text-gray-400">{t('accountProfileModal.perMonth')}</p>
           )}
         </div>
         {data.planMaxEmployees !== null && (
           <div className="text-right shrink-0">
-            <p className="text-xs text-gray-500">Nhân viên tối đa</p>
+            <p className="text-xs text-gray-500">{t('accountProfileModal.maxEmployees')}</p>
             <p className="text-sm font-bold text-gray-800">
-              {data.planMaxEmployees === -1 ? 'Không giới hạn' : `${data.planMaxEmployees} người`}
+              {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
             </p>
           </div>
         )}
@@ -158,8 +144,8 @@ function PlanSection({ data }) {
               : <HiOutlineClock className="w-4 h-4 shrink-0" />
             }
             <span>
-              Hết hạn ngày <strong>{expiresAt.toLocaleDateString('vi-VN')}</strong>
-              {isWarning && <span className="ml-1 font-semibold">— còn {daysLeft} ngày</span>}
+              {t('accountProfileModal.expiresOn', { date: expiresAt.toLocaleDateString('vi-VN') })}
+              {isWarning && <span className="ml-1 font-semibold">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>}
             </span>
           </div>
         );
@@ -183,30 +169,34 @@ function PlanSection({ data }) {
       {/* Usage bars */}
       {hasLimits && (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Giới hạn gửi tin</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.sendLimits')}</p>
           <UsageBar
             icon={HiOutlineMail}
-            label="Email hôm nay"
+            label={t('accountProfileModal.emailToday')}
             used={data.emailSentToday}
             limit={data.dailyEmailLimit}
+            t={t}
           />
           <UsageBar
             icon={HiOutlineMail}
-            label="Email tháng này"
+            label={t('accountProfileModal.emailThisMonth')}
             used={data.emailSentMonth}
             limit={data.monthlyEmailLimit}
+            t={t}
           />
           <UsageBar
             icon={HiOutlineChatAlt2}
-            label="Zalo hôm nay"
+            label={t('accountProfileModal.zaloToday')}
             used={data.zaloSentToday}
             limit={data.dailyZaloLimit}
+            t={t}
           />
           <UsageBar
             icon={HiOutlineChatAlt2}
-            label="Zalo tháng này"
+            label={t('accountProfileModal.zaloThisMonth')}
             used={data.zaloSentMonth}
             limit={data.monthlyZaloLimit}
+            t={t}
           />
         </div>
       )}
@@ -214,13 +204,22 @@ function PlanSection({ data }) {
   );
 }
 
-const STATUS_MAP = {
-  success:   { label: 'Thành công', cls: 'text-green-600 bg-green-50 border-green-200', icon: HiOutlineCheckCircle },
-  pending:   { label: 'Chờ thanh toán', cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: HiOutlineClock },
-  cancelled: { label: 'Đã hủy', cls: 'text-gray-400 bg-gray-50 border-gray-200', icon: HiOutlineBan },
+const PERMISSION_LABELS = {
+  manage_campaigns: 'manageCampaigns',
+  manage_contacts: 'manageContacts',
+  manage_templates: 'manageTemplates',
+  manage_channels: 'manageChannels',
+  manage_landing_pages: 'manageLandingPages',
+  view_analytics: 'viewAnalytics',
 };
 
-function OrderHistoryTab({ isUserAdmin }) {
+const STATUS_MAP = (t) => ({
+  success:   { label: t('accountProfileModal.success'), cls: 'text-green-600 bg-green-50 border-green-200', icon: HiOutlineCheckCircle },
+  pending:   { label: t('accountProfileModal.pending'), cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: HiOutlineClock },
+  cancelled: { label: t('accountProfileModal.cancelled'), cls: 'text-gray-400 bg-gray-50 border-gray-200', icon: HiOutlineBan },
+});
+
+function OrderHistoryTab({ isUserAdmin, t }) {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -235,7 +234,7 @@ function OrderHistoryTab({ isUserAdmin }) {
   if (!isUserAdmin) {
     return (
       <div className="py-12 text-center text-gray-400 text-sm">
-        Tính năng này chỉ dành cho tài khoản thành viên.
+        {t('accountProfileModal.ordersFeatureOnlyForMembers')}
       </div>
     );
   }
@@ -248,30 +247,32 @@ function OrderHistoryTab({ isUserAdmin }) {
     return (
       <div className="py-12 text-center">
         <HiOutlineClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-        <p className="text-sm text-gray-400">Chưa có đơn mua gói nào.</p>
+        <p className="text-sm text-gray-400">{t('accountProfileModal.noOrdersYet')}</p>
       </div>
     );
   }
 
+  const statusMap = STATUS_MAP(t);
+
   return (
     <div className="space-y-3">
       {orders.map((order) => {
-        const st = STATUS_MAP[order.status] || STATUS_MAP.pending;
+        const st = statusMap[order.status] || statusMap.pending;
         const Icon = st.icon;
         return (
           <div key={order.id} className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">
-                  {order.plan?.name || 'Gói không xác định'}
+                  {order.plan?.name || t('accountProfileModal.unknownPlan')}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Mã đơn: <span className="font-mono">{order.orderCode}</span>
+                  {t('accountProfileModal.orderCode')} <span className="font-mono">{order.orderCode}</span>
                 </p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm font-bold text-primary-600">
-                  {order.amount > 0 ? `${Number(order.amount).toLocaleString('vi-VN')} ₫` : 'Miễn phí'}
+                  {order.amount > 0 ? `${Number(order.amount).toLocaleString('vi-VN')} ₫` : t('accountProfileModal.free')}
                 </p>
                 <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-xs font-medium rounded-full border ${st.cls}`}>
                   <Icon className="w-3 h-3" />
@@ -281,10 +282,10 @@ function OrderHistoryTab({ isUserAdmin }) {
             </div>
             {order.plan && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-3 text-xs text-gray-500">
-                <span>Email/ngày: <strong className="text-gray-700">{order.plan.dailyEmailLimit ?? 'KGH'}</strong></span>
-                <span>Email/tháng: <strong className="text-gray-700">{order.plan.monthlyEmailLimit ?? 'KGH'}</strong></span>
-                <span>Zalo/ngày: <strong className="text-gray-700">{order.plan.dailyZaloLimit ?? 'KGH'}</strong></span>
-                <span>Zalo/tháng: <strong className="text-gray-700">{order.plan.monthlyZaloLimit ?? 'KGH'}</strong></span>
+                <span>{t('accountProfileModal.emailPerDay')} <strong className="text-gray-700">{order.plan.dailyEmailLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
+                <span>{t('accountProfileModal.emailPerMonth')} <strong className="text-gray-700">{order.plan.monthlyEmailLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
+                <span>{t('accountProfileModal.zaloPerDay')} <strong className="text-gray-700">{order.plan.dailyZaloLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
+                <span>{t('accountProfileModal.zaloPerMonth')} <strong className="text-gray-700">{order.plan.monthlyZaloLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
               </div>
             )}
             <p className="text-xs text-gray-400 mt-2">
@@ -298,7 +299,7 @@ function OrderHistoryTab({ isUserAdmin }) {
 }
 
 /** Tab hiển thị quyền hạn và giới hạn gửi khi đang trong employee context */
-function EmployeeContextTab({ activeContext }) {
+function EmployeeContextTab({ activeContext, t }) {
   const permissions = activeContext?.permissions || {};
   const grantedPerms = Object.entries(permissions).filter(([, v]) => v);
   const deniedPerms  = Object.entries(permissions).filter(([, v]) => !v);
@@ -307,6 +308,11 @@ function EmployeeContextTab({ activeContext }) {
   const hasZaloLimit  = activeContext?.dailyZaloLimit !== null || activeContext?.monthlyZaloLimit !== null;
   const hasAnyLimit   = hasEmailLimit || hasZaloLimit;
 
+  const getPermLabel = (key) => {
+    const labelKey = PERMISSION_LABELS[key];
+    return labelKey ? t(`accountProfileModal.${labelKey}`) : key;
+  };
+
   return (
     <div className="space-y-5">
       {/* Context banner */}
@@ -314,19 +320,19 @@ function EmployeeContextTab({ activeContext }) {
         <HiOutlineShieldCheck className="w-5 h-5 text-blue-500 shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-blue-800">
-            Đang làm việc tại: {activeContext?.ownerName}
+            {t('accountProfileModal.workingAt', { name: activeContext?.ownerName })}
           </p>
           <p className="text-xs text-blue-500 mt-0.5">
-            Quyền hạn và giới hạn bên dưới được cấp bởi doanh nghiệp này.
+            {t('accountProfileModal.permissionsGrantedByBusiness')}
           </p>
         </div>
       </div>
 
       {/* Permissions */}
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quyền được cấp</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.grantedPermissions')}</p>
         {grantedPerms.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Chưa được cấp quyền nào.</p>
+          <p className="text-sm text-gray-400 italic">{t('accountProfileModal.noPermissionsGranted')}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {grantedPerms.map(([key]) => (
@@ -335,7 +341,7 @@ function EmployeeContextTab({ activeContext }) {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200"
               >
                 <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-                {PERMISSION_LABELS[key] || key}
+                {getPermLabel(key)}
               </span>
             ))}
           </div>
@@ -348,7 +354,7 @@ function EmployeeContextTab({ activeContext }) {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-gray-50 text-gray-400 border border-gray-200"
               >
                 <HiOutlineBan className="w-3.5 h-3.5" />
-                {PERMISSION_LABELS[key] || key}
+                {getPermLabel(key)}
               </span>
             ))}
           </div>
@@ -357,9 +363,9 @@ function EmployeeContextTab({ activeContext }) {
 
       {/* Send limits */}
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Giới hạn gửi tin được cấp</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.grantedSendLimits')}</p>
         {!hasAnyLimit ? (
-          <p className="text-sm text-gray-400 italic">Không giới hạn số lượt gửi.</p>
+          <p className="text-sm text-gray-400 italic">{t('accountProfileModal.noSendLimits')}</p>
         ) : (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
             {hasEmailLimit && (
@@ -367,19 +373,19 @@ function EmployeeContextTab({ activeContext }) {
                 <div className="flex items-center justify-between py-1">
                   <span className="flex items-center gap-1.5 text-sm text-gray-600">
                     <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
-                    Email / ngày
+                    {t('accountProfileModal.emailPerDayShort')}
                   </span>
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
-                    {activeContext?.dailyEmailLimit === null ? 'Không giới hạn' : activeContext.dailyEmailLimit.toLocaleString()}
+                    {activeContext?.dailyEmailLimit === null ? t('accountProfileModal.unlimited') : activeContext.dailyEmailLimit.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
                   <span className="flex items-center gap-1.5 text-sm text-gray-600">
                     <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
-                    Email / tháng
+                    {t('accountProfileModal.emailPerMonthShort')}
                   </span>
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
-                    {activeContext?.monthlyEmailLimit === null ? 'Không giới hạn' : activeContext.monthlyEmailLimit.toLocaleString()}
+                    {activeContext?.monthlyEmailLimit === null ? t('accountProfileModal.unlimited') : activeContext.monthlyEmailLimit.toLocaleString()}
                   </span>
                 </div>
               </>
@@ -389,19 +395,19 @@ function EmployeeContextTab({ activeContext }) {
                 <div className="flex items-center justify-between py-1">
                   <span className="flex items-center gap-1.5 text-sm text-gray-600">
                     <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
-                    Zalo / ngày
+                    {t('accountProfileModal.zaloPerDayShort')}
                   </span>
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
-                    {activeContext?.dailyZaloLimit === null ? 'Không giới hạn' : activeContext.dailyZaloLimit.toLocaleString()}
+                    {activeContext?.dailyZaloLimit === null ? t('accountProfileModal.unlimited') : activeContext.dailyZaloLimit.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
                   <span className="flex items-center gap-1.5 text-sm text-gray-600">
                     <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
-                    Zalo / tháng
+                    {t('accountProfileModal.zaloPerMonthShort')}
                   </span>
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
-                    {activeContext?.monthlyZaloLimit === null ? 'Không giới hạn' : activeContext.monthlyZaloLimit.toLocaleString()}
+                    {activeContext?.monthlyZaloLimit === null ? t('accountProfileModal.unlimited') : activeContext.monthlyZaloLimit.toLocaleString()}
                   </span>
                 </div>
               </>
@@ -413,21 +419,29 @@ function EmployeeContextTab({ activeContext }) {
   );
 }
 
+const ROLE_LABELS = {
+  admin: 'systemAdmin',
+  member: 'member',
+  employee: 'employee',
+  user: 'user',
+};
+
 const AccountProfileModal = ({ isOpen, onClose }) => {
+  const { t } = useI18n();
   const { user, updateUser, activeContext } = useAuthStore();
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const TABS = isEmployeeCtx
     ? [
-        { key: 'profile', label: 'Hồ sơ' },
-        { key: 'permissions', label: 'Quyền hạn & Giới hạn' },
+        { key: 'profile', label: t('accountProfileModal.tabProfile') },
+        { key: 'permissions', label: t('accountProfileModal.tabPermissions') },
       ]
     : user?.role === 'user'
       ? [
-          { key: 'profile', label: 'Hồ sơ' },
-          { key: 'orders',  label: 'Lịch sử gói' },
+          { key: 'profile', label: t('accountProfileModal.tabProfile') },
+          { key: 'orders',  label: t('accountProfileModal.tabOrderHistory') },
         ]
-      : [{ key: 'profile', label: 'Hồ sơ' }];
+      : [{ key: 'profile', label: t('accountProfileModal.tabProfile') }];
 
   const [activeTab, setActiveTab] = useState('profile');
   const [formValues, setFormValues] = useState(PROFILE_FORM_INITIAL_STATE);
@@ -438,6 +452,11 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [success, setSuccess] = useState('');
 
   const isUserAdmin = !isEmployeeCtx && user?.role === 'user';
+
+  const getRoleLabel = (role) => {
+    const labelKey = ROLE_LABELS[role];
+    return labelKey ? t(`accountProfileModal.${labelKey}`) : t('accountProfileModal.user');
+  };
 
   // Reset tab khi context thay đổi (employee ↔ self) để tránh tab không tồn tại
   useEffect(() => {
@@ -464,7 +483,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         });
       } catch (loadError) {
         if (!isCancelled) {
-          setError(loadError?.response?.data?.message || 'Không thể tải thông tin tài khoản');
+          setError(loadError?.response?.data?.message || t('accountProfileModal.loadError'));
         }
       } finally {
         if (!isCancelled) setIsLoadingProfile(false);
@@ -473,7 +492,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
 
     loadProfile();
     return () => { isCancelled = true; };
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   if (!isOpen) return null;
 
@@ -504,10 +523,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
     setSuccess('');
 
     const payload = buildSubmitPayload();
-    if (!payload.email) { setError('Email không được để trống.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) { setError('Email không hợp lệ.'); return; }
+    if (!payload.email) { setError(t('accountProfileModal.emailRequired')); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) { setError(t('accountProfileModal.emailInvalid')); return; }
     if (payload.phone && !/^[0-9]{10,11}$/.test(payload.phone)) {
-      setError('Số điện thoại phải gồm 10-11 chữ số.');
+      setError(t('accountProfileModal.phoneInvalid'));
       return;
     }
 
@@ -515,7 +534,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
       setIsSaving(true);
       const response = await updateMyProfile(payload);
       const updatedProfile = response?.data || null;
-      if (!updatedProfile) { setError('Không nhận được dữ liệu cập nhật. Vui lòng thử lại.'); return; }
+      if (!updatedProfile) { setError(t('accountProfileModal.noDataError')); return; }
 
       setProfileData((prev) => ({ ...prev, ...updatedProfile }));
       setFormValues({
@@ -524,9 +543,9 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         phone: String(updatedProfile.phone || ''),
       });
       updateUser({ ...user, ...updatedProfile });
-      setSuccess(response?.message || 'Cập nhật thông tin tài khoản thành công.');
+      setSuccess(response?.message || t('accountProfileModal.updateSuccess'));
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || 'Không thể cập nhật thông tin tài khoản');
+      setError(saveError?.response?.data?.message || t('accountProfileModal.updateError'));
     } finally {
       setIsSaving(false);
     }
@@ -543,7 +562,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-2">
               <HiOutlineUserCircle className="w-6 h-6 text-primary-600" />
-              <h2 className="text-base font-semibold text-gray-900">Thông tin tài khoản</h2>
+              <h2 className="text-base font-semibold text-gray-900">{t('accountProfileModal.tabProfile')}</h2>
             </div>
             <button
               type="button"
@@ -578,21 +597,21 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           </div>
         ) : activeTab === 'orders' ? (
           <div className="overflow-y-auto px-6 py-5">
-            <OrderHistoryTab isUserAdmin={isUserAdmin} />
+            <OrderHistoryTab isUserAdmin={isUserAdmin} t={t} />
           </div>
         ) : activeTab === 'permissions' ? (
           <div className="overflow-y-auto px-6 py-5">
-            <EmployeeContextTab activeContext={activeContext} />
+            <EmployeeContextTab activeContext={activeContext} t={t} />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-5 space-y-5">
 
             {/* Personal info */}
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Thông tin cá nhân</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.personalInfo')}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.username')}</label>
                   <input
                     type="text"
                     className="input w-full bg-gray-50 text-gray-500"
@@ -601,43 +620,43 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.role')}</label>
                   <input
                     type="text"
                     className="input w-full bg-gray-50 text-gray-500"
-                    value={ROLE_LABELS[user?.role] || 'Người dùng'}
+                    value={getRoleLabel(user?.role)}
                     disabled
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.fullName')}</label>
                   <input
                     type="text"
                     className="input w-full"
                     value={formValues.fullName}
                     onChange={handleInputChange('fullName')}
-                    placeholder="Nhập họ và tên"
+                    placeholder={t('accountProfileModal.placeholderFullName')}
                     maxLength={255}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.email')}</label>
                   <input
                     type="email"
                     className="input w-full"
                     value={formValues.email}
                     onChange={handleInputChange('email')}
-                    placeholder="Nhập email"
+                    placeholder={t('accountProfileModal.placeholderEmail')}
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.phone')}</label>
                   <input
                     type="text"
                     className="input w-full"
                     value={formValues.phone}
                     onChange={handleInputChange('phone')}
-                    placeholder="Nhập số điện thoại"
+                    placeholder={t('accountProfileModal.placeholderPhone')}
                   />
                 </div>
               </div>
@@ -646,8 +665,8 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
             {/* Plan & usage — only in self context */}
             {isUserAdmin && (
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Gói đang sử dụng</p>
-                <PlanSection data={profileData} />
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.currentPlan')}</p>
+                <PlanSection data={profileData} t={t} />
               </div>
             )}
 
@@ -657,13 +676,13 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 {profileData.createdAt && (
                   <span className="flex items-center gap-1.5 text-xs text-gray-400">
                     <HiOutlineCalendar className="w-3.5 h-3.5" />
-                    Tạo ngày {formatDate(profileData.createdAt)}
+                    {t('accountProfileModal.createdAt', { date: formatDate(profileData.createdAt, t) })}
                   </span>
                 )}
                 {profileData.lastLoginAt && (
                   <span className="flex items-center gap-1.5 text-xs text-gray-400">
                     <HiOutlineClock className="w-3.5 h-3.5" />
-                    Đăng nhập gần nhất {formatDate(profileData.lastLoginAt)}
+                    {t('accountProfileModal.lastLogin', { date: formatDate(profileData.lastLoginAt, t) })}
                   </span>
                 )}
               </div>
@@ -678,10 +697,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
 
             <div className="flex justify-end gap-3 pt-1 shrink-0">
               <button type="button" className="btn btn-secondary" onClick={handleClose} disabled={isSaving}>
-                Đóng
+                {t('accountProfileModal.close')}
               </button>
               <button type="submit" className="btn btn-primary" disabled={isSaving}>
-                {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
+                {isSaving ? t('accountProfileModal.saving') : t('accountProfileModal.save')}
               </button>
             </div>
           </form>

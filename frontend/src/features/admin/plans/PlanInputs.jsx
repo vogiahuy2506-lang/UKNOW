@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
+import { useI18n } from '../../../i18n';
 
 // ── PriceInput ────────────────────────────────────────────────────────────────
 export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
+  const { t } = useI18n();
   const fmt = (n) => n ? Number(n).toLocaleString('vi-VN') : '';
 
   const handleChange = (e) => {
@@ -18,13 +20,14 @@ export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
       className={className}
       value={fmt(value)}
       onChange={handleChange}
-      placeholder="0"
+      placeholder={t('planInputs.pricePlaceholder')}
     />
   );
 };
 
 // ── FeatureEditor ─────────────────────────────────────────────────────────────
 export const FeatureEditor = ({ features, onChange }) => {
+  const { t } = useI18n();
   const [draft, setDraft] = useState('');
 
   const add = () => {
@@ -57,7 +60,7 @@ export const FeatureEditor = ({ features, onChange }) => {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder="Thêm tính năng... (Enter để thêm)"
+          placeholder={t('planInputs.featuresPlaceholder')}
           className="input flex-1 text-sm"
         />
         <button type="button" onClick={add} className="btn btn-secondary px-3">
@@ -70,6 +73,7 @@ export const FeatureEditor = ({ features, onChange }) => {
 
 // ── EmailAutocomplete ─────────────────────────────────────────────────────────
 export const EmailAutocomplete = ({ value, onChange, placeholder = 'user@example.com', excludeWithPlan = false }) => {
+  const { t } = useI18n();
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -137,7 +141,7 @@ export const EmailAutocomplete = ({ value, onChange, placeholder = 'user@example
                 </div>
                 {u.active_plan_id && (
                   <span className="ml-auto text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full shrink-0 self-center">
-                    Có gói
+                    {t('planInputs.hasPlan')}
                   </span>
                 )}
               </button>
@@ -151,6 +155,7 @@ export const EmailAutocomplete = ({ value, onChange, placeholder = 'user@example
 
 // ── EmployeeInput — chỉ nhập số nguyên dương, trống = không giới hạn ─────────
 export const EmployeeInput = ({ value, onChange, className = 'input w-full' }) => {
+  const { t } = useI18n();
   const displayVal = (value === -1 || value === '' || value == null) ? '' : String(value);
 
   const handleChange = (e) => {
@@ -163,7 +168,7 @@ export const EmployeeInput = ({ value, onChange, className = 'input w-full' }) =
       type="text"
       inputMode="numeric"
       className={className}
-      placeholder="Không giới hạn"
+      placeholder={t('planInputs.employeesPlaceholder')}
       value={displayVal}
       onChange={handleChange}
     />
@@ -218,79 +223,76 @@ export const DurationInput = ({ value, onChange }) => {
   );
 };
 
-// ── LimitInput — checkbox "Không giới hạn" + số, 0 = không hỗ trợ ───────────
-const LimitInput = ({ value, onChange }) => {
-  const isUnlimited = value === '' || value === null || value === undefined;
+// ── SendLimitsFields — 2×2 grid dùng chung cho cả 2 modal ────────────────────
+export const SendLimitsFields = ({ form, set, hint }) => {
+  const { t } = useI18n();
+  const hintText = hint || t('planInputs.hintLeaveEmptyUnlimited');
+
   return (
-    <div className="space-y-1.5">
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isUnlimited}
-          onChange={(e) => onChange(e.target.checked ? '' : 0)}
-          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
-        />
-        <span className="text-xs text-gray-400">Không giới hạn</span>
-      </label>
-      {!isUnlimited && (
-        <input
-          type="text"
-          inputMode="numeric"
-          className="input w-full"
-          placeholder="0 = không hỗ trợ"
-          value={value}
-          onChange={(e) => {
-            const raw = e.target.value.replace(/\D/g, '');
-            onChange(raw === '' ? 0 : Number(raw));
-          }}
-        />
-      )}
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.sendLimits')}</p>
+      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          ['dailyEmailLimit',   t('planInputs.emailPerDay'),   t('planInputs.emailPerDayPlaceholder')],
+          ['monthlyEmailLimit', t('planInputs.emailPerMonth'),  t('planInputs.emailPerMonthPlaceholder')],
+          ['dailyZaloLimit',    t('planInputs.zaloPerDay'),    t('planInputs.zaloPerDayPlaceholder')],
+          ['monthlyZaloLimit',  t('planInputs.zaloPerMonth'),   t('planInputs.zaloPerMonthPlaceholder')],
+        ].map(([key, label, ph]) => (
+          <div key={key}>
+            <label className="block text-xs text-gray-500 mb-1">{label}</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="input w-full"
+              placeholder={ph}
+              value={form[key]}
+              onChange={(e) => set(key, e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1'))}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-// ── SendLimitsFields — 2×2 grid dùng chung cho cả 2 modal ────────────────────
-export const SendLimitsFields = ({ form, set }) => (
-  <div>
-    <p className="text-sm font-medium text-gray-700 mb-1">Hạn mức gửi tin</p>
-    <p className="text-xs text-gray-400 mb-3">Check = không giới hạn. Bỏ check → nhập số (0 = không hỗ trợ).</p>
-    <div className="grid grid-cols-2 gap-4">
-      {[
-        ['dailyEmailLimit',   'Email / ngày'],
-        ['monthlyEmailLimit', 'Email / tháng'],
-        ['dailyZaloLimit',    'Zalo / ngày'],
-        ['monthlyZaloLimit',  'Zalo / tháng'],
-      ].map(([key, label]) => (
-        <div key={key}>
-          <label className="block text-xs text-gray-500 mb-1.5">{label}</label>
-          <LimitInput value={form[key]} onChange={(v) => set(key, v)} />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
 // ── ResourceLimitsFields — giới hạn số lượng tài nguyên theo gói ─────────────
-export const ResourceLimitsFields = ({ form, set }) => (
-  <div>
-    <p className="text-sm font-medium text-gray-700 mb-1">Giới hạn tài nguyên</p>
-    <p className="text-xs text-gray-400 mb-3">Check = không giới hạn. Bỏ check → nhập số (0 = không hỗ trợ).</p>
-    <div className="grid grid-cols-2 gap-4">
-      {[
-        ['maxLandingPages',        'Landing pages'],
-        ['maxZaloCampaigns',       'Chiến dịch Zalo CN'],
-        ['maxZaloGroupCampaigns',  'Chiến dịch Zalo Nhóm'],
-        ['maxEmailCampaigns',      'Chiến dịch Email'],
-        ['maxZaloAccounts',        'Tài khoản Zalo'],
-        ['maxEmailAccounts',       'Tài khoản Email'],
-        ['maxEmailTemplates',      'Email template'],
-        ['maxZaloTemplates',       'Zalo template'],
-      ].map(([key, label]) => (
-        <div key={key}>
-          <label className="block text-xs text-gray-500 mb-1.5">{label}</label>
-          <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
-        </div>
-      ))}
+export const ResourceLimitsFields = ({ form, set, hint }) => {
+  const { t } = useI18n();
+  const hintText = hint || t('planInputs.hintLeaveEmptyUnlimited');
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.resourceLimits')}</p>
+      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          ['maxLandingPages',       t('planInputs.landingPages')],
+          ['maxCampaigns',          t('planInputs.campaigns')],
+          ['maxZaloCampaigns',      t('planInputs.zaloCampaigns')],
+          ['maxZaloGroupCampaigns', t('planInputs.zaloGroupCampaigns')],
+          ['maxEmailCampaigns',     t('planInputs.emailCampaigns')],
+          ['maxZaloAccounts',       t('planInputs.zaloAccounts')],
+          ['maxEmailAccounts',      t('planInputs.emailAccounts')],
+          ['maxEmailTemplates',     t('planInputs.emailTemplates')],
+          ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
+        ].map(([key, label]) => (
+          <div key={key}>
+            <label className="block text-xs text-gray-500 mb-1">{label}</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="input w-full"
+              placeholder={t('planInputs.noLimit')}
+              value={form[key] ?? ''}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+                set(key, digits === '' ? '' : Number(digits));
+              }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};

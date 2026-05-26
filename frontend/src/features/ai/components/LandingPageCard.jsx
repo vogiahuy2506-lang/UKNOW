@@ -5,11 +5,13 @@ import {
   HiOutlineEye, HiOutlineDownload, HiOutlineClipboard, HiOutlineX,
   HiOutlineCheck
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 
 /**
  * Enhanced Landing Page Card with preview, code view, and export options.
  */
 const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
+  const t = useI18n('landingPageCard');
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'code'
   const [device, setDevice] = useState('desktop');
   const [showFullscreen, setShowFullscreen] = useState(false);
@@ -68,7 +70,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
   };
 
   const deviceWidth = device === 'mobile' ? 'w-[375px]' : 'w-full';
-  const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-[400px]';
+  const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-full';
 
   return (
     <>
@@ -76,7 +78,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
         {/* Header */}
         <div className="flex items-center gap-2 mb-3 text-slate-600">
           <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-          <span className="font-black text-[10px] uppercase tracking-widest">Landing Page</span>
+          <span className="font-black text-[10px] uppercase tracking-widest">{t('landingPageCard.label')}</span>
           {page.templateName && (
             <span className="ml-auto text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
               {page.templateName}
@@ -85,7 +87,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
         </div>
 
         {/* Title */}
-        <p className="text-sm font-bold text-slate-800 mb-3">{page.title || 'Untitled Landing Page'}</p>
+        <p className="text-sm font-bold text-slate-800 mb-3">{page.title || t('landingPageCard.untitled')}</p>
 
         {/* View Mode Toggle */}
         <div className="flex items-center gap-1 mb-3 bg-white rounded-lg p-1 border border-slate-200">
@@ -98,7 +100,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
             }`}
           >
             <HiOutlineEye className="w-3.5 h-3.5" />
-            Xem trước
+            {t('preview')}
           </button>
           <button
             onClick={() => setViewMode('code')}
@@ -109,7 +111,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
             }`}
           >
             <HiOutlineCode className="w-3.5 h-3.5" />
-            Mã nguồn
+            {t('sourceCode')}
           </button>
         </div>
 
@@ -125,7 +127,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                     ? 'bg-slate-800 text-white'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
-                title="Desktop"
+                title={t('desktop')}
               >
                 <HiOutlineDesktopComputer className="w-4 h-4" />
               </button>
@@ -136,7 +138,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                     ? 'bg-slate-800 text-white'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
-                title="Mobile"
+                title={t('mobile')}
               >
                 <HiOutlineDeviceMobile className="w-4 h-4" />
               </button>
@@ -175,7 +177,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 transition"
               >
                 {copied ? <HiOutlineCheck className="w-3.5 h-3.5" /> : <HiOutlineClipboard className="w-3.5 h-3.5" />}
-                {copied ? 'Đã copy!' : 'Copy code'}
+                {copied ? t('copied') : t('copyCode')}
               </button>
               <button
                 onClick={handleDownload}
@@ -195,7 +197,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
             className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2"
           >
             <HiOutlineExternalLink className="w-4 h-4 text-orange-400" />
-            Xem toàn màn hình
+            {t('viewFullscreen')}
           </button>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -203,14 +205,14 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
               className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5"
             >
               <HiOutlinePencilAlt className="w-3.5 h-3.5 text-orange-500" />
-              Chỉnh sửa & Lưu
+              {t('editAndSave')}
             </button>
             <button
               onClick={() => onGenerateNew?.()}
               className="py-2.5 bg-orange-50 border border-orange-200 text-orange-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-orange-100 flex items-center justify-center gap-1.5"
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
-              Tạo mới
+              {t('createNew')}
             </button>
           </div>
         </div>
@@ -246,12 +248,12 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
               </button>
             </div>
           </div>
-          <div className="flex-1 flex items-start justify-center bg-slate-800 p-4 overflow-auto">
+          <div className="flex-1 flex items-center justify-center bg-slate-800 p-4 overflow-auto">
             <div className={`transition-all ${device === 'mobile' ? 'w-[375px]' : 'w-full max-w-6xl'}`}>
-              <div className={`bg-white rounded-xl overflow-hidden shadow-2xl ${device === 'mobile' ? 'h-[667px]' : ''}`}>
+              <div className={`bg-white rounded-xl overflow-hidden shadow-2xl ${device === 'mobile' ? 'h-[667px]' : 'min-h-[600px]'}`}>
                 <iframe
                   srcDoc={fullHtml}
-                  className={`w-full border-0 ${device === 'mobile' ? 'h-full' : 'h-[2000px]'}`}
+                  className="w-full h-full border-0"
                   title="Landing Page Fullscreen Preview"
                   sandbox="allow-scripts allow-same-origin"
                 />

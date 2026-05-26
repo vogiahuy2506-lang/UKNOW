@@ -1,3 +1,4 @@
+import { useI18n } from '../../../i18n';
 import {
   HiOutlineDuplicate,
   HiOutlineEye,
@@ -19,20 +20,22 @@ const EmailTemplateListSection = ({
   handleDuplicate,
   handleEdit,
   handleDelete,
-  title = 'Thư viện Template',
-  description = 'Quản lý và thiết kế các mẫu email chuyên nghiệp cho chiến dịch của bạn',
-  emptyTitle = 'Chưa có template nào',
-  emptyDescription = 'Bắt đầu tạo mẫu email đầu tiên của bạn để sử dụng trong các chiến dịch marketing.',
-  searchPlaceholder = 'Tìm kiếm template...',
-}) => (
+  title,
+  description,
+  emptyTitle,
+  emptyDescription,
+  searchPlaceholder,
+}) => {
+  const { t } = useI18n();
+  return (
   <>
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-          {title}
+          {title || t('templates.libraryTitle')}
         </h1>
         <p className="text-gray-500 mt-1">
-          {description}
+          {description || t('templates.templateDescription')}
         </p>
       </div>
       <button
@@ -40,16 +43,16 @@ const EmailTemplateListSection = ({
         className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center font-medium"
       >
         <HiOutlinePlus className="w-5 h-5 mr-2" />
-        Tạo template mới
+        {t('templates.createTemplate')}
       </button>
     </div>
 
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
         {[
-          { id: '', label: 'Tất cả' },
-          { id: 'marketing', label: 'Marketing' },
-          { id: 'notification', label: 'Thông báo' },
+          { id: '', label: t('common.all') },
+          { id: 'marketing', label: t('aiChatbot.marketing') },
+          { id: 'notification', label: t('aiChatbot.notification') },
         ].map((cat) => (
           <button
             key={cat.id}
@@ -69,7 +72,7 @@ const EmailTemplateListSection = ({
         <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary-500 transition-colors" />
         <input
           type="text"
-          placeholder={searchPlaceholder}
+          placeholder={searchPlaceholder || t('templates.searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
@@ -86,15 +89,15 @@ const EmailTemplateListSection = ({
         <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <HiOutlineDuplicate className="w-8 h-8 text-gray-400" />
         </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyTitle}</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyTitle || t('templates.noTemplates')}</h3>
         <p className="text-gray-500 max-w-sm mx-auto mb-6">
-          {emptyDescription}
+          {emptyDescription || t('templates.firstTemplateTip')}
         </p>
         <button
           onClick={onCreateTemplate}
           className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg"
         >
-          Tạo template ngay
+          {t('templates.createTemplateNow')}
         </button>
       </div>
     ) : (
@@ -110,7 +113,7 @@ const EmailTemplateListSection = ({
                   {getCategoryBadge(template.category)}
                   {template?.activeUsage?.isUsedInActiveCampaign && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Đang được dùng
+                      {t('templates.inUse')}
                     </span>
                   )}
                 </div>
@@ -118,14 +121,14 @@ const EmailTemplateListSection = ({
                   <button
                     onClick={() => handlePreview(template)}
                     className="p-1 rounded hover:bg-gray-50 text-gray-500 hover:text-primary-600"
-                    title="Xem trước"
+                    title={t('templates.preview')}
                   >
                     <HiOutlineEye className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleDuplicate(template)}
                     className="p-1 rounded hover:bg-gray-50 text-gray-500 hover:text-primary-600"
-                    title="Nhân bản"
+                    title={t('templates.duplicate')}
                   >
                     <HiOutlineDuplicate className="w-3.5 h-3.5" />
                   </button>
@@ -140,7 +143,7 @@ const EmailTemplateListSection = ({
               </p>
 
               <p className="text-xs text-gray-500 mb-2 truncate" title={template?.createdBy?.name || template?.creatorName || ''}>
-                Người tạo: {template?.createdBy?.name || template?.creatorName || 'Không xác định'}
+                {t('templates.createdBy')}: {template?.createdBy?.name || template?.creatorName || t('common.unknown')}
               </p>
 
               <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
@@ -153,7 +156,7 @@ const EmailTemplateListSection = ({
                     onClick={() => handleEdit(template)}
                     className="text-xs font-medium text-gray-600 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-50 transition-colors"
                   >
-                    Chỉnh sửa
+                    {t('common.edit')}
                   </button>
                   <button
                     onClick={() => handleDelete(template.id)}
@@ -170,5 +173,6 @@ const EmailTemplateListSection = ({
     )}
   </>
 );
+};
 
 export default EmailTemplateListSection;

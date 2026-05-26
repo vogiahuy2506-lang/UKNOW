@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlinePlus,
   HiOutlineSearch,
@@ -19,9 +20,6 @@ import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { useAuthStore } from '../../stores/authStore';
 
-const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
-  'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi tạm dừng.';
-
 /**
  * Xác định chiến dịch có đang chạy hay không dựa trên số lượt chạy đang thực thi.
  *
@@ -35,6 +33,7 @@ const RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE =
 const isCampaignCurrentlyRunning = (campaign) => Number(campaign?.runningCount || 0) > 0;
 
 const Campaigns = () => {
+  const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
   const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
   const navigate = useNavigate();
@@ -84,7 +83,7 @@ const Campaigns = () => {
       setCampaigns(response.data.data.items);
       setPagination(response.data.data.pagination);
     } catch (error) {
-      toast.error('Không thể tải danh sách chiến dịch');
+      toast.error(t('campaigns.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -99,10 +98,10 @@ const Campaigns = () => {
   const handlePublish = async (id) => {
     try {
       await api.post(`/campaigns/${id}/publish`);
-      toast.success('Kích hoạt chiến dịch thành công');
+      toast.success(t('campaigns.activateSuccess'));
       fetchCampaigns();
     } catch (error) {
-      toast.error('Không thể kích hoạt chiến dịch');
+      toast.error(t('campaigns.activateFailed'));
     }
     setActiveMenu(null);
   };
@@ -112,37 +111,37 @@ const Campaigns = () => {
     const hasRunningCampaignRun = isCampaignCurrentlyRunning(selectedCampaign);
 
     if (hasRunningCampaignRun) {
-      toast.error(RUNNING_CAMPAIGN_PAUSE_BLOCK_MESSAGE);
+      toast.error(t('campaigns.runningCampaignBlock'));
       setActiveMenu(null);
       return;
     }
 
     try {
       await api.post(`/campaigns/${id}/pause`);
-      toast.success('Tạm dừng chiến dịch thành công');
+      toast.success(t('campaigns.pauseSuccess'));
       fetchCampaigns();
     } catch (error) {
-      toast.error('Không thể tạm dừng chiến dịch');
+      toast.error(t('campaigns.pauseFailed'));
     }
     setActiveMenu(null);
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa chiến dịch này?')) return;
+    if (!confirm(t('campaigns.confirmDelete'))) return;
 
     try {
       await api.delete(`/campaigns/${id}`);
-      toast.success('Xóa chiến dịch thành công');
+      toast.success(t('campaigns.deleteSuccess'));
       fetchCampaigns();
     } catch (error) {
-      toast.error('Không thể xóa chiến dịch');
+      toast.error(t('campaigns.deleteFailed'));
     }
     setActiveMenu(null);
   };
 
   const openDuplicateModal = (campaign) => {
     setDuplicateModal({ show: true, campaign });
-    setDuplicateName(`${campaign.campaignName} (Bản sao)`);
+    setDuplicateName(`${campaign.campaignName} (${t('campaigns.copy')})`);
     setActiveMenu(null);
   };
 
@@ -153,7 +152,7 @@ const Campaigns = () => {
 
   const handleDuplicate = async () => {
     if (!duplicateName.trim()) {
-      toast.error('Vui lòng nhập tên chiến dịch');
+      toast.error(t('campaigns.enterCampaignName'));
       return;
     }
 
@@ -162,11 +161,11 @@ const Campaigns = () => {
       await api.post(`/campaigns/${duplicateModal.campaign.id}/duplicate`, {
         campaignName: duplicateName.trim()
       });
-      toast.success('Nhân bản chiến dịch thành công');
+      toast.success(t('campaigns.duplicateSuccess'));
       closeDuplicateModal();
       fetchCampaigns();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể nhân bản chiến dịch');
+      toast.error(error.response?.data?.message || t('campaigns.duplicateFailed'));
     } finally {
       setIsDuplicating(false);
     }
@@ -186,7 +185,7 @@ const Campaigns = () => {
 
   const handleCreateCampaign = async () => {
     if (!createCampaignForm.campaignName.trim()) {
-      toast.error('Vui lòng nhập tên chiến dịch');
+      toast.error(t('campaigns.enterCampaignName'));
       return;
     }
 
@@ -202,13 +201,13 @@ const Campaigns = () => {
       });
       const createdCampaignId = response.data?.data?.id;
       if (!createdCampaignId) {
-        throw new Error('Không nhận được mã chiến dịch mới');
+        throw new Error(t('errors.serverError'));
       }
       setShowCreateModal(false);
       navigate(`/app/campaigns/${createdCampaignId}/builder`);
-      toast.success('Đã tạo chiến dịch mới');
+      toast.success(t('campaigns.createSuccess'));
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể tạo chiến dịch');
+      toast.error(error.response?.data?.message || t('campaigns.createFailed'));
     } finally {
       setIsCreatingCampaign(false);
     }
@@ -219,11 +218,11 @@ const Campaigns = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý quy trình</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('campaigns.title')}</h1>
           <p className="text-gray-500 mt-1">
             {isAdmin
-              ? 'Xem và chỉnh sửa chiến dịch của toàn bộ nhân viên'
-              : 'Tạo và quản lý các chiến dịch marketing của bạn'}
+              ? t('campaigns.adminDescription')
+              : t('campaigns.userDescription')}
           </p>
         </div>
         <button
@@ -231,7 +230,7 @@ const Campaigns = () => {
           className="btn btn-primary"
         >
           <HiOutlinePlus className="w-5 h-5 mr-2" />
-          Tạo
+          {t('campaigns.create')}
         </button>
       </div>
 
@@ -248,7 +247,7 @@ const Campaigns = () => {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm kiếm tên quy trình"
+                placeholder={t('campaigns.searchPlaceholder')}
                 className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
               />
             </div>
@@ -263,11 +262,11 @@ const Campaigns = () => {
             }}
             className="input w-auto"
           >
-            <option value="">Tất cả trạng thái</option>
-            <option value="draft">Nháp</option>
-            <option value="active">Đang hoạt động</option>
-            <option value="paused">Tạm dừng</option>
-            <option value="completed">Hoàn thành</option>
+            <option value="">{t('campaigns.allStatuses')}</option>
+            <option value="draft">{t('campaigns.draft')}</option>
+            <option value="active">{t('campaigns.active')}</option>
+            <option value="paused">{t('campaigns.paused')}</option>
+            <option value="completed">{t('campaigns.completed')}</option>
           </select>
 
           {/* Type filter */}
@@ -279,10 +278,10 @@ const Campaigns = () => {
             }}
             className="input w-auto"
           >
-            <option value="">Tất cả loại</option>
-            <option value="email">Email</option>
-            <option value="zalo">Zalo cá nhân</option>
-            <option value="zalo_group">Zalo nhóm</option>
+            <option value="">{t('campaigns.allTypes')}</option>
+            <option value="email">{t('campaigns.email')}</option>
+            <option value="zalo">{t('campaigns.zaloPersonal')}</option>
+            <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
           </select>
         </div>
       </div>
@@ -298,14 +297,14 @@ const Campaigns = () => {
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <HiOutlinePlus className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900">Chưa có quy trình nào</h3>
-            <p className="text-gray-500 mt-1">Bắt đầu tạo quy trình đầu tiên của bạn</p>
+            <h3 className="text-lg font-medium text-gray-900">{t('campaigns.noCampaigns')}</h3>
+            <p className="text-gray-500 mt-1">{t('campaigns.startFirst')}</p>
             <button
               onClick={openCreateModal}
               className="btn btn-primary mt-4"
             >
               <HiOutlinePlus className="w-5 h-5 mr-2" />
-              Tạo quy trình
+              {t('campaigns.createFirst')}
             </button>
           </div>
         ) : (
@@ -313,14 +312,14 @@ const Campaigns = () => {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Tên quy trình</th>
-                  <th>Trạng thái</th>
-                  <th>Đang chạy</th>
-                  <th>Loại chiến dịch</th>
-                  <th>Người tạo</th>
-                  <th>Thời gian tạo</th>
-                  <th>Cập nhật cuối</th>
-                  <th>Đã hoàn thành</th>
+                  <th>{t('campaigns.campaignName')}</th>
+                  <th>{t('common.status')}</th>
+                  <th>{t('campaigns.running')}</th>
+                  <th>{t('campaigns.campaignType')}</th>
+                  <th>{t('campaigns.createdBy')}</th>
+                  <th>{t('campaigns.createdAt')}</th>
+                  <th>{t('campaigns.updatedAt')}</th>
+                  <th>{t('campaigns.completed')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -348,17 +347,17 @@ const Campaigns = () => {
                         }`}
                       >
                         {campaign.status === 'active'
-                          ? 'Đang hoạt động'
+                          ? t('campaigns.active')
                           : campaign.status === 'draft'
-                          ? 'Nháp'
+                          ? t('campaigns.draft')
                           : campaign.status === 'paused'
-                          ? 'Tạm dừng'
+                          ? t('campaigns.paused')
                           : campaign.status}
                       </span>
                     </td>
                     <td>
                       <span className={`badge ${isCampaignCurrentlyRunning(campaign) ? 'badge-success' : 'badge-gray'}`}>
-                        {isCampaignCurrentlyRunning(campaign) ? 'Đang chạy' : 'Không chạy'}
+                        {isCampaignCurrentlyRunning(campaign) ? t('campaigns.running') : t('campaigns.notRunning')}
                       </span>
                     </td>
                     <td>
@@ -426,7 +425,7 @@ const Campaigns = () => {
                                 className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                               >
                                 <HiOutlinePencil className="w-4 h-4 mr-3" />
-                                Chỉnh sửa
+                                {t('common.edit')}
                               </button>
                               {campaign.status === 'draft' && (
                                 <button
@@ -434,7 +433,7 @@ const Campaigns = () => {
                                   className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
                                 >
                                   <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                  Kích hoạt
+                                  {t('campaigns.activate')}
                                 </button>
                               )}
                               {campaign.status === 'active' && (
@@ -443,7 +442,7 @@ const Campaigns = () => {
                                   className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
                                 >
                                   <HiOutlinePause className="w-4 h-4 mr-3" />
-                                  Tạm dừng
+                                  {t('campaigns.pause')}
                                 </button>
                               )}
                               {campaign.status === 'paused' && (
@@ -452,7 +451,7 @@ const Campaigns = () => {
                                   className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
                                 >
                                   <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                  Kích hoạt
+                                  {t('campaigns.activate')}
                                 </button>
                               )}
                               <button
@@ -460,14 +459,14 @@ const Campaigns = () => {
                                 className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                               >
                                 <HiOutlineDuplicate className="w-4 h-4 mr-3" />
-                                Nhân bản
+                                {t('campaigns.duplicate')}
                               </button>
                               <button
                                 onClick={() => handleDelete(campaign.id)}
                                 className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                               >
                                 <HiOutlineTrash className="w-4 h-4 mr-3" />
-                                Xóa
+                                {t('common.delete')}
                               </button>
                             </div>
                           </>,
@@ -486,7 +485,7 @@ const Campaigns = () => {
         {pagination.totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
             <p className="text-sm text-gray-500">
-              Hiển thị {campaigns.length} / {pagination.total} kết quả
+              {t('common.showing')} {campaigns.length} / {pagination.total} {t('common.results')}
             </p>
             <div className="flex items-center space-x-2">
               <button
@@ -504,7 +503,7 @@ const Campaigns = () => {
                 disabled={pagination.page === pagination.totalPages}
                 className="btn btn-secondary disabled:opacity-50"
               >
-                Sau
+                {t('common.next')}
               </button>
             </div>
           </div>
@@ -520,11 +519,11 @@ const Campaigns = () => {
           />
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Nhân bản chiến dịch</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('campaigns.duplicateModalTitle')}</h3>
             </div>
             <div className="px-6 py-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tên chiến dịch mới
+                {t('campaigns.newCampaignName')}
               </label>
               <input
                 type="text"
@@ -534,7 +533,7 @@ const Campaigns = () => {
                   if (e.key === 'Enter') handleDuplicate();
                   if (e.key === 'Escape') closeDuplicateModal();
                 }}
-                placeholder="Nhập tên chiến dịch mới"
+                placeholder={t('campaigns.newCampaignNamePlaceholder')}
                 className="input w-full"
                 autoFocus
               />
@@ -545,7 +544,7 @@ const Campaigns = () => {
                 disabled={isDuplicating}
                 className="btn btn-secondary"
               >
-                Hủy
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleDuplicate}
@@ -555,10 +554,10 @@ const Campaigns = () => {
                 {isDuplicating ? (
                   <>
                     <div className="spinner w-4 h-4 mr-2"></div>
-                    Đang xử lý...
+                    {t('common.processing')}
                   </>
                 ) : (
-                  'Nhân bản'
+                  t('campaigns.duplicate')
                 )}
               </button>
             </div>
@@ -572,26 +571,26 @@ const Campaigns = () => {
           <div className="absolute inset-0 bg-black/50" onClick={closeCreateModal} />
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Tạo chiến dịch mới</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('campaigns.createModalTitle')}</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tên chiến dịch
+                  {t('campaigns.campaignName')}
                 </label>
                 <input
                   type="text"
                   value={createCampaignForm.campaignName}
                   onChange={(e) => setCreateCampaignForm((prev) => ({ ...prev, campaignName: e.target.value }))}
                   className="input w-full"
-                  placeholder="Nhập tên chiến dịch..."
+                  placeholder={t('campaigns.campaignNamePlaceholder')}
                   autoFocus
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Loại chiến dịch
+                  {t('campaigns.campaignType')}
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   <button
@@ -604,7 +603,7 @@ const Campaigns = () => {
                     }`}
                   >
                     <HiOutlineMail className="w-4 h-4" />
-                    Email
+                    {t('campaigns.email')}
                   </button>
                   <button
                     type="button"
@@ -616,7 +615,7 @@ const Campaigns = () => {
                     }`}
                   >
                     <HiOutlineChat className="w-4 h-4" />
-                    Zalo cá nhân
+                    {t('campaigns.zaloPersonal')}
                   </button>
                   <button
                     type="button"
@@ -628,17 +627,17 @@ const Campaigns = () => {
                     }`}
                   >
                     <HiOutlineChat className="w-4 h-4" />
-                    Zalo nhóm
+                    {t('campaigns.zaloGroup')}
                   </button>
                 </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
               <button onClick={closeCreateModal} className="btn btn-secondary" disabled={isCreatingCampaign}>
-                Hủy
+                {t('common.cancel')}
               </button>
               <button onClick={handleCreateCampaign} className="btn btn-primary" disabled={isCreatingCampaign}>
-                {isCreatingCampaign ? 'Đang tạo...' : 'Tạo và thiết kế'}
+                {isCreatingCampaign ? t('campaigns.creating') : t('campaigns.createAndDesign')}
               </button>
             </div>
           </div>

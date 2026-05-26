@@ -1,4 +1,5 @@
 import { HiOutlineTable } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 
 /**
  * UI chọn cột dữ liệu cần giữ khi chạy node (giảm kích thước object trong RAM/log).
@@ -25,6 +26,7 @@ export function NodeConfigDataColumnPicker({
   formField = 'dataSelectedColumns',
   hint = 'Để trống (không chọn cột) = dùng toàn bộ cột. Chọn cột để giảm dung lượng payload trong bộ nhớ và log.',
 }) {
+  const t = useI18n('dataColumnPicker');
   const normalizedSelected = Array.isArray(selectedKeys) ? selectedKeys : [];
   const selectedSet = new Set(normalizedSelected);
 
@@ -50,7 +52,7 @@ export function NodeConfigDataColumnPicker({
         <HiOutlineTable className="h-5 w-5 text-green-600" />
         <span className="text-sm font-medium text-gray-800">{title}</span>
         <span className="text-xs text-gray-500">
-          (đang chọn {normalizedSelected.length}/{options.length || '—'})
+          ({t('selectedCount', { count: normalizedSelected.length, total: options.length || '—' })})
         </span>
       </div>
       <p className="text-xs text-gray-600">{hint}</p>
@@ -60,7 +62,7 @@ export function NodeConfigDataColumnPicker({
           onClick={selectAllMeaningClear}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
-          Dùng tất cả cột
+          {t('useAllColumns')}
         </button>
         {options.length > 0 ? (
           <button
@@ -68,7 +70,7 @@ export function NodeConfigDataColumnPicker({
             onClick={selectListed}
             className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
-            Chọn hết danh sách
+            {t('selectAll')}
           </button>
         ) : null}
       </div>
@@ -81,7 +83,7 @@ export function NodeConfigDataColumnPicker({
               type="button"
               onClick={() => toggleKey(k)}
               className="inline-flex items-center rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800 hover:bg-primary-100"
-              title="Nhấn để bỏ chọn"
+              title={t('pressToDeselect')}
             >
               {k}
               <span className="ml-1 text-primary-500">×</span>
@@ -91,7 +93,7 @@ export function NodeConfigDataColumnPicker({
       ) : null}
 
       {options.length === 0 ? (
-        <p className="text-sm text-amber-700">Chưa có danh sách cột. Hãy kiểm tra kết nối / tải mẫu dữ liệu trước.</p>
+        <p className="text-sm text-amber-700">{t('noColumnsHint')}</p>
       ) : (
         <div
           className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-gray-200 bg-white p-3"
@@ -115,7 +117,7 @@ export function NodeConfigDataColumnPicker({
       )}
 
       <p className="text-[11px] text-gray-500">
-        Khi chạy chiến dịch, log node sẽ hiển thị dung lượng JSON tích lũy (UTF-8) và phần tiết kiệm ước lượng theo batch.
+        {t('batchSizeNote')}
       </p>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -31,6 +32,7 @@ const applySendGridDefaults = (currentForm = {}) => ({
 });
 
 const EmailSettings = () => {
+  const { t } = useI18n();
   const [emailSettings, setEmailSettings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -48,6 +50,7 @@ const EmailSettings = () => {
 
   useEffect(() => {
     fetchEmailSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchEmailSettings = async () => {
@@ -57,7 +60,7 @@ const EmailSettings = () => {
       setEmailSettings(Array.isArray(items) ? items : []);
     } catch (error) {
       setEmailSettings([]);
-      toast.error('Không thể tải cài đặt email');
+      toast.error(t('emailSettings.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -68,17 +71,17 @@ const EmailSettings = () => {
     try {
       if (selectedEmail && !isAddingNew) {
         await api.put(`/email-settings/${selectedEmail.id}`, formData);
-        toast.success('Cập nhật email thành công');
+        toast.success(t('emailSettings.updateSuccess'));
       } else {
         await api.post('/email-settings', formData);
-        toast.success('Thêm email thành công');
+        toast.success(t('emailSettings.addSuccess'));
       }
       fetchEmailSettings();
       setIsAddingNew(false);
       setSelectedEmail(null);
       resetForm();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      toast.error(error.response?.data?.message || t('emailSettings.error'));
     }
   };
 
@@ -98,7 +101,7 @@ const EmailSettings = () => {
         useTls: item?.useTls ?? email.useTls ?? true,
       });
     } catch (error) {
-      toast.error('Không thể tải chi tiết email');
+      toast.error(t('emailSettings.loadDetailFailed'));
     }
   };
 
@@ -109,13 +112,13 @@ const EmailSettings = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa email này?')) return;
+    if (!confirm(t('emailSettings.confirmDelete'))) return;
     try {
       await api.delete(`/email-settings/${id}`);
-      toast.success('Đã xóa email');
+      toast.success(t('emailSettings.deleted'));
       fetchEmailSettings();
     } catch (error) {
-      toast.error('Không thể xóa email');
+      toast.error(t('emailSettings.deleteFailed'));
     }
   };
 
@@ -137,7 +140,7 @@ const EmailSettings = () => {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cài đặt email</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('emailSettings.title')}</h1>
         </div>
       </div>
 
@@ -151,7 +154,7 @@ const EmailSettings = () => {
                   className="btn btn-primary w-full"
                 >
                   <HiOutlinePlus className="w-4 h-4 mr-2" />
-                  Thêm email mới
+                  {t('emailSettings.addNewEmail')}
                 </button>
               </div>
               
@@ -163,8 +166,8 @@ const EmailSettings = () => {
                 ) : emailSettings.length === 0 ? (
                   <div className="p-6 text-center text-gray-500">
                     <HiOutlineMail className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm">Chưa có email nào</p>
-                    <p className="text-xs mt-1">Thêm email để bắt đầu</p>
+                    <p className="text-sm">{t('emailSettings.noEmails')}</p>
+                    <p className="text-xs mt-1">{t('emailSettings.addEmailToStart')}</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
@@ -190,7 +193,7 @@ const EmailSettings = () => {
                               {email.email}
                             </p>
                             <p className="text-xs text-gray-500 truncate mt-1">
-                              Người tạo: {email?.createdBy?.name || email?.creatorName || 'Không xác định'}
+                              {t('emailSettings.createdBy')}: {email?.createdBy?.name || email?.creatorName || t('emailSettings.unknown')}
                             </p>
                           </div>
                         </div>
@@ -207,11 +210,11 @@ const EmailSettings = () => {
                 <div className="flex items-center justify-center h-full p-8">
                   <div className="text-center">
                     <HiOutlineMail className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Chọn một email để xem chi tiết
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {t('emailSettings.selectEmailToView')}
                     </h3>
                     <p className="text-sm text-gray-500 max-w-md">
-                      Chọn một email từ danh sách bên trái để xem và chỉnh sửa thông tin chi tiết
+                      {t('emailSettings.selectEmailToEditTip')}
                     </p>
                   </div>
                 </div>
@@ -220,7 +223,7 @@ const EmailSettings = () => {
                   <div className="max-w-3xl">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold text-gray-900">
-                        {isAddingNew ? 'Thêm email mới' : 'Chỉnh sửa email'}
+                        {isAddingNew ? t('emailSettings.addNewEmail') : t('emailSettings.editEmail')}
                       </h3>
                       <div className="flex items-center space-x-2">
                         <button
@@ -228,13 +231,13 @@ const EmailSettings = () => {
                           onClick={() => setFormData((prev) => applySendGridDefaults(prev))}
                           className="btn btn-secondary"
                         >
-                          Dùng mặc định SendGrid
+                          {t('emailSettings.useSendGridDefault')}
                         </button>
                         {selectedEmail && !isAddingNew && (
                           <button
                             onClick={() => handleDelete(selectedEmail.id)}
                             className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600"
-                            title="Xóa"
+                            title={t('emailSettings.delete')}
                           >
                             <HiOutlineTrash className="w-5 h-5" />
                           </button>
@@ -245,7 +248,7 @@ const EmailSettings = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="label">Tên hiển thị</label>
+                          <label className="label">{t('emailSettings.displayName')}</label>
                           <input
                             type="text"
                             value={formData.name}
@@ -256,12 +259,12 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="Founder AI"
-                            required
+                          placeholder={t('emailSettings.displayNamePlaceholder')}
+                          required
                           />
                         </div>
                         <div>
-                          <label className="label">Email gửi</label>
+                          <label className="label">{t('emailSettings.fromEmail')}</label>
                           <input
                             type="email"
                             value={formData.email}
@@ -272,7 +275,7 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="noreply@founderai.biz"
+                            placeholder={t('emailSettings.fromEmailPlaceholder')}
                             required
                           />
                         </div>
@@ -280,7 +283,7 @@ const EmailSettings = () => {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="label">SMTP Host</label>
+                          <label className="label">{t('emailSettings.smtpHost')}</label>
                           <input
                             type="text"
                             value={formData.smtpHost}
@@ -291,12 +294,12 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="smtp.sendgrid.net"
+                            placeholder={t('emailSettings.smtpHostPlaceholder')}
                             required
                           />
                         </div>
                         <div>
-                          <label className="label">SMTP Port</label>
+                          <label className="label">{t('emailSettings.smtpPort')}</label>
                           <input
                             type="text"
                             value={formData.smtpPort}
@@ -307,7 +310,7 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="587"
+                            placeholder={t('emailSettings.smtpPortPlaceholder')}
                             required
                           />
                         </div>
@@ -315,7 +318,7 @@ const EmailSettings = () => {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="label">SMTP Username</label>
+                          <label className="label">{t('emailSettings.smtpUsername')}</label>
                           <input
                             type="text"
                             value={formData.smtpUsername}
@@ -326,12 +329,12 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="apikey"
+                            placeholder={t('emailSettings.smtpUsernamePlaceholder')}
                             required
                           />
                         </div>
                         <div>
-                          <label className="label">SMTP Password</label>
+                          <label className="label">{t('emailSettings.smtpPassword')}</label>
                           <input
                             type="password"
                             value={formData.smtpPassword}
@@ -342,16 +345,16 @@ const EmailSettings = () => {
                               }))
                             }
                             className="input"
-                            placeholder="Nhập SMTP password"
+                            placeholder={t('emailSettings.smtpPasswordPlaceholder')}
                             autoComplete="new-password"
                             spellCheck={false}
                             required
                           />
                           <p className="text-xs text-gray-500 mt-1">
-                            Bắt buộc nhập SMTP password khi thêm mới hoặc chỉnh sửa.
+                            {t('emailSettings.smtpPasswordRequired')}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            Với SendGrid SMTP: username dùng <strong>apikey</strong>, password là API key bắt đầu bằng <strong>SG.</strong>
+                            {t('emailSettings.smtpPasswordSendGridHint')}
                           </p>
                         </div>
                       </div>
@@ -367,7 +370,7 @@ const EmailSettings = () => {
                           className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                         />
                         <label htmlFor="useTls" className="ml-2 text-sm text-gray-700">
-                          Sử dụng TLS/SSL
+                          {t('emailSettings.useTlsSsl')}
                         </label>
                       </div>
 
@@ -381,10 +384,10 @@ const EmailSettings = () => {
                           }}
                           className="btn btn-secondary"
                         >
-                          Hủy
+                          {t('common.cancel')}
                         </button>
                         <button type="submit" className="btn btn-primary">
-                          {isAddingNew ? 'Thêm email' : 'Cập nhật'}
+                          {isAddingNew ? t('emailSettings.addEmail') : t('common.save')}
                         </button>
                       </div>
                     </form>

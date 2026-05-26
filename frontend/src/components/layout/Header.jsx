@@ -8,6 +8,7 @@ import {
 } from 'react-icons/hi';
 import logoIcon from '../../assets/icons/founderai-logo.png';
 import ChangePasswordModal from '../../features/auth/components/ChangePasswordModal';
+import { useI18n } from '../../i18n';
 
 /**
  * Mobile top header bar.
@@ -18,6 +19,7 @@ import ChangePasswordModal from '../../features/auth/components/ChangePasswordMo
  * @param {function} onToggleSidebar - Callback to open/close the sidebar drawer
  */
 const Header = ({ onToggleSidebar }) => {
+  const { t } = useI18n();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -47,7 +49,7 @@ const Header = ({ onToggleSidebar }) => {
         <button
           onClick={onToggleSidebar}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          aria-label="Mở menu"
+          aria-label={t('header.openMenu')}
         >
           <HiOutlineMenu className="w-6 h-6 text-gray-600" />
         </button>

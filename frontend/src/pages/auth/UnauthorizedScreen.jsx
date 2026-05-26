@@ -3,8 +3,10 @@ import { HiOutlineShieldExclamation, HiOutlineLogout, HiOutlineHome } from 'reac
 import { useAuthStore } from '../../stores/authStore';
 import Navbar from '../../components/layout/client/Navbar';
 import Footer from '../../components/layout/client/Footer';
+import { useI18n } from '../../i18n';
 
 const UnauthorizedScreen = () => {
+  const { t } = useI18n();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -23,25 +25,25 @@ const UnauthorizedScreen = () => {
             <HiOutlineShieldExclamation className="w-8 h-8 text-red-500" />
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900">Không có quyền truy cập</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('unauthorized.title')}</h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Trang này chỉ dành cho quản trị viên hệ thống (Super Admin).
+            {t('unauthorized.description')}
           </p>
 
           {user && (
             <p className="text-xs text-gray-400 mt-3">
-              Đăng nhập với tài khoản <strong>{user.email}</strong>
+              {t('unauthorized.loginWith')} <strong>{user.email}</strong>
             </p>
           )}
 
           <div className="flex flex-col gap-2 mt-8">
             <button onClick={() => navigate('/app')} className="btn btn-primary w-full">
               <HiOutlineHome className="w-4 h-4 mr-2" />
-              Về trang của tôi
+              {t('unauthorized.goToMyPage')}
             </button>
             <button onClick={handleLogout} className="btn btn-secondary w-full">
               <HiOutlineLogout className="w-4 h-4 mr-2" />
-              Đăng xuất
+              {t('unauthorized.logout')}
             </button>
           </div>
         </div>

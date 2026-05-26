@@ -7,16 +7,8 @@ import {
   HiOutlineUpload,
   HiOutlineSparkles,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
-
-/** Danh sách biến gợi ý dùng chung cho email và zalo */
-const SUGGESTED_VARIABLES = [
-  { name: 'Tên khách hàng', key: 'ten_khach' },
-  { name: 'Link khóa học', key: 'link_khoa_hoc' },
-  { name: 'Tên khóa học', key: 'ten_khoa_hoc' },
-  { name: 'Email khách hàng', key: 'email_khach' },
-  { name: 'Số điện thoại', key: 'so_dien_thoai' },
-];
 
 const EmailTemplateEditorModal = ({
   showEditorModal,
@@ -67,9 +59,21 @@ const EmailTemplateEditorModal = ({
   handleRemoveVariable,
   handleAddSuggestedVariable,
   hideHtmlTab = false,
-  subjectLabel = 'Tiêu đề email',
+  subjectLabel,
   templateKindLabel = 'email',
-}) => (
+}) => {
+  const { t } = useI18n();
+
+  /** Danh sách biến gợi ý dùng chung cho email và zalo */
+  const SUGGESTED_VARIABLES = [
+    { name: t('emailTemplateEditor.suggestedCustomerName'), key: 'ten_khach' },
+    { name: t('emailTemplateEditor.suggestedCourseLink'), key: 'link_khoa_hoc' },
+    { name: t('emailTemplateEditor.suggestedCourseName'), key: 'ten_khoa_hoc' },
+    { name: t('emailTemplateEditor.suggestedCustomerEmail'), key: 'email_khach' },
+    { name: t('emailTemplateEditor.suggestedPhone'), key: 'so_dien_thoai' },
+  ];
+
+  return (
   <FullScreenOverlay isOpen={showEditorModal}>
     <div className="bg-white rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -79,9 +83,9 @@ const EmailTemplateEditorModal = ({
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">
-              {editingTemplate ? 'Chỉnh sửa template' : 'Tạo template mới'}
+              {editingTemplate ? t('emailTemplateEditor.editTemplate') : t('emailTemplateEditor.createTemplate')}
             </h3>
-            <p className="text-xs text-gray-500">Điền thông tin và thiết kế nội dung</p>
+            <p className="text-xs text-gray-500">{t('emailTemplateEditor.fillInfoAndDesign')}</p>
           </div>
         </div>
         <button
@@ -98,7 +102,7 @@ const EmailTemplateEditorModal = ({
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-white grid grid-cols-12 gap-4">
           <div className="col-span-4 space-y-1">
-            <label className="text-sm font-medium text-gray-700">Tên template</label>
+            <label className="text-sm font-medium text-gray-700">{t('emailTemplateEditor.templateName')}</label>
             <input
               type="text"
               value={formData.templateName}
@@ -109,12 +113,12 @@ const EmailTemplateEditorModal = ({
                 }))
               }
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-              placeholder="Ví dụ: Chào mừng khách hàng mới"
+              placeholder={t('emailTemplateEditor.templateNamePlaceholder')}
               required
             />
           </div>
           <div className="col-span-6 space-y-1">
-            <label className="text-sm font-medium text-gray-700">{subjectLabel}</label>
+            <label className="text-sm font-medium text-gray-700">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
             <input
               type="text"
               value={formData.subject}
@@ -125,12 +129,12 @@ const EmailTemplateEditorModal = ({
                 updateSubjectValue(e.target.value, e.target.selectionStart || 0)
               }
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-              placeholder="Ví dụ: Chào mừng {{name}} đến với Founder AI!"
+              placeholder={t('emailTemplateEditor.subjectPlaceholder')}
               required
             />
           </div>
           <div className="col-span-2 space-y-1">
-            <label className="text-sm font-medium text-gray-700">Phân loại</label>
+            <label className="text-sm font-medium text-gray-700">{t('emailTemplateEditor.category')}</label>
             <select
               value={formData.category}
               onChange={(e) =>
@@ -141,8 +145,8 @@ const EmailTemplateEditorModal = ({
               }
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
             >
-              <option value="marketing">Marketing</option>
-              <option value="notification">Thông báo</option>
+              <option value="marketing">{t('aiChatbot.marketing')}</option>
+              <option value="notification">{t('aiChatbot.notification')}</option>
             </select>
           </div>
         </div>
@@ -156,14 +160,14 @@ const EmailTemplateEditorModal = ({
                   onClick={() => setEditorTab('content')}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${editorTab === 'content' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                  Nội dung
+                  {t('emailTemplateEditor.content')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditorTab('variables')}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${editorTab === 'variables' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                  Thiết lập biến
+                  {t('emailTemplateEditor.setupVariables')}
                 </button>
               </div>
               {editorTab === 'content' && (
@@ -174,7 +178,7 @@ const EmailTemplateEditorModal = ({
                     disabled={isUploading}
                     className="text-sm flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-60"
                   >
-                    <HiOutlineUpload className="w-4 h-4" /> {isUploading ? 'Đang upload...' : 'Upload file'}
+                    <HiOutlineUpload className="w-4 h-4" /> {isUploading ? t('emailTemplateEditor.uploading') : t('emailTemplateEditor.uploadFile')}
                   </button>
                   {formData.attachments?.length > 0 && (
                     <button
@@ -182,7 +186,7 @@ const EmailTemplateEditorModal = ({
                       onClick={() => setShowAttachmentsModal(true)}
                       className="text-sm flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-all"
                     >
-                      <HiOutlinePaperClip className="w-4 h-4" /> Files ({formData.attachments.length})
+                      <HiOutlinePaperClip className="w-4 h-4" /> {t('emailTemplateEditor.files')} ({formData.attachments.length})
                     </button>
                   )}
                   <input
@@ -197,7 +201,7 @@ const EmailTemplateEditorModal = ({
                       onClick={() => setIsPreviewVisible(!isPreviewVisible)}
                       className={`text-sm flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all ${isPreviewVisible ? 'bg-primary-50 text-primary-700 border-primary-200' : 'bg-white text-gray-600 border-gray-300'}`}
                     >
-                      <HiOutlineEye className="w-4 h-4" /> {isPreviewVisible ? 'Ẩn Preview' : 'Xem Preview'}
+                      <HiOutlineEye className="w-4 h-4" /> {isPreviewVisible ? t('emailTemplateEditor.hidePreview') : t('emailTemplateEditor.showPreview')}
                     </button>
                   )}
                 </div>
@@ -227,7 +231,7 @@ const EmailTemplateEditorModal = ({
                           }}
                           className={`px-4 py-2 text-sm font-medium transition-all ${contentTab === 'html' ? 'bg-white text-gray-900 border-b-2 border-primary-500' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                          HTML Editor
+                          {t('emailTemplateEditor.htmlEditor')}
                         </button>
                       )}
                       <button
@@ -240,7 +244,7 @@ const EmailTemplateEditorModal = ({
                         }}
                         className={`px-4 py-2 text-sm font-medium transition-all ${contentTab === 'text' ? 'bg-white text-gray-900 border-b-2 border-primary-500' : 'text-gray-500 hover:text-gray-700'}`}
                       >
-                        Text Format
+                        {t('emailTemplateEditor.textEditor')}
                       </button>
                     </div>
 
@@ -254,7 +258,7 @@ const EmailTemplateEditorModal = ({
                           }
                           className="w-full h-full p-3 font-mono text-[13px] bg-gray-50 focus:bg-white resize-none outline-none border-0 focus:ring-0 focus:border-0 focus:outline-none"
                           style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
-                          placeholder="<!-- Bắt đầu viết mã HTML của bạn tại đây... -->"
+                          placeholder={t('emailTemplateEditor.htmlPlaceholder')}
                         />
                       ) : (
                         <div className="flex flex-col h-full bg-white">
@@ -266,7 +270,7 @@ const EmailTemplateEditorModal = ({
                               onClick={() => setActiveInput('text')}
                               onChange={(e) => updateContentValue('text', e.target.value, e.target.selectionStart)}
                               className="w-full h-full p-3 text-[13px] bg-white outline-none border border-gray-200 rounded-md shadow-sm resize-none"
-                              placeholder="Nhập nội dung văn bản..."
+                              placeholder={t('emailTemplateEditor.textPlaceholder')}
                             />
                           </div>
                         </div>
@@ -289,7 +293,7 @@ const EmailTemplateEditorModal = ({
                               style={{ top: suggestionPosition.top, left: suggestionPosition.left }}
                             >
                               <div className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-200">
-                                Chọn biến để chèn
+                                {t('emailTemplateEditor.selectVariableToInsert')}
                               </div>
                               <div className="max-h-48 overflow-auto py-1">
                                 {variables
@@ -332,7 +336,7 @@ const EmailTemplateEditorModal = ({
                       >
                         <div className="flex border-b border-gray-200 bg-white">
                           <div className="px-4 py-2 text-sm font-medium text-gray-700">
-                            Xem trước
+                            {t('emailTemplateEditor.preview')}
                           </div>
                         </div>
                         <div className="flex-1 p-6 overflow-auto flex justify-center bg-gray-100">
@@ -343,7 +347,7 @@ const EmailTemplateEditorModal = ({
                                 srcDoc={editorPreviewSrcDoc}
                                 onLoad={() => resizeIframeToContent(editorPreviewIframeRef.current)}
                                 className="w-full min-h-[500px] outline-none focus:outline-none"
-                                title="Preview"
+                                title={t('emailTemplateEditor.preview')}
                                 style={{ border: 'none', outline: 'none' }}
                               />
                             ) : (
@@ -351,7 +355,7 @@ const EmailTemplateEditorModal = ({
                                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                                   <HiOutlineEye className="w-8 h-8 opacity-50" />
                                 </div>
-                                <p className="text-center">Nhập mã HTML để xem trước kết quả hiển thị</p>
+                                <p className="text-center">{t('emailTemplateEditor.enterHtmlToPreview')}</p>
                               </div>
                             )}
                           </div>
@@ -367,10 +371,10 @@ const EmailTemplateEditorModal = ({
                     <div className="bg-white p-4 rounded-lg border border-gray-200">
                       <div className="flex items-center gap-2 mb-3">
                         <HiOutlineSparkles className="w-4 h-4 text-primary-500" />
-                        <h4 className="text-base font-semibold text-gray-900">Biến gợi ý</h4>
+                        <h4>{t('emailTemplateEditor.suggestedVariables')}</h4>
                       </div>
                       <p className="text-xs text-gray-500 mb-3">
-                        Click vào biến để thêm nhanh vào danh sách biến của template.
+                        {t('emailTemplateEditor.clickToAddVariable')}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {SUGGESTED_VARIABLES.map((sv) => {
@@ -397,14 +401,14 @@ const EmailTemplateEditorModal = ({
                     </div>
 
                     <div className="bg-white p-4 rounded-lg border border-gray-200">
-                      <h4 className="text-base font-semibold text-gray-900 mb-2">Quản lý biến</h4>
+                      <h4>{t('emailTemplateEditor.variableManagement')}</h4>
                       <p className="text-xs text-gray-600 mb-4">
-                        {`Tạo và quản lý các biến để sử dụng trong template ${templateKindLabel}. Sử dụng cú pháp {{variable}} để chèn biến vào nội dung.`}
+                        {t('emailTemplateEditor.manageVariablesDescription', { templateKind: templateKindLabel })}
                       </p>
 
                       <div className="grid grid-cols-3 gap-3 mb-4">
                         <div>
-                          <label className="text-xs font-medium text-gray-700 mb-1 block">Tên biến</label>
+                          <label className="text-xs font-medium text-gray-700 mb-1 block">{t('emailTemplateEditor.variableName')}</label>
                           <input
                             type="text"
                             value={newVariable.name}
@@ -415,11 +419,11 @@ const EmailTemplateEditorModal = ({
                               }))
                             }
                             className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                            placeholder="Ví dụ: Tên khách hàng"
+                            placeholder={t('emailTemplateEditor.variableNamePlaceholder')}
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-medium text-gray-700 mb-1 block">Mã biến</label>
+                          <label className="text-xs font-medium text-gray-700 mb-1 block">{t('emailTemplateEditor.variableKey')}</label>
                           <input
                             type="text"
                             value={newVariable.key}
@@ -430,7 +434,7 @@ const EmailTemplateEditorModal = ({
                               }))
                             }
                             className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                            placeholder="name"
+                            placeholder={t('emailTemplateEditor.variableKeyPlaceholder')}
                           />
                         </div>
                         <div className="flex items-end">
@@ -440,31 +444,31 @@ const EmailTemplateEditorModal = ({
                             className="w-full bg-primary-500 hover:bg-primary-600 text-white px-4 py-1.5 rounded-lg font-medium transition-colors text-sm"
                           >
                             <HiOutlinePlus className="w-4 h-4 mr-2 inline" />
-                            Thêm biến
+                            {t('emailTemplateEditor.addVariable')}
                           </button>
                         </div>
                       </div>
 
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                          <h5 className="text-xs font-semibold text-gray-900">Danh sách biến ({variables.length})</h5>
+                          <h5 className="text-xs font-semibold text-gray-900">{t('emailTemplateEditor.variablesList')} ({variables.length})</h5>
                         </div>
                         {variables.length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
                               <HiOutlinePlus className="w-6 h-6 text-gray-400" />
                             </div>
-                            <p className="text-sm">Chưa có biến nào được tạo</p>
-                            <p className="text-xs mt-1">Thêm biến để sử dụng trong template</p>
+                            <p className="text-sm">{t('emailTemplateEditor.noVariables')}</p>
+                            <p className="text-xs mt-1">{t('emailTemplateEditor.addVariableTip')}</p>
                           </div>
                         ) : (
                           <div className="overflow-auto">
                             <table className="min-w-full text-sm">
                               <thead className="bg-gray-50">
                                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                                  <th className="px-4 py-2 font-semibold">Tên trường</th>
-                                  <th className="px-4 py-2 font-semibold">Mã biến</th>
-                                  <th className="px-4 py-2 font-semibold w-24 text-right">Thao tác</th>
+                                  <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.fieldName')}</th>
+                                  <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.variableKey')}</th>
+                                  <th className="px-4 py-2 font-semibold w-24 text-right">{t('common.actions')}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
@@ -505,14 +509,14 @@ const EmailTemplateEditorModal = ({
                                               onClick={handleSaveEditVariable}
                                               className="px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs"
                                             >
-                                              Lưu
+                                              {t('common.save')}
                                             </button>
                                             <button
                                               type="button"
                                               onClick={handleCancelEditVariable}
                                               className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs"
                                             >
-                                              Hủy
+                                              {t('common.cancel')}
                                             </button>
                                           </div>
                                         </td>
@@ -531,7 +535,7 @@ const EmailTemplateEditorModal = ({
                                               type="button"
                                               onClick={() => handleStartEditVariable(index)}
                                               className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                                              title="Chỉnh sửa"
+                                              title={t('common.edit')}
                                             >
                                               <HiOutlinePencil className="w-4 h-4" />
                                             </button>
@@ -539,7 +543,7 @@ const EmailTemplateEditorModal = ({
                                               type="button"
                                               onClick={() => handleRemoveVariable(index)}
                                               className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                              title="Xóa"
+                                              title={t('common.delete')}
                                             >
                                               <HiOutlineTrash className="w-4 h-4" />
                                             </button>
@@ -571,15 +575,16 @@ const EmailTemplateEditorModal = ({
             }}
             className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            Hủy bỏ
+            {t('common.cancel')}
           </button>
           <button type="submit" className="px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 shadow-sm transition-all">
-            {editingTemplate ? 'Lưu thay đổi' : 'Tạo template mới'}
+            {editingTemplate ? t('emailTemplateEditor.saveChanges') : t('emailTemplateEditor.createTemplate')}
           </button>
         </div>
       </form>
     </div>
   </FullScreenOverlay>
-);
+  );
+};
 
 export default EmailTemplateEditorModal;

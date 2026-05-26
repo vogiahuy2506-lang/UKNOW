@@ -4,6 +4,7 @@ import {
   HiOutlineLink,
   HiOutlineTable,
 } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
 /**
@@ -26,6 +27,7 @@ export const NodeConfigReadSheetSection = ({
   handleCheckSheetConnection,
   isCheckingSheet,
 }) => {
+  const t = useI18n('readSheetSection');
   const [lastAutoCheckConnectionKey, setLastAutoCheckConnectionKey] = useState('');
   const connectionSignature = useMemo(
     () => [
@@ -57,11 +59,11 @@ export const NodeConfigReadSheetSection = ({
   ]);
 
   const readSheetSections = [
-    { id: 'basic', name: 'Thông tin cơ bản', icon: HiOutlineDocument },
-    { id: 'config', name: 'Cấu hình Sheet', icon: HiOutlineTable },
+    { id: 'basic', name: t('basicInfo'), icon: HiOutlineDocument },
+    { id: 'config', name: t('sheetConfig'), icon: HiOutlineTable },
     {
       id: 'connection',
-      name: 'Kết nối',
+      name: t('connection'),
       icon: HiOutlineLink,
       badge: Array.isArray(formData.columns) && formData.columns.length > 0,
     },
@@ -73,31 +75,31 @@ export const NodeConfigReadSheetSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="Đọc dữ liệu Sheet"
+                placeholder={t('readSheetPlaceholder')}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                URL Google Sheet <span className="text-red-500">*</span>
+                {t('sheetUrl')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="url"
                 value={formData.sheetUrl}
                 onChange={(e) => setFormData((prev) => ({ ...prev, sheetUrl: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="https://docs.google.com/spreadsheets/d/..."
+                placeholder={t('sheetUrlPlaceholder')}
               />
-              <p className="text-xs text-gray-500 mt-1">Đảm bảo sheet đã được chia sẻ quyền đọc</p>
+              <p className="text-xs text-gray-500 mt-1">{t('sharePermission')}</p>
             </div>
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-sm text-blue-700">
-                <strong>Lưu ý:</strong> Đọc dữ liệu từ Google Sheet để sử dụng trong các bước tiếp theo của chiến dịch.
+                <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('readSheetNote')}
               </p>
             </div>
           </div>
@@ -108,18 +110,18 @@ export const NodeConfigReadSheetSection = ({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên Sheet</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('sheetName')}</label>
                 <input
                   type="text"
                   value={formData.sheetName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, sheetName: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Sheet1"
+                  placeholder={t('sheetNamePlaceholder')}
                 />
-                <p className="text-xs text-gray-500 mt-1">Tên tab sheet trong file Google Sheets</p>
+                <p className="text-xs text-gray-500 mt-1">{t('sheetNameHint')}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dòng tiêu đề</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('headerRow')}</label>
                 <input
                   type="number"
                   min={1}
@@ -127,11 +129,11 @@ export const NodeConfigReadSheetSection = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, headerRow: parseInt(e.target.value, 10) }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">Dòng chứa tiêu đề của các cột</p>
+                <p className="text-xs text-gray-500 mt-1">{t('headerRowHint')}</p>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dòng bắt đầu dữ liệu</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('dataStartRow')}</label>
               <input
                 type="number"
                 min={1}
@@ -139,17 +141,17 @@ export const NodeConfigReadSheetSection = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, dataStartRow: parseInt(e.target.value, 10) }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
-              <p className="text-xs text-gray-500 mt-1">Dòng đầu tiên có dữ liệu thực tế (thường là dòng sau tiêu đề)</p>
+              <p className="text-xs text-gray-500 mt-1">{t('dataStartRowHint')}</p>
             </div>
             <div className="bg-amber-50 p-3 rounded-lg">
               <p className="text-sm text-amber-700">
-                <strong>Mẹo:</strong> Nếu tiêu đề ở dòng 1 và dữ liệu bắt đầu từ dòng 2, hãy đặt dòng tiêu đề = 1, dòng bắt đầu dữ liệu = 2.
+                <strong>{t('tip') || 'Tip'}:</strong> {t('tipHeaderRow')}
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Số dòng tối đa khi chạy thử trên Builder
+                {t('builderPreviewLimit')}
               </label>
               <select
                 value={
@@ -166,18 +168,17 @@ export const NodeConfigReadSheetSection = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
               >
                 <option value="">
-                  Mặc định Builder: 100 dòng (chọn số khác hoặc «Toàn bộ» để xem nhiều hơn khi chạy thử)
+                  {t('builderPreviewNote')}
                 </option>
-                <option value="100">100 dòng</option>
-                <option value="500">500 dòng</option>
-                <option value="2000">2.000 dòng</option>
-                <option value="5000">5.000 dòng</option>
-                <option value="10000">10.000 dòng</option>
-                <option value="all">Toàn bộ (tối đa 20.000 dòng — có thể chậm / nặng RAM trình duyệt)</option>
+                <option value="100">{t('rows100')}</option>
+                <option value="500">{t('rows500')}</option>
+                <option value="2000">{t('rows2000')}</option>
+                <option value="5000">{t('rows5000')}</option>
+                <option value="10000">{t('rows10000')}</option>
+                <option value="all">{t('allRows')}</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Chỉ áp dụng khi bấm «Chạy» trên Builder. Chạy thật từ trang «Chạy chiến dịch» vẫn đọc đủ dòng Sheet
-                (theo backend), không phụ thuộc tùy chọn này.
+                {t('builderPreviewHint')}
               </p>
             </div>
           </div>
@@ -197,16 +198,16 @@ export const NodeConfigReadSheetSection = ({
                     : 'bg-primary-600 text-white hover:bg-primary-700'
                 }`}
               >
-                {isCheckingSheet ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+                {isCheckingSheet ? t('checkingConnection') : t('checkConnection')}
               </button>
             </div>
-            <p className="text-xs text-gray-500">Nhấn để kiểm tra kết nối và lấy danh sách các cột từ sheet</p>
+            <p className="text-xs text-gray-500">{t('checkConnectionHint')}</p>
 
             {Array.isArray(formData.columns) && formData.columns.length > 0 ? (
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <div className="flex items-center gap-2 mb-3">
                   <HiOutlineTable className="w-5 h-5 text-green-600" />
-                  <span className="text-sm font-medium text-gray-700">Danh sách cột ({formData.columns.length})</span>
+                  <span className="text-sm font-medium text-gray-700">{t('columnList', { count: formData.columns.length })}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {formData.columns.map((col, idx) => (
@@ -222,13 +223,13 @@ export const NodeConfigReadSheetSection = ({
             ) : (
               <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
                 <HiOutlineTable className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Chưa có cột nào được tải</p>
-                <p className="text-xs text-gray-400 mt-1">Nhấn "Kiểm tra kết nối" để tải danh sách cột</p>
+                <p className="text-sm text-gray-500">{t('noColumnsLoaded')}</p>
+                <p className="text-xs text-gray-400 mt-1">{t('pressToLoadColumns')}</p>
               </div>
             )}
 
             <NodeConfigDataColumnPicker
-              title="Chỉ đọc các cột đã chọn (tối ưu bộ nhớ / log)"
+              title={t('onlySelectedColumns')}
               options={(Array.isArray(formData.columns) ? formData.columns : []).map((c) => ({
                 key: String(c || '').trim(),
                 label: String(c || '').trim(),
@@ -236,12 +237,12 @@ export const NodeConfigReadSheetSection = ({
               selectedKeys={Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : []}
               setFormData={setFormData}
               formField="dataSelectedColumns"
-              hint="Google vẫn tải file CSV đầy đủ; server chỉ giữ các cột chọn trong object để giảm RAM và kích thước log. Để trống = giữ mọi cột như trước."
+              hint={t('columnHint')}
             />
 
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-sm text-green-700">
-                <strong>Thành công!</strong> Sau khi kiểm tra kết nối, các cột sẽ được hiển thị ở đây và có thể sử dụng trong các node tiếp theo.
+                <strong>{t('common.success')}:</strong> {t('connectionSuccess')}
               </p>
             </div>
           </div>
@@ -256,7 +257,7 @@ export const NodeConfigReadSheetSection = ({
     <div className="flex" style={{ minHeight: '500px' }}>
       <div className="w-64 border-r border-gray-200 flex flex-col">
         <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">Cài đặt</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readSheetSections.map((section) => {

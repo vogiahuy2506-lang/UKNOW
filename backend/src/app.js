@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import { globalLimiter, authLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -42,6 +43,8 @@ import planRoutes from './routes/plan.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';
+import chatbotRoutes from './routes/chatbot.routes.js';
+import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
@@ -61,6 +64,10 @@ export function createApp() {
     'http://127.0.0.1:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5175',
+    'http://localhost:5176',
+    'http://127.0.0.1:5176',
     'http://localhost:4173',
     'http://127.0.0.1:4173',
   ];
@@ -79,6 +86,24 @@ export function createApp() {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+          connectSrc: ["'self'", 'https://generativelanguage.googleapis.com', 'https://accounts.google.com'],
+          frameSrc: ["'self'", 'https://www.youtube.com'],
+          objectSrc: ["'none'"],
+          upgradeInsecureRequests: [],
+        },
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
     })
   );
   app.use(
@@ -113,7 +138,7 @@ export function createApp() {
   // Resolve custom hostname (*.lp.founderai.biz) → landing page slug
   app.use(domainResolver);
 
-  app.use('/api/auth', authRoutes);
+  app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
   app.use('/api/email-templates', emailTemplateRoutes);
@@ -130,7 +155,7 @@ export function createApp() {
   app.use('/download', downloadRoutes);
   app.use('/track', trackingRoutes);
   app.use('/t', trackingShortLinkRoutes);
-  app.use('/api/webhooks', webhookRoutes);
+  app.use('/api/webhooks', webhookLimiter, webhookRoutes);
   app.use('/api/courses', coursesRoutes);
   app.use('/api/zalo', zaloSettingsRoutes);
   app.use('/api/zalo-templates', zaloTemplateRoutes);
@@ -149,11 +174,42 @@ export function createApp() {
   app.use('/api/admin/members', adminMembersRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/ai/chatbot', chatbotRoutes);
+  app.use('/api/chatbot-public', chatbotPublicRoutes);
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/custom-domains', customDomainRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Zalo domain verification meta tag
+  app.get('/', (req, res) => {
+    return res.send(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="zalo-platform-site-verification" content="KlgV4OVxHJrppf8XXBaeArFAIJI_I6XjCJWu" />
+    <title>FounderAI API</title>
+</head>
+<body>
+    <h1>FounderAI API Server</h1>
+    <p>API is running...</p>
+</body>
+</html>`);
+  });
+
+  // Zalo domain verification - serve HTML file at root
+  app.get('/KlgV4OVxHJrppf8XXBaeArFAIJI_I6XjCJWu.html', (req, res) => {
+    res.set('Content-Type', 'text/html');
+    return res.send(`<!DOCTYPE html>
+<html>
+<head>
+    <meta name="zalo-verification" content="KlgV4OVxHJrppf8XXBaeArFAIJI_I6XjCJWu" />
+</head>
+<body></body>
+</html>`);
   });
 
   // Catch-all: serve landing page HTML khi request đến từ custom domain (*.lp.founderai.biz)

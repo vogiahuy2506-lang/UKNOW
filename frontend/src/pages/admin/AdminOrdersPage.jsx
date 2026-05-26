@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan } from 'react-icons/hi';
 import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.service';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
-const STATUS_LABEL = {
-  success: { label: 'Thành công', cls: 'badge-green' },
-  pending: { label: 'Chờ thanh toán', cls: 'badge-yellow' },
-  cancelled: { label: 'Đã hủy', cls: 'badge-gray' },
-};
+const STATUS_LABEL = (t) => ({
+  success: { label: t('orders.success'), cls: 'badge-green' },
+  pending: { label: t('orders.pending'), cls: 'badge-yellow' },
+  cancelled: { label: t('orders.cancelled'), cls: 'badge-gray' },
+});
 
 const KpiCard = ({ label, value, sub }) => (
   <div className="card p-5">
@@ -20,14 +21,15 @@ const KpiCard = ({ label, value, sub }) => (
   </div>
 );
 
-const StatusBadge = ({ status }) => {
-  const s = STATUS_LABEL[status] || { label: status, cls: 'badge-gray' };
+const StatusBadge = ({ status, t }) => {
+  const s = STATUS_LABEL(t)[status] || { label: status, cls: 'badge-gray' };
   return <span className={`badge ${s.cls} text-xs`}>{s.label}</span>;
 };
 
 const PAGE_SIZE = 20;
 
 const AdminOrdersPage = () => {
+  const { t } = useI18n();
   const [orders, setOrders] = useState([]);
   const [kpi, setKpi] = useState(null);
   const [total, setTotal] = useState(0);
@@ -49,10 +51,11 @@ const AdminOrdersPage = () => {
       setTotal(t);
       setKpi(k);
     } catch {
-      toast.error('Không thể tải danh sách đơn hàng');
+      toast.error(t('orders.loadFailed'));
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { fetchOrders(filters, page); }, [filters, page, fetchOrders]);
@@ -73,11 +76,11 @@ const AdminOrdersPage = () => {
   const handleCancel = async (orderCode) => {
     try {
       await adminOrdersApiService.cancelOrder(orderCode);
-      toast.success('Đã huỷ đơn và vô hiệu hoá QR');
+      toast.success(t('orders.cancelSuccess'));
       setCancellingCode(null);
       fetchOrders(filters, page);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể huỷ đơn hàng');
+      toast.error(err?.response?.data?.message || t('orders.cancelFailed'));
     }
   };
 
@@ -88,8 +91,8 @@ const AdminOrdersPage = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Đơn hàng hệ thống</h1>
-          <p className="text-gray-500 mt-1">Toàn bộ giao dịch thanh toán qua PayOS</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('adminOrders.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('adminOrders.description')}</p>
         </div>
         <button
           type="button"
@@ -98,27 +101,27 @@ const AdminOrdersPage = () => {
           disabled={isLoading}
         >
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
-          Làm mới
+          {t('adminOrders.refresh')}
         </button>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
-          label="Doanh thu"
+          label={t('adminDashboard.revenue')}
           value={kpi ? fmtVnd(kpi.totalRevenue) : '—'}
-          sub="Từ đơn thành công"
+          sub={t('adminOrders.fromSuccessfulOrders')}
         />
         <KpiCard
-          label="Tổng đơn"
+          label={t('adminOrders.totalOrders')}
           value={kpi ? Number(kpi.totalOrders).toLocaleString() : '—'}
         />
         <KpiCard
-          label="Chờ thanh toán"
+          label={t('adminOrders.pendingOrders')}
           value={kpi ? Number(kpi.pendingCount).toLocaleString() : '—'}
         />
         <KpiCard
-          label="Đã hủy"
+          label={t('adminOrders.cancelledOrders')}
           value={kpi ? Number(kpi.cancelledCount).toLocaleString() : '—'}
         />
       </div>
@@ -126,13 +129,13 @@ const AdminOrdersPage = () => {
       {/* Filter bar */}
       <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
         <div className="flex-[2] min-w-[180px]">
-          <label className="block text-xs text-gray-500 mb-1">Tìm kiếm</label>
+          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.search')}</label>
           <div className="relative">
             <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               className="input pl-9 w-full"
-              placeholder="Email hoặc mã đơn..."
+              placeholder={t('adminOrders.searchPlaceholder')}
               value={draft.search}
               onChange={(e) => setDraft((p) => ({ ...p, search: e.target.value }))}
             />
@@ -140,21 +143,21 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex-1 min-w-[130px]">
-          <label className="block text-xs text-gray-500 mb-1">Trạng thái</label>
+          <label className="block text-xs text-gray-500 mb-1">{t('orders.status')}</label>
           <select
             className="input w-full"
             value={draft.status}
             onChange={(e) => setDraft((p) => ({ ...p, status: e.target.value }))}
           >
-            <option value="">Tất cả</option>
-            <option value="success">Thành công</option>
-            <option value="pending">Chờ thanh toán</option>
-            <option value="cancelled">Đã hủy</option>
+            <option value="">{t('adminOrders.all')}</option>
+            <option value="success">{t('adminOrders.success')}</option>
+            <option value="pending">{t('adminOrders.pending')}</option>
+            <option value="cancelled">{t('adminOrders.cancelled')}</option>
           </select>
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">Từ ngày</label>
+          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.fromDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -164,7 +167,7 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">Đến ngày</label>
+          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.toDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -174,8 +177,8 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex gap-2 shrink-0">
-          <button type="submit" className="btn btn-primary" disabled={isLoading}>Lọc</button>
-          <button type="button" className="btn btn-secondary" onClick={handleReset}>Xóa lọc</button>
+          <button type="submit" className="btn btn-primary" disabled={isLoading}>{t('common.filter')}</button>
+          <button type="button" className="btn btn-secondary" onClick={handleReset}>{t('adminOrders.clearFilters')}</button>
         </div>
       </form>
 
@@ -185,7 +188,7 @@ const AdminOrdersPage = () => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Mã đơn', 'Gói dịch vụ', 'Khách hàng', 'Số tiền', 'Ngày tạo', 'Trạng thái', 'Hành động'].map((h) => (
+                {[t('adminOrders.orderCode'), t('adminOrders.servicePackage'), t('adminOrders.customer'), t('adminOrders.amount'), t('adminOrders.createdAt'), t('adminOrders.status'), t('adminOrders.actions')].map((h) => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">
                     {h}
                   </th>
@@ -206,7 +209,7 @@ const AdminOrdersPage = () => {
               ) : orders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
-                    Không có đơn hàng nào.
+                    {t('adminOrders.noOrders')}
                   </td>
                 </tr>
               ) : orders.map((o) => (
@@ -217,7 +220,7 @@ const AdminOrdersPage = () => {
                       <span className="font-medium text-gray-800">{o.planName || '—'}</span>
                       {o.isCustom && (
                         <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium">
-                          Riêng
+                          {t('adminOrders.custom')}
                         </span>
                       )}
                     </div>
@@ -245,21 +248,21 @@ const AdminOrdersPage = () => {
                             onClick={() => handleCancel(o.orderCode)}
                             className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
-                            Xác nhận
+                            {t('adminOrders.confirm')}
                           </button>
                           <button
                             type="button"
                             onClick={() => setCancellingCode(null)}
                             className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
                           >
-                            Thôi
+                            {t('adminOrders.cancel')}
                           </button>
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setCancellingCode(o.orderCode)}
-                          title="Huỷ đơn và vô hiệu hoá QR"
+                          title={t('adminOrders.cancelOrderAndDisableQR')}
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <HiOutlineBan className="w-4 h-4" />
@@ -277,7 +280,7 @@ const AdminOrdersPage = () => {
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
             <span>
-              Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / {total} đơn
+              {t('adminOrders.displaying', { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, total), total })}
             </span>
             <div className="flex gap-1">
               <button
@@ -286,7 +289,7 @@ const AdminOrdersPage = () => {
                 onClick={() => setPage((p) => p - 1)}
                 className="btn btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
               >
-                ← Trước
+                ← {t('adminOrders.previous')}
               </button>
               {[...Array(Math.min(totalPages, 5))].map((_, i) => {
                 const pg = page <= 3 ? i + 1 : page - 2 + i;
@@ -308,7 +311,7 @@ const AdminOrdersPage = () => {
                 onClick={() => setPage((p) => p + 1)}
                 className="btn btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
               >
-                Sau →
+                {t('adminOrders.next')} →
               </button>
             </div>
           </div>

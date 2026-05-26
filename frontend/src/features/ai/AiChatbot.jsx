@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useNavigate, Link } from 'react-router-dom';
+import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
@@ -50,9 +51,9 @@ const CATEGORIES = [
 ];
 
 // Category picker overlay
-const CategoryPicker = ({ onSelect, onCancel }) => (
+const CategoryPicker = ({ onSelect, onCancel, t }) => (
   <div className="mt-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
-    <p className="text-xs font-bold text-orange-700 mb-2">📂 Lưu vào danh mục nào?</p>
+    <p className="text-xs font-bold text-orange-700 mb-2">📂 {t('aiChatbot.saveToCategory')}</p>
     <div className="flex gap-2">
       {CATEGORIES.map(cat => (
         <button
@@ -64,12 +65,12 @@ const CategoryPicker = ({ onSelect, onCancel }) => (
         </button>
       ))}
     </div>
-    <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">Huỷ</button>
+    <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">{t('aiChatbot.cancel')}</button>
   </div>
 );
 
 // Template preview card
-const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
+const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -86,10 +87,10 @@ const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
         category,
         variables: [],
       });
-      toast.success('✅ Đã lưu template thành công!');
+      toast.success('✅ ' + t('aiChatbot.templateSaved'));
       onSave?.();
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Lưu thất bại');
+      toast.error(e.response?.data?.message || t('aiChatbot.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -102,25 +103,25 @@ const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
           ? <HiOutlineMail className="w-4 h-4 text-orange-500" />
           : <HiOutlineChat className="w-4 h-4 text-blue-500" />}
         <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-          {draft.channel === 'email' ? 'Template Email' : 'Template Zalo'}
+          {draft.channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate')}
         </span>
       </div>
 
       <div className="p-4 space-y-3">
         <div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Tên template</p>
+          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{t('aiChatbot.templateName')}</p>
           <p className="text-sm font-bold text-slate-800">{draft.templateName}</p>
         </div>
 
         {draft.subject && (
           <div>
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Tiêu đề</p>
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{t('aiChatbot.subject')}</p>
             <p className="text-sm text-slate-700">{draft.subject}</p>
           </div>
         )}
 
         <div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1">Nội dung</p>
+          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1">{t('aiChatbot.content')}</p>
           {draft.channel === 'email' && draft.bodyHtml ? (
             <div
               className="text-xs text-slate-600 leading-relaxed max-h-40 overflow-y-auto border border-slate-100 rounded-lg p-2 bg-gray-50"
@@ -134,7 +135,7 @@ const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
         </div>
 
         {showCategoryPicker ? (
-          <CategoryPicker onSelect={handleSave} onCancel={() => setShowCategoryPicker(false)} />
+          <CategoryPicker onSelect={handleSave} onCancel={() => setShowCategoryPicker(false)} t={t} />
         ) : (
           <div className="flex gap-2 pt-1">
             <button
@@ -143,14 +144,14 @@ const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
               className="flex-1 py-2.5 bg-orange-500 text-white text-xs font-black rounded-xl hover:bg-orange-600 flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
             >
               <HiOutlineCheck className="w-4 h-4" />
-              {saving ? 'Đang lưu...' : 'Lưu vào thư viện'}
+              {saving ? t('aiChatbot.saving') : t('aiChatbot.saveToLibrary')}
             </button>
             <button
               onClick={() => onEdit?.(draft)}
               className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-all"
             >
               <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
-              Chỉnh sửa
+              {t('aiChatbot.edit')}
             </button>
           </div>
         )}
@@ -160,11 +161,11 @@ const TemplateDraftCard = ({ draft, onSave, onEdit }) => {
 };
 
 // Ask-more card
-const AskMoreCard = ({ missingFields }) => (
+const AskMoreCard = ({ missingFields, t }) => (
   <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
     <HiOutlineQuestionMarkCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
     <div>
-      <p className="text-xs font-bold text-amber-800 mb-1">Cần thêm thông tin:</p>
+      <p className="text-xs font-bold text-amber-800 mb-1">{t('aiChatbot.needMoreInfo')}</p>
       <ul className="space-y-0.5">
         {missingFields.map((f, i) => (
           <li key={i} className="text-xs text-amber-700 flex items-center gap-1">
@@ -177,14 +178,14 @@ const AskMoreCard = ({ missingFields }) => (
 );
 
 // Ask campaign type card - hỏi user chọn kênh
-const AskCampaignTypeCard = ({ data, onSelect }) => {
+const AskCampaignTypeCard = ({ data, onSelect, t }) => {
   if (!data?.campaignOptions) return null;
-  
+
   return (
     <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
       <div className="flex items-center gap-2 mb-3">
         <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-600">Chọn kênh chiến dịch</span>
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-600">{t('aiChatbot.selectCampaignChannel')}</span>
       </div>
       {data.campaignName && (
         <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
@@ -192,7 +193,7 @@ const AskCampaignTypeCard = ({ data, onSelect }) => {
       {data.description && (
         <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
       )}
-      <p className="text-xs text-slate-600 mb-3">Bạn muốn gửi qua kênh nào?</p>
+      <p className="text-xs text-slate-600 mb-3">{t('aiChatbot.whichChannel')}</p>
       <div className="space-y-2">
         {data.campaignOptions.map((option) => (
           <button
@@ -220,7 +221,7 @@ const AskCampaignTypeCard = ({ data, onSelect }) => {
 };
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
-const AskCampaignDetailsCard = ({ data, onSubmit }) => {
+const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const [answers, setAnswers] = useState({});
   const [emailChoice, setEmailChoice] = useState(null); // 'new' | 'existing'
   const [emailTemplateName, setEmailTemplateName] = useState('');
@@ -258,7 +259,7 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
       <div className="flex items-center gap-2">
         <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
         <span className="font-black text-[10px] uppercase tracking-[0.2em] text-orange-600">
-          Thiết kế chiến dịch
+          {t('aiChatbot.designCampaign')}
         </span>
       </div>
 
@@ -325,7 +326,7 @@ const AskCampaignDetailsCard = ({ data, onSubmit }) => {
         disabled={!allAnswered}
         className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-orange-500 hover:bg-orange-600 text-white"
       >
-        {allAnswered ? '✓ Tạo chiến dịch theo lựa chọn này' : 'Chọn hết các mục bên trên để tiếp tục'}
+        {allAnswered ? '✓ ' + t('aiChatbot.createCampaignWithOptions') : t('aiChatbot.selectAllAbove')}
       </button>
     </div>
   );
@@ -454,14 +455,14 @@ const AskLandingDetailsCard = ({ data, onSubmit }) => {
 };
 
 // Ask audience card - hỏi user chọn đối tượng khách hàng
-const AskAudienceCard = ({ data, onSelect }) => {
+const AskAudienceCard = ({ data, onSelect, t }) => {
   if (!data?.campaignOptions) return null;
-  
+
   return (
     <div className="mt-4 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-4">
       <div className="flex items-center gap-2 mb-3">
         <HiOutlineSparkles className="w-5 h-5 text-purple-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-purple-600">Chọn đối tượng khách hàng</span>
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-purple-600">{t('aiChatbot.selectAudience')}</span>
       </div>
       {data.campaignName && (
         <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
@@ -469,7 +470,7 @@ const AskAudienceCard = ({ data, onSelect }) => {
       {data.description && (
         <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
       )}
-      <p className="text-xs text-slate-600 mb-3">Bạn muốn gửi cho đối tượng nào?</p>
+      <p className="text-xs text-slate-600 mb-3">{t('aiChatbot.sendToAudience')}</p>
       <div className="space-y-2">
         {data.campaignOptions.map((option) => (
           <button
@@ -500,7 +501,7 @@ const AskAudienceCard = ({ data, onSelect }) => {
 };
 
 // Campaign Draft Editor - Chỉnh sửa draft ngay trong chatbot
-const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
+const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
   // AI có thể trả về nodes hoặc summary.steps
   const rawNodes = script?.nodes || [];
   const rawSteps = script?.summary?.steps || [];
@@ -569,7 +570,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HiOutlinePencilAlt className="w-5 h-5" />
-            <span className="font-black text-[10px] uppercase tracking-[0.2em]">Chỉnh sửa Draft</span>
+            <span className="font-black text-[10px] uppercase tracking-[0.2em]">{t('aiChatbot.editDraft')}</span>
           </div>
           <button onClick={onCancel} className="p-1 hover:bg-orange-400 rounded-lg">
             <HiOutlineX className="w-4 h-4" />
@@ -585,7 +586,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
             activeTab === 'basic' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
           }`}
         >
-          📝 Cơ bản
+          📝 {t('aiChatbot.basic')}
         </button>
         <button
           onClick={() => setActiveTab('nodes')}
@@ -593,7 +594,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
             activeTab === 'nodes' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
           }`}
         >
-          📋 Nodes ({displayItems.length})
+          📋 {t('aiChatbot.nodes')} ({displayItems.length})
         </button>
       </div>
 
@@ -603,26 +604,26 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
           <div className="space-y-3">
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Tên chiến dịch
+                {t('aiChatbot.campaignName')}
               </label>
               <input
                 type="text"
                 value={editedScript.campaignName}
                 onChange={(e) => setEditedScript(prev => ({ ...prev, campaignName: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none"
-                placeholder="Nhập tên chiến dịch..."
+                placeholder={t('aiChatbot.enterCampaignName')}
               />
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Mô tả
+                {t('aiChatbot.description')}
               </label>
               <textarea
                 value={editedScript.description}
                 onChange={(e) => setEditedScript(prev => ({ ...prev, description: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none resize-none"
                 rows={3}
-                placeholder="Nhập mô tả chiến dịch..."
+                placeholder={t('aiChatbot.enterDescription')}
               />
             </div>
           </div>
@@ -637,7 +638,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
                 <div key={nodeId} className="bg-white rounded-lg p-3 border border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-lg">{isStep ? '📝' : getNodeIcon(item)}</span>
-                    <span className="text-xs font-bold text-slate-600">Bước {item.step || i + 1}</span>
+                    <span className="text-xs font-bold text-slate-600">{t('aiChatbot.step')} {item.step || i + 1}</span>
                     <span className="text-[10px] text-slate-400">
                       {isStep ? (item.action || '') : (item.nodeSubtype || item.subtype || 'action')}
                     </span>
@@ -656,7 +657,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
                         value={item.nodeName || ''}
                         onChange={(e) => handleNodeNameChange(nodeId, e.target.value)}
                         className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs mb-2 focus:border-orange-400 outline-none"
-                        placeholder="Tên node..."
+                        placeholder={t('aiChatbot.nodeName')}
                       />
                       {/* Email config */}
                       {(item.nodeSubtype || item.subtype || '').includes('email') && (
@@ -666,7 +667,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
                             value={item.config?.emailSubject || ''}
                             onChange={(e) => handleNodeConfigChange(nodeId, 'emailSubject', e.target.value)}
                             className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:border-orange-400 outline-none"
-                            placeholder="Tiêu đề email..."
+                            placeholder={t('aiChatbot.emailSubject')}
                           />
                         </div>
                       )}
@@ -677,7 +678,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
                           onChange={(e) => handleNodeConfigChange(nodeId, 'message', e.target.value)}
                           className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs resize-none focus:border-orange-400 outline-none"
                           rows={3}
-                          placeholder="Nội dung tin nhắn Zalo..."
+                          placeholder={t('aiChatbot.zaloMessage')}
                         />
                       )}
                     </>
@@ -685,7 +686,7 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
                 </div>
               );
             }) : (
-              <p className="text-xs text-slate-400 text-center py-4">Không có node nào để chỉnh sửa</p>
+              <p className="text-xs text-slate-400 text-center py-4">{t('aiChatbot.noNodesToEdit')}</p>
             )}
           </div>
         )}
@@ -697,13 +698,13 @@ const CampaignDraftEditor = ({ script, onSave, onCancel }) => {
           onClick={onCancel}
           className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-slate-200 transition-colors"
         >
-          Huỷ
+          {t('aiChatbot.cancelAction')}
         </button>
         <button
           onClick={handleSave}
           className="flex-1 py-2 bg-orange-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-orange-600 transition-colors"
         >
-          Lưu thay đổi
+          {t('aiChatbot.saveChanges')}
         </button>
       </div>
     </div>
@@ -979,12 +980,13 @@ const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
 // Landing page card - now imported from ./components/LandingPageCard.jsx
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
+  const { t } = useI18n();
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
 
   const welcomeMessage = isSuperAdmin
-    ? 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng Founder AI theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!'
-    : 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo và chạy chiến dịch tự động\n🌐 Thiết kế Landing Page\n\nChỉ cần mô tả yêu cầu, tôi sẽ tự tạo và chạy chiến dịch cho bạn!';
+    ? t('aiChatbot.welcomeAdmin')
+    : t('aiChatbot.welcomeUser');
 
   const [messages, setMessages] = useState([{
     role: 'assistant',
@@ -1983,7 +1985,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
               {/* Ask more */}
               {msg.type === 'ask_more' && msg.missing_fields?.length > 0 && (
-                <AskMoreCard missingFields={msg.missing_fields} />
+                <AskMoreCard missingFields={msg.missing_fields} t={t} />
               )}
 
               {/* Ask campaign type - hỏi user chọn kênh */}
@@ -1991,6 +1993,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskCampaignDetailsCard
                   data={msg.data}
                   onSubmit={handleCampaignDetailsSubmit}
+                  t={t}
                 />
               )}
 
@@ -2005,6 +2008,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskCampaignTypeCard
                   data={msg.data}
                   onSelect={handleSelectCampaignType}
+                  t={t}
                 />
               )}
 
@@ -2013,6 +2017,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskAudienceCard
                   data={msg.data}
                   onSelect={handleSelectAudience}
+                  t={t}
                 />
               )}
 
@@ -2036,6 +2041,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     toast.success('Đã cập nhật draft!');
                   }}
                   onCancel={() => setIsEditingDraft(false)}
+                  t={t}
                 />
               )}
 
@@ -2045,6 +2051,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   draft={msg.data}
                   onSave={() => {}}
                   onEdit={handleEditTemplate}
+                  t={t}
                 />
               )}
 

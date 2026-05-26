@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { renderModal, MODAL_SM } from '../../features/admin/plans/planUtils.jsx';
@@ -13,6 +14,7 @@ const SkeletonGrid = () => (
 );
 
 const AdminPlansPage = () => {
+  const { t } = useI18n();
   const [tab, setTab]                 = useState('public');
   const [plans, setPlans]             = useState([]);
   const [customPlans, setCustomPlans] = useState([]);
@@ -29,7 +31,7 @@ const AdminPlansPage = () => {
     try {
       const res = await adminPlansApiService.getPlans();
       setPlans(res.data.data || []);
-    } catch { toast.error('Không thể tải danh sách gói dịch vụ'); }
+    } catch { toast.error(t('adminPlans.loadFailed')); }
     finally { setIsLoading(false); }
   };
 
@@ -38,7 +40,7 @@ const AdminPlansPage = () => {
     try {
       const res = await adminPlansApiService.getCustomPlans(hidden);
       setCustomPlans(res.data.data || []);
-    } catch { toast.error('Không thể tải danh sách gói riêng'); }
+    } catch { toast.error(t('adminPlans.loadCustomFailed')); }
     finally { setIsLoading(false); }
   };
 
@@ -54,10 +56,10 @@ const AdminPlansPage = () => {
     if (!plan.assignedEmail) return;
     try {
       await adminPlansApiService.assignPlan(plan.id, plan.assignedEmail);
-      toast.success(`Đã kích hoạt gói "${plan.name}" cho ${plan.assignedEmail}`);
+      toast.success(`${t('adminPlans.activated')} "${plan.name}" cho ${plan.assignedEmail}`);
       fetchCustomPlans();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể kích hoạt gói');
+      toast.error(err?.response?.data?.message || t('adminPlans.activateFailed'));
     }
   };
 
@@ -75,10 +77,10 @@ const AdminPlansPage = () => {
         dailyZaloLimit: plan.dailyZaloLimit ?? null,
         monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
       });
-      toast.success(plan.isActive ? 'Đã ẩn gói dịch vụ' : 'Đã hiển thị gói dịch vụ');
+      toast.success(plan.isActive ? t('adminPlans.planHidden') : t('adminPlans.planVisible'));
       fetchPlans();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái gói');
+      toast.error(err?.response?.data?.message || t('adminPlans.updateStatusFailed'));
     }
   };
 
@@ -96,10 +98,10 @@ const AdminPlansPage = () => {
         dailyZaloLimit: plan.dailyZaloLimit ?? null,
         monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
       });
-      toast.success(`Đã khôi phục gói "${plan.name}"`);
+      toast.success(`${t('adminPlans.restored')} "${plan.name}"`);
       fetchCustomPlans();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể khôi phục gói');
+      toast.error(err?.response?.data?.message || t('adminPlans.restoreFailed'));
     }
   };
 
@@ -118,7 +120,7 @@ const AdminPlansPage = () => {
       setDeletePlan(null);
       handleRefresh();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể xóa gói');
+      toast.error(err?.response?.data?.message || t('adminPlans.deleteFailed'));
     } finally {
       setIsDeleting(false);
     }
@@ -129,23 +131,23 @@ const AdminPlansPage = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý gói dịch vụ</h1>
-          <p className="text-gray-500 mt-1">Chỉnh sửa giá, hạn mức và tính năng các gói.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('adminPlans.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('adminPlans.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={handleRefresh} className="btn btn-secondary" disabled={isLoading}>
             <HiOutlineRefresh className="w-4 h-4 mr-2" />
-            Làm mới
+            {t('common.refresh')}
           </button>
           {tab === 'custom' ? (
             <button type="button" onClick={() => setShowCustomModal(true)} className="btn btn-primary">
               <HiOutlineSparkles className="w-4 h-4 mr-2" />
-              Tạo gói riêng
+              {t('adminPlans.createCustomPlan')}
             </button>
           ) : (
             <button type="button" onClick={() => setEditPlan('new')} className="btn btn-primary">
               <HiOutlinePlus className="w-4 h-4 mr-2" />
-              Tạo gói mới
+              {t('adminPlans.createPlan')}
             </button>
           )}
         </div>
@@ -154,8 +156,8 @@ const AdminPlansPage = () => {
       {/* Toggle tabs */}
       <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
         {[
-          { key: 'public', label: 'Gói đại trà' },
-          { key: 'custom', label: 'Gói riêng doanh nghiệp', count: customPlans.length },
+          { key: 'public', label: t('adminPlans.tabPublicPlans') },
+          { key: 'custom', label: t('adminPlans.tabCustomPlans'), count: customPlans.length },
         ].map(({ key, label, count }) => (
           <button
             key={key}
@@ -177,7 +179,7 @@ const AdminPlansPage = () => {
       {tab === 'public' && (
         isLoading ? <SkeletonGrid /> :
         plans.length === 0 ? (
-          <div className="card p-10 text-center text-gray-400">Chưa có gói dịch vụ nào.</div>
+          <div className="card p-10 text-center text-gray-400">{t('adminPlans.noPlans')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {plans.map((plan) => (
@@ -202,15 +204,15 @@ const AdminPlansPage = () => {
               checked={showHidden}
               onChange={(e) => setShowHidden(e.target.checked)}
             />
-            <span className="text-sm text-gray-500">Hiện gói đã ẩn</span>
+            <span className="text-sm text-gray-500">{t('adminPlans.showHiddenPlans')}</span>
           </label>
           {isLoading ? <SkeletonGrid /> :
           customPlans.length === 0 ? (
             <div className="card p-10 text-center text-gray-400">
-              <p>Chưa có gói riêng nào.</p>
+              <p>{t('adminPlans.noCustomPlans')}</p>
               <button type="button" onClick={() => setShowCustomModal(true)} className="btn btn-primary mt-4">
                 <HiOutlineSparkles className="w-4 h-4 mr-2" />
-                Tạo gói riêng đầu tiên
+                {t('adminPlans.createFirstCustom')}
               </button>
             </div>
           ) : (
@@ -246,48 +248,48 @@ const AdminPlansPage = () => {
           const hasUsers = (deletePlan.user_count > 0) || !!deletePlan.assignedEmail;
           return (
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Xác nhận xoá gói</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{t('adminPlans.confirmDelete')}</h2>
               <p className="text-sm text-gray-600 mt-2">
-                Xoá gói <strong>{deletePlan.name}</strong>?
+                {t('adminPlans.deletePlanConfirm')} <strong>{deletePlan.name}</strong>?
               </p>
 
               {isCustom && hasUsers && (
                 <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-                  <p className="font-medium text-red-700">Gói riêng — sẽ <u>chấm dứt</u> với khách hàng</p>
+                  <p className="font-medium text-red-700">{t('adminPlans.customPlanWarning')}</p>
                   <p className="text-red-600 mt-1">
                     {deletePlan.assignedEmail
-                      ? <>Khách <strong>{deletePlan.assignedEmail}</strong> sẽ bị gỡ gói ngay lập tức và mất quyền dùng dịch vụ.</>
-                      : <>{deletePlan.user_count} khách đang dùng sẽ bị gỡ gói.</>}
+                      ? <>{t('adminPlans.customPlanUserImpact', { email: deletePlan.assignedEmail })}</>
+                      : <>{deletePlan.user_count} {t('adminPlans.customPlanCountImpact')}</>}
                   </p>
                   <p className="text-gray-500 italic text-xs mt-2">
-                    Lịch sử đơn hàng vẫn được giữ để đối soát.
+                    {t('adminPlans.orderHistoryPreserved')}
                   </p>
                 </div>
               )}
 
               {!isCustom && hasUsers && (
                 <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                  <p className="font-medium text-amber-700">Gói đại trà — vẫn cho khách cũ dùng tiếp</p>
+                  <p className="font-medium text-amber-700">{t('adminPlans.standardPlanWarning')}</p>
                   <p className="text-amber-600 mt-1">
-                    {deletePlan.user_count > 0 && <>{deletePlan.user_count} khách đang dùng vẫn được phục vụ đến hết kỳ.</>}
-                    {' '}Khách mới sẽ không còn thấy gói này trên trang Bảng giá.
+                    {deletePlan.user_count > 0 && <>{deletePlan.user_count} {t('adminPlans.standardPlanUserImpact')}</>}
+                    {' '}{t('adminPlans.newCustomersCannotSee')}
                   </p>
                 </div>
               )}
 
               {!hasUsers && (
                 <p className="text-xs text-gray-400 italic mt-2">
-                  Chưa có khách dùng — gói sẽ bị <strong>xoá vĩnh viễn</strong>.
+                  {t('adminPlans.noUsersWarning')}
                 </p>
               )}
 
               <div className="flex justify-end gap-2 mt-6">
-                <button type="button" className="btn btn-secondary" onClick={() => setDeletePlan(null)} disabled={isDeleting}>Hủy</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setDeletePlan(null)} disabled={isDeleting}>{t('common.cancel')}</button>
                 <button type="button"
                   className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
                   onClick={handleDelete} disabled={isDeleting}
                 >
-                  {isDeleting ? 'Đang xoá...' : (isCustom && hasUsers ? 'Xoá & chấm dứt' : 'Xác nhận xoá')}
+                  {isDeleting ? t('adminPlans.deleting') : (isCustom && hasUsers ? t('adminPlans.deleteAndTerminate') : t('adminPlans.confirmDeleteButton'))}
                 </button>
               </div>
             </div>

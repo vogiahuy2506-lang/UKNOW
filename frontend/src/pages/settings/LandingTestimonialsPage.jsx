@@ -9,6 +9,7 @@ import {
 } from '../../features/landing/services/landingTestimonialsApi.service.js';
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service.js';
 import { normalizePublicFileUrlForEmbed } from '../../features/landing/utils/publicFileUrl.js';
+import { useI18n } from '../../i18n';
 
 const emptyForm = () => ({
   quoteVi: '',
@@ -32,6 +33,7 @@ const emptyForm = () => ({
  * 2. Thêm / sửa / xóa; upload ảnh tạm qua POST `/api/uploads/temp`, lưu bản ghi kèm `imageTempId` + `imageOriginalName`.
  */
 const LandingTestimonialsPage = () => {
+  const { t } = useI18n();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,11 +55,12 @@ const LandingTestimonialsPage = () => {
       const list = await fetchAdminLandingTestimonials();
       setRows(list);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Không thể tải danh sách');
+      toast.error(e?.response?.data?.message || t('landingTestimonials.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -135,9 +138,9 @@ const LandingTestimonialsPage = () => {
         return { ...prev, imageUrl: '' };
       });
       setPendingImage({ tempId: tempData.tempId, originalName: tempData.originalName || file.name });
-      toast.success('Đã tải ảnh lên — bấm Lưu để áp dụng');
-    } catch (err) {
-      toast.error('Upload ảnh thất bại');
+      toast.success(t('landingTestimonials.imageUploaded'));
+    } catch {
+      toast.error(t('landingTestimonials.uploadFailed'));
     } finally {
       setUploadingFile(false);
     }
@@ -168,11 +171,11 @@ const LandingTestimonialsPage = () => {
       isActive: Boolean(form.isActive),
     };
     if (!payload.quoteVi || !payload.quoteEn) {
-      toast.error('Nội dung (VI) và (EN) là bắt buộc');
+      toast.error(t('landingTestimonials.contentViRequired'));
       return;
     }
     if (!payload.nameVi || !payload.nameEn) {
-      toast.error('Tên (VI) và (EN) là bắt buộc');
+      toast.error(t('landingTestimonials.nameViRequired'));
       return;
     }
     if (pendingImage?.tempId && pendingImage?.originalName) {
@@ -185,28 +188,28 @@ const LandingTestimonialsPage = () => {
       setSaving(true);
       if (editingId) {
         await updateLandingTestimonial(editingId, payload);
-        toast.success('Đã cập nhật');
+        toast.success(t('landingTestimonials.updated'));
       } else {
         await createLandingTestimonial(payload);
-        toast.success('Đã thêm đánh giá');
+        toast.success(t('landingTestimonials.created'));
       }
       closeModal();
       await load(true);
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể lưu');
+    } catch {
+      toast.error(t('landingTestimonials.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (row) => {
-    if (!window.confirm(`Xóa đánh giá của "${row.nameVi}"?`)) return;
+    if (!window.confirm(t('landingTestimonials.deleteConfirm', { name: row.nameVi }))) return;
     try {
       await deleteLandingTestimonial(row.id);
-      toast.success('Đã xóa');
+      toast.success(t('landingTestimonials.deleted'));
       await load(true);
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể xóa');
+    } catch {
+      toast.error(t('landingTestimonials.deleteFailed'));
     }
   };
 
@@ -214,9 +217,9 @@ const LandingTestimonialsPage = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Landing — đánh giá (testimonials)</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('landingTestimonials.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Quản lý thẻ cảm nhận trên <code className="text-xs bg-gray-100 px-1 rounded">/l</code> — nội dung, sao, tên, chức vụ, vị trí, ảnh (URL hoặc upload).
+            {t('landingTestimonials.description')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -227,7 +230,7 @@ const LandingTestimonialsPage = () => {
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             <HiOutlineRefresh className={refreshing ? 'animate-spin' : ''} />
-            Làm mới
+            {t('landingTestimonials.refresh')}
           </button>
           <button
             type="button"
@@ -235,31 +238,31 @@ const LandingTestimonialsPage = () => {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
           >
             <HiOutlinePlus />
-            Thêm đánh giá
+            {t('landingTestimonials.addTestimonial')}
           </button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Đang tải...</p>
+        <p className="text-gray-500">{t('landingTestimonials.loading')}</p>
       ) : (
         <div className="overflow-x-auto border border-gray-200 rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Tên (VI)</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">Sao</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 max-w-xs">Nội dung (rút gọn)</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">Ảnh MC</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">Hiển thị</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700">Thao tác</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingTestimonials.nameVi')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingTestimonials.stars')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 max-w-xs">{t('landingTestimonials.content')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">{t('landingTestimonials.image')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingTestimonials.visible')}</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700">{t('landingTestimonials.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
-                    Chưa có bản ghi — trang landing dùng nội dung mặc định trong code.
+                    {t('landingTestimonials.noRecords')}
                   </td>
                 </tr>
               ) : (
@@ -275,7 +278,7 @@ const LandingTestimonialsPage = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block"
-                          title="Xem ảnh minh chứng"
+                          title={t('landingTestimonials.viewImage')}
                         >
                           <img
                             src={normalizePublicFileUrlForEmbed(r.imageUrl)}
@@ -287,21 +290,21 @@ const LandingTestimonialsPage = () => {
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-center">{r.isActive ? 'Có' : 'Không'}</td>
+                    <td className="px-3 py-2 text-center">{r.isActive ? t('landingTestimonials.yes') : t('landingTestimonials.no')}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 hover:bg-primary-50 rounded"
                       >
-                        <HiOutlinePencil /> Sửa
+                        <HiOutlinePencil /> {t('landingTestimonials.edit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(r)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-red-600 hover:bg-red-50 rounded ml-2"
                       >
-                        <HiOutlineTrash /> Xóa
+                        <HiOutlineTrash /> {t('landingTestimonials.delete')}
                       </button>
                     </td>
                   </tr>
@@ -315,11 +318,11 @@ const LandingTestimonialsPage = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? 'Sửa đánh giá' : 'Thêm đánh giá'}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? t('landingTestimonials.editTestimonial') : t('landingTestimonials.createTestimonial')}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-600">Nội dung (VI) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.contentVi')}</span>
                   <textarea
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
                     value={form.quoteVi}
@@ -328,7 +331,7 @@ const LandingTestimonialsPage = () => {
                   />
                 </label>
                 <label className="block sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-600">Nội dung (EN) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.contentEn')}</span>
                   <textarea
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
                     value={form.quoteEn}
@@ -338,7 +341,7 @@ const LandingTestimonialsPage = () => {
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">Số sao (1–5)</span>
+                <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.starCount')}</span>
                 <select
                   className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                   value={form.starRating}
@@ -346,14 +349,14 @@ const LandingTestimonialsPage = () => {
                 >
                   {[1, 2, 3, 4, 5].map((n) => (
                     <option key={n} value={n}>
-                      {n} sao
+                      {n} {t('landingTestimonials.stars').toLowerCase()}
                     </option>
                   ))}
                 </select>
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tên (VI) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.nameVi')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.nameVi}
@@ -362,7 +365,7 @@ const LandingTestimonialsPage = () => {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Tên (EN) *</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.nameEn')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.nameEn}
@@ -373,7 +376,7 @@ const LandingTestimonialsPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Chức vụ / vai trò (VI)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.roleVi')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.roleVi}
@@ -381,7 +384,7 @@ const LandingTestimonialsPage = () => {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Chức vụ / vai trò (EN)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.roleEn')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.roleEn}
@@ -391,36 +394,34 @@ const LandingTestimonialsPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Vị trí / địa điểm (VI)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.locationVi')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.locationVi}
                     onChange={(e) => setField('locationVi', e.target.value)}
-                    placeholder="VD: Hà Nội"
+                    placeholder={t('landingTestimonials.locationPlaceholderVi')}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">Vị trí / địa điểm (EN)</span>
+                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.locationEn')}</span>
                   <input
                     className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={form.locationEn}
                     onChange={(e) => setField('locationEn', e.target.value)}
-                    placeholder="e.g. Hanoi"
+                    placeholder={t('landingTestimonials.locationPlaceholderEn')}
                   />
                 </label>
               </div>
               <label className="block">
                 <span className="text-xs font-medium text-gray-600">
-                  URL ảnh minh chứng (http/https, tùy chọn — hoặc upload bên dưới)
+                  {t('landingTestimonials.imageUrlLabel')}
                 </span>
                 <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
                   <span className="block">
-                    Ưu tiên khi lưu: nếu vừa có URL vừa chọn file upload, hệ thống dùng ảnh từ upload (đường dẫn do
-                    server tạo).
+                    {t('landingTestimonials.imageUrlNote1')}
                   </span>
                   <span className="block">
-                    Khi đã chọn file upload tạm, ô URL ảnh bị khóa — bấm «Bỏ chọn ảnh upload» bên dưới để nhập lại
-                    URL.
+                    {t('landingTestimonials.imageUrlNote2')}
                   </span>
                 </p>
                 <input
@@ -431,23 +432,23 @@ const LandingTestimonialsPage = () => {
                   onChange={(e) => setField('imageUrl', e.target.value)}
                   placeholder="https://..."
                   disabled={Boolean(pendingImage)}
-                  title={pendingImage ? 'Đang có ảnh upload tạm — bỏ chọn ảnh để nhập URL' : ''}
+                  title={pendingImage ? t('landingTestimonials.imageDisabledNote') : ''}
                 />
               </label>
               <div className="rounded-lg border border-dashed border-gray-300 p-3">
                 <p className="text-xs text-gray-600 mb-2">
-                  Upload ảnh minh chứng (lưu vào thư mục uploads khi bấm Lưu; xóa bản ghi sẽ xóa file tương ứng)
+                  {t('landingTestimonials.uploadImageLabel')}
                 </p>
                 <input type="file" accept="image/*" onChange={onPickImage} disabled={uploadingFile} className="text-sm" />
                 {pendingImage && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-primary-600">Chờ lưu: {pendingImage.originalName}</p>
+                    <p className="text-xs text-primary-600">{t('landingTestimonials.pendingSave', { name: pendingImage.originalName })}</p>
                     <button
                       type="button"
                       onClick={clearPendingImage}
                       className="text-xs font-medium text-gray-700 underline hover:text-primary-600"
                     >
-                      Bỏ chọn ảnh upload
+                      {t('landingTestimonials.cancelUpload')}
                     </button>
                   </div>
                 )}
@@ -458,7 +459,7 @@ const LandingTestimonialsPage = () => {
                   checked={form.isActive}
                   onChange={(e) => setField('isActive', e.target.checked)}
                 />
-                <span className="text-gray-700">Đang hiển thị trên landing</span>
+                <span className="text-gray-700">{t('landingTestimonials.isActiveLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-4">
                 <button
@@ -466,14 +467,14 @@ const LandingTestimonialsPage = () => {
                   onClick={closeModal}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
-                  Hủy
+                  {t('landingTestimonials.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {saving ? 'Đang lưu...' : 'Lưu'}
+                  {saving ? t('landingTestimonials.saving') : t('landingTestimonials.save')}
                 </button>
               </div>
             </form>

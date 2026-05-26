@@ -3,15 +3,7 @@ import {
   HiOutlineX, HiOutlineSearch, HiOutlineSparkles
 } from 'react-icons/hi';
 import api from '../../../services/api';
-
-const CATEGORY_LABELS = {
-  lead_capture: 'Thu thập Lead',
-  product: 'Sản phẩm',
-  event: 'Sự kiện / Webinar',
-  webinar: 'Webinar',
-  ecommerce: 'Cửa hàng',
-  consultation: 'Tư vấn',
-};
+import { useI18n } from '../../../i18n';
 
 const CATEGORY_ICONS = {
   lead_capture: '📋',
@@ -22,10 +14,23 @@ const CATEGORY_ICONS = {
   consultation: '💼',
 };
 
+const getCategoryLabel = (t, category) => {
+  const labels = {
+    lead_capture: t('templateSelector.leadCapture'),
+    product: t('templateSelector.product'),
+    event: t('templateSelector.event'),
+    webinar: t('templateSelector.event'),
+    ecommerce: t('templateSelector.ecommerce'),
+    consultation: t('templateSelector.consultation'),
+  };
+  return labels[category] || category;
+};
+
 /**
  * Template Selector Modal for choosing a base template before generating.
  */
 const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
+  const { t } = useI18n();
   const [templates, setTemplates] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -85,8 +90,8 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
               <HiOutlineSparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="font-bold text-slate-800 text-lg">Chọn Template</h2>
-              <p className="text-xs text-slate-500">Chọn một mẫu làm nền tảng hoặc tạo từ đầu</p>
+              <h2 className="font-bold text-slate-800 text-lg">{t('templateSelector.title')}</h2>
+              <p className="text-xs text-slate-500">{t('templateSelector.subtitle')}</p>
             </div>
           </div>
           <button
@@ -105,7 +110,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
               <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm kiếm template..."
+                placeholder={t('templateSelector.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-orange-400"
@@ -123,7 +128,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
                   : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
-              Tất cả
+              {t('templateSelector.all')}
             </button>
             {categories.map((cat) => (
               <button
@@ -136,7 +141,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
                 }`}
               >
                 <span>{CATEGORY_ICONS[cat.category] || '📄'}</span>
-                <span>{CATEGORY_LABELS[cat.category] || cat.category}</span>
+                <span>{getCategoryLabel(t, cat.category)}</span>
                 <span className={`text-[10px] ${selectedCategory === cat.category ? 'text-slate-300' : 'text-slate-400'}`}>
                   ({cat.count})
                 </span>
@@ -153,7 +158,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
             </div>
           ) : filteredTemplates.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-slate-400">Không tìm thấy template nào</p>
+              <p className="text-slate-400">{t('templateSelector.notFound')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -166,8 +171,8 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
                   <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-orange-100 transition-colors">
                     <span className="text-3xl">✨</span>
                   </div>
-                  <span className="font-bold text-slate-700 text-sm">Tạo từ đầu</span>
-                  <span className="text-xs text-slate-400 mt-1">Không dùng template</span>
+                  <span className="font-bold text-slate-700 text-sm">{t('templateSelector.createFromScratch')}</span>
+                  <span className="text-xs text-slate-400 mt-1">{t('templateSelector.createFromScratchDesc')}</span>
                 </div>
               </button>
 
@@ -186,7 +191,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
                     <div className="text-center p-4">
                       <div className="text-4xl mb-2">{CATEGORY_ICONS[template.category] || '📄'}</div>
                       <div className="text-[10px] text-slate-400 uppercase tracking-wider">
-                        {CATEGORY_LABELS[template.category] || template.category}
+                        {getCategoryLabel(t, template.category)}
                       </div>
                     </div>
                   </div>
@@ -207,7 +212,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
                   <div className={`absolute inset-0 bg-orange-500/90 rounded-2xl flex items-center justify-center transition-opacity ${
                     hoveredId === template.id ? 'opacity-100' : 'opacity-0'
                   }`}>
-                    <span className="text-white font-bold text-sm">Chọn template này</span>
+                    <span className="text-white font-bold text-sm">{t('templateSelector.selectTemplate')}</span>
                   </div>
                 </button>
               ))}
@@ -221,7 +226,7 @@ const TemplateSelector = ({ isOpen, onClose, onSelect }) => {
             onClick={onClose}
             className="w-full py-3 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors"
           >
-            Huỷ
+            {t('templateSelector.cancel')}
           </button>
         </div>
       </div>

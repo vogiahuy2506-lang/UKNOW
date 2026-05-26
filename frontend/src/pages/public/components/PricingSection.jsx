@@ -4,6 +4,7 @@ import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt } from 'react-i
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
+import { useI18n } from '../../../i18n';
 
 const ZALO_URL = 'https://zalo.me/0388180856';
 
@@ -22,7 +23,7 @@ const GLASS_STYLES = [
   },
   {
     wrapper: 'bg-white/75 border border-orange-300/60 backdrop-blur-sm shadow-xl shadow-orange-500/10',
-    badge: 'Phổ Biến Nhất',
+    badge: null, // Will be set from t('pricing.mostPopular')
     title: 'text-slate-900',
     price: 'text-slate-900',
     unit: 'text-slate-500',
@@ -72,7 +73,7 @@ const DYNAMIC_STYLES = [
   {
     // Nổi bật bằng màu + shadow + ring, KHÔNG dùng scale (làm card lệch chiều cao so với các card khác)
     wrapper: 'bg-gradient-to-b from-orange-600 to-red-600 shadow-2xl shadow-orange-500/30 ring-2 ring-orange-400 relative z-10',
-    badge: 'Phổ Biến Nhất',
+    badge: true, // Will use t('pricing.mostPopular')
     title: 'text-white',
     price: 'text-white',
     unit: 'text-orange-100',
@@ -114,6 +115,7 @@ const DYNAMIC_STYLES = [
  * - compact  (boolean): thu nhỏ padding/spacing để fit trong 1 viewport.
  */
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState([]);
@@ -228,7 +230,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   {style.badge && (
                     <div className="absolute top-3 inset-x-0 flex justify-center z-20">
                       <span className="bg-white text-orange-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full shadow-md whitespace-nowrap">
-                        {style.badge}
+                        {t('pricing.mostPopular')}
                       </span>
                     </div>
                   )}
@@ -248,14 +250,14 @@ export default function PricingSection({ embedded = false, compact = false, glas
                     <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
                       {isCustom || plan.price === 0 ? (
                         <div className="flex items-end gap-2">
-                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>Liên hệ</span>
+                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
                         </div>
                       ) : (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
                             {(plan.price / 1000).toLocaleString('vi-VN')}K
                           </span>
-                          <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>/tháng</span>
+                          <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perMonth')}</span>
                         </div>
                       )}
                     </div>
@@ -273,7 +275,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       onClick={() => handlePlanClick(plan)}
                       className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
                     >
-                      {isCustom || plan.price === 0 ? 'Nhận báo giá riêng' : 'Bắt đầu dùng thử'}
+                      {isCustom || plan.price === 0 ? t('pricing.getQuote') : t('pricing.startTrial')}
                     </button>
                   </div>
                 </div>
@@ -285,7 +287,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {!compact && !glass && (
           <AnimatedSection className="text-center mt-16 max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-full px-6 py-3 text-sm font-medium text-slate-600">
-              <FaStar className="text-yellow-400 w-5 h-5" /> Tất cả các gói đều có <strong className="text-orange-600">14 ngày dùng thử miễn phí</strong>. Không cần thẻ tín dụng.
+              <FaStar className="text-yellow-400 w-5 h-5" /> {t('pricing.trialOffer')}
             </div>
           </AnimatedSection>
         )}

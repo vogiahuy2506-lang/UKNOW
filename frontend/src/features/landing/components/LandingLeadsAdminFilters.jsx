@@ -1,6 +1,7 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
 import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options';
+import { useI18n } from '../../../i18n';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách để giảm re-render.
@@ -30,6 +31,7 @@ const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checke
  * @param {function} props.setDraftFilters
  */
 function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters }) {
+  const { t } = useI18n();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const toggleOne = useCallback(
@@ -67,14 +69,14 @@ function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters 
             onClick={selectAll}
             className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Chọn tất cả
+            {t('landingLeads.selectAll')}
           </button>
           <button
             type="button"
             onClick={clearAll}
             className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Bỏ chọn
+            {t('landingLeads.deselectAll')}
           </button>
         </div>
       </div>
@@ -112,6 +114,7 @@ export function LandingLeadsAdminFilters({
   onExportExcel,
   isExporting = false,
 }) {
+  const { t } = useI18n();
   const occupations = Array.isArray(draftFilters.landingLeadsOccupations)
     ? draftFilters.landingLeadsOccupations
     : [];
@@ -138,9 +141,9 @@ export function LandingLeadsAdminFilters({
     <div className="card p-5 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Bộ lọc</h2>
+          <h2 className="text-base font-semibold text-gray-900">{t('landingLeads.filterTitle')}</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Lọc theo ngày gửi, landing/slug, nghề nghiệp và lĩnh vực (để trống nghĩa là không lọc theo mục đó).
+            {t('landingLeads.filterDescription')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -149,7 +152,7 @@ export function LandingLeadsAdminFilters({
             onClick={onReset}
             className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Xóa bộ lọc
+            {t('landingLeads.clearFilters')}
           </button>
           {typeof onExportExcel === 'function' ? (
             <button
@@ -158,7 +161,7 @@ export function LandingLeadsAdminFilters({
               disabled={isExporting}
               className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm hover:bg-emerald-100 disabled:opacity-50"
             >
-              {isExporting ? 'Đang xuất…' : 'Xuất Excel'}
+              {isExporting ? t('landingLeads.exporting') : t('landingLeads.exportExcel')}
             </button>
           ) : null}
           <button
@@ -166,7 +169,7 @@ export function LandingLeadsAdminFilters({
             onClick={onApply}
             className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700"
           >
-            Áp dụng bộ lọc
+            {t('landingLeads.applyFilters')}
           </button>
         </div>
       </div>
@@ -180,13 +183,13 @@ export function LandingLeadsAdminFilters({
           }
           className="h-4 w-4 rounded border-gray-300"
         />
-        <span>Lọc theo khoảng ngày đăng ký</span>
+        <span>{t('landingLeads.filterByDateRange')}</span>
       </label>
 
       {draftFilters.landingLeadsUseDateRange ? (
         <div className="flex flex-wrap gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Từ ngày</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">{t('landingLeads.fromDate')}</label>
             <input
               type="date"
               value={draftFilters.landingLeadsDateFrom || ''}
@@ -197,7 +200,7 @@ export function LandingLeadsAdminFilters({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Đến ngày</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">{t('landingLeads.toDate')}</label>
             <input
               type="date"
               value={draftFilters.landingLeadsDateTo || ''}
@@ -212,14 +215,14 @@ export function LandingLeadsAdminFilters({
 
       <div className="grid gap-6 md:grid-cols-2">
         <MultiFilterBlock
-          title="Nghề nghiệp"
+          title={t('landingLeads.occupationLabel')}
           options={founder_OCCUPATION_OPTIONS}
           fieldKey="landingLeadsOccupations"
           selected={occupations}
           setDraftFilters={setDraftFilters}
         />
         <MultiFilterBlock
-          title="Lĩnh vực quan tâm"
+          title={t('landingLeads.interestLabel')}
           options={founder_INTEREST_OPTIONS}
           fieldKey="landingLeadsInterests"
           selected={interests}
@@ -228,7 +231,7 @@ export function LandingLeadsAdminFilters({
       </div>
 
       <MultiFilterBlock
-        title="Landing / slug nguồn (để trống = tất cả)"
+        title={t('landingLeads.slugSourceLabel')}
         options={slugOptions}
         fieldKey="landingLeadsSlugs"
         selected={slugs}

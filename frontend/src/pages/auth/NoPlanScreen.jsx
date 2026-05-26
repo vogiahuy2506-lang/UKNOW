@@ -3,8 +3,10 @@ import { HiOutlineLockClosed, HiOutlineLogout, HiOutlineArrowRight, HiOutlineOff
 import { useAuthStore } from '../../stores/authStore';
 import Navbar from '../../components/layout/client/Navbar';
 import Footer from '../../components/layout/client/Footer';
+import { useI18n } from '../../i18n';
 
 const NoPlanScreen = () => {
+  const { t } = useI18n();
   const { logout, user, switchContext } = useAuthStore();
   const navigate   = useNavigate();
   const memberships = user?.memberships || [];
@@ -30,19 +32,19 @@ const NoPlanScreen = () => {
             <HiOutlineLockClosed className="w-8 h-8 text-primary-600" />
           </div>
 
-          <h2 className="text-2xl font-bold text-gray-900">Bạn chưa có gói dịch vụ</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{t('noPlan.title')}</h2>
           <p className="text-gray-500 mt-3 text-sm leading-relaxed">
-            Tài khoản của bạn chưa đăng ký gói dịch vụ riêng.
+            {t('noPlan.description')}
             {memberships.length > 0
-              ? ' Bạn có thể vào workspace của doanh nghiệp bạn đang làm nhân viên, hoặc tự mua gói.'
-              : ' Để truy cập trang quản trị và sử dụng các tính năng, bạn cần đăng ký một gói phù hợp.'}
+              ? t('noPlan.descriptionWithMembership')
+              : t('noPlan.descriptionWithoutMembership')}
           </p>
 
           {/* Danh sách workspace user đang là employee */}
           {memberships.length > 0 && (
             <div className="mt-6 space-y-2 text-left">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">
-                Vào workspace của doanh nghiệp
+                {t('noPlan.enterWorkspace')}
               </p>
               {memberships.map((m) => (
                 <button
@@ -56,7 +58,7 @@ const NoPlanScreen = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{m.ownerName || m.ownerUsername}</p>
                     <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <HiOutlineOfficeBuilding className="w-3 h-3" /> Nhân viên
+                      <HiOutlineOfficeBuilding className="w-3 h-3" /> {t('noPlan.employee')}
                     </p>
                   </div>
                   <HiOutlineArrowRight className="w-4 h-4 text-amber-600 group-hover:translate-x-0.5 transition" />
@@ -67,12 +69,12 @@ const NoPlanScreen = () => {
 
           <div className="flex flex-col gap-3 mt-8">
             <button onClick={() => navigate('/pricing')} className="btn btn-primary w-full">
-              Xem các gói dịch vụ
+              {t('noPlan.viewPlans')}
               <HiOutlineArrowRight className="w-4 h-4 ml-2" />
             </button>
             <button onClick={handleLogout} className="btn btn-secondary w-full">
               <HiOutlineLogout className="w-4 h-4 mr-2" />
-              Đăng xuất
+              {t('noPlan.logout')}
             </button>
           </div>
         </div>

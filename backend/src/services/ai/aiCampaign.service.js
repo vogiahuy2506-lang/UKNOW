@@ -1303,6 +1303,491 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     return parsed;
   }
+
+  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user' }) {
+    let contextBlock = '';
+
+    // Lấy existing resources
+    let existingResources = '';
+    let nodeContext = '';
+    let multiStepExample = '';
+    let templateSelectionPrompt = '';
+
+    if (userId) {
+      try {
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats] =
+          await Promise.all([
+            this.getEmailTemplates(userId),
+            this.getZaloAccounts(userId),
+            this.getZaloGroups(userId),
+            this.getZaloTemplates(userId),
+            this.getRecommendedCampaignType(userId),
+            this.getCustomerStats(userId),
+          ]);
+
+        // Get node context từ registry
+        nodeContext = campaignNodeRegistryService.buildNodeContextForAI();
+        multiStepExample = campaignNodeRegistryService.buildMultiStepExample();
+        templateSelectionPrompt = campaignNodeRegistryService.buildTemplateSelectionPrompt({
+          emailTemplates,
+          zaloTemplates,
+        });
+
+        const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
+
+        // Format Zalo accounts list
+        let zaloAccountsList = '  (chưa kết nối)';
+        if (zaloAccounts.length > 0) {
+          zaloAccountsList = zaloAccounts.map(a => `  - ID: ${a.id} | ${a.displayName}`).join('\n');
+        }
+
+        // Format Zalo groups list
+        let zaloGroupsList = '';
+        if (zaloGroups.length > 0) {
+          zaloGroupsList = `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}`;
+        }
+
+        existingResources = `
+=== TÀI NGUYÊN CÓ SẴN ===
+📊 Khách hàng: ${customerStats.total} tổng | ${customerStats.hasEmail} có email | ${customerStats.hasZalo} có Zalo
+
+🔑 Zalo accounts:
+${zaloAccountsList}
+Tài khoản mặc định: ${firstZaloAccountId ?? 'null'}
+
+${zaloGroupsList}
+
+${templateSelectionPrompt}
+`;
+      } catch (e) {
+        console.warn('[AI V2] Không lấy được resources:', e.message);
+      }
+    }
+
+    // RAG context
+    if (userId && history.length > 0) {
+      const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
+      if (lastUserMsg) {
+        try {
+          contextBlock = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
+        } catch (e) {
+          console.warn('[AI V2] Không lấy được RAG context:', e.message);
+        }
+        if (!contextBlock) {
+          try {
+            const profile = await businessProfileService.getProfile(userId);
+            contextBlock = businessProfileService.formatProfileForPrompt(profile);
+          } catch (e) {
+            console.warn('[AI V2] Không lấy được business profile:', e.message);
+          }
+        }
+      }
+    }
+
+    const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo chiến dịch marketing với multi-step support.
+
+## NGUYÊN TẮC QUAN TRỌNG NHẤT:
+- KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
+- Luôn ưu tiên dùng template có sẵn nếu phù hợp.
+- Nếu KHÔNG có template phù hợp → tự soạn nội dung inline.
+- MỘT NODE CÓ THỂ GỬI NHIỀU EMAIL/ZALO cách nhau thời gian (multi-step trong 1 node).
+
+${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}${nodeContext}
+
+${multiStepExample}
+
+## LUẬT CHỌN/GỬI TEMPLATE:
+1. Ưu tiên template có sẵn nếu phù hợp với mục tiêu chiến dịch
+2. Nếu KHÔNG có template phù hợp → tự soạn nội dung inline
+3. Nội dung inline PHẢI có:
+   - Email: emailSubject + emailBody (HTML đẹp, có CTA)
+   - Zalo: message (dưới 4000 ký tự, có biến {{variable}})
+4. Luôn thêm templateMappings cho các biến động như {{full_name}}, {{product_name}}
+5. KHÔNG dùng placeholder như "[TÊN_SẢN_PHẨM]" - phải điền thực
+
+## LUẬT PHÂN LOẠI Ý ĐỊNH (intent):
+
+### 1. type: "text"
+Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận.
+
+### 2. type: "ask_more"
+Khi thiếu thông tin cần thiết để tạo chiến dịch. Hỏi cụ thể những gì còn thiếu.
+
+### 3. type: "confirm_create"
+Khi đã có đủ thông tin và tạo xong script. Hiển thị summary và hỏi xác nhận.
+
+### 4. type: "campaign_script"
+Khi tạo xong script và muốn user xem trước.
+
+### 5. type: "create_and_run"
+Khi muốn TẠO VÀ CHẠY NGAY - không cần xác nhận.
+
+### 6. type: "landing_page"
+Khi muốn tạo Landing Page.
+
+## 3 CHIẾN DỊCH TÁCH BIỆT (KHÔNG BAO GIỜ GỘP):
+1. Gmail (Email) - dùng action/send_email với emailSteps[]
+2. Zalo cá nhân - dùng action/send_zalo_personal với zaloPersonalTemplateSteps[]
+3. Zalo nhóm - dùng action/send_zalo_group với zaloGroupTemplateSteps[]
+
+## HEURISTICS CHO create_and_run:
+- Người dùng nói "tạo và chạy", "bắt đầu ngay", "chạy ngay"
+- Người dùng mô tả rõ ràng mục tiêu
+- Nếu thiếu thông tin cơ bản → vẫn tạo nhưng dùng placeholder có ý nghĩa
+`;
+
+    return this._runChat(systemPrompt, history, files);
+  }
+
+  /**
+   * Shared Gemini chat runner — builds history, attaches files, calls API.
+   * @param {string} systemPrompt
+   * @param {Array}  history  — [{role, content}]
+   * @param {Array}  files    — [{tempId, originalName, contentType}]
+   */
+  async _runChat(systemPrompt, history, files) {
+    // Hàm đọc và đính kèm một file vào parts array
+    const attachFileToParts = async (parts, file) => {
+      try {
+        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
+        } else {
+          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+          if (extractedText.trim()) {
+            parts.push({
+              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+      }
+    };
+
+    // Build Gemini history — re-attach files từ TẤT CẢ tin nhắn trong lịch sử
+    const geminiHistory = await Promise.all(history.map(async (msg) => {
+      const parts = [{ text: msg.content || '(no text)' }];
+      if (msg.role === 'user' && Array.isArray(msg.files) && msg.files.length > 0) {
+        for (const file of msg.files) {
+          await attachFileToParts(parts, file);
+        }
+      }
+      return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
+    }));
+
+    // Đính kèm thêm files của tin nhắn hiện tại (nếu có, không trùng với history)
+    if (files.length > 0) {
+      const lastMessage = geminiHistory[geminiHistory.length - 1];
+      const historyFileIds = new Set(
+        (history[history.length - 1]?.files || []).map(f => f.tempId)
+      );
+      for (const file of files) {
+        if (!historyFileIds.has(file.tempId)) {
+          await attachFileToParts(lastMessage.parts, file);
+        }
+      }
+    }
+
+    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+    const modelName = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    try {
+      const { data: result } = await axios.post(url, {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: geminiHistory,
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
+      }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
+
+      if (!result.candidates || result.candidates.length === 0) {
+        if (result.promptFeedback?.blockReason) {
+          throw new Error(`Yêu cầu bị chặn: ${result.promptFeedback.blockReason}`);
+        }
+        throw new Error('AI không phản hồi, vui lòng thử lại.');
+      }
+
+      const text = result.candidates[0].content?.parts?.[0]?.text;
+      if (!text) throw new Error('AI trả về kết quả rỗng.');
+
+      console.log('[AI Chat] Gemini response (first 500 chars):', text.substring(0, 500));
+      return this._parseJson(text);
+    } catch (err) {
+      if (err.response) {
+        console.error('Gemini API Error Detail:', JSON.stringify(err.response.data, null, 2));
+        throw new Error(`Gemini API Error (${err.response.status}): ${JSON.stringify(err.response.data)}`);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Generate landing page using AI with optional template.
+   * @param {object} params
+   * @param {string} params.prompt - User's request
+   * @param {number} [params.templateId] - Optional template ID
+   * @param {number} [params.userId] - User ID for RAG context
+   * @param {Array} [params.files] - Attached files
+   * @returns {Promise<object>}
+   */
+  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
+    return landingTemplateService.generateLandingPage({ prompt, templateId, userId, files });
+  }
+
+  /**
+   * Get available landing page templates.
+   * @param {string} [category] - Optional category filter
+   * @returns {Promise<object[]>}
+   */
+  async getLandingTemplates(category = null) {
+    if (category) {
+      return landingTemplateService.getTemplatesByCategory(category);
+    }
+    return landingTemplateService.getTemplates();
+  }
+
+  /**
+   * Get landing page template categories.
+   * @returns {Promise<object[]>}
+   */
+  async getLandingTemplateCategories() {
+    return landingTemplateService.getCategories();
+  }
+
+  /**
+   * Generate campaign using Node Registry for multi-step support.
+   * Sử dụng campaignNodeRegistryService để AI hiểu rõ về các node types và multi-step.
+   */
+  async generateCampaignWithRegistry({ prompt, files = [], userId = null }) {
+    const parts = [];
+
+    // Get business context
+    let ragContext = '';
+    if (userId) {
+      try {
+        ragContext = await businessProfileService.getContextForPrompt(userId, prompt);
+      } catch (e) {
+        console.warn('[AI Registry] Không lấy được RAG context:', e.message);
+      }
+    }
+
+    // Get existing resources
+    let existingResources = '';
+    if (userId) {
+      try {
+        const [emailTemplates, zaloAccounts, zaloTemplates, recommendedType, customerStats] =
+          await Promise.all([
+            this.getEmailTemplates(userId),
+            this.getZaloAccounts(userId),
+            this.getZaloTemplates(userId),
+            this.getRecommendedCampaignType(userId),
+            this.getCustomerStats(userId),
+          ]);
+
+        // Build template selection prompt
+        const templateSelectionPrompt = campaignNodeRegistryService.buildTemplateSelectionPrompt({
+          emailTemplates,
+          zaloTemplates,
+        });
+
+        existingResources = `
+=== TÀI NGUYÊN CÓ SẴN ===
+📊 Khách hàng: ${customerStats.total} tổng | ${customerStats.hasEmail} có email | ${customerStats.hasZalo} có Zalo
+🔑 Zalo accounts: ${zaloAccounts.length > 0 ? zaloAccounts.map(a => `${a.id}: ${a.displayName}`).join(', ') : 'chưa kết nối'}
+Kênh khuyến nghị: ${recommendedType}
+
+${templateSelectionPrompt}
+`;
+      } catch (e) {
+        console.warn('[AI Registry] Không lấy được resources:', e.message);
+      }
+    }
+
+    // Get node context from registry
+    const nodeContext = campaignNodeRegistryService.buildNodeContextForAI();
+    const multiStepExample = campaignNodeRegistryService.buildMultiStepExample();
+
+    // Build system prompt
+    const systemPrompt = `Bạn là chuyên gia Marketing Automation. Nhiệm vụ: tạo JSONchiến dịch hoàn chỉnh từ yêu cầu.
+
+${ragContext ? ragContext + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}${nodeContext}
+
+${multiStepExample}
+
+QUY TẮC QUAN TRỌNG:
+1. MỘT NODE CÓ THỂ GỬI NHIỀU EMAIL/ZALO - dùng emailSteps[] hoặc zaloPersonalTemplateSteps[]
+2. KHÔNG tạo nhiều node send_email/send_zalo riêng cho mỗi tin
+3. Delay đặt trong delayValue + delayUnit CỦA MỖI STEP trong array
+4. Nếu thiếu thông tin cần thiết → hỏi user trước khi tạo
+5. Luôn điền đầy đủ config, không để null cho các trường bắt buộc
+
+Yêu cầu từ user: "${prompt}"
+
+Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
+
+    parts.push({ text: systemPrompt });
+
+    // Attach files
+    for (const file of files) {
+      try {
+        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
+        } else {
+          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+          if (extractedText.trim()) {
+            parts.push({ text: `[File: ${file.originalName}]:\n${extractedText}` });
+          }
+        }
+      } catch (err) {
+        console.warn(`[AI Registry] Could not read file:`, err.message);
+      }
+    }
+
+    console.log(`[AI Registry] Sending prompt to Gemini...`);
+    const { text } = await generateGeminiContent({ parts, jsonMode: true, temperature: 0.8 });
+    console.log(`[AI Registry] Response received (${text?.length || 0} chars)`);
+
+    return this._parseJson(text);
+  }
+
+  /**
+   * Validate campaign script before saving
+   */
+  validateCampaignScript(script) {
+    const errors = [];
+    const warnings = [];
+
+    if (!script.nodes || !Array.isArray(script.nodes)) {
+      errors.push('Thiếu danh sách nodes');
+      return { valid: false, errors, warnings };
+    }
+
+    if (!script.connections || !Array.isArray(script.connections)) {
+      errors.push('Thiếu danh sách connections');
+    }
+
+    // Check each node
+    for (const node of script.nodes) {
+      const validation = campaignNodeRegistryService.validateNodeConfig(node.nodeSubtype, node.config || {});
+      if (!validation.valid) {
+        warnings.push(`Node "${node.nodeName}": ${validation.errors.join(', ')}`);
+      }
+    }
+
+    return { valid: errors.length === 0, errors, warnings };
+  }
+
+  /**
+   * Robustly parse JSON from AI output.
+   */
+  _parseJson(text) {
+    let jsonStr = text.trim();
+    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    } else {
+      const firstBrace = jsonStr.indexOf('{');
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+      }
+    }
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
+
+    try {
+      const parsed = JSON.parse(jsonStr);
+      // Normalize: đổi "text" hoặc "response" thành "content" để frontend đọc được
+      if (parsed.text && !parsed.content) {
+        parsed.content = parsed.text;
+        delete parsed.text;
+      }
+      if (parsed.response && !parsed.content) {
+        parsed.content = parsed.response;
+        delete parsed.response;
+      }
+      // Handle {"intent":{"type":"..."}, ...} format - extract type from intent
+      if (parsed.intent?.type && !parsed.type) {
+        parsed.type = parsed.intent.type;
+        delete parsed.intent;
+      }
+      
+      // Nếu AI trả về campaign script trực tiếp (không có type), wrap lại đúng format
+      const hasCampaignScript = parsed.nodes && parsed.connections && parsed.campaignName;
+      const hasOnlyScriptData = !parsed.type && (parsed.campaignName || parsed.nodes);
+      
+      if (hasOnlyScriptData) {
+        // AI trả về campaign script trực tiếp - wrap lại
+        return {
+          type: parsed.type || 'campaign_script',
+          content: parsed.content || `Chiến dịch "${parsed.campaignName}" đã được tạo.`,
+          data: parsed,
+        };
+      }
+      
+      // Validate: nếu không có type, mặc định là "text" cho text content
+      if (!parsed.type) {
+        parsed.type = 'text';
+      }
+      // Validate: must have DATA nodes
+      return this._validateWorkflowNodes(parsed);
+    } catch {
+      const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
+        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+      });
+      const parsed = JSON.parse(sanitized);
+      if (parsed.text && !parsed.content) {
+        parsed.content = parsed.text;
+        delete parsed.text;
+      }
+      if (parsed.response && !parsed.content) {
+        parsed.content = parsed.response;
+        delete parsed.response;
+      }
+      // Handle {"intent":{"type":"..."}, ...} format
+      if (parsed.intent?.type && !parsed.type) {
+        parsed.type = parsed.intent.type;
+        delete parsed.intent;
+      }
+      
+      // Nếu AI trả về campaign script trực tiếp, wrap lại
+      const hasCampaignScript = parsed.nodes && parsed.connections && parsed.campaignName;
+      const hasOnlyScriptData = !parsed.type && (parsed.campaignName || parsed.nodes);
+      
+      if (hasOnlyScriptData) {
+        return {
+          type: parsed.type || 'campaign_script',
+          content: parsed.content || `Chiến dịch "${parsed.campaignName}" đã được tạo.`,
+          data: parsed,
+        };
+      }
+      
+      if (!parsed.type) {
+        parsed.type = 'text';
+      }
+      return this._validateWorkflowNodes(parsed);
+    }
+  }
+
+  /**
+   * Validate workflow has DATA nodes. If not, add warning but still return.
+   */
+  _validateWorkflowNodes(parsed) {
+    if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
+      return parsed;
+    }
+
+    const hasDataNode = parsed.nodes.some(n => n.nodeType === 'data');
+    if (!hasDataNode) {
+      console.warn('[AI] Warning: Workflow has no DATA nodes. Consider adding condition, filter, or tag_contact nodes.');
+    } else {
+      console.log(`[AI] Workflow validated: ${parsed.nodes.length} nodes with DATA nodes`);
+    }
+
+    return parsed;
+  }
 }
 
 export default new AiCampaignService();

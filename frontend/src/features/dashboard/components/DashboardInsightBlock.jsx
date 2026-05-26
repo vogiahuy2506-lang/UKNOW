@@ -1,4 +1,5 @@
 import InsightMarkdownBody from './InsightMarkdownBody';
+import { useI18n } from '../../../i18n';
 
 /**
  * Khối hiển thị insight (text) dưới biểu đồ/tổng quan.
@@ -7,11 +8,14 @@ import InsightMarkdownBody from './InsightMarkdownBody';
  * - Ưu tiên markdown nhẹ: gạch đầu dòng `- ` và **in đậm** (xem `InsightMarkdownBody`).
  * - Văn bản thuần vẫn hiển thị được (parser gom thành đoạn).
  */
-const DashboardInsightBlock = ({ title = 'Insight', text, isLoading = false, error = '' }) => {
+const DashboardInsightBlock = ({ title, text, isLoading = false, error = '' }) => {
+  const { t } = useI18n();
+  const _title = title || t('dashboardInsightOverview.title');
+
   if (isLoading) {
     return (
       <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500 animate-pulse">
-        Đang phân tích insight…
+        {t('dashboardInsightOverview.analyzingLoading')}
       </div>
     );
   }
@@ -28,7 +32,7 @@ const DashboardInsightBlock = ({ title = 'Insight', text, isLoading = false, err
 
   return (
     <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-      <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{title}</p>
+      <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{_title}</p>
       <InsightMarkdownBody text={text} />
     </div>
   );

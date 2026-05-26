@@ -2,7 +2,19 @@ import api from './api';
 
 const aiApi = {
   /**
-   * Generate campaign script from AI.
+   * Generate campaign script from AI (V2 - Registry-based, multi-step support).
+   * @param {string} prompt
+   * @param {Array} files Array of { tempId, originalName, ... }
+   */
+  generateCampaignV2: async (prompt, files = []) => {
+    const response = await api.post('/ai/generate-campaign-v2', { prompt, files }, {
+      timeout: 120000
+    });
+    return response.data;
+  },
+
+  /**
+   * Generate campaign script from AI (Legacy).
    * @param {string} prompt
    * @param {Array} files Array of { tempId, originalName, ... }
    */
@@ -63,6 +75,18 @@ const aiApi = {
    */
   chat: async (history, files = [], sessionId = null) => {
     const response = await api.post('/ai/chat', { history, files, sessionId }, {
+      timeout: 120000
+    });
+    return response.data;
+  },
+
+  /**
+   * Smart interactive chat V2 - multi-step support.
+   * @param {Array} history Array of { role, content }
+   * @param {Array} files Array of current attached files
+   */
+  chatV2: async (history, files = []) => {
+    const response = await api.post('/ai/chat-v2', { history, files }, {
       timeout: 120000
     });
     return response.data;

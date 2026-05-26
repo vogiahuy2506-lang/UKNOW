@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useI18n } from '../../i18n';
 
 const ActivatePage = () => {
+  const { t } = useI18n();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
@@ -17,7 +19,7 @@ const ActivatePage = () => {
 
     if (!token) {
       setState('error');
-      setErrorMessage('Link kích hoạt không hợp lệ.');
+      setErrorMessage(t('activate.invalidLink'));
       return;
     }
 
@@ -32,7 +34,7 @@ const ActivatePage = () => {
           setState('success');
         } else {
           setState('error');
-          setErrorMessage(err?.response?.data?.message || 'Link kích hoạt không hợp lệ hoặc đã hết hạn.');
+          setErrorMessage(err?.response?.data?.message || t('activate.expiredOrInvalid'));
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ activate 1 lần (guard bằng called.current)
@@ -43,7 +45,7 @@ const ActivatePage = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center space-y-4">
           <div className="spinner w-10 h-10 mx-auto" />
-          <p className="text-gray-500">Đang kích hoạt tài khoản...</p>
+          <p className="text-gray-500">{t('activate.activating')}</p>
         </div>
       </div>
     );
@@ -58,17 +60,17 @@ const ActivatePage = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Tài khoản đã được kích hoạt!</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('activate.successTitle')}</h2>
           {tokenInfo.username && (
             <p className="text-gray-500 text-sm">
-              Đăng nhập với tên đăng nhập <strong>{tokenInfo.username}</strong> và mật khẩu mặc định: <strong>digiso@2026</strong>
+              {t('activate.successMessage')} <strong>{tokenInfo.username}</strong> {t('activate.successDefaultPassword')} <strong>digiso@2026</strong>
             </p>
           )}
           <Link
             to="/login"
             className="btn btn-primary block w-full"
           >
-            Đăng nhập ngay
+            {t('activate.loginNow')}
           </Link>
         </div>
       </div>
@@ -83,10 +85,10 @@ const ActivatePage = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Kích hoạt thất bại</h2>
+        <h2 className="text-xl font-bold text-gray-900">{t('activate.failedTitle')}</h2>
         <p className="text-gray-500 text-sm">{errorMessage}</p>
-        <p className="text-gray-400 text-sm">Vui lòng liên hệ người quản lý để gửi lại lời mời.</p>
-        <Link to="/login" className="btn btn-primary block w-full">Về trang đăng nhập</Link>
+        <p className="text-gray-400 text-sm">{t('activate.contactManager')}</p>
+        <Link to="/login" className="btn btn-primary block w-full">{t('activate.backToLogin')}</Link>
       </div>
     </div>
   );

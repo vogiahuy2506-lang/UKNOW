@@ -1,4 +1,5 @@
 import { HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi';
+import { useI18n } from '../../../i18n';
 
 /**
  * Section UI for mapping-data node configuration.
@@ -19,6 +20,7 @@ export const NodeConfigMappingDataSection = ({
   mappingTemplate,
   handleMappingTemplateSelect,
 }) => {
+  const { t } = useI18n();
   const handleAddMapping = () => {
     setFormData((prev) => ({
       ...prev,
@@ -43,26 +45,26 @@ export const NodeConfigMappingDataSection = ({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Tên node</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.mappingData.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder="Mapping dữ liệu"
+          placeholder={t('campaignNodeConfig.mappingData.nodeNamePlaceholder')}
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Template áp dụng <span className="text-red-500">*</span>
+          {t('campaignNodeConfig.mappingData.templateToApply')} <span className="text-red-500">*</span>
         </label>
         <select
           value={formData.mappingTemplateId || ''}
           onChange={(e) => handleMappingTemplateSelect(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
-          <option value="">-- Chọn template để lấy biến --</option>
+          <option value="">{t('campaignNodeConfig.mappingData.selectTemplate')}</option>
           {emailTemplates.length > 0 && (
             <optgroup label="📧 Email">
               {emailTemplates.map((tpl) => (
@@ -84,25 +86,25 @@ export const NodeConfigMappingDataSection = ({
         </select>
         {mappingTemplate && (
           <p className="text-xs text-gray-500 mt-1">
-            Đã tải template: <span className="font-medium">{mappingTemplate.templateName}</span>
+            {t('campaignNodeConfig.mappingData.templateLoaded', { name: mappingTemplate.templateName })}
           </p>
         )}
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">Định nghĩa các biến</label>
+          <label className="block text-sm font-medium text-gray-700">{t('campaignNodeConfig.mappingData.variableDefinitions')}</label>
           <button
             type="button"
             onClick={handleAddMapping}
             className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
           >
             <HiOutlinePlus className="w-4 h-4" />
-            Thêm biến
+            {t('campaignNodeConfig.mappingData.addVariable')}
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-3">
-          Mapping tên biến với cột trong Sheet hoặc giá trị theo hàm/công thức
+          {t('campaignNodeConfig.mappingData.mappingHint')}
         </p>
 
         <div className="space-y-3">
@@ -110,7 +112,7 @@ export const NodeConfigMappingDataSection = ({
             <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
               <div className="flex items-start gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Tên biến (dùng trong template)</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.variableName')}</label>
                   <div className="flex items-center gap-1">
                     <span className="text-gray-400 text-sm">{'{{'}</span>
                     <input
@@ -118,7 +120,7 @@ export const NodeConfigMappingDataSection = ({
                       value={mapping.variableName}
                       onChange={(e) => handleMappingFieldChange(index, 'variableName', e.target.value)}
                       className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
-                      placeholder="ten_khach"
+                      placeholder={t('campaignNodeConfig.mappingData.variableNamePlaceholder')}
                     />
                     <span className="text-gray-400 text-sm">{'}}'}</span>
                   </div>
@@ -135,55 +137,55 @@ export const NodeConfigMappingDataSection = ({
               </div>
 
               <div className="mt-2">
-                <label className="block text-xs text-gray-500 mb-1">Nguồn dữ liệu</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.dataSource')}</label>
                 <select
                   value={mapping.sourceType}
                   onChange={(e) => handleMappingFieldChange(index, 'sourceType', e.target.value)}
                   className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="column">📊 Từ cột trong Sheet</option>
-                  <option value="formula">⚡ Hàm / Công thức</option>
-                  <option value="static">📝 Giá trị cố định</option>
+                  <option value="column">{t('campaignNodeConfig.mappingData.fromSheetColumn')}</option>
+                  <option value="formula">{t('campaignNodeConfig.mappingData.formulaFunction')}</option>
+                  <option value="static">{t('campaignNodeConfig.mappingData.fixedValue')}</option>
                 </select>
               </div>
 
               {mapping.sourceType === 'column' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">Tên cột / Ký hiệu cột</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.columnName')}</label>
                   <input
                     type="text"
                     value={mapping.columnName}
                     onChange={(e) => handleMappingFieldChange(index, 'columnName', e.target.value)}
                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
-                    placeholder="VD: A, B, Tên khách hàng, Email..."
+                    placeholder={t('campaignNodeConfig.mappingData.columnPlaceholder')}
                   />
-                  <p className="text-xs text-gray-400 mt-1">Nhập tên cột hoặc ký hiệu cột (A, B, C...)</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.mappingData.columnHint')}</p>
                 </div>
               )}
 
               {mapping.sourceType === 'formula' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">Công thức / Hàm</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.formulaFunction')}</label>
                   <input
                     type="text"
                     value={mapping.formula}
                     onChange={(e) => handleMappingFieldChange(index, 'formula', e.target.value)}
                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-primary-500"
-                    placeholder="VD: CONCAT(col_A, ' ', col_B) hoặc DATE_FORMAT(NOW(), '%d/%m/%Y')"
+                    placeholder={t('campaignNodeConfig.mappingData.formulaPlaceholder')}
                   />
-                  <p className="text-xs text-gray-400 mt-1">Sử dụng col_X để tham chiếu cột, hỗ trợ các hàm: CONCAT, UPPER, LOWER, DATE_FORMAT, NOW, IF...</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.mappingData.formulaHint')}</p>
                 </div>
               )}
 
               {mapping.sourceType === 'static' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">Giá trị cố định</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.fixedValue')}</label>
                   <input
                     type="text"
                     value={mapping.formula}
                     onChange={(e) => handleMappingFieldChange(index, 'formula', e.target.value)}
                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
-                    placeholder="Nhập giá trị cố định..."
+                    placeholder={t('campaignNodeConfig.mappingData.fixedValuePlaceholder')}
                   />
                 </div>
               )}
@@ -194,12 +196,12 @@ export const NodeConfigMappingDataSection = ({
 
       <div className="bg-amber-50 p-3 rounded-lg">
         <p className="text-sm text-amber-700">
-          <strong>Ví dụ:</strong>
+          <strong>{t('campaignNodeConfig.mappingData.example')}</strong>
         </p>
         <ul className="text-xs text-amber-600 mt-1 space-y-1 list-disc list-inside">
-          <li><code className="bg-amber-100 px-1 rounded">ten_khach</code> → Cột "Tên khách hàng" hoặc cột A</li>
-          <li><code className="bg-amber-100 px-1 rounded">ho_ten_day_du</code> → Hàm: CONCAT(col_B, ' ', col_C)</li>
-          <li><code className="bg-amber-100 px-1 rounded">ngay_gui</code> → Hàm: DATE_FORMAT(NOW(), '%d/%m/%Y')</li>
+          <li><code className="bg-amber-100 px-1 rounded">ten_khach</code> → {t('campaignNodeConfig.mappingData.exampleMapping', { var: 'ten_khach', column: 'Tên khách hàng' })}</li>
+          <li><code className="bg-amber-100 px-1 rounded">ho_ten_day_du</code> → {t('campaignNodeConfig.mappingData.exampleFunction')}</li>
+          <li><code className="bg-amber-100 px-1 rounded">ngay_gui</code> → {t('campaignNodeConfig.mappingData.exampleNow')}</li>
         </ul>
       </div>
     </div>
