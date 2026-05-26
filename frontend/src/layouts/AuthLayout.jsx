@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { FaCheckCircle, FaStar } from 'react-icons/fa';
 import founderaiLogo from '../assets/icons/founderai-logo.png';
+import { useI18n } from '../i18n';
 
 const FEATURES = [
   'Triển khai tự động hóa trong 5 phút',
@@ -18,14 +19,16 @@ const GLASS_LEFT = {
 };
 
 const GLASS_RIGHT = {
-  background: 'rgba(12, 10, 20, 0.82)',
-  backdropFilter: 'blur(22px)',
-  WebkitBackdropFilter: 'blur(22px)',
-  border: '1px solid rgba(255,255,255,0.09)',
-  boxShadow: '0 28px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
+  background: 'rgba(255, 255, 255, 0.93)',
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+  border: '1px solid rgba(255,255,255,0.6)',
+  boxShadow: '0 28px 80px rgba(0,0,0,0.35)',
 };
 
 const AuthLayout = ({ children }) => {
+  const { locale, toggleLocale } = useI18n();
+
   return (
     <div className="min-h-screen relative overflow-x-hidden font-sans selection:bg-orange-500 selection:text-white">
       {/* Video background */}
@@ -91,14 +94,28 @@ const AuthLayout = ({ children }) => {
 
           {/* Right panel: Form */}
           <div
-            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 auth-dark flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)]"
+            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)]"
             style={GLASS_RIGHT}
           >
-            {/* Mobile logo */}
-            <Link to="/" className="lg:hidden flex items-center gap-2.5 mb-8 hover:opacity-70 transition-opacity w-fit">
-              <img src={founderaiLogo} alt="Founder AI" className="w-8 h-8 object-contain" />
-              <span className="text-white font-bold text-[17px] tracking-tight">Founder AI</span>
-            </Link>
+            {/* Top bar: mobile logo + language toggle */}
+            <div className="flex items-center justify-between mb-8">
+              <Link to="/" className="lg:hidden flex items-center gap-2.5 hover:opacity-70 transition-opacity w-fit">
+                <img src={founderaiLogo} alt="Founder AI" className="w-8 h-8 object-contain" />
+                <span className="text-slate-800 font-bold text-[17px] tracking-tight">Founder AI</span>
+              </Link>
+              <div className="lg:ml-auto">
+                <button
+                  type="button"
+                  onClick={toggleLocale}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-orange-300 hover:bg-orange-50 transition-all text-xs font-semibold tracking-wide"
+                  title={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+                >
+                  <span className={locale === 'vi' ? 'text-slate-800' : 'text-slate-300'}>🇻🇳 VI</span>
+                  <span className="text-slate-300 mx-0.5">|</span>
+                  <span className={locale === 'en' ? 'text-slate-800' : 'text-slate-300'}>EN</span>
+                </button>
+              </div>
+            </div>
 
             {children}
           </div>
