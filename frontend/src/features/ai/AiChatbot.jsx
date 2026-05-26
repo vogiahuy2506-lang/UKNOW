@@ -1060,7 +1060,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const startNewChat = () => {
     setCurrentSessionId(null);
     setMessages([{ role: 'assistant', content: welcomeMessage }]);
-    setShowSessionList(false);
     setPendingCampaignPrompt(null);
     setPendingCampaignData(null);
     setPendingLandingPrompt(null);
