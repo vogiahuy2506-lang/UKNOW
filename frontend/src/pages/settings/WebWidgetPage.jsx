@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   HiOutlineCode, HiOutlinePlus, HiOutlineTrash, HiOutlineSave,
-  HiOutlineRefresh, HiOutlineX, HiOutlineEye,
-  HiOutlineExternalLink, HiOutlineClipboardCopy, HiOutlineCheck,
+  HiOutlineRefresh, HiOutlineX,
+  HiOutlineClipboardCopy, HiOutlineCheck,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../services/chatbotApi';
@@ -19,8 +19,9 @@ function WebWidgetPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newForm, setNewForm] = useState({ display_name: '', theme_color: '#6366F1' });
   const [copiedKey, setCopiedKey] = useState(null);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [_previewMode, _setPreviewMode] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchWidgets(); }, []);
 
   const fetchWidgets = async () => {

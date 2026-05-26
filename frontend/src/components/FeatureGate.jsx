@@ -1,7 +1,7 @@
 import { useI18n } from '../../i18n';
 import { HiLockClosed, HiSparkles } from 'react-icons/hi';
 
-const FeatureGate = ({ feature, children, fallback = null, showUpgradePrompt = true }) => {
+const FeatureGate = ({ feature: _feature, children, fallback = null, showUpgradePrompt = true }) => {
   const { t } = useI18n();
 
   // For now, we'll use a simple approach

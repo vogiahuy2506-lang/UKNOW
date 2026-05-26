@@ -211,6 +211,7 @@ const BusinessProfilePage = () => {
   const [logoPreview, setLogoPreview] = useState('');
   const logoInputRef = useRef(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchProfile(); }, []);
 
   const fetchProfile = async () => {

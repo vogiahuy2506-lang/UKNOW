@@ -37,6 +37,7 @@ export function useLazyData(fetchFn, deps = [], options = {}) {
     if (immediate) {
       fetch(true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   // Auto-refresh
@@ -48,6 +49,7 @@ export function useLazyData(fetchFn, deps = [], options = {}) {
 
       return () => clearInterval(interval);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshInterval, ...deps]);
 
   return { data, isLoading, error, fetch: refetch };

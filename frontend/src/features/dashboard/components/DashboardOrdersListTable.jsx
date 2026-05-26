@@ -713,13 +713,13 @@ const DashboardOrdersListTable = ({
   const items = useMemo(() => ordersData?.items || [], [ordersData?.items]);
   const pagination = ordersData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
-  const ORDER_STATUS_CONFIG = {
+  const _ORDER_STATUS_CONFIG = {
     pending: { cls: 'bg-orange-100 text-orange-700', label: t('ordersTable.pending') },
     completed: { cls: 'bg-green-100 text-green-700', label: t('ordersTable.completed') },
     other: { cls: 'bg-gray-100 text-gray-500', label: t('ordersTable.all') },
   };
 
-  const CHANNEL_CONFIG = {
+  const _CHANNEL_CONFIG = {
     email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
     zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
     zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },

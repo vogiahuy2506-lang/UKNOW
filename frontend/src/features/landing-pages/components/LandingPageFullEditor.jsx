@@ -116,7 +116,7 @@ export default function LandingPageFullEditor({
     }
   };
 
-  const handleTemplateSelect = ({ template, html, cssVariables, defaultConfig }) => {
+  const handleTemplateSelect = ({ template, html, cssVariables: _cssVariables, defaultConfig: _defaultConfig }) => {
     let finalHtml = html;
     // Insert form marker if not present
     if (!finalHtml.includes(LP_FORM_MARKER) && snippetContext?.iframeBlock) {
@@ -132,7 +132,7 @@ export default function LandingPageFullEditor({
     toast.success(t('landingPageEditor.templateUsed'));
   };
 
-  const handleVisualEditorSave = ({ html, data }) => {
+  const handleVisualEditorSave = ({ html, data: _data }) => {
     let finalHtml = html;
     // Insert form marker if not present
     if (!finalHtml.includes(LP_FORM_MARKER) && snippetContext?.iframeBlock) {
@@ -187,6 +187,7 @@ export default function LandingPageFullEditor({
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingId]);
 
   const saveCustomDomainHostname = async () => {

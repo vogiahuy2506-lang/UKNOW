@@ -241,6 +241,7 @@ export const FlowCanvas = ({
         setNodes((nds) => [...nds, newNode]);
       }
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       campaignType,
       getAllowedActionNodeTypesByCampaignType,

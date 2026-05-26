@@ -81,6 +81,7 @@ const renderModal = (content, onClose, cls = MODAL_SM) =>
 
 // ── AssignPlanModal ───────────────────────────────────────────────────────────
 const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
+  const { t } = useI18n();
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [paymentMethod, setPaymentMethod]   = useState('free');
   const [note, setNote]                     = useState('');
@@ -160,6 +161,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AdminMembersPage = () => {
+  const { t } = useI18n();
   const [members, setMembers]     = useState([]);
   const [plans, setPlans]         = useState([]);
   const [isLoading, setIsLoading] = useState(true);

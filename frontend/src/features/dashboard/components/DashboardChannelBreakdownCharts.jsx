@@ -25,7 +25,7 @@ const getChannelLabel = (key, t) => {
 /**
  * Custom tooltip for donut charts.
  */
-const DonutTooltip = ({ active, payload, t }) => {
+const DonutTooltip = ({ active, payload, t: _t }) => {
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
   const channelKey = payload[0]?.payload?.key;

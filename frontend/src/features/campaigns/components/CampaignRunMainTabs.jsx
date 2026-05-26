@@ -51,7 +51,6 @@ const CampaignRunMainTabs = ({
   toastNotifier,
 }) => {
   const { t } = useI18n();
-  const tt = (key, fallback) => t(key) || fallback;
 
   return (
     <>

@@ -647,7 +647,7 @@ export const NodeConfigSendZaloPersonalSection = ({
     { id: 'templates', name: t('zaloNodeSend.templateList'), icon: HiOutlineDocument },
   ];
 
-  const handleSendModeChange = (newMode) => {
+  const _handleSendModeChange = (newMode) => {
     setFormData((prev) => {
       const next = { ...prev, zaloPersonalSendMode: newMode };
       if (newMode === 'schedule') {

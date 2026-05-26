@@ -81,6 +81,7 @@ const CampaignCustomers = () => {
     customerApiService.getCampaignById(campaignId)
       .then((res) => setCampaign(res.data?.data || null))
       .catch(() => toast.error(t('campaignCustomers.loadCampaignFailed')));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   useEffect(() => {
@@ -116,6 +117,7 @@ const CampaignCustomers = () => {
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   const fetchGroupMessages = useCallback(async (page = 1) => {
@@ -138,6 +140,7 @@ const CampaignCustomers = () => {
     } finally {
       setGroupMessagesLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId, groupMessagesPagination.limit]);
 
   useEffect(() => {

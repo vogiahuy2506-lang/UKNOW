@@ -34,6 +34,7 @@ const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checke
  * @param {function} props.setFormData
  */
 function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setFormData }) {
+  const { t } = useI18n();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const toggleOne = useCallback(

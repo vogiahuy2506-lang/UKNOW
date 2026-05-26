@@ -50,7 +50,7 @@ const formatDate = (v) => {
 };
 
 const formatPrice = (price) => {
-  if (!price || price === 0) return t('courses.free');
+  if (!price || price === 0) return 'Miễn phí';
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',

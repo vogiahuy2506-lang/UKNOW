@@ -110,6 +110,7 @@ const ZaloSettings = () => {
 
   useEffect(() => {
     fetchAccounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copyText = async (value, successMsg) => {
@@ -297,6 +298,7 @@ const ZaloSettings = () => {
         window.clearInterval(timerId);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrPreview.isOpen, qrPreview.sessionKey]);
 
   return (

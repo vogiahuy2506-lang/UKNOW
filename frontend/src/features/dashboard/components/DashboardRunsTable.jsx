@@ -380,7 +380,7 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
   const items = useMemo(() => runsData?.items || [], [runsData?.items]);
   const pagination = runsData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
-  const STATUS_CONFIG = {
+  const _STATUS_CONFIG = {
     completed: { cls: 'badge-success', label: t('runsTable.completed') },
     running: { cls: 'badge-info', label: t('runsTable.running') },
     pending: { cls: 'badge-warning', label: t('runsTable.pending') },
@@ -388,7 +388,7 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
     cancelled: { cls: 'badge-gray', label: t('runsTable.cancelled') },
   };
 
-  const CHANNEL_CONFIG = {
+  const _CHANNEL_CONFIG = {
     email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
     zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
     zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },

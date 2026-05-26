@@ -78,7 +78,7 @@ export const SkeletonTable = ({ columns = 4, rows = 5, className = '' }) => {
   );
 };
 
-export const SkeletonChatBubble = ({ isOwn = false, className = '' }) => {
+export const SkeletonChatBubble = ({ isOwn = false, className: _className = '' }) => {
   return (
     <div className={`flex mb-3 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[75%] ${isOwn ? 'order-2' : 'order-1'}`}>

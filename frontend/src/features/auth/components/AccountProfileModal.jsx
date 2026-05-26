@@ -20,7 +20,7 @@ import { useI18n } from '../../../i18n';
 
 const PROFILE_FORM_INITIAL_STATE = { fullName: '', email: '', phone: '' };
 
-function formatDate(isoString, t) {
+function formatDate(isoString, _t) {
   if (!isoString) return '—';
   return new Date(isoString).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }

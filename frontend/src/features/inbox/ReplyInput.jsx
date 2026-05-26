@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { HiPaperAirplane, HiPaperClip, HiOutlineMicrophone } from 'react-icons/hi';
+import { HiPaperAirplane, HiPaperClip } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
 const ReplyInput = ({ onSend, disabled, placeholder }) => {

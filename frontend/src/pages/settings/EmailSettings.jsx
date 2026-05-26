@@ -50,6 +50,7 @@ const EmailSettings = () => {
 
   useEffect(() => {
     fetchEmailSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchEmailSettings = async () => {

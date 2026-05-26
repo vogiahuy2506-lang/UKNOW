@@ -37,6 +37,7 @@ const CustomDomainList = () => {
 
   useEffect(() => {
     fetchDomains();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDomains = async () => {

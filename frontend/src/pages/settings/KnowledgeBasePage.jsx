@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   HiOutlineBookOpen, HiOutlinePlus, HiOutlineTrash, HiOutlineUpload,
-  HiOutlineLink, HiOutlineDocumentText, HiOutlineRefresh, HiOutlineSave,
+  HiOutlineLink, HiOutlineDocumentText, HiOutlineRefresh,
   HiOutlineEye, HiOutlineX, HiOutlineCheck, HiOutlineClock,
   HiOutlineExclamationCircle, HiOutlineSparkles, HiOutlineChip,
 } from 'react-icons/hi';
@@ -45,6 +45,7 @@ function KnowledgeBasePage() {
   const [deletingDoc, setDeletingDoc] = useState(null);
   const fileInputRef = useRef(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchKBs(); }, []);
 
   const fetchKBs = async () => {

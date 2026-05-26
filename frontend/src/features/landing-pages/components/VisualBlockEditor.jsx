@@ -1,16 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  HiOutlineX, HiOutlinePencil, HiOutlineTrash, HiOutlineDuplicate,
+  HiOutlineTrash, HiOutlineDuplicate,
   HiOutlineChevronUp, HiOutlineChevronDown, HiOutlinePlus,
   HiOutlineSparkles, HiOutlineTemplate, HiOutlineViewGrid,
-  HiOutlineCode, HiOutlineSave, HiOutlineEye
+  HiOutlineCode, HiOutlineSave
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /**
  * Block definitions - each block has a default HTML template
  * Default data keys match translation keys
+// eslint-disable-next-line react-refresh/only-export-components
  */
 export const BLOCK_TYPES = {
   HERO: {

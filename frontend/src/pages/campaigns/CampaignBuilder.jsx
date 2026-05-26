@@ -396,6 +396,7 @@ const CampaignBuilder = () => {
     };
 
     fetchCampaign();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNewCampaign, navigate, setEdges, setNodes]);
 
   // When creating a new campaign, ask for name first
@@ -524,6 +525,7 @@ const CampaignBuilder = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNode, selectedEdgeId, setEdges]);
 
   const handleDeleteNode = () => {
@@ -793,6 +795,7 @@ const CampaignBuilder = () => {
     message: params.message || t('campaignBuilderExtra.executingNode'),
     timestamp: new Date(),
     result: params.result ?? null,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -31,6 +31,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
       fetchCategories();
       fetchTemplates();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {

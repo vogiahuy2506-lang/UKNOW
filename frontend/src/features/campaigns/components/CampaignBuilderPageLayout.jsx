@@ -95,7 +95,7 @@ const CampaignBuilderPageLayout = ({
   showDeleteModal,
   setShowDeleteModal,
   onConfirmDeleteNode,
-  deleteNodeName,
+  deleteNodeName: _deleteNodeName,
   showConfigModal,
   nodeToConfig,
   onNodeConfigSave,

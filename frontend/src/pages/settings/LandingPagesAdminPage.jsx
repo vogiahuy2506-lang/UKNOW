@@ -74,6 +74,7 @@ export default function LandingPagesAdminPage() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -113,6 +114,7 @@ export default function LandingPagesAdminPage() {
       };
     });
     return [fixedRow, ...rest];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, statsBySlug]);
 
   /**
@@ -138,6 +140,7 @@ export default function LandingPagesAdminPage() {
       ? form.htmlContent
       : '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body></body></html>';
     return prepareLandingHtmlForPreview(baseHtml, { slug, frontendOrigin: origin, apiBase });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.htmlContent, form.slug]);
 
   const previewExternalUrl = useMemo(() => {

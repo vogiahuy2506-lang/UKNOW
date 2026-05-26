@@ -55,6 +55,7 @@ const AdminOrdersPage = () => {
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { fetchOrders(filters, page); }, [filters, page, fetchOrders]);

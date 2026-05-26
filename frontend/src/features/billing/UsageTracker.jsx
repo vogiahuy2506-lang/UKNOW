@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { HiTrendingUp, HiTrendingDown, HiExclamation } from 'react-icons/hi';
+import { useState } from 'react';
+import { HiTrendingUp, HiExclamation } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
-const UsageTracker = ({ resourceType, title, used, limit, icon: Icon, color = 'primary' }) => {
+const UsageTracker = ({ resourceType: _resourceType, title, used, limit, icon: Icon, color = 'primary' }) => {
   const { t } = useI18n();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [_showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const remaining = Math.max(0, limit - used);
   const percentage = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;

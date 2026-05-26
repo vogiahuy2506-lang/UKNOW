@@ -46,7 +46,7 @@ const formatLogCellValue = (columnKey, value) => {
     try {
       return JSON.stringify(value);
     } catch {
-      return t('common.noDisplay', '[No display]');
+      return '[No display]';
     }
   }
   if (!shouldFormatDateTime) return String(value);

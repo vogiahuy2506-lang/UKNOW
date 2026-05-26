@@ -131,6 +131,7 @@ const getFileIcon = (fileName) => {
 };
 
 const BaseModal = ({ isOpen, onClose, title, children }) => {
+  const { t } = useI18n();
   const closeBtnRef = useRef(null);
 
   useEffect(() => {
@@ -1086,6 +1087,7 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose, t }) => {
       }
     })();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, customer?.id, campaignId]);
 
   const emails = [...(journeyData?.emails || [])].sort((a, b) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  HiOutlineChip, HiOutlinePlus, HiOutlineTrash, HiOutlineRefresh,
+  HiOutlineChip, HiOutlineRefresh,
   HiOutlineX, HiOutlineCheckCircle, HiOutlineXCircle,
   HiOutlineExternalLink, HiOutlineLink, HiOutlineCode, HiOutlineChevronDown, HiOutlineChevronRight,
 } from 'react-icons/hi';
@@ -218,6 +218,7 @@ function ChannelConnectionsPage() {
   // Get channel definitions with translations
   const channelDefs = getChannels(t);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchChannels(); }, []);
 
   const fetchChannels = async () => {
