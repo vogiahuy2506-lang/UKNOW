@@ -12,9 +12,9 @@ setup('authenticate', async ({ page }) => {
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible();
-  await page.getByPlaceholder('Nhập tên đăng nhập').fill(USERNAME);
-  await page.getByPlaceholder('Nhập mật khẩu').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Đăng nhập ngay', exact: true }).click();
+  await page.locator('input[autocomplete="username"]').fill(USERNAME);
+  await page.locator('input[autocomplete="current-password"]').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await page.waitForURL(/\/app(\/|$)/, { timeout: 20_000 });
   await expect(page.locator('aside').first()).toBeVisible();
   await page.context().storageState({ path: AUTH_FILE });
