@@ -1,7 +1,11 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
+const isTest = process.env.NODE_ENV === 'test';
+const skipInTest = () => isTest;
+
 // Global rate limiter - 100 requests per 15 minutes
 export const globalLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: {
@@ -19,6 +23,7 @@ export const globalLimiter = rateLimit({
 
 // Stricter limiter for auth endpoints - 10 requests per 15 minutes
 export const authLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: {
@@ -33,6 +38,7 @@ export const authLimiter = rateLimit({
 
 // API limiter - 200 requests per 15 minutes (less strict than global)
 export const apiLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 15 * 60 * 1000,
   max: 200,
   message: {
@@ -50,6 +56,7 @@ export const apiLimiter = rateLimit({
 
 // Chat/Message limiter - 60 messages per minute (higher for real-time)
 export const chatLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 60 * 1000, // 1 minute
   max: 60,
   message: {
@@ -67,6 +74,7 @@ export const chatLimiter = rateLimit({
 
 // Upload limiter - 20 uploads per 15 minutes
 export const uploadLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: {
@@ -80,6 +88,7 @@ export const uploadLimiter = rateLimit({
 
 // Webhook limiter - 500 requests per 15 minutes
 export const webhookLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 15 * 60 * 1000,
   max: 500,
   message: {
@@ -96,6 +105,7 @@ export const webhookLimiter = rateLimit({
 
 // Campaign run limiter - 10 campaign executions per hour
 export const campaignRunLimiter = rateLimit({
+  skip: skipInTest,
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,
   message: {
