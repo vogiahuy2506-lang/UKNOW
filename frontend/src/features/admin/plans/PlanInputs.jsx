@@ -277,12 +277,14 @@ export const ResourceLimitsFields = ({ form, set }) => (
     <p className="text-xs text-gray-400 mb-3">Check = không giới hạn. Bỏ check → nhập số (0 = không hỗ trợ).</p>
     <div className="grid grid-cols-2 gap-4">
       {[
-        ['maxLandingPages',   'Landing pages'],
-        ['maxCampaigns',      'Chiến dịch'],
-        ['maxZaloAccounts',   'Tài khoản Zalo'],
-        ['maxEmailAccounts',  'Tài khoản Email'],
-        ['maxEmailTemplates', 'Email template'],
-        ['maxZaloTemplates',  'Zalo template'],
+        ['maxLandingPages',        'Landing pages'],
+        ['maxZaloCampaigns',       'Chiến dịch Zalo CN'],
+        ['maxZaloGroupCampaigns',  'Chiến dịch Zalo Nhóm'],
+        ['maxEmailCampaigns',      'Chiến dịch Email'],
+        ['maxZaloAccounts',        'Tài khoản Zalo'],
+        ['maxEmailAccounts',       'Tài khoản Email'],
+        ['maxEmailTemplates',      'Email template'],
+        ['maxZaloTemplates',       'Zalo template'],
       ].map(([key, label]) => (
         <div key={key}>
           <label className="block text-xs text-gray-500 mb-1.5">{label}</label>

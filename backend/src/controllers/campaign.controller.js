@@ -290,6 +290,21 @@ class CampaignController {
         });
       }
 
+      // Kiểm tra giới hạn theo loại campaign (zalo / zalo_group / email)
+      const typeResourceKey = campaignType === 'email'
+        ? 'emailCampaigns'
+        : campaignType === 'zalo_group'
+          ? 'zaloGroupCampaigns'
+          : campaignType === 'zalo'
+            ? 'zaloCampaigns'
+            : null;
+      if (typeResourceKey) {
+        const typeLimitCheck = await checkUserResourceLimit({ userId, roleCode, resourceKey: typeResourceKey });
+        if (!typeLimitCheck.allowed) {
+          return res.status(400).json({ success: false, message: typeLimitCheck.message });
+        }
+      }
+
       await client.query('BEGIN');
 
       // Create campaign

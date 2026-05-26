@@ -7,6 +7,24 @@ const RESOURCE_LIMIT_MAP = {
     table: 'campaigns',
     label: 'số chiến dịch',
   },
+  zaloCampaigns: {
+    column: 'max_zalo_campaigns',
+    table: null, // đếm theo campaign_type — xử lý riêng
+    label: 'số chiến dịch Zalo cá nhân',
+    campaignType: 'zalo',
+  },
+  zaloGroupCampaigns: {
+    column: 'max_zalo_group_campaigns',
+    table: null,
+    label: 'số chiến dịch Zalo nhóm',
+    campaignType: 'zalo_group',
+  },
+  emailCampaigns: {
+    column: 'max_email_campaigns',
+    table: null,
+    label: 'số chiến dịch Email',
+    campaignType: 'email',
+  },
   zaloAccounts: {
     column: 'max_zalo_accounts',
     table: 'zalo_settings',
@@ -52,6 +70,9 @@ async function getUserLimitRow(userId) {
     const result = await db.query(
       `SELECT
          max_campaigns,
+         max_zalo_campaigns,
+         max_zalo_group_campaigns,
+         max_email_campaigns,
          max_zalo_accounts,
          max_email_accounts,
          max_email_templates,
@@ -120,12 +141,22 @@ export async function checkUserResourceLimit(input) {
     };
   }
 
-  const countResult = await db.query(
-    `SELECT COUNT(*)::int AS total
-     FROM ${resourceConfig.table}
-     WHERE id_user = $1`,
-    [userId]
-  );
+  let countResult;
+  if (resourceConfig.campaignType) {
+    countResult = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM campaigns
+       WHERE id_user = $1 AND campaign_type = $2`,
+      [userId, resourceConfig.campaignType]
+    );
+  } else {
+    countResult = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM ${resourceConfig.table}
+       WHERE id_user = $1`,
+      [userId]
+    );
+  }
   const currentCount = Number.parseInt(countResult.rows[0]?.total || 0, 10);
   const isAllowed = currentCount < normalizedLimit;
 

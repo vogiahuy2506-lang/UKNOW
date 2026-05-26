@@ -36,12 +36,16 @@ export async function listCustom(req, res) {
 /** POST /api/admin/plans */
 export async function create(req, res) {
   try {
-    const { code, name, price, description, features, maxEmployees, isActive,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
-    const plan = await adminPlansService.createNewPlan({
-      code, name, price: Number(price), description, features,
-      maxEmployees: Number(maxEmployees ?? 0), isActive,
+    const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
+    const plan = await adminPlansService.createNewPlan({
+      code, name, price: Number(price), priceYearly, description, features,
+      maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
     return res.status(201).json({ success: true, message: 'Tạo gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
@@ -50,12 +54,16 @@ export async function create(req, res) {
 /** PATCH /api/admin/plans/:id */
 export async function update(req, res) {
   try {
-    const { name, price, description, features, maxEmployees, isActive,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
-    const plan = await adminPlansService.editPlan(Number(req.params.id), {
-      name, price: Number(price), description, features,
-      maxEmployees: Number(maxEmployees ?? 0), isActive,
+    const { name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
+    const plan = await adminPlansService.editPlan(Number(req.params.id), {
+      name, price: Number(price), priceYearly, description, features,
+      maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
     return res.json({ success: true, message: 'Cập nhật gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
@@ -72,12 +80,17 @@ export async function remove(req, res) {
 /** POST /api/admin/plans/custom-with-payment — tạo gói riêng + tạo link thanh toán PayOS */
 export async function createCustomWithPayment(req, res) {
   try {
-    const { userEmail, name, code, price, description, maxEmployees,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
+    const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanWithPayment(userEmail, {
-      name, code, price: Number(price), description, maxEmployees: Number(maxEmployees ?? -1),
+      name, code, price: Number(price), priceYearly, description,
+      maxEmployees: Number(maxEmployees ?? -1), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
     return res.status(201).json({
       success: true,
@@ -90,12 +103,17 @@ export async function createCustomWithPayment(req, res) {
 /** POST /api/admin/plans/custom — tạo gói riêng + gán ngay cho user theo email */
 export async function createCustom(req, res) {
   try {
-    const { userEmail, name, code, price, description, maxEmployees,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
+    const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanForUser(userEmail, {
-      name, code, price: Number(price), description, maxEmployees: Number(maxEmployees ?? 0),
+      name, code, price: Number(price), priceYearly, description,
+      maxEmployees: Number(maxEmployees ?? 0), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
     return res.status(201).json({ success: true, message: `Đã tạo và gán gói "${result.plan.name}" cho ${result.assignedTo.email}`, data: result });
   } catch (err) { return handleError(res, err); }

@@ -24,6 +24,7 @@ export const emptyForm = () => ({
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
   maxLandingPages: '', maxCampaigns: '',
+  maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
   maxZaloAccounts: '', maxEmailAccounts: '',
   maxEmailTemplates: '', maxZaloTemplates: '',
 });
