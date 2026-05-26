@@ -38,8 +38,8 @@ const AuthLayout = ({ children }) => {
 
 
       {/* Two equal panels */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-16">
-        <div className="flex w-full max-w-[920px] items-stretch">
+      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-6">
+        <div className="flex w-full max-w-[920px] items-stretch my-auto">
 
           {/* Left panel: Branding (desktop only) */}
           <div
@@ -91,7 +91,7 @@ const AuthLayout = ({ children }) => {
 
           {/* Right panel: Form */}
           <div
-            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 auth-dark flex flex-col justify-center"
+            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 auth-dark flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)]"
             style={GLASS_RIGHT}
           >
             {/* Mobile logo */}
