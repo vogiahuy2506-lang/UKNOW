@@ -1704,11 +1704,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
             <HiOutlineSparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="font-bold text-slate-800 text-sm">Founder AI AI Assistant</h3>
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sẵn sàng</span>
+            <div className="flex items-center gap-1 max-w-[180px]">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0" />
+              {currentSessionId && sessions.find(s => s.id === currentSessionId) ? (
+                <span className="text-[10px] text-orange-500 font-semibold truncate">
+                  {sessions.find(s => s.id === currentSessionId).title}
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cuộc trò chuyện mới</span>
+              )}
             </div>
           </div>
         </div>
