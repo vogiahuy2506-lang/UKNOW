@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import authMiddleware from '../middleware/auth.middleware.js';
 import landingTemplateController from '../controllers/landingTemplate.controller.js';
 
 const router = Router();
@@ -15,7 +16,7 @@ router.get('/:id', landingTemplateController.getById.bind(landingTemplateControl
 // GET /api/landing-templates/:id/html - Get template HTML structure only
 router.get('/:id/html', landingTemplateController.getHtml.bind(landingTemplateController));
 
-// POST /api/landing-templates/generate - Generate landing page from prompt
-router.post('/generate', landingTemplateController.generate.bind(landingTemplateController));
+// POST /api/landing-templates/generate - Generate landing page from prompt (requires auth to save session)
+router.post('/generate', authMiddleware, landingTemplateController.generate.bind(landingTemplateController));
 
 export default router;

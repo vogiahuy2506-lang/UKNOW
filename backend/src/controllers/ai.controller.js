@@ -497,7 +497,7 @@ class AiController {
    */
   async generateLandingHtml(req, res) {
     try {
-      const { prompt, title } = req.body;
+      const { prompt, title, sessionId, userSummary } = req.body;
       if (!String(prompt || '').trim()) {
         return res.status(400).json({
           success: false,
@@ -510,6 +510,18 @@ class AiController {
         prompt: String(prompt).trim(),
         titleHint: title != null ? String(title) : '',
       });
+
+      // Lưu vào session nếu có sessionId
+      const sid = sessionId ? Number(sessionId) : null;
+      if (sid) {
+        const userContent = String(userSummary || prompt).trim();
+        const assistantMsg = {
+          content: `Đã tạo landing page "${data.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
+          type: 'landing_page',
+          data: { title: data.title, html: data.html },
+        };
+        await aiSessionRepo.saveMessages(sid, userContent, assistantMsg).catch(() => {});
+      }
 
       return res.json({ success: true, data });
     } catch (error) {

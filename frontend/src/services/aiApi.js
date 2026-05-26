@@ -110,8 +110,8 @@ const aiApi = {
     return response.data;
   },
 
-  generateLandingPage: async (prompt, templateId = null, files = [], sessionId = null) => {
-    const response = await api.post('/landing-templates/generate', { prompt, templateId, files, sessionId }, {
+  generateLandingPage: async (prompt, templateId = null, files = [], sessionId = null, userSummary = null) => {
+    const response = await api.post('/landing-templates/generate', { prompt, templateId, files, sessionId, userSummary }, {
       timeout: 120000
     });
     return response.data;

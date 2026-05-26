@@ -1401,7 +1401,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const enrichedPrompt = parts.join('. ');
 
     try {
-      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId);
+      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId, summaryText);
       if (response.success) {
         const { title, html, css } = response.data;
         setMessages(prev => [...prev, {

@@ -1,5 +1,5 @@
 import landingTemplateService from '../services/landingTemplate/landingTemplate.service.js';
-import { saveAssistantMessage } from '../repositories/aiSession.repository.js';
+import { saveMessages, saveAssistantMessage } from '../repositories/aiSession.repository.js';
 
 /**
  * Controller for landing page templates.
@@ -124,7 +124,7 @@ class LandingTemplateController {
    */
   async generate(req, res) {
     try {
-      const { prompt, templateId, files, sessionId } = req.body;
+      const { prompt, templateId, files, sessionId, userSummary } = req.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 10) {
         return res.status(400).json({
@@ -133,7 +133,7 @@ class LandingTemplateController {
         });
       }
 
-      const userId = req.user?.id || null;
+      const userId = req.user.id;
 
       const result = await landingTemplateService.generateLandingPage({
         prompt: prompt.trim(),
@@ -142,14 +142,16 @@ class LandingTemplateController {
         files: files || [],
       });
 
-      // Lưu kết quả vào session để restore được sau khi switch session
-      if (sessionId && userId) {
+      // Lưu cả user message + assistant (landing page) vào session
+      if (sessionId) {
         try {
-          await saveAssistantMessage(sessionId, {
+          const userContent = String(userSummary || prompt).trim();
+          const assistantMsg = {
             content: `Đã tạo landing page "${result.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
             type: 'landing_page',
             data: { title: result.title, html: result.html, css: result.css },
-          });
+          };
+          await saveMessages(sessionId, userContent, assistantMsg);
         } catch (saveErr) {
           console.warn('[LandingTemplate] Could not save message to session:', saveErr.message);
         }
