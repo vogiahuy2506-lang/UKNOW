@@ -6,8 +6,10 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { HiOutlineSparkles } from 'react-icons/hi';
 import useIsMobile from '../hooks/useIsMobile';
 import AiChatbot from '../features/ai/AiChatbot';
+import { useI18n } from '../i18n';
 
 const MainLayout = () => {
+  const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', true);
   const [sidebarWidth, setSidebarWidth] = useLocalStorageState('founder_ai_sidebar_width', 256);
   const [isResizing, setIsResizing] = useState(false);
@@ -179,7 +181,7 @@ const MainLayout = () => {
           onMouseDown={handleResizeStart}
           role="separator"
           aria-orientation="vertical"
-          title="Kéo để thay đổi kích thước"
+          title={t('mainLayout.dragToResize')}
         >
           <div className="mx-auto h-full w-px bg-gray-200" />
         </div>
@@ -213,7 +215,7 @@ const MainLayout = () => {
           <button 
             onClick={() => setAiPanelOpen(true)}
             className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-24 bg-white border border-slate-200 border-r-0 rounded-l-2xl shadow-xl flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 hover:w-10 transition-all group-hover:border-orange-200"
-            title="Mở AI Assistant"
+            title={t('mainLayout.openAIAssistant')}
           >
             <HiOutlineSparkles className="w-5 h-5" />
             <div className="w-1 h-1 bg-orange-500 rounded-full"></div>

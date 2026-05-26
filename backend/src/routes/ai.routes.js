@@ -9,8 +9,14 @@ router.use(authMiddleware);
 // Smart interactive chat
 router.post('/chat', aiController.chat.bind(aiController));
 
-// Generate campaign script from AI
+// Smart interactive chat V2 - multi-step support
+router.post('/chat-v2', aiController.chatV2.bind(aiController));
+
+// Generate campaign script from AI (legacy)
 router.post('/generate-campaign', aiController.generateCampaign.bind(aiController));
+
+// Generate campaign with Registry support (multi-step in 1 node)
+router.post('/generate-campaign-v2', aiController.generateCampaignV2.bind(aiController));
 
 // Generate full landing page HTML (Tailwind CDN + business context)
 router.post('/generate-landing-html', aiController.generateLandingHtml.bind(aiController));

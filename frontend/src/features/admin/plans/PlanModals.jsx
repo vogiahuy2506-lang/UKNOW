@@ -5,9 +5,11 @@ import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL } from './planUtils.jsx';
 import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
+import { useI18n } from '../../../i18n';
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
 export const PlanFormModal = ({ plan, onClose, onSaved }) => {
+  const { t } = useI18n();
   const isEdit = !!plan?.id;
   const [form, setForm] = useState(plan ? {
     code: plan.code || '',
@@ -38,20 +40,20 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error('Vui lòng nhập tên gói'); return; }
+    if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
     try {
       setIsSaving(true);
       if (isEdit) {
         await adminPlansApiService.updatePlan(plan.id, form);
-        toast.success('Cập nhật gói thành công');
+        toast.success(t('adminPlans.planUpdated'));
       } else {
         await adminPlansApiService.createPlan(form);
-        toast.success('Tạo gói thành công');
+        toast.success(t('adminPlans.planCreated'));
       }
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể lưu gói dịch vụ');
+      toast.error(err?.response?.data?.message || t('adminPlans.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -59,7 +61,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
 
   return renderModal(
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">{isEdit ? 'Chỉnh sửa gói' : 'Tạo gói mới'}</h2>
+      <h2 className="text-xl font-semibold text-gray-900">{isEdit ? t('adminPlans.editPlan') : t('adminPlans.createNewPlan')}</h2>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
@@ -71,7 +73,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">Mã gói (code)</label>
           <input type="text" className="input w-full" value={form.code}
             onChange={(e) => set('code', e.target.value)} placeholder="pro" disabled={isEdit} />
-          {isEdit && <p className="text-xs text-gray-400 mt-1">Mã gói không thể thay đổi sau khi tạo.</p>}
+          {isEdit && <p className="text-xs text-gray-400 mt-1">{t('adminPlans.codeCannotChange')}</p>}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Giá tháng (VNĐ) *</label>
@@ -92,7 +94,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
         <div className="flex items-center gap-3 pt-5">
           <input type="checkbox" id="isActive" className="w-4 h-4 text-primary-600 rounded"
             checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} />
-          <label htmlFor="isActive" className="text-sm text-gray-700 cursor-pointer">Hiển thị công khai</label>
+          <label htmlFor="isActive" className="text-sm text-gray-700 cursor-pointer">{t('adminPlans.displayPublic')}</label>
         </div>
       </div>
 
@@ -114,9 +116,9 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Hủy</button>
+        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
         <button type="submit" className="btn btn-primary" disabled={isSaving}>
-          {isSaving ? 'Đang lưu...' : isEdit ? 'Lưu thay đổi' : 'Tạo gói'}
+          {isSaving ? t('common.processing') : isEdit ? t('adminPlans.saveChanges') : t('adminPlans.createPlan')}
         </button>
       </div>
     </form>,
@@ -126,6 +128,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
 
 // ── AssignModal — gán gói đại trà cho 1 user ─────────────────────────────────
 export const AssignModal = ({ plan, onClose, onAssigned }) => {
+  const { t } = useI18n();
   const [email, setEmail]               = useState('');
   const [paymentMethod, setPaymentMethod] = useState('free');
   const [note, setNote]                 = useState('');
@@ -133,7 +136,7 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
 
   const handleAssign = async (e) => {
     e.preventDefault();
-    if (!email.trim()) { toast.error('Vui lòng nhập email'); return; }
+    if (!email.trim()) { toast.error(t('adminMembers.emailRequired')); return; }
     try {
       setIsLoading(true);
       const res = await adminPlansApiService.assignPlan(plan.id, email.trim(), {
@@ -144,7 +147,7 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
       onAssigned();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể gán gói');
+      toast.error(err?.response?.data?.message || t('adminMembers.assignFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -153,36 +156,36 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
   return renderModal(
     <form onSubmit={handleAssign} className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Gán gói cho người dùng</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.assignPlan')}</h2>
         <p className="text-sm text-gray-500 mt-1">Gói: <strong>{plan.name}</strong> · {fmtVnd(plan.price)}</p>
       </div>
       <p className="text-sm text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
         Thao tác này sẽ gán gói trực tiếp, bỏ qua quy trình thanh toán.
       </p>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Email người dùng *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.emailLabel')} *</label>
         <EmailAutocomplete value={email} onChange={setEmail} />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hình thức thanh toán *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>
         <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-          <option value="free">Miễn phí / Demo (không tính doanh thu)</option>
-          <option value="manual">Đã thu tiền ngoài (tính vào doanh thu)</option>
+          <option value="free">{t('adminMembers.freeDemo')}</option>
+          <option value="manual">{t('adminMembers.manualPayment')}</option>
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.note')}</label>
         <input
           className="input w-full"
-          placeholder="VD: Chuyển khoản MB Bank 12/05/2026..."
+          placeholder={t('adminMembers.placeholderNote')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
       </div>
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isLoading}>Hủy</button>
+        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isLoading}>{t('common.cancel')}</button>
         <button type="submit" className="btn btn-primary" disabled={isLoading}>
-          {isLoading ? 'Đang xử lý...' : 'Xác nhận gán gói'}
+          {isLoading ? t('adminMembers.confirming') : t('adminMembers.confirmAssign')}
         </button>
       </div>
     </form>,
@@ -193,6 +196,7 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
 
 // ── CustomPlanEditModal — chỉnh sửa gói riêng (không có code / tính năng) ────
 export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     name: plan.name || '',
     price: plan.price ?? 0,
@@ -219,15 +223,15 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error('Vui lòng nhập tên gói'); return; }
+    if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
     try {
       setIsSaving(true);
       await adminPlansApiService.updatePlan(plan.id, { ...form, isActive: false, features: [] });
-      toast.success('Cập nhật gói thành công');
+      toast.success(t('adminPlans.planUpdated'));
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể lưu gói');
+      toast.error(err?.response?.data?.message || t('adminPlans.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -236,7 +240,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
   return renderModal(
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Chỉnh sửa gói riêng</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t('adminPlans.editPlan')}</h2>
         {plan.assignedEmail && (
           <p className="text-sm text-gray-500 mt-1">Doanh nghiệp: <strong>{plan.assignedName || plan.assignedEmail}</strong></p>
         )}
@@ -276,9 +280,9 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
       <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Hủy</button>
+        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
         <button type="submit" className="btn btn-primary" disabled={isSaving}>
-          {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+          {isSaving ? t('common.processing') : t('adminPlans.saveChanges')}
         </button>
       </div>
     </form>,
@@ -414,6 +418,7 @@ const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, userEmai
 
 // ── CustomPlanModal — tạo gói riêng + gán ngay hoặc tạo link PayOS ───────────
 export const CustomPlanModal = ({ onClose, onSaved }) => {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     userEmail: '', name: '', code: '', price: 0, priceYearly: '',
     description: '', maxEmployees: -1,
@@ -430,21 +435,21 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
   const validate = () => {
-    if (!form.userEmail.trim()) { toast.error('Vui lòng nhập email người dùng'); return false; }
-    if (!form.name.trim()) { toast.error('Vui lòng nhập tên gói'); return false; }
+    if (!form.userEmail.trim()) { toast.error(t('adminMembers.emailRequired')); return false; }
+    if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return false; }
     return true;
   };
 
   const handleCreatePaymentLink = async () => {
     if (!validate()) return;
-    if (!form.price || form.price <= 0) { toast.error('Cần nhập giá tiền để tạo link thanh toán'); return; }
+    if (!form.price || form.price <= 0) { toast.error(t('adminPlans.priceRequired')); return; }
     try {
       setIsSaving(true);
       const res = await adminPlansApiService.createCustomPlanWithPayment(form);
       onSaved();
       setPaymentResult({ ...res.data.data, planName: form.name, userEmail: form.userEmail });
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể tạo link thanh toán');
+      toast.error(err?.response?.data?.message || t('adminPlans.cannotCreatePaymentLink'));
     } finally {
       setIsSaving(false);
     }
@@ -460,7 +465,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể tạo gói riêng');
+      toast.error(err?.response?.data?.message || t('adminPlans.cannotCreateCustomPlan'));
     } finally {
       setIsSaving(false);
     }
@@ -532,13 +537,13 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
           disabled={isSaving}
           className="btn btn-primary w-full"
         >
-          {isSaving ? 'Đang xử lý...' : 'Tạo link thanh toán'}
+          {isSaving ? t('common.processing') : t('adminPlans.createPaymentLink')}
         </button>
         {/* <button type="submit" disabled={isSaving} className="btn btn-secondary w-full text-sm">
           Gán ngay (bỏ qua thanh toán)
         </button> */}
         <button type="button" className="btn btn-secondary w-full text-sm" onClick={onClose} disabled={isSaving}>
-          Hủy
+          {t('common.cancel')}
         </button>
       </div>
     </form>,

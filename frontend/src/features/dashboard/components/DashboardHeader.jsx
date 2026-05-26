@@ -14,15 +14,21 @@
  * @param {import('react').ReactNode} [props.extraActions]
  * @returns {JSX.Element}
  */
+import { useI18n } from '../../../i18n';
+
 const DashboardHeader = ({
   filters,
   onOpenFilter,
   isLoading,
-  title = 'Campaign Dashboard',
-  description = 'Phân tích hiệu quả theo lượt chạy, kênh giao tiếp và trạng thái đơn hàng',
-  filterButtonLabel = 'Bộ lọc',
+  title,
+  description,
+  filterButtonLabel,
   extraActions = null,
 }) => {
+  const { t } = useI18n();
+  const _title = title || t('dashboard.orders');
+  const _description = description || t('dashboard.ordersDescription');
+  const _filterLabel = filterButtonLabel || t('common.filter');
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
     const [y, m, d] = dateStr.split('-');
@@ -30,17 +36,17 @@ const DashboardHeader = ({
   };
 
   return (
-    <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       {/* Title block */}
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight truncate">{title}</h1>
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">{_title}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {description}
+          {_description}
         </p>
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex items-center gap-2.5 shrink-0">
         {/* Active date range pill */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 shadow-sm">
           <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -71,7 +77,7 @@ const DashboardHeader = ({
               d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
             />
           </svg>
-          {filterButtonLabel}
+          {_filterLabel}
         </button>
         {extraActions}
       </div>
