@@ -6,7 +6,7 @@ import { useI18n } from '../../../i18n';
 // ── PriceInput ────────────────────────────────────────────────────────────────
 export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
   const { t } = useI18n();
-  const fmt = (n) => n ? Number(n).toLocaleString('vi-VN') : '';
+  const fmt = (n) => (n === '' || n === null || n === undefined) ? '' : Number(n).toLocaleString('vi-VN');
 
   const handleChange = (e) => {
     const digits = e.target.value.replace(/\./g, '').replace(/\D/g, '');

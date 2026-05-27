@@ -1467,6 +1467,9 @@ export default {
     autoRedirect: 'Hệ thống sẽ tự động chuyển hướng khi nhận được tiền',
     needHelp: 'Gặp khó khăn?',
     contactSupport: 'Liên hệ hỗ trợ 24/7',
+    step1: 'Mở app ngân hàng và chọn Quét QR',
+    step2: 'Quét mã QR hoặc nhập mã đơn hàng',
+    step3: 'Xác nhận — hệ thống tự kích hoạt tài khoản',
   },
 
   plans: {

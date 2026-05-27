@@ -1488,6 +1488,9 @@ export default {
     autoRedirect: 'System will redirect automatically when payment is received',
     needHelp: 'Need help?',
     contactSupport: 'Contact 24/7 support',
+    step1: 'Open your banking app and select Scan QR',
+    step2: 'Scan the QR code or enter the order code',
+    step3: 'Confirm — the system will activate your account automatically',
   },
 
   plans: {
