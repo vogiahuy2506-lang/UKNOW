@@ -8,21 +8,19 @@ import './index.css'
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-const AppTree = () => (
-  <I18nProvider>
-    <App />
-  </I18nProvider>
-);
-
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       {clientId ? (
         <GoogleOAuthProvider clientId={clientId}>
-          <AppTree />
+          <I18nProvider>
+            <App />
+          </I18nProvider>
         </GoogleOAuthProvider>
       ) : (
-        <AppTree />
+        <I18nProvider>
+          <App />
+        </I18nProvider>
       )}
     </ErrorBoundary>
   </React.StrictMode>,
