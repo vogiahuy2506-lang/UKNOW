@@ -5,6 +5,7 @@ import { getStoredLocale, setStoredLocale, LOCALES } from '../utils/i18n';
 
 const translations = { vi, en };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const I18nContext = createContext(null);
 
 export function I18nProvider({ children }) {
@@ -74,6 +75,7 @@ export function I18nProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useI18n(namespace = null) {
   const context = useContext(I18nContext);
   if (!context) {
