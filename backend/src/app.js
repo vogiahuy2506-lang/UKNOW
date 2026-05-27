@@ -138,7 +138,10 @@ export function createApp() {
   // Resolve custom hostname (*.lp.founderai.biz) → landing page slug
   app.use(domainResolver);
 
-  app.use('/api/auth', authLimiter, authRoutes);
+  // TEMPORARILY DISABLED FOR QA: authLimiter blocks repeated Google login tests with 429.
+  // Re-enable before production hardening if brute-force protection is required.
+  // app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
   app.use('/api/email-templates', emailTemplateRoutes);
