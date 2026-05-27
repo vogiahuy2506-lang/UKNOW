@@ -5,10 +5,6 @@ test.describe('Khách hàng', () => {
     await page.goto('/app/customers');
     // Wait for network to be idle so auth init (/auth/me) completes before asserting
     await page.waitForLoadState('networkidle', { timeout: 20_000 });
-    // Diagnostic: log URL + headings actually present on failure
-    const currentUrl = page.url();
-    const headings = await page.locator('h1, h2, h3').allTextContents();
-    console.log('[diag] url:', currentUrl, '| headings:', headings);
     await expect(page).toHaveURL(/\/app\/customers/);
     await expect(page.getByRole('heading', { name: 'Khách hàng', exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByPlaceholder('Tìm kiếm khách hàng...')).toBeVisible();

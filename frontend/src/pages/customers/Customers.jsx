@@ -132,7 +132,7 @@ const Customers = () => {
                     <span className="font-medium text-gray-900 truncate">
                       {c.campaignName}
                     </span>
-                    <StatusBadge status={c.status} />
+                    <StatusBadge status={c.status} t={t} />
                     {(() => {
                       const typeMeta = getCampaignTypeMeta(c.campaignType);
                       return (
