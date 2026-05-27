@@ -92,6 +92,27 @@ const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
   },
+  {
+    code: 'custom',
+    name: 'Gói Tùy chọn',
+    price: 0,
+    priceYearly: '',
+    durationDays: 30,
+    maxEmployees: -1,
+    dailyEmailLimit: '',
+    monthlyEmailLimit: '',
+    dailyZaloLimit: '',
+    monthlyZaloLimit: '',
+    maxLandingPages: '',
+    maxCampaigns: '',
+    maxZaloCampaigns: '',
+    maxZaloGroupCampaigns: '',
+    maxEmailCampaigns: '',
+    maxZaloAccounts: '',
+    maxEmailAccounts: '',
+    maxEmailTemplates: '',
+    maxZaloTemplates: '',
+  },
 ];
 
 const Field = ({ label, children, note, className = '' }) => (
@@ -158,6 +179,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
+  const isContactPlanCode = String(form.code || '').trim().toLowerCase() === 'custom';
   const applyPreset = (preset) => {
     setForm((prev) => ({
       ...prev,
@@ -210,7 +232,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
           title={t('adminPlans.presetTitle')}
           description={t('adminPlans.presetDescription')}
         >
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             {PLAN_PRESETS.map((preset) => (
               <button
                 key={preset.code}
@@ -260,7 +282,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
         description={t('adminPlans.pricingAndAccessDescription')}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label={t('planInputs.planPricePerMonth')}>
+          <Field label={t('planInputs.planPricePerMonth')} note={isContactPlanCode ? t('adminPlans.contactPlanPriceHint') : null}>
             <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>

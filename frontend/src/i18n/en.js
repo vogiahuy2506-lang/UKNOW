@@ -1148,7 +1148,7 @@ export default {
     customPlanEditSubtitle: 'Edit limits and pricing for a custom plan.',
     sectionFastSetup: 'Quick setup',
     presetTitle: 'Load package matrix settings',
-    presetDescription: 'Use the Trial, Basic, Pro or Team preset, then adjust before saving.',
+    presetDescription: 'Use the Trial, Basic, Pro, Team or Custom preset, then adjust before saving.',
     sectionGeneral: 'Details',
     generalInfoTitle: 'Plan details',
     generalInfoDescription: 'Name, code, duration and public or internal description.',
@@ -1156,6 +1156,7 @@ export default {
     pricingAndAccessTitle: 'Pricing and access',
     pricingAndAccessDescription: 'Monthly price, yearly price, admin seats and visibility.',
     yearlyPriceHint: 'Leave empty if yearly billing should not be shown/sold.',
+    contactPlanPriceHint: 'Plans with code custom show "Contact us" on the pricing page and open Zalo from the CTA.',
     displayPublicHint: 'Enable to show this plan on the pricing page.',
     sectionLimits: 'Limits',
     sendLimitsDescription: 'Configure email and Zalo quotas by day or month.',
@@ -2372,6 +2373,11 @@ export default {
 
   // Pricing
   pricing: {
+    title: 'Pricing',
+    heroBadge: 'Flexible pricing',
+    heroTitlePrefix: 'Invest in',
+    heroTitleHighlight: 'growth',
+    heroSubtitle: 'Plans designed to scale with your business. Admins can flexibly customize every configuration.',
     mostPopular: 'Most Popular',
     contact: 'Contact us',
     perMonth: '/ month',

@@ -6,7 +6,13 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
 import { useI18n } from '../../../i18n';
 
-const ZALO_URL = 'https://zalo.me/0388180856';
+const ZALO_URL = 'https://zalo.me/0866914382';
+
+const isContactPlan = (plan) => {
+  const code = String(plan?.code || '').trim().toLowerCase();
+  const name = String(plan?.name || '').trim().toLowerCase();
+  return code === 'custom' || code === 'contact' || name.includes('tùy chọn') || name.includes('tuỳ chọn');
+};
 
 // Glass mode styles — dùng cho trang /pricing với video background
 const GLASS_STYLES = [
@@ -128,7 +134,12 @@ export default function PricingSection({ embedded = false, compact = false, glas
       // Lọc các gói active và sắp xếp theo giá để hiển thị hợp lý
       const sortedPlans = (data.plans || [])
         .filter(p => p.is_active)
-        .sort((a, b) => a.price - b.price);
+        .sort((a, b) => {
+          const aContact = isContactPlan(a);
+          const bContact = isContactPlan(b);
+          if (aContact !== bContact) return aContact ? 1 : -1;
+          return Number(a.price || 0) - Number(b.price || 0);
+        });
       setPlans(sortedPlans);
     } catch (error) {
       console.error('Lỗi khi lấy dữ liệu gói:', error);
@@ -143,7 +154,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
   }, []);
 
   const handlePlanClick = (plan) => {
-    if (plan.code === 'custom' || plan.price === 0) {
+    if (isContactPlan(plan)) {
       window.open(ZALO_URL, '_blank');
       return;
     }
@@ -186,13 +197,16 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {!embedded && (
           <AnimatedSection className="text-center mb-20">
             <span className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full font-bold text-sm tracking-wide uppercase mb-6 shadow-sm border border-orange-200">
-              BẢNG GIÁ LINH HOẠT
+              {t('pricing.heroBadge')}
             </span>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 mb-6 tracking-tight">
-              Đầu tư cho sự <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">tăng trưởng</span>
+              {t('pricing.heroTitlePrefix')}{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+                {t('pricing.heroTitleHighlight')}
+              </span>
             </h2>
             <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Hệ thống gói cước được thiết kế để mở rộng cùng doanh nghiệp của bạn. Admin có thể tùy biến linh hoạt mọi cấu hình.
+              {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
         )}
@@ -211,7 +225,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
           {plans.map((plan, index) => {
             // Cấp phát style động dựa trên vị trí. Gói ở giữa (index 1) thường nổi bật nhất.
             // Admin có thể thêm code "custom" để ép hiển thị nút liên hệ Zalo.
-            const isCustom = plan.code === 'custom';
+            const isCustom = isContactPlan(plan);
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
 
@@ -248,7 +262,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                     <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{plan.description}</p>
 
                     <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
-                      {isCustom || plan.price === 0 ? (
+                      {isCustom ? (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
                         </div>
@@ -275,7 +289,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       onClick={() => handlePlanClick(plan)}
                       className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
                     >
-                      {isCustom || plan.price === 0 ? t('pricing.getQuote') : t('pricing.startTrial')}
+                      {isCustom ? t('pricing.getQuote') : t('pricing.startTrial')}
                     </button>
                   </div>
                 </div>

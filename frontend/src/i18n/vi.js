@@ -1148,7 +1148,7 @@ export default {
     customPlanEditSubtitle: 'Chỉnh sửa hạn mức và giá cho gói riêng.',
     sectionFastSetup: 'Thiết lập nhanh',
     presetTitle: 'Nạp cấu hình theo bảng gói',
-    presetDescription: 'Dùng preset Trial, Basic, Pro hoặc Team rồi tinh chỉnh lại trước khi lưu.',
+    presetDescription: 'Dùng preset Trial, Basic, Pro, Team hoặc Tùy chọn rồi tinh chỉnh lại trước khi lưu.',
     sectionGeneral: 'Thông tin',
     generalInfoTitle: 'Thông tin gói',
     generalInfoDescription: 'Tên, mã, thời hạn và mô tả nội bộ hoặc mô tả hiển thị.',
@@ -1156,6 +1156,7 @@ export default {
     pricingAndAccessTitle: 'Giá và quyền truy cập',
     pricingAndAccessDescription: 'Giá tháng, giá năm, số thành viên quản trị và trạng thái hiển thị.',
     yearlyPriceHint: 'Để trống nếu không hiển thị/bán theo năm.',
+    contactPlanPriceHint: 'Mã gói custom sẽ hiển thị giá "Liên hệ" trên trang bảng giá và nút sẽ mở Zalo.',
     displayPublicHint: 'Bật để gói xuất hiện trên trang pricing.',
     sectionLimits: 'Hạn mức',
     sendLimitsDescription: 'Thiết lập quota gửi email và Zalo theo ngày hoặc tháng.',
@@ -2351,6 +2352,11 @@ export default {
 
   // Pricing
   pricing: {
+    title: 'Bảng giá',
+    heroBadge: 'Bảng giá linh hoạt',
+    heroTitlePrefix: 'Đầu tư cho sự',
+    heroTitleHighlight: 'tăng trưởng',
+    heroSubtitle: 'Hệ thống gói cước được thiết kế để mở rộng cùng doanh nghiệp của bạn. Admin có thể tùy biến linh hoạt mọi cấu hình.',
     mostPopular: 'Phổ Biến Nhất',
     contact: 'Liên hệ',
     perMonth: '/ tháng',
