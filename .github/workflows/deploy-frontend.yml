@@ -69,9 +69,17 @@ jobs:
             echo "Deploying frontend image: $FRONTEND_IMAGE"
             docker pull "$FRONTEND_IMAGE"
             docker image inspect "$FRONTEND_IMAGE" --format 'Pulled image id: {{.Id}}'
-            CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-frontend 2>/dev/null || echo "")
-            [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" && sleep 2 || true
-            docker rm uknow-campaign-frontend || true
+            if docker inspect uknow-campaign-frontend > /dev/null 2>&1; then
+              echo "Removing old frontend container..."
+              CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-frontend 2>/dev/null || echo "")
+              [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" || true
+              for i in $(seq 1 15); do
+                RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-frontend 2>/dev/null || echo "false")
+                [ "$RUNNING" = "false" ] && break
+                sleep 1
+              done
+              docker rm uknow-campaign-frontend || docker rm -f uknow-campaign-frontend
+            fi
             docker run -d \
               --name uknow-campaign-frontend \
               --network uknow_network \
