@@ -11,7 +11,8 @@ const PASSWORD = process.env.E2E_PASSWORD || 'Test@1234';
 setup('authenticate', async ({ page }) => {
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible();
+  await page.waitForLoadState('networkidle', { timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible({ timeout: 15_000 });
   await page.locator('input[autocomplete="username"]').fill(USERNAME);
   await page.locator('input[autocomplete="current-password"]').fill(PASSWORD);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();

@@ -381,18 +381,22 @@ const Register = () => {
         </button>
       </form>
 
-      <div className="flex items-center my-8">
-        <div className="flex-1 border-t border-slate-200" />
-        <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('common.or')}</span>
-        <div className="flex-1 border-t border-slate-200" />
-      </div>
+      {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+        <>
+          <div className="flex items-center my-8">
+            <div className="flex-1 border-t border-slate-200" />
+            <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('common.or')}</span>
+            <div className="flex-1 border-t border-slate-200" />
+          </div>
 
-      <GoogleAuthButton
-        onSuccess={handleGoogleSuccess}
-        onError={handleGoogleError}
-        text={t('register.continueWithGoogle')}
-        disabled={isSendingCode}
-      />
+          <GoogleAuthButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            text={t('register.continueWithGoogle')}
+            disabled={isSendingCode}
+          />
+        </>
+      )}
 
       <div className="mt-8 text-center">
         <p className="text-sm font-medium text-slate-600">

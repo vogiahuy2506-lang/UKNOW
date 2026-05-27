@@ -163,20 +163,24 @@ const Login = () => {
         </button>
       </form>
 
-      {/* Divider */}
-      <div className="flex items-center my-4">
-        <div className="flex-1 border-t border-slate-200"></div>
-        <span className="px-3 text-xs text-slate-400">{t('auth.orContinueWith')}</span>
-        <div className="flex-1 border-t border-slate-200"></div>
-      </div>
+      {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+        <>
+          {/* Divider */}
+          <div className="flex items-center my-4">
+            <div className="flex-1 border-t border-slate-200"></div>
+            <span className="px-3 text-xs text-slate-400">{t('auth.orContinueWith')}</span>
+            <div className="flex-1 border-t border-slate-200"></div>
+          </div>
 
-      {/* Google Login */}
-      <GoogleAuthButton
-        onSuccess={handleGoogleSuccess}
-        onError={handleGoogleError}
-        text={t('auth.continueWithGoogle')}
-        disabled={isLoading}
-      />
+          {/* Google Login */}
+          <GoogleAuthButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            text={t('auth.continueWithGoogle')}
+            disabled={isLoading}
+          />
+        </>
+      )}
 
       {/* Register */}
       <p className="mt-5 text-center text-sm text-slate-600">
