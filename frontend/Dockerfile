@@ -5,6 +5,9 @@ WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
+ARG BUILD_SHA=dev
+RUN echo "Build SHA: $BUILD_SHA"
+
 COPY . .
 
 # Cho phép truyền biến API URL và Google Client ID lúc build
