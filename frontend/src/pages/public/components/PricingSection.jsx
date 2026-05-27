@@ -14,6 +14,62 @@ const isContactPlan = (plan) => {
   return code === 'custom' || code === 'contact' || name.includes('tùy chọn') || name.includes('tuỳ chọn');
 };
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const getPlanTranslationKey = (plan) => {
+  const code = normalizeText(plan?.code);
+  if (code) return code;
+
+  const name = normalizeText(plan?.name)
+    .replace(/^gói\s+/, '')
+    .replace(/\s+plan$/, '');
+
+  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(name)) {
+    return name;
+  }
+  if (name.includes('tùy chọn') || name.includes('tuỳ chọn')) return 'custom';
+  return '';
+};
+
+const getTranslatedPlanName = (plan, t) => {
+  const key = getPlanTranslationKey(plan);
+  const translated = key ? t(`pricing.planNames.${key}`) : '';
+  return translated && translated !== `pricing.planNames.${key}` ? translated : plan.name;
+};
+
+const getTranslatedPlanDescription = (plan, t) => {
+  const key = getPlanTranslationKey(plan);
+  const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
+  return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;
+};
+
+const getTranslatedFeature = (feature, t) => {
+  const text = String(feature || '').trim();
+  const normalized = normalizeText(text);
+
+  const emailMonth = text.match(/^([\d.,]+)\s*email\s*\/\s*tháng$/i);
+  if (emailMonth) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonth[1] });
+
+  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin nhắn\s*)?zalo\s*\/\s*tháng$/i);
+  if (zaloMonth) return t('pricing.featureTemplates.zaloPerMonth', { n: zaloMonth[1] });
+
+  const members = text.match(/^([\d.,]+)\s*thành viên(?:\s*tham gia)?$/i);
+  if (members) return t('pricing.featureTemplates.members', { n: members[1] });
+
+  const knownFeatureKeys = {
+    'ai viết content nâng cao': 'advancedAiWriting',
+    'hỗ trợ ưu tiên 24/7': 'prioritySupport247',
+    'hỗ trợ 24/7': 'support247',
+    'hỗ trợ qua email': 'emailSupport',
+    'multi_language': 'multiLanguage',
+    'không giới hạn': 'unlimited',
+    'không hỗ trợ': 'notSupported',
+  };
+
+  const key = knownFeatureKeys[normalized];
+  return key ? t(`pricing.features.${key}`) : text;
+};
+
 // Glass mode styles — dùng cho trang /pricing với video background
 const GLASS_STYLES = [
   {
@@ -232,6 +288,8 @@ export default function PricingSection({ embedded = false, compact = false, glas
             const features = Array.isArray(plan.features)
               ? plan.features
               : JSON.parse(plan.features || '[]');
+            const planName = getTranslatedPlanName(plan, t);
+            const planDescription = getTranslatedPlanDescription(plan, t);
 
             return (
               <AnimatedSection key={plan.id} delay={index * 100} className="h-full">
@@ -251,7 +309,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
                   <div className={`relative z-10 flex-1 flex flex-col ${style.badge ? 'pt-5' : ''}`}>
                     <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-                      <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{plan.name}</h3>
+                      <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{planName}</h3>
                       {PlanIcon && (
                         <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl flex items-center justify-center bg-white/10 backdrop-blur-sm ${style.featureIcon}`}>
                           <PlanIcon className={compact ? 'w-5 h-5' : 'w-6 h-6'} />
@@ -259,7 +317,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       )}
                     </div>
 
-                    <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{plan.description}</p>
+                    <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{planDescription}</p>
 
                     <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
                       {isCustom ? (
@@ -280,7 +338,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       {features.map((feature, i) => (
                         <li key={i} className="flex items-start gap-3">
                           <FaCheckCircle className={`flex-shrink-0 w-5 h-5 mt-0.5 ${style.featureIcon}`} />
-                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{feature}</span>
+                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{getTranslatedFeature(feature, t)}</span>
                         </li>
                       ))}
                     </ul>

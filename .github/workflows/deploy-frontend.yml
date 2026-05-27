@@ -57,32 +57,63 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}
+          EXPECTED_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME
+          envs: DOCKERHUB_USERNAME,FRONTEND_IMAGE,EXPECTED_SHA
           script: |
-            docker pull $DOCKERHUB_USERNAME/uknow-frontend:latest
+            set -e
+            echo "Deploying frontend image: $FRONTEND_IMAGE"
+            docker pull "$FRONTEND_IMAGE"
+            docker image inspect "$FRONTEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-frontend 2>/dev/null || echo "")
             [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" && sleep 2 || true
             docker rm uknow-campaign-frontend || true
             docker run -d \
               --name uknow-campaign-frontend \
               --network uknow_network \
+              --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
               -p 80:80 \
               -p 443:443 \
-              -v /root/uknow/frontend/default.conf:/etc/nginx/conf.d/default.conf \
               -v /etc/letsencrypt:/etc/letsencrypt:ro \
-              $DOCKERHUB_USERNAME/uknow-frontend:latest
+              "$FRONTEND_IMAGE"
             docker image prune -f
             echo "Chờ nginx khởi động..."
             sleep 5
-            if curl --retry 5 --retry-delay 2 --retry-connrefused -sf http://localhost > /dev/null; then
+            if curl --noproxy '*' --retry 5 --retry-delay 2 --retry-connrefused -kfsS \
+              --resolve founderai.biz:443:127.0.0.1 \
+              https://founderai.biz/ > /dev/null; then
               echo "Smoke test passed — frontend healthy"
             else
               echo "Smoke test FAILED"
               docker logs --tail 50 uknow-campaign-frontend
               exit 1
             fi
+            LOCAL_VERSION_JSON=$(curl --noproxy '*' --retry 5 --retry-delay 2 --retry-connrefused -kfsS \
+              --resolve founderai.biz:443:127.0.0.1 \
+              "https://founderai.biz/version.json?deploy=$EXPECTED_SHA")
+            echo "Local served version: $LOCAL_VERSION_JSON"
+            case "$LOCAL_VERSION_JSON" in
+              *"$EXPECTED_SHA"*) echo "Local version check passed — VPS is serving $EXPECTED_SHA" ;;
+              *)
+                echo "Local version check FAILED — expected $EXPECTED_SHA"
+                docker inspect uknow-campaign-frontend --format 'Container image: {{.Config.Image}} revision={{ index .Config.Labels "org.opencontainers.image.revision" }}'
+                docker logs --tail 50 uknow-campaign-frontend
+                exit 1
+                ;;
+            esac
+            PUBLIC_VERSION_JSON=$(curl --retry 5 --retry-delay 2 --retry-connrefused -kfsS \
+              "https://founderai.biz/version.json?deploy=$EXPECTED_SHA")
+            echo "Public served version: $PUBLIC_VERSION_JSON"
+            case "$PUBLIC_VERSION_JSON" in
+              *"$EXPECTED_SHA"*) echo "Public version check passed — founderai.biz is serving $EXPECTED_SHA" ;;
+              *)
+                echo "Public version check FAILED — expected $EXPECTED_SHA"
+                echo "If the local check passed but public failed, clear Cloudflare/cache for founderai.biz."
+                exit 1
+                ;;
+            esac
