@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Campaigns UI', () => {
   test('nút Tạo mở modal rồi Hủy', async ({ page }) => {
     await page.goto('/app/campaigns');
-    await expect(page.getByRole('heading', { name: /Chiến dịch/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Chiến dịch', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Tạo', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tạo chiến dịch mới' })).toBeVisible();
     await page.getByRole('button', { name: 'Hủy' }).first().click();
