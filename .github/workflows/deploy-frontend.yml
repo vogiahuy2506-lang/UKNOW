@@ -71,14 +71,22 @@ jobs:
             docker image inspect "$FRONTEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             if docker inspect uknow-campaign-frontend > /dev/null 2>&1; then
               echo "Removing old frontend container..."
-              CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-frontend 2>/dev/null || echo "")
-              [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" || true
+              docker update --restart=no uknow-campaign-frontend || true
               for i in $(seq 1 15); do
                 RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-frontend 2>/dev/null || echo "false")
                 [ "$RUNNING" = "false" ] && break
+                CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-frontend 2>/dev/null || echo "")
+                if [ -n "$CPID" ] && [ "$CPID" != "0" ]; then
+                  kill -9 "$CPID" 2>/dev/null || sudo -n kill -9 "$CPID" 2>/dev/null || true
+                fi
                 sleep 1
               done
-              docker rm uknow-campaign-frontend || docker rm -f uknow-campaign-frontend
+              RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-frontend 2>/dev/null || echo "false")
+              if [ "$RUNNING" != "false" ]; then
+                docker inspect uknow-campaign-frontend --format 'Could not stop old container: pid={{.State.Pid}} status={{.State.Status}} running={{.State.Running}}'
+                exit 1
+              fi
+              docker rm uknow-campaign-frontend
             fi
             docker run -d \
               --name uknow-campaign-frontend \
