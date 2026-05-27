@@ -84,37 +84,47 @@ const AuthLayout = ({ children }) => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center gap-5 text-xs font-medium text-white/25">
-              <span>© 2026 Founder AI Marketing</span>
-              <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">Bảo mật</Link>
-              <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">Hỗ trợ</a>
+            {/* Footer + language toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-5 text-xs font-medium text-white/25">
+                <span>© 2026 Founder AI Marketing</span>
+                <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">Bảo mật</Link>
+                <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">Hỗ trợ</a>
+              </div>
+              <button
+                type="button"
+                onClick={toggleLocale}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/15 hover:border-white/30 hover:bg-white/8 transition-all text-xs font-semibold"
+                title={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+              >
+                <span className={locale === 'vi' ? 'text-white/80' : 'text-white/30'}>🇻🇳 VI</span>
+                <span className="text-white/20 mx-0.5">|</span>
+                <span className={locale === 'en' ? 'text-white/80' : 'text-white/30'}>🇺🇸 EN</span>
+              </button>
             </div>
           </div>
 
           {/* Right panel: Form */}
           <div
-            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)]"
-            style={GLASS_RIGHT}
+            className="flex-1 rounded-r-3xl lg:rounded-l-none rounded-l-3xl p-8 sm:p-10 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)] [&::-webkit-scrollbar]:hidden"
+            style={{ ...GLASS_RIGHT, scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            {/* Top bar: mobile logo + language toggle */}
-            <div className="flex items-center justify-between mb-8">
-              <Link to="/" className="lg:hidden flex items-center gap-2.5 hover:opacity-70 transition-opacity w-fit">
+            {/* Mobile top bar: logo + language toggle (desktop: hidden, handled by left panel) */}
+            <div className="lg:hidden flex items-center justify-between mb-8">
+              <Link to="/" className="flex items-center gap-2.5 hover:opacity-70 transition-opacity w-fit">
                 <img src={founderaiLogo} alt="Founder AI" className="w-8 h-8 object-contain" />
                 <span className="text-slate-800 font-bold text-[17px] tracking-tight">Founder AI</span>
               </Link>
-              <div className="lg:ml-auto">
-                <button
-                  type="button"
-                  onClick={toggleLocale}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-orange-300 hover:bg-orange-50 transition-all text-xs font-semibold tracking-wide"
-                  title={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
-                >
-                  <span className={locale === 'vi' ? 'text-slate-800' : 'text-slate-300'}>🇻🇳 VI</span>
-                  <span className="text-slate-300 mx-0.5">|</span>
-                  <span className={locale === 'en' ? 'text-slate-800' : 'text-slate-300'}>EN</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={toggleLocale}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-orange-300 hover:bg-orange-50 transition-all text-xs font-semibold"
+                title={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+              >
+                <span className={locale === 'vi' ? 'text-slate-800' : 'text-slate-300'}>🇻🇳 VI</span>
+                <span className="text-slate-300 mx-0.5">|</span>
+                <span className={locale === 'en' ? 'text-slate-800' : 'text-slate-300'}>🇺🇸 EN</span>
+              </button>
             </div>
 
             {children}

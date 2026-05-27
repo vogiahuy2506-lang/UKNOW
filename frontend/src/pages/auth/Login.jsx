@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 import { HiOutlineUser, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
-import { GoogleLogin } from '@react-oauth/google';
+import GoogleAuthButton from '../../components/GoogleAuthButton';
 
 const Login = () => {
   const { t } = useI18n();
@@ -23,10 +23,10 @@ const Login = () => {
     rememberMe: z.boolean().optional(),
   });
 
-  const handleGoogleSuccess = async (credentialResponse) => {
+  const handleGoogleSuccess = async (tokenResponse) => {
     setIsLoading(true);
     try {
-      const result = await googleLogin(credentialResponse.credential);
+      const result = await googleLogin({ access_token: tokenResponse.access_token });
       toast.success(t('auth.googleLoginSuccess'));
       const role = result?.data?.user?.role;
       navigate(role === 'admin' ? '/admin' : '/app');
@@ -171,18 +171,12 @@ const Login = () => {
       </div>
 
       {/* Google Login */}
-      <div className="w-full flex justify-center">
-        <GoogleLogin
-          clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
-          onSuccess={handleGoogleSuccess}
-          onError={handleGoogleError}
-          theme="outline"
-          size="large"
-          width="100%"
-          text="continue_with"
-          shape="rectangular"
-        />
-      </div>
+      <GoogleAuthButton
+        onSuccess={handleGoogleSuccess}
+        onError={handleGoogleError}
+        text={t('auth.continueWithGoogle')}
+        disabled={isLoading}
+      />
 
       {/* Register */}
       <p className="mt-5 text-center text-sm text-slate-600">

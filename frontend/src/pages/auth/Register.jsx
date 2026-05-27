@@ -16,7 +16,7 @@ import {
   HiOutlineMail,
   HiOutlineArrowLeft,
 } from 'react-icons/hi';
-import { GoogleLogin } from '@react-oauth/google';
+import GoogleAuthButton from '../../components/GoogleAuthButton';
 
 const registerSchema = (t) => z.object({
   username: z
@@ -203,10 +203,10 @@ const Register = () => {
   const { googleLogin }                               = useAuthStore();
   const navigate                                      = useNavigate();
 
-  const handleGoogleSuccess = async (credentialResponse) => {
+  const handleGoogleSuccess = async (tokenResponse) => {
     setIsSendingCode(true);
     try {
-      const result = await googleLogin(credentialResponse.credential);
+      const result = await googleLogin({ access_token: tokenResponse.access_token });
       toast.success(t('register.googleLoginSuccess'));
       const role = result?.data?.user?.role;
       navigate(role === 'admin' ? '/admin' : '/app');
@@ -387,18 +387,12 @@ const Register = () => {
         <div className="flex-1 border-t border-slate-200" />
       </div>
 
-      <div className="w-full flex justify-center">
-        <GoogleLogin
-          clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
-          onSuccess={handleGoogleSuccess}
-          onError={handleGoogleError}
-          theme="outline"
-          size="large"
-          width="100%"
-          text="signup_with"
-          shape="rectangular"
-        />
-      </div>
+      <GoogleAuthButton
+        onSuccess={handleGoogleSuccess}
+        onError={handleGoogleError}
+        text={t('register.continueWithGoogle')}
+        disabled={isSendingCode}
+      />
 
       <div className="mt-8 text-center">
         <p className="text-sm font-medium text-slate-600">

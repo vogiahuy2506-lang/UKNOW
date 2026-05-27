@@ -234,21 +234,40 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { credential } = req.body;
+      const { credential, access_token } = req.body;
       const ipAddress = req.ip || req.socket?.remoteAddress;
       const userAgent = req.headers['user-agent'];
 
-      if (!credential) {
+      if (!credential && !access_token) {
         return res.status(400).json({ success: false, message: 'Thiếu Google credential' });
       }
 
-      // 1. Verify Google token
-      const ticket = await googleClient.verifyIdToken({
-        idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      const payload = ticket.getPayload();
-      const { email, name, picture } = payload;
+      // 1. Verify Google token (ID token or access token)
+      let email, name, picture;
+      if (credential) {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        email = payload.email;
+        name = payload.name;
+        picture = payload.picture;
+      } else {
+        const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (!resp.ok) {
+          return res.status(401).json({ success: false, message: 'Google access token không hợp lệ' });
+        }
+        const info = await resp.json();
+        if (!info.email_verified) {
+          return res.status(401).json({ success: false, message: 'Email Google chưa được xác thực' });
+        }
+        email = info.email;
+        name = info.name;
+        picture = info.picture;
+      }
 
       if (!email) {
         return res.status(400).json({ success: false, message: 'Không thể lấy email từ Google' });

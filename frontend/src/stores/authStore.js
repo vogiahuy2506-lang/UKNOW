@@ -174,8 +174,8 @@ export const useAuthStore = create((set, get) => ({
   /**
    * Đăng nhập / đăng ký bằng Google.
    */
-  googleLogin: async (credential, rememberMe = true) => {
-    const response = await api.post('/auth/google-login', { credential });
+  googleLogin: async (tokenData, rememberMe = true) => {
+    const response = await api.post('/auth/google-login', tokenData);
     const { user, accessToken } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
