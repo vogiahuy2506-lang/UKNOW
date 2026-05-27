@@ -1815,6 +1815,9 @@ export default {
     noProfile: 'No profile yet — AI doesn\'t know about your business yet',
     setup: 'Setup →',
     view: 'View →',
+    // Session tabs
+    newChat: 'New',
+    newConversation: 'New conversation',
     // Quick actions
     createCampaign: 'Create Campaign',
     landingPage: 'Landing Page',
@@ -2084,6 +2087,10 @@ export default {
     campaignManagement: 'Campaign Management',
     closeMenu: 'Close menu',
     editCampaign: 'Edit Campaign',
+    accountInfo: 'Account Info',
+    changePassword: 'Change Password',
+    logout: 'Logout',
+    language: 'Language',
   },
 
   // Header
@@ -2337,6 +2344,11 @@ export default {
   // Pricing
   pricing: {
     mostPopular: 'Most Popular',
+    contact: 'Contact us',
+    perMonth: '/ month',
+    getQuote: 'Get a Quote',
+    startTrial: 'Start Free Trial',
+    trialOffer: '14-day free trial — no credit card required',
   },
 
   // Hero Dashboard

@@ -104,13 +104,13 @@ export default function Footer() {
 
       {/* Bottom bar — ngoài card */}
       <div className="relative flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 px-2">
-        <span className="text-[13px] text-neutral-500">{t('footer.copyright')}</span>
+        <span className="text-[13px] text-slate-600">{t('footer.copyright')}</span>
         <div className="flex items-center gap-4">
-          <a href="/privacy-policy" className="text-[13px] text-neutral-500 hover:text-neutral-700 transition-colors">
+          <a href="/privacy-policy" className="text-[13px] text-slate-600 hover:text-slate-800 transition-colors">
             {t('footer.privacy')}
           </a>
-          <span className="text-neutral-300">|</span>
-          <Link to="/contact" className="text-[13px] text-neutral-500 hover:text-neutral-700 transition-colors">
+          <span className="text-neutral-400">|</span>
+          <Link to="/contact" className="text-[13px] text-slate-600 hover:text-slate-800 transition-colors">
             {t('footer.termsOfUse')}
           </Link>
         </div>

@@ -260,16 +260,16 @@ const Register = () => {
 
   return (
     <>
-      <div className="mb-8 lg:mb-10">
-        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">{t('register.registerTitle')}</h1>
-        <p className="text-slate-500 font-medium">{t('register.registerSubtitle')}</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">{t('register.registerTitle')}</h1>
+        <p className="text-sm text-slate-500 mt-1">{t('register.registerSubtitle')}</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Username & Email */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">
+            <label className="block text-sm font-medium text-slate-700">
               {t('auth.usernameLabel')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
@@ -283,7 +283,7 @@ const Register = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">
+            <label className="block text-sm font-medium text-slate-700">
               {t('common.email')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
@@ -298,9 +298,9 @@ const Register = () => {
         </div>
 
         {/* Full Name & Phone */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">{t('register.fullName')}</label>
+            <label className="block text-sm font-medium text-slate-700">{t('register.fullName')}</label>
             <div className="relative group">
               <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type="text" {...register('fullName')} className={inputClass} placeholder={t('register.fullNamePlaceholder')} />
@@ -308,7 +308,7 @@ const Register = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">{t('register.phone')}</label>
+            <label className="block text-sm font-medium text-slate-700">{t('register.phone')}</label>
             <div className="relative group">
               <HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input type="tel" {...register('phone')} className={`${inputClass} ${errors.phone ? 'border-red-400' : ''}`} placeholder={t('register.phonePlaceholder')} />
@@ -318,9 +318,9 @@ const Register = () => {
         </div>
 
         {/* Password & Confirm */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">
+            <label className="block text-sm font-medium text-slate-700">
               {t('auth.password')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
@@ -338,7 +338,7 @@ const Register = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-700">
+            <label className="block text-sm font-medium text-slate-700">
               {t('auth.confirmPassword')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
@@ -370,7 +370,7 @@ const Register = () => {
         </div>
 
         <button type="submit" disabled={isSendingCode}
-          className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
+          className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
         >
           {isSendingCode ? (
             <span className="flex items-center justify-center gap-2">
@@ -383,9 +383,9 @@ const Register = () => {
 
       {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
         <>
-          <div className="flex items-center my-8">
+          <div className="flex items-center my-4">
             <div className="flex-1 border-t border-slate-200" />
-            <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('common.or')}</span>
+            <span className="px-3 text-xs text-slate-400">{t('common.or')}</span>
             <div className="flex-1 border-t border-slate-200" />
           </div>
 
@@ -398,14 +398,12 @@ const Register = () => {
         </>
       )}
 
-      <div className="mt-8 text-center">
-        <p className="text-sm font-medium text-slate-600">
-          {t('auth.alreadyHaveAccount')}{' '}
-          <Link to="/login" className="font-bold text-orange-500 hover:text-orange-600 transition-colors ml-1">
-            {t('auth.loginHere')}
-          </Link>
-        </p>
-      </div>
+      <p className="mt-5 text-center text-sm text-slate-600">
+        {t('auth.alreadyHaveAccount')}{' '}
+        <Link to="/login" className="text-orange-500 hover:text-orange-600 font-semibold">
+          {t('auth.loginHere')}
+        </Link>
+      </p>
     </>
   );
 };

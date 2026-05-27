@@ -148,7 +148,7 @@ const userMenuItems = (t) => [
  * @param {function} onClose - Callback to close sidebar (mobile only)
  */
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
-  const { t } = useI18n();
+  const { t, locale, changeLocale } = useI18n();
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.settings'), t('nav.campaigns')]);
   const { user, logout, activeContext } = useAuthStore();
@@ -429,7 +429,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               <HiOutlineUserCircle className="w-4 h-4 mr-3" />
-              Thông tin tài khoản
+              {t('sidebar.accountInfo')}
             </button>
             <button
               onClick={() => {
@@ -439,15 +439,38 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               <HiOutlineLockClosed className="w-4 h-4 mr-3" />
-              Đổi mật khẩu
+              {t('sidebar.changePassword')}
             </button>
-            <div className="border-t border-gray-100 my-1"></div>
+            <div className="border-t border-gray-100 my-1" />
+            <div className="flex items-center justify-between px-4 py-2">
+              <div className="flex items-center gap-3 text-sm text-gray-700">
+                <HiOutlineGlobeAlt className="w-4 h-4" />
+                {t('sidebar.language')}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => changeLocale('vi')}
+                  className={`text-base px-1 py-0.5 rounded transition-opacity ${locale === 'vi' ? 'opacity-100' : 'opacity-30 hover:opacity-60'}`}
+                  title="Tiếng Việt"
+                >
+                  🇻🇳
+                </button>
+                <button
+                  onClick={() => changeLocale('en')}
+                  className={`text-base px-1 py-0.5 rounded transition-opacity ${locale === 'en' ? 'opacity-100' : 'opacity-30 hover:opacity-60'}`}
+                  title="English"
+                >
+                  🇺🇸
+                </button>
+              </div>
+            </div>
+            <div className="border-t border-gray-100 my-1" />
             <button
               onClick={handleLogout}
               className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
             >
               <HiOutlineLogout className="w-4 h-4 mr-3" />
-              Đăng xuất
+              {t('sidebar.logout')}
             </button>
           </div>
         )}

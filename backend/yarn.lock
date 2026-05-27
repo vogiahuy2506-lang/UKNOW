@@ -1652,6 +1652,13 @@ expect@^29.7.0:
     jest-message-util "^29.7.0"
     jest-util "^29.7.0"
 
+express-rate-limit@^8.5.2:
+  version "8.5.2"
+  resolved "https://registry.npmjs.org/express-rate-limit/-/express-rate-limit-8.5.2.tgz"
+  integrity sha512-5Kb34ipNX694DH48vN9irak1Qx30nb0PLYHXfJgw4YEjiC3ZEmZJhwOp+VfiCYwFzvFTdB9QkArYS5kXa2cx2A==
+  dependencies:
+    ip-address "^10.2.0"
+
 express-validator@^7.0.1:
   version "7.3.1"
   resolved "https://registry.npmjs.org/express-validator/-/express-validator-7.3.1.tgz"
@@ -1660,7 +1667,7 @@ express-validator@^7.0.1:
     lodash "^4.17.21"
     validator "~13.15.23"
 
-express@^4.18.2:
+express@^4.18.2, "express@>= 4.11":
   version "4.22.1"
   resolved "https://registry.npmjs.org/express/-/express-4.22.1.tgz"
   integrity sha512-F2X8g9P1X7uCPZMA3MVf9wcTqlyNp7IhH5qPCI0izhaOIYXaW9L535tGA3qmjRzpH+bZczqq7hVKxTR4NWnu+g==
@@ -2088,6 +2095,11 @@ ioredis@5.9.3:
     redis-errors "^1.2.0"
     redis-parser "^3.0.0"
     standard-as-callback "^2.1.0"
+
+ip-address@^10.2.0:
+  version "10.2.0"
+  resolved "https://registry.npmjs.org/ip-address/-/ip-address-10.2.0.tgz"
+  integrity sha512-/+S6j4E9AHvW9SWMSEY9Xfy66O5PWvVEJ08O0y5JGyEKQpojb0K0GKpz/v5HJ/G0vi3D2sjGK78119oXZeE0qA==
 
 ipaddr.js@1.9.1:
   version "1.9.1"

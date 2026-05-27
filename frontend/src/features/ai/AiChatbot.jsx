@@ -980,7 +980,7 @@ const CampaignPickerModal = ({ isOpen, onClose, onSelect }) => {
 // Landing page card - now imported from ./components/LandingPageCard.jsx
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
 
@@ -1265,7 +1265,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setIsTyping(true);
 
     try {
-      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId);
+      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale);
       if (response.success) {
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
         // Cập nhật session state
@@ -1451,7 +1451,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
         { role: 'user', content: summaryText + emailTemplateContext },
       ];
-      const response = await aiApi.chat(enrichedHistory, uploadedFiles);
+      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale);
       if (response.success) {
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
@@ -1557,7 +1557,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
       ];
       
-      const response = await aiApi.chat(enrichedHistory, []);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale);
       
       if (response.success) {
         const { type, content, data } = response.data;
@@ -1620,7 +1620,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Gửi cho ${audienceLabel}` }
       ];
 
-      const response = await aiApi.chat(enrichedHistory, []);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale);
 
       if (response.success) {
         const { type, content, data } = response.data;
@@ -1810,8 +1810,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       {isDragging && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-orange-50/90 border-2 border-dashed border-orange-400 rounded pointer-events-none">
           <HiOutlinePaperClip className="w-10 h-10 text-orange-400" />
-          <p className="text-sm font-semibold text-orange-600">Thả file để tải lên</p>
-          <p className="text-xs text-orange-400">PDF, Word, Excel, ảnh đều được</p>
+          <p className="text-sm font-semibold text-orange-600">{t('aiChatbot.dropFileToUpload')}</p>
+          <p className="text-xs text-orange-400">{t('aiChatbot.supportedFormats')}</p>
         </div>
       )}
       {/* Header */}
@@ -1821,10 +1821,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             <HiOutlineSparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Founder AI AI Assistant</h3>
+            <h3 className="font-bold text-slate-800 text-sm">{t('aiChatbot.title')}</h3>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sẵn sàng</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('aiChatbot.ready')}</span>
             </div>
           </div>
         </div>
@@ -1887,7 +1887,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         <button
           onMouseUp={() => { if (!tabsDragRef.current.moved) startNewChat(); }}
           onMouseDown={(e) => e.stopPropagation()}
-          title="Cuộc trò chuyện mới"
+          title={t('aiChatbot.newConversation')}
           className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
             !currentSessionId
               ? 'bg-orange-50 text-orange-500 border border-orange-200'
@@ -1895,7 +1895,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           }`}
         >
           <HiOutlinePlus className="w-3 h-3 shrink-0" />
-          Mới
+          {t('aiChatbot.newChat')}
         </button>
       </div>
 
@@ -1904,14 +1904,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         <div className={`flex-shrink-0 mx-4 mt-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 ${hasProfile ? 'bg-slate-50 border border-slate-200' : 'bg-orange-50 border border-orange-200'}`}>
           <HiOutlineSparkles className={`w-3.5 h-3.5 shrink-0 ${hasProfile ? 'text-slate-400' : 'text-orange-500'}`} />
           <p className={`flex-1 text-xs ${hasProfile ? 'text-slate-500' : 'text-orange-700 font-medium'}`}>
-            {hasProfile ? 'AI đang dùng hồ sơ doanh nghiệp của bạn' : 'Chưa có hồ sơ — AI chưa biết về doanh nghiệp bạn'}
+            {hasProfile ? t('aiChatbot.usingBusinessProfile') : t('aiChatbot.noProfile')}
           </p>
           <Link
             to="/app/settings/ai-profile"
             onClick={onToggle}
             className={`shrink-0 text-xs font-semibold whitespace-nowrap ${hasProfile ? 'text-slate-500 hover:text-orange-500' : 'text-orange-600 hover:text-orange-700'}`}
           >
-            {hasProfile ? 'Xem →' : 'Thiết lập →'}
+            {hasProfile ? t('aiChatbot.view') : t('aiChatbot.setup')}
           </Link>
         </div>
       )}
@@ -1926,7 +1926,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 rounded-full text-xs font-medium text-green-700 transition-all whitespace-nowrap"
           >
             <HiOutlinePlay className="w-3.5 h-3.5" />
-            Tạo Campaign
+            {t('aiChatbot.createCampaign')}
           </button>
           <button
             onClick={() => {
@@ -1945,7 +1945,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 rounded-full text-xs font-medium text-orange-700 transition-all whitespace-nowrap"
           >
             <HiOutlineMail className="w-3.5 h-3.5" />
-            Template Email
+            {t('aiChatbot.emailTemplate')}
           </button>
         </div>
       )}
@@ -2124,7 +2124,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
-            placeholder={isDragging ? 'Thả file vào đây...' : 'Nhập yêu cầu...'}
+            placeholder={isDragging ? t('aiChatbot.dropFilePlaceholder') : t('aiChatbot.inputPlaceholder')}
             rows={2}
             className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400"
             style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
@@ -2136,10 +2136,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {isUploading
                 ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
                 : <HiOutlinePaperClip className="w-3.5 h-3.5" />}
-              <span>Đính kèm</span>
+              <span>{t('aiChatbot.attach')}</span>
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-300">Enter để gửi</span>
+              <span className="text-[10px] text-slate-300">{t('aiChatbot.enterToSend')}</span>
               <button onClick={handleSend} disabled={!inputText.trim() && !uploadedFiles.length}
                 className="w-8 h-8 flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all">
                 <HiOutlineChevronRight className="w-4 h-4" />
@@ -2147,7 +2147,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             </div>
           </div>
         </div>
-        <p className="mt-2 text-[10px] text-center text-slate-400">Powered by Gemini • Kéo thả PDF, Word, Excel, ảnh vào đây</p>
+        <p className="mt-2 text-[10px] text-center text-slate-400">{t('aiChatbot.poweredBy')}</p>
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"

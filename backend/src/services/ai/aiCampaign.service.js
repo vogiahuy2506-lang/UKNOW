@@ -568,7 +568,13 @@ D. ZALO NHÓM:
    * Process interactive smart chat with intent detection.
    * Returns: { type, content, data, missing_fields }
    */
-  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user' }) {
+  _langInstruction(locale) {
+    return locale === 'en'
+      ? 'Always respond in English. All "content" fields in JSON must be written in English.'
+      : 'Luôn trả lời bằng tiếng Việt. Tất cả trường "content" trong JSON phải viết bằng tiếng Việt.';
+  }
+
+  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi' }) {
     let contextBlock = '';
 
     if (userRole === 'admin') {
@@ -579,12 +585,14 @@ D. ZALO NHÓM:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
+      const langInstr = this._langInstruction(locale);
       const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI, và chuyên phân tích tài liệu/dữ liệu doanh nghiệp.
 Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược, trả lời câu hỏi về tình trạng hoạt động của nền tảng, và giải đáp/tổng hợp bất kỳ tài liệu nào được gửi kèm.
 
 ${contextBlock}
 
 QUY TẮC:
+- ${langInstr}
 - Luôn dựa trên dữ liệu thực được cung cấp ở trên, không được bịa số liệu.
 - Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
 - Trả lời súc tích, rõ ràng. Dùng bullet points khi liệt kê.
@@ -594,7 +602,7 @@ QUY TẮC:
 ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
   "type": "text",
-  "content": "Câu trả lời của bạn (tiếng Việt)",
+  "content": "Your answer here",
   "missing_fields": [],
   "data": null
 }`;
@@ -694,7 +702,11 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
+    const langInstr = this._langInstruction(locale);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing, landing page, và phân tích tài liệu/dữ liệu doanh nghiệp.
+
+## NGÔN NGỮ:
+- ${langInstr}
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - HỒ SƠ DOANH NGHIỆP VÀ TÀI NGUYÊN bên dưới được hệ thống TẢI TRỰC TIẾP TỪ DATABASE ngay trước mỗi tin nhắn — luôn phản ánh trạng thái MỚI NHẤT. Khi user nói "tôi vừa thêm sản phẩm", "tôi vừa cập nhật hồ sơ", v.v., hãy XÁC NHẬN bạn thấy thông tin đó trong phần hồ sơ bên dưới. KHÔNG BAO GIỜ nói "tôi không thể đọc thay đổi mới" hoặc "hồ sơ của tôi là thông tin cũ".
@@ -967,7 +979,7 @@ Data structure:
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
   "type": "text" | "ask_more" | "template_draft" | "ask_campaign_details" | "confirm_create" | "create_and_run" | "ask_landing_details" | "landing_page",
-  "content": "Lời nhắn cho người dùng (tiếng Việt, thân thiện, KHÔNG dùng từ chuyên môn, KHÔNG dùng markdown **bold** hay *italic*, dùng text thuần, gạch đầu dòng bằng dấu -)",
+  "content": "Message to user (${langInstr} — friendly, NO jargon, NO markdown **bold** or *italic*, plain text, use - for bullet points)",
   "missing_fields": [] | ["tên sản phẩm", "mục tiêu email"],
   "data": null | { ... }
 }
@@ -1304,7 +1316,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     return parsed;
   }
 
-  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user' }) {
+  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi' }) {
     let contextBlock = '';
 
     // Lấy existing resources
@@ -1384,7 +1396,11 @@ ${templateSelectionPrompt}
       }
     }
 
+    const langInstrV2 = this._langInstruction(locale);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo chiến dịch marketing với multi-step support.
+
+## NGÔN NGỮ:
+- ${langInstrV2}
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.

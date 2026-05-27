@@ -96,7 +96,7 @@ class AiController {
    */
   async chat(req, res) {
     try {
-      const { history, files, sessionId } = req.body;
+      const { history, files, sessionId, locale } = req.body;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -110,6 +110,7 @@ class AiController {
         files: files || [],
         userId: req.user.id,
         userRole: req.user.role,
+        locale: locale || 'vi',
       });
 
       // Persist session + messages (bỏ qua lỗi DB để không block chat)
@@ -152,7 +153,7 @@ class AiController {
    */
   async chatV2(req, res) {
     try {
-      const { history, files } = req.body;
+      const { history, files, locale } = req.body;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -166,6 +167,7 @@ class AiController {
         files: files || [],
         userId: req.user.id,
         userRole: req.user.role,
+        locale: locale || 'vi',
       });
 
       return res.json({

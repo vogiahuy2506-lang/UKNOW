@@ -1794,6 +1794,9 @@ export default {
     noProfile: 'Chưa có hồ sơ — AI chưa biết về doanh nghiệp bạn',
     setup: 'Thiết lập →',
     view: 'Xem →',
+    // Session tabs
+    newChat: 'Mới',
+    newConversation: 'Cuộc trò chuyện mới',
     // Quick actions
     createCampaign: 'Tạo Campaign',
     landingPage: 'Landing Page',
@@ -2063,6 +2066,10 @@ export default {
     campaignManagement: 'Quản lý chiến dịch',
     closeMenu: 'Đóng menu',
     editCampaign: 'Chỉnh sửa chiến dịch',
+    accountInfo: 'Thông tin tài khoản',
+    changePassword: 'Đổi mật khẩu',
+    logout: 'Đăng xuất',
+    language: 'Ngôn ngữ',
   },
 
   // Header
@@ -2316,6 +2323,11 @@ export default {
   // Pricing
   pricing: {
     mostPopular: 'Phổ Biến Nhất',
+    contact: 'Liên hệ',
+    perMonth: '/ tháng',
+    getQuote: 'Nhận báo giá',
+    startTrial: 'Dùng thử miễn phí',
+    trialOffer: 'Dùng thử miễn phí 14 ngày — không cần thẻ tín dụng',
   },
 
   // Hero Dashboard

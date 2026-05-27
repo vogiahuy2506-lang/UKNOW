@@ -12,7 +12,7 @@ export const localeLabels = {
 
 export const localeFlags = {
   vi: '🇻🇳',
-  en: 'EN',
+  en: '🇺🇸',
 };
 
 const STORAGE_KEY = 'uknow_locale';
