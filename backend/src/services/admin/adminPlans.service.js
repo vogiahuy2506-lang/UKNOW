@@ -2,6 +2,7 @@ import {
   findAllPlans,
   findCustomPlans,
   findPlanById,
+  findPlanByCode,
   createPlan,
   updatePlan,
   deletePlan,
@@ -36,6 +37,12 @@ export async function getPlan(id) {
 }
 
 const parseLimitField = (v) => (v === '' || v === null || v === undefined) ? null : Number(v);
+const parseOptionalMoneyField = (v, label = 'Giá tiền') => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw { status: 400, message: `${label} không hợp lệ` };
+  return n;
+};
 
 export async function createNewPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive = true,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
@@ -43,24 +50,36 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
-  return createPlan({
-    code: code?.trim() || null, name: name.trim(), price, priceYearly: priceYearly ?? null,
-    description, features, maxEmployees: maxEmployees ?? 0, isActive,
-    durationDays:            parseLimitField(durationDays),
-    dailyEmailLimit:         parseLimitField(dailyEmailLimit),
-    monthlyEmailLimit:       parseLimitField(monthlyEmailLimit),
-    dailyZaloLimit:          parseLimitField(dailyZaloLimit),
-    monthlyZaloLimit:        parseLimitField(monthlyZaloLimit),
-    maxLandingPages:         parseLimitField(maxLandingPages),
-    maxCampaigns:            parseLimitField(maxCampaigns),
-    maxZaloCampaigns:        parseLimitField(maxZaloCampaigns),
-    maxZaloGroupCampaigns:   parseLimitField(maxZaloGroupCampaigns),
-    maxEmailCampaigns:       parseLimitField(maxEmailCampaigns),
-    maxZaloAccounts:         parseLimitField(maxZaloAccounts),
-    maxEmailAccounts:        parseLimitField(maxEmailAccounts),
-    maxEmailTemplates:       parseLimitField(maxEmailTemplates),
-    maxZaloTemplates:        parseLimitField(maxZaloTemplates),
-  });
+  const normalizedCode = code?.trim() || null;
+  if (normalizedCode) {
+    const existingPlan = await findPlanByCode(normalizedCode);
+    if (existingPlan) throw { status: 409, message: `Mã gói "${normalizedCode}" đã tồn tại` };
+  }
+  try {
+    return await createPlan({
+      code: normalizedCode, name: name.trim(), price, priceYearly: parseOptionalMoneyField(priceYearly, 'Giá năm'),
+      description, features, maxEmployees: maxEmployees ?? 0, isActive,
+      durationDays:            parseLimitField(durationDays),
+      dailyEmailLimit:         parseLimitField(dailyEmailLimit),
+      monthlyEmailLimit:       parseLimitField(monthlyEmailLimit),
+      dailyZaloLimit:          parseLimitField(dailyZaloLimit),
+      monthlyZaloLimit:        parseLimitField(monthlyZaloLimit),
+      maxLandingPages:         parseLimitField(maxLandingPages),
+      maxCampaigns:            parseLimitField(maxCampaigns),
+      maxZaloCampaigns:        parseLimitField(maxZaloCampaigns),
+      maxZaloGroupCampaigns:   parseLimitField(maxZaloGroupCampaigns),
+      maxEmailCampaigns:       parseLimitField(maxEmailCampaigns),
+      maxZaloAccounts:         parseLimitField(maxZaloAccounts),
+      maxEmailAccounts:        parseLimitField(maxEmailAccounts),
+      maxEmailTemplates:       parseLimitField(maxEmailTemplates),
+      maxZaloTemplates:        parseLimitField(maxZaloTemplates),
+    });
+  } catch (err) {
+    if (err?.code === '23505' && String(err?.constraint || '').includes('plans_code')) {
+      throw { status: 409, message: `Mã gói "${normalizedCode}" đã tồn tại` };
+    }
+    throw err;
+  }
 }
 
 export async function editPlan(id, payload) {
@@ -71,7 +90,7 @@ export async function editPlan(id, payload) {
   return updatePlan(id, {
     name:         payload.name.trim(),
     price:        payload.price,
-    priceYearly:  payload.priceYearly ?? null,
+    priceYearly:  parseOptionalMoneyField(payload.priceYearly, 'Giá năm'),
     description:  payload.description,
     features:     payload.features || [],
     maxEmployees: payload.maxEmployees ?? 0,
@@ -167,7 +186,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     code:                  planData.code?.trim() || null,
     name:                  planData.name.trim(),
     price:                 planData.price,
-    priceYearly:           planData.priceYearly ?? null,
+    priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm'),
     description:           planData.description || null,
     features:              planData.features || [],
     maxEmployees:          planData.maxEmployees ?? 0,
@@ -207,7 +226,7 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
     code:                  planData.code?.trim() || null,
     name:                  planData.name.trim(),
     price:                 planData.price,
-    priceYearly:           planData.priceYearly ?? null,
+    priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm'),
     description:           planData.description || null,
     features:              [],
     maxEmployees:          planData.maxEmployees ?? -1,

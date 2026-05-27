@@ -50,6 +50,11 @@ export async function findPlanById(id) {
   return rows[0] || null;
 }
 
+export async function findPlanByCode(code) {
+  const { rows } = await db.query(`SELECT * FROM plans WHERE LOWER(code) = LOWER($1) LIMIT 1`, [code]);
+  return rows[0] || null;
+}
+
 export async function createPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive,
   isCustom = false, durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,

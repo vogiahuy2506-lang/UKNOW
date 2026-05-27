@@ -258,11 +258,11 @@ export const DurationInput = ({ value, onChange }) => {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_8.5rem]">
         <button
           type="button"
           onClick={() => handleUnlimitedChange(!unlimited)}
-          className={`inline-flex h-11 items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
+          className={`inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-all sm:w-auto ${
             unlimited
               ? 'bg-orange-50 border-orange-200 text-orange-700'
               : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
@@ -273,16 +273,16 @@ export const DurationInput = ({ value, onChange }) => {
         </button>
 
         {!unlimited && (
-          <div className="flex items-center gap-2 min-w-0">
+          <>
             <input
               type="text"
               inputMode="numeric"
-              className="input h-11 w-20 shrink-0 text-center font-semibold text-slate-900"
+              className="h-11 min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition-base focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               placeholder="1"
               value={num}
               onChange={handleNumChange}
             />
-            <div className="relative w-32 shrink-0" ref={unitMenuRef}>
+            <div className="relative min-w-0" ref={unitMenuRef}>
               <button
                 type="button"
                 onClick={() => setUnitMenuOpen((open) => !open)}
@@ -314,7 +314,7 @@ export const DurationInput = ({ value, onChange }) => {
                 </div>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
       {totalDays !== null && unit !== 'day' && (

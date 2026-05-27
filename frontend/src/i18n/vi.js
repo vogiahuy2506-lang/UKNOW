@@ -1129,6 +1129,7 @@ export default {
     planUpdated: 'Cập nhật gói thành công',
     planCreated: 'Tạo gói thành công',
     planNameRequired: 'Vui lòng nhập tên gói',
+    planCodeExists: 'Mã gói "{code}" đã tồn tại',
     saveFailed: 'Không thể lưu gói dịch vụ',
     editPlan: 'Chỉnh sửa gói',
     createNewPlan: 'Tạo gói mới',

@@ -150,7 +150,7 @@ const ModalShell = ({ title, subtitle, children, footer, onSubmit }) => (
 );
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
-export const PlanFormModal = ({ plan, onClose, onSaved }) => {
+export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }) => {
   const { t } = useI18n();
   const isEdit = !!plan?.id;
   const [form, setForm] = useState(plan ? {
@@ -180,6 +180,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
   const isContactPlanCode = String(form.code || '').trim().toLowerCase() === 'custom';
+  const existingCodeSet = new Set(existingPlanCodes.map((code) => String(code || '').trim().toLowerCase()).filter(Boolean));
   const applyPreset = (preset) => {
     setForm((prev) => ({
       ...prev,
@@ -194,6 +195,11 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
+    const normalizedCode = String(form.code || '').trim().toLowerCase();
+    if (!isEdit && normalizedCode && existingCodeSet.has(normalizedCode)) {
+      toast.error(t('adminPlans.planCodeExists', { code: form.code.trim() }));
+      return;
+    }
     try {
       setIsSaving(true);
       if (isEdit) {

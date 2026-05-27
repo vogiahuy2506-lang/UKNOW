@@ -237,7 +237,12 @@ const AdminPlansPage = () => {
       {editPlan && (
         editPlan !== 'new' && editPlan.is_custom
           ? <CustomPlanEditModal plan={editPlan} onClose={() => setEditPlan(null)} onSaved={handleRefresh} />
-          : <PlanFormModal plan={editPlan === 'new' ? null : editPlan} onClose={() => setEditPlan(null)} onSaved={handleRefresh} />
+          : <PlanFormModal
+              plan={editPlan === 'new' ? null : editPlan}
+              existingPlanCodes={plans.map((plan) => plan.code)}
+              onClose={() => setEditPlan(null)}
+              onSaved={handleRefresh}
+            />
       )}
       {assignPlan && (
         <AssignModal plan={assignPlan} onClose={() => setAssignPlan(null)} onAssigned={fetchPlans} />

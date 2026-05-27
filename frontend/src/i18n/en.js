@@ -1129,6 +1129,7 @@ export default {
     planUpdated: 'Plan updated successfully',
     planCreated: 'Plan created successfully',
     planNameRequired: 'Please enter a plan name',
+    planCodeExists: 'Plan code "{code}" already exists',
     saveFailed: 'Unable to save plan',
     editPlan: 'Edit Plan',
     createNewPlan: 'Create New Plan',
