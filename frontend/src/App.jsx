@@ -203,12 +203,12 @@ function App() {
           <Route element={<PublicLayout />}>
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/contact" element={<ContactPage />} />
-          </Route>
-
-          {/* Landing Routes — old Navbar + Footer */}
-          <Route element={<LandingLayout />}>
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/payment-success" element={<PaymentSuccessPage />} />
+          </Route>
+
+          {/* Landing Routes — legacy pages */}
+          <Route element={<LandingLayout />}>
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
             <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
           </Route>

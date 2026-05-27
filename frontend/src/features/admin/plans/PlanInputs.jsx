@@ -26,43 +26,36 @@ export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
 };
 
 // ── FeatureEditor ─────────────────────────────────────────────────────────────
+const normalizeFeatures = (features) => {
+  if (Array.isArray(features)) return features;
+  if (typeof features === 'string') {
+    try { return JSON.parse(features) || []; } catch { return []; }
+  }
+  return [];
+};
+
 export const FeatureEditor = ({ features, onChange }) => {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
-  const composingRef = useRef(false);
-  const inputRef = useRef(null);
+  const list = normalizeFeatures(features);
 
-  const addFromValue = (rawValue) => {
-    const trimmed = String(rawValue ?? '').trim();
+  const add = () => {
+    const trimmed = draft.trim();
     if (!trimmed) return;
-    onChange([...features, trimmed]);
+    onChange([...list, trimmed]);
     setDraft('');
-  };
-
-  const add = () => addFromValue(inputRef.current?.value ?? draft);
-
-  const handleKeyDown = (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (composingRef.current || e.nativeEvent.isComposing) return;
-
-    // Defer one frame so IME finishes committing the last composed word.
-    requestAnimationFrame(() => {
-      addFromValue(inputRef.current?.value ?? draft);
-    });
   };
 
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        {features.map((f, i) => (
+        {list.map((f, i) => (
           <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
             <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
             <span className="text-sm text-gray-700 flex-1">{f}</span>
             <button
               type="button"
-              onClick={() => onChange(features.filter((_, j) => j !== i))}
+              onClick={() => onChange(list.filter((_, j) => j !== i))}
               className="text-gray-400 hover:text-red-500 transition-colors"
             >
               <HiOutlineX className="w-3.5 h-3.5" />
@@ -72,18 +65,16 @@ export const FeatureEditor = ({ features, onChange }) => {
       </div>
       <div className="flex gap-2">
         <input
-          ref={inputRef}
           type="text"
           value={draft}
-          onChange={(e) => {
-            if (!composingRef.current) setDraft(e.target.value);
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.nativeEvent.isComposing) return;
+            add();
           }}
-          onCompositionStart={() => { composingRef.current = true; }}
-          onCompositionEnd={(e) => {
-            composingRef.current = false;
-            setDraft(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
           placeholder={t('planInputs.featuresPlaceholder')}
           className="input flex-1 text-sm"
         />

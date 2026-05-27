@@ -1465,6 +1465,8 @@ export default {
   },
 
   checkout: {
+    pageTitle: 'Checkout',
+    pageSubtitle: 'Complete payment to activate your plan',
     copied: 'Content copied!',
     userEmailNotFound: 'User email not found. Please log in again.',
     createOrderFailed: 'Failed to create order. Please try again.',
@@ -1492,6 +1494,16 @@ export default {
     step1: 'Open your banking app and select Scan QR',
     step2: 'Scan the QR code or enter the order code',
     step3: 'Confirm — the system will activate your account automatically',
+  },
+
+  paymentSuccess: {
+    pageTitle: 'Payment successful',
+    pageSubtitle: 'Welcome to Founder AI. Your account has been activated.',
+    orderCode: 'Order code',
+    feature1: 'All features unlocked',
+    feature2: '24/7 technical support is ready',
+    feature3: 'Invoice sent to your email',
+    goToDashboard: 'Explore Dashboard now',
   },
 
   plans: {

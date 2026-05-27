@@ -1444,6 +1444,8 @@ export default {
   },
 
   checkout: {
+    pageTitle: 'Thanh toán',
+    pageSubtitle: 'Hoàn tất thanh toán để kích hoạt gói dịch vụ',
     copied: 'Đã sao chép nội dung!',
     userEmailNotFound: 'Không tìm thấy email người dùng. Vui lòng đăng nhập lại.',
     createOrderFailed: 'Không thể tạo đơn hàng. Vui lòng thử lại.',
@@ -1471,6 +1473,16 @@ export default {
     step1: 'Mở app ngân hàng và chọn Quét QR',
     step2: 'Quét mã QR hoặc nhập mã đơn hàng',
     step3: 'Xác nhận — hệ thống tự kích hoạt tài khoản',
+  },
+
+  paymentSuccess: {
+    pageTitle: 'Thanh toán thành công',
+    pageSubtitle: 'Chào mừng bạn đến với Founder AI. Tài khoản của bạn đã được kích hoạt.',
+    orderCode: 'Mã đơn hàng',
+    feature1: 'Tất cả tính năng đã được mở khóa',
+    feature2: 'Hỗ trợ kỹ thuật 24/7 đã sẵn sàng',
+    feature3: 'Hoá đơn đã được gửi đến email của bạn',
+    goToDashboard: 'Khám phá Dashboard ngay',
   },
 
   plans: {

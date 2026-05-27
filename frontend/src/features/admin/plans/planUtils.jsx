@@ -16,8 +16,19 @@ export const MODAL_FORM    = 'relative z-10 w-full max-w-5xl max-h-[92vh] rounde
 export const renderModal = (content, onClose, cls = MODAL_PANEL) =>
   createPortal(
     <div className={MODAL_OVERLAY}>
-      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className={cls}>{content}</div>
+      <div
+        role="presentation"
+        aria-hidden
+        className="absolute inset-0 z-0 bg-black/50"
+        onClick={onClose}
+      />
+      <div
+        className={cls}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {content}
+      </div>
     </div>,
     document.body
   );
