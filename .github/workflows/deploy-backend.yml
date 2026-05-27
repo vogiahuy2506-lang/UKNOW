@@ -56,7 +56,8 @@ jobs:
           envs: DOCKERHUB_USERNAME
           script: |
             docker pull $DOCKERHUB_USERNAME/uknow-backend:latest
-            docker stop uknow-campaign-backend || true
+            CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-backend 2>/dev/null || echo "")
+            [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" && sleep 2 || true
             docker rm uknow-campaign-backend || true
             docker run -d \
               --name uknow-campaign-backend \
