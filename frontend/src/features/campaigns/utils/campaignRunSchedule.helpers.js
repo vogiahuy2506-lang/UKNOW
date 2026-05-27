@@ -229,7 +229,8 @@ export const isReadonlyOnceSchedule = (schedule) =>
  * @returns {string}
  */
 export const getWeeklyDayLabel = (dayValue, weeklyDayOptions = []) => {
-  const matched = weeklyDayOptions.find((item) => item.value === String(dayValue));
+  const options = Array.isArray(weeklyDayOptions) ? weeklyDayOptions : [];
+  const matched = options.find((item) => item.value === String(dayValue));
   return matched ? matched.label : 'Thứ 2';
 };
 
@@ -244,7 +245,8 @@ export const getWeeklyDayFromCron = (cronExpression = '', weeklyDayOptions = [])
   const cronParts = String(cronExpression).trim().split(/\s+/);
   if (cronParts.length < 5) return '1';
   const dayOfWeek = cronParts[4];
-  const matched = weeklyDayOptions.find((item) => item.value === String(dayOfWeek));
+  const options = Array.isArray(weeklyDayOptions) ? weeklyDayOptions : [];
+  const matched = options.find((item) => item.value === String(dayOfWeek));
   return matched ? matched.value : '1';
 };
 

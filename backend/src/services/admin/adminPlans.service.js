@@ -237,7 +237,7 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
     amount:      Number(plan.price),
     description: plan.name.substring(0, 25),
     returnUrl:   `${process.env.FRONTEND_URL}/payment-success`,
-    cancelUrl:   `${process.env.FRONTEND_URL}/about`,
+    cancelUrl:   `${process.env.FRONTEND_URL}/pricing`,
     buyerEmail:  user.email,
     buyerName:   user.full_name || undefined,
   });

@@ -40,7 +40,6 @@ import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
-import AboutPage from './pages/public/AboutPage';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
@@ -208,7 +207,6 @@ function App() {
 
           {/* Landing Routes — old Navbar + Footer */}
           <Route element={<LandingLayout />}>
-            <Route path="/about" element={<AboutPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/payment-success" element={<PaymentSuccessPage />} />
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />

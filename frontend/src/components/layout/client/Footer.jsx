@@ -10,7 +10,6 @@ const COLUMNS = (t) => [
       { label: t('footer.features'), to: '/#features' },
       { label: t('footer.landingPage'), to: '/#features' },
       { label: t('footer.pricing'), to: '/pricing' },
-      { label: t('footer.updates'), to: '/about' },
     ],
   },
   {
@@ -25,7 +24,6 @@ const COLUMNS = (t) => [
   {
     title: t('footer.company'),
     links: [
-      { label: t('footer.about'), to: '/about' },
       { label: t('footer.contact'), to: '/contact' },
       { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
     ],

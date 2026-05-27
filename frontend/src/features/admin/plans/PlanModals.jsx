@@ -3,9 +3,130 @@ import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
-import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL } from './planUtils.jsx';
+import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL, MODAL_FORM } from './planUtils.jsx';
 import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
 import { useI18n } from '../../../i18n';
+
+const PLAN_PRESETS = [
+  {
+    code: 'trial',
+    name: 'Gói Dùng thử',
+    price: 0,
+    priceYearly: '',
+    durationDays: 10,
+    maxEmployees: 1,
+    dailyEmailLimit: -1,
+    monthlyEmailLimit: -1,
+    dailyZaloLimit: '',
+    monthlyZaloLimit: 100,
+    maxLandingPages: 5,
+    maxCampaigns: '',
+    maxZaloCampaigns: 5,
+    maxZaloGroupCampaigns: 5,
+    maxEmailCampaigns: -1,
+    maxZaloAccounts: 1,
+    maxEmailAccounts: -1,
+    maxEmailTemplates: '',
+    maxZaloTemplates: '',
+  },
+  {
+    code: 'basic',
+    name: 'Gói Basic',
+    price: 199000,
+    priceYearly: 1990000,
+    durationDays: 30,
+    maxEmployees: 1,
+    dailyEmailLimit: -1,
+    monthlyEmailLimit: -1,
+    dailyZaloLimit: '',
+    monthlyZaloLimit: 100,
+    maxLandingPages: 5,
+    maxCampaigns: '',
+    maxZaloCampaigns: 5,
+    maxZaloGroupCampaigns: 5,
+    maxEmailCampaigns: -1,
+    maxZaloAccounts: 1,
+    maxEmailAccounts: -1,
+    maxEmailTemplates: '',
+    maxZaloTemplates: '',
+  },
+  {
+    code: 'pro',
+    name: 'Gói Pro',
+    price: 499000,
+    priceYearly: 4990000,
+    durationDays: 30,
+    maxEmployees: 1,
+    dailyEmailLimit: '',
+    monthlyEmailLimit: 500,
+    dailyZaloLimit: '',
+    monthlyZaloLimit: 2000,
+    maxLandingPages: 15,
+    maxCampaigns: '',
+    maxZaloCampaigns: 30,
+    maxZaloGroupCampaigns: 30,
+    maxEmailCampaigns: 30,
+    maxZaloAccounts: 5,
+    maxEmailAccounts: 5,
+    maxEmailTemplates: '',
+    maxZaloTemplates: '',
+  },
+  {
+    code: 'team',
+    name: 'Gói Team',
+    price: 999000,
+    priceYearly: 9990000,
+    durationDays: 30,
+    maxEmployees: -1,
+    dailyEmailLimit: '',
+    monthlyEmailLimit: 30000,
+    dailyZaloLimit: '',
+    monthlyZaloLimit: '',
+    maxLandingPages: '',
+    maxCampaigns: '',
+    maxZaloCampaigns: '',
+    maxZaloGroupCampaigns: '',
+    maxEmailCampaigns: '',
+    maxZaloAccounts: '',
+    maxEmailAccounts: '',
+    maxEmailTemplates: '',
+    maxZaloTemplates: '',
+  },
+];
+
+const Field = ({ label, children, note, className = '' }) => (
+  <div className={className}>
+    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+    {children}
+    {note && <p className="mt-1.5 text-xs text-slate-400">{note}</p>}
+  </div>
+);
+
+const FormSection = ({ kicker, title, description, children }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-5">
+      {kicker && <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600">{kicker}</p>}
+      <h3 className="mt-1 text-base font-bold text-slate-900">{title}</h3>
+      {description && <p className="mt-1 text-sm leading-relaxed text-slate-500">{description}</p>}
+    </div>
+    {children}
+  </section>
+);
+
+const ModalShell = ({ title, subtitle, children, footer, onSubmit }) => (
+  <form onSubmit={onSubmit} className="flex max-h-[92vh] flex-col">
+    <div className="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
+      <h2 className="text-2xl font-black tracking-tight text-slate-950">{title}</h2>
+      {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+    </div>
+    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
+      <div className="space-y-5">{children}</div>
+    </div>
+    <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+      {footer}
+    </div>
+  </form>
+);
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
 export const PlanFormModal = ({ plan, onClose, onSaved }) => {
@@ -37,6 +158,16 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
+  const applyPreset = (preset) => {
+    setForm((prev) => ({
+      ...prev,
+      ...preset,
+      description: prev.description,
+      features: prev.features,
+      isActive: prev.isActive,
+      code: isEdit ? prev.code : preset.code,
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,69 +191,121 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
   };
 
   return renderModal(
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">{isEdit ? t('adminPlans.editPlan') : t('adminPlans.createNewPlan')}</h2>
+    <ModalShell
+      onSubmit={handleSubmit}
+      title={isEdit ? t('adminPlans.editPlan') : t('adminPlans.createNewPlan')}
+      subtitle={isEdit ? t('adminPlans.standardEditSubtitle') : t('adminPlans.standardCreateSubtitle')}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
+          <button type="submit" className="btn btn-primary px-6" disabled={isSaving}>
+            {isSaving ? t('common.processing') : isEdit ? t('adminPlans.saveChanges') : t('adminPlans.createPlan')}
+          </button>
+        </>
+      }
+    >
+      {!isEdit && (
+        <FormSection
+          kicker={t('adminPlans.sectionFastSetup')}
+          title={t('adminPlans.presetTitle')}
+          description={t('adminPlans.presetDescription')}
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {PLAN_PRESETS.map((preset) => (
+              <button
+                key={preset.code}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                  form.code === preset.code
+                    ? 'border-orange-300 bg-orange-50 text-orange-700 shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60'
+                }`}
+              >
+                <span className="block text-sm font-bold">{preset.name}</span>
+                <span className="mt-1 block text-xs text-slate-500">{fmtVnd(preset.price)} / {preset.durationDays === 10 ? '10 ngày' : 'tháng'}</span>
+              </button>
+            ))}
+          </div>
+        </FormSection>
+      )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên gói *</label>
-          <input type="text" className="input w-full" value={form.name}
-            onChange={(e) => set('name', e.target.value)} placeholder="Gói Pro" />
+      <FormSection
+        kicker={t('adminPlans.sectionGeneral')}
+        title={t('adminPlans.generalInfoTitle')}
+        description={t('adminPlans.generalInfoDescription')}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label={`${t('planInputs.planName')} *`} className="md:col-span-2">
+            <input type="text" className="input h-11 w-full" value={form.name}
+              onChange={(e) => set('name', e.target.value)} placeholder={t('planInputs.planNamePlaceholder')} />
+          </Field>
+          <Field label={t('planInputs.planCodeLabel')} note={isEdit ? t('adminPlans.codeCannotChange') : null}>
+            <input type="text" className="input h-11 w-full" value={form.code}
+              onChange={(e) => set('code', e.target.value)} placeholder={t('planInputs.planCodePlaceholder')} disabled={isEdit} />
+          </Field>
+          <Field label={t('planInputs.durationLabel')}>
+            <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
+          </Field>
+          <Field label={t('planInputs.descriptionLabel')} className="md:col-span-2">
+            <textarea rows={3} className="input w-full resize-none" value={form.description}
+              onChange={(e) => set('description', e.target.value)} placeholder={t('planInputs.descriptionPlaceholder')} />
+          </Field>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Mã gói (code)</label>
-          <input type="text" className="input w-full" value={form.code}
-            onChange={(e) => set('code', e.target.value)} placeholder="pro" disabled={isEdit} />
-          {isEdit && <p className="text-xs text-gray-400 mt-1">{t('adminPlans.codeCannotChange')}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá tháng (VNĐ) *</label>
-          <PriceInput value={form.price} onChange={(v) => set('price', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
-          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
-          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
-          <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} />
-        </div>
-        <div className="flex items-center gap-3 pt-5">
-          <input type="checkbox" id="isActive" className="w-4 h-4 text-primary-600 rounded"
-            checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} />
-          <label htmlFor="isActive" className="text-sm text-gray-700 cursor-pointer">{t('adminPlans.displayPublic')}</label>
-        </div>
-      </div>
+      </FormSection>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
-        <textarea rows={2} className="input w-full resize-none" value={form.description}
-          onChange={(e) => set('description', e.target.value)} placeholder="Mô tả ngắn về gói..." />
-      </div>
+      <FormSection
+        kicker={t('adminPlans.sectionCommerce')}
+        title={t('adminPlans.pricingAndAccessTitle')}
+        description={t('adminPlans.pricingAndAccessDescription')}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label={t('planInputs.planPricePerMonth')}>
+            <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.employeesLabel')}>
+            <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
+          </Field>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input type="checkbox" id="isActive" className="h-4 w-4 rounded text-primary-600"
+              checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} />
+            <label htmlFor="isActive" className="ml-3 cursor-pointer">
+              <span className="block text-sm font-semibold text-slate-800">{t('adminPlans.displayPublic')}</span>
+              <span className="text-xs text-slate-500">{t('adminPlans.displayPublicHint')}</span>
+            </label>
+          </div>
+        </div>
+      </FormSection>
 
-      <SendLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Backend sẽ chặn khi vượt ngưỡng." />
+      <FormSection
+        kicker={t('adminPlans.sectionLimits')}
+        title={t('planInputs.sendLimits')}
+        description={t('adminPlans.sendLimitsDescription')}
+      >
+        <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+      </FormSection>
 
-      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
+      <FormSection
+        kicker={t('adminPlans.sectionResources')}
+        title={t('planInputs.resourceLimits')}
+        description={t('adminPlans.resourceLimitsDescription')}
+      >
+        <ResourceLimitsFields form={form} set={set} hint={t('planInputs.hintResourceApplyImmediately')} />
+      </FormSection>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Tính năng hiển thị <span className="font-normal text-gray-400">(trang pricing)</span>
-        </label>
+      <FormSection
+        kicker={t('adminPlans.sectionPricingPage')}
+        title={t('planInputs.featuresLabel')}
+        description={t('adminPlans.featuresDescription')}
+      >
         <FeatureEditor features={form.features} onChange={(f) => set('features', f)} />
-      </div>
-
-      <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
-        <button type="submit" className="btn btn-primary" disabled={isSaving}>
-          {isSaving ? t('common.processing') : isEdit ? t('adminPlans.saveChanges') : t('adminPlans.createPlan')}
-        </button>
-      </div>
-    </form>,
-    () => { if (!isSaving) onClose(); }
+      </FormSection>
+    </ModalShell>,
+    () => { if (!isSaving) onClose(); },
+    MODAL_FORM
   );
 };
 
@@ -238,55 +421,68 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
   };
 
   return renderModal(
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">{t('adminPlans.editPlan')}</h2>
-        {plan.assignedEmail && (
-          <p className="text-sm text-gray-500 mt-1">Doanh nghiệp: <strong>{plan.assignedName || plan.assignedEmail}</strong></p>
-        )}
-      </div>
+    <ModalShell
+      onSubmit={handleSubmit}
+      title={t('adminPlans.editPlan')}
+      subtitle={plan.assignedEmail
+        ? `${t('adminPlans.enterprise')}: ${plan.assignedName || plan.assignedEmail}`
+        : t('adminPlans.customPlanEditSubtitle')}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
+          <button type="submit" className="btn btn-primary px-6" disabled={isSaving}>
+            {isSaving ? t('common.processing') : t('adminPlans.saveChanges')}
+          </button>
+        </>
+      }
+    >
+      <FormSection
+        kicker={t('adminPlans.sectionGeneral')}
+        title={t('adminPlans.generalInfoTitle')}
+        description={t('adminPlans.customPlanEditDescription')}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label={t('planInputs.planName')} className="md:col-span-2">
+            <input type="text" className="input h-11 w-full" value={form.name}
+              onChange={(e) => set('name', e.target.value)} />
+          </Field>
+          <Field label={t('planInputs.planPricePerMonth')}>
+            <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.employeesLabel')}>
+            <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.durationLabel')}>
+            <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
+          </Field>
+          <Field label={t('planInputs.descriptionNotesLabel')} className="md:col-span-2">
+            <textarea rows={3} className="input w-full resize-none" placeholder={t('planInputs.descriptionNotesPlaceholder')}
+              value={form.description} onChange={(e) => set('description', e.target.value)} />
+          </Field>
+        </div>
+      </FormSection>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên gói</label>
-          <input type="text" className="input w-full" value={form.name}
-            onChange={(e) => set('name', e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá tháng (VNĐ)</label>
-          <PriceInput value={form.price} onChange={(v) => set('price', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
-          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
-          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
-          <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả / Ghi chú</label>
-          <textarea rows={2} className="input w-full resize-none" placeholder="Ghi chú nội bộ..."
-            value={form.description} onChange={(e) => set('description', e.target.value)} />
-        </div>
-      </div>
+      <FormSection
+        kicker={t('adminPlans.sectionLimits')}
+        title={t('planInputs.sendLimits')}
+        description={t('adminPlans.sendLimitsDescription')}
+      >
+        <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+      </FormSection>
 
-      <SendLimitsFields form={form} set={set} />
-
-      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
-
-      <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
-        <button type="submit" className="btn btn-primary" disabled={isSaving}>
-          {isSaving ? t('common.processing') : t('adminPlans.saveChanges')}
-        </button>
-      </div>
-    </form>,
-    () => { if (!isSaving) onClose(); }
+      <FormSection
+        kicker={t('adminPlans.sectionResources')}
+        title={t('planInputs.resourceLimits')}
+        description={t('adminPlans.resourceLimitsDescription')}
+      >
+        <ResourceLimitsFields form={form} set={set} hint={t('planInputs.hintResourceApplyImmediately')} />
+      </FormSection>
+    </ModalShell>,
+    () => { if (!isSaving) onClose(); },
+    MODAL_FORM
   );
 };
 
@@ -455,22 +651,6 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     }
   };
 
-  const handleAssignDirect = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    try {
-      setIsSaving(true);
-      const res = await adminPlansApiService.createCustomPlan(form);
-      toast.success(res.data.message);
-      onSaved();
-      onClose();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || t('adminPlans.cannotCreateCustomPlan'));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   if (paymentResult) {
     return (
       <PaymentResultModal
@@ -486,67 +666,75 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
   }
 
   return renderModal(
-    <form onSubmit={handleAssignDirect} className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">Tạo gói riêng cho doanh nghiệp</h2>
-        <p className="text-sm text-gray-500 mt-1">Gói sẽ không xuất hiện trên trang pricing.</p>
-      </div>
+    <ModalShell
+      onSubmit={(e) => e.preventDefault()}
+      title={t('adminPlans.createCustomPlanTitle')}
+      subtitle={t('adminPlans.customPlanSubtitle')}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
+          <button type="button" onClick={handleCreatePaymentLink} disabled={isSaving} className="btn btn-primary px-6">
+            {isSaving ? t('common.processing') : t('adminPlans.createPaymentLink')}
+          </button>
+        </>
+      }
+    >
+      <FormSection
+        kicker={t('adminPlans.sectionCustomer')}
+        title={t('adminPlans.customerTargetTitle')}
+        description={t('adminPlans.customerTargetDescription')}
+      >
+        <Field label={t('planInputs.customerEmailLabel')}>
+          <EmailAutocomplete value={form.userEmail} onChange={(v) => set('userEmail', v)} placeholder="customer@example.com" excludeWithPlan />
+        </Field>
+      </FormSection>
 
-      <div className="bg-primary-50 rounded-lg p-4 space-y-2">
-        <label className="block text-sm font-semibold text-gray-700">Email khách hàng *</label>
-        <EmailAutocomplete value={form.userEmail} onChange={(v) => set('userEmail', v)} placeholder="customer@example.com" excludeWithPlan />
-      </div>
+      <FormSection
+        kicker={t('adminPlans.sectionGeneral')}
+        title={t('adminPlans.generalInfoTitle')}
+        description={t('adminPlans.customPlanDescription')}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label={`${t('planInputs.planName')} *`} className="md:col-span-2">
+            <input type="text" className="input h-11 w-full" placeholder={t('adminPlans.customPlanNamePlaceholder')}
+              value={form.name} onChange={(e) => set('name', e.target.value)} />
+          </Field>
+          <Field label={t('planInputs.planPricePerMonth')}>
+            <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.employeesLabel')}>
+            <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label={t('planInputs.durationLabel')}>
+            <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
+          </Field>
+          <Field label={t('planInputs.descriptionNotesLabel')} className="md:col-span-2">
+            <textarea rows={3} className="input w-full resize-none" placeholder={t('planInputs.descriptionNotesPlaceholder')}
+              value={form.description} onChange={(e) => set('description', e.target.value)} />
+          </Field>
+        </div>
+      </FormSection>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên gói *</label>
-          <input type="text" className="input w-full" placeholder="VD: Gói Enterprise - Công ty ABC"
-            value={form.name} onChange={(e) => set('name', e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ)/Tháng</label>
-          <PriceInput value={form.price} onChange={(v) => set('price', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Giá năm (VNĐ)</label>
-          <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Thời hạn gói</label>
-          <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Số nhân viên tối đa</label>
-          <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả / Ghi chú</label>
-          <textarea rows={2} className="input w-full resize-none" placeholder="Ghi chú nội bộ..."
-            value={form.description} onChange={(e) => set('description', e.target.value)} />
-        </div>
-      </div>
+      <FormSection
+        kicker={t('adminPlans.sectionLimits')}
+        title={t('planInputs.sendLimits')}
+        description={t('adminPlans.sendLimitsDescription')}
+      >
+        <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+      </FormSection>
 
-      <SendLimitsFields form={form} set={set} />
-
-      <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
-
-      <div className="flex flex-col gap-2 pt-2">
-        <button
-          type="button"
-          onClick={handleCreatePaymentLink}
-          disabled={isSaving}
-          className="btn btn-primary w-full"
-        >
-          {isSaving ? t('common.processing') : t('adminPlans.createPaymentLink')}
-        </button>
-        {/* <button type="submit" disabled={isSaving} className="btn btn-secondary w-full text-sm">
-          Gán ngay (bỏ qua thanh toán)
-        </button> */}
-        <button type="button" className="btn btn-secondary w-full text-sm" onClick={onClose} disabled={isSaving}>
-          {t('common.cancel')}
-        </button>
-      </div>
-    </form>,
-    () => { if (!isSaving) onClose(); }
+      <FormSection
+        kicker={t('adminPlans.sectionResources')}
+        title={t('planInputs.resourceLimits')}
+        description={t('adminPlans.resourceLimitsDescription')}
+      >
+        <ResourceLimitsFields form={form} set={set} hint={t('planInputs.hintResourceApplyImmediately')} />
+      </FormSection>
+    </ModalShell>,
+    () => { if (!isSaving) onClose(); },
+    MODAL_FORM
   );
 };

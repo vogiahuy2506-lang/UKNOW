@@ -31,7 +31,7 @@ const CheckoutPage = () => {
     // Tạo payment link khi load trang
     useEffect(() => {
         if (!plan) {
-            navigate('/about', { replace: true });
+            navigate('/pricing', { replace: true });
             return;
         }
 

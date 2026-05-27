@@ -175,50 +175,163 @@ export const EmployeeInput = ({ value, onChange, className = 'input w-full' }) =
   );
 };
 
-// ── DurationInput — chọn thời hạn gói (preset + tùy chỉnh) ──────────────────
-const DURATION_PRESETS = [
-  { label: 'Không giới hạn', value: '' },
-  { label: '10 ngày (dùng thử)', value: 10 },
-  { label: '30 ngày (1 tháng)', value: 30 },
-  { label: '90 ngày (3 tháng)', value: 90 },
-  { label: '365 ngày (1 năm)', value: 365 },
-  { label: 'Tùy chỉnh...', value: 'custom' },
+// ── DurationInput — nhập số + đơn vị (ngày / tuần / tháng / năm) ─────────────
+const DURATION_UNITS_KEYS = [
+  { key: 'durationUnitDay',   value: 'day',   mult: 1   },
+  { key: 'durationUnitWeek',  value: 'week',  mult: 7   },
+  { key: 'durationUnitMonth', value: 'month', mult: 30  },
+  { key: 'durationUnitYear',  value: 'year',  mult: 365 },
 ];
 
-export const DurationInput = ({ value, onChange }) => {
-  const isCustom = value !== '' && value !== null && value !== undefined &&
-    ![10, 30, 90, 365].includes(Number(value));
-  const selectVal = isCustom ? 'custom' : (value === '' || value == null ? '' : Number(value));
+const daysToInput = (days) => {
+  if (!days) return { num: '', unit: 'day' };
+  const d = Number(days);
+  if (d % 365 === 0) return { num: d / 365, unit: 'year'  };
+  if (d % 30  === 0) return { num: d / 30,  unit: 'month' };
+  if (d % 7   === 0) return { num: d / 7,   unit: 'week'  };
+  return { num: d, unit: 'day' };
+};
 
-  const handleSelect = (e) => {
-    const v = e.target.value;
-    if (v === '') { onChange(''); return; }
-    if (v === 'custom') { onChange(1); return; }
-    onChange(Number(v));
+export const DurationInput = ({ value, onChange }) => {
+  const { t } = useI18n();
+  const isEmpty = value === '' || value == null;
+  const parsed  = daysToInput(isEmpty ? '' : value);
+
+  const [unlimited, setUnlimited] = useState(isEmpty);
+  const [num,  setNum]  = useState(parsed.num);
+  const [unit, setUnit] = useState(parsed.unit);
+
+  useEffect(() => {
+    const isNowEmpty = value === '' || value == null;
+    if (isNowEmpty) {
+      setUnlimited(true);
+    } else {
+      const p = daysToInput(value);
+      setUnlimited(false);
+      setNum(p.num);
+      setUnit(p.unit);
+    }
+  }, [value]);
+
+  const emit = (n, u) => {
+    const mult = DURATION_UNITS_KEYS.find((x) => x.value === u)?.mult ?? 1;
+    const days = n === '' || n == null ? '' : Number(n) * mult;
+    onChange(days === '' || isNaN(days) ? '' : days);
+  };
+
+  const handleUnlimitedChange = (checked) => {
+    setUnlimited(checked);
+    if (checked) {
+      onChange('');
+    } else {
+      const defaultNum = num || 1;
+      setNum(defaultNum);
+      emit(defaultNum, unit);
+    }
+  };
+
+  const handleNumChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    setNum(raw === '' ? '' : Number(raw));
+    emit(raw === '' ? '' : Number(raw), unit);
+  };
+
+  const handleUnitChange = (e) => {
+    setUnit(e.target.value);
+    emit(num, e.target.value);
+  };
+
+  const totalDays = !unlimited && num !== '' && num > 0
+    ? Number(num) * (DURATION_UNITS_KEYS.find((x) => x.value === unit)?.mult ?? 1)
+    : null;
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* Unlimited toggle pill */}
+      <button
+        type="button"
+        onClick={() => handleUnlimitedChange(!unlimited)}
+        className={`inline-flex h-11 items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
+          unlimited
+            ? 'bg-orange-50 border-orange-200 text-orange-700'
+            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+        }`}
+      >
+        <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300'}`} />
+        {t('planInputs.durationUnlimited')}
+      </button>
+
+      {!unlimited && (
+        <>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <input
+              type="text"
+              inputMode="numeric"
+              className="input h-11 w-24 text-center shrink-0"
+              placeholder="1"
+              value={num}
+              onChange={handleNumChange}
+            />
+            <select className="input h-11 flex-1 min-w-0" value={unit} onChange={handleUnitChange}>
+              {DURATION_UNITS_KEYS.map((u) => (
+                <option key={u.value} value={u.value}>{t(`planInputs.${u.key}`)}</option>
+              ))}
+            </select>
+          </div>
+          {totalDays !== null && (
+            <span className="text-xs text-gray-500 shrink-0 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
+              {t('planInputs.durationEqualsNDays').replace('{n}', totalDays)}
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── LimitInput — input số với toggle "Không hỗ trợ" (-1) ─────────────────────
+/** value: '' = unlimited, -1 = not supported, number = limit */
+const LimitInput = ({ value, onChange, placeholder }) => {
+  const { t } = useI18n();
+  const isNotSupported = value === -1 || value === '-1';
+
+  const handleToggleNA = () => {
+    onChange(isNotSupported ? '' : -1);
+  };
+
+  const handleInputChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    onChange(digits === '' ? '' : Number(digits));
   };
 
   return (
     <div className="flex gap-2">
-      <select className="input flex-1" value={selectVal} onChange={handleSelect}>
-        {DURATION_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>{p.label}</option>
-        ))}
-      </select>
-      {isCustom && (
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            inputMode="numeric"
-            className="input w-24"
-            value={value}
-            onChange={(e) => {
-              const d = e.target.value.replace(/\D/g, '');
-              onChange(d === '' ? 1 : Number(d));
-            }}
-          />
-          <span className="text-sm text-gray-500 shrink-0">ngày</span>
+      {isNotSupported ? (
+        <div className="input h-11 flex-1 flex items-center bg-rose-50 border-rose-200">
+          <span className="text-sm font-semibold text-rose-600">{t('planInputs.notSupported')}</span>
         </div>
+      ) : (
+        <input
+          type="text"
+          inputMode="numeric"
+          className="input h-11 flex-1 min-w-0"
+          placeholder={placeholder || t('planInputs.noLimit')}
+          value={value ?? ''}
+          onChange={handleInputChange}
+        />
       )}
+      <button
+        type="button"
+        title={isNotSupported ? t('planInputs.noLimit') : t('planInputs.notSupported')}
+        onClick={handleToggleNA}
+        className={`shrink-0 h-11 px-3 rounded-xl border text-xs font-bold transition-all ${
+          isNotSupported
+            ? 'bg-rose-100 border-rose-300 text-rose-700 hover:bg-rose-50'
+            : 'bg-white border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-600'
+        }`}
+      >
+        N/A
+      </button>
     </div>
   );
 };
@@ -230,9 +343,8 @@ export const SendLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.sendLimits')}</p>
-      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['dailyEmailLimit',   t('planInputs.emailPerDay'),   t('planInputs.emailPerDayPlaceholder')],
           ['monthlyEmailLimit', t('planInputs.emailPerMonth'),  t('planInputs.emailPerMonthPlaceholder')],
@@ -240,15 +352,8 @@ export const SendLimitsFields = ({ form, set, hint }) => {
           ['monthlyZaloLimit',  t('planInputs.zaloPerMonth'),   t('planInputs.zaloPerMonthPlaceholder')],
         ].map(([key, label, ph]) => (
           <div key={key}>
-            <label className="block text-xs text-gray-500 mb-1">{label}</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input w-full"
-              placeholder={ph}
-              value={form[key]}
-              onChange={(e) => set(key, e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1'))}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <LimitInput value={form[key]} onChange={(v) => set(key, v)} placeholder={ph} />
           </div>
         ))}
       </div>
@@ -263,9 +368,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.resourceLimits')}</p>
-      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['maxLandingPages',       t('planInputs.landingPages')],
           ['maxCampaigns',          t('planInputs.campaigns')],
@@ -278,18 +382,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
         ].map(([key, label]) => (
           <div key={key}>
-            <label className="block text-xs text-gray-500 mb-1">{label}</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input w-full"
-              placeholder={t('planInputs.noLimit')}
-              value={form[key] ?? ''}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
-                set(key, digits === '' ? '' : Number(digits));
-              }}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
           </div>
         ))}
       </div>

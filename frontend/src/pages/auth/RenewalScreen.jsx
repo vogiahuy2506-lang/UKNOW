@@ -51,12 +51,12 @@ const RenewalScreen = () => {
           </div>
 
           <div className="flex flex-col gap-3 mt-8">
-            <button onClick={() => navigate('/about')} className="btn btn-primary w-full">
+            <button onClick={() => navigate('/pricing')} className="btn btn-primary w-full">
               <HiOutlineRefresh className="w-4 h-4 mr-2" />
               {t('renewal.renewNow')}
             </button>
             <button
-              onClick={() => navigate('/about')}
+              onClick={() => navigate('/pricing')}
               className="btn btn-secondary w-full text-sm"
             >
               {t('renewal.viewPlans')}
