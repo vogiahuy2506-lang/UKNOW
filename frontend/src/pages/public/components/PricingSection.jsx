@@ -176,12 +176,20 @@ const DYNAMIC_STYLES = [
  * - embedded (boolean): ẩn phần hero (badge + heading + subtitle) để nhúng vào trang có hero riêng.
  * - compact  (boolean): thu nhỏ padding/spacing để fit trong 1 viewport.
  */
+const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
+
+const calcSavings = (monthly, yearly) => {
+  const pct = Math.round((Number(monthly) * 12 - Number(yearly)) / (Number(monthly) * 12) * 100);
+  return pct > 0 ? pct : 0;
+};
+
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [billingPeriod, setBillingPeriod] = useState('monthly');
 
   const getPlansData = async () => {
     try {
@@ -209,6 +217,8 @@ export default function PricingSection({ embedded = false, compact = false, glas
     getPlansData();
   }, []);
 
+  const hasYearlyPricing = plans.some(p => !isContactPlan(p) && p.price_yearly);
+
   const handlePlanClick = (plan) => {
     if (isContactPlan(plan)) {
       window.open(ZALO_URL, '_blank');
@@ -217,7 +227,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
     if (!isAuthenticated) {
       navigate('/login');
     } else {
-      navigate('/checkout', { state: { plan } });
+      navigate('/checkout', { state: { plan, billingPeriod } });
     }
   };
 
@@ -265,6 +275,39 @@ export default function PricingSection({ embedded = false, compact = false, glas
               {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
+        )}
+
+        {/* Billing period toggle */}
+        {hasYearlyPricing && (
+          <div className={`flex justify-center ${compact ? 'mb-5' : 'mb-10'}`}>
+            <div className={`inline-flex items-center rounded-full p-1 gap-1 ${glass ? 'bg-white/20 backdrop-blur-sm' : 'bg-slate-100 border border-slate-200'}`}>
+              <button
+                onClick={() => setBillingPeriod('monthly')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                  billingPeriod === 'monthly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('pricing.billingMonthly')}
+              </button>
+              <button
+                onClick={() => setBillingPeriod('yearly')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
+                  billingPeriod === 'yearly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('pricing.billingYearly')}
+                {billingPeriod !== 'yearly' && (
+                  <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                    {t('pricing.saveLabel')}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
         )}
 
         {/*
@@ -324,10 +367,29 @@ export default function PricingSection({ embedded = false, compact = false, glas
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
                         </div>
+                      ) : billingPeriod === 'yearly' && plan.price_yearly ? (
+                        <div>
+                          <div className="flex items-end gap-2">
+                            <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
+                              {fmtVnd(plan.price_yearly)}
+                            </span>
+                            <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perYear')}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={`text-sm ${style.unit}`}>
+                              ≈ {fmtVnd(Math.round(Number(plan.price_yearly) / 12))} / tháng
+                            </span>
+                            {calcSavings(plan.price, plan.price_yearly) > 0 && (
+                              <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                                -{calcSavings(plan.price, plan.price_yearly)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
-                            {(plan.price / 1000).toLocaleString('vi-VN')}K
+                            {fmtVnd(plan.price)}
                           </span>
                           <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perMonth')}</span>
                         </div>

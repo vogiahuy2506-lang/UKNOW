@@ -28,7 +28,8 @@ const testDBConnection = async () => {
     );
     await runMigrations(client);
   } catch (error) {
-    console.error('Database connection failed:', error.message);
+    console.error('[Startup] Database/migration failed:', error.message);
+    process.exit(1);
   } finally {
     if (client) client.release();
   }

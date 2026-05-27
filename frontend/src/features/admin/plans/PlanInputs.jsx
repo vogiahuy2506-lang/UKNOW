@@ -29,12 +29,28 @@ export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
 export const FeatureEditor = ({ features, onChange }) => {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
+  const composingRef = useRef(false);
+  const inputRef = useRef(null);
 
-  const add = () => {
-    const trimmed = draft.trim();
+  const addFromValue = (rawValue) => {
+    const trimmed = String(rawValue ?? '').trim();
     if (!trimmed) return;
     onChange([...features, trimmed]);
     setDraft('');
+  };
+
+  const add = () => addFromValue(inputRef.current?.value ?? draft);
+
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (composingRef.current || e.nativeEvent.isComposing) return;
+
+    // Defer one frame so IME finishes committing the last composed word.
+    requestAnimationFrame(() => {
+      addFromValue(inputRef.current?.value ?? draft);
+    });
   };
 
   return (
@@ -56,10 +72,18 @@ export const FeatureEditor = ({ features, onChange }) => {
       </div>
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           type="text"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onChange={(e) => {
+            if (!composingRef.current) setDraft(e.target.value);
+          }}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={(e) => {
+            composingRef.current = false;
+            setDraft(e.target.value);
+          }}
+          onKeyDown={handleKeyDown}
           placeholder={t('planInputs.featuresPlaceholder')}
           className="input flex-1 text-sm"
         />

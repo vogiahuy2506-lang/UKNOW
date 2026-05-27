@@ -17,6 +17,9 @@ const CheckoutPage = () => {
     const pollingRef = useRef(null);
 
     const plan = location.state?.plan;
+    const billingPeriod = location.state?.billingPeriod || 'monthly';
+    const isYearly = billingPeriod === 'yearly' && plan?.price_yearly;
+    const displayPrice = isYearly ? Number(plan?.price_yearly) : Number(plan?.price || 0);
 
     const [orderCode, setOrderCode] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -52,6 +55,7 @@ const CheckoutPage = () => {
                 const { data } = await api.post('/payments/create-payment', {
                     planCode: plan.code,
                     userEmail,
+                    billingPeriod,
                 });
                 if (!data.success) throw new Error(data.message);
 
@@ -124,24 +128,30 @@ const CheckoutPage = () => {
                                     {t('checkout.membershipPlan')}
                                 </p>
                                 <p className="text-xl font-black text-slate-900">{plan.name}</p>
-                                <p className="text-sm text-slate-500 mt-0.5">{t('checkout.monthlyBilling')}</p>
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                    {isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')}
+                                </p>
                             </div>
 
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between text-slate-500">
                                     <span>{t('checkout.serviceFee')}</span>
-                                    <span className="font-medium text-slate-700">{fmtVnd(plan.price)}</span>
+                                    <span className="font-medium text-slate-700">{fmtVnd(displayPrice)}</span>
                                 </div>
-                                <div className="flex justify-between text-emerald-600 text-xs italic">
-                                    <span>{t('checkout.trialOffer')}</span>
-                                    <span>- 0 đ</span>
-                                </div>
+                                {isYearly && (
+                                    <div className="flex justify-between text-emerald-600 text-xs">
+                                        <span>≈ {fmtVnd(Math.round(displayPrice / 12))} / tháng</span>
+                                        <span className="bg-emerald-100 px-1.5 rounded font-semibold">
+                                            -{Math.round((Number(plan.price) * 12 - displayPrice) / (Number(plan.price) * 12) * 100)}%
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="pt-3 border-t border-dashed border-slate-200 flex justify-between items-end">
                                     <div>
                                         <span className="block font-semibold text-slate-900">{t('checkout.total')}</span>
                                         <span className="text-[11px] text-slate-400">{t('checkout.vatIncluded')}</span>
                                     </div>
-                                    <span className="text-2xl font-black text-slate-900">{fmtVnd(plan.price)}</span>
+                                    <span className="text-2xl font-black text-slate-900">{fmtVnd(displayPrice)}</span>
                                 </div>
                             </div>
                         </div>

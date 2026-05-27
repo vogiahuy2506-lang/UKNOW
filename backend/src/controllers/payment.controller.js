@@ -2,16 +2,19 @@ import * as paymentService from '../services/payment/payment.service.js';
 
 export const createPayment = async (req, res) => {
     try {
-        const { planCode, userEmail } = req.body;
+        const { planCode, userEmail, billingPeriod = 'monthly' } = req.body;
         if (!planCode || !userEmail) {
             return res.status(400).json({ error: 'Thiếu planCode hoặc userEmail' });
         }
+        if (!['monthly', 'yearly'].includes(billingPeriod)) {
+            return res.status(400).json({ error: 'billingPeriod phải là monthly hoặc yearly' });
+        }
 
-        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id });
+        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id, billingPeriod });
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, message: 'Lỗi server' });
+        res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
     }
 };
 
@@ -42,4 +45,4 @@ export const getPaymentStatus = async (req, res) => {
         console.error(err);
         res.status(500).json({ success: false, message: 'Lỗi server' });
     }
-}
+};

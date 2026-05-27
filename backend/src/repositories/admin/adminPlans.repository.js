@@ -164,7 +164,10 @@ export async function searchUserAdminsByEmail(query, limit = 8, excludeWithPlan 
 /** Tìm user_admin theo email để gán gói trực tiếp */
 export async function findUserAdminByEmail(email) {
   const { rows } = await db.query(
-    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId" FROM users WHERE email = $1`,
+    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId"
+     FROM users
+     WHERE LOWER(email) = LOWER($1)
+     LIMIT 1`,
     [email]
   );
   return rows[0] || null;

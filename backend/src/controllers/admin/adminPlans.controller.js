@@ -2,8 +2,15 @@ import * as adminPlansService from '../../services/admin/adminPlans.service.js';
 
 function handleError(res, err) {
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.code === '42703') {
+    console.error('Admin plans error (missing DB column):', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Database trên server chưa cập nhật migration. Kiểm tra log backend (docker logs uknow-campaign-backend).',
+    });
+  }
   console.error('Admin plans error:', err);
-  return res.status(500).json({ success: false, message: 'Lỗi server' });
+  return res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
 }
 
 /** GET /api/admin/plans/search-users?q=&excludeWithPlan=true */
