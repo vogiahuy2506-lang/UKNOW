@@ -151,12 +151,13 @@ class AuthController {
 
       const user = result.rows[0];
 
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        return res.status(403).json({
-          success: false,
-          message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
-        });
-      }
+      // TEMPORARILY DISABLED: login lockout check
+      // if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+      //   });
+      // }
 
       if (user.status !== 'active') {
         return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
@@ -165,13 +166,13 @@ class AuthController {
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
       if (!isValidPassword) {
-        const failedAttempts = (user.failed_login_attempts || 0) + 1;
-        const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
-
-        await client.query(
-          'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
-          [failedAttempts, lockedUntil, user.id]
-        );
+        // TEMPORARILY DISABLED: failed attempt counter and lockout update
+        // const failedAttempts = (user.failed_login_attempts || 0) + 1;
+        // const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
+        // await client.query(
+        //   'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
+        //   [failedAttempts, lockedUntil, user.id]
+        // );
         await this.logLoginAttempt(client, user.id, user.email, 'failed', 'Mật khẩu không đúng', ipAddress, userAgent);
 
         return res.status(401).json({
@@ -318,12 +319,13 @@ class AuthController {
         if (user.status !== 'active') {
           return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
         }
-        if (user.locked_until && new Date(user.locked_until) > new Date()) {
-          return res.status(403).json({
-            success: false,
-            message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
-          });
-        }
+        // TEMPORARILY DISABLED: login lockout check (Google OAuth)
+        // if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        //   return res.status(403).json({
+        //     success: false,
+        //     message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+        //   });
+        // }
         // Cập nhật thông tin profile nếu có thay đổi từ Google
         if (user.full_name !== name || user.avatar_url !== picture || !user.is_verified) {
           await client.query(
