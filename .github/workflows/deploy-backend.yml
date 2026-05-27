@@ -51,25 +51,47 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
+          EXPECTED_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME
+          envs: DOCKERHUB_USERNAME,BACKEND_IMAGE,EXPECTED_SHA
           script: |
-            docker pull $DOCKERHUB_USERNAME/uknow-backend:latest
-            CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-backend 2>/dev/null || echo "")
-            [ -n "$CPID" ] && [ "$CPID" != "0" ] && kill -9 "$CPID" && sleep 2 || true
-            docker rm uknow-campaign-backend || true
+            set -e
+            echo "Deploying backend image: $BACKEND_IMAGE"
+            docker pull "$BACKEND_IMAGE"
+            docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
+            if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
+              echo "Removing old backend container..."
+              docker update --restart=no uknow-campaign-backend || true
+              for i in $(seq 1 15); do
+                RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-backend 2>/dev/null || echo "false")
+                [ "$RUNNING" = "false" ] && break
+                CPID=$(docker inspect --format '{{.State.Pid}}' uknow-campaign-backend 2>/dev/null || echo "")
+                if [ -n "$CPID" ] && [ "$CPID" != "0" ]; then
+                  kill -9 "$CPID" 2>/dev/null || sudo -n kill -9 "$CPID" 2>/dev/null || true
+                fi
+                sleep 1
+              done
+              RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-backend 2>/dev/null || echo "false")
+              if [ "$RUNNING" != "false" ]; then
+                docker inspect uknow-campaign-backend --format 'Could not stop old container: pid={{.State.Pid}} status={{.State.Status}} running={{.State.Running}}'
+                exit 1
+              fi
+              docker rm uknow-campaign-backend
+            fi
             docker run -d \
               --name uknow-campaign-backend \
               --network uknow_network \
+              --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
               -p 5001:5001 \
               -v /root/uknow/backend/.env:/app/.env \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
-              $DOCKERHUB_USERNAME/uknow-backend:latest
+              "$BACKEND_IMAGE"
             docker image prune -f
             echo "Chờ server khởi động..."
             sleep 8
