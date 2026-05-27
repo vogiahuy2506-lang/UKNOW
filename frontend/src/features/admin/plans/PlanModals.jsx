@@ -292,7 +292,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
             <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
-            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v > 0 ? v : '')} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
@@ -478,7 +478,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
             <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
-            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v > 0 ? v : '')} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
@@ -731,7 +731,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
             <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
-            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v || '')} className="input h-11 w-full" />
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v > 0 ? v : '')} className="input h-11 w-full" />
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />

@@ -52,10 +52,11 @@ export async function getPlan(id) {
 }
 
 const parseLimitField = (v) => (v === '' || v === null || v === undefined) ? null : Number(v);
-const parseOptionalMoneyField = (v, label = 'Giá tiền') => {
+const parseOptionalMoneyField = (v, label = 'Giá tiền', { emptyWhenZero = false } = {}) => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) throw { status: 400, message: `${label} không hợp lệ` };
+  if (emptyWhenZero && n === 0) return null;
   return n;
 };
 
@@ -72,7 +73,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   }
   try {
     return await createPlan({
-      code: normalizedCode, name: name.trim(), price, priceYearly: parseOptionalMoneyField(priceYearly, 'Giá năm'),
+      code: normalizedCode, name: name.trim(), price, priceYearly: parseOptionalMoneyField(priceYearly, 'Giá năm', { emptyWhenZero: true }),
       description, features, maxEmployees: maxEmployees ?? 0, isActive,
       durationDays:            parseLimitField(durationDays),
       dailyEmailLimit:         parseLimitField(dailyEmailLimit),
@@ -105,7 +106,7 @@ export async function editPlan(id, payload) {
   return updatePlan(id, {
     name:         payload.name.trim(),
     price:        payload.price,
-    priceYearly:  parseOptionalMoneyField(payload.priceYearly, 'Giá năm'),
+    priceYearly:  parseOptionalMoneyField(payload.priceYearly, 'Giá năm', { emptyWhenZero: true }),
     description:  payload.description,
     features:     payload.features || [],
     maxEmployees: payload.maxEmployees ?? 0,
@@ -201,7 +202,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     code:                  planData.code?.trim() || null,
     name:                  planData.name.trim(),
     price:                 planData.price,
-    priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm'),
+    priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm', { emptyWhenZero: true }),
     description:           planData.description || null,
     features:              planData.features || [],
     maxEmployees:          planData.maxEmployees ?? 0,
@@ -246,7 +247,7 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       code:                  planData.code?.trim() || null,
       name:                  planData.name.trim(),
       price:                 planData.price,
-      priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm'),
+      priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm', { emptyWhenZero: true }),
       description:           planData.description || null,
       features:              [],
       maxEmployees:          planData.maxEmployees ?? -1,

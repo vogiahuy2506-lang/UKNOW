@@ -59,6 +59,11 @@ import landingPagePublicController from './controllers/landingPagePublic.control
 export function createApp() {
   const app = express();
 
+  // VPS/nginx gửi X-Forwarded-For — cần bật để rate-limit và req.ip đúng.
+  if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
+
   const defaultAllowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',

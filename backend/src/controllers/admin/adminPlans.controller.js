@@ -9,6 +9,12 @@ function handleError(res, err) {
       message: 'Database trên server chưa cập nhật migration. Kiểm tra log backend (docker logs uknow-campaign-backend).',
     });
   }
+  if (err.code === '22P02') {
+    return res.status(400).json({
+      success: false,
+      message: 'Giá năm hoặc trường số không hợp lệ. Để trống giá năm nếu không dùng.',
+    });
+  }
   console.error('Admin plans error:', err);
   return res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
 }

@@ -1,5 +1,8 @@
 import db from '../../config/database.js';
 
+/** Chuẩn hoá giá trị BIGINT nullable — tránh lỗi `invalid input syntax for type bigint: ""`. */
+const toNullableBigint = (v) => (v === '' || v === null || v === undefined ? null : v);
+
 const PLAN_COLS = `
   id, code, name, price, price_yearly AS "priceYearly", description, features,
   is_active AS "isActive", is_custom AS "isCustom",
@@ -70,7 +73,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,NOW(),NOW())
      RETURNING *`,
-    [code, name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
+    [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
      maxLandingPages ?? null, maxCampaigns ?? null,
@@ -99,7 +102,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
          updated_at = NOW()
      WHERE id = $22
      RETURNING *`,
-    [name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive,
+    [name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
      maxLandingPages ?? null, maxCampaigns ?? null,
@@ -227,7 +230,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
        RETURNING *`,
-      [code || null, name, price, priceYearly ?? null, description || null, maxEmployees,
+      [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
        dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
        maxLandingPages ?? null, maxCampaigns ?? null,
