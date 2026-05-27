@@ -1,6 +1,6 @@
 import { useI18n } from '../../../i18n';
-import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck } from 'react-icons/hi';
-import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages, fmtFup } from './planUtils.jsx';
+import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
+import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
 export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
