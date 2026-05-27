@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
+import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField } from './PlanInputs';
 import { useI18n } from '../../../i18n';
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
@@ -25,6 +25,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    messagesPerPeriod: plan.messagesPerPeriod ?? '',
+    isFupEnabled: plan.isFupEnabled ?? false,
     maxLandingPages: plan.maxLandingPages ?? '',
     maxCampaigns: plan.maxCampaigns ?? '',
     maxZaloCampaigns: plan.maxZaloCampaigns ?? '',
@@ -105,6 +107,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Backend sẽ chặn khi vượt ngưỡng." />
+
+      <PeriodMessagesField form={form} set={set} />
 
       <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
@@ -208,6 +212,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    messagesPerPeriod: plan.messagesPerPeriod ?? '',
+    isFupEnabled: plan.isFupEnabled ?? false,
     maxLandingPages: plan.maxLandingPages ?? '',
     maxCampaigns: plan.maxCampaigns ?? '',
     maxZaloCampaigns: plan.maxZaloCampaigns ?? '',
@@ -276,6 +282,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} />
+
+      <PeriodMessagesField form={form} set={set} />
 
       <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 
@@ -425,6 +433,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     durationDays: '',
     dailyEmailLimit: '', monthlyEmailLimit: '',
     dailyZaloLimit: '', monthlyZaloLimit: '',
+    messagesPerPeriod: '', isFupEnabled: false,
     maxLandingPages: '', maxCampaigns: '',
     maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
     maxZaloAccounts: '', maxEmailAccounts: '',
@@ -527,6 +536,8 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
       </div>
 
       <SendLimitsFields form={form} set={set} />
+
+      <PeriodMessagesField form={form} set={set} />
 
       <ResourceLimitsFields form={form} set={set} hint="Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này." />
 

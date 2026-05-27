@@ -2909,6 +2909,12 @@ export default {
     hintResourceApplyImmediately: 'Để trống = không giới hạn. Áp dụng ngay khi user được gán gói này.',
     hintEmailLimitsBackendBlocked: 'Để trống = không giới hạn. Backend sẽ chặn khi vượt ngưỡng.',
     hasPlan: 'Có gói',
+    messagesPerPeriod: 'Tin nhắn theo kỳ',
+    messagesPerPeriodHint: 'Giới hạn tin nhắn cho toàn bộ kỳ subscription. Để trống = không giới hạn theo kỳ.',
+    messagesPerPeriodPlaceholder: 'VD: 100',
+    fupEnabled: 'Bật FUP (Không giới hạn thực tế)',
+    fupDescription: 'Gói không giới hạn nhưng có Fair Usage Policy. Admin sẽ thấy cảnh báo khi user sử dụng quá mức bình thường.',
+    unlimitedWithFup: 'Không giới hạn (FUP)',
   },
 
   // Custom Domain Modal

@@ -38,12 +38,14 @@ export async function create(req, res) {
   try {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     const plan = await adminPlansService.createNewPlan({
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
@@ -56,12 +58,14 @@ export async function update(req, res) {
   try {
     const { name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
       name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
@@ -82,6 +86,7 @@ export async function createCustomWithPayment(req, res) {
   try {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
@@ -89,6 +94,7 @@ export async function createCustomWithPayment(req, res) {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? -1), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
@@ -105,6 +111,7 @@ export async function createCustom(req, res) {
   try {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
@@ -112,6 +119,7 @@ export async function createCustom(req, res) {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? 0), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+      messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });

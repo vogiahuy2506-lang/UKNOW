@@ -7,6 +7,7 @@ const PLAN_COLS = `
   duration_days AS "durationDays",
   daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
   daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
+  messages_per_period AS "messagesPerPeriod", is_fup_enabled AS "isFupEnabled",
   max_landing_pages AS "maxLandingPages", max_campaigns AS "maxCampaigns",
   max_zalo_campaigns AS "maxZaloCampaigns",
   max_zalo_group_campaigns AS "maxZaloGroupCampaigns",
@@ -28,8 +29,11 @@ export async function findCustomPlans({ showHidden = false } = {}) {
   const { rows } = await db.query(
     `SELECT DISTINCT ON (p.id)
             p.id, p.code, p.name, p.price, p.description, p.is_active AS "isActive", p.is_custom AS "isCustom",
-            p.max_employees AS "maxEmployees", p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
-            p.daily_zalo_limit AS "dailyZaloLimit", p.monthly_zalo_limit AS "monthlyZaloLimit", p.created_at AS "createdAt",
+            p.max_employees AS "maxEmployees",
+            p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
+            p.daily_zalo_limit AS "dailyZaloLimit", p.monthly_zalo_limit AS "monthlyZaloLimit",
+            p.messages_per_period AS "messagesPerPeriod", p.is_fup_enabled AS "isFupEnabled",
+            p.created_at AS "createdAt",
             COALESCE(u.email,     o_user.email)     AS "assignedEmail",
             COALESCE(u.full_name, o_user.full_name) AS "assignedName",
             COALESCE(u.id,        o_user.id)        AS "assignedUserId",
@@ -52,22 +56,25 @@ export async function findPlanById(id) {
 
 export async function createPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive,
   isCustom = false, durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, price_yearly, description, features, max_employees, is_active, is_custom,
                         duration_days,
                         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                        messages_per_period, is_fup_enabled,
                         max_landing_pages, max_campaigns,
                         max_zalo_campaigns, max_zalo_group_campaigns, max_email_campaigns,
                         max_zalo_accounts, max_email_accounts,
                         max_email_templates, max_zalo_templates,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),NOW())
      RETURNING *`,
     [code, name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+     messagesPerPeriod ?? null, isFupEnabled ?? false,
      maxLandingPages ?? null, maxCampaigns ?? null,
      maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
@@ -78,6 +85,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
 
 export async function updatePlan(id, { name, price, priceYearly, description, features, maxEmployees, isActive,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const { rows } = await db.query(
@@ -87,16 +95,18 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
          duration_days = $8,
          daily_email_limit = $9, monthly_email_limit = $10,
          daily_zalo_limit = $11, monthly_zalo_limit = $12,
-         max_landing_pages = $13, max_campaigns = $14,
-         max_zalo_campaigns = $15, max_zalo_group_campaigns = $16, max_email_campaigns = $17,
-         max_zalo_accounts = $18, max_email_accounts = $19,
-         max_email_templates = $20, max_zalo_templates = $21,
+         messages_per_period = $13, is_fup_enabled = $14,
+         max_landing_pages = $15, max_campaigns = $16,
+         max_zalo_campaigns = $17, max_zalo_group_campaigns = $18, max_email_campaigns = $19,
+         max_zalo_accounts = $20, max_email_accounts = $21,
+         max_email_templates = $22, max_zalo_templates = $23,
          updated_at = NOW()
-     WHERE id = $22
+     WHERE id = $24
      RETURNING *`,
     [name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+     messagesPerPeriod ?? null, isFupEnabled ?? false,
      maxLandingPages ?? null, maxCampaigns ?? null,
      maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
@@ -186,6 +196,8 @@ export async function assignPlanToUser(userId, planId) {
          max_email_accounts        = p.max_email_accounts,
          max_email_templates       = p.max_email_templates,
          max_zalo_templates        = p.max_zalo_templates,
+         messages_per_period       = p.messages_per_period,
+         is_fup_enabled            = p.is_fup_enabled,
          updated_at = NOW()
      FROM plans p
      WHERE p.id = $1 AND u.id = $2
@@ -202,6 +214,7 @@ export async function assignPlanToUser(userId, planId) {
  */
 export async function createAndAssignCustomPlan(userId, { code, name, price, priceYearly, description, maxEmployees,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   const client = await db.getClient();
@@ -212,16 +225,18 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
       `INSERT INTO plans (code, name, price, price_yearly, description, features, max_employees, is_active, is_custom,
                           duration_days,
                           daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                          messages_per_period, is_fup_enabled,
                           max_landing_pages, max_campaigns,
                           max_zalo_campaigns, max_zalo_group_campaigns, max_email_campaigns,
                           max_zalo_accounts, max_email_accounts,
                           max_email_templates, max_zalo_templates,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, priceYearly ?? null, description || null, maxEmployees,
        durationDays ?? null,
        dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
+       messagesPerPeriod ?? null, isFupEnabled ?? false,
        maxLandingPages ?? null, maxCampaigns ?? null,
        maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
        maxZaloAccounts ?? null, maxEmailAccounts ?? null,
@@ -242,6 +257,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
            max_zalo_campaigns = $6, max_zalo_group_campaigns = $7, max_email_campaigns = $8,
            max_zalo_accounts = $9, max_email_accounts = $10,
            max_email_templates = $11, max_zalo_templates = $12,
+           messages_per_period = $13, is_fup_enabled = $14,
            updated_at = NOW()
        WHERE id = $2
        RETURNING id, username, email, full_name AS "fullName"`,
@@ -250,7 +266,8 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
        plan.max_landing_pages, plan.max_campaigns,
        plan.max_zalo_campaigns, plan.max_zalo_group_campaigns, plan.max_email_campaigns,
        plan.max_zalo_accounts, plan.max_email_accounts,
-       plan.max_email_templates, plan.max_zalo_templates]
+       plan.max_email_templates, plan.max_zalo_templates,
+       plan.messages_per_period, plan.is_fup_enabled]
     );
     const assignedUser = userResult.rows[0];
 

@@ -76,6 +76,8 @@ const AdminPlansPage = () => {
         monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
         dailyZaloLimit: plan.dailyZaloLimit ?? null,
         monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
+        messagesPerPeriod: plan.messagesPerPeriod ?? null,
+        isFupEnabled: plan.isFupEnabled ?? false,
       });
       toast.success(plan.isActive ? t('adminPlans.planHidden') : t('adminPlans.planVisible'));
       fetchPlans();
@@ -97,6 +99,8 @@ const AdminPlansPage = () => {
         monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
         dailyZaloLimit: plan.dailyZaloLimit ?? null,
         monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
+        messagesPerPeriod: plan.messagesPerPeriod ?? null,
+        isFupEnabled: plan.isFupEnabled ?? false,
       });
       toast.success(`${t('adminPlans.restored')} "${plan.name}"`);
       fetchCustomPlans();

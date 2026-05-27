@@ -3,6 +3,12 @@ import { createPortal } from 'react-dom';
 export const fmtVnd   = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 export const fmtEmp   = (n) => n === -1 ? 'Không giới hạn' : `${n} nhân viên`;
 export const fmtLimit = (v) => (v == null ? '∞' : Number(v).toLocaleString('vi-VN'));
+export const fmtPeriodMessages = (v, periodDays) => {
+  if (v == null) return '∞';
+  if (periodDays) return `${Number(v).toLocaleString('vi-VN')} tin/kỳ (${periodDays} ngày)`;
+  return `${Number(v).toLocaleString('vi-VN')} tin/kỳ`;
+};
+export const fmtFup   = (v) => v ? 'Có FUP' : null;
 
 export const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
 export const MODAL_PANEL   = 'relative z-10 w-full max-w-lg max-h-[90vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
@@ -23,6 +29,7 @@ export const emptyForm = () => ({
   durationDays: '',
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
+  messagesPerPeriod: '', isFupEnabled: false,
   maxLandingPages: '', maxCampaigns: '',
   maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
   maxZaloAccounts: '', maxEmailAccounts: '',

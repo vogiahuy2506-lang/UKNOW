@@ -1,6 +1,6 @@
 import { useI18n } from '../../../i18n';
-import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
-import { fmtVnd, fmtEmp, fmtLimit } from './planUtils.jsx';
+import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck } from 'react-icons/hi';
+import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages, fmtFup } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
 export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
@@ -12,6 +12,11 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
             {!plan.isActive && <span className="badge badge-gray text-xs">{t('plans.hiddenStatus')}</span>}
+            {plan.isFupEnabled && (
+              <span className="badge badge-amber text-xs" title={t('planInputs.fupDescription')}>
+                FUP
+              </span>
+            )}
           </div>
           {plan.code && <p className="text-xs text-gray-400 mt-0.5">#{plan.code}</p>}
         </div>
@@ -23,6 +28,17 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <span className="text-gray-200">|</span>
         <span>{plan.user_count ?? 0} {t('plans.membersUsing')}</span>
       </div>
+
+      {(plan.messagesPerPeriod != null || plan.isFupEnabled) && (
+        <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
+          <span className="font-medium">{t('planInputs.messagesPerPeriod')}: </span>
+          {plan.isFupEnabled ? (
+            <span className="text-amber-600">{t('planInputs.unlimitedWithFup')}</span>
+          ) : (
+            <span>{fmtPeriodMessages(plan.messagesPerPeriod, plan.durationDays)}</span>
+          )}
+        </div>
+      )}
 
       {plan.features?.length > 0 && (
         <ul className="space-y-1">
@@ -107,6 +123,17 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
         <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
         <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees)}</strong></span>
       </div>
+
+      {(plan.messagesPerPeriod != null || plan.isFupEnabled) && (
+        <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
+          <span className="font-medium">{t('planInputs.messagesPerPeriod')}: </span>
+          {plan.isFupEnabled ? (
+            <span className="text-amber-600">{t('planInputs.unlimitedWithFup')}</span>
+          ) : (
+            <span>{fmtPeriodMessages(plan.messagesPerPeriod, plan.durationDays)}</span>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
         {isHidden ? (

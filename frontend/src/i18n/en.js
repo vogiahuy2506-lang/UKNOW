@@ -2930,6 +2930,12 @@ export default {
     hintResourceApplyImmediately: 'Leave empty = unlimited. Applies immediately when user is assigned this plan.',
     hintEmailLimitsBackendBlocked: 'Leave empty = unlimited. Backend will block when threshold is exceeded.',
     hasPlan: 'Has plan',
+    messagesPerPeriod: 'Messages per period',
+    messagesPerPeriodHint: 'Message limit for the entire subscription period. Leave empty = no period limit.',
+    messagesPerPeriodPlaceholder: 'e.g. 100',
+    fupEnabled: 'Enable FUP (Actual Unlimited)',
+    fupDescription: 'Plan is unlimited but has Fair Usage Policy. Admin will see warnings when user exceeds normal usage.',
+    unlimitedWithFup: 'Unlimited (FUP)',
   },
 
   // Custom Domain Modal
