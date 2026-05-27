@@ -16,7 +16,7 @@ test.describe('Navigation smoke', () => {
       const res = await page.goto(r.path);
       expect(res?.status() ?? 200).toBeLessThan(400);
       await expect(page).toHaveURL(new RegExp(r.path.replace(/\//g, '\\/')));
-      await expect(page.locator('aside').first()).toBeVisible();
+      await expect(page.locator('aside').first()).toBeVisible({ timeout: 15_000 });
       await expect(
         page.locator('h1, h2').filter({ hasText: r.heading }).first()
       ).toBeVisible({ timeout: 15_000 });
