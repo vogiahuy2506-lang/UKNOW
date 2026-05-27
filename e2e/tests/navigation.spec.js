@@ -15,6 +15,8 @@ test.describe('Navigation smoke', () => {
     test(`GET ${r.path}`, async ({ page }) => {
       const res = await page.goto(r.path);
       expect(res?.status() ?? 200).toBeLessThan(400);
+      // Wait for auth/me + all data requests to settle before asserting layout
+      await page.waitForLoadState('networkidle', { timeout: 20_000 });
       await expect(page).toHaveURL(new RegExp(r.path.replace(/\//g, '\\/')));
       await expect(page.locator('aside').first()).toBeVisible({ timeout: 15_000 });
       await expect(

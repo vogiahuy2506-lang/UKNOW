@@ -81,7 +81,7 @@ const ProtectedRoute = ({ children }) => {
     if (isLoading) {
       const timeout = setTimeout(() => {
         useAuthStore.setState({ isLoading: false, isAuthenticated: false });
-      }, 5000);
+      }, 15000);
       return () => clearTimeout(timeout);
     }
   }, [isLoading]);
