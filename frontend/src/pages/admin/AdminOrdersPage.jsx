@@ -21,7 +21,8 @@ const KpiCard = ({ label, value, sub }) => (
   </div>
 );
 
-const StatusBadge = ({ status, t }) => {
+const StatusBadge = ({ status }) => {
+  const { t } = useI18n();
   const s = STATUS_LABEL(t)[status] || { label: status, cls: 'badge-gray' };
   return <span className={`badge ${s.cls} text-xs`}>{s.label}</span>;
 };

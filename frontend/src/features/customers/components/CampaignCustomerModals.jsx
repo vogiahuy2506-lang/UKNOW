@@ -770,7 +770,8 @@ const Journey4States = ({ journey, emailSubject, orderEvents = [], t }) => {
   );
 };
 
-const EmailContentViewer = ({ email, t }) => {
+const EmailContentViewer = ({ email }) => {
+  const { t } = useI18n();
   const senderDisplay = email.senderName
     ? `${email.senderName} <${email.senderEmail || ''}>`
     : (email.senderEmail || t('campaignCustomerModals.systemCampaign'));

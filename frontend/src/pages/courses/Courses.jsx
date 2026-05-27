@@ -23,7 +23,8 @@ const normalizeCourseStatus = (status) => {
   return normalized || 'publish';
 };
 
-const StatusBadge = ({ status, t }) => {
+const StatusBadge = ({ status }) => {
+  const { t } = useI18n();
   const normalizedStatus = normalizeCourseStatus(status);
   const labels = COURSE_STATUS_LABELS(t);
   const label = labels[normalizedStatus] || normalizedStatus;

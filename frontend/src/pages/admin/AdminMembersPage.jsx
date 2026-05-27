@@ -24,7 +24,8 @@ import adminPlansApiService from '../../features/admin/services/adminPlansApi.se
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
-const ExpiryBadge = ({ expiresAt, hasPlan, t }) => {
+const ExpiryBadge = ({ expiresAt, hasPlan }) => {
+  const { t } = useI18n();
   if (!expiresAt) return <span className="text-xs text-gray-400">—</span>;
 
   const now = Date.now();
