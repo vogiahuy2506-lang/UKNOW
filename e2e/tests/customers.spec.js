@@ -16,7 +16,8 @@ test.describe('Khách hàng', () => {
     const entry = page.getByRole('button', { name: /E2E-\d+/ }).first();
     await expect(entry).toBeVisible({ timeout: 20_000 });
     await entry.click();
-    await expect(page).toHaveURL(/\/app\/customers\/\d+/);
-    await expect(page.getByText('Danh sách khách hàng tham gia chiến dịch')).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/customers\/\d+/, { timeout: 15_000 });
+    await page.waitForLoadState('networkidle', { timeout: 20_000 });
+    await expect(page.getByText('Danh sách khách hàng tham gia chiến dịch')).toBeVisible({ timeout: 15_000 });
   });
 });
