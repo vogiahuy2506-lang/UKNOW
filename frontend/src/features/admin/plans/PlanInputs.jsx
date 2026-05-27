@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
+import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { useI18n } from '../../../i18n';
 
@@ -175,10 +175,9 @@ export const EmployeeInput = ({ value, onChange, className = 'input w-full' }) =
   );
 };
 
-// ── DurationInput — nhập số + đơn vị (ngày / tuần / tháng / năm) ─────────────
+// ── DurationInput — nhập số + đơn vị (ngày / tháng / năm) ───────────────────
 const DURATION_UNITS_KEYS = [
   { key: 'durationUnitDay',   value: 'day',   mult: 1   },
-  { key: 'durationUnitWeek',  value: 'week',  mult: 7   },
   { key: 'durationUnitMonth', value: 'month', mult: 30  },
   { key: 'durationUnitYear',  value: 'year',  mult: 365 },
 ];
@@ -188,7 +187,6 @@ const daysToInput = (days) => {
   const d = Number(days);
   if (d % 365 === 0) return { num: d / 365, unit: 'year'  };
   if (d % 30  === 0) return { num: d / 30,  unit: 'month' };
-  if (d % 7   === 0) return { num: d / 7,   unit: 'week'  };
   return { num: d, unit: 'day' };
 };
 
@@ -200,6 +198,8 @@ export const DurationInput = ({ value, onChange }) => {
   const [unlimited, setUnlimited] = useState(isEmpty);
   const [num,  setNum]  = useState(parsed.num);
   const [unit, setUnit] = useState(parsed.unit);
+  const [unitMenuOpen, setUnitMenuOpen] = useState(false);
+  const unitMenuRef = useRef(null);
 
   useEffect(() => {
     const isNowEmpty = value === '' || value == null;
@@ -212,6 +212,16 @@ export const DurationInput = ({ value, onChange }) => {
       setUnit(p.unit);
     }
   }, [value]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (unitMenuRef.current && !unitMenuRef.current.contains(e.target)) {
+        setUnitMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const emit = (n, u) => {
     const mult = DURATION_UNITS_KEYS.find((x) => x.value === u)?.mult ?? 1;
@@ -236,9 +246,10 @@ export const DurationInput = ({ value, onChange }) => {
     emit(raw === '' ? '' : Number(raw), unit);
   };
 
-  const handleUnitChange = (e) => {
-    setUnit(e.target.value);
-    emit(num, e.target.value);
+  const handleUnitChange = (nextUnit) => {
+    setUnit(nextUnit);
+    setUnitMenuOpen(false);
+    emit(num, nextUnit);
   };
 
   const totalDays = !unlimited && num !== '' && num > 0
@@ -246,44 +257,70 @@ export const DurationInput = ({ value, onChange }) => {
     : null;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* Unlimited toggle pill */}
-      <button
-        type="button"
-        onClick={() => handleUnlimitedChange(!unlimited)}
-        className={`inline-flex h-11 items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
-          unlimited
-            ? 'bg-orange-50 border-orange-200 text-orange-700'
-            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-        }`}
-      >
-        <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300'}`} />
-        {t('planInputs.durationUnlimited')}
-      </button>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => handleUnlimitedChange(!unlimited)}
+          className={`inline-flex h-11 items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
+            unlimited
+              ? 'bg-orange-50 border-orange-200 text-orange-700'
+              : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300'}`} />
+          {t('planInputs.durationUnlimited')}
+        </button>
 
-      {!unlimited && (
-        <>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        {!unlimited && (
+          <div className="flex items-center gap-2 min-w-0">
             <input
               type="text"
               inputMode="numeric"
-              className="input h-11 w-24 text-center shrink-0"
+              className="input h-11 w-20 shrink-0 text-center font-semibold text-slate-900"
               placeholder="1"
               value={num}
               onChange={handleNumChange}
             />
-            <select className="input h-11 flex-1 min-w-0" value={unit} onChange={handleUnitChange}>
-              {DURATION_UNITS_KEYS.map((u) => (
-                <option key={u.value} value={u.value}>{t(`planInputs.${u.key}`)}</option>
-              ))}
-            </select>
+            <div className="relative w-32 shrink-0" ref={unitMenuRef}>
+              <button
+                type="button"
+                onClick={() => setUnitMenuOpen((open) => !open)}
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-orange-300 hover:bg-orange-50/40 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              >
+                <span>{t(`planInputs.${DURATION_UNITS_KEYS.find((u) => u.value === unit)?.key || 'durationUnitDay'}`)}</span>
+                <HiChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {unitMenuOpen && (
+                <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                  {DURATION_UNITS_KEYS.map((u) => {
+                    const selected = unit === u.value;
+                    return (
+                      <button
+                        key={u.value}
+                        type="button"
+                        onClick={() => handleUnitChange(u.value)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                          selected
+                            ? 'bg-orange-50 text-orange-700'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                      >
+                        {t(`planInputs.${u.key}`)}
+                        {selected && <HiOutlineCheck className="h-4 w-4" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-          {totalDays !== null && (
-            <span className="text-xs text-gray-500 shrink-0 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
-              {t('planInputs.durationEqualsNDays').replace('{n}', totalDays)}
-            </span>
-          )}
-        </>
+        )}
+      </div>
+      {totalDays !== null && unit !== 'day' && (
+        <span className="inline-flex rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+          {t('planInputs.durationEqualsNDays').replace('{n}', totalDays)}
+        </span>
       )}
     </div>
   );
