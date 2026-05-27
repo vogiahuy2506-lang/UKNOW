@@ -182,7 +182,8 @@ const BaseModal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose, t }) => {
+const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
+  const { t } = useI18n();
   const [journeyData, setJourneyData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
@@ -1065,7 +1066,8 @@ const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [], t }) =
   );
 };
 
-const JourneyModal = ({ customer, campaignId, isOpen, onClose, t }) => {
+const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
+  const { t } = useI18n();
   const [journeyData, setJourneyData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);

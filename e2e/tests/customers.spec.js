@@ -18,8 +18,6 @@ test.describe('Khách hàng', () => {
     await entry.click();
     await expect(page).toHaveURL(/\/app\/customers\/\d+/, { timeout: 15_000 });
     await page.waitForLoadState('networkidle', { timeout: 20_000 });
-    const diagHeadings = await page.locator('h1, h2, h3, p').allTextContents();
-    console.log('[diag-cc] url:', page.url(), '| texts:', JSON.stringify(diagHeadings.slice(0, 8)));
     await expect(page.getByText('Danh sách khách hàng tham gia chiến dịch')).toBeVisible({ timeout: 15_000 });
   });
 });
