@@ -26,10 +26,16 @@ const testDBConnection = async () => {
     console.log(
       `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
     );
-    await runMigrations(client);
+    if (process.env.SKIP_MIGRATIONS === 'true') {
+      console.log('[Migration] Skipped (SKIP_MIGRATIONS=true)');
+    } else {
+      await runMigrations(client);
+    }
   } catch (error) {
     console.error('[Startup] Database/migration failed:', error.message);
-    process.exit(1);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
   } finally {
     if (client) client.release();
   }
