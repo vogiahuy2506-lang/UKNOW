@@ -67,6 +67,36 @@ export const handleWebhook = async (body) => {
     return webhookData;
 };
 
+export const activateFreePlan = async ({ planCode, userId, userEmail, billingPeriod = 'monthly' }) => {
+    const plan = await findPlanByCode(planCode);
+    if (!plan) throw new Error('Gói không tồn tại');
+
+    const amount = billingPeriod === 'yearly' && plan.price_yearly
+        ? Number(plan.price_yearly)
+        : Number(plan.price);
+
+    if (amount > 0) throw new Error('Gói này cần thanh toán, không thể kích hoạt miễn phí');
+
+    const orderCode = Date.now();
+
+    await createOrder({
+        orderCode,
+        planId: plan.id,
+        amount: 0,
+        userEmail,
+        userId,
+        status: 'success',
+        paymentMethod: 'free',
+        billingPeriod,
+    });
+
+    if (userId) {
+        await activateUserPlan(userId, plan.id, billingPeriod);
+    }
+
+    return { orderCode };
+};
+
 export const getOrderStatus = async (orderCode) => {
     return await findOrderStatusByCode(orderCode);
 };

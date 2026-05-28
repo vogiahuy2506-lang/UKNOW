@@ -28,6 +28,27 @@ export const webhook = async (req, res) => {
     }
 };
 
+export const activateFree = async (req, res) => {
+    try {
+        const { planCode, billingPeriod = 'monthly' } = req.body;
+        if (!planCode) return res.status(400).json({ error: 'Thiếu planCode' });
+        if (!['monthly', 'yearly'].includes(billingPeriod)) {
+            return res.status(400).json({ error: 'billingPeriod phải là monthly hoặc yearly' });
+        }
+
+        const result = await paymentService.activateFreePlan({
+            planCode,
+            userId: req.user.id,
+            userEmail: req.user.email,
+            billingPeriod,
+        });
+        res.json({ success: true, result });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
+    }
+};
+
 export const getPaymentStatus = async (req, res) => {
     try {
         const { orderCode } = req.params;

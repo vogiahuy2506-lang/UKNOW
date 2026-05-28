@@ -55,6 +55,19 @@ const CheckoutPage = () => {
                     return;
                 }
 
+                if (displayPrice <= 0) {
+                    const { data } = await api.post('/payments/activate-free', {
+                        planCode: plan.code,
+                        billingPeriod,
+                    });
+                    if (!data.success) throw new Error(data.message);
+                    navigate('/payment-success', {
+                        replace: true,
+                        state: { orderCode: data.result.orderCode, fromCheckout: true },
+                    });
+                    return;
+                }
+
                 const { data } = await api.post('/payments/create-payment', {
                     planCode: plan.code,
                     userEmail,
