@@ -7,6 +7,10 @@ export const fmtLimit = (v) => {
   if (Number(v) === -1) return 'N/A';
   return Number(v).toLocaleString('vi-VN');
 };
+export const fmtPeriodMessages = (v) => {
+  if (v == null || v === '') return '∞';
+  return Number(v).toLocaleString('vi-VN');
+};
 
 export const normalizeMoneyValue = (value) => {
   if (value === '' || value === null || value === undefined) return '';
@@ -87,6 +91,7 @@ export const emptyForm = () => ({
   durationDays: '',
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
+  messagesPerPeriod: '', isFupEnabled: false,
   maxLandingPages: '', maxCampaigns: '',
   maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
   maxZaloAccounts: '', maxEmailAccounts: '',

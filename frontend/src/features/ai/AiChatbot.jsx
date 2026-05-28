@@ -1381,7 +1381,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
-  const handleEditCampaign = (script) => {
+  const _handleEditCampaign = (script) => {
     console.log('[AI Chatbot] handleEditCampaign called with script:', JSON.stringify(script, null, 2));
     const draftData = {
       campaignName: script.campaignName || '',
@@ -1712,7 +1712,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  const handlePushToExisting = (script) => {
+  const _handlePushToExisting = (script) => {
     setSelectedScriptForPush(script);
     setShowCampaignPicker(true);
   };

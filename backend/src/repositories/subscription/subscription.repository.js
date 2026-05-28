@@ -51,10 +51,15 @@ export async function expireUserPlan(userId) {
          subscription_reminder_count = 0,
          max_landing_pages        = NULL,
          max_campaigns            = NULL,
+         max_zalo_campaigns       = NULL,
+         max_zalo_group_campaigns = NULL,
+         max_email_campaigns      = NULL,
          max_zalo_accounts        = NULL,
          max_email_accounts       = NULL,
          max_email_templates      = NULL,
          max_zalo_templates       = NULL,
+         messages_per_period      = NULL,
+         is_fup_enabled           = FALSE,
          updated_at               = CURRENT_TIMESTAMP
      WHERE id = $1`,
     [userId]

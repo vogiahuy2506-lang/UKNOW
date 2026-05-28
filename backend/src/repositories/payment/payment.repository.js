@@ -71,12 +71,17 @@ export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly'
                ELSE NOW()              + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END)
              END,
              subscription_reminder_count = 0,
-             max_landing_pages   = p.max_landing_pages,
-             max_campaigns       = p.max_campaigns,
-             max_zalo_accounts   = p.max_zalo_accounts,
-             max_email_accounts  = p.max_email_accounts,
-             max_email_templates = p.max_email_templates,
-             max_zalo_templates  = p.max_zalo_templates,
+             max_landing_pages        = p.max_landing_pages,
+             max_campaigns            = p.max_campaigns,
+             max_zalo_campaigns       = p.max_zalo_campaigns,
+             max_zalo_group_campaigns = p.max_zalo_group_campaigns,
+             max_email_campaigns      = p.max_email_campaigns,
+             max_zalo_accounts        = p.max_zalo_accounts,
+             max_email_accounts       = p.max_email_accounts,
+             max_email_templates      = p.max_email_templates,
+             max_zalo_templates       = p.max_zalo_templates,
+             messages_per_period      = p.messages_per_period,
+             is_fup_enabled           = p.is_fup_enabled,
              updated_at = CURRENT_TIMESTAMP
          FROM plans p
          WHERE p.id = $1 AND u.id = $2`,

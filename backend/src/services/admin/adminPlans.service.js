@@ -62,6 +62,7 @@ const parseOptionalMoneyField = (v, label = 'Giá tiền', { emptyWhenZero = fal
 
 export async function createNewPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive = true,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
+  messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
@@ -80,6 +81,8 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
       monthlyEmailLimit:       parseLimitField(monthlyEmailLimit),
       dailyZaloLimit:          parseLimitField(dailyZaloLimit),
       monthlyZaloLimit:        parseLimitField(monthlyZaloLimit),
+      messagesPerPeriod:       parseLimitField(messagesPerPeriod),
+      isFupEnabled:            Boolean(isFupEnabled),
       maxLandingPages:         parseLimitField(maxLandingPages),
       maxCampaigns:            parseLimitField(maxCampaigns),
       maxZaloCampaigns:        parseLimitField(maxZaloCampaigns),
@@ -116,6 +119,8 @@ export async function editPlan(id, payload) {
     monthlyEmailLimit:     parseLimitField(payload.monthlyEmailLimit),
     dailyZaloLimit:        parseLimitField(payload.dailyZaloLimit),
     monthlyZaloLimit:      parseLimitField(payload.monthlyZaloLimit),
+    messagesPerPeriod:     parseLimitField(payload.messagesPerPeriod),
+    isFupEnabled:          Boolean(payload.isFupEnabled),
     maxLandingPages:       parseLimitField(payload.maxLandingPages),
     maxCampaigns:          parseLimitField(payload.maxCampaigns),
     maxZaloCampaigns:      parseLimitField(payload.maxZaloCampaigns),
@@ -211,6 +216,8 @@ export async function createCustomPlanForUser(userEmail, planData) {
     monthlyEmailLimit:     parseLimitField(planData.monthlyEmailLimit),
     dailyZaloLimit:        parseLimitField(planData.dailyZaloLimit),
     monthlyZaloLimit:      parseLimitField(planData.monthlyZaloLimit),
+    messagesPerPeriod:     parseLimitField(planData.messagesPerPeriod),
+    isFupEnabled:          Boolean(planData.isFupEnabled),
     maxLandingPages:       parseLimitField(planData.maxLandingPages),
     maxCampaigns:          parseLimitField(planData.maxCampaigns),
     maxZaloCampaigns:      parseLimitField(planData.maxZaloCampaigns),
@@ -258,6 +265,8 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       monthlyEmailLimit:     parseLimitField(planData.monthlyEmailLimit),
       dailyZaloLimit:        parseLimitField(planData.dailyZaloLimit),
       monthlyZaloLimit:      parseLimitField(planData.monthlyZaloLimit),
+      messagesPerPeriod:     parseLimitField(planData.messagesPerPeriod),
+      isFupEnabled:          Boolean(planData.isFupEnabled),
       maxLandingPages:       parseLimitField(planData.maxLandingPages),
       maxCampaigns:          parseLimitField(planData.maxCampaigns),
       maxZaloCampaigns:      parseLimitField(planData.maxZaloCampaigns),

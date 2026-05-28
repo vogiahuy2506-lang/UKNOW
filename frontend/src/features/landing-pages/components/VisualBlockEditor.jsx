@@ -11,8 +11,8 @@ import { useI18n } from '../../../i18n';
 /**
  * Block definitions - each block has a default HTML template
  * Default data keys match translation keys
-// eslint-disable-next-line react-refresh/only-export-components
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const BLOCK_TYPES = {
   HERO: {
     id: 'hero',

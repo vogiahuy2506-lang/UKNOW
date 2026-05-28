@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL, MODAL_FORM, normalizeMoneyValue } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
+import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField } from './PlanInputs';
 import { useI18n } from '../../../i18n';
 
 const PLAN_PRESETS = [
@@ -19,6 +19,8 @@ const PLAN_PRESETS = [
     monthlyEmailLimit: -1,
     dailyZaloLimit: '',
     monthlyZaloLimit: 100,
+    messagesPerPeriod: 100,
+    isFupEnabled: false,
     maxLandingPages: 5,
     maxCampaigns: '',
     maxZaloCampaigns: 5,
@@ -40,6 +42,8 @@ const PLAN_PRESETS = [
     monthlyEmailLimit: -1,
     dailyZaloLimit: '',
     monthlyZaloLimit: 100,
+    messagesPerPeriod: 100,
+    isFupEnabled: false,
     maxLandingPages: 5,
     maxCampaigns: '',
     maxZaloCampaigns: 5,
@@ -61,6 +65,8 @@ const PLAN_PRESETS = [
     monthlyEmailLimit: 500,
     dailyZaloLimit: '',
     monthlyZaloLimit: 2000,
+    messagesPerPeriod: 2500,
+    isFupEnabled: false,
     maxLandingPages: 15,
     maxCampaigns: '',
     maxZaloCampaigns: 30,
@@ -82,6 +88,8 @@ const PLAN_PRESETS = [
     monthlyEmailLimit: 30000,
     dailyZaloLimit: '',
     monthlyZaloLimit: '',
+    messagesPerPeriod: '',
+    isFupEnabled: false,
     maxLandingPages: '',
     maxCampaigns: '',
     maxZaloCampaigns: '',
@@ -103,6 +111,8 @@ const PLAN_PRESETS = [
     monthlyEmailLimit: '',
     dailyZaloLimit: '',
     monthlyZaloLimit: '',
+    messagesPerPeriod: '',
+    isFupEnabled: false,
     maxLandingPages: '',
     maxCampaigns: '',
     maxZaloCampaigns: '',
@@ -177,6 +187,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    messagesPerPeriod: plan.messagesPerPeriod ?? '',
+    isFupEnabled: plan.isFupEnabled ?? false,
     maxLandingPages: plan.maxLandingPages ?? '',
     maxCampaigns: plan.maxCampaigns ?? '',
     maxZaloCampaigns: plan.maxZaloCampaigns ?? '',
@@ -325,6 +337,9 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
         description={t('adminPlans.sendLimitsDescription')}
       >
         <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <PeriodMessagesField form={form} set={set} />
+        </div>
       </FormSection>
 
       <FormSection
@@ -430,6 +445,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    messagesPerPeriod: plan.messagesPerPeriod ?? '',
+    isFupEnabled: plan.isFupEnabled ?? false,
     maxLandingPages: plan.maxLandingPages ?? '',
     maxCampaigns: plan.maxCampaigns ?? '',
     maxZaloCampaigns: plan.maxZaloCampaigns ?? '',
@@ -448,7 +465,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
     try {
       setIsSaving(true);
-      await adminPlansApiService.updatePlan(plan.id, { ...normalizePlanPayload(form), isActive: false, features: [] });
+      await adminPlansApiService.updatePlan(plan.id, { ...normalizePlanPayload(form), isActive: plan.isActive ?? true, features: [] });
       toast.success(t('adminPlans.planUpdated'));
       onSaved();
       onClose();
@@ -510,6 +527,9 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
         description={t('adminPlans.sendLimitsDescription')}
       >
         <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <PeriodMessagesField form={form} set={set} />
+        </div>
       </FormSection>
 
       <FormSection
@@ -660,6 +680,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     durationDays: '',
     dailyEmailLimit: '', monthlyEmailLimit: '',
     dailyZaloLimit: '', monthlyZaloLimit: '',
+    messagesPerPeriod: '', isFupEnabled: false,
     maxLandingPages: '', maxCampaigns: '',
     maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
     maxZaloAccounts: '', maxEmailAccounts: '',
@@ -763,6 +784,9 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
         description={t('adminPlans.sendLimitsDescription')}
       >
         <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <PeriodMessagesField form={form} set={set} />
+        </div>
       </FormSection>
 
       <FormSection

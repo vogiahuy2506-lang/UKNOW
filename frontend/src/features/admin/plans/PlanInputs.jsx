@@ -417,6 +417,49 @@ export const SendLimitsFields = ({ form, set, hint }) => {
   );
 };
 
+// ── PeriodMessagesField — quota tổng theo chu kỳ gói + Fair Usage Policy ─────
+export const PeriodMessagesField = ({ form, set }) => {
+  const { t } = useI18n();
+
+  const handleInputChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    set('messagesPerPeriod', digits === '' ? '' : Number(digits));
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {t('planInputs.messagesPerPeriod')}
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            className="input h-11 w-full"
+            placeholder={t('planInputs.messagesPerPeriodPlaceholder')}
+            value={form.messagesPerPeriod ?? ''}
+            onChange={handleInputChange}
+          />
+          <p className="mt-1.5 text-xs text-slate-400">{t('planInputs.messagesPerPeriodHint')}</p>
+        </div>
+        <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded text-primary-600"
+            checked={Boolean(form.isFupEnabled)}
+            onChange={(e) => set('isFupEnabled', e.target.checked)}
+          />
+          <span className="ml-3">
+            <span className="block text-sm font-semibold text-slate-800">{t('planInputs.fupEnabled')}</span>
+            <span className="text-xs text-slate-500">{t('planInputs.fupDescription')}</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
 // ── ResourceLimitsFields — giới hạn số lượng tài nguyên theo gói ─────────────
 export const ResourceLimitsFields = ({ form, set, hint }) => {
   const { t } = useI18n();

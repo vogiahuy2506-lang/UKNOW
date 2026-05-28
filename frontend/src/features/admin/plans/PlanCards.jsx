@@ -1,6 +1,6 @@
 import { useI18n } from '../../../i18n';
 import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
-import { fmtVnd, fmtEmp, fmtLimit } from './planUtils.jsx';
+import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
 export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
@@ -12,6 +12,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
             {!plan.isActive && <span className="badge badge-gray text-xs">{t('plans.hiddenStatus')}</span>}
+            {plan.isFupEnabled && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">FUP</span>}
           </div>
           {plan.code && <p className="text-xs text-gray-400 mt-0.5">#{plan.code}</p>}
         </div>
@@ -23,6 +24,14 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <span className="text-gray-200">|</span>
         <span>{plan.user_count ?? 0} {t('plans.membersUsing')}</span>
       </div>
+
+      {(plan.messagesPerPeriod !== null && plan.messagesPerPeriod !== undefined && plan.messagesPerPeriod !== '') && (
+        <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+          <span className="font-semibold">{t('planInputs.messagesPerPeriod')}:</span>{' '}
+          {fmtPeriodMessages(plan.messagesPerPeriod)}
+          {plan.isFupEnabled && <span className="ml-1 text-orange-500">({t('planInputs.fupEnabled')})</span>}
+        </div>
+      )}
 
       {plan.features?.length > 0 && (
         <ul className="space-y-1">
@@ -94,7 +103,10 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
       </div>
 
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">{plan.name}</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">{plan.name}</h3>
+          {plan.isFupEnabled && <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">FUP</span>}
+        </div>
         <p className="text-base font-bold text-primary-600 shrink-0">{fmtVnd(plan.price)}</p>
       </div>
 
@@ -105,6 +117,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
         <span>{t('plans.emailPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyEmailLimit)}</strong></span>
         <span>{t('plans.zaloPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
         <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
+        <span className="col-span-2">{t('planInputs.messagesPerPeriod')}: <strong className="text-gray-700">{fmtPeriodMessages(plan.messagesPerPeriod)}</strong></span>
         <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees)}</strong></span>
       </div>
 
