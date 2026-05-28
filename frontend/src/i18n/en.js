@@ -3989,8 +3989,11 @@ export default {
   // Hero Page
   heroPage: {
     tagline: 'Founder AI',
-    heroSubtitle: 'The All-In-One Software Powering the Future of Marketing Automation',
-    getStarted: 'Get Started',
+    heroTitleLine1: 'Automate',
+    heroTitleAccent: 'Marketing',
+    heroTitleLine2: 'across channels',
+    heroSubtitle: 'Build landing pages, manage leads, and automate Email/Zalo customer journeys from one platform.',
+    getStarted: 'Get started free',
     statsBusinesses: 'Businesses Trust Us',
     statsLeads: 'Leads Processed',
     statsCampaigns: 'Campaigns Daily',

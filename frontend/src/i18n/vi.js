@@ -3986,8 +3986,11 @@ export default {
   // Hero Page
   heroPage: {
     tagline: 'Founder AI',
-    heroSubtitle: 'The All-In-One Software Powering the Future of Marketing Automation',
-    getStarted: 'Get Started',
+    heroTitleLine1: 'Tự động hóa',
+    heroTitleAccent: 'Marketing',
+    heroTitleLine2: 'đa kênh',
+    heroSubtitle: 'Tạo Landing Page, quản lý Lead và chăm sóc khách hàng tự động qua Email/Zalo trong một nền tảng.',
+    getStarted: 'Bắt đầu miễn phí',
     statsBusinesses: 'Businesses Trust Us',
     statsLeads: 'Leads Processed',
     statsCampaigns: 'Campaigns Daily',
