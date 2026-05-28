@@ -44,6 +44,22 @@ export const findUserIdByEmail = async (email) => {
     return rows[0]?.id || null;
 };
 
+export const hasSuccessfulOrderForPlanByUser = async ({ planId, userId = null, userEmail = null }) => {
+    const { rows } = await db.query(
+        `SELECT 1
+         FROM orders
+         WHERE plan_id = $1
+           AND status = 'success'
+           AND (
+             ($2::bigint IS NOT NULL AND user_id = $2)
+             OR ($3::text IS NOT NULL AND LOWER(user_email) = LOWER($3))
+           )
+         LIMIT 1`,
+        [planId, userId, userEmail]
+    );
+    return rows.length > 0;
+};
+
 // billingPeriod: 'monthly' → theo duration_days của plan, 'yearly' → +12 tháng
 export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly') => {
     await db.query(

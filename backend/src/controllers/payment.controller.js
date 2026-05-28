@@ -14,7 +14,7 @@ export const createPayment = async (req, res) => {
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
+        res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
     }
 };
 
@@ -45,7 +45,7 @@ export const activateFree = async (req, res) => {
         res.json({ success: true, result });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
+        res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
     }
 };
 

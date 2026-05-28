@@ -1,10 +1,50 @@
-import { findPlanByCode } from '../../repositories/payment/plan.repository.js';
+import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
-import { createOrder, findOrderStatusByCode, updateOrderStatus, findOrderByCode, activateUserPlan, findUserIdByEmail } from '../../repositories/payment/payment.repository.js';
+import {
+    createOrder,
+    findOrderStatusByCode,
+    updateOrderStatus,
+    findOrderByCode,
+    activateUserPlan,
+    findUserIdByEmail,
+    hasSuccessfulOrderForPlanByUser,
+} from '../../repositories/payment/payment.repository.js';
+
+const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
+    // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
+    if (Number(plan?.duration_days) !== 10) return;
+
+    const alreadyRegistered = await hasSuccessfulOrderForPlanByUser({
+        planId: plan.id,
+        userId,
+        userEmail,
+    });
+    if (alreadyRegistered) {
+        throw { status: 409, message: 'Gói dùng thử 10 ngày chỉ được đăng ký một lần cho mỗi tài khoản' };
+    }
+};
+
+const assertNoImmediateDowngrade = async ({ targetPlan, userId }) => {
+    if (!userId) return;
+    const currentPlan = await getPlanByUserId(userId);
+    if (!currentPlan) return;
+    if (Number(currentPlan.id) === Number(targetPlan.id)) return;
+
+    const currentMonthlyPrice = Number(currentPlan.price || 0);
+    const targetMonthlyPrice = Number(targetPlan.price || 0);
+    if (targetMonthlyPrice < currentMonthlyPrice) {
+        throw {
+            status: 409,
+            message: 'Không thể hạ gói ngay khi còn hiệu lực gói hiện tại. Vui lòng hạ gói vào kỳ tiếp theo.',
+        };
+    }
+};
 
 export const createPaymentLink = async ({ planCode, userEmail, userId = null, billingPeriod = 'monthly' }) => {
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
+    await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
+    await assertNoImmediateDowngrade({ targetPlan: plan, userId });
 
     // Xác định số tiền theo chu kỳ thanh toán
     const amount = billingPeriod === 'yearly' && plan.price_yearly
@@ -70,6 +110,8 @@ export const handleWebhook = async (body) => {
 export const activateFreePlan = async ({ planCode, userId, userEmail, billingPeriod = 'monthly' }) => {
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
+    await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
+    await assertNoImmediateDowngrade({ targetPlan: plan, userId });
 
     const amount = billingPeriod === 'yearly' && plan.price_yearly
         ? Number(plan.price_yearly)
