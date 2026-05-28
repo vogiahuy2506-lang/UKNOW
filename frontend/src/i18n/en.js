@@ -2404,6 +2404,7 @@ export default {
     saveLabel: 'Save',
     getQuote: 'Get a Quote',
     startTrial: 'Start Free Trial',
+    choosePlan: 'Choose plan',
     trialOffer: '14-day free trial — no credit card required',
     planNames: {
       starter: 'Starter Plan',

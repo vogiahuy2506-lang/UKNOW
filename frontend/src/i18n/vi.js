@@ -2383,6 +2383,7 @@ export default {
     saveLabel: 'Tiết kiệm',
     getQuote: 'Nhận báo giá',
     startTrial: 'Dùng thử miễn phí',
+    choosePlan: 'Đăng ký gói',
     trialOffer: 'Dùng thử miễn phí 14 ngày — không cần thẻ tín dụng',
     planNames: {
       starter: 'Gói Starter',

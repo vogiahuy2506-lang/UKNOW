@@ -14,6 +14,14 @@ const isContactPlan = (plan) => {
   return code === 'custom' || code === 'contact' || name.includes('tùy chọn') || name.includes('tuỳ chọn');
 };
 
+const isFreePlan = (plan) => Number(plan?.price || 0) <= 0 && !isContactPlan(plan);
+
+const getPlanCtaLabel = (plan, t) => {
+  if (isContactPlan(plan)) return t('pricing.getQuote');
+  if (isFreePlan(plan)) return t('pricing.startTrial');
+  return t('pricing.choosePlan');
+};
+
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
 const getPlanTranslationKey = (plan) => {
@@ -409,7 +417,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       onClick={() => handlePlanClick(plan)}
                       className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
                     >
-                      {isCustom ? t('pricing.getQuote') : t('pricing.startTrial')}
+                      {getPlanCtaLabel(plan, t)}
                     </button>
                   </div>
                 </div>
