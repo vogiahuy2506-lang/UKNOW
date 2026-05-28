@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 import { HiOutlineUser, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
+import { getPostAuthPath } from '../../utils/authRedirect';
 
 const Login = () => {
   const { t } = useI18n();
@@ -28,8 +29,7 @@ const Login = () => {
     try {
       const result = await googleLogin({ access_token: tokenResponse.access_token });
       toast.success(t('auth.googleLoginSuccess'));
-      const role = result?.data?.user?.role;
-      navigate(role === 'admin' ? '/admin' : '/app');
+      navigate(getPostAuthPath(result?.data?.user));
     } catch (error) {
       const message = error.response?.data?.message || t('auth.googleLoginFailed');
       toast.error(message);
@@ -60,8 +60,7 @@ const Login = () => {
     try {
       const result = await login(data.username, data.password, data.rememberMe ?? true);
       toast.success(t('common.success'));
-      const role = result?.data?.user?.role;
-      navigate(role === 'admin' ? '/admin' : '/app');
+      navigate(getPostAuthPath(result?.data?.user));
     } catch (error) {
       const message = error.response?.data?.message || t('auth.invalidCredentials');
       toast.error(message);

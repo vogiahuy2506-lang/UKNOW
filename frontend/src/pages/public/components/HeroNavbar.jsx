@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
 import LanguageSwitcher from '../../../components/LanguageSwitcher';
 import { useI18n } from '../../../i18n';
+import { getPostAuthPath } from '../../../utils/authRedirect';
 
 const AVATAR_STYLES = {
   admin: 'from-purple-500 to-violet-600',
@@ -12,7 +13,7 @@ const AVATAR_STYLES = {
   user: 'from-orange-500 to-red-500',
 };
 
-function UserMenu({ user, logout }) {
+function UserMenu({ user, logout, activeContext }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -30,7 +31,8 @@ function UserMenu({ user, logout }) {
     navigate('/login');
   };
 
-  const dashboardPath = user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/app';
+  const dashboardPath = getPostAuthPath(user, activeContext);
+  const dashboardLabel = dashboardPath === '/' ? t('navbar.home') : t('navbar.adminDashboard');
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
   const initial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
   const displayName = user?.fullName || user?.username || t('navbar.myAccount');
@@ -60,7 +62,7 @@ function UserMenu({ user, logout }) {
             className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <LuLayoutDashboard className="w-4 h-4 text-gray-400" />
-            {t('navbar.adminDashboard')}
+            {dashboardLabel}
           </Link>
           <button
             onClick={handleLogout}
@@ -78,7 +80,7 @@ function UserMenu({ user, logout }) {
 export default function HeroNavbar() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, user, logout, activeContext } = useAuthStore();
   const { pathname } = useLocation();
 
   const isActive = (to) => to === '/' ? pathname === '/' : pathname.startsWith(to);
@@ -121,7 +123,7 @@ export default function HeroNavbar() {
 
             {isAuthenticated ? (
               <div className="hidden md:block">
-                <UserMenu user={user} logout={logout} />
+                <UserMenu user={user} logout={logout} activeContext={activeContext} />
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-1.5">
@@ -174,7 +176,7 @@ export default function HeroNavbar() {
             <div className="border-t border-neutral-100 mt-2 pt-2 flex flex-col gap-1">
               {isAuthenticated ? (
                 <Link
-                  to="/app"
+                  to={getPostAuthPath(user, activeContext)}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2 px-4 py-2.5 text-[14px] font-medium text-neutral-700 hover:bg-neutral-50 rounded-xl transition-colors"
                 >

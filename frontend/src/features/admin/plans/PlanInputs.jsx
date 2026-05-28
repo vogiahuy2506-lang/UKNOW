@@ -2,15 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { useI18n } from '../../../i18n';
+import { normalizeMoneyValue } from './planUtils.jsx';
 
 // ── PriceInput ────────────────────────────────────────────────────────────────
 export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
   const { t } = useI18n();
-  const fmt = (n) => (n === '' || n === null || n === undefined) ? '' : Number(n).toLocaleString('vi-VN');
+  const fmt = (n) => {
+    const normalized = normalizeMoneyValue(n);
+    return normalized === '' ? '' : Number(normalized).toLocaleString('vi-VN');
+  };
 
   const handleChange = (e) => {
-    const digits = e.target.value.replace(/\./g, '').replace(/\D/g, '');
-    onChange(digits === '' ? 0 : Number(digits));
+    const normalized = normalizeMoneyValue(e.target.value);
+    onChange(normalized === '' ? 0 : normalized);
   };
 
   return (

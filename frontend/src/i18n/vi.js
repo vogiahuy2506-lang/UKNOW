@@ -4224,7 +4224,8 @@ export default {
   // Unauthorized Screen
   unauthorized: {
     title: 'Không có quyền truy cập',
-    description: 'Trang này chỉ dành cho quản trị viên hệ thống (Super Admin).',
+    badge: 'No access',
+    description: 'Tài khoản hoặc vai trò workspace hiện tại của bạn chưa có quyền mở trang này.',
     loginWith: 'Đăng nhập với tài khoản',
     goToMyPage: 'Về trang của tôi',
     logout: 'Đăng xuất',
@@ -4245,11 +4246,15 @@ export default {
   // No Plan Screen
   noPlan: {
     title: 'Bạn chưa có gói dịch vụ',
+    accountReady: 'Tài khoản đã sẵn sàng',
     description: 'Tài khoản của bạn chưa đăng ký gói dịch vụ riêng.',
     descriptionWithMembership: ' Bạn có thể vào workspace của doanh nghiệp bạn đang làm nhân viên, hoặc tự mua gói.',
     descriptionWithoutMembership: ' Để truy cập trang quản trị và sử dụng các tính năng, bạn cần đăng ký một gói phù hợp.',
     enterWorkspace: 'Vào workspace của doanh nghiệp',
     employee: 'Nhân viên',
+    signedInAs: 'Đang đăng nhập',
+    goHome: 'Về trang chủ',
+    homeHint: 'Bạn có thể tiếp tục xem Founder AI ở trang chủ, sau đó chọn gói phù hợp khi đã sẵn sàng.',
     viewPlans: 'Xem các gói dịch vụ',
     logout: 'Đăng xuất',
   },

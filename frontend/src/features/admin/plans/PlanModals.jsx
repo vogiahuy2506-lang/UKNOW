@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
-import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL, MODAL_FORM } from './planUtils.jsx';
+import { renderModal, emptyForm, fmtVnd, MODAL_SM, MODAL_PANEL, MODAL_FORM, normalizeMoneyValue } from './planUtils.jsx';
 import { PriceInput, FeatureEditor, EmailAutocomplete, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput } from './PlanInputs';
 import { useI18n } from '../../../i18n';
 
@@ -134,6 +134,16 @@ const FormSection = ({ kicker, title, description, children }) => (
   </section>
 );
 
+const normalizePlanPayload = (form) => {
+  const price = normalizeMoneyValue(form.price);
+  const priceYearly = normalizeMoneyValue(form.priceYearly);
+  return {
+    ...form,
+    price: price === '' ? 0 : price,
+    priceYearly: priceYearly && priceYearly > 0 ? priceYearly : '',
+  };
+};
+
 const ModalShell = ({ title, subtitle, children, footer, onSubmit }) => (
   <form onSubmit={onSubmit} className="flex max-h-[92vh] flex-col">
     <div className="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
@@ -202,11 +212,12 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     }
     try {
       setIsSaving(true);
+      const payload = normalizePlanPayload(form);
       if (isEdit) {
-        await adminPlansApiService.updatePlan(plan.id, form);
+        await adminPlansApiService.updatePlan(plan.id, payload);
         toast.success(t('adminPlans.planUpdated'));
       } else {
-        await adminPlansApiService.createPlan(form);
+        await adminPlansApiService.createPlan(payload);
         toast.success(t('adminPlans.planCreated'));
       }
       onSaved();
@@ -437,7 +448,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
     try {
       setIsSaving(true);
-      await adminPlansApiService.updatePlan(plan.id, { ...form, isActive: false, features: [] });
+      await adminPlansApiService.updatePlan(plan.id, { ...normalizePlanPayload(form), isActive: false, features: [] });
       toast.success(t('adminPlans.planUpdated'));
       onSaved();
       onClose();
@@ -669,7 +680,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     if (!form.price || form.price <= 0) { toast.error(t('adminPlans.priceRequired')); return; }
     try {
       setIsSaving(true);
-      const res = await adminPlansApiService.createCustomPlanWithPayment(form);
+      const res = await adminPlansApiService.createCustomPlanWithPayment(normalizePlanPayload(form));
       onSaved();
       setPaymentResult({ ...res.data.data, planName: form.name, userEmail: form.userEmail });
     } catch (err) {

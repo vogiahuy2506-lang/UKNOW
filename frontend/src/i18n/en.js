@@ -4227,7 +4227,8 @@ export default {
   // Unauthorized Screen
   unauthorized: {
     title: 'Access Denied',
-    description: 'This page is for system administrators only (Super Admin).',
+    badge: 'No access',
+    description: 'Your current account or workspace role does not have permission to open this page.',
     loginWith: 'Logged in with account',
     goToMyPage: 'Go to My Page',
     logout: 'Logout',
@@ -4248,11 +4249,15 @@ export default {
   // No Plan Screen
   noPlan: {
     title: 'You have no service plan',
+    accountReady: 'Account created',
     description: 'Your account has not subscribed to any service plan.',
     descriptionWithMembership: ' You can enter the workspace of the business you are working for as an employee, or purchase a plan yourself.',
     descriptionWithoutMembership: ' To access the admin panel and use features, you need to subscribe to a suitable plan.',
     enterWorkspace: 'Enter Business Workspace',
     employee: 'Employee',
+    signedInAs: 'Signed in as',
+    goHome: 'Go to Home',
+    homeHint: 'You can continue exploring Founder AI from the home page, then choose a plan when you are ready.',
     viewPlans: 'View Service Plans',
     logout: 'Logout',
   },
