@@ -574,6 +574,71 @@ D. ZALO NHÓM:
       : 'Luôn trả lời bằng tiếng Việt. Tất cả trường "content" trong JSON phải viết bằng tiếng Việt.';
   }
 
+  _lastUserMessageContent(history = []) {
+    const lastUserMessage = [...history].reverse().find((message) => message?.role === 'user');
+    return String(lastUserMessage?.content || '');
+  }
+
+  _hasExplicitCustomerSource(text = '') {
+    const normalized = String(text || '').toLowerCase();
+    return /google\s*sheet|spreadsheet|docs\.google\.com\/spreadsheets|excel|xlsx|xls|csv|file|t[eệ]p|tập tin|landing page|khách hàng trong hệ thống|database|db|crm/.test(normalized);
+  }
+
+  _looksLikeCampaignRequest(text = '') {
+    const normalized = String(text || '').toLowerCase();
+    return /chiến dịch|chien dich|campaign|email|zalo|khách|khach|customer|tour|chuyến đi|chuyen di|du lịch|du lich/.test(normalized);
+  }
+
+  _asksOnlyForGoogleSheet(response) {
+    const text = [
+      response?.content,
+      ...(Array.isArray(response?.missing_fields) ? response.missing_fields : []),
+    ].join(' ').toLowerCase();
+
+    return response?.type === 'ask_more'
+      && /google\s*sheet|spreadsheet|sheet\s*url|đường dẫn google sheet|docs\.google\.com\/spreadsheets/.test(text);
+  }
+
+  _buildCampaignDataSourceQuestion(locale = 'vi') {
+    const isEnglish = locale === 'en';
+    return {
+      type: 'ask_campaign_details',
+      content: isEnglish
+        ? 'I can create this customer care campaign. Before setting it up, please choose where the customer list should come from.'
+        : 'Tôi có thể tạo chiến dịch chăm sóc khách hàng này. Trước khi thiết lập, bạn chọn giúp tôi nguồn danh sách khách hàng nhé.',
+      missing_fields: [],
+      data: {
+        campaignName: isEnglish ? 'Travel customer care campaign' : 'Chiến dịch chăm sóc khách du lịch',
+        description: isEnglish
+          ? 'Send thank-you messages after a trip and a follow-up promotion later.'
+          : 'Gửi lời cảm ơn sau chuyến đi và gửi ưu đãi tour mới sau một khoảng thời gian.',
+        questions: [
+          {
+            id: 'dataSource',
+            label: isEnglish ? 'Where should the customer list come from?' : 'Lấy danh sách khách từ đâu?',
+            options: [
+              { value: 'db', label: isEnglish ? 'Customers already in the system' : 'Khách hàng có sẵn trong hệ thống' },
+              { value: 'sheet', label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet' },
+              { value: 'landing', label: isEnglish ? 'Landing page leads' : 'Danh sách đăng ký từ Landing Page' },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  _guardCampaignDataSourceResponse(response, history = [], locale = 'vi') {
+    const lastUserText = this._lastUserMessageContent(history);
+    if (
+      this._looksLikeCampaignRequest(lastUserText)
+      && this._asksOnlyForGoogleSheet(response)
+      && !this._hasExplicitCustomerSource(lastUserText)
+    ) {
+      return this._buildCampaignDataSourceQuestion(locale);
+    }
+    return response;
+  }
+
   async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi' }) {
     let contextBlock = '';
 
@@ -1124,7 +1189,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
-    return this._runChat(systemPrompt, history, files);
+    const response = await this._runChat(systemPrompt, history, files);
+    return this._guardCampaignDataSourceResponse(response, history, locale);
   }
 
   /**
