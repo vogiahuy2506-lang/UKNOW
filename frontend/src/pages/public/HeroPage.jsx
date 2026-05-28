@@ -127,7 +127,7 @@ export default function HeroPage() {
               {t('heroPage.featuresBadge')}
             </span>
             <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
-              {t('heroPage.featuresTitle')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{t('aboutPage.featuresSubtitle').split(' ').slice(0, 2).join(' ')}</span>
+              {t('heroPage.featuresTitle')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{t('heroPage.featuresTitleHighlight')}</span>
             </h2>
             <p className="text-xl text-slate-600 leading-relaxed">
               {t('heroPage.featuresSubtitle')}

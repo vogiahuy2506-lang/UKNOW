@@ -4001,6 +4001,7 @@ export default {
     statsUptime: 'Uptime Commitment',
     featuresBadge: 'KEY FEATURES',
     featuresTitle: 'Comprehensive',
+    featuresTitleHighlight: 'toolkit',
     featuresSubtitle: 'All the tools you need to build a closed-loop marketing funnel and fully automate.',
     howItWorksBadge: '4-STEP PROCESS',
     howItWorksTitle: 'Launch campaigns',
