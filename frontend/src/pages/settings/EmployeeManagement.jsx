@@ -34,15 +34,6 @@ const MODAL_SM = 'relative z-10 w-full max-w-md  max-h-[85vh] rounded-xl bg-whit
 const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl overflow-hidden flex flex-col';
 const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
 
-const renderModal = (content, onClose, panelClass = MODAL_MD, t) =>
-  createPortal(
-    <div className={MODAL_OVERLAY}>
-      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label={t('common.close')} />
-      <div className={panelClass}>{content}</div>
-    </div>,
-    document.body
-  );
-
 const limitLabel = (val) => (val === null || val === undefined ? '∞' : String(val));
 
 // ── LimitField ───────────────────────────────────────────────────────────────
@@ -151,6 +142,16 @@ const EmployeeManagement = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Modal helper - defined inside component so it has access to `t`
+  const renderModal = (content, onClose, panelClass = MODAL_MD) =>
+    createPortal(
+      <div className={MODAL_OVERLAY}>
+        <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label={t('common.close')} />
+        <div className={panelClass}>{content}</div>
+      </div>,
+      document.body
+    );
 
   const createNewForm  = useForm({ defaultValues: { username: '', email: '', fullName: '' } });
   const createLinkForm = useForm({ defaultValues: { email: '' } });
@@ -671,8 +672,7 @@ const EmployeeManagement = () => {
             )}
           </div>
         </div>,
-        () => setSelectedEmployee(null),
-        t
+        () => setSelectedEmployee(null)
       )}
 
       {/* ── Modal thêm nhân viên (2 tab) ──────────────────────────────────────── */}
@@ -785,8 +785,7 @@ const EmployeeManagement = () => {
           </div>
         </div>,
         () => { if (!isResetting) setResetConfirmEmp(null); },
-        MODAL_SM,
-        t
+        MODAL_SM
       )}
 
       {/* ── Modal confirm xóa nhân viên ──────────────────────────────────────── */}
@@ -810,8 +809,7 @@ const EmployeeManagement = () => {
           </div>
         </div>,
         () => { if (!isDeleting) setDeleteConfirmEmp(null); },
-        MODAL_SM,
-        t
+        MODAL_SM
       )}
     </div>
   );
