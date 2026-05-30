@@ -85,7 +85,7 @@ const userMenuItems = (t) => [
       { name: t('nav.chatbotChannels'), path: '/app/settings/chatbot-channels', icon: HiOutlineChatAlt2, ownerOnly: true },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, permission: ['courses'] },
+      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap },
     ],
   },
   {
