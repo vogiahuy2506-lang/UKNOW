@@ -522,7 +522,7 @@ const EmployeeManagement = () => {
                 <div className="border-t border-gray-100 pt-5 space-y-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('employee.accountManagement')}</p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedEmployee.status !== 'pending_activation' && (
+                    {selectedEmployee.memberStatus !== 'pending_activation' && (
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}
@@ -531,7 +531,7 @@ const EmployeeManagement = () => {
                       >
                         {statusUpdatingId === selectedEmployee.id ? (
                           <div className="spinner w-4 h-4 mr-2" />
-                        ) : selectedEmployee.member_status === 'active' ? (
+                        ) : selectedEmployee.memberStatus === 'active' ? (
                           <HiOutlineLockClosed className="w-4 h-4 mr-2" />
                         ) : (
                           <HiOutlineLockOpen className="w-4 h-4 mr-2" />
@@ -541,7 +541,7 @@ const EmployeeManagement = () => {
                           : selectedEmployee.memberStatus === 'active' ? t('employee.lockAccount') : t('employee.unlockAccount')}
                       </button>
                     )}
-                    {selectedEmployee.status === 'pending_activation' ? (
+                    {selectedEmployee.memberStatus === 'pending_activation' ? (
                       <button
                         type="button"
                         onClick={() => handleResendInvite(selectedEmployee)}
