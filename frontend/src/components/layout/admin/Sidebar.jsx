@@ -85,7 +85,7 @@ const userMenuItems = (t) => [
       { name: t('nav.chatbotChannels'), path: '/app/settings/chatbot-channels', icon: HiOutlineChatAlt2, ownerOnly: true },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap },
+      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
     ],
   },
   {
@@ -153,6 +153,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.settings'), t('nav.campaigns')]);
   const { user, logout, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
+  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
   const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
   // Context-aware filtering: employee context dùng permissions do owner cấp,
   // self context (chủ tài khoản) thấy hết.
@@ -222,8 +223,15 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   // Lọc menu item theo ngữ cảnh hoạt động.
   // - ownerOnly: chỉ hiện khi đang ở context cá nhân (chủ tài khoản).
   // - permission: trong employee context phải có ít nhất 1 quyền tương ứng.
+  // - adminUsernameOnly: chỉ hiện cho tài khoản có username = "admin" hoặc nhân viên của account đó.
   const filterItem = (item) => {
     if (item.ownerOnly && isEmployeeCtx) return false;
+    if (item.adminUsernameOnly) {
+      // Chỉ hiện cho username = "admin" hoặc nhân viên của account admin
+      if (isAdminUsername) return true;
+      const ownerUsername = activeContext?.owner?.username?.toLowerCase();
+      return ownerUsername === 'admin';
+    }
     if (item.permission && isEmployeeCtx) {
       return item.permission.some((p) => ctxPermissions[p] === true);
     }
