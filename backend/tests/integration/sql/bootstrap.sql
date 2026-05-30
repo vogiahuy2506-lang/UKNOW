@@ -159,6 +159,8 @@ CREATE TABLE orders (
   payment_method VARCHAR(20) NOT NULL DEFAULT 'payos'
     CHECK (payment_method IN ('payos', 'manual', 'free')),
   note        TEXT,
+  billing_period VARCHAR(10) NOT NULL DEFAULT 'monthly'
+    CHECK (billing_period IN ('monthly', 'yearly')),
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

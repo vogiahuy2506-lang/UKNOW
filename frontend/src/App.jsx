@@ -40,7 +40,6 @@ import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
-import AboutPage from './pages/public/AboutPage';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
@@ -54,12 +53,11 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
-import NoPlanScreen from './pages/auth/NoPlanScreen';
-import RenewalScreen from './pages/auth/RenewalScreen';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import { getPostAuthPath } from './utils/authRedirect';
 
 const LoadingScreen = () => {
   const { t } = useI18n();
@@ -93,7 +91,7 @@ const ProtectedRoute = ({ children }) => {
   // Employee context: plan check dựa vào owner's plan (middleware đã xử lý server-side)
   // Frontend chỉ cần kiểm tra self context
   if (activeContext?.type === 'self' && !user?.active_plan_id) {
-    return user?.isReturningCustomer ? <RenewalScreen /> : <NoPlanScreen />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -128,9 +126,9 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
-// Redirect nếu đã đăng nhập: super_admin → /admin, còn lại → /app
+// Redirect nếu đã đăng nhập: super_admin → /admin, user có gói/employee → /app, user chưa có gói → /
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, user } = useAuthStore();
+  const { isAuthenticated, isLoading, user, activeContext } = useAuthStore();
 
   useEffect(() => {
     if (isLoading) {
@@ -143,7 +141,7 @@ const PublicRoute = ({ children }) => {
 
   if (isLoading) return <LoadingScreen />;
   if (isAuthenticated) {
-    return <Navigate to={user?.role === 'admin' ? '/admin' : '/app'} replace />;
+    return <Navigate to={getPostAuthPath(user, activeContext)} replace />;
   }
 
   return children;
@@ -204,13 +202,12 @@ function App() {
           <Route element={<PublicLayout />}>
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/contact" element={<ContactPage />} />
-          </Route>
-
-          {/* Landing Routes — old Navbar + Footer */}
-          <Route element={<LandingLayout />}>
-            <Route path="/about" element={<AboutPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/payment-success" element={<PaymentSuccessPage />} />
+          </Route>
+
+          {/* Landing Routes — legacy pages */}
+          <Route element={<LandingLayout />}>
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
             <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
           </Route>

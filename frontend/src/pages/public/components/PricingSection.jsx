@@ -6,7 +6,77 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
 import { useI18n } from '../../../i18n';
 
-const ZALO_URL = 'https://zalo.me/0388180856';
+const ZALO_URL = 'https://zalo.me/0866914382';
+
+const isContactPlan = (plan) => {
+  const code = String(plan?.code || '').trim().toLowerCase();
+  const name = String(plan?.name || '').trim().toLowerCase();
+  return code === 'custom' || code === 'contact' || name.includes('tùy chọn') || name.includes('tuỳ chọn');
+};
+
+const isFreePlan = (plan) => Number(plan?.price || 0) <= 0 && !isContactPlan(plan);
+
+const getPlanCtaLabel = (plan, t) => {
+  if (isContactPlan(plan)) return t('pricing.getQuote');
+  if (isFreePlan(plan)) return t('pricing.startTrial');
+  return t('pricing.choosePlan');
+};
+
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const getPlanTranslationKey = (plan) => {
+  const code = normalizeText(plan?.code);
+  if (code) return code;
+
+  const name = normalizeText(plan?.name)
+    .replace(/^gói\s+/, '')
+    .replace(/\s+plan$/, '');
+
+  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(name)) {
+    return name;
+  }
+  if (name.includes('tùy chọn') || name.includes('tuỳ chọn')) return 'custom';
+  return '';
+};
+
+const getTranslatedPlanName = (plan, t) => {
+  const key = getPlanTranslationKey(plan);
+  const translated = key ? t(`pricing.planNames.${key}`) : '';
+  return translated && translated !== `pricing.planNames.${key}` ? translated : plan.name;
+};
+
+const getTranslatedPlanDescription = (plan, t) => {
+  const key = getPlanTranslationKey(plan);
+  const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
+  return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;
+};
+
+const getTranslatedFeature = (feature, t) => {
+  const text = String(feature || '').trim();
+  const normalized = normalizeText(text);
+
+  const emailMonth = text.match(/^([\d.,]+)\s*email\s*\/\s*tháng$/i);
+  if (emailMonth) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonth[1] });
+
+  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin nhắn\s*)?zalo\s*\/\s*tháng$/i);
+  if (zaloMonth) return t('pricing.featureTemplates.zaloPerMonth', { n: zaloMonth[1] });
+
+  const members = text.match(/^([\d.,]+)\s*thành viên(?:\s*tham gia)?$/i);
+  if (members) return t('pricing.featureTemplates.members', { n: members[1] });
+
+  const knownFeatureKeys = {
+    'ai viết content nâng cao': 'advancedAiWriting',
+    'hỗ trợ ưu tiên 24/7': 'prioritySupport247',
+    'hỗ trợ 24/7': 'support247',
+    'hỗ trợ qua email': 'emailSupport',
+    'multi_language': 'multiLanguage',
+    'không giới hạn': 'unlimited',
+    'không hỗ trợ': 'notSupported',
+  };
+
+  const key = knownFeatureKeys[normalized];
+  return key ? t(`pricing.features.${key}`) : text;
+};
 
 // Glass mode styles — dùng cho trang /pricing với video background
 const GLASS_STYLES = [
@@ -114,12 +184,20 @@ const DYNAMIC_STYLES = [
  * - embedded (boolean): ẩn phần hero (badge + heading + subtitle) để nhúng vào trang có hero riêng.
  * - compact  (boolean): thu nhỏ padding/spacing để fit trong 1 viewport.
  */
+const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
+
+const calcSavings = (monthly, yearly) => {
+  const pct = Math.round((Number(monthly) * 12 - Number(yearly)) / (Number(monthly) * 12) * 100);
+  return pct > 0 ? pct : 0;
+};
+
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [billingPeriod, setBillingPeriod] = useState('monthly');
 
   const getPlansData = async () => {
     try {
@@ -128,7 +206,12 @@ export default function PricingSection({ embedded = false, compact = false, glas
       // Lọc các gói active và sắp xếp theo giá để hiển thị hợp lý
       const sortedPlans = (data.plans || [])
         .filter(p => p.is_active)
-        .sort((a, b) => a.price - b.price);
+        .sort((a, b) => {
+          const aContact = isContactPlan(a);
+          const bContact = isContactPlan(b);
+          if (aContact !== bContact) return aContact ? 1 : -1;
+          return Number(a.price || 0) - Number(b.price || 0);
+        });
       setPlans(sortedPlans);
     } catch (error) {
       console.error('Lỗi khi lấy dữ liệu gói:', error);
@@ -142,15 +225,17 @@ export default function PricingSection({ embedded = false, compact = false, glas
     getPlansData();
   }, []);
 
+  const hasYearlyPricing = plans.some(p => !isContactPlan(p) && p.price_yearly);
+
   const handlePlanClick = (plan) => {
-    if (plan.code === 'custom' || plan.price === 0) {
+    if (isContactPlan(plan)) {
       window.open(ZALO_URL, '_blank');
       return;
     }
     if (!isAuthenticated) {
       navigate('/login');
     } else {
-      navigate('/checkout', { state: { plan } });
+      navigate('/checkout', { state: { plan, billingPeriod } });
     }
   };
 
@@ -186,15 +271,51 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {!embedded && (
           <AnimatedSection className="text-center mb-20">
             <span className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full font-bold text-sm tracking-wide uppercase mb-6 shadow-sm border border-orange-200">
-              BẢNG GIÁ LINH HOẠT
+              {t('pricing.heroBadge')}
             </span>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 mb-6 tracking-tight">
-              Đầu tư cho sự <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">tăng trưởng</span>
+              {t('pricing.heroTitlePrefix')}{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+                {t('pricing.heroTitleHighlight')}
+              </span>
             </h2>
             <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Hệ thống gói cước được thiết kế để mở rộng cùng doanh nghiệp của bạn. Admin có thể tùy biến linh hoạt mọi cấu hình.
+              {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
+        )}
+
+        {/* Billing period toggle */}
+        {hasYearlyPricing && (
+          <div className={`flex justify-center ${compact ? 'mb-5' : 'mb-10'}`}>
+            <div className={`inline-flex items-center rounded-full p-1 gap-1 ${glass ? 'bg-white/20 backdrop-blur-sm' : 'bg-slate-100 border border-slate-200'}`}>
+              <button
+                onClick={() => setBillingPeriod('monthly')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                  billingPeriod === 'monthly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('pricing.billingMonthly')}
+              </button>
+              <button
+                onClick={() => setBillingPeriod('yearly')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
+                  billingPeriod === 'yearly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('pricing.billingYearly')}
+                {billingPeriod !== 'yearly' && (
+                  <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                    {t('pricing.saveLabel')}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
         )}
 
         {/*
@@ -211,13 +332,15 @@ export default function PricingSection({ embedded = false, compact = false, glas
           {plans.map((plan, index) => {
             // Cấp phát style động dựa trên vị trí. Gói ở giữa (index 1) thường nổi bật nhất.
             // Admin có thể thêm code "custom" để ép hiển thị nút liên hệ Zalo.
-            const isCustom = plan.code === 'custom';
+            const isCustom = isContactPlan(plan);
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
 
             const features = Array.isArray(plan.features)
               ? plan.features
               : JSON.parse(plan.features || '[]');
+            const planName = getTranslatedPlanName(plan, t);
+            const planDescription = getTranslatedPlanDescription(plan, t);
 
             return (
               <AnimatedSection key={plan.id} delay={index * 100} className="h-full">
@@ -237,7 +360,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
                   <div className={`relative z-10 flex-1 flex flex-col ${style.badge ? 'pt-5' : ''}`}>
                     <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-                      <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{plan.name}</h3>
+                      <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{planName}</h3>
                       {PlanIcon && (
                         <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl flex items-center justify-center bg-white/10 backdrop-blur-sm ${style.featureIcon}`}>
                           <PlanIcon className={compact ? 'w-5 h-5' : 'w-6 h-6'} />
@@ -245,17 +368,36 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       )}
                     </div>
 
-                    <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{plan.description}</p>
+                    <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{planDescription}</p>
 
                     <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
-                      {isCustom || plan.price === 0 ? (
+                      {isCustom ? (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
+                        </div>
+                      ) : billingPeriod === 'yearly' && plan.price_yearly ? (
+                        <div>
+                          <div className="flex items-end gap-2">
+                            <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
+                              {fmtVnd(plan.price_yearly)}
+                            </span>
+                            <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perYear')}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={`text-sm ${style.unit}`}>
+                              ≈ {fmtVnd(Math.round(Number(plan.price_yearly) / 12))} / tháng
+                            </span>
+                            {calcSavings(plan.price, plan.price_yearly) > 0 && (
+                              <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                                -{calcSavings(plan.price, plan.price_yearly)}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
-                            {(plan.price / 1000).toLocaleString('vi-VN')}K
+                            {fmtVnd(plan.price)}
                           </span>
                           <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perMonth')}</span>
                         </div>
@@ -266,7 +408,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       {features.map((feature, i) => (
                         <li key={i} className="flex items-start gap-3">
                           <FaCheckCircle className={`flex-shrink-0 w-5 h-5 mt-0.5 ${style.featureIcon}`} />
-                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{feature}</span>
+                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{getTranslatedFeature(feature, t)}</span>
                         </li>
                       ))}
                     </ul>
@@ -275,7 +417,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       onClick={() => handlePlanClick(plan)}
                       className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
                     >
-                      {isCustom || plan.price === 0 ? t('pricing.getQuote') : t('pricing.startTrial')}
+                      {getPlanCtaLabel(plan, t)}
                     </button>
                   </div>
                 </div>

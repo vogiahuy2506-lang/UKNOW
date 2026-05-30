@@ -1,5 +1,8 @@
 import db from '../../config/database.js';
 
+/** Chuẩn hoá giá trị BIGINT nullable — tránh lỗi `invalid input syntax for type bigint: ""`. */
+const toNullableBigint = (v) => (v === '' || v === null || v === undefined ? null : v);
+
 const PLAN_COLS = `
   id, code, name, price, price_yearly AS "priceYearly", description, features,
   is_active AS "isActive", is_custom AS "isCustom",
@@ -28,11 +31,18 @@ export async function findAllPlans() {
 export async function findCustomPlans({ showHidden = false } = {}) {
   const { rows } = await db.query(
     `SELECT DISTINCT ON (p.id)
-            p.id, p.code, p.name, p.price, p.description, p.is_active AS "isActive", p.is_custom AS "isCustom",
-            p.max_employees AS "maxEmployees",
-            p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
+            p.id, p.code, p.name, p.price, p.price_yearly AS "priceYearly", p.description,
+            p.is_active AS "isActive", p.is_custom AS "isCustom",
+            p.max_employees AS "maxEmployees", p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
             p.daily_zalo_limit AS "dailyZaloLimit", p.monthly_zalo_limit AS "monthlyZaloLimit",
             p.messages_per_period AS "messagesPerPeriod", p.is_fup_enabled AS "isFupEnabled",
+            p.duration_days AS "durationDays",
+            p.max_landing_pages AS "maxLandingPages", p.max_campaigns AS "maxCampaigns",
+            p.max_zalo_campaigns AS "maxZaloCampaigns",
+            p.max_zalo_group_campaigns AS "maxZaloGroupCampaigns",
+            p.max_email_campaigns AS "maxEmailCampaigns",
+            p.max_zalo_accounts AS "maxZaloAccounts", p.max_email_accounts AS "maxEmailAccounts",
+            p.max_email_templates AS "maxEmailTemplates", p.max_zalo_templates AS "maxZaloTemplates",
             p.created_at AS "createdAt",
             COALESCE(u.email,     o_user.email)     AS "assignedEmail",
             COALESCE(u.full_name, o_user.full_name) AS "assignedName",
@@ -54,6 +64,11 @@ export async function findPlanById(id) {
   return rows[0] || null;
 }
 
+export async function findPlanByCode(code) {
+  const { rows } = await db.query(`SELECT * FROM plans WHERE LOWER(code) = LOWER($1) LIMIT 1`, [code]);
+  return rows[0] || null;
+}
+
 export async function createPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive,
   isCustom = false, durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
@@ -71,7 +86,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),NOW())
      RETURNING *`,
-    [code, name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
+    [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
      messagesPerPeriod ?? null, isFupEnabled ?? false,
@@ -103,7 +118,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
          updated_at = NOW()
      WHERE id = $24
      RETURNING *`,
-    [name, price, priceYearly ?? null, description || null, JSON.stringify(features || []), maxEmployees, isActive,
+    [name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
      dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
      messagesPerPeriod ?? null, isFupEnabled ?? false,
@@ -169,7 +184,10 @@ export async function searchUserAdminsByEmail(query, limit = 8, excludeWithPlan 
 /** Tìm user_admin theo email để gán gói trực tiếp */
 export async function findUserAdminByEmail(email) {
   const { rows } = await db.query(
-    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId" FROM users WHERE email = $1`,
+    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId"
+     FROM users
+     WHERE LOWER(email) = LOWER($1)
+     LIMIT 1`,
     [email]
   );
   return rows[0] || null;
@@ -233,7 +251,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW(),NOW())
        RETURNING *`,
-      [code || null, name, price, priceYearly ?? null, description || null, maxEmployees,
+      [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
        dailyEmailLimit ?? null, monthlyEmailLimit ?? null, dailyZaloLimit ?? null, monthlyZaloLimit ?? null,
        messagesPerPeriod ?? null, isFupEnabled ?? false,

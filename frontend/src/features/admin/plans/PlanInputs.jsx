@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
+import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { useI18n } from '../../../i18n';
+import { normalizeMoneyValue } from './planUtils.jsx';
 
 // ── PriceInput ────────────────────────────────────────────────────────────────
 export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
   const { t } = useI18n();
-  const fmt = (n) => n ? Number(n).toLocaleString('vi-VN') : '';
+  const fmt = (n) => {
+    const normalized = normalizeMoneyValue(n);
+    return normalized === '' ? '' : Number(normalized).toLocaleString('vi-VN');
+  };
 
   const handleChange = (e) => {
-    const digits = e.target.value.replace(/\./g, '').replace(/\D/g, '');
-    onChange(digits === '' ? 0 : Number(digits));
+    const normalized = normalizeMoneyValue(e.target.value);
+    onChange(normalized === '' ? 0 : normalized);
   };
 
   return (
@@ -26,27 +30,36 @@ export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
 };
 
 // ── FeatureEditor ─────────────────────────────────────────────────────────────
+const normalizeFeatures = (features) => {
+  if (Array.isArray(features)) return features;
+  if (typeof features === 'string') {
+    try { return JSON.parse(features) || []; } catch { return []; }
+  }
+  return [];
+};
+
 export const FeatureEditor = ({ features, onChange }) => {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
+  const list = normalizeFeatures(features);
 
   const add = () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
-    onChange([...features, trimmed]);
+    onChange([...list, trimmed]);
     setDraft('');
   };
 
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        {features.map((f, i) => (
+        {list.map((f, i) => (
           <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
             <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
             <span className="text-sm text-gray-700 flex-1">{f}</span>
             <button
               type="button"
-              onClick={() => onChange(features.filter((_, j) => j !== i))}
+              onClick={() => onChange(list.filter((_, j) => j !== i))}
               className="text-gray-400 hover:text-red-500 transition-colors"
             >
               <HiOutlineX className="w-3.5 h-3.5" />
@@ -59,7 +72,13 @@ export const FeatureEditor = ({ features, onChange }) => {
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.nativeEvent.isComposing) return;
+            add();
+          }}
           placeholder={t('planInputs.featuresPlaceholder')}
           className="input flex-1 text-sm"
         />
@@ -175,50 +194,200 @@ export const EmployeeInput = ({ value, onChange, className = 'input w-full' }) =
   );
 };
 
-// ── DurationInput — chọn thời hạn gói (preset + tùy chỉnh) ──────────────────
-const DURATION_PRESETS = [
-  { label: 'Không giới hạn', value: '' },
-  { label: '10 ngày (dùng thử)', value: 10 },
-  { label: '30 ngày (1 tháng)', value: 30 },
-  { label: '90 ngày (3 tháng)', value: 90 },
-  { label: '365 ngày (1 năm)', value: 365 },
-  { label: 'Tùy chỉnh...', value: 'custom' },
+// ── DurationInput — nhập số + đơn vị (ngày / tháng / năm) ───────────────────
+const DURATION_UNITS_KEYS = [
+  { key: 'durationUnitDay',   value: 'day',   mult: 1   },
+  { key: 'durationUnitMonth', value: 'month', mult: 30  },
+  { key: 'durationUnitYear',  value: 'year',  mult: 365 },
 ];
 
-export const DurationInput = ({ value, onChange }) => {
-  const isCustom = value !== '' && value !== null && value !== undefined &&
-    ![10, 30, 90, 365].includes(Number(value));
-  const selectVal = isCustom ? 'custom' : (value === '' || value == null ? '' : Number(value));
+const daysToInput = (days) => {
+  if (!days) return { num: '', unit: 'day' };
+  const d = Number(days);
+  if (d % 365 === 0) return { num: d / 365, unit: 'year'  };
+  if (d % 30  === 0) return { num: d / 30,  unit: 'month' };
+  return { num: d, unit: 'day' };
+};
 
-  const handleSelect = (e) => {
-    const v = e.target.value;
-    if (v === '') { onChange(''); return; }
-    if (v === 'custom') { onChange(1); return; }
-    onChange(Number(v));
+export const DurationInput = ({ value, onChange }) => {
+  const { t } = useI18n();
+  const isEmpty = value === '' || value == null;
+  const parsed  = daysToInput(isEmpty ? '' : value);
+
+  const [unlimited, setUnlimited] = useState(isEmpty);
+  const [num,  setNum]  = useState(parsed.num);
+  const [unit, setUnit] = useState(parsed.unit);
+  const [unitMenuOpen, setUnitMenuOpen] = useState(false);
+  const unitMenuRef = useRef(null);
+
+  useEffect(() => {
+    const isNowEmpty = value === '' || value == null;
+    if (isNowEmpty) {
+      setUnlimited(true);
+    } else {
+      const p = daysToInput(value);
+      setUnlimited(false);
+      setNum(p.num);
+      setUnit(p.unit);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (unitMenuRef.current && !unitMenuRef.current.contains(e.target)) {
+        setUnitMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const emit = (n, u) => {
+    const mult = DURATION_UNITS_KEYS.find((x) => x.value === u)?.mult ?? 1;
+    const days = n === '' || n == null ? '' : Number(n) * mult;
+    onChange(days === '' || isNaN(days) ? '' : days);
+  };
+
+  const handleUnlimitedChange = (checked) => {
+    setUnlimited(checked);
+    if (checked) {
+      onChange('');
+    } else {
+      const defaultNum = num || 1;
+      setNum(defaultNum);
+      emit(defaultNum, unit);
+    }
+  };
+
+  const handleNumChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    setNum(raw === '' ? '' : Number(raw));
+    emit(raw === '' ? '' : Number(raw), unit);
+  };
+
+  const handleUnitChange = (nextUnit) => {
+    setUnit(nextUnit);
+    setUnitMenuOpen(false);
+    emit(num, nextUnit);
+  };
+
+  const totalDays = !unlimited && num !== '' && num > 0
+    ? Number(num) * (DURATION_UNITS_KEYS.find((x) => x.value === unit)?.mult ?? 1)
+    : null;
+
+  return (
+    <div className="space-y-2">
+      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_8.5rem]">
+        <button
+          type="button"
+          onClick={() => handleUnlimitedChange(!unlimited)}
+          className={`inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-all sm:w-auto ${
+            unlimited
+              ? 'bg-orange-50 border-orange-200 text-orange-700'
+              : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300'}`} />
+          {t('planInputs.durationUnlimited')}
+        </button>
+
+        {!unlimited && (
+          <>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="h-11 min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition-base focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+              placeholder="1"
+              value={num}
+              onChange={handleNumChange}
+            />
+            <div className="relative min-w-0" ref={unitMenuRef}>
+              <button
+                type="button"
+                onClick={() => setUnitMenuOpen((open) => !open)}
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-orange-300 hover:bg-orange-50/40 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              >
+                <span>{t(`planInputs.${DURATION_UNITS_KEYS.find((u) => u.value === unit)?.key || 'durationUnitDay'}`)}</span>
+                <HiChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {unitMenuOpen && (
+                <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                  {DURATION_UNITS_KEYS.map((u) => {
+                    const selected = unit === u.value;
+                    return (
+                      <button
+                        key={u.value}
+                        type="button"
+                        onClick={() => handleUnitChange(u.value)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                          selected
+                            ? 'bg-orange-50 text-orange-700'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                      >
+                        {t(`planInputs.${u.key}`)}
+                        {selected && <HiOutlineCheck className="h-4 w-4" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {totalDays !== null && unit !== 'day' && (
+        <span className="inline-flex rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+          {t('planInputs.durationEqualsNDays').replace('{n}', totalDays)}
+        </span>
+      )}
+    </div>
+  );
+};
+
+// ── LimitInput — input số với toggle "Không hỗ trợ" (-1) ─────────────────────
+/** value: '' = unlimited, -1 = not supported, number = limit */
+const LimitInput = ({ value, onChange, placeholder }) => {
+  const { t } = useI18n();
+  const isNotSupported = value === -1 || value === '-1';
+
+  const handleToggleNA = () => {
+    onChange(isNotSupported ? '' : -1);
+  };
+
+  const handleInputChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    onChange(digits === '' ? '' : Number(digits));
   };
 
   return (
     <div className="flex gap-2">
-      <select className="input flex-1" value={selectVal} onChange={handleSelect}>
-        {DURATION_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>{p.label}</option>
-        ))}
-      </select>
-      {isCustom && (
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            inputMode="numeric"
-            className="input w-24"
-            value={value}
-            onChange={(e) => {
-              const d = e.target.value.replace(/\D/g, '');
-              onChange(d === '' ? 1 : Number(d));
-            }}
-          />
-          <span className="text-sm text-gray-500 shrink-0">ngày</span>
+      {isNotSupported ? (
+        <div className="input h-11 flex-1 flex items-center bg-rose-50 border-rose-200">
+          <span className="text-sm font-semibold text-rose-600">{t('planInputs.notSupported')}</span>
         </div>
+      ) : (
+        <input
+          type="text"
+          inputMode="numeric"
+          className="input h-11 flex-1 min-w-0"
+          placeholder={placeholder || t('planInputs.noLimit')}
+          value={value ?? ''}
+          onChange={handleInputChange}
+        />
       )}
+      <button
+        type="button"
+        title={isNotSupported ? t('planInputs.noLimit') : t('planInputs.notSupported')}
+        onClick={handleToggleNA}
+        className={`shrink-0 h-11 px-3 rounded-xl border text-xs font-bold transition-all ${
+          isNotSupported
+            ? 'bg-rose-100 border-rose-300 text-rose-700 hover:bg-rose-50'
+            : 'bg-white border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-600'
+        }`}
+      >
+        N/A
+      </button>
     </div>
   );
 };
@@ -230,9 +399,8 @@ export const SendLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.sendLimits')}</p>
-      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['dailyEmailLimit',   t('planInputs.emailPerDay'),   t('planInputs.emailPerDayPlaceholder')],
           ['monthlyEmailLimit', t('planInputs.emailPerMonth'),  t('planInputs.emailPerMonthPlaceholder')],
@@ -240,17 +408,53 @@ export const SendLimitsFields = ({ form, set, hint }) => {
           ['monthlyZaloLimit',  t('planInputs.zaloPerMonth'),   t('planInputs.zaloPerMonthPlaceholder')],
         ].map(([key, label, ph]) => (
           <div key={key}>
-            <label className="block text-xs text-gray-500 mb-1">{label}</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input w-full"
-              placeholder={ph}
-              value={form[key]}
-              onChange={(e) => set(key, e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1'))}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <LimitInput value={form[key]} onChange={(v) => set(key, v)} placeholder={ph} />
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+// ── PeriodMessagesField — quota tổng theo chu kỳ gói + Fair Usage Policy ─────
+export const PeriodMessagesField = ({ form, set }) => {
+  const { t } = useI18n();
+
+  const handleInputChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    set('messagesPerPeriod', digits === '' ? '' : Number(digits));
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {t('planInputs.messagesPerPeriod')}
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            className="input h-11 w-full"
+            placeholder={t('planInputs.messagesPerPeriodPlaceholder')}
+            value={form.messagesPerPeriod ?? ''}
+            onChange={handleInputChange}
+          />
+          <p className="mt-1.5 text-xs text-slate-400">{t('planInputs.messagesPerPeriodHint')}</p>
+        </div>
+        <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded text-primary-600"
+            checked={Boolean(form.isFupEnabled)}
+            onChange={(e) => set('isFupEnabled', e.target.checked)}
+          />
+          <span className="ml-3">
+            <span className="block text-sm font-semibold text-slate-800">{t('planInputs.fupEnabled')}</span>
+            <span className="text-xs text-slate-500">{t('planInputs.fupDescription')}</span>
+          </span>
+        </label>
       </div>
     </div>
   );
@@ -263,9 +467,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700 mb-1">{t('planInputs.resourceLimits')}</p>
-      <p className="text-xs text-gray-400 mb-3">{hintText}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['maxLandingPages',       t('planInputs.landingPages')],
           ['maxCampaigns',          t('planInputs.campaigns')],
@@ -278,18 +481,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
         ].map(([key, label]) => (
           <div key={key}>
-            <label className="block text-xs text-gray-500 mb-1">{label}</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input w-full"
-              placeholder={t('planInputs.noLimit')}
-              value={form[key] ?? ''}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
-                set(key, digits === '' ? '' : Number(digits));
-              }}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
           </div>
         ))}
       </div>

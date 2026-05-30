@@ -17,6 +17,7 @@ import {
   HiOutlineArrowLeft,
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
+import { getPostAuthPath } from '../../utils/authRedirect';
 
 const registerSchema = (t) => z.object({
   username: z
@@ -208,8 +209,7 @@ const Register = () => {
     try {
       const result = await googleLogin({ access_token: tokenResponse.access_token });
       toast.success(t('register.googleLoginSuccess'));
-      const role = result?.data?.user?.role;
-      navigate(role === 'admin' ? '/admin' : '/app');
+      navigate(getPostAuthPath(result?.data?.user));
     } catch (error) {
       const message = error.response?.data?.message || t('register.googleLoginFailed');
       toast.error(message);

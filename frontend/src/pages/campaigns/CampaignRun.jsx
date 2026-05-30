@@ -68,6 +68,7 @@ const normalizeContinuousPollIntervalMinutes = (rawValue) => {
 
 const CampaignRun = () => {
   const { t } = useI18n();
+  const weeklyDayOptions = WEEKLY_DAY_OPTIONS(t);
   const [campaigns, setCampaigns] = useState([]);
   const [pausedCampaigns, setPausedCampaigns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -875,9 +876,9 @@ const CampaignRun = () => {
     }
   };
 
-  const getWeeklyDayLabelByOptions = (dayValue) => getWeeklyDayLabel(dayValue, WEEKLY_DAY_OPTIONS);
+  const getWeeklyDayLabelByOptions = (dayValue) => getWeeklyDayLabel(dayValue, weeklyDayOptions);
   const getWeeklyDayFromCronByOptions = (cronExpression = '') =>
-    getWeeklyDayFromCron(cronExpression, WEEKLY_DAY_OPTIONS);
+    getWeeklyDayFromCron(cronExpression, weeklyDayOptions);
 
   if (isLoading) {
     return (
@@ -947,7 +948,7 @@ const CampaignRun = () => {
       )}
 
       <CampaignRunModals
-        weeklyDayOptions={WEEKLY_DAY_OPTIONS}
+        weeklyDayOptions={weeklyDayOptions}
         showRunConfirmModal={showRunConfirmModal}
         closeRunConfirmModal={closeRunConfirmModal}
         runConfirmCampaign={runConfirmCampaign}

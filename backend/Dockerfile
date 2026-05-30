@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+ARG BUILD_SHA=dev
+RUN echo "Build SHA: $BUILD_SHA"
+
 # Copy toàn bộ source sau khi đã cài dependency
 COPY . .
 

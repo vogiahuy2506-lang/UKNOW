@@ -2,6 +2,7 @@ import {
   findAllPlans,
   findCustomPlans,
   findPlanById,
+  findPlanByCode,
   createPlan,
   updatePlan,
   deletePlan,
@@ -14,8 +15,23 @@ import {
   createAndAssignCustomPlan,
   getPlanUserCounts,
 } from '../../repositories/admin/adminPlans.repository.js';
-import { createOrder } from '../../repositories/payment/payment.repository.js';
+import { createOrder, deleteOrderByCode } from '../../repositories/payment/payment.repository.js';
 import payosClient from '../../utils/payos.util.js';
+
+const assertPaymentEnv = () => {
+  const missing = ['PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY', 'FRONTEND_URL']
+    .filter((key) => !String(process.env[key] || '').trim());
+  if (missing.length) {
+    throw { status: 503, message: `Thiếu cấu hình thanh toán trên server: ${missing.join(', ')}` };
+  }
+};
+
+const mapPaymentProviderError = (err) => {
+  if (err?.status) return err;
+  const message = String(err?.message || err?.desc || err?.response?.data?.desc || '').trim();
+  if (message) return { status: 502, message: `PayOS: ${message}` };
+  return { status: 502, message: 'Không thể tạo link thanh toán PayOS. Kiểm tra cấu hình PAYOS_* trên VPS.' };
+};
 
 export async function listPlans() {
   const [plans, counts] = await Promise.all([findAllPlans(), getPlanUserCounts()]);
@@ -36,6 +52,13 @@ export async function getPlan(id) {
 }
 
 const parseLimitField = (v) => (v === '' || v === null || v === undefined) ? null : Number(v);
+const parseOptionalMoneyField = (v, label = 'Giá tiền', { emptyWhenZero = false } = {}) => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw { status: 400, message: `${label} không hợp lệ` };
+  if (emptyWhenZero && n === 0) return null;
+  return n;
+};
 
 export async function createNewPlan({ code, name, price, priceYearly, description, features, maxEmployees, isActive = true,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
@@ -44,26 +67,38 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
-  return createPlan({
-    code: code?.trim() || null, name: name.trim(), price, priceYearly: priceYearly ?? null,
-    description, features, maxEmployees: maxEmployees ?? 0, isActive,
-    durationDays:            parseLimitField(durationDays),
-    dailyEmailLimit:         parseLimitField(dailyEmailLimit),
-    monthlyEmailLimit:       parseLimitField(monthlyEmailLimit),
-    dailyZaloLimit:          parseLimitField(dailyZaloLimit),
-    monthlyZaloLimit:        parseLimitField(monthlyZaloLimit),
-    messagesPerPeriod:       parseLimitField(messagesPerPeriod),
-    isFupEnabled:            isFupEnabled ?? false,
-    maxLandingPages:         parseLimitField(maxLandingPages),
-    maxCampaigns:            parseLimitField(maxCampaigns),
-    maxZaloCampaigns:        parseLimitField(maxZaloCampaigns),
-    maxZaloGroupCampaigns:   parseLimitField(maxZaloGroupCampaigns),
-    maxEmailCampaigns:       parseLimitField(maxEmailCampaigns),
-    maxZaloAccounts:         parseLimitField(maxZaloAccounts),
-    maxEmailAccounts:        parseLimitField(maxEmailAccounts),
-    maxEmailTemplates:       parseLimitField(maxEmailTemplates),
-    maxZaloTemplates:        parseLimitField(maxZaloTemplates),
-  });
+  const normalizedCode = code?.trim() || null;
+  if (normalizedCode) {
+    const existingPlan = await findPlanByCode(normalizedCode);
+    if (existingPlan) throw { status: 409, message: `Mã gói "${normalizedCode}" đã tồn tại` };
+  }
+  try {
+    return await createPlan({
+      code: normalizedCode, name: name.trim(), price, priceYearly: parseOptionalMoneyField(priceYearly, 'Giá năm', { emptyWhenZero: true }),
+      description, features, maxEmployees: maxEmployees ?? 0, isActive,
+      durationDays:            parseLimitField(durationDays),
+      dailyEmailLimit:         parseLimitField(dailyEmailLimit),
+      monthlyEmailLimit:       parseLimitField(monthlyEmailLimit),
+      dailyZaloLimit:          parseLimitField(dailyZaloLimit),
+      monthlyZaloLimit:        parseLimitField(monthlyZaloLimit),
+      messagesPerPeriod:       parseLimitField(messagesPerPeriod),
+      isFupEnabled:            Boolean(isFupEnabled),
+      maxLandingPages:         parseLimitField(maxLandingPages),
+      maxCampaigns:            parseLimitField(maxCampaigns),
+      maxZaloCampaigns:        parseLimitField(maxZaloCampaigns),
+      maxZaloGroupCampaigns:   parseLimitField(maxZaloGroupCampaigns),
+      maxEmailCampaigns:       parseLimitField(maxEmailCampaigns),
+      maxZaloAccounts:         parseLimitField(maxZaloAccounts),
+      maxEmailAccounts:        parseLimitField(maxEmailAccounts),
+      maxEmailTemplates:       parseLimitField(maxEmailTemplates),
+      maxZaloTemplates:        parseLimitField(maxZaloTemplates),
+    });
+  } catch (err) {
+    if (err?.code === '23505' && String(err?.constraint || '').includes('plans_code')) {
+      throw { status: 409, message: `Mã gói "${normalizedCode}" đã tồn tại` };
+    }
+    throw err;
+  }
 }
 
 export async function editPlan(id, payload) {
@@ -74,7 +109,7 @@ export async function editPlan(id, payload) {
   return updatePlan(id, {
     name:         payload.name.trim(),
     price:        payload.price,
-    priceYearly:  payload.priceYearly ?? null,
+    priceYearly:  parseOptionalMoneyField(payload.priceYearly, 'Giá năm', { emptyWhenZero: true }),
     description:  payload.description,
     features:     payload.features || [],
     maxEmployees: payload.maxEmployees ?? 0,
@@ -85,7 +120,7 @@ export async function editPlan(id, payload) {
     dailyZaloLimit:        parseLimitField(payload.dailyZaloLimit),
     monthlyZaloLimit:      parseLimitField(payload.monthlyZaloLimit),
     messagesPerPeriod:     parseLimitField(payload.messagesPerPeriod),
-    isFupEnabled:         payload.isFupEnabled ?? false,
+    isFupEnabled:          Boolean(payload.isFupEnabled),
     maxLandingPages:       parseLimitField(payload.maxLandingPages),
     maxCampaigns:          parseLimitField(payload.maxCampaigns),
     maxZaloCampaigns:      parseLimitField(payload.maxZaloCampaigns),
@@ -172,7 +207,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     code:                  planData.code?.trim() || null,
     name:                  planData.name.trim(),
     price:                 planData.price,
-    priceYearly:           planData.priceYearly ?? null,
+    priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm', { emptyWhenZero: true }),
     description:           planData.description || null,
     features:              planData.features || [],
     maxEmployees:          planData.maxEmployees ?? 0,
@@ -182,9 +217,9 @@ export async function createCustomPlanForUser(userEmail, planData) {
     dailyZaloLimit:        parseLimitField(planData.dailyZaloLimit),
     monthlyZaloLimit:      parseLimitField(planData.monthlyZaloLimit),
     messagesPerPeriod:     parseLimitField(planData.messagesPerPeriod),
-    isFupEnabled:         planData.isFupEnabled ?? false,
+    isFupEnabled:          Boolean(planData.isFupEnabled),
     maxLandingPages:       parseLimitField(planData.maxLandingPages),
-    maxCampaigns:         parseLimitField(planData.maxCampaigns),
+    maxCampaigns:          parseLimitField(planData.maxCampaigns),
     maxZaloCampaigns:      parseLimitField(planData.maxZaloCampaigns),
     maxZaloGroupCampaigns: parseLimitField(planData.maxZaloGroupCampaigns),
     maxEmailCampaigns:     parseLimitField(planData.maxEmailCampaigns),
@@ -210,48 +245,68 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
   if (!planData.name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (!planData.price || planData.price <= 0) throw { status: 400, message: 'Giá tiền phải lớn hơn 0 để tạo link thanh toán' };
 
-  const plan = await createPlan({
-    code:                  planData.code?.trim() || null,
-    name:                  planData.name.trim(),
-    price:                 planData.price,
-    priceYearly:           planData.priceYearly ?? null,
-    description:           planData.description || null,
-    features:              [],
-    maxEmployees:          planData.maxEmployees ?? -1,
-    isActive:              true,
-    isCustom:              true,
-    durationDays:          parseLimitField(planData.durationDays),
-    dailyEmailLimit:       parseLimitField(planData.dailyEmailLimit),
-    monthlyEmailLimit:     parseLimitField(planData.monthlyEmailLimit),
-    dailyZaloLimit:        parseLimitField(planData.dailyZaloLimit),
-    monthlyZaloLimit:      parseLimitField(planData.monthlyZaloLimit),
-    messagesPerPeriod:     parseLimitField(planData.messagesPerPeriod),
-    isFupEnabled:         planData.isFupEnabled ?? false,
-    maxLandingPages:       parseLimitField(planData.maxLandingPages),
-    maxCampaigns:          parseLimitField(planData.maxCampaigns),
-    maxZaloCampaigns:      parseLimitField(planData.maxZaloCampaigns),
-    maxZaloGroupCampaigns: parseLimitField(planData.maxZaloGroupCampaigns),
-    maxEmailCampaigns:     parseLimitField(planData.maxEmailCampaigns),
-    maxZaloAccounts:       parseLimitField(planData.maxZaloAccounts),
-    maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
-    maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
-    maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
-  });
+  assertPaymentEnv();
 
-  const orderCode = Date.now();
-  await createOrder({ orderCode, planId: plan.id, amount: plan.price, userEmail: user.email, userId: user.id });
+  let plan = null;
+  let orderCode = null;
+  try {
+    plan = await createPlan({
+      code:                  planData.code?.trim() || null,
+      name:                  planData.name.trim(),
+      price:                 planData.price,
+      priceYearly:           parseOptionalMoneyField(planData.priceYearly, 'Giá năm', { emptyWhenZero: true }),
+      description:           planData.description || null,
+      features:              [],
+      maxEmployees:          planData.maxEmployees ?? -1,
+      isActive:              true,
+      isCustom:              true,
+      durationDays:          parseLimitField(planData.durationDays),
+      dailyEmailLimit:       parseLimitField(planData.dailyEmailLimit),
+      monthlyEmailLimit:     parseLimitField(planData.monthlyEmailLimit),
+      dailyZaloLimit:        parseLimitField(planData.dailyZaloLimit),
+      monthlyZaloLimit:      parseLimitField(planData.monthlyZaloLimit),
+      messagesPerPeriod:     parseLimitField(planData.messagesPerPeriod),
+      isFupEnabled:          Boolean(planData.isFupEnabled),
+      maxLandingPages:       parseLimitField(planData.maxLandingPages),
+      maxCampaigns:          parseLimitField(planData.maxCampaigns),
+      maxZaloCampaigns:      parseLimitField(planData.maxZaloCampaigns),
+      maxZaloGroupCampaigns: parseLimitField(planData.maxZaloGroupCampaigns),
+      maxEmailCampaigns:     parseLimitField(planData.maxEmailCampaigns),
+      maxZaloAccounts:       parseLimitField(planData.maxZaloAccounts),
+      maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
+      maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
+      maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
+    });
 
-  const paymentLink = await payosClient.paymentRequests.create({
-    orderCode:   Number(orderCode),
-    amount:      Number(plan.price),
-    description: plan.name.substring(0, 25),
-    returnUrl:   `${process.env.FRONTEND_URL}/payment-success`,
-    cancelUrl:   `${process.env.FRONTEND_URL}/about`,
-    buyerEmail:  user.email,
-    buyerName:   user.full_name || undefined,
-  });
+    orderCode = Date.now();
+    const amount = Math.round(Number(plan.price));
+    await createOrder({ orderCode, planId: plan.id, amount, userEmail: user.email, userId: user.id });
+  } catch (err) {
+    if (plan?.id) {
+      try { await deletePlan(plan.id); } catch { /* best-effort cleanup */ }
+    }
+    throw err;
+  }
 
-  return { plan, user, checkoutUrl: paymentLink.checkoutUrl, qrCode: paymentLink.qrCode, orderCode };
+  try {
+    const amount = Math.round(Number(plan.price));
+    const paymentLink = await payosClient.paymentRequests.create({
+      orderCode:   Number(orderCode),
+      amount,
+      description: plan.name.substring(0, 25),
+      returnUrl:   `${process.env.FRONTEND_URL}/payment-success`,
+      cancelUrl:   `${process.env.FRONTEND_URL}/pricing`,
+      buyerEmail:  user.email,
+      buyerName:   user.fullName || undefined,
+    });
+
+    return { plan, user, checkoutUrl: paymentLink.checkoutUrl, qrCode: paymentLink.qrCode, orderCode };
+  } catch (err) {
+    try { await deleteOrderByCode(orderCode); } catch { /* best-effort cleanup */ }
+    try { await deletePlan(plan.id); } catch { /* best-effort cleanup */ }
+    if (err?.status) throw err;
+    throw mapPaymentProviderError(err);
+  }
 }
 
 /** Tìm user_admin theo email gần đúng (dùng cho autocomplete). */

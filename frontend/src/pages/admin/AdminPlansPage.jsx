@@ -13,6 +13,33 @@ const SkeletonGrid = () => (
   </div>
 );
 
+const buildPlanUpdatePayload = (plan, overrides = {}) => ({
+  name: plan.name,
+  price: Number(plan.price ?? 0),
+  priceYearly: plan.priceYearly ?? '',
+  description: plan.description || '',
+  features: plan.features || [],
+  maxEmployees: Number(plan.maxEmployees ?? 0),
+  isActive: plan.isActive ?? true,
+  durationDays: plan.durationDays ?? '',
+  dailyEmailLimit: plan.dailyEmailLimit ?? '',
+  monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
+  dailyZaloLimit: plan.dailyZaloLimit ?? '',
+  monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+  messagesPerPeriod: plan.messagesPerPeriod ?? '',
+  isFupEnabled: plan.isFupEnabled ?? false,
+  maxLandingPages: plan.maxLandingPages ?? '',
+  maxCampaigns: plan.maxCampaigns ?? '',
+  maxZaloCampaigns: plan.maxZaloCampaigns ?? '',
+  maxZaloGroupCampaigns: plan.maxZaloGroupCampaigns ?? '',
+  maxEmailCampaigns: plan.maxEmailCampaigns ?? '',
+  maxZaloAccounts: plan.maxZaloAccounts ?? '',
+  maxEmailAccounts: plan.maxEmailAccounts ?? '',
+  maxEmailTemplates: plan.maxEmailTemplates ?? '',
+  maxZaloTemplates: plan.maxZaloTemplates ?? '',
+  ...overrides,
+});
+
 const AdminPlansPage = () => {
   const { t } = useI18n();
   const [tab, setTab]                 = useState('public');
@@ -65,20 +92,7 @@ const AdminPlansPage = () => {
 
   const handleToggleVisibility = async (plan) => {
     try {
-      await adminPlansApiService.updatePlan(plan.id, {
-        name: plan.name,
-        price: parseInt(plan.price, 10),
-        description: plan.description,
-        features: plan.features || [],
-        maxEmployees: parseInt(plan.maxEmployees ?? 0, 10),
-        isActive: !plan.isActive,
-        dailyEmailLimit: plan.dailyEmailLimit ?? null,
-        monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
-        dailyZaloLimit: plan.dailyZaloLimit ?? null,
-        monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
-        messagesPerPeriod: plan.messagesPerPeriod ?? null,
-        isFupEnabled: plan.isFupEnabled ?? false,
-      });
+      await adminPlansApiService.updatePlan(plan.id, buildPlanUpdatePayload(plan, { isActive: !plan.isActive }));
       toast.success(plan.isActive ? t('adminPlans.planHidden') : t('adminPlans.planVisible'));
       fetchPlans();
     } catch (err) {
@@ -88,20 +102,7 @@ const AdminPlansPage = () => {
 
   const handleRestore = async (plan) => {
     try {
-      await adminPlansApiService.updatePlan(plan.id, {
-        name: plan.name,
-        price: parseInt(plan.price, 10),
-        description: plan.description,
-        features: plan.features || [],
-        maxEmployees: parseInt(plan.maxEmployees ?? 0, 10),
-        isActive: true,
-        dailyEmailLimit: plan.dailyEmailLimit ?? null,
-        monthlyEmailLimit: plan.monthlyEmailLimit ?? null,
-        dailyZaloLimit: plan.dailyZaloLimit ?? null,
-        monthlyZaloLimit: plan.monthlyZaloLimit ?? null,
-        messagesPerPeriod: plan.messagesPerPeriod ?? null,
-        isFupEnabled: plan.isFupEnabled ?? false,
-      });
+      await adminPlansApiService.updatePlan(plan.id, buildPlanUpdatePayload(plan, { isActive: true }));
       toast.success(`${t('adminPlans.restored')} "${plan.name}"`);
       fetchCustomPlans();
     } catch (err) {
@@ -241,7 +242,12 @@ const AdminPlansPage = () => {
       {editPlan && (
         editPlan !== 'new' && editPlan.is_custom
           ? <CustomPlanEditModal plan={editPlan} onClose={() => setEditPlan(null)} onSaved={handleRefresh} />
-          : <PlanFormModal plan={editPlan === 'new' ? null : editPlan} onClose={() => setEditPlan(null)} onSaved={handleRefresh} />
+          : <PlanFormModal
+              plan={editPlan === 'new' ? null : editPlan}
+              existingPlanCodes={plans.map((plan) => plan.code)}
+              onClose={() => setEditPlan(null)}
+              onSaved={handleRefresh}
+            />
       )}
       {assignPlan && (
         <AssignModal plan={assignPlan} onClose={() => setAssignPlan(null)} onAssigned={fetchPlans} />

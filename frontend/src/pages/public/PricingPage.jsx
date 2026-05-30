@@ -1,6 +1,9 @@
 import PricingSection from './components/PricingSection';
+import { useI18n } from '../../i18n';
 
 export default function PricingPage() {
+  const { t } = useI18n();
+
   return (
     <div className="relative min-h-screen">
       <div className="relative pt-4 pb-6">
@@ -13,7 +16,7 @@ export default function PricingPage() {
             className="font-black text-white"
             style={{ fontSize: 'clamp(28px, 4vw, 48px)', lineHeight: 1.05, letterSpacing: '-0.02em' }}
           >
-            Bảng giá
+            {t('pricing.title')}
           </h1>
         </div>
 

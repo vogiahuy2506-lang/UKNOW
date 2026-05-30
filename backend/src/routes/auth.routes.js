@@ -57,9 +57,14 @@ router.post('/login',
 // Đăng nhập Google
 router.post('/google-login',
   [
-    body('credential')
-      .notEmpty()
-      .withMessage('Credential không được để trống')
+    body().custom((payload) => {
+      const hasCredential = typeof payload?.credential === 'string' && payload.credential.trim();
+      const hasAccessToken = typeof payload?.access_token === 'string' && payload.access_token.trim();
+      if (!hasCredential && !hasAccessToken) {
+        throw new Error('Credential hoặc access token không được để trống');
+      }
+      return true;
+    })
   ],
   handleValidationErrors,
   authController.googleLogin.bind(authController)

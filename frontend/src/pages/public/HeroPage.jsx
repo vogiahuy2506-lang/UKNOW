@@ -68,11 +68,13 @@ export default function HeroPage() {
 
           <h1
             className="mt-5 sm:mt-6 max-w-4xl text-white"
-            style={{ fontSize: 'clamp(32px, 7vw, 68px)', lineHeight: 1.05, fontWeight: 500, letterSpacing: '-0.02em' }}
+            style={{ fontSize: 'clamp(32px, 7vw, 68px)', lineHeight: 1.05, fontWeight: 500, letterSpacing: 0 }}
           >
-            Shaping{' '}
-            <span style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', fontWeight: 400 }}>Marketing</span>
-            <br />of tomorrow
+            {t('heroPage.heroTitleLine1')}{' '}
+            <span style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', fontWeight: 400 }}>
+              {t('heroPage.heroTitleAccent')}
+            </span>
+            <br />{t('heroPage.heroTitleLine2')}
           </h1>
 
           <p
@@ -125,7 +127,7 @@ export default function HeroPage() {
               {t('heroPage.featuresBadge')}
             </span>
             <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
-              {t('heroPage.featuresTitle')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{t('aboutPage.featuresSubtitle').split(' ').slice(0, 2).join(' ')}</span>
+              {t('heroPage.featuresTitle')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{t('heroPage.featuresTitleHighlight')}</span>
             </h2>
             <p className="text-xl text-slate-600 leading-relaxed">
               {t('heroPage.featuresSubtitle')}

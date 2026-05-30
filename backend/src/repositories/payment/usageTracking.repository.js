@@ -77,6 +77,9 @@ class UsageTrackingRepository {
          p.max_employees,
          p.max_landing_pages,
          p.max_campaigns,
+         p.max_zalo_campaigns,
+         p.max_zalo_group_campaigns,
+         p.max_email_campaigns,
          p.max_zalo_accounts,
          p.max_email_accounts,
          p.max_email_templates,
@@ -84,7 +87,9 @@ class UsageTrackingRepository {
          p.daily_email_limit,
          p.monthly_email_limit,
          p.daily_zalo_limit,
-         p.monthly_zalo_limit
+         p.monthly_zalo_limit,
+         p.messages_per_period,
+         p.is_fup_enabled
        FROM users u
        JOIN plans p ON p.id = u.active_plan_id
        WHERE u.id = $1`,

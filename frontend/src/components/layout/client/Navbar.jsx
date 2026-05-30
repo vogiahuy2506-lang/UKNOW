@@ -11,7 +11,7 @@ import founderaiLogo from '../../../assets/icons/founderai-logo.png';
  * nên không cần lặp lại ở navbar.
  */
 const NAV_LINKS = [
-  { kind: 'route', to: '/',        label: 'Trang chủ', matchPaths: ['/', '/about'] },
+  { kind: 'route', to: '/',        label: 'Trang chủ', matchPaths: ['/'] },
   { kind: 'route', to: '/pricing', label: 'Bảng giá',  matchPaths: ['/pricing'] },
   { kind: 'route', to: '/contact', label: 'Liên hệ',   matchPaths: ['/contact'] },
 ];
