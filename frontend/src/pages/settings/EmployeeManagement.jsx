@@ -578,7 +578,7 @@ const EmployeeManagement = () => {
             {activeTab === 'permissions' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {PERMISSION_FIELDS.map(({ keys, label }) => {
+                  {PERMISSION_FIELDS(t).map(({ keys, label }) => {
                     const isChecked = keys.some((k) => permState[k] === true);
                     return (
                       <label key={keys[0]} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
