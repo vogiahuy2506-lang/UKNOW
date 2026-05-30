@@ -385,7 +385,7 @@ const CustomEdge = ({
           cursor: 'pointer',
         }}
       />
-      {isHovered && (
+      {isHovered && labelX != null && labelY != null && (
         <foreignObject width={24} height={24} x={labelX - 12} y={labelY - 12} style={{ overflow: 'visible' }}>
           <div
             className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 shadow-md"
@@ -395,7 +395,7 @@ const CustomEdge = ({
           </div>
         </foreignObject>
       )}
-      {label && !isHovered && (
+      {label && !isHovered && labelX != null && labelY != null && (
         <foreignObject width={150} height={30} x={labelX - 75} y={labelY - 15} className="overflow-visible">
           <div className="flex items-center justify-center">
             <span className="bg-white px-2 py-0.5 text-xs text-gray-500 whitespace-nowrap">{label}</span>
