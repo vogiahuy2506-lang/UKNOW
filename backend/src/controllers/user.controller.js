@@ -1,5 +1,22 @@
-import db from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import {
+  createLegacyEmployee,
+  findLegacyEmployees,
+  findPasswordHashByUserId,
+  findProfileBase,
+  findProfileBaseFallback,
+  findProfilePlan,
+  findProfileUsageCounts,
+  findRoleAndLimits,
+  findRoleAndLimitsFallback,
+  findSuccessfulOrdersForUser,
+  findUserByEmailExceptId,
+  resetLegacyEmployeePassword,
+  updateLegacyEmployeeLimits,
+  updateLegacyEmployeeStatus,
+  updatePasswordHash,
+  updateProfile as updateProfileInDb,
+} from '../repositories/user/user.repository.js';
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 const EMPLOYEE_LIMIT_KEYS = {
@@ -10,28 +27,6 @@ const EMPLOYEE_LIMIT_KEYS = {
   maxZaloTemplates: 'max_zalo_templates',
   maxLandingPages: 'max_landing_pages',
 };
-const PROFILE_LIMIT_COLUMNS = `
-  u.max_campaigns,
-  u.max_zalo_accounts,
-  u.max_email_accounts,
-  u.max_email_templates,
-  u.max_zalo_templates,
-  u.max_landing_pages
-`;
-
-const PLAN_COLUMNS = `
-  p.id          AS plan_id,
-  p.name        AS plan_name,
-  p.code        AS plan_code,
-  p.price       AS plan_price,
-  p.features    AS plan_features,
-  p.max_employees AS plan_max_employees,
-  p.daily_email_limit,
-  p.monthly_email_limit,
-  p.daily_zalo_limit,
-  p.monthly_zalo_limit
-`;
-
 /**
  * Chuẩn hóa giá trị giới hạn từ request body.
  *
@@ -119,54 +114,22 @@ class UserController {
       const userId = req.user.id;
 
       // 1. User base info — separate try/catch only for missing limit columns
-      let result;
+      let userRow;
       try {
-        result = await db.query(
-          `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
-                  u.role, u.active_plan_id, u.subscription_expires_at,
-                  ${PROFILE_LIMIT_COLUMNS},
-                  u.created_at, u.last_login_at, r.role_code, r.role_name
-           FROM users u
-           LEFT JOIN roles r ON u.id_role = r.id
-           WHERE u.id = $1`,
-          [userId]
-        );
+        userRow = await findProfileBase(userId);
       } catch {
         // Fallback khi migration chưa chạy đủ (thiếu cột limit hoặc subscription_expires_at)
-        result = await db.query(
-          `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
-                  u.role, u.active_plan_id,
-                  NULL AS subscription_expires_at,
-                  NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
-                  NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
-                  NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
-                  u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
-           FROM users u WHERE u.id = $1`,
-          [userId]
-        );
+        userRow = await findProfileBaseFallback(userId);
       }
 
-      if (result.rows.length === 0) {
+      if (!userRow) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
       }
-
-      const userRow = result.rows[0];
 
       // 2. Resolve plan — active_plan_id first, then latest order by user_id OR user_email
       let planRow = null;
       try {
-        const planResult = await db.query(
-          `SELECT ${PLAN_COLUMNS}
-           FROM plans p
-           WHERE p.id = COALESCE(
-             $1::int,
-             (SELECT o.plan_id FROM orders o
-              WHERE o.user_id = $2 OR o.user_email = $3
-              ORDER BY o.created_at DESC LIMIT 1)
-           )`,
-          [userRow.active_plan_id || null, userId, userRow.email]
-        );
-        if (planResult.rows.length > 0) planRow = planResult.rows[0];
+        planRow = await findProfilePlan({ activePlanId: userRow.active_plan_id, userId, email: userRow.email });
       } catch {
         // plan info is optional
       }
@@ -174,22 +137,7 @@ class UserController {
       // 3. Usage counts (best-effort)
       let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
       try {
-        const usageResult = await db.query(
-          `SELECT
-             COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
-               AND cj.created_at >= CURRENT_DATE) AS email_sent_today,
-             COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
-               AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS email_sent_month,
-             COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
-               AND cj.created_at >= CURRENT_DATE) AS zalo_sent_today,
-             COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
-               AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS zalo_sent_month
-           FROM customer_journey cj
-           JOIN campaigns c ON cj.campaign_id = c.id
-           WHERE c.id_user = $1`,
-          [userId]
-        );
-        if (usageResult.rows.length > 0) usageCounts = usageResult.rows[0];
+        usageCounts = await findProfileUsageCounts(userId) || usageCounts;
       } catch {
         // ignore
       }
@@ -215,14 +163,8 @@ class UserController {
       const { fullName, email, phone, avatarUrl } = req.body;
 
       if (email !== undefined) {
-        const existingEmailResult = await db.query(
-          `SELECT id
-           FROM users
-           WHERE email = $1 AND id <> $2
-           LIMIT 1`,
-          [email, userId]
-        );
-        if (existingEmailResult.rows.length > 0) {
+        const existingEmail = await findUserByEmailExceptId(email, userId);
+        if (existingEmail) {
           return res.status(400).json({
             success: false,
             message: 'Email đã được sử dụng',
@@ -230,19 +172,7 @@ class UserController {
         }
       }
 
-      const result = await db.query(
-        `UPDATE users SET 
-          full_name = COALESCE($1, full_name),
-          email = COALESCE($2, email),
-          phone = COALESCE($3, phone),
-          avatar_url = COALESCE($4, avatar_url),
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
-         RETURNING id, username, email, full_name, avatar_url, phone`,
-        [fullName, email, phone, avatarUrl, userId]
-      );
-
-      const user = result.rows[0];
+      const user = await updateProfileInDb(userId, { fullName, email, phone, avatarUrl });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -250,42 +180,21 @@ class UserController {
         });
       }
 
-      let roleAndLimitResult;
+      let roleAndLimits = null;
       try {
-        roleAndLimitResult = await db.query(
-          `SELECT r.role_code, r.role_name, ${PROFILE_LIMIT_COLUMNS},
-                  u.status, u.created_at, u.last_login_at
-           FROM users u
-           LEFT JOIN roles r ON u.id_role = r.id
-           WHERE u.id = $1
-           LIMIT 1`,
-          [userId]
-        );
+        roleAndLimits = await findRoleAndLimits(userId);
       } catch {
         // Fallback không dùng JOIN để tránh lỗi khi id_role hoặc các cột limit chưa tồn tại
         try {
-          roleAndLimitResult = await db.query(
-            `SELECT u.role AS role_code, u.role AS role_name,
-                    NULL::int AS max_campaigns,
-                    NULL::int AS max_zalo_accounts,
-                    NULL::int AS max_email_accounts,
-                    NULL::int AS max_email_templates,
-                    NULL::int AS max_zalo_templates,
-                    NULL::int AS max_landing_pages,
-                    u.status, u.created_at, u.last_login_at
-             FROM users u
-             WHERE u.id = $1
-             LIMIT 1`,
-            [userId]
-          );
+          roleAndLimits = await findRoleAndLimitsFallback(userId);
         } catch {
-          roleAndLimitResult = { rows: [] };
+          roleAndLimits = null;
         }
       }
 
       const userProfileRow = {
         ...user,
-        ...(roleAndLimitResult.rows[0] || {}),
+        ...(roleAndLimits || {}),
       };
 
       res.json({
@@ -313,12 +222,9 @@ class UserController {
       const { currentPassword, newPassword } = req.body;
 
       // Lấy mật khẩu hiện tại
-      const userResult = await db.query(
-        'SELECT password_hash FROM users WHERE id = $1',
-        [userId]
-      );
+      const user = await findPasswordHashByUserId(userId);
 
-      if (userResult.rows.length === 0) {
+      if (!user) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy người dùng'
@@ -326,7 +232,7 @@ class UserController {
       }
 
       // Kiểm tra mật khẩu hiện tại
-      const isValid = await bcrypt.compare(currentPassword, userResult.rows[0].password_hash);
+      const isValid = await bcrypt.compare(currentPassword, user.password_hash);
       
       if (!isValid) {
         return res.status(400).json({
@@ -338,10 +244,7 @@ class UserController {
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
       // Cập nhật mật khẩu
-      await db.query(
-        'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newPasswordHash, userId]
-      );
+      await updatePasswordHash(userId, newPasswordHash);
 
       res.json({
         success: true,
@@ -369,34 +272,19 @@ class UserController {
    */
   async getEmployees(req, res) {
     try {
-      let result;
+      let employees;
       try {
-        result = await db.query(
-          `SELECT u.id, u.username, u.email, u.full_name, u.phone, u.status,
-                  u.max_campaigns, u.max_zalo_accounts, u.max_email_accounts, u.max_email_templates, u.max_zalo_templates, u.max_landing_pages,
-                  u.created_at, u.last_login_at, r.role_code, r.role_name
-           FROM users u
-           JOIN roles r ON u.id_role = r.id
-           WHERE r.role_code = 'employee'
-           ORDER BY u.created_at DESC, u.id DESC`
-        );
+        employees = await findLegacyEmployees({ includeLimits: true });
       } catch (queryError) {
         if (!isMissingLimitColumnError(queryError)) throw queryError;
 
         // Fallback tương thích ngược khi DB chưa chạy migration cột giới hạn.
-        result = await db.query(
-          `SELECT u.id, u.username, u.email, u.full_name, u.phone, u.status,
-                  u.created_at, u.last_login_at, r.role_code, r.role_name
-           FROM users u
-           JOIN roles r ON u.id_role = r.id
-           WHERE r.role_code = 'employee'
-           ORDER BY u.created_at DESC, u.id DESC`
-        );
+        employees = await findLegacyEmployees({ includeLimits: false });
       }
 
       return res.json({
         success: true,
-        data: result.rows.map((row) => ({
+        data: employees.map((row) => ({
           id: row.id,
           username: row.username,
           email: row.email,
@@ -436,60 +324,33 @@ class UserController {
    * @param {import('express').Response} res
    */
   async createEmployee(req, res) {
-    const client = await db.getClient();
     try {
       const { username, email, fullName, phone } = req.body;
 
-      await client.query('BEGIN');
+      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+      const createResult = await createLegacyEmployee({
+        username,
+        email,
+        passwordHash,
+        fullName,
+        phone,
+      });
 
-      const existingUserResult = await client.query(
-        `SELECT id
-         FROM users
-         WHERE username = $1 OR email = $2
-         LIMIT 1`,
-        [username, email]
-      );
-      if (existingUserResult.rows.length > 0) {
-        await client.query('ROLLBACK');
+      if (createResult.status === 'duplicate') {
         return res.status(400).json({
           success: false,
           message: 'Username hoặc email đã tồn tại',
         });
       }
 
-      const employeeRoleResult = await client.query(
-        `SELECT id
-         FROM roles
-         WHERE role_code = 'employee'
-         LIMIT 1`
-      );
-      if (employeeRoleResult.rows.length === 0) {
-        await client.query('ROLLBACK');
+      if (createResult.status === 'missing_role') {
         return res.status(400).json({
           success: false,
           message: 'Hệ thống chưa cấu hình role nhân viên. Vui lòng chạy migration role trước.',
         });
       }
 
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
-      const createResult = await client.query(
-        `INSERT INTO users (
-          username, email, password_hash, full_name, phone, status, id_role, created_at, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, 'active', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        RETURNING id, username, email, full_name, phone, status, created_at`,
-        [
-          username,
-          email,
-          passwordHash,
-          fullName || null,
-          phone || null,
-          employeeRoleResult.rows[0].id,
-        ]
-      );
-
-      await client.query('COMMIT');
-      const employee = createResult.rows[0];
+      const employee = createResult.employee;
       return res.status(201).json({
         success: true,
         message: `Tạo tài khoản nhân viên thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
@@ -512,14 +373,11 @@ class UserController {
         },
       });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Create employee error:', error);
       return res.status(500).json({
         success: false,
         message: 'Lỗi server',
       });
-    } finally {
-      client.release();
     }
   }
 
@@ -541,18 +399,9 @@ class UserController {
         });
       }
 
-      const result = await db.query(
-        `UPDATE users u
-         SET status = $1, updated_at = CURRENT_TIMESTAMP
-         FROM roles r
-         WHERE u.id = $2
-           AND u.id_role = r.id
-           AND r.role_code = 'employee'
-         RETURNING u.id, u.status`,
-        [status, employeeId]
-      );
+      const employee = await updateLegacyEmployeeStatus(employeeId, status);
 
-      if (result.rows.length === 0) {
+      if (!employee) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy nhân viên',
@@ -563,8 +412,8 @@ class UserController {
         success: true,
         message: 'Cập nhật trạng thái nhân viên thành công',
         data: {
-          id: result.rows[0].id,
-          status: result.rows[0].status,
+          id: employee.id,
+          status: employee.status,
         },
       });
     } catch (error) {
@@ -599,18 +448,9 @@ class UserController {
       }
 
       const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
-      const result = await db.query(
-        `UPDATE users u
-         SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
-         FROM roles r
-         WHERE u.id = $2
-           AND u.id_role = r.id
-           AND r.role_code = 'employee'
-         RETURNING u.id`,
-        [passwordHash, employeeId]
-      );
+      const employee = await resetLegacyEmployeePassword(employeeId, passwordHash);
 
-      if (result.rows.length === 0) {
+      if (!employee) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy nhân viên',
@@ -621,7 +461,7 @@ class UserController {
         success: true,
         message: `Reset mật khẩu thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
         data: {
-          id: result.rows[0].id,
+          id: employee.id,
         },
       });
     } catch (error) {
@@ -670,30 +510,9 @@ class UserController {
         });
       }
 
-      const setClauses = entries.map((item, index) => `${item.dbColumn} = $${index + 1}`);
-      const values = entries.map((item) => item.value);
-      values.push(employeeId);
-
-      const updateQuery = `
-        UPDATE users u
-        SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP
-        FROM roles r
-        WHERE u.id = $${values.length}
-          AND u.id_role = r.id
-          AND r.role_code = 'employee'
-        RETURNING
-          u.id,
-          u.max_campaigns,
-          u.max_zalo_accounts,
-          u.max_email_accounts,
-          u.max_email_templates,
-          u.max_zalo_templates,
-          u.max_landing_pages
-      `;
-
-      let result;
+      let employee;
       try {
-        result = await db.query(updateQuery, values);
+        employee = await updateLegacyEmployeeLimits(employeeId, entries);
       } catch (queryError) {
         if (isMissingLimitColumnError(queryError)) {
           return res.status(400).json({
@@ -704,14 +523,13 @@ class UserController {
         throw queryError;
       }
 
-      if (result.rows.length === 0) {
+      if (!employee) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy nhân viên',
         });
       }
 
-      const employee = result.rows[0];
       return res.json({
         success: true,
         message: 'Cập nhật giới hạn tài khoản nhân viên thành công',
@@ -743,22 +561,11 @@ class UserController {
       const userId = req.user.id;
       const userEmail = req.user.email;
 
-      const result = await db.query(
-        `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
-                p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
-                p.daily_email_limit, p.monthly_email_limit,
-                p.daily_zalo_limit, p.monthly_zalo_limit
-         FROM orders o
-         LEFT JOIN plans p ON o.plan_id = p.id
-         WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'
-         ORDER BY o.created_at DESC
-         LIMIT 20`,
-        [userId, userEmail]
-      );
+      const orders = await findSuccessfulOrdersForUser({ userId, userEmail });
 
       res.json({
         success: true,
-        data: result.rows.map((row) => ({
+        data: orders.map((row) => ({
           id: row.id,
           orderCode: String(row.order_code),
           amount: Number(row.amount),
