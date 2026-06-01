@@ -18,7 +18,16 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
   const [copied, setCopied] = useState(false);
   const iframeRef = useRef(null);
 
-  const fullHtml = `<!DOCTYPE html>
+  const rawHtml = page.html || '';
+  const isFullDocument = /<!doctype\s+html/i.test(rawHtml) || /<html[\s>]/i.test(rawHtml);
+  const fullHtml = isFullDocument
+    ? rawHtml.replace(/<head([^>]*)>/i, (m, attrs) => {
+        const hasTailwind = rawHtml.includes('cdn.tailwindcss.com');
+        const tailwindTag = hasTailwind ? '' : '\n  <script src="https://cdn.tailwindcss.com"></script>';
+        const cssTag = page.css ? `\n  <style>${page.css}</style>` : '';
+        return `<head${attrs}>${tailwindTag}${cssTag}`;
+      })
+    : `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -31,7 +40,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
   </style>
 </head>
 <body>
-  ${page.html || ''}
+  ${rawHtml}
 </body>
 </html>`;
 
