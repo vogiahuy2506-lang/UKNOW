@@ -257,6 +257,7 @@ class ZaloTemplateController {
         res.status(400).json({
           success: false,
           message: zaloTemplateLimitCheck.message,
+          limitReached: true,
         });
         return;
       }

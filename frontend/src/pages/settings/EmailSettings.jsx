@@ -81,7 +81,9 @@ const EmailSettings = () => {
       setSelectedEmail(null);
       resetForm();
     } catch (error) {
-      toast.error(error.response?.data?.message || t('emailSettings.error'));
+      if (!error._upgradeToastShown) {
+        toast.error(error.response?.data?.message || t('emailSettings.error'));
+      }
     }
   };
 

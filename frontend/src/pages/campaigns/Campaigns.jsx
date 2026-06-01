@@ -207,7 +207,9 @@ const Campaigns = () => {
       navigate(`/app/campaigns/${createdCampaignId}/builder`);
       toast.success(t('campaigns.createSuccess'));
     } catch (error) {
-      toast.error(error.response?.data?.message || t('campaigns.createFailed'));
+      if (!error._upgradeToastShown) {
+        toast.error(error.response?.data?.message || t('campaigns.createFailed'));
+      }
     } finally {
       setIsCreatingCampaign(false);
     }

@@ -287,6 +287,7 @@ class CampaignController {
         return res.status(400).json({
           success: false,
           message: campaignLimitCheck.message,
+          limitReached: true,
         });
       }
 
@@ -301,7 +302,7 @@ class CampaignController {
       if (typeResourceKey) {
         const typeLimitCheck = await checkUserResourceLimit({ userId, roleCode, resourceKey: typeResourceKey });
         if (!typeLimitCheck.allowed) {
-          return res.status(400).json({ success: false, message: typeLimitCheck.message });
+          return res.status(400).json({ success: false, message: typeLimitCheck.message, limitReached: true });
         }
       }
 
@@ -1074,6 +1075,7 @@ class CampaignController {
       res.status(statusCode).json({
         success: false,
         message: statusCode === 500 ? 'Lỗi server' : (error?.message || 'Không thể nhân bản chiến dịch'),
+        ...(error?.limitReached && { limitReached: true }),
       });
     }
   }

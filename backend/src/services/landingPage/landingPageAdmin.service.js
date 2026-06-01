@@ -74,6 +74,7 @@ class LandingPageAdminService {
     if (!limitCheck.allowed) {
       const err = new Error(limitCheck.message || 'Đã đạt giới hạn landing page cho tài khoản hiện tại');
       err.statusCode = 400;
+      err.limitReached = true;
       throw err;
     }
 

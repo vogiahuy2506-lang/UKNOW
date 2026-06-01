@@ -238,6 +238,7 @@ class CampaignCrudService {
         await client.query('ROLLBACK');
         const limitError = new Error(campaignLimitCheck.message);
         limitError.statusCode = 400;
+        limitError.limitReached = true;
         throw limitError;
       }
 

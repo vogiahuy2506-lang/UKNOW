@@ -217,7 +217,9 @@ export default function LandingPagesAdminPage() {
       closeModal();
       reloadAll();
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed'));
+      if (!e._upgradeToastShown) {
+        toast.error(e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed'));
+      }
     } finally {
       setSaving(false);
     }

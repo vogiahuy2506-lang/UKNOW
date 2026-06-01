@@ -1,5 +1,10 @@
 import axios from 'axios';
+import React from 'react';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
+import { getStoredLocale } from '../utils/i18n';
+import vi from '../i18n/vi';
+import en from '../i18n/en';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -92,6 +97,12 @@ api.interceptors.request.use(
   }
 );
 
+const getLimitReachedLabel = () => {
+  const locale = getStoredLocale();
+  const tr = locale === 'en' ? en : vi;
+  return tr?.plans?.upgrade || 'Nâng cấp';
+};
+
 // Response interceptor
 api.interceptors.response.use(
   (response) => response,
@@ -100,6 +111,40 @@ api.interceptors.response.use(
     const statusCode = error.response?.status;
     const requestUrl = originalRequest?.url;
     const isAuthRequest = isAuthEndpointRequest(requestUrl);
+
+    // Khi server báo đạt giới hạn tài nguyên → show upgrade toast toàn app
+    if (error.response?.data?.limitReached) {
+      const msg = error.response.data.message;
+      toast.custom(
+        (tst) => React.createElement(
+          'div',
+          {
+            style: {
+              display: 'flex', flexDirection: 'column', gap: 6,
+              background: '#fff', borderRadius: 8, padding: '12px 16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              opacity: tst.visible ? 1 : 0, transition: 'opacity 0.2s',
+            },
+          },
+          React.createElement('p', { style: { fontSize: 14, color: '#1f2937', margin: 0 } }, msg),
+          React.createElement(
+            'button',
+            {
+              onClick: () => { toast.dismiss(tst.id); window.location.href = '/pricing'; },
+              style: {
+                alignSelf: 'flex-start', fontSize: 12, fontWeight: 600,
+                color: '#f97316', background: 'none', border: 'none',
+                cursor: 'pointer', padding: 0,
+              },
+            },
+            `${getLimitReachedLabel()} →`
+          )
+        ),
+        { duration: 8000 }
+      );
+      error._upgradeToastShown = true;
+      return Promise.reject(error);
+    }
 
     // Chỉ xử lý phiên cho các lỗi 401
     if (statusCode !== 401) {

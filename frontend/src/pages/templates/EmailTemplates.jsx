@@ -262,7 +262,9 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
       resetForm();
       fetchTemplates();
     } catch (error) {
-      toast.error(error.response?.data?.message || t('templates.error'));
+      if (!error._upgradeToastShown) {
+        toast.error(error.response?.data?.message || t('templates.error'));
+      }
     }
   };
 
