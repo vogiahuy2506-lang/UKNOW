@@ -47,9 +47,12 @@ export default function LandingPagesAdminPage() {
     setForm({
       slug: '',
       title: aiDraft.title || '',
-      htmlContent: aiDraft.html
-        ? `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`
-        : '',
+      htmlContent: (() => {
+        if (!aiDraft.html) return '';
+        const isFullDoc = /<!doctype\s+html/i.test(aiDraft.html) || /<html[\s>]/i.test(aiDraft.html);
+        if (isFullDoc) return aiDraft.html;
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><script src="https://cdn.tailwindcss.com"></script><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`;
+      })(),
       isPublished: false,
     });
     setModalOpen(true);
@@ -127,7 +130,9 @@ export default function LandingPagesAdminPage() {
     const emptyHint =
       `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><p class="p-4 text-gray-500 text-sm">${t('landingPagesAdmin.previewPlaceholder')}</p></body></html>`;
     if (!slug || slug === FIXED_LANDING_SLUG) {
-      return rawTrim || emptyHint;
+      const raw = rawTrim || emptyHint;
+      if (!raw || raw.includes('cdn.tailwindcss.com')) return raw;
+      return raw.replace(/<head([^>]*)>/i, `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`);
     }
     if (typeof window === 'undefined') {
       return rawTrim || emptyHint;
