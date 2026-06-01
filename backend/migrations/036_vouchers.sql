@@ -36,6 +36,15 @@ UPDATE orders
 SET original_amount = amount
 WHERE original_amount IS NULL;
 
+-- Mở rộng constraint payment_method để cho phép 'voucher' (thanh toán 100% bằng voucher)
+ALTER TABLE orders
+  DROP CONSTRAINT IF EXISTS orders_status_check,
+  DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+
+ALTER TABLE orders
+  ADD CONSTRAINT orders_payment_method_check
+    CHECK (payment_method IN ('payos', 'manual', 'free', 'voucher'));
+
 CREATE TABLE IF NOT EXISTS voucher_redemptions (
   id              BIGSERIAL PRIMARY KEY,
   voucher_id      BIGINT NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,

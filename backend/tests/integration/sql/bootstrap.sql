@@ -46,6 +46,8 @@ CREATE TABLE users (
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
   subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
+  messages_per_period     INTEGER,
+  is_fup_enabled          BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -138,6 +140,8 @@ CREATE TABLE plans (
   max_zalo_templates    INTEGER,
   duration_days         INTEGER,
   price_yearly          BIGINT,
+  messages_per_period   INTEGER,
+  is_fup_enabled        BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -157,10 +161,14 @@ CREATE TABLE orders (
   status      VARCHAR(20)  NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
   payment_method VARCHAR(20) NOT NULL DEFAULT 'payos'
-    CHECK (payment_method IN ('payos', 'manual', 'free')),
+    CHECK (payment_method IN ('payos', 'manual', 'free', 'voucher')),
   note        TEXT,
   billing_period VARCHAR(10) NOT NULL DEFAULT 'monthly'
     CHECK (billing_period IN ('monthly', 'yearly')),
+  original_amount NUMERIC(12, 2),
+  discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  voucher_id  BIGINT,
+  voucher_code VARCHAR(64),
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -168,6 +176,44 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
+
+-- ─── Vouchers (migration 036) ──────────────────────────────────────────
+CREATE TABLE vouchers (
+  id                         BIGSERIAL PRIMARY KEY,
+  code                       VARCHAR(64)  NOT NULL UNIQUE,
+  name                       VARCHAR(160) NOT NULL,
+  description                TEXT,
+  discount_type              VARCHAR(20)  NOT NULL CHECK (discount_type IN ('percentage', 'fixed_amount')),
+  discount_value             NUMERIC(12, 2) NOT NULL CHECK (discount_value >= 0),
+  max_discount_amount        NUMERIC(12, 2),
+  min_order_amount           NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (min_order_amount >= 0),
+  applies_to_plan_codes      TEXT[],
+  applies_to_billing_periods TEXT[],
+  starts_at                  TIMESTAMPTZ,
+  ends_at                    TIMESTAMPTZ,
+  usage_limit                INTEGER CHECK (usage_limit IS NULL OR usage_limit >= 0),
+  usage_limit_per_user       INTEGER CHECK (usage_limit_per_user IS NULL OR usage_limit_per_user >= 0),
+  used_count                 INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
+  auto_apply                 BOOLEAN NOT NULL DEFAULT FALSE,
+  stackable                  BOOLEAN NOT NULL DEFAULT FALSE,
+  is_active                  BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE orders
+  ADD CONSTRAINT orders_voucher_fk FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE SET NULL;
+
+CREATE TABLE voucher_redemptions (
+  id              BIGSERIAL PRIMARY KEY,
+  voucher_id      BIGINT NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
+  order_id        BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  user_id         BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  user_email      VARCHAR(255),
+  discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(order_id)
+);
 
 -- ─── Email module (settings + templates) ──────────────────────────────
 -- Schema tối thiểu để test CRUD email-settings và email-templates.
