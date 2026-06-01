@@ -15,7 +15,6 @@ import { toast } from 'react-hot-toast';
 import aiApi from '../../services/aiApi';
 import api from '../../services/api';
 import LandingPageCard from './components/LandingPageCard';
-import TemplateSelector from './components/TemplateSelector';
 import {
   AiContent, TemplateDraftCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
@@ -44,10 +43,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
-  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [pendingLandingData, setPendingLandingData] = useState(null);
-  const [, setSelectedTemplate] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   
@@ -780,55 +777,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  // Handle template selection and generate landing page
-  const handleTemplateSelect = async (template) => {
-    if (!pendingLandingPrompt) return;
-
-    setSelectedTemplate(template);
-    setShowTemplateSelector(false);
-    setIsTyping(true);
-
-    const templateContext = template
-      ? `Tôi muốn dựa trên template "${template.name}" (${template.category}). `
-      : 'Tôi muốn tạo landing page từ đầu. ';
-
-    const fullPrompt = templateContext + pendingLandingPrompt;
-
-    try {
-      const response = await aiApi.generateLandingPage(fullPrompt, template?.id || null, uploadedFiles, currentSessionId);
-
-      if (response.success) {
-        const { title, html, css, variables } = response.data;
-
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước, chỉnh sửa và lưu vào thư viện.`,
-          type: 'landing_page',
-          data: {
-            title,
-            html,
-            css,
-            variables,
-            templateId: template?.id,
-            templateName: template?.name,
-          },
-        }]);
-      }
-    } catch (error) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `⚠️ Lỗi khi tạo landing page: ${error.response?.data?.message || error.message}`
-      }]);
-    } finally {
-      setIsTyping(false);
-      setSelectedTemplate(null);
-      setPendingLandingPrompt(null);
-    }
-  };
-
-  // Handle generate new landing page from existing card
   const handleGenerateNewLandingPage = () => {
-    setShowTemplateSelector(true);
+    setPendingLandingPrompt(null);
+    setPendingLandingData(null);
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: 'Bạn muốn tạo landing page mới về chủ đề gì? Hãy mô tả ngắn gọn sản phẩm/dịch vụ, đối tượng khách hàng và phong cách thiết kế bạn muốn nhé! 🎨',
+    }]);
   };
 
   return (
@@ -1206,15 +1161,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         onSelect={handleSelectCampaign}
       />
 
-      {/* Template Selector Modal */}
-      <TemplateSelector
-        isOpen={showTemplateSelector}
-        onClose={() => {
-          setShowTemplateSelector(false);
-          setPendingLandingPrompt(null);
-        }}
-        onSelect={handleTemplateSelect}
-      />
     </div>
   );
 };
