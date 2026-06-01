@@ -31,6 +31,7 @@ import {
   HiOutlineOfficeBuilding,
   HiOutlineInbox,
   HiOutlineSparkles,
+  HiOutlineServer,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -65,6 +66,11 @@ const superAdminMenuItems = (t) => [
     name: t('nav.orders'),
     path: '/admin/orders',
     icon: HiOutlineClipboardList,
+  },
+  {
+    name: t('nav.serverMonitoring'),
+    path: '/admin/system',
+    icon: HiOutlineServer,
   },
 ];
 

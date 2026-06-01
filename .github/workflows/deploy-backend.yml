@@ -82,13 +82,16 @@ jobs:
               fi
               docker rm uknow-campaign-backend
             fi
+            DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 0)"
             docker run -d \
               --name uknow-campaign-backend \
               --network uknow_network \
+              --group-add "$DOCKER_GID" \
               --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
               -p 5001:5001 \
               -v /root/uknow/backend/.env:/app/.env \
+              -v /var/run/docker.sock:/var/run/docker.sock:ro \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
               "$BACKEND_IMAGE"

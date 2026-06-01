@@ -51,6 +51,7 @@ import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
+import AdminSystemPage from './pages/admin/AdminSystemPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -292,6 +293,7 @@ function App() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="system" element={<AdminSystemPage />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
