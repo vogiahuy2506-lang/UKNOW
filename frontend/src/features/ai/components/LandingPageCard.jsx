@@ -257,17 +257,30 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
               </button>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center bg-slate-800 p-4 overflow-auto">
-            <div className={`transition-all ${device === 'mobile' ? 'w-[375px]' : 'w-full max-w-6xl'}`}>
-              <div className={`bg-white rounded-xl overflow-hidden shadow-2xl ${device === 'mobile' ? 'h-[667px]' : 'min-h-[600px]'}`}>
-                <iframe
-                  srcDoc={fullHtml}
-                  className="w-full h-full border-0"
-                  title="Landing Page Fullscreen Preview"
-                  sandbox="allow-scripts allow-same-origin"
-                />
+          <div className="flex-1 min-h-0 bg-slate-800 overflow-auto">
+            {device === 'mobile' ? (
+              <div className="flex items-center justify-center p-4 min-h-full">
+                <div className="w-[375px] h-[667px] flex-shrink-0 bg-white rounded-xl overflow-hidden shadow-2xl">
+                  <iframe
+                    srcDoc={fullHtml}
+                    className="w-full h-full border-0"
+                    title="Landing Page Fullscreen Preview"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="h-full p-4 flex flex-col">
+                <div className="flex-1 min-h-0 w-full max-w-6xl mx-auto bg-white rounded-xl overflow-hidden shadow-2xl">
+                  <iframe
+                    srcDoc={fullHtml}
+                    className="w-full h-full border-0"
+                    title="Landing Page Fullscreen Preview"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
