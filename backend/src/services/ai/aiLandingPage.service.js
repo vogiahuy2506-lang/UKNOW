@@ -47,7 +47,7 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    - <meta name="viewport" content="width=device-width, initial-scale=1"/>
    - <title> khớp hoặc gần với "title" JSON
    - <script src="https://cdn.tailwindcss.com"></script>
-4) Styling: CHỈ dùng lớp Tailwind utility trên các phần tử (không file CSS ngoài, không <style> lớn trừ khi cần vài dòng cho animation tối thiểu).
+4) Styling — NGHIÊM CẤM TUYỆT ĐỐI dùng thuộc tính style="..." inline trên BẤT KỲ thẻ HTML nào. KHÔNG được viết style="color:...", style="background-color:...", style="font-size:...", style="padding:...", style="margin:..." hay bất kỳ thuộc tính style inline nào. CHỈ được dùng class Tailwind utility (ví dụ class="bg-orange-500 text-white px-6 py-3"). Không dùng <style> block lớn; chỉ được vài dòng cho keyframe animation nếu thật sự cần.
 5) Không dùng JavaScript ngoài script Tailwind CDN ở trên (không thư viện khác, không inline script logic).
 6) Trang phải có vùng đăng ký lead: tại vị trí form (ví dụ sau khối CTA chính), chèn ĐÚNG một dòng comment HTML sau, đứng một mình giữa các thẻ cha phù hợp (ví dụ trong <section>):
    ${LANDING_FORM_PLACEHOLDER}
@@ -113,6 +113,14 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       err.status = 502;
       throw err;
     }
+    // Đếm số lần dùng inline style — cho phép tối đa 2 (ví dụ: keyframe fallback)
+    const inlineStyleCount = (html.match(/\bstyle\s*=/gi) || []).length;
+    if (inlineStyleCount > 2) {
+      const err = new Error('AI sinh HTML dùng inline style thay vì Tailwind. Vui lòng thử lại.');
+      err.status = 502;
+      throw err;
+    }
+
     if (!html.includes(LANDING_FORM_PLACEHOLDER)) {
       if (/<\/body>/i.test(html)) {
         html = html.replace(/<\/body>/i, `  <section class="py-10 px-4 max-w-3xl mx-auto">\n    <h2 class="text-xl font-semibold text-gray-900 mb-4">Đăng ký</h2>\n    ${LANDING_FORM_PLACEHOLDER}\n  </section>\n</body>`);
