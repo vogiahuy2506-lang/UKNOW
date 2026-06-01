@@ -1,10 +1,16 @@
 import aiCampaignService from '../services/ai/aiCampaign.service.js';
 import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
+import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
+import ragEngineService from '../services/chatbot/ragEngine.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import db from '../config/database.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
+import multer from 'multer';
+import { extractTextFromBuffer } from '../utils/fileExtractor.util.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 class AiController {
   /**
@@ -835,6 +841,237 @@ class AiController {
         config,
       };
     });
+  }
+
+  /**
+   * Custom AI Chat - dùng cho widget, Zalo OA, Facebook, Studio chat
+   * Uses system_instruction và settings từ chatbot để tùy chỉnh AI
+   * Includes RAG context from uploaded documents
+   */
+  async customChat(req, res) {
+    try {
+      const { history, chatbot_id, system_instruction, temperature, max_tokens } = req.body;
+
+      if (!history || !Array.isArray(history) || history.length === 0) {
+        return res.status(400).json({ success: false, message: 'history is required' });
+      }
+
+      const chatbotId = parseInt(chatbot_id) || 0;
+      const userId = req.user?.id || 1;
+
+      // Get RAG context from custom chatbot chunks
+      let ragContext = '';
+      try {
+        const lastUserMessage = [...history].reverse().find(m => m.role === 'user')?.content || '';
+        if (lastUserMessage) {
+          const chunks = await this._searchChunks(chatbotId, userId, lastUserMessage);
+          if (chunks.length > 0) {
+            ragContext = `\n\nTài liệu tham khảo từ Knowledge Base:\n${chunks.map(c => `- ${c}`).join('\n')}`;
+          }
+        }
+      } catch (e) {
+        console.warn('[CustomChat] RAG search failed:', e.message);
+      }
+
+      // Build system prompt
+      const defaultSystem = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+      const systemPrompt = system_instruction || defaultSystem;
+
+      // Build prompt với history + RAG context
+      const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
+
+      // Get Gemini API key từ env
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+      if (!apiKey) {
+        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
+      }
+
+      // Call Gemini
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: temperature || 0.7,
+            maxOutputTokens: Math.min(max_tokens || 2048, 65536),
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(500).json({ success: false, message: data.error.message });
+      }
+
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+
+      return res.json({
+        success: true,
+        content: content,
+        type: 'text',
+      });
+    } catch (error) {
+      console.error('[CustomChat] Error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Search chunks for RAG context (simple keyword matching)
+   */
+  async _searchChunks(chatbotId, userId, query) {
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    if (words.length === 0) return [];
+
+    // Get all chunks for this chatbot
+    const result = await db.query(`
+      SELECT chunk_text FROM custom_chatbot_chunks
+      WHERE chatbot_id = $1 AND user_id = $2
+      ORDER BY chunk_index
+    `, [chatbotId, userId]);
+
+    if (!result.rows.length) return [];
+
+    // Simple relevance scoring based on keyword matches
+    const scored = result.rows.map(row => {
+      const text = row.chunk_text.toLowerCase();
+      const score = words.filter(w => text.includes(w)).length;
+      return { text: row.chunk_text, score };
+    });
+
+    // Return top 5 most relevant chunks
+    return scored
+      .filter(c => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(c => c.text);
+  }
+
+  /**
+   * Upload document cho Custom AI Chat - extract text, chunk, embed
+   */
+  async customChatUpload(req, res) {
+    try {
+      const { chatbot_id } = req.body;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+
+      // Extract text from file
+      const text = await extractTextFromBuffer(file.buffer, file.originalname);
+
+      if (!text || text.trim().length < 10) {
+        return res.status(400).json({ success: false, message: 'Could not extract text from file' });
+      }
+
+      // Create a temporary KB for this chatbot if needed
+      // For now, store chunks in memory with chatbot_id
+      const chunks = this._chunkText(text, 500);
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      // Generate embeddings
+      let embeddings = [];
+      if (apiKey) {
+        try {
+          const { embedTexts } = await import('../utils/embeddingClient.util.js');
+          embeddings = await embedTexts(chunks.map((c, i) => `[${i}] ${c}`));
+        } catch (e) {
+          console.warn('[CustomChat] Embedding failed, using text only:', e.message);
+        }
+      }
+
+      // Store chunks in database
+      const chatbotId = parseInt(chatbot_id) || 0;
+      const userId = req.user?.id || 1;
+
+      // Store in custom_chatbot_chunks table
+      await db.query(`
+        DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1
+      `, [chatbotId]);
+
+      for (let i = 0; i < chunks.length; i++) {
+        await db.query(`
+          INSERT INTO custom_chatbot_chunks (chatbot_id, user_id, chunk_text, embedding, chunk_index, source)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [chatbotId, userId, chunks[i], embeddings[i] || null, i, file.originalname]);
+      }
+
+      return res.json({
+        success: true,
+        message: `Đã xử lý ${chunks.length} đoạn từ file`,
+        chunks: chunks.length,
+        preview: chunks.slice(0, 3).join('\n\n').substring(0, 500),
+      });
+    } catch (error) {
+      console.error('[CustomChatUpload] Error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get documents for Custom AI Chatbot
+   */
+  async getCustomChatbotDocuments(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      const result = await db.query(`
+        SELECT id, chunk_text, source, chunk_index, created_at
+        FROM custom_chatbot_chunks
+        WHERE chatbot_id = $1
+        ORDER BY chunk_index
+      `, [id]);
+
+      // Group by source (document)
+      const docsMap = {};
+      for (const row of result.rows) {
+        const source = row.source || 'Unknown';
+        if (!docsMap[source]) {
+          docsMap[source] = {
+            id: row.id,
+            title: source,
+            type: 'file',
+            status: 'ready',
+            chunk_count: 0,
+            created_at: row.created_at,
+          };
+        }
+        docsMap[source].chunk_count++;
+      }
+
+      return res.json({
+        success: true,
+        documents: Object.values(docsMap),
+      });
+    } catch (error) {
+      console.error('[CustomChat] Get documents error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  _chunkText(text, chunkSize = 500) {
+    const paragraphs = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+    const chunks = [];
+    let buffer = '';
+
+    for (const para of paragraphs) {
+      if (buffer.length + para.length + 1 <= chunkSize) {
+        buffer += (buffer ? '\n\n' : '') + para;
+      } else {
+        if (buffer) chunks.push(buffer);
+        buffer = para;
+      }
+    }
+    if (buffer) chunks.push(buffer);
+
+    return chunks;
   }
 }
 

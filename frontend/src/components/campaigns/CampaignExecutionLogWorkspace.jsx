@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { HiOutlineDocumentDownload } from 'react-icons/hi';
+import * as XLSX from 'xlsx';
 import { useI18n } from '../../i18n';
 import {
   formatCampaignDateTime,
@@ -125,6 +127,37 @@ const CampaignExecutionLogWorkspace = ({
   const [page, setPage] = useState(1);
   const [expandedCell, setExpandedCell] = useState(null);
 
+  // Export to Excel
+  const exportToExcel = () => {
+    if (!items.length) return;
+    
+    // Get all items without pagination
+    const allItems = items;
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Add logs sheet
+    const logData = normalizedLogs.map(log => ({
+      'Node': log.nodeName || 'System',
+      'Status': log.status || 'info',
+      'Message': log.message || '-',
+      'Timestamp': log.timestamp ? new Date(log.timestamp).toLocaleString('vi-VN') : '-',
+    }));
+    const logSheet = XLSX.utils.json_to_sheet(logData);
+    XLSX.utils.book_append_sheet(wb, logSheet, 'Execution Logs');
+    
+    // Add data sheet (from selected log output)
+    if (allItems.length > 0) {
+      const dataSheet = XLSX.utils.json_to_sheet(allItems);
+      XLSX.utils.book_append_sheet(wb, dataSheet, 'Data Output');
+    }
+    
+    // Download
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `campaign-logs-${timestamp}.xlsx`);
+  };
+
   useEffect(() => {
     if (!normalizedLogs.length) return;
     const hasSelection = normalizedLogs.some((log) => log.id === selectedLogId);
@@ -217,7 +250,18 @@ const CampaignExecutionLogWorkspace = ({
       >
         <div className="px-2 py-1.5 bg-gray-50 border-b flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">{t('campaignExecutionLog.logList')}</div>
-          <div className="text-xs text-gray-500">{normalizedLogs.length} {normalizedLogs.length === 1 ? 'log' : 'logs'}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportToExcel}
+              disabled={!items.length}
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export Excel"
+            >
+              <HiOutlineDocumentDownload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
+            <div className="text-xs text-gray-500">{normalizedLogs.length} {normalizedLogs.length === 1 ? 'log' : 'logs'}</div>
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {normalizedLogs.length === 0 ? (

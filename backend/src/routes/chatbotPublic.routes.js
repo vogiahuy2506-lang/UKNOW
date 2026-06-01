@@ -17,4 +17,15 @@ router.get('/widget/conversations/:conversationId/messages', chatbotController.g
 // Send a message in a conversation
 router.post('/widget/conversations/:conversationId/messages', chatbotController.sendWebChatMessage.bind(chatbotController));
 
+// ── Custom AI Chat Widget (uses /api/ai/custom-chat) ─────────────────────
+
+// Get custom chatbot config by widget_key
+router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfig.bind(chatbotController));
+
+// Get documents for a chatbot
+router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
+
+// Send message to custom chatbot (directly uses Gemini + KB)
+router.post('/custom-chatbot/:widgetKey/chat', chatbotController.chatWithCustomChatbot.bind(chatbotController));
+
 export default router;

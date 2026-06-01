@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HiOutlineDuplicate, HiOutlineLightningBolt, HiOutlineTemplate,
-  HiOutlineViewGrid
+  HiOutlineViewGrid, HiOutlineGlobeAlt, HiOutlineShieldCheck,
+  HiOutlineClock, HiOutlineServer, HiOutlineSave,
+  HiOutlineClipboard, HiOutlineTrash, HiOutlineCheck
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
@@ -331,82 +333,197 @@ export default function LandingPageFullEditor({
               {t('landingPageEditor.publish')}
             </label>
 
-            <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-2 text-xs text-sky-950 space-y-2">
-              <p className="font-medium text-sky-900">{t('landingPageEditor.customDomain')}</p>
-              {!editingId ? (
-                <p className="text-sky-800">{t('landingPageEditor.saveToConfigureDomain')}</p>
-              ) : cdLoading ? (
-                <p className="text-sky-700">{t('landingPageEditor.loadingConfig')}</p>
-              ) : (
-                <>
-                  <p className="text-sky-800 leading-relaxed">
-                    {t('landingPageEditor.domainInstructions')}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      className="flex-1 rounded border border-sky-200/90 bg-white px-2 py-1.5 text-sm font-mono"
-                      placeholder={t('landingPageEditor.domainPlaceholder')}
-                      value={cdHostnameDraft}
-                      onChange={(e) => setCdHostnameDraft(e.target.value)}
-                      disabled={cdBusy || cdInfo?.status === 'active'}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-secondary text-xs py-1.5 shrink-0"
-                      disabled={cdBusy || cdInfo?.status === 'active'}
-                      onClick={saveCustomDomainHostname}
-                    >
-                      {t('landingPageEditor.saveHostname')}
-                    </button>
+            {/* Custom Domain Section */}
+            <div className="rounded-2xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <HiOutlineGlobeAlt className="w-5 h-5 text-white" />
+                    <h3 className="font-bold text-white">Custom Domain</h3>
                   </div>
-                  {cdInfo?.record ? (
-                    <div className="space-y-1">
-                      <div className="flex justify-between gap-2">
-                        <span className="font-medium text-sky-900">{t('landingPageEditor.txtRecord')}</span>
+                  {cdInfo?.status === 'active' && (
+                    <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                      <HiOutlineShieldCheck className="w-3 h-3" />
+                      Active
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* What is this */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                    <HiOutlineGlobeAlt className="w-4 h-4" />
+                    Custom Domain là gì?
+                  </h4>
+                  <p className="text-sm text-blue-700 leading-relaxed">
+                    Thay vì dùng link <code className="bg-blue-100 px-1 rounded">app.uknow.io/lp/yourpage</code>, 
+                    bạn có thể dùng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code>. 
+                    Tạo thương hiệu chuyên nghiệp hơn!
+                  </p>
+                </div>
+
+                {!editingId ? (
+                  <div className="text-center py-6 bg-slate-100 rounded-xl">
+                    <HiOutlineGlobeAlt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="font-medium text-slate-600">Lưu landing page trước</p>
+                    <p className="text-sm text-slate-500 mt-1">để cấu hình custom domain</p>
+                  </div>
+                ) : cdLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-8 h-8 border-3 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Status Cards */}
+                    {cdInfo?.status === 'active' ? (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-200">
+                            <HiOutlineCheck className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-green-800 text-lg">{cdInfo.hostname}</p>
+                            <p className="text-sm text-green-600">Domain đã được kích hoạt thành công!</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : cdInfo?.configured ? (
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-200">
+                            <HiOutlineClock className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-amber-800 text-lg">{cdInfo.hostname}</p>
+                            <p className="text-sm text-amber-600">Đang chờ xác minh DNS</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Input Domain */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <label className="block text-sm font-bold text-slate-700 mb-3">
+                        Nhập tên miền của bạn
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          className="flex-1 rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-mono outline-none focus:border-blue-400 transition-colors"
+                          placeholder="ví dụ: yoursite.com"
+                          value={cdHostnameDraft}
+                          onChange={(e) => setCdHostnameDraft(e.target.value)}
+                          disabled={cdBusy || cdInfo?.status === 'active'}
+                        />
                         <button
                           type="button"
-                          className="text-primary-600 text-[11px] shrink-0"
-                          onClick={() =>
-                            copyText(
-                              'TXT',
-                              `${cdInfo.record.name}\tTXT\t${cdInfo.record.value}`
-                            )
-                          }
+                          className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                          disabled={cdBusy || cdInfo?.status === 'active' || !cdHostnameDraft.trim()}
+                          onClick={saveCustomDomainHostname}
                         >
-                          {t('common.copy')}
+                          {cdBusy ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <HiOutlineSave className="w-5 h-5" />
+                              Lưu Domain
+                            </>
+                          )}
                         </button>
                       </div>
-                      <textarea
-                        readOnly
-                        className="w-full h-16 rounded border border-sky-200 bg-white px-2 py-1 text-[11px] font-mono"
-                        value={`${t('landingPageEditor.name')}: ${cdInfo.record.name}\n${t('landingPageEditor.value')}: ${cdInfo.record.value}`}
-                        spellCheck={false}
-                      />
+                      <p className="text-xs text-slate-500 mt-2">
+                        Hỗ trợ cả apex domain (yoursite.com) và www domain (www.yoursite.com)
+                      </p>
+                    </div>
+
+                    {/* DNS Records & Guide */}
+                    {cdInfo?.record && cdInfo?.status !== 'active' && (
+                      <div className="space-y-4">
+                        {/* DNS Record Card */}
+                        <div className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden">
+                          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3">
+                            <h4 className="font-bold text-white flex items-center gap-2">
+                              <HiOutlineServer className="w-5 h-5" />
+                              Thêm DNS Record này vào nhà cung cấp domain
+                            </h4>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <span className="px-4 py-2 bg-blue-500 text-white text-sm font-bold rounded-lg">TXT</span>
+                              <div className="flex-1">
+                                <p className="text-xs text-slate-500">Hostname</p>
+                                <code className="text-sm font-mono font-bold text-slate-800">
+                                  {cdInfo.record.name || '(root/@)'}
+                                </code>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-2">Giá trị (Value)</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-slate-100 px-4 py-3 rounded-xl text-sm font-mono break-all">
+                                  {cdInfo.record.value}
+                                </code>
+                                <button
+                                  onClick={() => copyText(cdInfo.record.value, 'txt-value')}
+                                  className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors"
+                                  title="Copy giá trị"
+                                >
+                                  <HiOutlineClipboard className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Simple Guide */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                          <p className="text-sm text-slate-600 leading-relaxed">
+                            <strong>Cách thêm:</strong> Đăng nhập vào trang quản lý domain của bạn → Tìm mục DNS Settings → Thêm TXT record với thông tin bên trên → Lưu.
+                          </p>
+                        </div>
+
+                        {/* Verify Button */}
+                        <button
+                          type="button"
+                          className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-green-200"
+                          disabled={cdBusy}
+                          onClick={verifyCustomDomain}
+                        >
+                          {cdBusy ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <HiOutlineShieldCheck className="w-6 h-6" />
+                              Xác minh DNS
+                            </>
+                          )}
+                        </button>
+
+                        {/* Warning */}
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <p className="text-sm text-amber-800">
+                            <strong>⏱️ Lưu ý:</strong> DNS có thể mất 5-30 phút để cập nhật. Đôi khi cần đến 24 giờ.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Remove Domain */}
+                    {cdInfo?.configured && (
                       <button
                         type="button"
-                        className="btn btn-primary text-xs py-1.5"
+                        className="w-full py-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
                         disabled={cdBusy}
-                        onClick={verifyCustomDomain}
+                        onClick={removeCustomDomain}
                       >
-                        {t('landingPageEditor.verifyDNS')}
+                        <HiOutlineTrash className="w-5 h-5" />
+                        Xóa domain đã cấu hình
                       </button>
-                    </div>
-                  ) : null}
-                  {cdInfo?.status === 'active' ? (
-                    <p className="text-emerald-800 font-medium">{t('landingPageEditor.activated')}: {cdInfo.hostname}</p>
-                  ) : null}
-                  {cdInfo?.configured ? (
-                    <button
-                      type="button"
-                      className="text-red-600 text-[11px] hover:underline"
-                      disabled={cdBusy}
-                      onClick={removeCustomDomain}
-                    >
-                      {t('landingPageEditor.removeDomain')}
-                    </button>
-                  ) : null}
-                </>
-              )}
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-950 leading-relaxed space-y-2">

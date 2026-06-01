@@ -151,6 +151,60 @@ const chatbotApi = {
     return response.data;
   },
 
+  // ── Unified Chatbot (Studio) ────────────────────────────────────────
+
+  // List all chatbots
+  listChatbots: async () => {
+    const response = await api.get('/ai/chatbot/studio/chatbots');
+    return response.data;
+  },
+
+  // Create a new chatbot
+  createChatbot: async (data) => {
+    const response = await api.post('/ai/chatbot/studio/chatbots', data);
+    return response.data;
+  },
+
+  // Get chatbot details
+  getChatbot: async (id) => {
+    const response = await api.get(`/ai/chatbot/studio/chatbots/${id}`);
+    return response.data;
+  },
+
+  // Update chatbot
+  updateChatbot: async (id, data) => {
+    const response = await api.put(`/ai/chatbot/studio/chatbots/${id}`, data);
+    return response.data;
+  },
+
+  // Delete chatbot
+  deleteChatbot: async (id) => {
+    const response = await api.delete(`/ai/chatbot/studio/chatbots/${id}`);
+    return response.data;
+  },
+
+  // Chat with chatbot (returns AI response)
+  chatWithChatbot: async (chatbotId, messages) => {
+    const response = await api.post(`/ai/chatbot/studio/chatbots/${chatbotId}/chat`, { messages });
+    return response.data;
+  },
+
+  // Chat sessions
+  getChatbotSessions: async (chatbotId) => {
+    const response = await api.get(`/ai/chatbot/studio/chatbots/${chatbotId}/sessions`);
+    return response.data;
+  },
+
+  getChatbotSessionMessages: async (chatbotId, sessionId) => {
+    const response = await api.get(`/ai/chatbot/studio/chatbots/${chatbotId}/sessions/${sessionId}/messages`);
+    return response.data;
+  },
+
+  deleteChatbotSession: async (chatbotId, sessionId) => {
+    const response = await api.delete(`/ai/chatbot/studio/chatbots/${chatbotId}/sessions/${sessionId}`);
+    return response.data;
+  },
+
   // ── Unified Inbox ────────────────────────────────────────────────
 
   getConversations: async ({ channel, status, search, limit = 20, offset = 0 } = {}) => {
