@@ -999,6 +999,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskLandingDetailsCard
                   data={msg.data}
                   onSubmit={handleLandingDetailsSubmit}
+                  t={t}
                 />
               )}
 
@@ -1026,6 +1027,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onConfirm={handleConfirmCreate}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
+                  t={t}
                 />
               )}
               
@@ -1067,6 +1069,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AutoCreatingCard
                   campaignName={msg.data?.campaignName}
                   onView={autoCreatedCampaign ? () => navigate(`/app/campaigns/${autoCreatedCampaign.campaignId}/builder`) : null}
+                  t={t}
                 />
               )}
 
@@ -1075,6 +1078,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AutoCreatedSuccessCard
                   result={msg.data}
                   onView={() => navigate(`/app/campaigns/${msg.data.campaignId}/builder`)}
+                  t={t}
                 />
               )}
             </div>
@@ -1159,6 +1163,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           setSelectedScriptForPush(null);
         }}
         onSelect={handleSelectCampaign}
+        t={t}
       />
 
     </div>

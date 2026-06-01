@@ -1936,6 +1936,27 @@ export default {
     designCampaign: 'Design campaign',
     createCampaignWithOptions: 'Create campaign with these options',
     selectAllAbove: 'Select all items above to continue',
+    // Landing details card
+    designLandingPage: 'Design Landing Page',
+    formFieldsLabel: '📋 Registration form fields',
+    formFieldsDefault: 'Default collect: Last name, First name, Email, Phone',
+    formFieldsBasic: 'Basic info only',
+    formFieldsExtended: '+ Occupation & Industry',
+    formFieldsCustom: 'Custom fields',
+    customFieldsPlaceholder: 'Enter field names to collect, e.g.: Company, Position, Industry, Monthly Revenue...',
+    customFieldsHint: 'Separate each field with a comma',
+    createLandingWithOptions: 'Create Landing Page with these options',
+    enterFieldNameToContinue: 'Enter field name to continue',
+    // Campaign details card — email section
+    emailContent: '📧 Email content:',
+    createNewContent: '✨ Create new content',
+    useExistingTemplate: '📄 Use existing template',
+    enterEmailTemplateName: 'Enter email template name...',
+    // Confirm create / campaign buttons
+    createCampaignBtn: 'Create campaign',
+    stepsLabel: 'Steps:',
+    // Category names
+    notificationCategory: '🔔 Notification',
     // Audience card
     selectAudience: 'Select target audience',
     sendToAudience: 'Who do you want to send to?',

@@ -1944,6 +1944,27 @@ export default {
     designCampaign: 'Thiết kế chiến dịch',
     createCampaignWithOptions: 'Tạo chiến dịch theo lựa chọn này',
     selectAllAbove: 'Chọn hết các mục bên trên để tiếp tục',
+    // Landing details card
+    designLandingPage: 'Thiết kế Landing Page',
+    formFieldsLabel: '📋 Thông tin form đăng ký',
+    formFieldsDefault: 'Mặc định thu thập: Họ, Tên, Email, SĐT',
+    formFieldsBasic: 'Chỉ thông tin cơ bản',
+    formFieldsExtended: '+ Nghề nghiệp & Lĩnh vực',
+    formFieldsCustom: 'Tự chọn trường khác',
+    customFieldsPlaceholder: 'Nhập tên các trường bạn muốn thu thập, ví dụ: Công ty, Chức vụ, Ngành hàng, Doanh thu hàng tháng...',
+    customFieldsHint: 'Mỗi trường cách nhau bằng dấu phẩy',
+    createLandingWithOptions: 'Tạo Landing Page theo lựa chọn này',
+    enterFieldNameToContinue: 'Nhập tên trường để tiếp tục',
+    // Campaign details card — email section
+    emailContent: '📧 Nội dung email:',
+    createNewContent: '✨ Tạo nội dung mới',
+    useExistingTemplate: '📄 Dùng mẫu có sẵn',
+    enterEmailTemplateName: 'Nhập tên mẫu email...',
+    // Confirm create / campaign buttons
+    createCampaignBtn: 'Tạo chiến dịch',
+    stepsLabel: 'Các bước:',
+    // Category names
+    notificationCategory: '🔔 Thông báo',
     // Audience card
     selectAudience: 'Chọn đối tượng khách hàng',
     sendToAudience: 'Bạn muốn gửi cho đối tượng nào?',
