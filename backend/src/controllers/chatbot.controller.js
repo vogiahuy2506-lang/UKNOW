@@ -557,6 +557,133 @@ class ChatbotController {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  // ── Custom AI Chatbot Widget ─────────────────────────────────────
+
+  async getCustomChatbotConfig(req, res) {
+    try {
+      const { widgetKey } = req.params;
+
+      // Get chatbot from localStorage data or DB
+      // For now, return config from widgets stored in localStorage
+      // In production, this would query the chatbot table
+
+      return res.json({
+        success: true,
+        data: {
+          widgetKey: widgetKey,
+          welcomeMessage: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Config error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async getCustomChatbotDocuments(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      const result = await db.query(`
+        SELECT id, chunk_text, source, chunk_index, created_at
+        FROM custom_chatbot_chunks
+        WHERE chatbot_id = $1
+        ORDER BY chunk_index
+      `, [id]);
+
+      // Group by source (document)
+      const docsMap = {};
+      for (const row of result.rows) {
+        const source = row.source || 'Unknown';
+        if (!docsMap[source]) {
+          docsMap[source] = {
+            id: row.id,
+            title: source,
+            type: 'file',
+            status: 'ready',
+            chunk_count: 0,
+            created_at: row.created_at,
+          };
+        }
+        docsMap[source].chunk_count++;
+      }
+
+      return res.json({
+        success: true,
+        documents: Object.values(docsMap),
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Get documents error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async chatWithCustomChatbot(req, res) {
+    try {
+      const { widgetKey } = req.params;
+      const { message, history } = req.body;
+
+      if (!message?.trim()) {
+        return res.status(400).json({ success: false, message: 'message is required' });
+      }
+
+      // Get chatbot settings by widget_key
+      // For now, use default settings
+      const systemInstruction = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+
+      // Build history
+      const fullHistory = [
+        ...(history || []),
+        { role: 'user', content: message }
+      ];
+
+      // Build prompt
+      const prompt = `Hệ thống: ${systemInstruction}\n\n${fullHistory.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
+
+      // Get Gemini API key từ env
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+      if (!apiKey) {
+        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
+      }
+
+      // Call Gemini
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(500).json({ success: false, message: data.error.message });
+      }
+
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+
+      return res.json({
+        success: true,
+        data: {
+          role: 'assistant',
+          content: content,
+          created_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Chat error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
 
 export default new ChatbotController();

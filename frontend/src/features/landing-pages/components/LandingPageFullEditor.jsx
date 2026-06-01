@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HiOutlineDuplicate, HiOutlineLightningBolt, HiOutlineTemplate,
-  HiOutlineViewGrid
+  HiOutlineViewGrid, HiOutlineGlobeAlt, HiOutlineShieldCheck,
+  HiOutlineClock, HiOutlineServer, HiOutlineSave,
+  HiOutlineClipboard, HiOutlineTrash, HiOutlineCheck
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
@@ -20,9 +22,6 @@ import VisualBlockEditor from './VisualBlockEditor.jsx';
 
 /** Khớp backend `aiLandingPage.service.js` — thay bằng iframe khi đã có slug. */
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
-const DEFAULT_EDITOR_PANEL_WIDTH = 420;
-const MIN_EDITOR_PANEL_WIDTH = 320;
-const MIN_PREVIEW_PANEL_WIDTH = 420;
 
 /**
  * Editor toàn màn hình (portal ra `document.body`): một nửa nhập HTML/metadata + lệnh chèn tay, một nửa iframe preview thuần HTML.
@@ -55,7 +54,6 @@ export default function LandingPageFullEditor({
   onSave,
 }) {
   const { t } = useI18n();
-  const editorBodyRef = useRef(null);
   const snippetContext = useMemo(() => {
     const slug = String(form.slug || '').trim().toLowerCase();
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -65,9 +63,6 @@ export default function LandingPageFullEditor({
     return getLandingManualInsertSnippets({ slug, frontendOrigin: origin, apiBase }, t);
   }, [form.slug, t]);
 
-  const [leftTab, setLeftTab] = useState('html');
-  const [editorPanelWidth, setEditorPanelWidth] = useState(DEFAULT_EDITOR_PANEL_WIDTH);
-  const [isResizingPanels, setIsResizingPanels] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -81,36 +76,8 @@ export default function LandingPageFullEditor({
       setAiBusy(false);
       setTemplateGalleryOpen(false);
       setVisualEditorOpen(false);
-      setLeftTab('html');
     }
   }, [open]);
-
-  const handlePanelResizeStart = (event) => {
-    if (event.button !== 0) return;
-
-    const body = editorBodyRef.current;
-    if (!body) return;
-
-    event.preventDefault();
-    setIsResizingPanels(true);
-
-    const resize = (moveEvent) => {
-      const rect = body.getBoundingClientRect();
-      const maxWidth = Math.max(MIN_EDITOR_PANEL_WIDTH, rect.width - MIN_PREVIEW_PANEL_WIDTH);
-      const nextWidth = moveEvent.clientX - rect.left;
-
-      setEditorPanelWidth(Math.min(Math.max(nextWidth, MIN_EDITOR_PANEL_WIDTH), maxWidth));
-    };
-
-    const stopResize = () => {
-      setIsResizingPanels(false);
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResize);
-    };
-
-    window.addEventListener('mousemove', resize);
-    window.addEventListener('mouseup', stopResize);
-  };
 
   const runAiGenerate = async () => {
     const p = String(aiPrompt || '').trim();
@@ -280,270 +247,382 @@ export default function LandingPageFullEditor({
   if (!open) return null;
 
   const overlay = (
-    <div
-      className="fixed top-0 right-0 bottom-0 z-[200] flex flex-col bg-white shadow-2xl border-l border-gray-200"
-      style={{ left: 'var(--sidebar-w, 0px)' }}
-    >
-      {/* ── Header ── */}
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 h-14 border-b border-gray-200 bg-white">
-        <h2 className="text-base font-semibold text-gray-900 truncate">
+    <div className="fixed inset-0 z-[200] flex flex-col bg-white">
+      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50/90">
+        <h2 className="text-lg font-semibold text-gray-900">
           {editingId ? t('landingPageEditor.editLanding') : t('landingPageEditor.createLanding')}
         </h2>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {links?.preview ? (
+            <a
+              href={links.preview}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary-600 hover:underline max-w-[200px] truncate"
+              title={links.preview}
+            >
+              {t('landingPageEditor.openInNewTab')}
+            </a>
+          ) : null}
           <button
             type="button"
-            className="btn btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1"
+            className="btn btn-secondary text-sm flex items-center gap-1.5"
             onClick={() => setVisualEditorOpen(true)}
+            title={t('landingPageEditor.visualEditor')}
           >
-            <HiOutlineViewGrid className="w-3.5 h-3.5" />
+            <HiOutlineViewGrid className="w-4 h-4" />
             {t('landingPageEditor.visualEditor')}
           </button>
           <button
             type="button"
-            className="btn btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1"
+            className="btn btn-secondary text-sm flex items-center gap-1.5"
             onClick={() => setTemplateGalleryOpen(true)}
+            title={t('landingPageEditor.selectTemplate')}
           >
-            <HiOutlineTemplate className="w-3.5 h-3.5" />
+            <HiOutlineTemplate className="w-4 h-4" />
             {t('landingPageEditor.template')}
           </button>
           <button
             type="button"
-            className="btn btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1"
+            className="btn btn-secondary text-sm flex items-center gap-1.5"
             onClick={() => setAiOpen(true)}
+            title={t('landingPageEditor.generateWithAI')}
           >
-            <HiOutlineLightningBolt className="w-3.5 h-3.5" />
+            <HiOutlineLightningBolt className="w-4 h-4" />
             {t('landingPageEditor.aiGenerate')}
           </button>
-          <div className="w-px h-5 bg-gray-200 mx-1" />
-          <button type="button" className="btn btn-secondary text-xs px-3 py-1.5" onClick={onClose}>
+          <button type="button" className="btn btn-secondary text-sm" onClick={onClose}>
             {t('common.close')}
           </button>
-          <button type="button" className="btn btn-primary text-xs px-3 py-1.5" onClick={onSave} disabled={saving}>
+          <button type="button" className="btn btn-primary text-sm" onClick={onSave} disabled={saving}>
             {saving ? t('landingPageEditor.saving') : t('landingPageEditor.save')}
           </button>
         </div>
       </header>
 
-      {/* ── Body: left panel + right preview ── */}
-      <div
-        ref={editorBodyRef}
-        className={`flex flex-1 min-h-0 flex-col lg:flex-row ${isResizingPanels ? 'cursor-col-resize select-none' : ''}`}
-      >
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+        <section className="flex flex-col min-h-[40vh] lg:min-h-0 lg:w-1/2 lg:border-r border-gray-200 overflow-hidden">
+          <div className="shrink-0 p-4 space-y-3 border-b border-gray-100 bg-white overflow-y-auto max-h-[48vh] lg:max-h-[50%]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPageEditor.slug')}</label>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
+                  value={form.slug}
+                  onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '') }))}
+                  placeholder={t('landingPageEditor.slugPlaceholder')}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPageEditor.pageTitle')}</label>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={form.title}
+                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder={t('landingPageEditor.pageTitlePlaceholder')}
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.isPublished)}
+                onChange={(e) => setForm((p) => ({ ...p, isPublished: e.target.checked }))}
+                className="rounded border-gray-300"
+              />
+              {t('landingPageEditor.publish')}
+            </label>
 
-        {/* ── Left panel with tabs ── */}
-        <section
-          className="flex w-full flex-col border-gray-200 min-h-0 lg:w-[var(--landing-editor-panel-width)] lg:shrink-0"
-          style={{ '--landing-editor-panel-width': `${editorPanelWidth}px` }}
-        >
-
-          {/* Tab bar */}
-          <div className="shrink-0 flex border-b border-gray-200 bg-gray-50">
-            {['settings', 'html'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setLeftTab(tab)}
-                className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  leftTab === tab
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab === 'settings' ? t('landingPageEditor.tabSettings') : 'HTML'}
-              </button>
-            ))}
-          </div>
-
-          {/* Settings tab */}
-          {leftTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Slug + Title */}
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('landingPageEditor.slug')}</label>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
-                    value={form.slug}
-                    onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '') }))}
-                    placeholder={t('landingPageEditor.slugPlaceholder')}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('landingPageEditor.pageTitle')}</label>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={form.title}
-                    onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                    placeholder={t('landingPageEditor.pageTitlePlaceholder')}
-                  />
+            {/* Custom Domain Section */}
+            <div className="rounded-2xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <HiOutlineGlobeAlt className="w-5 h-5 text-white" />
+                    <h3 className="font-bold text-white">Custom Domain</h3>
+                  </div>
+                  {cdInfo?.status === 'active' && (
+                    <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                      <HiOutlineShieldCheck className="w-3 h-3" />
+                      Active
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Publish + URL row */}
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.isPublished)}
-                    onChange={(e) => setForm((p) => ({ ...p, isPublished: e.target.checked }))}
-                    className="rounded border-gray-300"
-                  />
-                  {t('landingPageEditor.publish')}
-                </label>
-                {links?.preview ? (
-                  <a
-                    href={links.preview}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary-600 hover:underline truncate max-w-[180px]"
-                    title={links.preview}
-                  >
-                    {t('landingPageEditor.openInNewTab')} ↗
-                  </a>
-                ) : null}
-              </div>
+              <div className="p-4 space-y-4">
+                {/* What is this */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                    <HiOutlineGlobeAlt className="w-4 h-4" />
+                    Custom Domain là gì?
+                  </h4>
+                  <p className="text-sm text-blue-700 leading-relaxed">
+                    Thay vì dùng link <code className="bg-blue-100 px-1 rounded">app.uknow.io/lp/yourpage</code>, 
+                    bạn có thể dùng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code>. 
+                    Tạo thương hiệu chuyên nghiệp hơn!
+                  </p>
+                </div>
 
-              {/* Custom Domain */}
-              <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3.5 py-3 text-xs text-sky-950 space-y-2">
-                <p className="font-semibold text-sky-800">{t('landingPageEditor.customDomain')}</p>
                 {!editingId ? (
-                  <p className="text-sky-700">{t('landingPageEditor.saveToConfigureDomain')}</p>
+                  <div className="text-center py-6 bg-slate-100 rounded-xl">
+                    <HiOutlineGlobeAlt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="font-medium text-slate-600">Lưu landing page trước</p>
+                    <p className="text-sm text-slate-500 mt-1">để cấu hình custom domain</p>
+                  </div>
                 ) : cdLoading ? (
-                  <p className="text-sky-600">{t('landingPageEditor.loadingConfig')}</p>
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-8 h-8 border-3 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
                 ) : (
                   <>
-                    <p className="text-sky-700 leading-relaxed">{t('landingPageEditor.domainInstructions')}</p>
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm font-mono"
-                        placeholder={t('landingPageEditor.domainPlaceholder')}
-                        value={cdHostnameDraft}
-                        onChange={(e) => setCdHostnameDraft(e.target.value)}
-                        disabled={cdBusy || cdInfo?.status === 'active'}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-xs py-1.5 shrink-0"
-                        disabled={cdBusy || cdInfo?.status === 'active'}
-                        onClick={saveCustomDomainHostname}
-                      >
-                        {t('landingPageEditor.saveHostname')}
-                      </button>
-                    </div>
-                    {cdInfo?.record ? (
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between gap-2">
-                          <span className="font-medium text-sky-800">{t('landingPageEditor.txtRecord')}</span>
-                          <button
-                            type="button"
-                            className="text-primary-600 text-[11px]"
-                            onClick={() => copyText('TXT', `${cdInfo.record.name}\tTXT\t${cdInfo.record.value}`)}
-                          >
-                            {t('common.copy')}
-                          </button>
+                    {/* Status Cards */}
+                    {cdInfo?.status === 'active' ? (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-200">
+                            <HiOutlineCheck className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-green-800 text-lg">{cdInfo.hostname}</p>
+                            <p className="text-sm text-green-600">Domain đã được kích hoạt thành công!</p>
+                          </div>
                         </div>
-                        <textarea
-                          readOnly
-                          className="w-full h-14 rounded-lg border border-sky-200 bg-white px-2 py-1 text-[11px] font-mono"
-                          value={`${t('landingPageEditor.name')}: ${cdInfo.record.name}\n${t('landingPageEditor.value')}: ${cdInfo.record.value}`}
-                          spellCheck={false}
-                        />
-                        <button type="button" className="btn btn-primary text-xs py-1.5" disabled={cdBusy} onClick={verifyCustomDomain}>
-                          {t('landingPageEditor.verifyDNS')}
-                        </button>
+                      </div>
+                    ) : cdInfo?.configured ? (
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-200">
+                            <HiOutlineClock className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-amber-800 text-lg">{cdInfo.hostname}</p>
+                            <p className="text-sm text-amber-600">Đang chờ xác minh DNS</p>
+                          </div>
+                        </div>
                       </div>
                     ) : null}
-                    {cdInfo?.status === 'active' ? (
-                      <p className="text-emerald-700 font-medium">{t('landingPageEditor.activated')}: {cdInfo.hostname}</p>
-                    ) : null}
-                    {cdInfo?.configured ? (
-                      <button type="button" className="text-red-500 text-[11px] hover:underline" disabled={cdBusy} onClick={removeCustomDomain}>
-                        {t('landingPageEditor.removeDomain')}
+
+                    {/* Input Domain */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <label className="block text-sm font-bold text-slate-700 mb-3">
+                        Nhập tên miền của bạn
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          className="flex-1 rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-mono outline-none focus:border-blue-400 transition-colors"
+                          placeholder="ví dụ: yoursite.com"
+                          value={cdHostnameDraft}
+                          onChange={(e) => setCdHostnameDraft(e.target.value)}
+                          disabled={cdBusy || cdInfo?.status === 'active'}
+                        />
+                        <button
+                          type="button"
+                          className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                          disabled={cdBusy || cdInfo?.status === 'active' || !cdHostnameDraft.trim()}
+                          onClick={saveCustomDomainHostname}
+                        >
+                          {cdBusy ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <HiOutlineSave className="w-5 h-5" />
+                              Lưu Domain
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Hỗ trợ cả apex domain (yoursite.com) và www domain (www.yoursite.com)
+                      </p>
+                    </div>
+
+                    {/* DNS Records & Guide */}
+                    {cdInfo?.record && cdInfo?.status !== 'active' && (
+                      <div className="space-y-4">
+                        {/* DNS Record Card */}
+                        <div className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden">
+                          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3">
+                            <h4 className="font-bold text-white flex items-center gap-2">
+                              <HiOutlineServer className="w-5 h-5" />
+                              Thêm DNS Record này vào nhà cung cấp domain
+                            </h4>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <span className="px-4 py-2 bg-blue-500 text-white text-sm font-bold rounded-lg">TXT</span>
+                              <div className="flex-1">
+                                <p className="text-xs text-slate-500">Hostname</p>
+                                <code className="text-sm font-mono font-bold text-slate-800">
+                                  {cdInfo.record.name || '(root/@)'}
+                                </code>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-2">Giá trị (Value)</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-slate-100 px-4 py-3 rounded-xl text-sm font-mono break-all">
+                                  {cdInfo.record.value}
+                                </code>
+                                <button
+                                  onClick={() => copyText(cdInfo.record.value, 'txt-value')}
+                                  className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors"
+                                  title="Copy giá trị"
+                                >
+                                  <HiOutlineClipboard className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Simple Guide */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                          <p className="text-sm text-slate-600 leading-relaxed">
+                            <strong>Cách thêm:</strong> Đăng nhập vào trang quản lý domain của bạn → Tìm mục DNS Settings → Thêm TXT record với thông tin bên trên → Lưu.
+                          </p>
+                        </div>
+
+                        {/* Verify Button */}
+                        <button
+                          type="button"
+                          className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-green-200"
+                          disabled={cdBusy}
+                          onClick={verifyCustomDomain}
+                        >
+                          {cdBusy ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <HiOutlineShieldCheck className="w-6 h-6" />
+                              Xác minh DNS
+                            </>
+                          )}
+                        </button>
+
+                        {/* Warning */}
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <p className="text-sm text-amber-800">
+                            <strong>⏱️ Lưu ý:</strong> DNS có thể mất 5-30 phút để cập nhật. Đôi khi cần đến 24 giờ.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Remove Domain */}
+                    {cdInfo?.configured && (
+                      <button
+                        type="button"
+                        className="w-full py-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                        disabled={cdBusy}
+                        onClick={removeCustomDomain}
+                      >
+                        <HiOutlineTrash className="w-5 h-5" />
+                        Xóa domain đã cấu hình
                       </button>
-                    ) : null}
+                    )}
                   </>
                 )}
               </div>
-
-              {/* Code Snippets */}
-              <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-3.5 py-3 text-xs text-amber-900 space-y-2">
-                <p className="font-semibold">{t('landingPageEditor.whenSave')}</p>
-                <p className="text-amber-800 leading-relaxed">{t('landingPageEditor.saveDescription')}</p>
-                {!snippetContext.combined ? (
-                  <p className="text-amber-700 italic">{t('landingPageEditor.enterSlugForCode')}</p>
-                ) : (
-                  <div className="space-y-3 pt-1">
-                    {[
-                      { label: t('landingPageEditor.formIframeBlock'), value: snippetContext.iframeBlock, h: 'h-20' },
-                      { label: t('landingPageEditor.scriptTrackingBlock'), value: snippetContext.scriptBlock, h: 'h-14' },
-                    ].map(({ label, value, h }) => (
-                      <div key={label}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="font-medium">{label}</span>
-                          <button
-                            type="button"
-                            className="text-primary-600 flex items-center gap-1"
-                            onClick={() => copyText(label, value)}
-                          >
-                            <HiOutlineDuplicate className="w-3.5 h-3.5" />
-                            {t('common.copy')}
-                          </button>
-                        </div>
-                        <textarea readOnly className={`w-full ${h} rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-[11px] font-mono`} value={value} spellCheck={false} />
-                      </div>
-                    ))}
-                    <button type="button" className="btn btn-secondary text-xs py-1.5 w-full" onClick={() => copyText('both', snippetContext.combined)}>
-                      {t('landingPageEditor.copyBothBlocks')}
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
-          )}
 
-          {/* HTML tab */}
-          {leftTab === 'html' && (
-            <div className="flex-1 flex flex-col min-h-0 p-3">
-              <textarea
-                className="flex-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary-400/40 focus:border-primary-400 bg-gray-50"
-                value={form.htmlContent}
-                onChange={(e) => setForm((p) => ({ ...p, htmlContent: e.target.value }))}
-                placeholder={t('landingPageEditor.htmlPlaceholder')}
-                spellCheck={false}
-              />
-              <p className="shrink-0 mt-1.5 text-[11px] text-gray-400">
-                {form.htmlContent ? `${form.htmlContent.split('\n').length} lines · ${form.htmlContent.length.toLocaleString()} chars` : t('landingPageEditor.htmlPlaceholder')}
+            <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-950 leading-relaxed space-y-2">
+              <p>
+                <strong>{t('landingPageEditor.whenSave')}:</strong> {t('landingPageEditor.saveDescription')}
               </p>
+              {!snippetContext.combined ? (
+                <p className="text-amber-800">{t('landingPageEditor.enterSlugForCode')}</p>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span>{t('landingPageEditor.formIframeBlock')}</span>
+                      <button
+                        type="button"
+                        className="text-primary-600 flex items-center gap-1 shrink-0 text-[11px]"
+                        onClick={() => copyText('iframe form', snippetContext.iframeBlock)}
+                      >
+                        <HiOutlineDuplicate className="w-3.5 h-3.5" />
+                        {t('common.copy')}
+                      </button>
+                    </div>
+                    <textarea
+                      readOnly
+                      className="w-full h-24 rounded border border-amber-200/80 bg-white px-2 py-1.5 text-[11px] font-mono"
+                      value={snippetContext.iframeBlock}
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span>{t('landingPageEditor.scriptTrackingBlock')}</span>
+                      <button
+                        type="button"
+                        className="text-primary-600 flex items-center gap-1 shrink-0 text-[11px]"
+                        onClick={() => copyText('script tracking', snippetContext.scriptBlock)}
+                      >
+                        <HiOutlineDuplicate className="w-3.5 h-3.5" />
+                        {t('common.copy')}
+                      </button>
+                    </div>
+                    <textarea
+                      readOnly
+                      className="w-full h-20 rounded border border-amber-200/80 bg-white px-2 py-1.5 text-[11px] font-mono"
+                      value={snippetContext.scriptBlock}
+                      spellCheck={false}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-xs py-1.5"
+                    onClick={() => copyText('cả hai khối', snippetContext.combined)}
+                  >
+                    {t('landingPageEditor.copyBothBlocks')}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+
+            {form.slug.trim() && links?.preview ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <span className="truncate max-w-full">{links.preview}</span>
+                <button
+                  type="button"
+                  className="text-primary-600 flex items-center gap-1 shrink-0"
+                  onClick={() => copyText('URL', links.preview)}
+                >
+                  <HiOutlineDuplicate className="w-3.5 h-3.5" />
+                  {t('landingPageEditor.copyUrl')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="flex-1 flex flex-col min-h-0 p-4 bg-white">
+            <label className="block text-sm font-medium text-gray-700 mb-1 shrink-0">
+              HTML (dán tay hoặc dùng «Tạo bằng AI» — một file đầy đủ, Tailwind CDN)
+            </label>
+            <textarea
+              className="flex-1 w-full min-h-[200px] rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono resize-none"
+              value={form.htmlContent}
+              onChange={(e) => setForm((p) => ({ ...p, htmlContent: e.target.value }))}
+              placeholder={t('landingPageEditor.htmlPlaceholder')}
+              spellCheck={false}
+            />
+          </div>
         </section>
 
-        <div
-          aria-label={t('landingPageEditor.resizePanels')}
-          className="group relative hidden lg:flex w-2 shrink-0 cursor-col-resize items-stretch justify-center border-x border-gray-200 bg-gray-50 hover:bg-primary-50"
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={handlePanelResizeStart}
-        >
-          <span className="my-auto h-12 w-1 rounded-full bg-gray-300 transition-colors group-hover:bg-primary-400" />
-        </div>
-
-        {/* ── Preview ── */}
-        <section className="flex flex-col flex-1 min-h-[40vh] lg:min-h-0 bg-gray-100 border-t lg:border-t-0 border-gray-200">
-          <div className="shrink-0 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <span>{t('landingPageEditor.preview')}</span>
-            {links?.preview ? (
-              <a href={links.preview} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline flex items-center gap-1">
-                <HiOutlineDuplicate className="w-3 h-3" />
-                {links.preview.replace(/^https?:\/\/[^/]+/, '')}
-              </a>
-            ) : null}
+        <section className="flex flex-col min-h-[40vh] lg:min-h-0 lg:w-1/2 bg-gray-100 border-t lg:border-t-0 border-gray-200">
+          <div className="shrink-0 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 bg-gray-50">
+            {t('landingPageEditor.preview')}
           </div>
           <iframe
             title={t('landingPageEditor.landingPreview')}
-            className={`flex-1 w-full min-h-0 border-0 bg-white ${isResizingPanels ? 'pointer-events-none' : ''}`}
+            className="flex-1 w-full min-h-0 border-0 bg-white"
             sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-            srcDoc={previewSrcDoc || `<!DOCTYPE html><html><body><p class="p-4 text-gray-500 text-sm">${t('landingPageEditor.enterSlugHtmlToPreview')}</p></body></html>`}
+            srcDoc={
+              previewSrcDoc ||
+              `<!DOCTYPE html><html><body><p class="p-4 text-gray-500 text-sm">${t('landingPageEditor.enterSlugHtmlToPreview')}</p></body></html>`
+            }
           />
         </section>
       </div>

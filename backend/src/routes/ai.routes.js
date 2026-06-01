@@ -1,8 +1,10 @@
 import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import multer from 'multer';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.use(authMiddleware);
 
@@ -41,5 +43,14 @@ router.put('/business-profile', aiController.saveBusinessProfile.bind(aiControll
 router.get('/sessions', aiController.getSessions.bind(aiController));
 router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiController));
 router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
+
+// Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
+router.post('/custom-chat', aiController.customChat.bind(aiController));
+
+// Custom AI - Document upload (extract, chunk, embed)
+router.post('/custom-chat/upload', upload.single('file'), aiController.customChatUpload.bind(aiController));
+
+// Custom AI - Get documents
+router.get('/custom-chat/documents/:chatbotId', aiController.getCustomChatbotDocuments.bind(aiController));
 
 export default router;

@@ -43,7 +43,7 @@ function getBlockedHostnames() {
   return set;
 }
 
-function assertValidWwwHostname(hostname) {
+function assertValidHostname(hostname) {
   const h = String(hostname || '').trim().toLowerCase();
   if (!h) {
     const err = new Error('Thiếu hostname');
@@ -55,12 +55,8 @@ function assertValidWwwHostname(hostname) {
     err.statusCode = 400;
     throw err;
   }
-  if (!h.startsWith('www.')) {
-    const err = new Error('Chỉ hỗ trợ hostname dạng www.ví-dụ.com (apex domain.com redirect về www — cấu hình DNS/nginx).');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (!WWW_HOST_RE.test(h)) {
+  // Hỗ trợ cả apex domain (example.com) và www domain (www.example.com)
+  if (!/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(h)) {
     const err = new Error('Hostname không hợp lệ');
     err.statusCode = 400;
     throw err;
@@ -184,7 +180,7 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async setHostname(landingPageId, hostname, authUser) {
-    const h = assertValidWwwHostname(hostname);
+    const h = assertValidHostname(hostname);
     const lp = await landingPageRepository.findByIdInScope(landingPageId, normalizeAuthScope(authUser));
     if (!lp) {
       const err = new Error('Không tìm thấy landing page');

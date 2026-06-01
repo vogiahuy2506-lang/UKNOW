@@ -33,6 +33,7 @@ import {
   HiOutlineCode,
   HiOutlineChatAlt2,
   HiOutlineInbox,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -85,10 +86,7 @@ const userMenuItems = (t) => [
     icon: HiOutlineCog,
     children: [
       { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
-      { name: t('nav.knowledgeBase'), path: '/app/settings/knowledge-base', icon: HiOutlineBookOpen, ownerOnly: true },
-      { name: t('nav.subAssistants'), path: '/app/settings/sub-assistants', icon: HiOutlineUsers, ownerOnly: true },
-      { name: t('nav.chatbotWidget'), path: '/app/settings/chatbot-widget', icon: HiOutlineCode, ownerOnly: true },
-      { name: t('nav.chatbotChannels'), path: '/app/settings/chatbot-channels', icon: HiOutlineChatAlt2, ownerOnly: true },
+      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlineSparkles, ownerOnly: true },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
       { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
@@ -101,7 +99,6 @@ const userMenuItems = (t) => [
       { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
       { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
       { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
-      { name: t('nav.customDomains'), path: '/app/settings/custom-domains', icon: HiOutlineGlobeAlt, ownerOnly: true },
       { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
     ],
   },

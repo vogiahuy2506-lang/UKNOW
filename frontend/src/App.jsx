@@ -30,12 +30,12 @@ import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesP
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
-import CustomDomainsPage from './pages/settings/CustomDomainsPage';
 import KnowledgeBasePage from './pages/settings/KnowledgeBasePage';
 import SubAssistantPage from './pages/settings/SubAssistantPage';
 import ChannelConnectionsPage from './pages/settings/ChannelConnectionsPage';
 import WebWidgetPage from './pages/settings/WebWidgetPage';
 import UnifiedInboxPage from './pages/settings/UnifiedInboxPage';
+import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
 import Orders from './pages/orders/Orders';
@@ -262,12 +262,8 @@ function App() {
             <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
             <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
-            <Route path="settings/custom-domains" element={<OwnerRoute><CustomDomainsPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
-            <Route path="settings/knowledge-base" element={<OwnerRoute><KnowledgeBasePage /></OwnerRoute>} />
-            <Route path="settings/sub-assistants" element={<OwnerRoute><SubAssistantPage /></OwnerRoute>} />
-            <Route path="settings/chatbot-channels" element={<OwnerRoute><ChannelConnectionsPage /></OwnerRoute>} />
-            <Route path="settings/chatbot-widget" element={<OwnerRoute><WebWidgetPage /></OwnerRoute>} />
+            <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><UnifiedInboxPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
@@ -278,6 +274,10 @@ function App() {
             <Route path="settings/zalo" element={<Navigate to="/app/settings/channels" replace />} />
             <Route path="settings/email-templates" element={<Navigate to="/app/settings/templates" replace />} />
             <Route path="settings/zalo-templates" element={<Navigate to="/app/settings/templates" replace />} />
+            <Route path="settings/knowledge-base" element={<Navigate to="/app/chatbot-studio" replace />} />
+            <Route path="settings/sub-assistants" element={<Navigate to="/app/chatbot-studio" replace />} />
+            <Route path="settings/chatbot-widget" element={<Navigate to="/app/chatbot-studio" replace />} />
+            <Route path="settings/chatbot-channels" element={<Navigate to="/app/chatbot-studio" replace />} />
 
             {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
             <Route path="courses" element={<Courses />} />
