@@ -6,6 +6,7 @@ import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
 import db from '../../config/database.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 
 class AiCampaignService {
   /**
@@ -1532,6 +1533,8 @@ Khi muốn tạo Landing Page.
    * @param {Array}  files    — [{tempId, originalName, contentType}]
    */
   async _runChat(systemPrompt, history, files) {
+    const googleUrlCache = new Map();
+
     // Hàm đọc và đính kèm một file vào parts array
     const attachFileToParts = async (parts, file) => {
       try {
@@ -1552,13 +1555,16 @@ Khi muốn tạo Landing Page.
       }
     };
 
-    // Build Gemini history — re-attach files từ TẤT CẢ tin nhắn trong lịch sử
+    // Build Gemini history — re-attach files + Google URLs từ TẤT CẢ tin nhắn trong lịch sử
     const geminiHistory = await Promise.all(history.map(async (msg) => {
       const parts = [{ text: msg.content || '(no text)' }];
-      if (msg.role === 'user' && Array.isArray(msg.files) && msg.files.length > 0) {
-        for (const file of msg.files) {
-          await attachFileToParts(parts, file);
+      if (msg.role === 'user') {
+        if (Array.isArray(msg.files) && msg.files.length > 0) {
+          for (const file of msg.files) {
+            await attachFileToParts(parts, file);
+          }
         }
+        await attachGoogleUrlParts(parts, msg.content, googleUrlCache);
       }
       return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
     }));
