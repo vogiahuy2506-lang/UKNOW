@@ -3,6 +3,14 @@ import { useParams } from 'react-router-dom';
 import { fetchPublishedLandingHtml } from '../../features/landing-pages/services/landingPagePublicApi.service.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
 
+function ensureTailwindCdn(html) {
+  if (!html || html.includes('cdn.tailwindcss.com')) return html;
+  return html.replace(
+    /<head([^>]*)>/i,
+    `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`,
+  );
+}
+
 /**
  * Render HTML do admin upload — hiển thị trong iframe sandbox (tách origin khỏi app cha).
  * Route: `/lp/:slug`
@@ -69,7 +77,7 @@ export default function LpRendererPage() {
       title={title || slug}
       className="w-full min-h-screen border-0 block"
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-same-origin"
-      srcDoc={html}
+      srcDoc={ensureTailwindCdn(html)}
     />
   );
 }

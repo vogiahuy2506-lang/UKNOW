@@ -139,7 +139,9 @@ export default function LandingPagesAdminPage() {
     const baseHtml = rawTrim
       ? form.htmlContent
       : '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body></body></html>';
-    return prepareLandingHtmlForPreview(baseHtml, { slug, frontendOrigin: origin, apiBase });
+    const preview = prepareLandingHtmlForPreview(baseHtml, { slug, frontendOrigin: origin, apiBase });
+    if (preview.includes('cdn.tailwindcss.com')) return preview;
+    return preview.replace(/<head([^>]*)>/i, `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.htmlContent, form.slug]);
 
