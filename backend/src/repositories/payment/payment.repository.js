@@ -4,11 +4,42 @@ export const deleteOrderByCode = async (orderCode) => {
     await db.query('DELETE FROM orders WHERE order_code = $1', [orderCode]);
 };
 
-export const createOrder = async ({ orderCode, planId, amount, userEmail, userId = null, status = 'pending', paymentMethod = 'payos', note = null, billingPeriod = 'monthly' }) => {
+export const createOrder = async ({
+    orderCode,
+    planId,
+    amount,
+    userEmail,
+    userId = null,
+    status = 'pending',
+    paymentMethod = 'payos',
+    note = null,
+    billingPeriod = 'monthly',
+    originalAmount = null,
+    discountAmount = 0,
+    voucherId = null,
+    voucherCode = null,
+}) => {
     const { rows } = await db.query(
-        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING *`,
-        [orderCode, planId, amount, userEmail, userId, status, paymentMethod, note, billingPeriod]
+        `INSERT INTO orders (
+            order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
+            original_amount, discount_amount, voucher_id, voucher_code, created_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()) RETURNING *`,
+        [
+            orderCode,
+            planId,
+            amount,
+            userEmail,
+            userId,
+            status,
+            paymentMethod,
+            note,
+            billingPeriod,
+            originalAmount ?? amount,
+            discountAmount || 0,
+            voucherId,
+            voucherCode,
+        ]
     );
     return rows[0];
 };
@@ -30,7 +61,9 @@ export const findOrderStatusByCode = async (orderCode) => {
 
 export const findOrderByCode = async (orderCode) => {
     const { rows } = await db.query(
-        'SELECT id, user_id, plan_id, status, user_email, billing_period FROM orders WHERE order_code = $1',
+        `SELECT id, user_id, plan_id, status, user_email, billing_period,
+                voucher_id, voucher_code, discount_amount
+         FROM orders WHERE order_code = $1`,
         [orderCode]
     );
     return rows[0] || null;

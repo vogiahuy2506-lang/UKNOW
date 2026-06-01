@@ -18,7 +18,7 @@ export function AiContent({ text }) {
         : part
     );
   return (
-    <div className="text-sm leading-relaxed text-slate-800 space-y-1">
+    <div className="text-sm leading-relaxed text-slate-800 space-y-1 break-words">
       {lines.map((line, i) => {
         if (!line.trim()) return <div key={i} className="h-1" />;
         // Bullet: lines starting with - or *

@@ -14,6 +14,9 @@ const adminPlansApiService = {
   assignPlan(id, userEmail, { paymentMethod = 'free', note = null } = {}) {
     return api.post(`/admin/plans/${id}/assign`, { userEmail, paymentMethod, note });
   },
+  translateFeatures(texts) {
+    return api.post('/admin/plans/translate-features', { texts });
+  },
 };
 
 export default adminPlansApiService;

@@ -32,7 +32,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
   const exp = new Date(expiresAt);
   const daysLeft = Math.ceil((exp - now) / 86400000);
 
-  if (!hasPlan && exp < now) {
+  if (exp < now) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
         {t('plans.expired')}
@@ -43,7 +43,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
     return (
       <div>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
-          ⚠ {daysLeft} {t('time.daysAgo', { n: daysLeft })}
+          ⚠ {t('plans.daysLeft', { n: daysLeft })}
         </span>
         <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>
@@ -53,7 +53,7 @@ const ExpiryBadge = ({ expiresAt, hasPlan }) => {
     return (
       <div>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 border border-amber-200">
-          {daysLeft} {t('time.daysAgo', { n: daysLeft })}
+          ⚠ {t('plans.daysLeft', { n: daysLeft })}
         </span>
         <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>

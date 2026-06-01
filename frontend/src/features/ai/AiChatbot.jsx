@@ -242,6 +242,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ scroll khi messages đổi; isOpen chỉ là guard
   }, [messages]);
 
+  useEffect(() => {
+    setMessages(prev => {
+      if (prev.length === 0) return prev;
+      const newWelcome = isSuperAdmin ? t('aiChatbot.welcomeAdmin') : t('aiChatbot.welcomeUser');
+      if (prev[0].content === newWelcome) return prev;
+      return [{ role: 'assistant', content: newWelcome }, ...prev.slice(1)];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
+
   const uploadFiles = async (files) => {
     if (!files.length) return;
     setIsUploading(true);
@@ -833,58 +843,63 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </div>
       </div>
 
-      {/* Session tabs — kéo ngang để xem thêm */}
-      <div
-        ref={tabsScrollRef}
-        className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-slate-100 overflow-x-auto select-none"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', cursor: 'grab' }}
-        onMouseDown={(e) => {
-          tabsDragRef.current = { dragging: true, startX: e.clientX, scrollLeft: tabsScrollRef.current.scrollLeft, moved: false };
-          tabsScrollRef.current.style.cursor = 'grabbing';
-        }}
-        onMouseMove={(e) => {
-          if (!tabsDragRef.current.dragging) return;
-          const dx = e.clientX - tabsDragRef.current.startX;
-          if (Math.abs(dx) > 4) tabsDragRef.current.moved = true;
-          tabsScrollRef.current.scrollLeft = tabsDragRef.current.scrollLeft - dx;
-        }}
-        onMouseUp={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
-        onMouseLeave={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
-      >
-        {sessions.map(session => (
-          <div
-            key={session.id}
-            title={session.title}
-            className={`shrink-0 group flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-[11px] font-semibold transition-all min-w-[60px] max-w-[130px] ${
-              currentSessionId === session.id
-                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
-                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-            }`}
-          >
-            {pendingTabIds.has(session.id) && currentSessionId !== session.id && (
-              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-0.5" title="Đang xử lý ngầm..." />
-            )}
-            <span
-              className="truncate flex-1 cursor-pointer"
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseUp={() => { if (!tabsDragRef.current.moved) loadSession(session.id); }}
-            >
-              {session.title}
-            </span>
-            <span
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseUp={(e) => { if (!tabsDragRef.current.moved) handleDeleteSession(session.id, e); }}
-              className={`shrink-0 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${
-                currentSessionId === session.id ? 'hover:bg-orange-400' : 'hover:bg-slate-200'
+      {/* Session tabs — session list scrolls, New stays pinned */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+        <div
+          ref={tabsScrollRef}
+          className="min-w-0 flex-1 flex items-center gap-1 overflow-x-auto select-none"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', cursor: 'grab' }}
+          onMouseDown={(e) => {
+            tabsDragRef.current = { dragging: true, startX: e.clientX, scrollLeft: tabsScrollRef.current.scrollLeft, moved: false };
+            tabsScrollRef.current.style.cursor = 'grabbing';
+          }}
+          onMouseMove={(e) => {
+            if (!tabsDragRef.current.dragging) return;
+            const dx = e.clientX - tabsDragRef.current.startX;
+            if (Math.abs(dx) > 4) tabsDragRef.current.moved = true;
+            tabsScrollRef.current.scrollLeft = tabsDragRef.current.scrollLeft - dx;
+          }}
+          onMouseUp={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
+          onMouseLeave={() => { tabsDragRef.current.dragging = false; if (tabsScrollRef.current) tabsScrollRef.current.style.cursor = 'grab'; }}
+        >
+          {sessions.map(session => (
+            <div
+              key={session.id}
+              title={session.title}
+              className={`shrink-0 group flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-[11px] font-semibold transition-all min-w-[60px] max-w-[130px] ${
+                currentSessionId === session.id
+                  ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
               }`}
             >
-              <HiOutlineX className="w-3 h-3" />
-            </span>
-          </div>
-        ))}
+              {pendingTabIds.has(session.id) && currentSessionId !== session.id && (
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-0.5" title="Đang xử lý ngầm..." />
+              )}
+              <span
+                className="truncate flex-1 cursor-pointer"
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={() => { if (!tabsDragRef.current.moved) loadSession(session.id); }}
+              >
+                {session.title}
+              </span>
+              <span
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => { if (!tabsDragRef.current.moved) handleDeleteSession(session.id, e); }}
+                className={`shrink-0 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${
+                  currentSessionId === session.id ? 'hover:bg-orange-400' : 'hover:bg-slate-200'
+                }`}
+              >
+                <HiOutlineX className="w-3 h-3" />
+              </span>
+            </div>
+          ))}
+        </div>
         <button
           onMouseUp={() => { if (!tabsDragRef.current.moved) startNewChat(); }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            tabsDragRef.current = { ...tabsDragRef.current, dragging: false, moved: false };
+          }}
           title={t('aiChatbot.newConversation')}
           className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
             !currentSessionId
@@ -952,7 +967,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[92%] ${msg.role === 'user' ? 'bg-slate-100 rounded-2xl px-4 py-3' : ''}`}>
+            <div className={`max-w-[92%] min-w-0 break-words ${msg.role === 'user' ? 'bg-slate-100 rounded-2xl px-4 py-3' : ''}`}>
               {msg.role === 'assistant' && (
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-5 h-5 bg-orange-100 rounded-md flex items-center justify-center">

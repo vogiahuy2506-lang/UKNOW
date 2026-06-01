@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineSparkles } from 'react-icons/hi2';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { useI18n } from '../../../i18n';
 import { normalizeMoneyValue } from './planUtils.jsx';
@@ -39,46 +40,123 @@ const normalizeFeatures = (features) => {
 };
 
 export const FeatureEditor = ({ features, onChange }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [draft, setDraft] = useState('');
+  const [translatingIdxs, setTranslatingIdxs] = useState(new Set());
+  const featuresRef = useRef(features);
+  useEffect(() => { featuresRef.current = features; }, [features]);
+
   const list = normalizeFeatures(features);
+
+  const viOnlyIdxs = list
+    .map((f, i) => ({ i, text: typeof f === 'string' ? f : null }))
+    .filter(({ text }) => text !== null);
+
+  const getDisplayText = (f) => {
+    if (typeof f === 'object' && f !== null) return f[locale] || f.vi || f.en || '';
+    return f;
+  };
+
+  const translateOne = useCallback(async (text, idx) => {
+    setTranslatingIdxs(prev => new Set([...prev, idx]));
+    try {
+      const { data } = await adminPlansApiService.translateFeatures([text]);
+      const en = data.data?.[0];
+      if (!en) return;
+      const current = normalizeFeatures(featuresRef.current);
+      if (typeof current[idx] === 'string') {
+        const next = [...current];
+        next[idx] = { vi: text, en };
+        onChange(next);
+      }
+    } catch {
+      // silently fail — stays as string, VI only badge appears
+    } finally {
+      setTranslatingIdxs(prev => { const s = new Set(prev); s.delete(idx); return s; });
+    }
+  }, [onChange]);
+
+  const autoTranslateAll = async () => {
+    if (viOnlyIdxs.length === 0) return;
+    const allTranslating = new Set(viOnlyIdxs.map(({ i }) => i));
+    setTranslatingIdxs(allTranslating);
+    try {
+      const { data } = await adminPlansApiService.translateFeatures(viOnlyIdxs.map(({ text }) => text));
+      const translations = data.data;
+      const current = normalizeFeatures(featuresRef.current);
+      const updated = [...current];
+      viOnlyIdxs.forEach(({ i, text }, arrIdx) => {
+        if (typeof updated[i] === 'string') updated[i] = { vi: text, en: translations[arrIdx] };
+      });
+      onChange(updated);
+    } catch {
+      // silently fail
+    } finally {
+      setTranslatingIdxs(new Set());
+    }
+  };
 
   const add = () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
+    const newIdx = list.length;
     onChange([...list, trimmed]);
     setDraft('');
+    translateOne(trimmed, newIdx);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.nativeEvent.isComposing) return;
+    add();
   };
 
   return (
     <div className="space-y-2">
+      {viOnlyIdxs.length > 0 && (
+        <button
+          type="button"
+          onClick={autoTranslateAll}
+          disabled={translatingIdxs.size > 0}
+          className="flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50 transition-colors"
+        >
+          <HiOutlineSparkles className="w-3.5 h-3.5" />
+          {translatingIdxs.size > 0 ? 'Đang dịch...' : `Auto-translate ${viOnlyIdxs.length} VI only`}
+        </button>
+      )}
       <div className="space-y-1">
-        {list.map((f, i) => (
-          <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
-            <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
-            <span className="text-sm text-gray-700 flex-1">{f}</span>
-            <button
-              type="button"
-              onClick={() => onChange(list.filter((_, j) => j !== i))}
-              className="text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <HiOutlineX className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
+        {list.map((f, i) => {
+          const isObj = typeof f === 'object' && f !== null;
+          const isTranslating = translatingIdxs.has(i);
+          return (
+            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+              <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <span className="text-sm text-gray-700 flex-1">{getDisplayText(f)}</span>
+              {isTranslating && (
+                <span className="text-[10px] text-gray-400 animate-pulse">translating...</span>
+              )}
+              {!isObj && !isTranslating && (
+                <span className="text-[10px] text-amber-500 font-medium">VI only</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(list.filter((_, j) => j !== i))}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <HiOutlineX className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
       <div className="flex gap-2">
         <input
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.nativeEvent.isComposing) return;
-            add();
-          }}
+          onKeyDown={handleKeyDown}
           placeholder={t('planInputs.featuresPlaceholder')}
           className="input flex-1 text-sm"
         />

@@ -1,5 +1,6 @@
 import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
+import { validateVoucherForCheckout } from '../voucher.service.js';
 import {
     createOrder,
     findOrderStatusByCode,
@@ -9,6 +10,7 @@ import {
     findUserIdByEmail,
     hasSuccessfulOrderForPlanByUser,
 } from '../../repositories/payment/payment.repository.js';
+import { redeemVoucherForOrder } from '../../repositories/voucher.repository.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -40,29 +42,65 @@ const assertNoImmediateDowngrade = async ({ targetPlan, userId }) => {
     }
 };
 
-export const createPaymentLink = async ({ planCode, userEmail, userId = null, billingPeriod = 'monthly' }) => {
+export const createPaymentLink = async ({ planCode, userEmail, userId = null, billingPeriod = 'monthly', voucherCode = null }) => {
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
     await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
     await assertNoImmediateDowngrade({ targetPlan: plan, userId });
 
     // Xác định số tiền theo chu kỳ thanh toán
-    const amount = billingPeriod === 'yearly' && plan.price_yearly
+    const originalAmount = billingPeriod === 'yearly' && plan.price_yearly
         ? Number(plan.price_yearly)
         : Number(plan.price);
 
-    if (amount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
+    if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
+
+    let voucher = null;
+    let amount = Math.round(originalAmount);
+    let discountAmount = 0;
+    if (String(voucherCode || '').trim()) {
+        const validation = await validateVoucherForCheckout({
+            planCode,
+            billingPeriod,
+            userId,
+            userEmail,
+            code: voucherCode,
+        });
+        if (!validation.voucher) throw { status: 400, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' };
+        voucher = validation.voucher;
+        discountAmount = Number(voucher.discountAmount || 0);
+        amount = Number(voucher.finalAmount || 0);
+    }
 
     const orderCode = Date.now();
 
-    await createOrder({
+    const order = await createOrder({
         orderCode,
         planId: plan.id,
         amount,
         userEmail,
         userId,
         billingPeriod,
+        originalAmount,
+        discountAmount,
+        voucherId: voucher?.id || null,
+        voucherCode: voucher?.code || null,
+        status: amount <= 0 ? 'success' : 'pending',
+        paymentMethod: amount <= 0 ? 'voucher' : 'payos',
     });
+
+    if (amount <= 0) {
+        await redeemVoucherForOrder(order);
+        if (userId) await activateUserPlan(userId, plan.id, billingPeriod);
+        return {
+            orderCode,
+            originalAmount: Math.round(originalAmount),
+            discountAmount,
+            amount,
+            voucher,
+            noPayment: true,
+        };
+    }
 
     const paymentLink = await payosClient.paymentRequests.create({
         orderCode: Number(orderCode),
@@ -78,6 +116,10 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
         qrCode: paymentLink.qrCode,
         checkoutUrl: paymentLink.checkoutUrl,
         orderCode,
+        originalAmount: Math.round(originalAmount),
+        discountAmount,
+        amount,
+        voucher,
     };
 };
 
@@ -95,6 +137,7 @@ export const handleWebhook = async (body) => {
         }
 
         await updateOrderStatus(webhookData.orderCode, 'success');
+        await redeemVoucherForOrder(order);
 
         const userId = order?.user_id || (order?.user_email ? await findUserIdByEmail(order.user_email) : null);
         if (userId && order?.plan_id) {

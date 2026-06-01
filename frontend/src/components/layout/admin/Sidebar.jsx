@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
@@ -26,6 +26,7 @@ import {
   HiOutlineStar,
   HiOutlineGlobeAlt,
   HiOutlineCurrencyDollar,
+  HiOutlineTicket,
   HiOutlineShieldCheck,
   HiOutlineOfficeBuilding,
   HiOutlineBookOpen,
@@ -56,6 +57,11 @@ const superAdminMenuItems = (t) => [
     name: t('nav.planManagement'),
     path: '/admin/plans',
     icon: HiOutlineCurrencyDollar,
+  },
+  {
+    name: t('nav.voucherManagement'),
+    path: '/admin/vouchers',
+    icon: HiOutlineTicket,
   },
   {
     name: t('nav.orders'),
@@ -252,7 +258,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
     >
       {/* Logo row — includes close button on mobile */}
       <div className={`h-16 flex items-center border-b border-gray-200 px-4 ${showLabels ? 'justify-between' : 'justify-center'}`}>
-        <div className="flex items-center gap-2.5 min-w-0">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0 hover:opacity-75 transition-opacity">
           <img
             src={logoIcon}
             alt="Founder AI"
@@ -266,7 +272,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               </p>
             </div>
           )}
-        </div>
+        </Link>
 
         {/* Close button — only on mobile */}
         {isMobile && showLabels && (

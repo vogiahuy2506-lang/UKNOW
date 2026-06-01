@@ -2,12 +2,7 @@ import { Link } from 'react-router-dom';
 import { FaCheckCircle, FaStar } from 'react-icons/fa';
 import founderaiLogo from '../assets/icons/founderai-logo.png';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-
-const FEATURES = [
-  'Triển khai tự động hóa trong 5 phút',
-  'Landing Page Builder kéo thả trực quan',
-  'Bảo mật dữ liệu Cloud cao cấp',
-];
+import { useI18n } from '../i18n';
 
 const GLASS_LEFT = {
   background: 'rgba(12, 10, 20, 0.18)',
@@ -27,6 +22,8 @@ const GLASS_RIGHT = {
 };
 
 const AuthLayout = ({ children }) => {
+  const { t } = useI18n();
+  const features = t('authLayout.features');
 
   return (
     <div className="min-h-screen relative overflow-x-hidden font-sans selection:bg-orange-500 selection:text-white">
@@ -61,21 +58,21 @@ const AuthLayout = ({ children }) => {
             <div className="my-auto py-10">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/12 bg-white/5 mb-8">
                 <FaStar className="text-yellow-400 w-3.5 h-3.5" />
-                <span className="text-[11px] font-bold text-orange-200 uppercase tracking-widest">Nền tảng số 1 Việt Nam</span>
+                <span className="text-[11px] font-bold text-orange-200 uppercase tracking-widest">{t('authLayout.badge')}</span>
               </div>
 
               <h2 className="text-3xl xl:text-4xl font-black text-white leading-[1.2] tracking-tight mb-5">
-                Khởi tạo hành trình<br />
+                {t('authLayout.headline')}<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400">
-                  Tăng trưởng đột phá
+                  {t('authLayout.subheadline')}
                 </span>
               </h2>
               <p className="text-base text-white/50 leading-relaxed mb-10">
-                Hệ sinh thái tự động hóa Marketing, thu thập Lead và chăm sóc khách hàng đa kênh dành cho doanh nghiệp Việt.
+                {t('authLayout.description')}
               </p>
 
               <div className="space-y-4">
-                {FEATURES.map((text, i) => (
+                {(Array.isArray(features) ? features : []).map((text, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
                       <FaCheckCircle className="text-orange-400 w-3.5 h-3.5" />
@@ -89,8 +86,8 @@ const AuthLayout = ({ children }) => {
             {/* Footer */}
             <div className="flex items-center gap-5 text-xs font-medium text-white/25">
               <span>© 2026 Founder AI Marketing</span>
-              <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">Bảo mật</Link>
-              <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">Hỗ trợ</a>
+              <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">{t('authLayout.footer.privacy')}</Link>
+              <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">{t('authLayout.footer.support')}</a>
             </div>
           </div>
 

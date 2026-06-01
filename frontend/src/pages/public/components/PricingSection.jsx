@@ -4,6 +4,7 @@ import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt } from 'react-i
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
+import { getActivePromotions } from '../../../services/promotion.service';
 import { useI18n } from '../../../i18n';
 
 const ZALO_URL = 'https://zalo.me/0866914382';
@@ -24,16 +25,19 @@ const getPlanCtaLabel = (plan, t) => {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
+const PLAN_ALIASES = { professional: 'pro' };
+
 const getPlanTranslationKey = (plan) => {
   const code = normalizeText(plan?.code);
-  if (code) return code;
+  if (code) return PLAN_ALIASES[code] || code;
 
   const name = normalizeText(plan?.name)
     .replace(/^gói\s+/, '')
     .replace(/\s+plan$/, '');
 
-  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(name)) {
-    return name;
+  const resolved = PLAN_ALIASES[name] || name;
+  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(resolved)) {
+    return resolved;
   }
   if (name.includes('tùy chọn') || name.includes('tuỳ chọn')) return 'custom';
   return '';
@@ -55,14 +59,35 @@ const getTranslatedFeature = (feature, t) => {
   const text = String(feature || '').trim();
   const normalized = normalizeText(text);
 
-  const emailMonth = text.match(/^([\d.,]+)\s*email\s*\/\s*tháng$/i);
-  if (emailMonth) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonth[1] });
+  // Email per month: "500 email/tháng" or "500 emails/month"
+  const emailMonthVi = text.match(/^([\d.,]+)\s*emails?\s*\/\s*tháng$/i);
+  if (emailMonthVi) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthVi[1] });
+  const emailMonthEn = text.match(/^([\d.,]+)\s*emails?\s*\/\s*month$/i);
+  if (emailMonthEn) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthEn[1] });
 
-  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin nhắn\s*)?zalo\s*\/\s*tháng$/i);
+  // Zalo per month: "1,000 tin Zalo/tháng" or "1,000 tin nhắn Zalo/tháng"
+  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin(?:\s*nhắn)?\s*)?zalo\s*\/\s*tháng$/i);
   if (zaloMonth) return t('pricing.featureTemplates.zaloPerMonth', { n: zaloMonth[1] });
 
+  // Members: "5 thành viên"
   const members = text.match(/^([\d.,]+)\s*thành viên(?:\s*tham gia)?$/i);
   if (members) return t('pricing.featureTemplates.members', { n: members[1] });
+
+  // Campaigns: "3 chiến dịch"
+  const campaigns = text.match(/^([\d.,]+)\s*chiến dịch$/i);
+  if (campaigns) return t('pricing.featureTemplates.campaigns', { n: campaigns[1] });
+
+  // Landing pages: "2 Landing pages" or "2 landing pages"
+  const landingPages = text.match(/^([\d.,]+)\s*landing pages?$/i);
+  if (landingPages) return t('pricing.featureTemplates.landingPages', { n: landingPages[1] });
+
+  // Zalo OA accounts: "1 tài khoản Zalo OA"
+  const zaloAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*zalo(?:\s*oa)?$/i);
+  if (zaloAccounts) return t('pricing.featureTemplates.zaloAccounts', { n: zaloAccounts[1] });
+
+  // Email accounts: "1 tài khoản Email"
+  const emailAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*email$/i);
+  if (emailAccounts) return t('pricing.featureTemplates.emailAccounts', { n: emailAccounts[1] });
 
   const knownFeatureKeys = {
     'ai viết content nâng cao': 'advancedAiWriting',
@@ -72,6 +97,23 @@ const getTranslatedFeature = (feature, t) => {
     'multi_language': 'multiLanguage',
     'không giới hạn': 'unlimited',
     'không hỗ trợ': 'notSupported',
+    'nhắn tin zalo oa không giới hạn': 'unlimitedZaloMessages',
+    'nhắn tin zalo không giới hạn': 'unlimitedZaloMessages',
+    'không giới hạn tin zalo': 'unlimitedZalo',
+    'gửi email không giới hạn': 'unlimitedEmailSending',
+    'không giới hạn email': 'unlimitedEmail',
+    'không giới hạn chiến dịch': 'unlimitedCampaigns',
+    'không giới hạn landing pages': 'unlimitedLandingPages',
+    'không giới hạn landing page': 'unlimitedLandingPages',
+    'không giới hạn tài khoản': 'unlimitedAccounts',
+    'tạo chiến dịch zalo & email': 'zaloEmailCampaigns',
+    'hỗ trợ qua chat': 'chatSupport',
+    'báo cáo chi tiết': 'detailedReports',
+    'tự động hoá zalo': 'zaloAutomation',
+    'tự động hóa zalo': 'zaloAutomation',
+    'api truy cập': 'apiAccess',
+    'ưu tiên hỗ trợ': 'prioritySupport',
+    'hỗ trợ ưu tiên': 'prioritySupport',
   };
 
   const key = knownFeatureKeys[normalized];
@@ -192,12 +234,13 @@ const calcSavings = (monthly, yearly) => {
 };
 
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
+  const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
 
   const getPlansData = async () => {
     try {
@@ -224,6 +267,18 @@ export default function PricingSection({ embedded = false, compact = false, glas
   useEffect(() => {
     getPlansData();
   }, []);
+
+  useEffect(() => {
+    const loadPromotions = async () => {
+      try {
+        const { data } = await getActivePromotions({ billingPeriod });
+        setPromotionsByPlanCode(data?.data?.byPlanCode || {});
+      } catch {
+        setPromotionsByPlanCode({});
+      }
+    };
+    loadPromotions();
+  }, [billingPeriod]);
 
   const hasYearlyPricing = plans.some(p => !isContactPlan(p) && p.price_yearly);
 
@@ -341,6 +396,16 @@ export default function PricingSection({ embedded = false, compact = false, glas
               : JSON.parse(plan.features || '[]');
             const planName = getTranslatedPlanName(plan, t);
             const planDescription = getTranslatedPlanDescription(plan, t);
+            const planCode = String(plan.code || '').toLowerCase();
+            const promotion = promotionsByPlanCode[planCode];
+            const hasPromotion = !isCustom && promotion?.discountAmount > 0;
+            const rawPlanPrice = billingPeriod === 'yearly' && plan.price_yearly
+              ? Number(plan.price_yearly)
+              : Number(plan.price || 0);
+            const promotedPrice = hasPromotion ? Number(promotion.finalAmount || rawPlanPrice) : rawPlanPrice;
+            const discountPct = hasPromotion && rawPlanPrice > 0
+              ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
+              : 0;
 
             return (
               <AnimatedSection key={plan.id} delay={index * 100} className="h-full">
@@ -357,8 +422,14 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       </span>
                     </div>
                   )}
-
                   <div className={`relative z-10 flex-1 flex flex-col ${style.badge ? 'pt-5' : ''}`}>
+                    {hasPromotion && (
+                      <div className="mb-2">
+                        <span className="bg-emerald-500 text-white px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm whitespace-nowrap">
+                          {t('pricing.promoDiscount', { pct: discountPct })}
+                        </span>
+                      </div>
+                    )}
                     <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
                       <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{planName}</h3>
                       {PlanIcon && (
@@ -374,6 +445,32 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       {isCustom ? (
                         <div className="flex items-end gap-2">
                           <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
+                        </div>
+                      ) : hasPromotion ? (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-sm line-through ${style.unit}`}>
+                              {fmtVnd(rawPlanPrice)}
+                            </span>
+                            <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                              -{fmtVnd(promotion.discountAmount)}
+                            </span>
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
+                              {fmtVnd(promotedPrice)}
+                            </span>
+                            <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>
+                              {billingPeriod === 'yearly' ? t('pricing.perYear') : t('pricing.perMonth')}
+                            </span>
+                          </div>
+                          {billingPeriod === 'yearly' && plan.price_yearly && (
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className={`text-sm ${style.unit}`}>
+                                ≈ {fmtVnd(Math.round(promotedPrice / 12))} / tháng
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : billingPeriod === 'yearly' && plan.price_yearly ? (
                         <div>
@@ -405,19 +502,24 @@ export default function PricingSection({ embedded = false, compact = false, glas
                     </div>
 
                     <ul className={`${compact ? 'space-y-3 mb-6' : 'space-y-4 mb-8'} flex-1`}>
-                      {features.map((feature, i) => (
+                      {features.map((feature, i) => {
+                        const featureText = (typeof feature === 'object' && feature !== null)
+                          ? (feature[locale] || feature.vi || feature.en || '')
+                          : getTranslatedFeature(feature, t);
+                        return (
                         <li key={i} className="flex items-start gap-3">
                           <FaCheckCircle className={`flex-shrink-0 w-5 h-5 mt-0.5 ${style.featureIcon}`} />
-                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{getTranslatedFeature(feature, t)}</span>
+                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{featureText}</span>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
 
                     <button
                       onClick={() => handlePlanClick(plan)}
                       className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
                     >
-                      {getPlanCtaLabel(plan, t)}
+                      {hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t)}
                     </button>
                   </div>
                 </div>

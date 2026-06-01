@@ -1,10 +1,10 @@
 import { useI18n } from '../../../i18n';
 import { HiOutlineCheck, HiOutlinePencil, HiOutlineTrash, HiOutlineUserAdd, HiOutlineLightningBolt, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
-import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages } from './planUtils.jsx';
+import { fmtVnd, fmtEmp, fmtLimit, fmtPeriodMessages, getTranslatedFeature, getTranslatedPlanDescription } from './planUtils.jsx';
 
 // ── PlanCard — gói đại trà ────────────────────────────────────────────────────
 export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <div className={`card p-5 flex flex-col gap-4 ${!plan.isActive ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-2">
@@ -20,7 +20,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
       </div>
 
       <div className="flex items-center gap-4 text-sm text-gray-500">
-        <span>{fmtEmp(plan.maxEmployees)}</span>
+        <span>{fmtEmp(plan.maxEmployees, t)}</span>
         <span className="text-gray-200">|</span>
         <span>{plan.user_count ?? 0} {t('plans.membersUsing')}</span>
       </div>
@@ -35,16 +35,23 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
 
       {plan.features?.length > 0 && (
         <ul className="space-y-1">
-          {plan.features.map((f, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-              <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
-              {f}
-            </li>
-          ))}
+          {plan.features.map((f, i) => {
+            const text = (typeof f === 'object' && f !== null)
+              ? (f[locale] || f.vi || f.en || '')
+              : getTranslatedFeature(f, t);
+            return (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
+                {text}
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      {plan.description && <p className="text-xs text-gray-400 italic">{plan.description}</p>}
+      {plan.description && (
+        <p className="text-xs text-gray-400 italic">{getTranslatedPlanDescription(plan, t)}</p>
+      )}
 
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
         <button onClick={() => onEdit(plan)} className="btn btn-secondary flex-1 text-sm">
@@ -110,7 +117,9 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
         <p className="text-base font-bold text-primary-600 shrink-0">{fmtVnd(plan.price)}</p>
       </div>
 
-      {plan.description && <p className="text-xs text-gray-400 italic -mt-2">{plan.description}</p>}
+      {plan.description && (
+        <p className="text-xs text-gray-400 italic -mt-2">{getTranslatedPlanDescription(plan, t)}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
         <span>{t('plans.emailPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyEmailLimit)}</strong></span>
@@ -118,7 +127,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
         <span>{t('plans.zaloPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
         <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
         <span className="col-span-2">{t('planInputs.messagesPerPeriod')}: <strong className="text-gray-700">{fmtPeriodMessages(plan.messagesPerPeriod)}</strong></span>
-        <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees)}</strong></span>
+        <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees, t)}</strong></span>
       </div>
 
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">

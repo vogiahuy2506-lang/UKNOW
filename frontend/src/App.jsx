@@ -10,6 +10,7 @@ import { useI18n } from './i18n';
 // Layouts
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
+import CheckoutLayout from './layouts/CheckoutLayout';
 import LandingLayout from './layouts/LandingLayout';
 import PublicLayout from './layouts/PublicLayout';
 
@@ -53,6 +54,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -202,9 +204,11 @@ function App() {
           <Route element={<PublicLayout />}>
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/payment-success" element={<PaymentSuccessPage />} />
           </Route>
+
+          {/* Thanh toán — video background, không có navbar/footer */}
+          <Route path="/checkout" element={<CheckoutLayout><CheckoutPage /></CheckoutLayout>} />
+          <Route path="/payment-success" element={<CheckoutLayout><PaymentSuccessPage /></CheckoutLayout>} />
 
           {/* Landing Routes — legacy pages */}
           <Route element={<LandingLayout />}>
@@ -290,6 +294,7 @@ function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="members" element={<AdminMembersPage />} />
             <Route path="plans" element={<AdminPlansPage />} />
+            <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
           </Route>
 

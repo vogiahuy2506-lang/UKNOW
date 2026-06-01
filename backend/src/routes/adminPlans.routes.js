@@ -131,4 +131,10 @@ router.post('/:id/assign',
   ctrl.assign
 );
 
+router.post('/translate-features',
+  [body('texts').isArray({ min: 1 }).withMessage('texts phải là mảng không rỗng')],
+  handleValidationErrors,
+  ctrl.translateFeatures
+);
+
 export default router;

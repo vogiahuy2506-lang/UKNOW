@@ -1,4 +1,5 @@
 import * as adminPlansService from '../../services/admin/adminPlans.service.js';
+import { generateGeminiText } from '../../utils/geminiClient.util.js';
 
 function handleError(res, err) {
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
@@ -141,5 +142,23 @@ export async function assign(req, res) {
       return res.status(400).json({ success: false, message: 'paymentMethod phải là "manual" hoặc "free"' });
     const user = await adminPlansService.assignPlan(Number(req.params.id), userEmail, { paymentMethod, note });
     return res.json({ success: true, message: 'Gán gói cho người dùng thành công', data: user });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** POST /api/admin/plans/translate-features */
+export async function translateFeatures(req, res) {
+  try {
+    const { texts } = req.body;
+    if (!Array.isArray(texts) || texts.length === 0) {
+      return res.status(400).json({ success: false, message: 'texts phải là mảng không rỗng' });
+    }
+    const list = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const prompt = `Translate the following Vietnamese SaaS plan feature strings into concise English. Return ONLY a JSON array of strings in the same order, no explanation.\n\n${list}`;
+    const { text } = await generateGeminiText({ prompt, maxOutputTokens: 1024, temperature: 0.1, jsonMode: true });
+    const translations = JSON.parse(text);
+    if (!Array.isArray(translations) || translations.length !== texts.length) {
+      throw new Error('Gemini trả về kết quả không hợp lệ');
+    }
+    return res.json({ success: true, data: translations });
   } catch (err) { return handleError(res, err); }
 }

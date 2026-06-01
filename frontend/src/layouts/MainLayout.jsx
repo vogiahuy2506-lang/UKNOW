@@ -113,6 +113,15 @@ const MainLayout = () => {
     return () => clearTimeout(t);
   }, [aiPanelOpen]);
 
+  const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
+  const desktopMainClassName = isFullLayout
+    ? 'flex-1 min-h-0 overflow-hidden p-0'
+    : 'flex-1 min-h-0 p-6 overflow-auto';
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', `${effectiveSidebarWidth}px`);
+  }, [effectiveSidebarWidth]);
+
   if (isMobile) {
     const mainClassName = isFullLayout
       ? 'flex-1 min-h-0 overflow-hidden p-0'
@@ -160,11 +169,6 @@ const MainLayout = () => {
   }
 
   // Desktop layout — unchanged behavior
-  const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
-  const mainClassName = isFullLayout
-    ? 'flex-1 min-h-0 overflow-hidden p-0'
-    : 'flex-1 min-h-0 p-6 overflow-auto';
-
   return (
     <div className="h-screen overflow-hidden bg-gray-50 flex" style={{ zoom: 1 }}>
       <Sidebar
@@ -194,7 +198,7 @@ const MainLayout = () => {
           marginRight: aiPanelOpen && !isMobile ? `${aiPanelWidth}px` : '0px',
         }}
       >
-        <main ref={mainContentRef} className={mainClassName}>
+        <main ref={mainContentRef} className={desktopMainClassName}>
           <Outlet />
         </main>
       </div>

@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { LuChevronRight } from 'react-icons/lu';
 import {
   FaEnvelope, FaComments, FaUsers, FaChartBar, FaBolt, FaShieldAlt,
   FaRocket, FaHandshake, FaHeadset, FaCheckCircle,
@@ -84,15 +83,6 @@ export default function HeroPage() {
             {t('heroPage.heroSubtitle')}
           </p>
 
-          <Link
-            to="/register"
-            className="mt-5 sm:mt-7 inline-flex items-center gap-3 liquid-glass text-white rounded-full pl-6 sm:pl-7 pr-2 py-2 sm:py-2.5 text-[14px] font-medium hover:opacity-90 transition-opacity border border-white/20"
-          >
-            {t('heroPage.getStarted')}
-            <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
-              <LuChevronRight className="w-4 h-4" />
-            </span>
-          </Link>
         </div>
 
         {/* Dashboard — fade out ở bottom */}

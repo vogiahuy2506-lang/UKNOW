@@ -2,7 +2,7 @@ import * as paymentService from '../services/payment/payment.service.js';
 
 export const createPayment = async (req, res) => {
     try {
-        const { planCode, userEmail, billingPeriod = 'monthly' } = req.body;
+        const { planCode, userEmail, billingPeriod = 'monthly', voucherCode = null } = req.body;
         if (!planCode || !userEmail) {
             return res.status(400).json({ error: 'Thiếu planCode hoặc userEmail' });
         }
@@ -10,7 +10,7 @@ export const createPayment = async (req, res) => {
             return res.status(400).json({ error: 'billingPeriod phải là monthly hoặc yearly' });
         }
 
-        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id, billingPeriod });
+        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id, billingPeriod, voucherCode });
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
         console.error(err);

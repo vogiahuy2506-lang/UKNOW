@@ -4,6 +4,7 @@ import publicLeadController from '../controllers/publicLead.controller.js';
 import landingFeaturedCoursePublicController from '../controllers/landingFeaturedCoursePublic.controller.js';
 import landingTestimonialPublicController from '../controllers/landingTestimonialPublic.controller.js';
 import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
+import * as publicPromotionController from '../controllers/publicPromotion.controller.js';
 import { domainResolver } from '../middleware/domainResolver.js';
 
 const router = express.Router();
@@ -17,6 +18,8 @@ const landingPublicCors = cors({
 });
 
 router.post('/leads', publicLeadController.create.bind(publicLeadController));
+
+router.get('/promotions/active', publicPromotionController.active);
 
 router.get(
   '/landing-track/go',
