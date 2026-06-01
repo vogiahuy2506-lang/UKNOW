@@ -9,7 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 
-function ChatListSidebar({ selectedBot, onSelectBot, onCreateNew }) {
+function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew }) {
   const { t } = useI18n();
   const [chatbots, setChatbots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, onCreateNew }) {
     if (bots.length > 0 && !selectedBot) {
       onSelectBot(bots[0]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreate = async (e) => {

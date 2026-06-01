@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import ChatListSidebar from './ChatListSidebar';
 import ChatMessageArea from './ChatMessageArea';
 import ChatbotSettings from './ChatbotSettings';
 
 function ChatbotStudioPage() {
   const [selectedBot, setSelectedBot] = useState(null);
-  const [bots, setBots] = useState([]);
+  const [_bots, setBots] = useState([]);
 
   const handleSelectBot = (bot) => {
     setSelectedBot(bot);

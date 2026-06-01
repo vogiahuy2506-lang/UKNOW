@@ -9,17 +9,11 @@ import {
   HiOutlineUpload,
   HiOutlinePlus,
   HiOutlineX,
-  HiOutlineLink,
   HiOutlineDocumentText,
-  HiOutlineEye,
   HiOutlineCog,
   HiOutlineCode,
   HiOutlineCheck,
-  HiOutlineClock,
-  HiOutlineExclamationCircle,
-  HiOutlinePhotograph,
   HiOutlineGlobeAlt,
-  HiOutlineExternalLink,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -74,7 +68,7 @@ function ChatbotSettings({ chatbot, onUpdate }) {
     welcome_message: '',
   });
   const [widgetCopied, setWidgetCopied] = useState(false);
-  const [channels, setChannels] = useState([]);
+  const [_channels, setChannels] = useState([]);
   const [showChannelModal, setShowChannelModal] = useState(null);
   const [channelForms, setChannelForms] = useState({});
   const [connecting, setConnecting] = useState(false);
@@ -102,6 +96,7 @@ function ChatbotSettings({ chatbot, onUpdate }) {
       loadDocumentsForChatbot(chatbot.id);
       setChannels(chatbot.channels || []);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatbot?.id]);
 
   // Load documents from backend
@@ -818,7 +813,7 @@ function ChatbotSettings({ chatbot, onUpdate }) {
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-blue-800 mb-1">Bước 1: Tạo Zalo OA (Official Account)</p>
                     <ul className="text-xs text-blue-600 space-y-1 ml-2">
-                      <li>• Đăng nhập <a href="https://oa.zalo.me" target="_blank" className="underline">oa.zalo.me</a></li>
+                      <li>• Đăng nhập <a href="https://oa.zalo.me" target="_blank" rel="noreferrer" className="underline">oa.zalo.me</a></li>
                       <li>• Nếu chưa có OA, nhấn "Tạo OA" và làm theo hướng dẫn</li>
                       <li>• Sau khi có OA, vào <strong>Cài đặt → Thông tin OA</strong></li>
                       <li>• Copy <strong>ID Ứng dụng</strong> (ví dụ: 123456789)</li>
@@ -936,7 +931,7 @@ function ChatbotSettings({ chatbot, onUpdate }) {
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-indigo-800 mb-1">Bước 1: Tạo Facebook App</p>
                     <ul className="text-xs text-indigo-600 space-y-1 ml-2">
-                      <li>• Truy cập <a href="https://developers.facebook.com" target="_blank" className="underline">developers.facebook.com</a></li>
+                      <li>• Truy cập <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="underline">developers.facebook.com</a></li>
                       <li>• Nhấn <strong>"My Apps"</strong> → <strong>"Create App"</strong></li>
                       <li>• Chọn loại app: <strong>"Business"</strong></li>
                       <li>• Điền tên app và email, nhấn "Create App"</li>

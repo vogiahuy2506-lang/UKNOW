@@ -46,6 +46,7 @@ function ChatMessageArea({ chatbot }) {
         setActiveSessionId(sessions[0].id);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatbot?.id]);
 
   // Load messages when session changes
@@ -59,6 +60,7 @@ function ChatMessageArea({ chatbot }) {
         setMessages([]);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatbot?.id, activeSessionId]);
 
   // Save messages
@@ -69,6 +71,7 @@ function ChatMessageArea({ chatbot }) {
         localStorage.setItem(msgKey, JSON.stringify(messages));
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, chatbot?.id, activeSessionId]);
 
   useEffect(() => {

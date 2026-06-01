@@ -29,9 +29,6 @@ import {
   HiOutlineTicket,
   HiOutlineShieldCheck,
   HiOutlineOfficeBuilding,
-  HiOutlineBookOpen,
-  HiOutlineCode,
-  HiOutlineChatAlt2,
   HiOutlineInbox,
   HiOutlineSparkles,
 } from 'react-icons/hi';

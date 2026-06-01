@@ -30,10 +30,6 @@ import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesP
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
-import KnowledgeBasePage from './pages/settings/KnowledgeBasePage';
-import SubAssistantPage from './pages/settings/SubAssistantPage';
-import ChannelConnectionsPage from './pages/settings/ChannelConnectionsPage';
-import WebWidgetPage from './pages/settings/WebWidgetPage';
 import UnifiedInboxPage from './pages/settings/UnifiedInboxPage';
 import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';

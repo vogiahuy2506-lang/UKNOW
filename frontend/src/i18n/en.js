@@ -2057,7 +2057,6 @@ export default {
       fbStep5: 'Subscribe to "messages" and "messaging_postbacks"',
       fbStep6: 'Generate token and enter in settings below',
       setupFacebook: 'Setup Facebook',
-      setupZalo: 'Setup Zalo OA',
       zaloSetupTitle: 'Connect Zalo OA',
       zaloOaId: 'Zalo OA ID',
       zaloOaIdTip: 'Get from oa.zalo.me > Settings > OA Info',
@@ -2074,7 +2073,6 @@ export default {
       zaloVerifyTokenTip: 'Enter any token, use in Zalo OA > Webhook API',
       fbVerifyToken: 'Verify Token',
       fbVerifyTokenTip: 'Enter any token, use in Facebook App > Webhooks',
-      connect: 'Connect',
     },
     channels: {
       title: 'Chatbot Channels',

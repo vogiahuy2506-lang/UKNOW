@@ -2066,7 +2066,6 @@ export default {
       fbStep5: 'Subscribe vào "messages" và "messaging_postbacks"',
       fbStep6: 'Gen token và nhập vào cài đặt bên dưới',
       setupFacebook: 'Cài đặt Facebook',
-      setupZalo: 'Cài đặt Zalo OA',
       zaloSetupTitle: 'Kết nối Zalo OA',
       zaloOaId: 'Zalo OA ID',
       zaloOaIdTip: 'Lấy từ oa.zalo.me > Cài đặt > Thông tin OA',
@@ -2083,7 +2082,6 @@ export default {
       zaloVerifyTokenTip: 'Nhập token bất kỳ, dùng trong Zalo OA > Webhook API',
       fbVerifyToken: 'Verify Token',
       fbVerifyTokenTip: 'Nhập token bất kỳ, dùng trong Facebook App > Webhooks',
-      connect: 'Kết nối',
     },
     channels: {
       title: 'Kênh Chatbot',
