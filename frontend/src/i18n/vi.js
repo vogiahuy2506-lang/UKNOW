@@ -60,7 +60,6 @@ export default {
     sheetConfig: 'Cấu hình Sheet',
     connection: 'Kết nối',
     nodeName: 'Tên node',
-    settings: 'Cài đặt',
   },
 
   auth: {
@@ -2997,7 +2996,6 @@ export default {
     filterTip: 'Sử dụng bộ lọc khóa học để thu hẹp đối tượng nhận email hoặc tin nhắn, giúp nội dung phù hợp hơn với từng nhóm khách hàng.',
     customers: '{count} khách hàng',
     noCourses: 'Chưa có khóa học nào',
-    takingAll: 'Đang lấy tất cả',
   },
 
   // Node Config - Landing Leads

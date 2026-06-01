@@ -60,7 +60,6 @@ export default {
     sheetConfig: 'Sheet Config',
     connection: 'Connection',
     nodeName: 'Node name',
-    settings: 'Settings',
   },
 
   auth: {
