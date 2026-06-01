@@ -45,10 +45,11 @@ async function countEmailSentThisMonth(userId) {
 async function countZaloSentToday(userId) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS total
-     FROM zalo_messages
-     WHERE id_user = $1
-       AND status = 'sent'
-       AND sent_at >= CURRENT_DATE`,
+     FROM zalo_messages zm
+     JOIN campaigns c ON c.id = zm.id_campaign
+     WHERE c.id_user = $1
+       AND zm.tracking_metadata->>'status' = 'sent'
+       AND zm.sent_at >= CURRENT_DATE`,
     [userId]
   );
   return toCount(rows[0]?.total);
@@ -57,10 +58,11 @@ async function countZaloSentToday(userId) {
 async function countZaloSentThisMonth(userId) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS total
-     FROM zalo_messages
-     WHERE id_user = $1
-       AND status = 'sent'
-       AND sent_at >= DATE_TRUNC('month', NOW())`,
+     FROM zalo_messages zm
+     JOIN campaigns c ON c.id = zm.id_campaign
+     WHERE c.id_user = $1
+       AND zm.tracking_metadata->>'status' = 'sent'
+       AND zm.sent_at >= DATE_TRUNC('month', NOW())`,
     [userId]
   );
   return toCount(rows[0]?.total);
