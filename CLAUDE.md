@@ -140,3 +140,69 @@ See existing backend `.env` for the full list including Zalo rate-limiting, camp
 - **PayOS**: QR-based checkout flow — frontend generates QR via `CheckoutPage`, webhook confirms payment, `PaymentSuccess` verifies order.
 - **Landing Pages**: Dynamic HTML injection (`utils/landingHtmlInjection.util.js`) with lead capture and pixel tracking. Landing pages are served from public routes without auth.
 - **WooCommerce**: Webhook consumer updates local course/product data from the UKNOW WordPress site.
+
+## Operational Parameters — Zalo & Email Sending
+
+All values below are **defaults coded in** `src/services/campaign/campaignRun.service.js`. Override via env vars in `backend/.env`.
+
+### Zalo — Khung giờ yên lặng (Quiet Hours)
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `ZALO_OUTBOUND_QUIET_HOURS_START` | `23` | Giờ bắt đầu không gửi (23:00 VN) |
+| `ZALO_OUTBOUND_QUIET_HOURS_END` | `6` | Giờ cho phép gửi trở lại (06:00 VN) |
+
+→ **Không gửi Zalo từ 23:00 tối đến 06:00 sáng** (giờ Việt Nam cố định +7). Campaign đang chạy sẽ tự động pause và resume lúc 6h sáng.
+
+### Zalo — Rate limit & khoảng cách tin nhắn
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT` | `100` | Tối đa 100 tin/giờ/tài khoản (mọi kênh) |
+| `ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT` | `20000` | Chờ tối thiểu **20 giây** giữa 2 tin |
+| `ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT` | `50000` | Chờ tối đa **50 giây** giữa 2 tin (random trong min–max) |
+| `ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS` | `10800000` | Cooldown **3 giờ** nếu API báo tra số điện thoại quá nhiều |
+
+Override riêng theo kênh (0 = dùng default chung):
+
+| Tham số | Kênh |
+|---|---|
+| `ZALO_PERSONAL_PER_HOUR_LIMIT` / `_INTER_MESSAGE_MIN_MS` / `_MAX_MS` | Zalo cá nhân |
+| `ZALO_GROUP_PER_HOUR_LIMIT` / `_INTER_MESSAGE_MIN_MS` / `_MAX_MS` | Zalo nhóm |
+| `ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT` / `_INTER_MESSAGE_MIN_MS` / `_MAX_MS` | Kết bạn Zalo |
+
+### Zalo — Xử lý thất bại
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `CONTINUOUS_ZALO_MAX_SEND_FAILURES` | `5` | Sau 5 lần thất bại liên tiếp với cùng 1 người → bỏ qua, không thử lại |
+| `ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS` | `60000` | Nếu phải chờ > 60s (hết quota / quiet hours / cooldown tra số) → nhả worker slot, scheduler resume sau |
+
+### Concurrency (số campaign chạy đồng thời)
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `MAX_CONCURRENT_CAMPAIGNS` | `3` | Tối đa 3 campaign one-shot chạy cùng lúc |
+| `MAX_CONTINUOUS_WORKERS` | `10` | Tối đa 10 worker cho continuous campaigns |
+
+### Batch size (chế độ continuous + BullMQ)
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `CONTINUOUS_EMAIL_BATCH_SIZE` | `12` | Gửi 12 email/batch |
+| `CONTINUOUS_ZALO_PERSONAL_BATCH_SIZE` | `1` | Gửi 1 tin Zalo cá nhân/batch (để đảm bảo inter-message delay) |
+| `CONTINUOUS_ZALO_GROUP_BATCH_SIZE` | `6` | Gửi 6 tin Zalo nhóm/batch |
+| `CONTINUOUS_ZALO_FRIEND_BATCH_SIZE` | `8` | Gửi 8 yêu cầu kết bạn/batch |
+
+### Khi nào Zalo không gửi / gửi chậm — checklist giám sát
+
+1. **Không gửi gì cả** → Kiểm tra: đang trong quiet hours? (`23:00–06:00`), hay tài khoản Zalo bị disconnect?
+2. **Gửi rất chậm** → Bình thường — mỗi tin cách nhau 20–50s. Với 1000 người = ~7–14 giờ.
+3. **Dừng giữa chừng** → Có thể đã đạt 100 tin/giờ → chờ quota reset (window 1 giờ), hoặc bị cooldown tra số điện thoại (3 giờ).
+4. **Một số người không nhận được** → Có thể đã thất bại 5 lần → bị skip. Xem log backend: `docker logs uknow-campaign-backend --since 2h | grep "FAIL\|skip\|ledger"`.
+5. **Email không gửi** → Kiểm tra SendGrid quota, hoặc xem log: `docker logs uknow-campaign-backend --since 2h | grep "email\|sendgrid"`.
+
+> **Log nhanh trên VPS:**
+> ```bash
+> docker logs uknow-campaign-backend --since 1h --tail 200 | grep -iE "quiet|rate.limit|cooldown|fail|error|skip"
+> ```
