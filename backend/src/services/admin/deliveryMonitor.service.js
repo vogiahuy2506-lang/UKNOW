@@ -188,7 +188,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     ),
     safeQuery(
       `SELECT
-         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type, 'email') AS channel,
+         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
          COUNT(*)::int AS count
        FROM campaign_executions ce
        LEFT JOIN campaigns c ON c.id = ce.id_campaign
@@ -286,7 +286,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     safeQuery(
       `SELECT
          COALESCE(NULLIF(ce.error_message, ''), 'Unknown error') AS error_message,
-         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type, 'unknown') AS channel,
+         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'unknown') AS channel,
          COUNT(*)::int AS count,
          MAX(ce.updated_at)::timestamptz AS last_seen_at
        FROM campaign_executions ce

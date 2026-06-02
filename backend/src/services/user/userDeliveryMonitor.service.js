@@ -85,7 +85,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     ),
     safeQuery(
       `SELECT
-         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type, 'email') AS channel,
+         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
          COUNT(*)::int AS count
        FROM campaign_executions ce
        JOIN campaigns c ON c.id = ce.id_campaign
