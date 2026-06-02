@@ -2881,6 +2881,10 @@ export default {
       zaloAutomation: 'Zalo automation',
       apiAccess: 'API access',
       prioritySupport: 'Priority support',
+      whiteLabel: 'White-label',
+      dedicatedSupport: 'Dedicated support',
+      slaUptime: 'SLA 99.9% uptime',
+      customIntegrations: 'Custom integrations',
     },
   },
 

@@ -74,6 +74,14 @@ export const getTranslatedFeature = (feature, t) => {
     'api truy cập': 'apiAccess',
     'ưu tiên hỗ trợ': 'prioritySupport',
     'hỗ trợ ưu tiên': 'prioritySupport',
+    'nhãn trắng (white-label)': 'whiteLabel',
+    'nhãn trắng': 'whiteLabel',
+    'white-label': 'whiteLabel',
+    'hỗ trợ chuyên biệt': 'dedicatedSupport',
+    'cam kết uptime 99.9%': 'slaUptime',
+    'sla 99.9%': 'slaUptime',
+    'tích hợp tùy chỉnh': 'customIntegrations',
+    'tích hợp tuỳ chỉnh': 'customIntegrations',
   };
 
   const key = knownFeatureKeys[normalized];

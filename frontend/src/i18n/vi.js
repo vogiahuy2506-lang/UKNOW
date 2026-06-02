@@ -2890,6 +2890,10 @@ export default {
       zaloAutomation: 'Tự động hoá Zalo',
       apiAccess: 'API truy cập',
       prioritySupport: 'Ưu tiên hỗ trợ',
+      whiteLabel: 'Nhãn trắng (White-label)',
+      dedicatedSupport: 'Hỗ trợ chuyên biệt',
+      slaUptime: 'Cam kết uptime 99.9%',
+      customIntegrations: 'Tích hợp tùy chỉnh',
     },
   },
 
