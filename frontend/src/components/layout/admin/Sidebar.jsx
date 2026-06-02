@@ -72,6 +72,11 @@ const superAdminMenuItems = (t) => [
     path: '/admin/system',
     icon: HiOutlineServer,
   },
+  {
+    name: t('nav.deliveryMonitoring'),
+    path: '/admin/delivery-monitor',
+    icon: HiOutlineLightningBolt,
+  },
 ];
 
 // Menu dành cho user_admin và employee — vận hành marketing

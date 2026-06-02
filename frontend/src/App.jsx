@@ -52,6 +52,7 @@ import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
+import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -294,6 +295,7 @@ function App() {
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="system" element={<AdminSystemPage />} />
+            <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
