@@ -65,8 +65,7 @@ router.post(
     body('email')
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
   ],
   handleValidationErrors,
   employeeController.linkEmployee
