@@ -560,6 +560,39 @@ class ChatbotController {
 
   // ── Custom AI Chatbot Widget ─────────────────────────────────────
 
+  async getPublicChatbotById(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(id);
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          id: chatbot.id,
+          name: chatbot.name || 'AI Assistant',
+          description: chatbot.description || '',
+          greeting_msg: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          avatar_url: chatbot.avatar_url || null,
+          theme_color: chatbot.theme_color || '#6366f1',
+          is_active: chatbot.is_active,
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] getPublicChatbotById error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   async getCustomChatbotConfig(req, res) {
     try {
       const { widgetKey } = req.params;

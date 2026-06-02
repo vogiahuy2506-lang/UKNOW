@@ -1,7 +1,11 @@
 import express from 'express';
+import { publicCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
 
 const router = express.Router();
+
+// Apply CORS to all routes in this router
+router.use(publicCorsMiddleware);
 
 // ── Public Web Widget API (no auth required) ─────────────────────
 
@@ -18,6 +22,9 @@ router.get('/widget/conversations/:conversationId/messages', chatbotController.g
 router.post('/widget/conversations/:conversationId/messages', chatbotController.sendWebChatMessage.bind(chatbotController));
 
 // ── Custom AI Chat Widget (uses /api/ai/custom-chat) ─────────────────────
+
+// Get custom chatbot config by ID (public)
+router.get('/chatbot/:chatbotId', chatbotController.getPublicChatbotById.bind(chatbotController));
 
 // Get custom chatbot config by widget_key
 router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfig.bind(chatbotController));

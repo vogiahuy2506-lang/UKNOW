@@ -226,8 +226,9 @@ class ChatbotRepository {
       conv = existing.rows[0];
     } else {
       const created = await db.query(
-        `INSERT INTO channel_conversations (id_user, id_channel, external_id, visitor_name, visitor_info)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO channel_conversations (id_user, id_channel, channel, external_id, visitor_name, visitor_info)
+         SELECT $1, $2, ch.channel, $3, $4, $5
+         FROM channel_connections ch WHERE ch.id = $2
          RETURNING *`,
         [userId, channelId, externalId, visitorName || null, JSON.stringify(visitorInfo || {})]
       );
@@ -264,6 +265,20 @@ class ChatbotRepository {
     );
 
     return rows[0];
+  }
+
+  // ── Custom Chatbots (Public) ─────────────────────────────────────
+
+  async findChatbotById(chatbotId) {
+    const { rows } = await db.query(
+      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+              avatar_url, is_active, theme_color, position, welcome_message,
+              created_at, updated_at
+       FROM custom_chatbots
+       WHERE id = $1 AND is_active = true`,
+      [chatbotId]
+    );
+    return rows[0] || null;
   }
 }
 

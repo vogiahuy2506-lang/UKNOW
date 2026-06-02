@@ -67,4 +67,9 @@ router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMess
 router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
 
+// ── Outbox ───────────────────────────────────────────────────────
+
+router.get('/inbox/outbox', unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));
+router.get('/inbox/outbox/:id', unifiedInboxController.getOutboxMessage.bind(unifiedInboxController));
+
 export default router;

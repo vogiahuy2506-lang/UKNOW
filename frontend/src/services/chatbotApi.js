@@ -246,6 +246,20 @@ const chatbotApi = {
     });
     return response.data;
   },
+
+  // ── Outbox ───────────────────────────────────────────────────────
+
+  getOutboxMessages: async ({ channel, search, startDate, endDate, limit = 20, offset = 0 } = {}) => {
+    const response = await api.get('/ai/chatbot/inbox/outbox', {
+      params: { channel, search, startDate, endDate, limit, offset },
+    });
+    return response.data;
+  },
+
+  getOutboxMessage: async (id) => {
+    const response = await api.get(`/ai/chatbot/inbox/outbox/${id}`);
+    return response.data;
+  },
 };
 
 export default chatbotApi;

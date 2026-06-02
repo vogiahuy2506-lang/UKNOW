@@ -2,7 +2,6 @@
 // Không import dotenv ở đây để app.js có thể được import độc lập trong test
 // mà không nuốt nhầm config production (vd PGSSLMODE=require của Neon).
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
@@ -52,6 +51,7 @@ import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
+import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
 
 /**
@@ -68,30 +68,10 @@ export function createApp() {
     app.set('trust proxy', 1);
   }
 
-  const defaultAllowedOrigins = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5174',
-    'http://localhost:5175',
-    'http://127.0.0.1:5175',
-    'http://localhost:5176',
-    'http://127.0.0.1:5176',
-    'http://localhost:4173',
-    'http://127.0.0.1:4173',
-  ];
+  // Dynamic CORS - allows verified domains and known subdomains
+  const dynamicCors = createDynamicCorsMiddleware();
+  app.use(dynamicCors);
 
-  const envAllowedOrigins = [
-    ...(process.env.FRONTEND_URLS || '').split(','),
-    process.env.FRONTEND_URL || '',
-  ]
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
-
-  // Cho phép nhúng ảnh/file từ domain khác (`<img src="https://api.../file/...">`).
-  // Helmet mặc định CORP `same-origin` khiến trình duyệt chặn hiển thị ảnh cross-origin (mở URL trực tiếp vẫn được).
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -115,19 +95,7 @@ export function createApp() {
       },
     })
   );
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow non-browser tools (Postman/curl) and same-origin requests with no Origin header.
-        if (!origin) return callback(null, true);
-        // iframe sandbox (srcDoc) gửi Origin: null — cần cho form/embed landing từ HTML tĩnh
-        if (origin === 'null') return callback(null, true);
-        if (allowedOrigins.has(origin)) return callback(null, true);
-        return callback(new Error(`CORS blocked for origin: ${origin}`));
-      },
-      credentials: true,
-    })
-  );
+  // CORS handled by dynamicCors middleware above
   // Tắt morgan trong môi trường test để output Jest sạch.
   if (process.env.NODE_ENV !== 'test') {
     app.use(morgan('dev'));
@@ -191,7 +159,7 @@ export function createApp() {
   app.use('/api/admin/delivery-monitor', adminDeliveryMonitorRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
-  app.use('/api/chatbot-public', chatbotPublicRoutes);
+  app.use('/api/chatbot-public', publicCorsMiddleware, chatbotPublicRoutes);
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/custom-domains', customDomainRoutes);
 

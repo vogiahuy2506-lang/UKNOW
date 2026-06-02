@@ -4,6 +4,7 @@ import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
 import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
 import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
+import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
@@ -504,4 +505,23 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo subscription reminder cron: 08:00 hàng ngày');
+
+  // ── Zalo Personal Inbox - Register listeners cho các connected accounts ────
+  // Đăng ký listeners khi khởi động và mỗi 30 giây để handle accounts mới connect
+  const registerZaloPersonalListeners = async () => {
+    try {
+      await zaloPersonalInboxService.start();
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi đăng ký Zalo Personal Inbox listeners:', error.message);
+    }
+  };
+
+  cron.schedule('*/30 * * * * *', async () => {
+    await registerZaloPersonalListeners();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  // Đăng ký ngay khi khởi động
+  registerZaloPersonalListeners();
+
+  console.log('[Scheduler] Đã khởi tạo Zalo Personal Inbox: đăng ký listeners mỗi 30 giây');
 };
