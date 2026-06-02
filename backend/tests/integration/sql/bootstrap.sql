@@ -839,6 +839,36 @@ CREATE TABLE landing_testimonials (
 );
 CREATE INDEX idx_landing_testimonials_user ON landing_testimonials(id_user);
 
+-- ─── Zalo accounts (minimal for delivery monitor tests) ────────────────
+CREATE TABLE zalo_accounts (
+  id         BIGSERIAL PRIMARY KEY,
+  id_user    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
+  status     VARCHAR(20) NOT NULL DEFAULT 'disconnected',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_zalo_accounts_user ON zalo_accounts(id_user);
+
+-- ─── Zalo unreachable phones (minimal for delivery monitor tests) ───────
+CREATE TABLE zalo_unreachable_phones (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  phone_normalized VARCHAR(20) NOT NULL,
+  reason           TEXT,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── Campaign run recipient steps (minimal for delivery monitor tests) ──
+CREATE TABLE campaign_run_recipient_steps (
+  id                 BIGSERIAL PRIMARY KEY,
+  id_campaign_run    BIGINT REFERENCES campaign_runs(id) ON DELETE CASCADE,
+  meta               JSONB NOT NULL DEFAULT '{}',
+  is_fully_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_crrs_run ON campaign_run_recipient_steps(id_campaign_run);
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
