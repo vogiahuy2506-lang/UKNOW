@@ -37,8 +37,7 @@ router.post(
     body('email')
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
     body('fullName')
       .optional({ checkFalsy: true })
       .trim()
@@ -80,8 +79,7 @@ router.patch(
       .optional({ checkFalsy: true })
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
     body('fullName')
       .optional({ checkFalsy: true })
       .trim()

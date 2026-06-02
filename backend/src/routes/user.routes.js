@@ -35,8 +35,7 @@ router.put('/profile',
       .optional()
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
     body('phone')
       .optional()
       .trim()

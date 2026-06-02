@@ -19,8 +19,7 @@ router.post('/register',
     body('email')
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
     body('password')
       .isLength({ min: 6 })
       .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
@@ -89,7 +88,7 @@ router.get('/me', authMiddleware, authController.getMe.bind(authController));
 
 // Quên mật khẩu — gửi email reset
 router.post('/forgot-password',
-  [body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail()],
+  [body('email').trim().isEmail().withMessage('Email không hợp lệ')],
   handleValidationErrors,
   authController.forgotPassword.bind(authController)
 );

@@ -11,8 +11,7 @@ router.post('/send-code',
     body('email')
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
   ],
   handleValidationErrors,
   verificationController.sendCode.bind(verificationController)
@@ -24,8 +23,7 @@ router.post('/verify-code',
     body('email')
       .trim()
       .isEmail()
-      .withMessage('Email không hợp lệ')
-      .normalizeEmail(),
+      .withMessage('Email không hợp lệ'),
     body('code')
       .trim()
       .isLength({ min: 6, max: 6 })
