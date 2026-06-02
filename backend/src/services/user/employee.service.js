@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import {
   findEmployeesByOwner,
   findEmployeeByIdAndOwner,
+  findTeamOverview,
   countActiveEmployees,
   findOwnerPlanLimit,
   findUserByEmail,
@@ -202,4 +203,9 @@ export async function resetEmployeePassword(ownerId, employeeId) {
   if (!result) {
     throw { status: 500, message: 'Không thể reset mật khẩu' };
   }
+}
+
+
+export async function getTeamOverview(ownerId) {
+  return findTeamOverview(ownerId);
 }

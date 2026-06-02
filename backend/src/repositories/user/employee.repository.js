@@ -190,6 +190,52 @@ export async function updateEmployeeSendLimits(employeeId, ownerId, {
   return result.rows[0] || null;
 }
 
+export async function findTeamOverview(ownerId) {
+  const { rows } = await db.query(
+    `SELECT
+       u.id,
+       u.username,
+       u.full_name            AS "fullName",
+       u.avatar_url           AS "avatarUrl",
+       u.status,
+       um.status              AS "memberStatus",
+       um.daily_email_limit   AS "dailyEmailLimit",
+       um.monthly_email_limit AS "monthlyEmailLimit",
+       um.daily_zalo_limit    AS "dailyZaloLimit",
+       um.monthly_zalo_limit  AS "monthlyZaloLimit",
+
+       COUNT(DISTINCT c.id) FILTER (
+         WHERE c.status = 'running'
+       )::int                                                        AS "runningCampaigns",
+
+       COUNT(DISTINCT c.id) FILTER (
+         WHERE c.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       )::int                                                        AS "campaignsThisMonth",
+
+       COALESCE(SUM(cr.successful_sends) FILTER (
+         WHERE cr.started_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       ), 0)::int                                                    AS "sendsThisMonth",
+
+       COALESCE(SUM(cr.failed_sends) FILTER (
+         WHERE cr.started_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       ), 0)::int                                                    AS "failedThisMonth",
+
+       MAX(cr.started_at)                                            AS "lastActiveAt"
+
+     FROM user_members um
+     JOIN users u ON u.id = um.employee_id
+     LEFT JOIN campaigns c ON c.id_user = um.employee_id
+     LEFT JOIN campaign_runs cr ON cr.id_campaign = c.id
+     WHERE um.owner_id = $1
+     GROUP BY u.id, u.username, u.full_name, u.avatar_url, u.status,
+              um.status, um.daily_email_limit, um.monthly_email_limit,
+              um.daily_zalo_limit, um.monthly_zalo_limit
+     ORDER BY u.username`,
+    [ownerId]
+  );
+  return rows;
+}
+
 export async function removeEmployee(employeeId, ownerId) {
   const client = await db.getClient();
   try {

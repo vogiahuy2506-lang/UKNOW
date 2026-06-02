@@ -801,6 +801,13 @@ export default {
       customers: 'Customers',
       leads: 'Landing Page Leads',
     },
+    teamActivity: 'Team Activity',
+    teamActivityPeriod: 'This month',
+    runningCampaigns: 'Running',
+    campaignsThisMonth: 'Campaigns this month',
+    sendsThisMonth: 'Sent',
+    failedThisMonth: 'Failed',
+    lastActive: 'Last active',
   },
 
   customerDetail: {

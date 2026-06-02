@@ -198,3 +198,16 @@ export async function resetEmployeePassword(req, res) {
     return handleServiceError(res, err);
   }
 }
+/**
+ * GET /api/employees/team-overview
+ * Tổng quan hoạt động của toàn team (read-only, chỉ employer xem được).
+ */
+export async function teamOverview(req, res) {
+  try {
+    const ownerId = req.user.id;
+    const data = await employeeService.getTeamOverview(ownerId);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}

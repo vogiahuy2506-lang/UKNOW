@@ -46,6 +46,10 @@ export const userManagementApiService = {
   resendInvite(employeeId) {
     return api.post(`/employees/${employeeId}/resend-invite`);
   },
+
+  getTeamOverview() {
+    return api.get('/employees/team-overview');
+  },
 };
 
 export default userManagementApiService;

@@ -132,6 +132,10 @@ const EmployeeManagement = () => {
     dailyZalo:  null, monthlyZalo:  null,
   });
 
+  // Team overview
+  const [teamOverview, setTeamOverview] = useState([]);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
   // Inline actions
   const [statusUpdatingId, setStatusUpdatingId]   = useState(null);
   const [resetConfirmEmp, setResetConfirmEmp]     = useState(null);
@@ -189,8 +193,21 @@ const EmployeeManagement = () => {
     }
   };
 
+  const fetchTeamOverview = async () => {
+    setOverviewLoading(true);
+    try {
+      const res = await userManagementApiService.getTeamOverview();
+      setTeamOverview(res.data?.data || []);
+    } catch {
+      // non-critical, ignore
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchTeamOverview();
     getMyProfile().then((res) => {
       const d = res?.data;
       if (!d) return;
@@ -448,6 +465,68 @@ const EmployeeManagement = () => {
           </div>
         )}
       </div>
+
+      {/* ── Hoạt động team (tháng này) ───────────────────────────────────────── */}
+      {(teamOverview.length > 0 || overviewLoading) && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-800">{t('employee.teamActivity')}</h2>
+            <span className="text-xs text-gray-400">{t('employee.teamActivityPeriod')}</span>
+          </div>
+          {overviewLoading ? (
+            <div className="h-32 flex items-center justify-center"><div className="spinner w-6 h-6" /></div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t('employee.fullName')}</th>
+                    <th className="text-center">{t('employee.runningCampaigns')}</th>
+                    <th className="text-center">{t('employee.campaignsThisMonth')}</th>
+                    <th className="text-center">{t('employee.sendsThisMonth')}</th>
+                    <th className="text-center">{t('employee.failedThisMonth')}</th>
+                    <th>{t('employee.lastActive')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamOverview.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-gray-50">
+                      <td>
+                        <div className="font-medium text-gray-800">{emp.fullName || emp.username}</div>
+                        <div className="text-xs text-gray-400">@{emp.username}</div>
+                      </td>
+                      <td className="text-center">
+                        {emp.runningCampaigns > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-green-700 font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            {emp.runningCampaigns}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">0</span>
+                        )}
+                      </td>
+                      <td className="text-center text-sm text-gray-700">{emp.campaignsThisMonth}</td>
+                      <td className="text-center text-sm font-medium text-gray-800">{emp.sendsThisMonth.toLocaleString('vi-VN')}</td>
+                      <td className="text-center text-sm">
+                        {emp.failedThisMonth > 0 ? (
+                          <span className="text-red-500 font-medium">{emp.failedThisMonth.toLocaleString('vi-VN')}</span>
+                        ) : (
+                          <span className="text-gray-400">0</span>
+                        )}
+                      </td>
+                      <td className="text-sm text-gray-500">
+                        {emp.lastActiveAt
+                          ? new Date(emp.lastActiveAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Modal chi tiết nhân viên (3 tab) ─────────────────────────────────── */}
       {selectedEmployee && renderModal(

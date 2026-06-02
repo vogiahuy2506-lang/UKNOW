@@ -802,6 +802,13 @@ export default {
       customers: 'Khách hàng',
       leads: 'Leads landing page',
     },
+    teamActivity: 'Hoạt động team',
+    teamActivityPeriod: 'Tháng này',
+    runningCampaigns: 'Đang chạy',
+    campaignsThisMonth: 'Chiến dịch tháng này',
+    sendsThisMonth: 'Đã gửi',
+    failedThisMonth: 'Thất bại',
+    lastActive: 'Hoạt động gần nhất',
   },
 
   customerDetail: {

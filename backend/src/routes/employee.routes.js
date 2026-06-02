@@ -15,6 +15,9 @@ router.use(requireRole('admin', 'user'));
 // GET /api/employees
 router.get('/', employeeController.getEmployees);
 
+// GET /api/employees/team-overview — tổng quan hoạt động toàn team (read-only)
+router.get('/team-overview', employeeController.teamOverview);
+
 // GET /api/employees/:id
 router.get(
   '/:id',
