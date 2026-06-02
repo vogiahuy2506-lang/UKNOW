@@ -2229,9 +2229,13 @@ export default {
     newChat: 'Mới',
     newConversation: 'Cuộc trò chuyện mới',
     // Quick actions
+    quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',
+    scriptCampaign: 'Lập kịch bản',
     landingPage: 'Landing Page',
     emailTemplate: 'Template Email',
+    connectZalo: 'Kết nối Zalo',
+    zaloTimeSlot: 'Khung giờ Zalo',
     // Drag & drop
     dropFileToUpload: 'Thả file để tải lên',
     supportedFormats: 'PDF, Word, Excel, ảnh đều được',

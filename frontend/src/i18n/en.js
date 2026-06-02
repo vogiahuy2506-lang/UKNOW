@@ -2220,9 +2220,13 @@ export default {
     newChat: 'New',
     newConversation: 'New conversation',
     // Quick actions
+    quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',
+    scriptCampaign: 'Script campaign',
     landingPage: 'Landing Page',
     emailTemplate: 'Email Template',
+    connectZalo: 'Connect Zalo',
+    zaloTimeSlot: 'Zalo time slots',
     // Drag & drop
     dropFileToUpload: 'Drop file to upload',
     supportedFormats: 'PDF, Word, Excel, images all supported',
