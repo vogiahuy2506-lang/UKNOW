@@ -53,7 +53,7 @@ function buildZaloRecipientErrorProbe(error) {
  * Luồng hoạt động:
  * 1. Đọc mã lỗi (code) nếu SDK gắn sẵn (vd. zalo_unreachable_contact).
  * 2. Gom message + cause để khớp cả thông điệp tiếng Việt/Anh từ findUser và từ API gửi tin.
- * 3. Khớp thêm các lỗi phổ biến khi gửi: tham số không hợp lệ; chặn tin từ người lạ; không thể nhận tin từ bạn; vi phạm chính sách.
+ * 3. Khớp các lỗi quyền riêng tư khi gửi: chặn tin từ người lạ; không thể nhận tin từ bạn; vi phạm chính sách.
  * 4. Tránh khớp nhầm lỗi domain khác bằng từ khóa loại trừ ngắn (chỉ áp cho nhánh “không tìm thấy” chung).
  *
  * @param {unknown} error
@@ -73,8 +73,6 @@ export function isZaloUnreachableRecipientError(error) {
   const probe = buildZaloRecipientErrorProbe(error);
   if (!probe) return false;
 
-  // API gửi tin Zalo: tham số không hợp lệ — không gửi được cho SĐT/recipient hiện tại.
-  if (probe.includes('tham số không hợp lệ')) return true;
   // Người nhận không nhận tin từ người lạ (cài đặt quyền riêng tư / chặn inbox người lạ).
   if (
     probe.includes('chặn không nhận tin nhắn từ người lạ')
