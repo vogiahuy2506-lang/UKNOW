@@ -53,7 +53,7 @@ export async function findOwnerPlanLimit(ownerId) {
 export async function findUserByEmail(email) {
   const result = await db.query(
     `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId"
-     FROM users WHERE email = $1`,
+     FROM users WHERE LOWER(email) = LOWER($1)`,
     [email]
   );
   return result.rows[0] || null;

@@ -104,7 +104,7 @@ export async function resendInvitation(ownerId, employeeId) {
 export async function linkUserAsEmployee(ownerId, email) {
   await assertCanAddEmployee(ownerId);
 
-  const user = await findUserByEmail(email);
+  const user = await findUserByEmail(email?.trim().toLowerCase());
   if (!user) {
     throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };
   }
