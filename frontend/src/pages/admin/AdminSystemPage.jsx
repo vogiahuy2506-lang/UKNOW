@@ -97,11 +97,10 @@ const AlertList = ({ alerts, t }) => {
         {alerts.map((alert, index) => (
           <div
             key={`${alert.code}-${index}`}
-            className={`rounded-xl border px-3 py-2 text-sm ${
-              alert.level === 'critical'
-                ? 'border-red-100 bg-red-50 text-red-700'
-                : 'border-amber-100 bg-amber-50 text-amber-700'
-            }`}
+            className={`rounded-xl border px-3 py-2 text-sm ${alert.level === 'critical'
+              ? 'border-red-100 bg-red-50 text-red-700'
+              : 'border-amber-100 bg-amber-50 text-amber-700'
+              }`}
           >
             <div className="flex items-center gap-2 font-semibold">
               <HiOutlineExclamationCircle className="h-4 w-4" />
@@ -177,9 +176,8 @@ const RedisPanel = ({ redis, t }) => {
               </div>
             )}
           </div>
-          <div className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${
-            evictionBad ? 'border-amber-100 bg-amber-50' : 'border-emerald-100 bg-emerald-50'
-          }`}>
+          <div className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${evictionBad ? 'border-amber-100 bg-amber-50' : 'border-emerald-100 bg-emerald-50'
+            }`}>
             <span className={evictionBad ? 'text-amber-700' : 'text-emerald-700'}>
               {t('adminSystem.redisEviction')}
             </span>
@@ -257,11 +255,10 @@ const LogsPanel = ({ activeLogService, setActiveLogService, logs, logsLoading, o
             key={service}
             type="button"
             onClick={() => setActiveLogService(service)}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              activeLogService === service
-                ? 'bg-orange-50 text-orange-700'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${activeLogService === service
+              ? 'bg-orange-50 text-orange-700'
+              : 'text-gray-500 hover:bg-gray-50'
+              }`}
           >
             {t(`adminSystem.${service}`)}
           </button>
@@ -324,8 +321,22 @@ export default function AdminSystemPage() {
 
   useEffect(() => {
     fetchOverview();
-    const id = setInterval(fetchOverview, 15000);
-    return () => clearInterval(id);
+    let id = setInterval(fetchOverview, 5000);
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(id);
+      } else {
+        fetchOverview();
+        id = setInterval(fetchOverview, 5000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchOverview]);
 
   useEffect(() => {
