@@ -170,6 +170,39 @@ class OutboundMessageQueueService {
    * @param {string|number} [jobId=''] id job liên quan
    * @returns {Promise<void>}
    */
+  async getRedisStats() {
+    if (!this.connection) return { available: false };
+    try {
+      const [memInfo, configResult] = await Promise.all([
+        this.connection.info('memory'),
+        this.connection.config('GET', 'maxmemory-policy'),
+      ]);
+
+      const parsed = {};
+      memInfo.split('\r\n').forEach((line) => {
+        const [k, v] = line.split(':');
+        if (k && v !== undefined) parsed[k.trim()] = v.trim();
+      });
+
+      let evictionPolicy = 'unknown';
+      if (Array.isArray(configResult) && configResult.length >= 2) {
+        evictionPolicy = configResult[1];
+      } else if (configResult && typeof configResult === 'object') {
+        evictionPolicy = configResult['maxmemory-policy'] ?? 'unknown';
+      }
+
+      return {
+        available: true,
+        usedMemory: Number(parsed.used_memory || 0),
+        maxMemory: Number(parsed.maxmemory || 0),
+        evictionPolicy,
+        evictionPolicyOk: evictionPolicy === 'noeviction',
+      };
+    } catch (err) {
+      return { available: false, error: err.message };
+    }
+  }
+
   async logQueueMetrics(phase, jobType = '', jobId = '') {
     const metrics = await this.getQueueMetrics();
     if (!metrics) return;

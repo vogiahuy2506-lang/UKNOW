@@ -148,6 +148,102 @@ const DockerPanel = ({ docker, t }) => (
   </div>
 );
 
+const RedisPanel = ({ redis, t }) => {
+  const evictionBad = redis?.available && !redis.evictionPolicyOk;
+  const memPercent = redis?.maxMemory > 0 ? Math.min(100, Math.round((redis.usedMemory / redis.maxMemory) * 100)) : null;
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.redis')}</h2>
+        <span className={`badge text-xs ${redis?.available ? 'badge-success' : 'badge-gray'}`}>
+          {redis?.available ? t('adminSystem.redisConnected') : t('adminSystem.redisNotConnected')}
+        </span>
+      </div>
+      {!redis?.available ? (
+        <p className="text-sm text-gray-500">{t('adminSystem.bullmqNotAvailable')}</p>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span>{t('adminSystem.redisMemory')}</span>
+              <span>
+                {fmtBytes(redis.usedMemory)}
+                {redis.maxMemory > 0 ? ` / ${fmtBytes(redis.maxMemory)}` : ` (${t('adminSystem.redisNoLimit')})`}
+              </span>
+            </div>
+            {memPercent !== null && (
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full bg-blue-500" style={{ width: `${memPercent}%` }} />
+              </div>
+            )}
+          </div>
+          <div className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${
+            evictionBad ? 'border-amber-100 bg-amber-50' : 'border-emerald-100 bg-emerald-50'
+          }`}>
+            <span className={evictionBad ? 'text-amber-700' : 'text-emerald-700'}>
+              {t('adminSystem.redisEviction')}
+            </span>
+            <span className={`font-semibold ${evictionBad ? 'text-amber-700' : 'text-emerald-700'}`}>
+              {evictionBad ? `${redis.evictionPolicy} — ${t('adminSystem.redisEvictionBad')}` : t('adminSystem.redisEvictionOk')}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BullMQPanel = ({ bullmq, t }) => {
+  const available = bullmq?.available !== false && bullmq !== null;
+  const stats = available ? bullmq : null;
+  const items = [
+    { key: 'waiting', label: t('adminSystem.bullmqWaiting'), color: 'text-amber-600 bg-amber-50' },
+    { key: 'active', label: t('adminSystem.bullmqActive'), color: 'text-blue-600 bg-blue-50' },
+    { key: 'delayed', label: t('adminSystem.bullmqDelayed'), color: 'text-purple-600 bg-purple-50' },
+    { key: 'failed', label: t('adminSystem.bullmqFailed'), color: 'text-red-600 bg-red-50' },
+    { key: 'completed', label: t('adminSystem.bullmqCompleted'), color: 'text-emerald-600 bg-emerald-50' },
+  ];
+  return (
+    <div className="card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminSystem.bullmq')}</h2>
+      {!stats ? (
+        <p className="text-sm text-gray-500">{t('adminSystem.bullmqNotAvailable')}</p>
+      ) : (
+        <div className="grid grid-cols-5 gap-2">
+          {items.map(({ key, label, color }) => (
+            <div key={key} className={`rounded-xl px-3 py-2.5 text-center ${color}`}>
+              <p className="text-lg font-bold">{stats[key] ?? 0}</p>
+              <p className="mt-0.5 text-[10px] font-medium">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DbPoolPanel = ({ dbPool, t }) => {
+  const tone = dbPool?.percent >= 90 ? 'red' : dbPool?.percent >= 75 ? 'yellow' : 'green';
+  const cls = toneClass[tone];
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.dbPool')}</h2>
+        <span className="text-xs font-semibold text-gray-600">
+          {t('adminSystem.dbPoolConnections', { total: dbPool?.total ?? 0, max: dbPool?.max ?? 0 })}
+        </span>
+      </div>
+      <div className="mt-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className={`h-full ${cls.bar}`} style={{ width: `${Math.min(100, dbPool?.percent ?? 0)}%` }} />
+      </div>
+      <div className="mt-2 flex gap-4 text-xs text-gray-500">
+        <span>{t('adminSystem.dbPoolIdle', { idle: dbPool?.idle ?? 0 })}</span>
+        <span>{t('adminSystem.dbPoolWaiting', { waiting: dbPool?.waiting ?? 0 })}</span>
+      </div>
+    </div>
+  );
+};
+
 const LogsPanel = ({ activeLogService, setActiveLogService, logs, logsLoading, onRefreshLogs, t }) => (
   <div className="card overflow-hidden">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
@@ -330,6 +426,12 @@ export default function AdminSystemPage() {
           tone="green"
         />
         <AlertList alerts={overview.alerts} t={t} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <RedisPanel redis={overview.redis} t={t} />
+        <BullMQPanel bullmq={overview.bullmq} t={t} />
+        <DbPoolPanel dbPool={overview.dbPool} t={t} />
       </div>
 
       <DockerPanel docker={overview.docker} t={t} />

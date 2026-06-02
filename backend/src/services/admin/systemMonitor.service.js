@@ -3,6 +3,8 @@ import http from 'node:http';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import db from '../../config/database.js';
+import outboundMessageQueueService from '../queue/outboundMessageQueue.service.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -219,7 +221,20 @@ const getDockerContainers = async () => {
   }
 };
 
-const buildAlerts = ({ cpu, memory, disk, docker }) => {
+const getDbPoolStats = () => {
+  try {
+    const pool = db.pool;
+    const max = pool.options?.max ?? 20;
+    const total = pool.totalCount ?? 0;
+    const idle = pool.idleCount ?? 0;
+    const waiting = pool.waitingCount ?? 0;
+    return { available: true, total, idle, waiting, max, percent: max > 0 ? pct((total / max) * 100) : 0 };
+  } catch {
+    return { available: false, total: 0, idle: 0, waiting: 0, max: 0, percent: 0 };
+  }
+};
+
+const buildAlerts = ({ cpu, memory, disk, docker, redis, dbPool }) => {
   const alerts = [];
   if (cpu.percent >= 90) alerts.push({ level: 'critical', code: 'CPU_HIGH', message: 'CPU usage is above 90%' });
   else if (cpu.percent >= 75) alerts.push({ level: 'warning', code: 'CPU_WARNING', message: 'CPU usage is above 75%' });
@@ -236,17 +251,31 @@ const buildAlerts = ({ cpu, memory, disk, docker }) => {
     }
   });
 
+  if (redis?.available && !redis.evictionPolicyOk) {
+    alerts.push({ level: 'warning', code: 'REDIS_EVICTION_POLICY', message: `Redis eviction policy is "${redis.evictionPolicy}" — BullMQ requires "noeviction"` });
+  }
+
+  if (dbPool?.available && dbPool.max > 0) {
+    const poolPct = (dbPool.total / dbPool.max) * 100;
+    if (poolPct >= 90) alerts.push({ level: 'critical', code: 'DB_POOL_HIGH', message: `DB pool ${dbPool.total}/${dbPool.max} connections` });
+    else if (poolPct >= 75) alerts.push({ level: 'warning', code: 'DB_POOL_WARNING', message: `DB pool ${dbPool.total}/${dbPool.max} connections` });
+  }
+
   return alerts;
 };
 
 export async function getSystemOverview() {
-  const [cpu, memory, disk, network, docker] = await Promise.all([
+  const [cpu, memory, disk, network, docker, redis, bullmq] = await Promise.all([
     getCpuUsage(),
     readText('/proc/meminfo').then(parseMeminfo),
     getDiskUsage(),
     getNetworkUsage(),
     getDockerContainers(),
+    outboundMessageQueueService.getRedisStats(),
+    outboundMessageQueueService.getQueueMetrics(),
   ]);
+
+  const dbPool = getDbPoolStats();
 
   const data = {
     host: {
@@ -267,6 +296,9 @@ export async function getSystemOverview() {
     disk,
     network,
     docker,
+    redis,
+    bullmq: bullmq ?? { available: false },
+    dbPool,
   };
 
   return { ...data, alerts: buildAlerts(data) };
