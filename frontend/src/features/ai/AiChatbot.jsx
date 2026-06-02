@@ -5,7 +5,7 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
-  HiOutlineChevronRight, HiOutlineArrowRight,
+  HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
   HiOutlineMail, HiOutlineGlobeAlt, HiOutlinePlus,
   HiOutlineClipboardList, HiOutlineChat, HiOutlineLink, HiOutlineClock,
 } from 'react-icons/hi';
@@ -48,6 +48,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   
   // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [pendingCampaignPrompt, setPendingCampaignPrompt] = useState(null); // Prompt gốc của user
   const [pendingCampaignData, setPendingCampaignData] = useState(null); // Data từ AI khi hỏi campaign type
   const [isEditingDraft, setIsEditingDraft] = useState(false); // Đang chỉnh sửa draft trong chatbot
@@ -931,54 +932,62 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       {/* Quick Actions */}
       {!isSuperAdmin && (
         <div className="flex-shrink-0 mx-4 mt-3">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('aiChatbot.quickActions')}</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              onClick={() => setInputText('Lập kịch bản chiến dịch marketing cho [tên sản phẩm/dịch vụ], gửi qua Email và Zalo')}
-              className="flex flex-col items-center gap-1 p-2.5 bg-green-50 hover:bg-green-100 rounded-xl text-green-700 transition-all"
-            >
-              <HiOutlineClipboardList className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.scriptCampaign')}</span>
-            </button>
-            <button
-              onClick={() => setInputText('Viết template email chào mừng khách hàng mới')}
-              className="flex flex-col items-center gap-1 p-2.5 bg-orange-50 hover:bg-orange-100 rounded-xl text-orange-700 transition-all"
-            >
-              <HiOutlineMail className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.emailTemplate')}</span>
-            </button>
-            <button
-              onClick={() => setInputText('Viết template tin nhắn Zalo chăm sóc khách hàng sau mua hàng')}
-              className="flex flex-col items-center gap-1 p-2.5 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 transition-all"
-            >
-              <HiOutlineChat className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.zaloTemplate')}</span>
-            </button>
-            <button
-              onClick={() => { onToggle?.(); navigate('/app/settings/channels'); }}
-              className="flex flex-col items-center gap-1 p-2.5 bg-cyan-50 hover:bg-cyan-100 rounded-xl text-cyan-700 transition-all"
-            >
-              <HiOutlineLink className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.connectZalo')}</span>
-            </button>
-            <button
-              onClick={() => { onToggle?.(); navigate('/app/settings/channels'); }}
-              className="flex flex-col items-center gap-1 p-2.5 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 transition-all"
-            >
-              <HiOutlineClock className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.zaloTimeSlot')}</span>
-            </button>
-            <button
-              onClick={() => {
-                setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
-                setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
-              }}
-              className="flex flex-col items-center gap-1 p-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-all"
-            >
-              <HiOutlineGlobeAlt className="w-4 h-4 shrink-0" />
-              <span className="text-[10px] font-semibold leading-tight text-center">Landing Page</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setQuickActionsOpen(o => !o)}
+            className="flex items-center justify-between w-full group"
+          >
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-slate-500 transition-colors">{t('aiChatbot.quickActions')}</p>
+            <HiOutlineChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-500 transition-all duration-200 ${quickActionsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {quickActionsOpen && (
+            <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+              <button
+                onClick={() => setInputText('Lập kịch bản chiến dịch marketing cho [tên sản phẩm/dịch vụ], gửi qua Email và Zalo')}
+                className="flex flex-col items-center gap-1 p-2.5 bg-green-50 hover:bg-green-100 rounded-xl text-green-700 transition-all"
+              >
+                <HiOutlineClipboardList className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.scriptCampaign')}</span>
+              </button>
+              <button
+                onClick={() => setInputText('Viết template email chào mừng khách hàng mới')}
+                className="flex flex-col items-center gap-1 p-2.5 bg-orange-50 hover:bg-orange-100 rounded-xl text-orange-700 transition-all"
+              >
+                <HiOutlineMail className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.emailTemplate')}</span>
+              </button>
+              <button
+                onClick={() => setInputText('Viết template tin nhắn Zalo chăm sóc khách hàng sau mua hàng')}
+                className="flex flex-col items-center gap-1 p-2.5 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 transition-all"
+              >
+                <HiOutlineChat className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.zaloTemplate')}</span>
+              </button>
+              <button
+                onClick={() => { onToggle?.(); navigate('/app/settings/channels'); }}
+                className="flex flex-col items-center gap-1 p-2.5 bg-cyan-50 hover:bg-cyan-100 rounded-xl text-cyan-700 transition-all"
+              >
+                <HiOutlineLink className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.connectZalo')}</span>
+              </button>
+              <button
+                onClick={() => { onToggle?.(); navigate('/app/settings/channels'); }}
+                className="flex flex-col items-center gap-1 p-2.5 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 transition-all"
+              >
+                <HiOutlineClock className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">{t('aiChatbot.zaloTimeSlot')}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+                  setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+                }}
+                className="flex flex-col items-center gap-1 p-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-all"
+              >
+                <HiOutlineGlobeAlt className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-semibold leading-tight text-center">Landing Page</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -37,11 +37,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push image
-        uses: docker/build-push-action@v5
+      - name: Build image
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
-          push: true
+          push: false
+          load: true
+          provenance: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}
@@ -52,6 +54,18 @@ jobs:
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Push image (with retry)
+        run: |
+          for attempt in 1 2 3; do
+            echo "--- Push attempt $attempt/3 ---"
+            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest" && \
+            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}" && exit 0
+            echo "Push failed, retrying in 20s..."
+            sleep 20
+          done
+          echo "All push attempts failed"
+          exit 1
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
