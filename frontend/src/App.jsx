@@ -53,6 +53,7 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
+import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -248,6 +249,7 @@ function App() {
             <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
             <Route path="campaigns/new" element={<CampaignBuilder />} />
             <Route path="campaign-run" element={<CampaignRun />} />
+            <Route path="delivery-monitor" element={<UserDeliveryMonitorPage />} />
 
             {/* Customers */}
             <Route path="customers" element={<Customers />} />

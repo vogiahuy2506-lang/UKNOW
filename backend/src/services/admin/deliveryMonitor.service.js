@@ -159,6 +159,10 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     recentErrorRows,
     failureRows,
     unreachableRows,
+    hardBounceRows,
+    zaloDisconnectedRows,
+    pendingRetryRows,
+    zaloSkipRows,
   ] = await Promise.all([
     safeQuery(
       `SELECT status, COUNT(*)::int AS count
@@ -189,7 +193,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        FROM campaign_executions ce
        LEFT JOIN campaigns c ON c.id = ce.id_campaign
        WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(ce.status, '')) IN ('failed', 'error', 'failure')
+         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
        GROUP BY channel`,
       params
     ),
@@ -197,14 +201,14 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       `SELECT 'email' AS channel, COUNT(*)::int AS count
        FROM email_messages
        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(status, '')) IN ('failed', 'bounced', 'error')`,
+         AND LOWER(COALESCE(status::text, '')) IN ('failed', 'bounced', 'error')`,
       params
     ),
     safeQuery(
       `SELECT COALESCE(channel, 'zalo') AS channel, COUNT(*)::int AS count
        FROM zalo_messages
        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(status, '')) IN ('failed', 'error')
+         AND LOWER(COALESCE(status::text, '')) IN ('failed', 'error')
        GROUP BY COALESCE(channel, 'zalo')`,
       params
     ),
@@ -274,7 +278,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        LEFT JOIN campaigns c ON c.id = ce.id_campaign
        WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND ce.error_message IS NOT NULL
-         AND LOWER(COALESCE(ce.status, '')) IN ('failed', 'error', 'failure')
+         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
        ORDER BY ce.updated_at DESC
        LIMIT 20`,
       params
@@ -289,7 +293,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        LEFT JOIN campaigns c ON c.id = ce.id_campaign
        WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND ce.error_message IS NOT NULL
-         AND LOWER(COALESCE(ce.status, '')) IN ('failed', 'error', 'failure')
+         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
        GROUP BY COALESCE(NULLIF(ce.error_message, ''), 'Unknown error'), channel
        ORDER BY COUNT(*) DESC, MAX(ce.updated_at) DESC
        LIMIT 12`,
@@ -302,10 +306,45 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       params,
       [{ count: 0 }]
     ),
+    safeQuery(
+      `SELECT COUNT(*)::int AS count FROM customers WHERE email_hard_bounced = true`,
+      [],
+      [{ count: 0 }]
+    ),
+    safeQuery(
+      `SELECT COUNT(*)::int AS count FROM zalo_accounts WHERE is_active = true AND status = 'disconnected'`,
+      [],
+      [{ count: 0 }]
+    ),
+    safeQuery(
+      `SELECT COUNT(*)::int AS count
+       FROM campaign_run_recipient_steps
+       WHERE meta ? 'retryCount'
+         AND TRIM(COALESCE(meta->>'retryCount','')) ~ '^[0-9]+$'
+         AND (meta->>'retryCount')::int > 0`,
+      [],
+      [{ count: 0 }]
+    ),
+    safeQuery(
+      `SELECT COUNT(*)::int AS count
+       FROM campaign_run_recipient_steps
+       WHERE meta ? 'zaloAbandonReason'
+         AND updated_at >= NOW() - ($1::int * INTERVAL '1 day')`,
+      params,
+      [{ count: 0 }]
+    ),
   ]);
 
   const queueMetrics = await outboundMessageQueueService.getQueueMetrics();
   const redisStats = await outboundMessageQueueService.getRedisStats();
+
+  const quietStart = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START ?? '23', 10);
+  const quietEnd = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END ?? '6', 10);
+  const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const currentHourVN = nowVN.getUTCHours();
+  const inQuietHours = quietStart > quietEnd
+    ? currentHourVN >= quietStart || currentHourVN < quietEnd
+    : currentHourVN >= quietStart && currentHourVN < quietEnd;
   const failedRows = [...executionFailureRows, ...emailFailureRows, ...zaloFailureRows];
   const channels = normalizeChannelSummary({ sentRows, failedRows, openedClickedRows });
 
@@ -383,6 +422,10 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     (row) => row.status === 'running' && row.durationSeconds >= 60 * 60
   ).length;
   const unreachableCount = toNumber(unreachableRows[0]?.count);
+  const hardBounceCount = toNumber(hardBounceRows[0]?.count);
+  const zaloDisconnectedCount = toNumber(zaloDisconnectedRows[0]?.count);
+  const pendingRetryCount = toNumber(pendingRetryRows[0]?.count);
+  const zaloSkipCount = toNumber(zaloSkipRows[0]?.count);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -402,5 +445,12 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     queue: queueMetrics || { available: false },
     redis: redisStats || { available: false },
     signals: buildSignals({ summary, queueMetrics, stalledRuns, unreachableCount, failureGroups }),
+    health: {
+      hardBounceCount,
+      zaloDisconnectedCount,
+      pendingRetryCount,
+      zaloSkipCount,
+      zaloQuietHours: { inQuietHours, start: quietStart, end: quietEnd, currentHourVN },
+    },
   };
 }

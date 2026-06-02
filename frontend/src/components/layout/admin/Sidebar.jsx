@@ -118,6 +118,7 @@ const userMenuItems = (t) => [
       { name: t('nav.campaignManagement'), path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
       { name: t('nav.createCampaign'), path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
       { name: t('nav.runCampaign'), path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
+      { name: t('nav.deliveryMonitor'), path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
     ],
   },
   {

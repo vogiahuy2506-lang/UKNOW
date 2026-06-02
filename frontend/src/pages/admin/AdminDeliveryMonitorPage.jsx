@@ -152,6 +152,36 @@ const QueuePanel = ({ queue, redis, t }) => {
   );
 };
 
+const AdminHealthPanel = ({ health, t }) => {
+  if (!health) return null;
+  const { hardBounceCount, zaloDisconnectedCount, pendingRetryCount, zaloSkipCount, zaloQuietHours } = health;
+  const items = [
+    { label: t('adminDeliveryMonitor.health.hardBounce'), value: fmt(hardBounceCount), warn: hardBounceCount > 0, hint: t('adminDeliveryMonitor.health.hardBounceHint') },
+    { label: t('adminDeliveryMonitor.health.zaloDisconnected'), value: fmt(zaloDisconnectedCount), warn: zaloDisconnectedCount > 0, hint: t('adminDeliveryMonitor.health.zaloDisconnectedHint') },
+    { label: t('adminDeliveryMonitor.health.pendingRetry'), value: fmt(pendingRetryCount), warn: pendingRetryCount > 0, hint: t('adminDeliveryMonitor.health.pendingRetryHint') },
+    { label: t('adminDeliveryMonitor.health.zaloSkip'), value: fmt(zaloSkipCount), warn: zaloSkipCount > 0, hint: t('adminDeliveryMonitor.health.zaloSkipHint') },
+  ];
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.healthTitle')}</h2>
+        {zaloQuietHours?.inQuietHours && (
+          <span className="badge badge-warning text-xs">{t('adminDeliveryMonitor.health.quietHoursActive', { start: zaloQuietHours.start, end: zaloQuietHours.end })}</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.label} className={`rounded-xl border px-4 py-3 text-center ${item.warn ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
+            <p className={`text-xl font-bold ${item.warn ? 'text-amber-700' : 'text-gray-900'}`}>{item.value}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-gray-600">{item.label}</p>
+            <p className="mt-1 text-[10px] text-gray-400 leading-tight">{item.hint}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const SignalsPanel = ({ signals, t }) => (
   <div className="card p-5">
     <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.signals')}</h2>
@@ -369,6 +399,8 @@ export default function AdminDeliveryMonitorPage() {
         </div>
         <ChannelPanel channels={data?.channels || []} t={t} />
       </div>
+
+      <AdminHealthPanel health={data?.health} t={t} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <QueuePanel queue={data?.queue} redis={data?.redis} t={t} />
