@@ -1,6 +1,7 @@
 import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
 import multer from 'multer';
 
 const router = express.Router();
@@ -9,31 +10,31 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 router.use(authMiddleware);
 
 // Smart interactive chat
-router.post('/chat', aiController.chat.bind(aiController));
+router.post('/chat', aiLimiter, aiController.chat.bind(aiController));
 
 // Smart interactive chat V2 - multi-step support
-router.post('/chat-v2', aiController.chatV2.bind(aiController));
+router.post('/chat-v2', aiLimiter, aiController.chatV2.bind(aiController));
 
 // Generate campaign script from AI (legacy)
-router.post('/generate-campaign', aiController.generateCampaign.bind(aiController));
+router.post('/generate-campaign', aiLimiter, aiController.generateCampaign.bind(aiController));
 
 // Generate campaign with Registry support (multi-step in 1 node)
-router.post('/generate-campaign-v2', aiController.generateCampaignV2.bind(aiController));
+router.post('/generate-campaign-v2', aiLimiter, aiController.generateCampaignV2.bind(aiController));
 
 // Generate full landing page HTML (Tailwind CDN + business context)
-router.post('/generate-landing-html', aiController.generateLandingHtml.bind(aiController));
+router.post('/generate-landing-html', aiLimiter, aiController.generateLandingHtml.bind(aiController));
 
 // Create and optionally run the campaign
-router.post('/execute-campaign', aiController.executeCampaign.bind(aiController));
+router.post('/execute-campaign', aiLimiter, aiController.executeCampaign.bind(aiController));
 
 // Create campaign from AI draft (NO auto-run)
-router.post('/create-from-draft', aiController.createCampaignFromDraft.bind(aiController));
+router.post('/create-from-draft', aiLimiter, aiController.createCampaignFromDraft.bind(aiController));
 
 // Push AI script to existing campaign
-router.post('/push-to-campaign/:id', aiController.pushToCampaign.bind(aiController));
+router.post('/push-to-campaign/:id', aiLimiter, aiController.pushToCampaign.bind(aiController));
 
 // Create AND RUN campaign automatically (no confirmation needed)
-router.post('/create-and-run-campaign', aiController.createAndRunCampaign.bind(aiController));
+router.post('/create-and-run-campaign', aiLimiter, aiController.createAndRunCampaign.bind(aiController));
 
 // Business profile (RAG context)
 router.get('/business-profile', aiController.getBusinessProfile.bind(aiController));
@@ -45,7 +46,7 @@ router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiCont
 router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
-router.post('/custom-chat', aiController.customChat.bind(aiController));
+router.post('/custom-chat', aiLimiter, aiController.customChat.bind(aiController));
 
 // Custom AI - Document upload (extract, chunk, embed)
 router.post('/custom-chat/upload', upload.single('file'), aiController.customChatUpload.bind(aiController));

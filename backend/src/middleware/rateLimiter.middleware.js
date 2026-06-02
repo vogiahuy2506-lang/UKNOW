@@ -103,6 +103,39 @@ export const webhookLimiter = rateLimit({
   },
 });
 
+// AI/Gemini limiter - 20 requests per minute per user (Gemini calls are expensive)
+export const aiLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 60 * 1000, // 1 minute
+  max: 20,
+  message: {
+    success: false,
+    message: 'Quá nhiều yêu cầu AI. Vui lòng thử lại sau 1 phút.',
+    code: 'AI_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    if (req.user?.id) return `ai:${req.user.id}`;
+    return `ai:${ipKeyGenerator(req)}`;
+  },
+});
+
+// Public chatbot limiter - 30 messages per minute per IP (no auth, visitor-facing)
+export const publicChatLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  message: {
+    success: false,
+    message: 'Quá nhiều tin nhắn. Vui lòng thử lại sau 1 phút.',
+    code: 'CHAT_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pubchat:${ipKeyGenerator(req)}`,
+});
+
 // Campaign run limiter - 10 campaign executions per hour
 export const campaignRunLimiter = rateLimit({
   skip: skipInTest,

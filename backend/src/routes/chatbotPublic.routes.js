@@ -1,5 +1,6 @@
 import express from 'express';
 import chatbotController from '../controllers/chatbot.controller.js';
+import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.post('/widget/conversations', chatbotController.startWebChat.bind(chatbot
 router.get('/widget/conversations/:conversationId/messages', chatbotController.getWebChatMessages.bind(chatbotController));
 
 // Send a message in a conversation
-router.post('/widget/conversations/:conversationId/messages', chatbotController.sendWebChatMessage.bind(chatbotController));
+router.post('/widget/conversations/:conversationId/messages', publicChatLimiter, chatbotController.sendWebChatMessage.bind(chatbotController));
 
 // ── Custom AI Chat Widget (uses /api/ai/custom-chat) ─────────────────────
 
@@ -26,6 +27,6 @@ router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfi
 router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Send message to custom chatbot (directly uses Gemini + KB)
-router.post('/custom-chatbot/:widgetKey/chat', chatbotController.chatWithCustomChatbot.bind(chatbotController));
+router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotController.chatWithCustomChatbot.bind(chatbotController));
 
 export default router;
