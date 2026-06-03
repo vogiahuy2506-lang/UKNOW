@@ -197,6 +197,8 @@ export default {
     voucherManagement: 'Quản lý voucher',
     serverMonitoring: 'Giám sát máy chủ',
     deliveryMonitoring: 'Giám sát gửi tin',
+    systemAuditLogs: 'Nhật ký hệ thống',
+    auditLogs: 'Nhật ký hoạt động',
     businessProfile: 'Hồ sơ doanh nghiệp',
     chatbotStudio: 'AI Chatbot',
     knowledgeBase: 'Knowledge Base',

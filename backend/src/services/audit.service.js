@@ -1,20 +1,18 @@
 import db from '../config/database.js';
 
 class AuditService {
-  /**
-   * Log an action to the audit log
-   * @param {object} params
-   */
-  async log({ userId, action, entityType, entityId, details = {}, req = null }) {
+  async log({ userId, ownerId = null, category = 'workspace', action, entityType, entityId, details = {}, req = null }) {
     try {
       await db.query(
-        `INSERT INTO audit_logs (id_user, action, entity_type, entity_id, details, ip_address, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO audit_logs (id_user, owner_id, category, action, entity_type, entity_id, details, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
-          userId,
+          userId || null,
+          ownerId || null,
+          category,
           action,
-          entityType,
-          entityId,
+          entityType || null,
+          entityId || null,
           JSON.stringify(details),
           req?.ip || req?.connection?.remoteAddress || null,
           req?.headers?.['user-agent'] || null,
@@ -22,153 +20,183 @@ class AuditService {
       );
     } catch (err) {
       console.error('[AuditService] Failed to log audit:', err.message);
-      // Don't throw - audit logging should not break the main flow
     }
   }
 
-  /**
-   * Get audit logs with filters
-   * @param {object} filters
-   */
-  async getLogs({ userId, action, entityType, startDate, endDate, limit = 50, offset = 0 } = {}) {
-    const conditions = [];
-    const params = [];
-    let paramIndex = 1;
+  // Employer view: logs scoped to their workspace (own actions + employees' actions)
+  async getWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate, limit = 50, offset = 0 } = {}) {
+    const conditions = ['(owner_id = $1 OR (id_user = $1 AND category = \'workspace\'))'];
+    const params = [ownerId];
+    let i = 2;
 
-    if (userId) {
-      conditions.push(`id_user = $${paramIndex}`);
-      params.push(userId);
-      paramIndex++;
-    }
-
-    if (action) {
-      conditions.push(`action = $${paramIndex}`);
-      params.push(action);
-      paramIndex++;
-    }
-
-    if (entityType) {
-      conditions.push(`entity_type = $${paramIndex}`);
-      params.push(entityType);
-      paramIndex++;
-    }
-
-    if (startDate) {
-      conditions.push(`created_at >= $${paramIndex}`);
-      params.push(startDate);
-      paramIndex++;
-    }
-
-    if (endDate) {
-      conditions.push(`created_at <= $${paramIndex}`);
-      params.push(endDate);
-      paramIndex++;
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    if (actorId) { conditions.push(`id_user = $${i++}`); params.push(actorId); }
+    if (action)  { conditions.push(`action = $${i++}`); params.push(action); }
+    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
+    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
+    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
 
     params.push(limit, offset);
 
-    const query = `
-      SELECT al.*, u.full_name as user_name, u.email as user_email
-      FROM audit_logs al
-      LEFT JOIN users u ON u.id = al.id_user
-      ${whereClause}
-      ORDER BY al.created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    const { rows } = await db.query(query, params);
+    const { rows } = await db.query(
+      `SELECT al.id, al.action, al.entity_type, al.entity_id, al.details,
+              al.ip_address, al.created_at,
+              u.full_name AS actor_name, u.username AS actor_username, u.avatar_url AS actor_avatar
+       FROM audit_logs al
+       LEFT JOIN users u ON u.id = al.id_user
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY al.created_at DESC
+       LIMIT $${i} OFFSET $${i + 1}`,
+      params
+    );
     return rows;
   }
 
-  /**
-   * Get audit log summary by action type
-   * @param {number} userId
-   * @param {Date} startDate
-   * @param {Date} endDate
-   */
-  async getSummary(userId, startDate, endDate) {
+  async countWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate } = {}) {
+    const conditions = ['(owner_id = $1 OR (id_user = $1 AND category = \'workspace\'))'];
+    const params = [ownerId];
+    let i = 2;
+
+    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
+    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
+    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
+    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
+    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
+
     const { rows } = await db.query(
-      `SELECT action, COUNT(*) as count
-       FROM audit_logs
-       WHERE ($1::BIGINT IS NULL OR id_user = $1)
-         AND ($2::TIMESTAMPTZ IS NULL OR created_at >= $2)
-         AND ($3::TIMESTAMPTZ IS NULL OR created_at <= $3)
-       GROUP BY action
-       ORDER BY count DESC`,
-      [userId, startDate, endDate]
+      `SELECT COUNT(*)::int AS total FROM audit_logs WHERE ${conditions.join(' AND ')}`,
+      params
+    );
+    return rows[0].total;
+  }
+
+  // Super admin view: system-level events only
+  async getSystemLogs({ actorId, action, entityType, startDate, endDate, limit = 50, offset = 0 } = {}) {
+    const conditions = [`category = 'system'`];
+    const params = [];
+    let i = 1;
+
+    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
+    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
+    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
+    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
+    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
+
+    params.push(limit, offset);
+
+    const { rows } = await db.query(
+      `SELECT al.id, al.action, al.entity_type, al.entity_id, al.details,
+              al.ip_address, al.created_at,
+              u.full_name AS actor_name, u.username AS actor_username, u.email AS actor_email
+       FROM audit_logs al
+       LEFT JOIN users u ON u.id = al.id_user
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY al.created_at DESC
+       LIMIT $${i} OFFSET $${i + 1}`,
+      params
     );
     return rows;
+  }
+
+  async countSystemLogs({ actorId, action, entityType, startDate, endDate } = {}) {
+    const conditions = [`category = 'system'`];
+    const params = [];
+    let i = 1;
+
+    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
+    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
+    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
+    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
+    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
+
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS total FROM audit_logs WHERE ${conditions.join(' AND ')}`,
+      params
+    );
+    return rows[0].total;
   }
 }
 
 const auditService = new AuditService();
 
-// Predefined action types
 export const AUDIT_ACTIONS = {
-  // Auth actions
+  // Auth
   LOGIN: 'LOGIN',
   LOGOUT: 'LOGOUT',
   LOGIN_FAILED: 'LOGIN_FAILED',
   PASSWORD_CHANGED: 'PASSWORD_CHANGED',
   PASSWORD_RESET_REQUESTED: 'PASSWORD_RESET_REQUESTED',
 
-  // Channel actions
-  CHANNEL_CONNECTED: 'CHANNEL_CONNECTED',
-  CHANNEL_DISCONNECTED: 'CHANNEL_DISCONNECTED',
-  CHANNEL_CONFIG_UPDATED: 'CHANNEL_CONFIG_UPDATED',
+  // System — plans
+  PLAN_CREATED: 'PLAN_CREATED',
+  PLAN_UPDATED: 'PLAN_UPDATED',
+  PLAN_DELETED: 'PLAN_DELETED',
 
-  // Chatbot actions
-  CHATBOT_SETTINGS_UPDATED: 'CHATBOT_SETTINGS_UPDATED',
-  KB_CREATED: 'KB_CREATED',
-  KB_UPDATED: 'KB_UPDATED',
-  KB_DELETED: 'KB_DELETED',
-  DOCUMENT_UPLOADED: 'DOCUMENT_UPLOADED',
-  SUB_ASSISTANT_CREATED: 'SUB_ASSISTANT_CREATED',
-  SUB_ASSISTANT_UPDATED: 'SUB_ASSISTANT_UPDATED',
-  SUB_ASSISTANT_DELETED: 'SUB_ASSISTANT_DELETED',
+  // System — vouchers
+  VOUCHER_CREATED: 'VOUCHER_CREATED',
+  VOUCHER_UPDATED: 'VOUCHER_UPDATED',
+  VOUCHER_DELETED: 'VOUCHER_DELETED',
 
-  // Campaign actions
+  // System — users
+  USER_REGISTERED: 'USER_REGISTERED',
+  USER_PLAN_CHANGED: 'USER_PLAN_CHANGED',
+  USER_ROLE_CHANGED: 'USER_ROLE_CHANGED',
+
+  // Workspace — employees
+  EMPLOYEE_ADDED: 'EMPLOYEE_ADDED',
+  EMPLOYEE_REMOVED: 'EMPLOYEE_REMOVED',
+  EMPLOYEE_LIMITS_UPDATED: 'EMPLOYEE_LIMITS_UPDATED',
+  EMPLOYEE_PERMISSIONS_UPDATED: 'EMPLOYEE_PERMISSIONS_UPDATED',
+  EMPLOYEE_STATUS_UPDATED: 'EMPLOYEE_STATUS_UPDATED',
+  EMPLOYEE_PASSWORD_RESET: 'EMPLOYEE_PASSWORD_RESET',
+
+  // Workspace — campaigns
   CAMPAIGN_CREATED: 'CAMPAIGN_CREATED',
   CAMPAIGN_UPDATED: 'CAMPAIGN_UPDATED',
   CAMPAIGN_DELETED: 'CAMPAIGN_DELETED',
   CAMPAIGN_RUN_STARTED: 'CAMPAIGN_RUN_STARTED',
-  CAMPAIGN_RUN_COMPLETED: 'CAMPAIGN_RUN_COMPLETED',
-  CAMPAIGN_RUN_FAILED: 'CAMPAIGN_RUN_FAILED',
+  CAMPAIGN_PAUSED: 'CAMPAIGN_PAUSED',
 
-  // Subscription actions
-  PLAN_CHANGED: 'PLAN_CHANGED',
-  SUBSCRIPTION_RENEWED: 'SUBSCRIPTION_RENEWED',
-  SUBSCRIPTION_CANCELLED: 'SUBSCRIPTION_CANCELLED',
-
-  // Admin actions
-  USER_CREATED: 'USER_CREATED',
-  USER_UPDATED: 'USER_UPDATED',
-  USER_DELETED: 'USER_DELETED',
-  PLAN_CREATED: 'PLAN_CREATED',
-  PLAN_UPDATED: 'PLAN_UPDATED',
-  PLAN_DELETED: 'PLAN_DELETED',
+  // Workspace — templates
+  EMAIL_TEMPLATE_CREATED: 'EMAIL_TEMPLATE_CREATED',
+  EMAIL_TEMPLATE_UPDATED: 'EMAIL_TEMPLATE_UPDATED',
+  EMAIL_TEMPLATE_DELETED: 'EMAIL_TEMPLATE_DELETED',
+  ZALO_TEMPLATE_CREATED: 'ZALO_TEMPLATE_CREATED',
+  ZALO_TEMPLATE_UPDATED: 'ZALO_TEMPLATE_UPDATED',
+  ZALO_TEMPLATE_DELETED: 'ZALO_TEMPLATE_DELETED',
 };
 
 export const AUDIT_ENTITY_TYPES = {
   USER: 'user',
   PLAN: 'plan',
-  CHANNEL: 'channel',
-  CHATBOT_SETTINGS: 'chatbot_settings',
-  KNOWLEDGE_BASE: 'knowledge_base',
-  DOCUMENT: 'document',
-  SUB_ASSISTANT: 'sub_assistant',
+  VOUCHER: 'voucher',
+  EMPLOYEE: 'employee',
   CAMPAIGN: 'campaign',
-  CAMPAIGN_RUN: 'campaign_run',
-  SUBSCRIPTION: 'subscription',
-  ORDER: 'order',
+  EMAIL_TEMPLATE: 'email_template',
+  ZALO_TEMPLATE: 'zalo_template',
 };
 
-// Quick helper for common audit actions
-export async function auditLog(req, action, entityType, entityId, details = {}) {
+/**
+ * Log a workspace event (employer/employee action).
+ * Call this in controllers where req is available.
+ */
+export async function logWorkspace(req, action, entityType, entityId, details = {}) {
+  const userId = req.user?.id;
+  // owner_id = employer. If acting as employee (activeContext.type === 'employee'), owner is activeContext.ownerId.
+  const ownerId = req.user?.activeContext?.type === 'employee'
+    ? req.user.activeContext.ownerId
+    : userId;
+
+  return auditService.log({ userId, ownerId, category: 'workspace', action, entityType, entityId, details, req });
+}
+
+/**
+ * Log a system event (super admin action).
+ */
+export async function logSystem(req, action, entityType, entityId, details = {}) {
   return auditService.log({
     userId: req.user?.id,
+    ownerId: null,
+    category: 'system',
     action,
     entityType,
     entityId,

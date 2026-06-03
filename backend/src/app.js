@@ -52,6 +52,8 @@ import chatbotRoutes from './routes/chatbot.routes.js';
 import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
+import auditRoutes from './routes/audit.routes.js';
+import adminAuditLogsRoutes from './routes/adminAuditLogs.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
 
@@ -196,6 +198,8 @@ export function createApp() {
   app.use('/api/chatbot-public', chatbotPublicRoutes);
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/custom-domains', customDomainRoutes);
+  app.use('/api/audit-logs', auditRoutes);
+  app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

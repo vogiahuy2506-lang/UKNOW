@@ -10,6 +10,7 @@ import campaignEmailSenderService from '../services/campaign/campaignEmailSender
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 class CampaignController {
   /**
@@ -392,6 +393,7 @@ class CampaignController {
 
       await client.query('COMMIT');
 
+      logWorkspace(req, AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaign_name, type: campaign.campaign_type });
       res.status(201).json({
         success: true,
         message: 'Tạo chiến dịch thành công',
@@ -705,6 +707,7 @@ class CampaignController {
         }
       }
 
+      logWorkspace(req, AUDIT_ACTIONS.CAMPAIGN_DELETED, AUDIT_ENTITY_TYPES.CAMPAIGN, Number(id), {});
       res.json({
         success: true,
         message: 'Xóa chiến dịch thành công'

@@ -32,6 +32,7 @@ import {
   HiOutlineInbox,
   HiOutlineSparkles,
   HiOutlineServer,
+  HiOutlineClipboard,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -76,6 +77,11 @@ const superAdminMenuItems = (t) => [
     name: t('nav.deliveryMonitoring'),
     path: '/admin/delivery-monitor',
     icon: HiOutlineLightningBolt,
+  },
+  {
+    name: t('nav.systemAuditLogs'),
+    path: '/admin/audit-logs',
+    icon: HiOutlineClipboard,
   },
 ];
 
@@ -143,6 +149,12 @@ const userMenuItems = (t) => [
     name: t('nav.employees'),
     path: '/app/settings/employees',
     icon: HiOutlineUserGroup,
+    ownerOnly: true,
+  },
+  {
+    name: t('nav.auditLogs'),
+    path: '/app/settings/audit-logs',
+    icon: HiOutlineClipboard,
     ownerOnly: true,
   },
 ];

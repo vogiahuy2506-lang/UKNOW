@@ -53,6 +53,8 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
+import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
+import AuditLogsPage from './pages/settings/AuditLogsPage';
 import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
@@ -259,6 +261,7 @@ function App() {
             {/* Settings — owner only */}
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
+            <Route path="settings/audit-logs" element={<OwnerRoute><AuditLogsPage /></OwnerRoute>} />
             <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
             <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
@@ -298,6 +301,7 @@ function App() {
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="system" element={<AdminSystemPage />} />
             <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
+            <Route path="audit-logs" element={<AdminAuditLogsPage />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}

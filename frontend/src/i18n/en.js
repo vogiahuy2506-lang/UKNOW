@@ -197,6 +197,8 @@ export default {
     voucherManagement: 'Voucher Management',
     serverMonitoring: 'Server Monitoring',
     deliveryMonitoring: 'Delivery Monitoring',
+    systemAuditLogs: 'System Audit Logs',
+    auditLogs: 'Activity Logs',
     businessProfile: 'Business Profile',
     knowledgeBase: 'Knowledge Base',
     subAssistants: 'Sub-assistants',
