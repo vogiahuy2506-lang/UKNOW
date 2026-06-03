@@ -23,6 +23,15 @@ const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
 const fmtPct = (value) => `${Number(value || 0).toFixed(1)}%`;
 const fmtDateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN') : '-');
 const fmtRate = (value) => `${Number(value || 0).toFixed(1)}/min`;
+const fmtDuration = (seconds) => {
+  if (!seconds || seconds < 1) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}g ${m}p`;
+  if (m > 0) return `${m}p ${s}s`;
+  return `${s}s`;
+};
 
 const windowOptions = [7, 30, 90];
 
@@ -168,13 +177,14 @@ const TopRunsTable = ({ runs, t }) => (
             <th className="px-5 py-3">{t('userDeliveryMonitor.campaign')}</th>
             <th className="px-5 py-3">{t('userDeliveryMonitor.status')}</th>
             <th className="px-5 py-3">{t('userDeliveryMonitor.sentFailed')}</th>
+            <th className="px-5 py-3">{t('userDeliveryMonitor.runDuration')}</th>
             <th className="px-5 py-3">{t('userDeliveryMonitor.speed')}</th>
             <th className="px-5 py-3">{t('userDeliveryMonitor.failRate')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {runs.length === 0 ? (
-            <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
+            <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
           ) : runs.map((run) => (
             <tr key={run.id}>
               <td className="px-5 py-3">
@@ -186,7 +196,16 @@ const TopRunsTable = ({ runs, t }) => (
                   {run.status}
                 </span>
               </td>
-              <td className="px-5 py-3 text-gray-700">{fmt(run.successfulSends)} / {fmt(run.failedSends)}</td>
+              <td className="px-5 py-3 text-gray-700">
+                <span className="font-medium">{fmt(run.successfulSends)}</span>
+                <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>
+              </td>
+              <td className="px-5 py-3 text-gray-700">
+                <span>{fmtDuration(run.durationSeconds)}</span>
+                {run.completedAt && (
+                  <p className="text-xs text-gray-400">{fmtDateTime(run.completedAt)}</p>
+                )}
+              </td>
               <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
               <td className="px-5 py-3 text-gray-700">{fmtPct(run.failureRate)}</td>
             </tr>
