@@ -146,14 +146,17 @@ const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
         {channels.map((channel) => {
           const recent = recentMap[channel.channel];
           const recentDrop = recent && channel.sent > 0 && recent.sent === 0;
-          const width = Math.min(100, Math.max(0, channel.successRate || 0));
+          const hasCoverage = channel.coverage !== null && channel.coverage !== undefined;
+          const barWidth = Math.min(100, Math.max(0, hasCoverage ? channel.coverage : channel.successRate));
           return (
             <div key={channel.channel} className={`rounded-xl border px-4 py-3 ${recentDrop ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="font-semibold text-gray-900">{t(`userDeliveryMonitor.channel.${channel.channel}`)}</p>
                   <p className="text-xs text-gray-500">
-                    {t('userDeliveryMonitor.channelSub', { sent: fmt(channel.sent), failed: fmt(channel.failed), clicked: fmt(channel.clicked) })}
+                    {hasCoverage
+                      ? t('userDeliveryMonitor.channelSubCoverage', { sent: fmt(channel.sent), total: fmt(channel.totalRecipients), clicked: fmt(channel.clicked) })
+                      : t('userDeliveryMonitor.channelSub', { sent: fmt(channel.sent), failed: fmt(channel.failed), clicked: fmt(channel.clicked) })}
                   </p>
                   {recent && (
                     <p className={`mt-0.5 text-xs ${recentDrop ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
@@ -161,12 +164,21 @@ const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
                     </p>
                   )}
                 </div>
-                <span className={`badge shrink-0 text-xs ${recentDrop ? 'badge-warning' : channel.failed > 0 ? 'badge-warning' : 'badge-success'}`}>
-                  {fmtPct(channel.successRate)}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {hasCoverage && (
+                    <span className={`badge text-xs ${recentDrop ? 'badge-warning' : channel.coverage >= 80 ? 'badge-success' : channel.coverage >= 40 ? 'badge-warning' : 'badge-error'}`}>
+                      {fmtPct(channel.coverage)} {t('userDeliveryMonitor.channelCoverageLabel')}
+                    </span>
+                  )}
+                  {channel.attempts > 0 && (
+                    <span className="text-xs text-gray-400">
+                      {t('userDeliveryMonitor.channelQuality', { rate: fmtPct(channel.successRate) })}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }} />
+                <div className="h-full rounded-full" style={{ width: `${barWidth}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }} />
               </div>
             </div>
           );

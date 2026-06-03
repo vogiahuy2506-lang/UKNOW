@@ -63,6 +63,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     execFail48h,
     emailFail48h,
     zaloFail48h,
+    totalRecipientsRows,
   ] = await Promise.all([
     safeQuery(
       `SELECT cr.status, COUNT(*)::int AS count
@@ -276,14 +277,29 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        GROUP BY COALESCE(zm.channel, 'zalo')`,
       params48h
     ),
+    safeQuery(
+      `SELECT
+         CASE
+           WHEN c.campaign_type::text ILIKE '%zalo_group%' THEN 'zalo_group'
+           WHEN c.campaign_type::text ILIKE '%zalo%' THEN 'zalo'
+           ELSE 'email'
+         END AS channel,
+         SUM(GREATEST(cr.total_recipients, 0))::int AS total_recipients
+       FROM campaign_runs cr
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND c.id_user = $2
+       GROUP BY channel`,
+      params
+    ),
   ]);
 
   const CHANNEL_LABELS = { email: 'Email', zalo: 'Zalo cá nhân', zalo_group: 'Zalo nhóm' };
-  const buildChannels = (sRows, execFRows, emailFRows, zaloFRows, ocRows = []) => {
+  const buildChannels = (sRows, execFRows, emailFRows, zaloFRows, ocRows = [], totRows = []) => {
     const map = {
-      email: { channel: 'email', label: CHANNEL_LABELS.email, sent: 0, failed: 0, opened: 0, clicked: 0 },
-      zalo: { channel: 'zalo', label: CHANNEL_LABELS.zalo, sent: 0, failed: 0, opened: 0, clicked: 0 },
-      zalo_group: { channel: 'zalo_group', label: CHANNEL_LABELS.zalo_group, sent: 0, failed: 0, opened: 0, clicked: 0 },
+      email: { channel: 'email', label: CHANNEL_LABELS.email, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
+      zalo: { channel: 'zalo', label: CHANNEL_LABELS.zalo, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
+      zalo_group: { channel: 'zalo_group', label: CHANNEL_LABELS.zalo_group, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
     };
     sRows.forEach((row) => { map[inferChannel(row)].sent += toNumber(row.count); });
     [...execFRows, ...emailFRows, ...zaloFRows].forEach((row) => {
@@ -295,12 +311,17 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       if (type.includes('opened')) ch.opened += toNumber(row.count);
       if (type.includes('clicked')) ch.clicked += toNumber(row.count);
     });
+    totRows.forEach((row) => { map[inferChannel(row)].totalRecipients += toNumber(row.total_recipients); });
     return Object.values(map).map((item) => {
       const attempts = item.sent + item.failed;
-      return { ...item, attempts, successRate: attempts > 0 ? Math.round((item.sent / attempts) * 1000) / 10 : 0 };
+      const successRate = attempts > 0 ? Math.round((item.sent / attempts) * 1000) / 10 : 0;
+      const coverage = item.totalRecipients > 0
+        ? Math.round((item.sent / item.totalRecipients) * 1000) / 10
+        : null;
+      return { ...item, attempts, successRate, coverage };
     });
   };
-  const channels = buildChannels(sentRows, executionFailureRows, emailFailureRows, zaloFailureRows, openedClickedRows);
+  const channels = buildChannels(sentRows, executionFailureRows, emailFailureRows, zaloFailureRows, openedClickedRows, totalRecipientsRows);
   const channelsRecent = buildChannels(sentRows48h, execFail48h, emailFail48h, zaloFail48h);
 
   const runStatus = runStatusRows.reduce((acc, row) => {
