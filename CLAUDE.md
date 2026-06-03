@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Do not include "Co-authored-by:..." in commit messages
+
 ## Project Overview
 
 UKNOW Campaign is a multi-channel marketing automation platform for email and Zalo messaging campaigns, with customer segmentation, landing page builder, course management, and payment integration (PayOS). The target deployment is Vietnamese market.
@@ -194,15 +196,40 @@ Override riêng theo kênh (0 = dùng default chung):
 | `CONTINUOUS_ZALO_GROUP_BATCH_SIZE` | `6` | Gửi 6 tin Zalo nhóm/batch |
 | `CONTINUOUS_ZALO_FRIEND_BATCH_SIZE` | `8` | Gửi 8 yêu cầu kết bạn/batch |
 
+### Email — Tốc độ gửi & xử lý lỗi
+
+| Tham số (hardcoded) | Giá trị | Ý nghĩa |
+|---|---|---|
+| `EMAIL_API_DELAY_MIN_MS` | `50` | Delay tối thiểu **50ms** giữa 2 lần gọi SMTP API |
+| `EMAIL_API_DELAY_MAX_MS` | `250` | Delay tối đa **250ms** giữa 2 lần gọi SMTP API |
+| `EMAIL_RATE_LIMIT_PAUSE_MS` | `43200000` | Nếu SendGrid báo bị rate-limit → **tạm dừng 12 giờ** rồi tự retry |
+
+→ Email gửi nhanh hơn Zalo nhiều (50–250ms/tin). Bottleneck chính là **SendGrid quota** và **hard bounce**.
+
+### Email — Xử lý bounce
+
+| Loại | Hành vi |
+|---|---|
+| **Hard bounce** (địa chỉ không tồn tại, domain lỗi) | Đánh dấu `email_hard_bounced = true` trong DB, **không gửi lại bao giờ** |
+| **Soft bounce / SMTP lỗi tạm thời** | Lên lịch retry, theo dõi qua `meta.retryCount` trong ledger |
+| **SMTP auth lỗi (535)** | Đánh dấu lỗi cấu hình, **không retry** vì là lỗi credentials |
+| **SendGrid rate-limit** | Pause toàn bộ campaign 12 giờ, sau đó resume tự động |
+
 ### Khi nào Zalo không gửi / gửi chậm — checklist giám sát
 
 1. **Không gửi gì cả** → Kiểm tra: đang trong quiet hours? (`23:00–06:00`), hay tài khoản Zalo bị disconnect?
 2. **Gửi rất chậm** → Bình thường — mỗi tin cách nhau 20–50s. Với 1000 người = ~7–14 giờ.
 3. **Dừng giữa chừng** → Có thể đã đạt 100 tin/giờ → chờ quota reset (window 1 giờ), hoặc bị cooldown tra số điện thoại (3 giờ).
-4. **Một số người không nhận được** → Có thể đã thất bại 5 lần → bị skip. Xem log backend: `docker logs uknow-campaign-backend --since 2h | grep "FAIL\|skip\|ledger"`.
-5. **Email không gửi** → Kiểm tra SendGrid quota, hoặc xem log: `docker logs uknow-campaign-backend --since 2h | grep "email\|sendgrid"`.
+4. **Một số người không nhận được** → Có thể đã thất bại 5 lần → bị skip. Xem log: `docker logs uknow-campaign-backend --since 2h | grep "FAIL\|skip\|ledger"`.
+
+### Khi nào Email không gửi / dừng giữa chừng — checklist giám sát
+
+1. **Campaign dừng ~12 giờ** → SendGrid báo rate-limit → tự resume sau 12 tiếng. Xem log: `grep -i "rate.limit\|pause\|sendgrid"`.
+2. **Một số người không nhận được** → Email bị hard bounce (địa chỉ không tồn tại) → bị skip vĩnh viễn. Kiểm tra cột `email_hard_bounced` trong DB.
+3. **Toàn bộ email lỗi liên tục** → Kiểm tra SendGrid API key, quota tháng, hoặc domain sender bị blacklist.
+4. **Campaign treo, không tiến triển** → Có thể SMTP credentials sai (lỗi 535) → xem log: `grep -i "535\|auth\|credentials"`.
 
 > **Log nhanh trên VPS:**
 > ```bash
-> docker logs uknow-campaign-backend --since 1h --tail 200 | grep -iE "quiet|rate.limit|cooldown|fail|error|skip"
+> docker logs uknow-campaign-backend --since 1h --tail 200 | grep -iE "quiet|rate.limit|cooldown|fail|error|skip|bounce|sendgrid"
 > ```

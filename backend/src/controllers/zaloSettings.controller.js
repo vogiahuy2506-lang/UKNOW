@@ -13,6 +13,8 @@ import campaignZaloSenderService from '../services/campaign/campaignZaloSender.s
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
+import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
+import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 
 class ZaloSettingsController {
   constructor() {
@@ -373,6 +375,7 @@ class ZaloSettingsController {
       [userId, accountId]
     );
     zaloAccountSessionService.clearAccountApi(accountId);
+    zaloPersonalInboxService.invalidateAccountCache();
   }
 
   /**
@@ -611,6 +614,12 @@ class ZaloSettingsController {
       api,
       context: 'loginQr',
     });
+
+    // Notify inbox service to register listener for this account
+    if (account?.id) {
+      addPendingAccount(account.id);
+      zaloPersonalInboxService.invalidateAccountCache();
+    }
   }
 
   /**
@@ -1673,6 +1682,9 @@ class ZaloSettingsController {
 
       zaloAccountSessionService.clearAccountApi(deleted.rows[0].id);
 
+      // Invalidate inbox cache
+      zaloPersonalInboxService.invalidateAccountCache();
+
       if (deleted.rows[0].is_default) {
         const ownerUserId = deleted.rows[0].id_user;
         await db.query(
@@ -1818,6 +1830,10 @@ class ZaloSettingsController {
           api,
           context: 'restoreAccountSessionByCookie',
         });
+
+        // Notify inbox service to register listener for this account
+        addPendingAccount(accountId);
+        zaloPersonalInboxService.invalidateAccountCache();
 
         return res.json({
           success: true,

@@ -560,23 +560,160 @@ class ChatbotController {
 
   // ── Custom AI Chatbot Widget ─────────────────────────────────────
 
-  async getCustomChatbotConfig(req, res) {
+  async getPublicChatbotById(req, res) {
     try {
-      const { widgetKey } = req.params;
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
 
-      // Get chatbot from localStorage data or DB
-      // For now, return config from widgets stored in localStorage
-      // In production, this would query the chatbot table
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(id);
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
 
       return res.json({
         success: true,
         data: {
-          widgetKey: widgetKey,
-          welcomeMessage: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          id: chatbot.id,
+          name: chatbot.name || 'AI Assistant',
+          description: chatbot.description || '',
+          greeting_msg: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          avatar_url: chatbot.avatar_url || null,
+          theme_color: chatbot.theme_color || '#6366f1',
+          is_active: chatbot.is_active,
+          // Widget UI customization
+          primary_color: chatbot.primary_color || '#6366F1',
+          background_color: chatbot.background_color || '#FFFFFF',
+          text_color: chatbot.text_color || '#1F2937',
+          accent_color: chatbot.accent_color || '#60A5FA',
+          logo_url: chatbot.logo_url || null,
+          show_avatar: chatbot.show_avatar !== false,
+          position: chatbot.position || 'bottom-right',
+          border_radius: chatbot.border_radius || 16,
+          chat_height: chatbot.chat_height || '600px',
+          // Suggested questions - applies to all deployment types
+          suggested_questions: chatbot.suggested_questions || [],
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] getPublicChatbotById error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async getCustomChatbotConfig(req, res) {
+    try {
+      const { widgetKey } = req.params;
+
+      // Query chatbot from database
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
+
+      if (!chatbot) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy chatbot',
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          widgetKey: chatbot.widget_key,
+          name: chatbot.name,
+          welcomeMessage: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          description: chatbot.description,
+          avatarUrl: chatbot.avatar_url,
+          logoUrl: chatbot.logo_url,
+          primaryColor: chatbot.primary_color || '#6366F1',
+          backgroundColor: chatbot.background_color || '#FFFFFF',
+          textColor: chatbot.text_color || '#1F2937',
+          accentColor: chatbot.accent_color || '#60A5FA',
+          showAvatar: chatbot.show_avatar !== false,
+          suggestedQuestions: chatbot.suggested_questions || [],
+          position: chatbot.position || 'bottom-right',
         },
       });
     } catch (err) {
       console.error('[CustomChatbot] Config error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── Custom Chatbots (Studio) ──────────────────────────────────────
+
+  async listCustomChatbots(req, res) {
+    try {
+      const chatbots = await chatbotRepository.listChatbotsByUser(req.user.id);
+      return res.json({ success: true, data: chatbots });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async createCustomChatbot(req, res) {
+    try {
+      const crypto = await import('crypto');
+      const widgetKey = crypto.randomUUID().split('-')[0];
+      const chatbot = await chatbotRepository.createChatbot(req.user.id, {
+        ...req.body,
+        widget_key: widgetKey,
+      });
+      return res.status(201).json({ success: true, data: chatbot });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async updateCustomChatbot(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const updated = await chatbotRepository.updateChatbot(id, req.user.id, req.body);
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      return res.json({
+        success: true,
+        data: updated,
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] updateCustomChatbot error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async deleteCustomChatbot(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const deleted = await chatbotRepository.deleteChatbot(id, req.user.id);
+
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Chatbot deleted',
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] deleteCustomChatbot error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -629,9 +766,15 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'message is required' });
       }
 
-      // Get chatbot settings by widget_key
-      // For now, use default settings
-      const systemInstruction = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+      // Get chatbot settings by widget_key from database
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+      }
+
+      // Use chatbot's system instruction or default
+      const systemInstruction = chatbot.system_instruction || 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
 
       // Build history
       const fullHistory = [
@@ -657,8 +800,8 @@ class ChatbotController {
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
+            temperature: chatbot.temperature || 0.7,
+            maxOutputTokens: chatbot.max_tokens || 2048,
           }
         })
       });
@@ -681,6 +824,84 @@ class ChatbotController {
       });
     } catch (err) {
       console.error('[CustomChatbot] Chat error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // Chat with chatbot by ID (not widgetKey) - for PublicChatbotPage
+  async chatWithCustomChatbotById(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const { message, history } = req.body;
+
+      if (!message?.trim()) {
+        return res.status(400).json({ success: false, message: 'message is required' });
+      }
+
+      // Get chatbot by ID from database
+      const chatbot = await chatbotRepository.findChatbotById(id);
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+      }
+
+      // Use chatbot's system instruction or default
+      const systemInstruction = chatbot.system_instruction || 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+
+      // Build history
+      const fullHistory = [
+        ...(history || []),
+        { role: 'user', content: message }
+      ];
+
+      // Build prompt
+      const prompt = `Hệ thống: ${systemInstruction}\n\n${fullHistory.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
+
+      // Get Gemini API key từ env
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+      if (!apiKey) {
+        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
+      }
+
+      // Call Gemini
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: chatbot.temperature || 0.7,
+            maxOutputTokens: chatbot.max_tokens || 2048,
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(500).json({ success: false, message: data.error.message });
+      }
+
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+
+      return res.json({
+        success: true,
+        data: {
+          role: 'assistant',
+          content: content,
+          created_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Chat by ID error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

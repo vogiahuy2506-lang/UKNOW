@@ -311,6 +311,251 @@ class UnifiedInboxRepository {
       );
     }
   }
+
+  /**
+   * Get all sent messages (outbox) for a user
+   * @param {number} userId
+   * @param {object} filters - { channel, search, startDate, endDate, limit, offset }
+   */
+  async getOutboxMessages(userId, filters = {}) {
+    const { channel, search, startDate, endDate, limit = 20, offset = 0 } = filters;
+
+    const params = [userId, limit, offset];
+    let paramIndex = 4;
+    let channelFilter = '';
+    let dateFilter = '';
+    let searchFilter = '';
+
+    // Channel filter
+    if (channel) {
+      channelFilter = `AND ch.channel = $${paramIndex}`;
+      params.push(channel);
+      paramIndex++;
+    }
+
+    // Date range filter
+    if (startDate) {
+      dateFilter += ` AND cm.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    if (endDate) {
+      dateFilter += ` AND cm.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    // Search filter
+    if (search) {
+      searchFilter = `AND (
+        cc.visitor_name ILIKE $${paramIndex} OR
+        cw.visitor_name ILIKE $${paramIndex} OR
+        cm.content ILIKE $${paramIndex}
+      )`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const query = `
+      WITH outbox_messages AS (
+        -- Channel messages (Zalo OA, Facebook, Zalo Personal) sent by agent
+        SELECT
+          cm.id,
+          cm.id_user,
+          cm.id_conversation,
+          cc.visitor_name,
+          cc.visitor_info,
+          cc.external_id,
+          cc.status as conversation_status,
+          'channel' as conversation_type,
+          ch.channel,
+          ch.display_name as channel_display_name,
+          cm.content,
+          cm.attachments,
+          cm.created_at,
+          cm.is_read,
+          cm.read_at,
+          (
+            SELECT COUNT(*) FROM channel_messages
+            WHERE id_conversation = cc.id AND role = 'visitor' AND is_read = false
+          ) as unread_count
+        FROM channel_messages cm
+        JOIN channel_conversations cc ON cc.id = cm.id_conversation
+        JOIN channel_connections ch ON ch.id = cc.id_channel
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+
+        UNION ALL
+
+        -- Web chat messages sent by agent
+        SELECT
+          wm.id,
+          wm.id_user,
+          wm.id_conversation,
+          wc.visitor_name,
+          wc.visitor_info,
+          wc.session_id as external_id,
+          wc.status as conversation_status,
+          'webchat' as conversation_type,
+          'web' as channel,
+          ww.display_name as channel_display_name,
+          wm.content,
+          wm.attachments,
+          wm.created_at,
+          wm.is_read,
+          wm.read_at,
+          (
+            SELECT COUNT(*) FROM webchat_messages
+            WHERE id_conversation = wc.id AND role = 'visitor' AND is_read = false
+          ) as unread_count
+        FROM webchat_messages wm
+        JOIN webchat_conversations wc ON wc.id = wm.id_conversation
+        JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
+        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateFilter} ${searchFilter}
+      )
+      SELECT * FROM outbox_messages
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+
+    const { rows } = await db.query(query, params);
+    return rows;
+  }
+
+  /**
+   * Get total count of outbox messages
+   */
+  async getOutboxMessagesCount(userId, filters = {}) {
+    const { channel, search, startDate, endDate } = filters;
+
+    const params = [userId];
+    let paramIndex = 2;
+    let channelFilter = '';
+    let dateFilter = '';
+    let searchFilter = '';
+
+    if (channel) {
+      channelFilter = `AND ch.channel = $${paramIndex}`;
+      params.push(channel);
+      paramIndex++;
+    }
+
+    if (startDate) {
+      dateFilter += ` AND cm.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    if (endDate) {
+      dateFilter += ` AND cm.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    if (search) {
+      searchFilter = `AND (
+        cc.visitor_name ILIKE $${paramIndex} OR
+        cw.visitor_name ILIKE $${paramIndex} OR
+        cm.content ILIKE $${paramIndex}
+      )`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const query = `
+      SELECT COUNT(*) as total FROM (
+        SELECT cm.id FROM channel_messages cm
+        JOIN channel_conversations cc ON cc.id = cm.id_conversation
+        JOIN channel_connections ch ON ch.id = cc.id_channel
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+
+        UNION ALL
+
+        SELECT wm.id FROM webchat_messages wm
+        JOIN webchat_conversations wc ON wc.id = wm.id_conversation
+        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateFilter} ${searchFilter}
+      ) as outbox
+    `;
+
+    const { rows } = await db.query(query, params);
+    return parseInt(rows[0]?.total || 0);
+  }
+
+  /**
+   * Get outbox statistics by channel
+   */
+  async getOutboxStatsByChannel(userId) {
+    const { rows } = await db.query(
+      `SELECT
+        'web' as channel,
+        (
+          SELECT COUNT(*) FROM webchat_messages wm
+          JOIN webchat_conversations wc ON wc.id = wm.id_conversation
+          WHERE wc.id_user = $1 AND wm.role = 'agent'
+        ) as total_sent,
+        (
+          SELECT COUNT(*) FROM webchat_messages wm
+          JOIN webchat_conversations wc ON wc.id = wm.id_conversation
+          WHERE wc.id_user = $1 AND wm.role = 'agent' AND wm.is_read = true
+        ) as total_read
+      UNION ALL
+      SELECT
+        cc.channel,
+        (
+          SELECT COUNT(*) FROM channel_messages cm
+          JOIN channel_conversations conv ON conv.id = cm.id_conversation
+          WHERE conv.id_channel = cc.id AND cm.role = 'agent'
+        ) as total_sent,
+        (
+          SELECT COUNT(*) FROM channel_messages cm
+          JOIN channel_conversations conv ON conv.id = cm.id_conversation
+          WHERE conv.id_channel = cc.id AND cm.role = 'agent' AND cm.is_read = true
+        ) as total_read
+      FROM channel_connections cc
+      WHERE cc.id_user = $1`,
+      [userId]
+    );
+    return rows;
+  }
+
+  /**
+   * Get a single sent message by ID
+   */
+  async getOutboxMessageById(userId, messageId) {
+    // Try channel_messages first
+    let { rows } = await db.query(
+      `SELECT cm.*, cc.visitor_name, cc.visitor_info, cc.external_id, cc.status as conversation_status,
+              'channel' as conversation_type, ch.channel, ch.display_name as channel_display_name,
+              (
+                SELECT content FROM channel_messages
+                WHERE id_conversation = cc.id AND role = 'visitor'
+                ORDER BY created_at DESC LIMIT 1
+              ) as last_reply
+       FROM channel_messages cm
+       JOIN channel_conversations cc ON cc.id = cm.id_conversation
+       JOIN channel_connections ch ON ch.id = cc.id_channel
+       WHERE cm.id = $1 AND cm.id_user = $2 AND cm.role = 'agent'`,
+      [messageId, userId]
+    );
+
+    if (rows.length > 0) return rows[0];
+
+    // Try webchat_messages
+    ({ rows } = await db.query(
+      `SELECT wm.*, wc.visitor_name, wc.visitor_info, wc.session_id as external_id, wc.status as conversation_status,
+              'webchat' as conversation_type, 'web' as channel, ww.display_name as channel_display_name,
+              (
+                SELECT content FROM webchat_messages
+                WHERE id_conversation = wc.id AND role = 'visitor'
+                ORDER BY created_at DESC LIMIT 1
+              ) as last_reply
+       FROM webchat_messages wm
+       JOIN webchat_conversations wc ON wc.id = wm.id_conversation
+       JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
+       WHERE wm.id = $1 AND wm.id_user = $2 AND wm.role = 'agent'`,
+      [messageId, userId]
+    ));
+
+    return rows[0] || null;
+  }
 }
 
 export default new UnifiedInboxRepository();

@@ -1,8 +1,12 @@
 import express from 'express';
+import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
 import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
+
+// Apply allow-all CORS to all routes (for widget/iframe embedding)
+router.use(allowAllCorsMiddleware);
 
 // ── Public Web Widget API (no auth required) ─────────────────────
 
@@ -20,13 +24,22 @@ router.post('/widget/conversations/:conversationId/messages', publicChatLimiter,
 
 // ── Custom AI Chat Widget (uses /api/ai/custom-chat) ─────────────────────
 
+// Get custom chatbot config by ID (public)
+router.get('/chatbot/:chatbotId', chatbotController.getPublicChatbotById.bind(chatbotController));
+
 // Get custom chatbot config by widget_key
 router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfig.bind(chatbotController));
+
+// Alternative: /custom-chatbot/:widgetKey/config (for widget.js)
+router.get('/custom-chatbot/:widgetKey/config', chatbotController.getCustomChatbotConfig.bind(chatbotController));
 
 // Get documents for a chatbot
 router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Send message to custom chatbot (directly uses Gemini + KB)
 router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotController.chatWithCustomChatbot.bind(chatbotController));
+
+// Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
+router.post('/custom-chatbot/id/:chatbotId/chat', chatbotController.chatWithCustomChatbotById.bind(chatbotController));
 
 export default router;

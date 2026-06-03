@@ -112,16 +112,27 @@ class ChatbotRepository {
     return rows;
   }
 
-  async createWidget(userId, { id_sub_assistant, widget_key, display_name, theme_color, position, welcome_message, allowed_domains, settings }) {
+  async createWidget(userId, { 
+    id_sub_assistant, widget_key, display_name, theme_color, position, welcome_message, 
+    allowed_domains, settings, logo_url, primary_color, background_color, text_color, 
+    accent_color, suggested_questions, border_radius, show_avatar, chat_height 
+  }) {
     const { rows } = await db.query(
       `INSERT INTO web_widget_configs
-         (id_user, id_sub_assistant, widget_key, display_name, theme_color, position, welcome_message, allowed_domains, settings)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (id_user, id_sub_assistant, widget_key, display_name, theme_color, position, 
+          welcome_message, allowed_domains, settings, logo_url, primary_color, 
+          background_color, text_color, accent_color, suggested_questions,
+          border_radius, show_avatar, chat_height)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
       [userId, id_sub_assistant || null, widget_key, display_name || null,
        theme_color || '#3B82F6', position || 'bottom-right',
        welcome_message || null, allowed_domains || null,
-       JSON.stringify(settings || {})]
+       JSON.stringify(settings || {}),
+       logo_url || null, primary_color || '#3B82F6', background_color || '#FFFFFF',
+       text_color || '#1F2937', accent_color || '#60A5FA',
+       suggested_questions || [], border_radius || 16, 
+       show_avatar !== false, chat_height || '500px']
     );
     return rows[0];
   }
@@ -136,12 +147,25 @@ class ChatbotRepository {
          is_active = COALESCE($7, is_active),
          allowed_domains = COALESCE($8, allowed_domains),
          settings = COALESCE($9, settings),
+         logo_url = COALESCE($10, logo_url),
+         primary_color = COALESCE($11, primary_color),
+         background_color = COALESCE($12, background_color),
+         text_color = COALESCE($13, text_color),
+         accent_color = COALESCE($14, accent_color),
+         suggested_questions = COALESCE($15, suggested_questions),
+         border_radius = COALESCE($16, border_radius),
+         show_avatar = COALESCE($17, show_avatar),
+         chat_height = COALESCE($18, chat_height),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`,
-      [id, userId, data.display_name, data.theme_color, data.position,
+      [id, userId, 
+       data.display_name, data.theme_color, data.position,
        data.welcome_message, data.is_active, data.allowed_domains,
-       data.settings ? JSON.stringify(data.settings) : null]
+       data.settings ? JSON.stringify(data.settings) : null,
+       data.logo_url, data.primary_color, data.background_color,
+       data.text_color, data.accent_color, data.suggested_questions,
+       data.border_radius, data.show_avatar, data.chat_height]
     );
     return rows[0];
   }
@@ -226,8 +250,9 @@ class ChatbotRepository {
       conv = existing.rows[0];
     } else {
       const created = await db.query(
-        `INSERT INTO channel_conversations (id_user, id_channel, external_id, visitor_name, visitor_info)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO channel_conversations (id_user, id_channel, channel, external_id, visitor_name, visitor_info)
+         SELECT $1, $2, ch.channel, $3, $4, $5
+         FROM channel_connections ch WHERE ch.id = $2
          RETURNING *`,
         [userId, channelId, externalId, visitorName || null, JSON.stringify(visitorInfo || {})]
       );
@@ -247,15 +272,16 @@ class ChatbotRepository {
     return rows;
   }
 
-  async addChannelMessage(conversationId, userId, channelId, { role, content, message_type, external_id, external_ts, attachments, metadata }) {
+  async addChannelMessage(conversationId, userId, channelId, { role, content, message_type, external_id, external_ts, attachments, metadata, raw_data }) {
     const { rows } = await db.query(
       `INSERT INTO channel_messages
-         (id_conversation, id_user, id_channel, role, content, message_type, external_id, external_ts, attachments, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (id_conversation, id_user, id_channel, role, content, message_type, external_id, external_ts, attachments, metadata, raw_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [conversationId, userId, channelId, role, content,
        message_type || 'text', external_id || null, external_ts || null,
-       JSON.stringify(attachments || []), JSON.stringify(metadata || {})]
+       JSON.stringify(attachments || []), JSON.stringify(metadata || {}), 
+       raw_data ? JSON.stringify(raw_data) : null]
     );
 
     await db.query(
@@ -264,6 +290,120 @@ class ChatbotRepository {
     );
 
     return rows[0];
+  }
+
+  // ── Custom Chatbots (Public) ─────────────────────────────────────
+
+  async listChatbotsByUser(userId) {
+    const { rows } = await db.query(
+      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+              avatar_url, is_active, theme_color, position, welcome_message,
+              primary_color, background_color, text_color, accent_color,
+              logo_url, show_avatar, border_radius, chat_height,
+              suggested_questions, widget_key,
+              created_at, updated_at
+       FROM custom_chatbots
+       WHERE id_user = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    return rows;
+  }
+
+  async createChatbot(userId, data) {
+    const { rows } = await db.query(
+      `INSERT INTO custom_chatbots
+         (id_user, name, description, system_instruction, greeting_msg, avatar_url,
+          theme_color, position, welcome_message, is_active,
+          primary_color, background_color, text_color, accent_color,
+          logo_url, show_avatar, border_radius, chat_height, suggested_questions, widget_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+       RETURNING *`,
+      [userId, data.name || 'New Chatbot', data.description || '',
+       data.system_instruction || '', data.greeting_msg || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+       data.avatar_url || null, data.theme_color || '#6366F1', data.position || 'bottom-right',
+       data.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?', data.is_active !== false,
+       data.primary_color || '#6366F1', data.background_color || '#FFFFFF',
+       data.text_color || '#1F2937', data.accent_color || '#60A5FA',
+       data.logo_url || null, data.show_avatar !== false, data.border_radius || 16,
+       data.chat_height || '600px', data.suggested_questions || [],
+       data.widget_key || null]
+    );
+    return rows[0];
+  }
+
+  async findChatbotById(chatbotId) {
+    const { rows } = await db.query(
+      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+              avatar_url, is_active, theme_color, position, welcome_message,
+              primary_color, background_color, text_color, accent_color,
+              logo_url, show_avatar, border_radius, chat_height,
+              suggested_questions,
+              created_at, updated_at
+       FROM custom_chatbots
+       WHERE id = $1 AND is_active = true`,
+      [chatbotId]
+    );
+    return rows[0] || null;
+  }
+
+  async updateChatbot(chatbotId, userId, data) {
+    const { rows } = await db.query(
+      `UPDATE custom_chatbots SET
+         name = COALESCE($3, name),
+         description = COALESCE($4, description),
+         system_instruction = COALESCE($5, system_instruction),
+         greeting_msg = COALESCE($6, greeting_msg),
+         avatar_url = COALESCE($7, avatar_url),
+         theme_color = COALESCE($8, theme_color),
+         welcome_message = COALESCE($9, welcome_message),
+         primary_color = COALESCE($10, primary_color),
+         background_color = COALESCE($11, background_color),
+         text_color = COALESCE($12, text_color),
+         accent_color = COALESCE($13, accent_color),
+         logo_url = COALESCE($14, logo_url),
+         show_avatar = COALESCE($15, show_avatar),
+         position = COALESCE($16, position),
+         border_radius = COALESCE($17, border_radius),
+         chat_height = COALESCE($18, chat_height),
+         suggested_questions = COALESCE($19, suggested_questions),
+         updated_at = NOW()
+       WHERE id = $1 AND id_user = $2
+       RETURNING *`,
+      [chatbotId, userId,
+       data.name, data.description, data.system_instruction, data.greeting_msg,
+       data.avatar_url, data.theme_color, data.welcome_message,
+       data.primary_color, data.background_color, data.text_color, data.accent_color,
+       data.logo_url, data.show_avatar, data.position, data.border_radius,
+       data.chat_height, data.suggested_questions]
+    );
+    return rows[0] || null;
+  }
+
+  async deleteChatbot(chatbotId, userId) {
+    const { rows } = await db.query(
+      `UPDATE custom_chatbots SET is_active = false, updated_at = NOW()
+       WHERE id = $1 AND id_user = $2
+       RETURNING id`,
+      [chatbotId, userId]
+    );
+    return rows[0] || null;
+  }
+
+  // Find chatbot by widget_key (public access)
+  async findChatbotByWidgetKey(widgetKey) {
+    const { rows } = await db.query(
+      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+              avatar_url, is_active, theme_color, position, welcome_message,
+              primary_color, background_color, text_color, accent_color,
+              logo_url, show_avatar, border_radius, chat_height,
+              suggested_questions, widget_key,
+              created_at, updated_at
+       FROM custom_chatbots
+       WHERE widget_key = $1 AND is_active = true`,
+      [widgetKey]
+    );
+    return rows[0] || null;
   }
 }
 

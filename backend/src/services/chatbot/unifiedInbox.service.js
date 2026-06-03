@@ -216,6 +216,86 @@ class UnifiedInboxService {
     };
     return adapters[channel];
   }
+
+  /**
+   * Get all sent messages (outbox) for a user
+   */
+  async getOutboxMessages(userId, filters = {}) {
+    const [messages, total, statsByChannel] = await Promise.all([
+      unifiedInboxRepository.getOutboxMessages(userId, filters),
+      unifiedInboxRepository.getOutboxMessagesCount(userId, filters),
+      unifiedInboxRepository.getOutboxStatsByChannel(userId),
+    ]);
+
+    const formattedMessages = messages.map(msg => ({
+      id: msg.id,
+      conversationId: msg.id_conversation,
+      conversationType: msg.conversation_type,
+      channel: msg.channel,
+      channelDisplayName: msg.channel_display_name,
+      visitorName: msg.visitor_name || 'Khách vãng lai',
+      visitorInfo: msg.visitor_info,
+      externalId: msg.external_id,
+      conversationStatus: msg.conversation_status,
+      content: msg.content,
+      attachments: msg.attachments || [],
+      sentAt: msg.created_at,
+      isRead: msg.is_read || false,
+      readAt: msg.read_at,
+      unreadCount: parseInt(msg.unread_count || 0),
+      lastReply: msg.last_reply,
+    }));
+
+    const statsSummary = {};
+    statsByChannel.forEach(item => {
+      if (item.total_sent > 0) {
+        statsSummary[item.channel] = {
+          totalSent: parseInt(item.total_sent),
+          totalRead: parseInt(item.total_read),
+          readRate: item.total_sent > 0
+            ? Math.round((item.total_read / item.total_sent) * 100)
+            : 0,
+        };
+      }
+    });
+
+    return {
+      messages: formattedMessages,
+      total,
+      statsByChannel: statsSummary,
+      page: Math.floor((filters.offset || 0) / (filters.limit || 20)) + 1,
+      pageSize: filters.limit || 20,
+    };
+  }
+
+  /**
+   * Get a single sent message detail
+   */
+  async getOutboxMessage(userId, messageId) {
+    const message = await unifiedInboxRepository.getOutboxMessageById(userId, parseInt(messageId));
+
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    return {
+      id: message.id,
+      conversationId: message.id_conversation,
+      conversationType: message.conversation_type,
+      channel: message.channel,
+      channelDisplayName: message.channel_display_name,
+      visitorName: message.visitor_name || 'Khách vãng lai',
+      visitorInfo: message.visitor_info,
+      externalId: message.external_id,
+      conversationStatus: message.conversation_status,
+      content: message.content,
+      attachments: message.attachments || [],
+      sentAt: message.created_at,
+      isRead: message.is_read || false,
+      readAt: message.read_at,
+      lastReply: message.last_reply,
+    };
+  }
 }
 
 export default new UnifiedInboxService();

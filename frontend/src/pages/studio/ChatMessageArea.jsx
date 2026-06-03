@@ -19,6 +19,11 @@ function ChatMessageArea({ chatbot }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Get custom colors from chatbot settings
+  const primaryColor = chatbot?.primary_color || chatbot?.widget_settings?.primary_color || '#6366F1';
+  const accentColor = chatbot?.accent_color || chatbot?.widget_settings?.accent_color || '#818CF8';
+  const gradientStyle = `linear-gradient(135deg, ${primaryColor}, ${accentColor})`;
+
   // Storage keys
   const getSessionKey = () => `uknow_sessions_${chatbot?.id}`;
   const getMsgKey = (sessionId) => `uknow_msgs_${chatbot?.id}_${sessionId}`;
@@ -195,7 +200,7 @@ function ChatMessageArea({ chatbot }) {
       {/* Header */}
       <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 bg-white">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: gradientStyle }}>
             {chatbot.avatar_url ? (
               <img src={chatbot.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -269,16 +274,20 @@ function ChatMessageArea({ chatbot }) {
           messages.map((msg, idx) => (
             <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               {msg.role !== 'user' && (
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: gradientStyle }}>
                   <span className="text-white text-xs font-bold">{chatbot.name?.[0]?.toUpperCase()}</span>
                 </div>
               )}
               <div className={`max-w-[70%] ${msg.role === 'user' ? 'items-end' : ''}`}>
                 <div className={`rounded-2xl px-4 py-2.5 ${
                   msg.role === 'user'
-                    ? 'bg-purple-500 text-white rounded-br-md'
-                    : 'bg-white text-slate-700 rounded-bl-md shadow-sm'
-                }`}>
+                    ? 'text-white rounded-br-md'
+                    : 'rounded-bl-md shadow-sm'
+                }`}
+                  style={msg.role === 'user'
+                    ? { background: gradientStyle }
+                    : { backgroundColor: '#fff', color: '#374151' }}
+                >
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 px-1">
@@ -291,14 +300,14 @@ function ChatMessageArea({ chatbot }) {
 
         {sending && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: gradientStyle }}>
               <span className="text-white text-xs font-bold">{chatbot.name?.[0]?.toUpperCase()}</span>
             </div>
             <div className="bg-white rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
               <div className="flex gap-1">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -322,7 +331,9 @@ function ChatMessageArea({ chatbot }) {
           <button
             onClick={handleSend}
             disabled={!input.trim() || sending}
-            className="w-11 h-11 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-xl flex items-center justify-center">
+            className="w-11 h-11 text-white rounded-xl flex items-center justify-center disabled:opacity-50"
+            style={{ background: gradientStyle }}
+          >
             {sending ? (
               <HiOutlineTrash className="w-5 h-5 animate-spin" />
             ) : (

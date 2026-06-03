@@ -6,6 +6,15 @@ import cloudflareService from '../cloudflare.service.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { resolveFrontendOriginFromEnv } from '../../utils/landingHtmlInjection.util.js';
 
+// Lazy import to avoid circular dependency
+let clearVerifiedDomainsCache = null;
+function getClearCacheFn() {
+  if (!clearVerifiedDomainsCache) {
+    clearVerifiedDomainsCache = require('../../middleware/dynamicCors.middleware.js').clearVerifiedDomainsCache;
+  }
+  return clearVerifiedDomainsCache;
+}
+
 const WWW_HOST_RE = /^www\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
 
 function normalizeAuthScope(authUser) {
@@ -239,6 +248,8 @@ class LandingPageDomainService {
             cfZoneId: cfResult.zoneId,
             cfRecordId: cfResult.recordId,
           });
+          // Clear CORS cache so new domain is immediately allowed
+          getClearCacheFn()();
           return this.getForLanding(landingPageId, authUser);
         } catch (e) {
           if (e?.code === '23505') {
@@ -264,6 +275,9 @@ class LandingPageDomainService {
         cfZoneId: null,
         cfRecordId: null,
       });
+      // Clear CORS cache so new domain is immediately allowed (even if pending)
+      // Clear CORS cache so new domain is immediately allowed (even if pending)
+      getClearCacheFn()();
       return this.getForLanding(landingPageId, authUser);
     } catch (e) {
       if (e?.code === '23505') {
@@ -319,6 +333,8 @@ class LandingPageDomainService {
       throw err;
     }
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
+    // Clear CORS cache so verified domain is immediately allowed
+    clearVerifiedDomainsCache();
     return this.getForLanding(landingPageId, authUser);
   }
 
@@ -347,6 +363,8 @@ class LandingPageDomainService {
     }
 
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
+    // Clear CORS cache so removed domain is no longer allowed
+    clearVerifiedDomainsCache();
     return { ok: true };
   }
 
@@ -384,6 +402,9 @@ class LandingPageDomainService {
         cfZoneId: cfResult.zoneId,
         cfRecordId: cfResult.recordId,
       });
+      // Clear CORS cache so auto-provisioned subdomain is immediately allowed
+      // Clear CORS cache so new domain is immediately allowed (even if pending)
+      getClearCacheFn()();
       console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
       return { hostname, cfManaged: true };
     } catch (e) {
@@ -412,6 +433,8 @@ class LandingPageDomainService {
     }
 
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
+    // Clear CORS cache so removed subdomain is no longer allowed
+    clearVerifiedDomainsCache();
   }
 }
 

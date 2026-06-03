@@ -163,6 +163,60 @@ class UnifiedInboxController {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  /**
+   * Get all sent messages (outbox)
+   * GET /api/ai/chatbot/inbox/outbox
+   */
+  async getOutboxMessages(req, res) {
+    try {
+      const { channel, search, startDate, endDate, limit = 20, offset = 0 } = req.query;
+
+      const result = await unifiedInboxService.getOutboxMessages(req.user.id, {
+        channel,
+        search,
+        startDate,
+        endDate,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+      });
+
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      console.error('[UnifiedInbox] Get outbox messages error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Get single outbox message detail
+   * GET /api/ai/chatbot/inbox/outbox/:id
+   */
+  async getOutboxMessage(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({ success: false, message: 'Message ID is required' });
+      }
+
+      const message = await unifiedInboxService.getOutboxMessage(req.user.id, id);
+
+      return res.json({
+        success: true,
+        data: message,
+      });
+    } catch (err) {
+      console.error('[UnifiedInbox] Get outbox message error:', err);
+      if (err.message === 'Message not found') {
+        return res.status(404).json({ success: false, message: err.message });
+      }
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
 
 export default new UnifiedInboxController();

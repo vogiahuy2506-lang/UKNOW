@@ -30,7 +30,7 @@ import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesP
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
-import UnifiedInboxPage from './pages/settings/UnifiedInboxPage';
+import InboxOutboxPage from './pages/settings/InboxOutboxPage';
 import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
@@ -43,6 +43,7 @@ import ContactPage from './pages/public/ContactPage';
 import LpRendererPage from './pages/public/LpRendererPage';
 import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
+import PublicChatbotPage from './pages/public/PublicChatbotPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
 import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
@@ -235,6 +236,7 @@ function App() {
           {/* Các route hỗ trợ khác */}
           <Route path="/lp/:slug" element={<LpRendererPage />} />
           <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
+          <Route path="/chat/:chatbotId" element={<PublicChatbotPage />} />
           <Route path="/learning" element={<LearningPage />} />
 
           {/* Protected Routes - prefix /app */}
@@ -267,7 +269,7 @@ function App() {
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
-            <Route path="settings/inbox" element={<OwnerRoute><UnifiedInboxPage /></OwnerRoute>} />
+            <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />
