@@ -162,13 +162,17 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          cr.id, cr.run_name, cr.status,
          cr.started_at::timestamptz AS started_at,
          cr.completed_at::timestamptz AS completed_at,
-         cr.total_recipients, cr.successful_sends, cr.failed_sends, cr.error_message,
+         cr.total_recipients,
+         COUNT(cj.id) FILTER (WHERE cj.event_type IN ('email_sent', 'zalo_sent'))::int AS successful_sends,
+         cr.failed_sends, cr.error_message,
          c.campaign_name, c.campaign_type,
          EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
        FROM campaign_runs cr
        JOIN campaigns c ON c.id = cr.id_campaign
+       LEFT JOIN customer_journey cj ON cj.id_run = cr.id
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND c.id_user = $2
+       GROUP BY cr.id, c.campaign_name, c.campaign_type
        ORDER BY cr.started_at DESC
        LIMIT 20`,
       params

@@ -1890,7 +1890,7 @@ class CampaignRunService {
         campaign?.flow_json
       );
       const runResult = await db.query(
-        `SELECT run_metadata
+        `SELECT run_metadata, successful_sends, failed_sends
          FROM campaign_runs
          WHERE id = $1
          LIMIT 1`,
@@ -2590,8 +2590,8 @@ class CampaignRunService {
       const nodeOutputs = {};
       let lastOutputItems = [];
       let totalRecipients = 0;
-      let successfulSends = 0;
-      let failedSends = 0;
+      let successfulSends = Number(runResult.rows[0]?.successful_sends || 0);
+      let failedSends = Number(runResult.rows[0]?.failed_sends || 0);
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
       /**
