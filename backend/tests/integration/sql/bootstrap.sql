@@ -869,6 +869,26 @@ CREATE TABLE campaign_run_recipient_steps (
 );
 CREATE INDEX idx_crrs_run ON campaign_run_recipient_steps(id_campaign_run);
 
+-- ─── Audit logs ─────────────────────────────────────────────────────────
+CREATE TABLE audit_logs (
+  id          BIGSERIAL PRIMARY KEY,
+  id_user     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  owner_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  category    VARCHAR(20) NOT NULL DEFAULT 'workspace',
+  action      VARCHAR(100) NOT NULL,
+  entity_type VARCHAR(50),
+  entity_id   BIGINT,
+  details     JSONB DEFAULT '{}',
+  ip_address  VARCHAR(45),
+  user_agent  TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_audit_logs_id_user    ON audit_logs(id_user);
+CREATE INDEX idx_audit_logs_owner_id   ON audit_logs(owner_id);
+CREATE INDEX idx_audit_logs_category   ON audit_logs(category);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
