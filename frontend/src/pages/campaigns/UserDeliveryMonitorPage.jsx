@@ -135,34 +135,44 @@ const HealthPanel = ({ health, t }) => {
   );
 };
 
-const ChannelPanel = ({ channels, t }) => (
-  <div className="card p-5">
-    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.channels')}</h2>
-    <div className="space-y-4">
-      {channels.map((channel) => {
-        const width = Math.min(100, Math.max(0, channel.successRate || 0));
-        return (
-          <div key={channel.channel} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-semibold text-gray-900">{t(`userDeliveryMonitor.channel.${channel.channel}`)}</p>
-                <p className="text-xs text-gray-500">
-                  {t('userDeliveryMonitor.channelSub', { sent: fmt(channel.sent), failed: fmt(channel.failed), clicked: fmt(channel.clicked) })}
-                </p>
+const ChannelPanel = ({ channels, channelsRecent, t }) => {
+  const recentMap = Object.fromEntries((channelsRecent || []).map((c) => [c.channel, c]));
+  return (
+    <div className="card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.channels')}</h2>
+      <div className="space-y-4">
+        {channels.map((channel) => {
+          const recent = recentMap[channel.channel];
+          const recentDrop = recent && channel.sent > 0 && recent.sent === 0;
+          const width = Math.min(100, Math.max(0, channel.successRate || 0));
+          return (
+            <div key={channel.channel} className={`rounded-xl border px-4 py-3 ${recentDrop ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-gray-900">{t(`userDeliveryMonitor.channel.${channel.channel}`)}</p>
+                  <p className="text-xs text-gray-500">
+                    {t('userDeliveryMonitor.channelSub', { sent: fmt(channel.sent), failed: fmt(channel.failed), clicked: fmt(channel.clicked) })}
+                  </p>
+                  {recent && (
+                    <p className={`mt-0.5 text-xs ${recentDrop ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
+                      {t('userDeliveryMonitor.channelRecent', { sent: fmt(recent.sent), failed: fmt(recent.failed) })}
+                    </p>
+                  )}
+                </div>
+                <span className={`badge shrink-0 text-xs ${recentDrop ? 'badge-warning' : channel.failed > 0 ? 'badge-warning' : 'badge-success'}`}>
+                  {fmtPct(channel.successRate)}
+                </span>
               </div>
-              <span className={`badge text-xs ${channel.failed > 0 ? 'badge-warning' : 'badge-success'}`}>
-                {fmtPct(channel.successRate)}
-              </span>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }} />
+              </div>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-              <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }} />
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const TopRunsTable = ({ runs, t }) => (
   <div className="card overflow-hidden">
@@ -346,7 +356,7 @@ export default function UserDeliveryMonitorPage() {
             </ResponsiveContainer>
           )}
         </div>
-        <ChannelPanel channels={data?.channels || []} t={t} />
+        <ChannelPanel channels={data?.channels || []} channelsRecent={data?.channelsRecent} t={t} />
       </div>
 
       <TopRunsTable runs={data?.topRuns || []} t={t} />

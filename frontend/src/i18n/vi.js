@@ -5026,6 +5026,7 @@ export default {
     runDuration: 'Thời lượng',
     channels: 'Hiệu quả theo kênh',
     channelSub: '{sent} gửi thành công · {failed} lỗi · {clicked} click',
+    channelRecent: '48g qua: {sent} gửi · {failed} lỗi',
     throughput: 'Tốc độ gửi theo giờ',
     noRecentErrors: 'Chưa có lỗi gần đây.',
     recentErrors: 'Lỗi gần đây',

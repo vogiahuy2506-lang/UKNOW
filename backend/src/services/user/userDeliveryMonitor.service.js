@@ -43,6 +43,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
   const windowDays = clampWindowDays(rawWindowDays);
   const params = [windowDays, userId];
 
+  const params48h = [2, userId];
+
   const [
     runStatusRows,
     sentRows,
@@ -57,6 +59,10 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     zaloDisconnectedRows,
     pendingRetryRows,
     zaloSkipRows,
+    sentRows48h,
+    execFail48h,
+    emailFail48h,
+    zaloFail48h,
   ] = await Promise.all([
     safeQuery(
       `SELECT cr.status, COUNT(*)::int AS count
@@ -213,20 +219,69 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       params,
       [{ count: 0 }]
     ),
+    safeQuery(
+      `SELECT
+         CASE
+           WHEN cj.event_type = 'email_sent' THEN 'email'
+           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
+           ELSE 'zalo'
+         END AS channel,
+         COUNT(*)::int AS count
+       FROM customer_journey cj
+       JOIN campaigns c ON c.id = cj.id_campaign
+       WHERE cj.event_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND cj.event_type IN ('email_sent', 'zalo_sent')
+         AND c.id_user = $2
+       GROUP BY channel`,
+      params48h
+    ),
+    safeQuery(
+      `SELECT
+         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
+         COUNT(*)::int AS count
+       FROM campaign_executions ce
+       JOIN campaigns c ON c.id = ce.id_campaign
+       WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
+         AND c.id_user = $2
+       GROUP BY channel`,
+      params48h
+    ),
+    safeQuery(
+      `SELECT 'email' AS channel, COUNT(*)::int AS count
+       FROM email_messages em
+       JOIN campaign_runs cr ON cr.id = em.id_campaign_run
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE em.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
+         AND c.id_user = $2`,
+      params48h
+    ),
+    safeQuery(
+      `SELECT COALESCE(zm.channel, 'zalo') AS channel, COUNT(*)::int AS count
+       FROM zalo_messages zm
+       JOIN campaign_runs cr ON cr.id = zm.id_campaign_run
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE zm.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
+         AND c.id_user = $2
+       GROUP BY COALESCE(zm.channel, 'zalo')`,
+      params48h
+    ),
   ]);
 
   const CHANNEL_LABELS = { email: 'Email', zalo: 'Zalo cá nhân', zalo_group: 'Zalo nhóm' };
-  const channels = (() => {
+  const buildChannels = (sRows, execFRows, emailFRows, zaloFRows, ocRows = []) => {
     const map = {
       email: { channel: 'email', label: CHANNEL_LABELS.email, sent: 0, failed: 0, opened: 0, clicked: 0 },
       zalo: { channel: 'zalo', label: CHANNEL_LABELS.zalo, sent: 0, failed: 0, opened: 0, clicked: 0 },
       zalo_group: { channel: 'zalo_group', label: CHANNEL_LABELS.zalo_group, sent: 0, failed: 0, opened: 0, clicked: 0 },
     };
-    sentRows.forEach((row) => { map[inferChannel(row)].sent += toNumber(row.count); });
-    [...executionFailureRows, ...emailFailureRows, ...zaloFailureRows].forEach((row) => {
+    sRows.forEach((row) => { map[inferChannel(row)].sent += toNumber(row.count); });
+    [...execFRows, ...emailFRows, ...zaloFRows].forEach((row) => {
       map[inferChannel(row)].failed += toNumber(row.count);
     });
-    openedClickedRows.forEach((row) => {
+    ocRows.forEach((row) => {
       const ch = map[inferChannel(row)];
       const type = String(row.event_type || '').toLowerCase();
       if (type.includes('opened')) ch.opened += toNumber(row.count);
@@ -236,7 +291,9 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       const attempts = item.sent + item.failed;
       return { ...item, attempts, successRate: attempts > 0 ? Math.round((item.sent / attempts) * 1000) / 10 : 0 };
     });
-  })();
+  };
+  const channels = buildChannels(sentRows, executionFailureRows, emailFailureRows, zaloFailureRows, openedClickedRows);
+  const channelsRecent = buildChannels(sentRows48h, execFail48h, emailFail48h, zaloFail48h);
 
   const runStatus = runStatusRows.reduce((acc, row) => {
     acc[String(row.status || 'unknown')] = toNumber(row.count);
@@ -289,6 +346,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     windowDays,
     summary,
     channels,
+    channelsRecent,
     timeline: timelineRows.map((row) => ({
       bucket: row.bucket,
       email: toNumber(row.email),
