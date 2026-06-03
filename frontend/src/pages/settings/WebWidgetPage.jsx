@@ -20,6 +20,7 @@ function WebWidgetPage() {
   const [newForm, setNewForm] = useState({ display_name: '', theme_color: '#6366F1' });
   const [copiedKey, setCopiedKey] = useState(null);
   const [_previewMode, _setPreviewMode] = useState(false);
+  const [newQuestion, setNewQuestion] = useState('');
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchWidgets(); }, []);
@@ -41,6 +42,16 @@ function WebWidgetPage() {
       position: widget.position || 'bottom-right',
       welcome_message: widget.welcome_message || '',
       is_active: widget.is_active !== false,
+      // Customization
+      logo_url: widget.logo_url || '',
+      primary_color: widget.primary_color || '#3B82F6',
+      background_color: widget.background_color || '#FFFFFF',
+      text_color: widget.text_color || '#1F2937',
+      accent_color: widget.accent_color || '#60A5FA',
+      suggested_questions: widget.suggested_questions || [],
+      border_radius: widget.border_radius || 16,
+      show_avatar: widget.show_avatar !== false,
+      chat_height: widget.chat_height || '500px',
     });
   };
 
@@ -95,6 +106,26 @@ function WebWidgetPage() {
     setCopiedKey(widgetKey);
     setTimeout(() => setCopiedKey(null), 2000);
     toast.success(t('chatbot.widget.copied'));
+  };
+
+  const addSuggestedQuestion = () => {
+    if (!newQuestion.trim()) return;
+    if (form.suggested_questions.length >= 5) {
+      toast.error('Tối đa 5 câu hỏi gợi ý');
+      return;
+    }
+    setForm(p => ({
+      ...p,
+      suggested_questions: [...(p.suggested_questions || []), newQuestion.trim()]
+    }));
+    setNewQuestion('');
+  };
+
+  const removeSuggestedQuestion = (index) => {
+    setForm(p => ({
+      ...p,
+      suggested_questions: p.suggested_questions.filter((_, i) => i !== index)
+    }));
   };
 
   return (
@@ -253,6 +284,95 @@ function WebWidgetPage() {
                     <input type="text" value={form.welcome_message} onChange={e => setForm(p => ({ ...p, welcome_message: e.target.value }))}
                       placeholder={t('chatbot.widget.welcomeMessagePlaceholder')}
                       className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-400 transition-all" />
+                  </div>
+
+                  {/* Customization Section */}
+                  <div className="border-t border-slate-100 pt-4 mt-4">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3">Tuỳ chỉnh giao diện</h4>
+                    
+                    {/* Logo */}
+                    <div className="mb-4">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{t('chatbot.widget.logo') || 'Logo'}</label>
+                      <input type="url" value={form.logo_url} onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
+                        placeholder="https://example.com/logo.png"
+                        className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-400 transition-all" />
+                    </div>
+
+                    {/* Colors Grid */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Màu chính</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={form.primary_color} onChange={e => setForm(p => ({ ...p, primary_color: e.target.value }))}
+                            className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer" />
+                          <input type="text" value={form.primary_color} onChange={e => setForm(p => ({ ...p, primary_color: e.target.value }))}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-violet-400 font-mono" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Màu nền</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={form.background_color} onChange={e => setForm(p => ({ ...p, background_color: e.target.value }))}
+                            className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer" />
+                          <input type="text" value={form.background_color} onChange={e => setForm(p => ({ ...p, background_color: e.target.value }))}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-violet-400 font-mono" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Màu chữ</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={form.text_color} onChange={e => setForm(p => ({ ...p, text_color: e.target.value }))}
+                            className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer" />
+                          <input type="text" value={form.text_color} onChange={e => setForm(p => ({ ...p, text_color: e.target.value }))}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-violet-400 font-mono" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Màu nhấn</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={form.accent_color} onChange={e => setForm(p => ({ ...p, accent_color: e.target.value }))}
+                            className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer" />
+                          <input type="text" value={form.accent_color} onChange={e => setForm(p => ({ ...p, accent_color: e.target.value }))}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-violet-400 font-mono" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Show Avatar Toggle */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.show_avatar} onChange={e => setForm(p => ({ ...p, show_avatar: e.target.checked }))}
+                          className="w-4 h-4 rounded border-slate-300 text-violet-500 focus:ring-violet-400" />
+                        <span className="text-sm text-slate-600">Hiển thị avatar bot</span>
+                      </label>
+                    </div>
+
+                    {/* Suggested Questions */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        Câu hỏi gợi ý (tối đa 5)
+                      </label>
+                      <div className="flex gap-2 mt-1">
+                        <input type="text" value={newQuestion} onChange={e => setNewQuestion(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSuggestedQuestion())}
+                          placeholder="Nhập câu hỏi..."
+                          className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400 transition-all" />
+                        <button type="button" onClick={addSuggestedQuestion}
+                          className="px-3 py-2 bg-violet-500 text-white rounded-xl text-sm hover:bg-violet-600 transition-colors">
+                          Thêm
+                        </button>
+                      </div>
+                      {form.suggested_questions?.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {form.suggested_questions.map((q, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-violet-50 text-violet-600 rounded-full text-xs">
+                              {q}
+                              <button onClick={() => removeSuggestedQuestion(i)} className="hover:text-violet-800 ml-1">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </form>

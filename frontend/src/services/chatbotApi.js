@@ -151,35 +151,35 @@ const chatbotApi = {
     return response.data;
   },
 
-  // ── Unified Chatbot (Studio) ────────────────────────────────────────
+  // ── Custom Chatbots (Studio) ────────────────────────────────────────
 
-  // List all chatbots
+  // List all chatbots for current user
   listChatbots: async () => {
-    const response = await api.get('/ai/chatbot/studio/chatbots');
+    const response = await api.get('/ai/chatbot/custom-chatbots');
     return response.data;
   },
 
   // Create a new chatbot
   createChatbot: async (data) => {
-    const response = await api.post('/ai/chatbot/studio/chatbots', data);
+    const response = await api.post('/ai/chatbot/custom-chatbots', data);
     return response.data;
   },
 
   // Get chatbot details
-  getChatbot: async (id) => {
-    const response = await api.get(`/ai/chatbot/studio/chatbots/${id}`);
+  getChatbot: async (chatbotId) => {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}`);
     return response.data;
   },
 
-  // Update chatbot
-  updateChatbot: async (id, data) => {
-    const response = await api.put(`/ai/chatbot/studio/chatbots/${id}`, data);
+  // Update chatbot (includes widget_settings and suggested_questions)
+  updateChatbot: async (chatbotId, data) => {
+    const response = await api.put(`/ai/chatbot/custom-chatbots/${chatbotId}`, data);
     return response.data;
   },
 
   // Delete chatbot
-  deleteChatbot: async (id) => {
-    const response = await api.delete(`/ai/chatbot/studio/chatbots/${id}`);
+  deleteChatbot: async (chatbotId) => {
+    const response = await api.delete(`/ai/chatbot/custom-chatbots/${chatbotId}`);
     return response.data;
   },
 

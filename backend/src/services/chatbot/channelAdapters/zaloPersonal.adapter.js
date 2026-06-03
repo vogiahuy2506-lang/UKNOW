@@ -94,7 +94,12 @@ class ZaloPersonalAdapter {
         // Access raw data from UserMessage object
         const rawData = message?.data || message;
 
-        // Build normalized message object
+        // Determine message source type (personal chat vs group)
+        const isGroup = rawData?.clientGroupId || rawData?.threadType === 1 || 
+                        rawData?.idTo?.startsWith('g_') || 
+                        (rawData?.idTo && String(rawData.idTo).length > 15);
+        
+        // Build normalized message object with full metadata
         const msgData = {
           msgId: rawData.msgId || rawData.id || `zalo_${Date.now()}`,
           messageId: rawData.msgId || rawData.id,
@@ -112,9 +117,22 @@ class ZaloPersonalAdapter {
           isSelf: message?.isSelf || false,
           type: message?.type || 'user',
           threadId: rawData.threadId || rawData.idTo,
+          // Source context: personal or group
+          isGroup: isGroup,
+          groupId: rawData.clientGroupId || (isGroup ? rawData.idTo : null),
+          groupName: rawData.groupName || null,
+          // Full sender info
+          senderName: rawData.displayName || rawData.alias || rawData.coinsName || null,
+          senderAvatar: rawData.avatarThumb || rawData.avatar || null,
+          // Message details
+          msgType: rawData.msgType || rawData.type || 1,
+          attachmentUrl: rawData.attachmentUrl || rawData.thumb || rawData.photo || null,
           // Original message object for debugging
           _raw: rawData,
         };
+        
+        console.log(`[ZaloPersonalAdapter] Incoming ${msgData.isGroup ? 'group' : 'personal'} message from ${msgData.fromUid}: ${String(msgData.content || '').substring(0, 50)}`);
+        
         stored.handler(msgData).catch((err) => {
           console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.message);
         });

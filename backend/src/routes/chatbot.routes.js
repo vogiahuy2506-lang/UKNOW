@@ -39,6 +39,13 @@ router.delete('/sub-assistants/:id', chatbotController.deleteSubAssistant.bind(c
 router.get('/chatbot/settings/:channel', chatbotController.getChatbotSettings.bind(chatbotController));
 router.put('/chatbot/settings/:channel', chatbotController.updateChatbotSettings.bind(chatbotController));
 
+// ── Custom Chatbots (Studio) ──────────────────────────────────────
+
+router.get('/custom-chatbots', chatbotController.listCustomChatbots.bind(chatbotController));
+router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatbotController));
+router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
+
 // ── Channel Connections ──────────────────────────────────────────
 
 router.get('/channels', chatbotController.listChannels.bind(chatbotController));

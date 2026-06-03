@@ -1,11 +1,11 @@
 import express from 'express';
-import { publicCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
+import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
 
 const router = express.Router();
 
-// Apply CORS to all routes in this router
-router.use(publicCorsMiddleware);
+// Apply allow-all CORS to all routes (for widget/iframe embedding)
+router.use(allowAllCorsMiddleware);
 
 // ── Public Web Widget API (no auth required) ─────────────────────
 
@@ -28,6 +28,9 @@ router.get('/chatbot/:chatbotId', chatbotController.getPublicChatbotById.bind(ch
 
 // Get custom chatbot config by widget_key
 router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfig.bind(chatbotController));
+
+// Alternative: /custom-chatbot/:widgetKey/config (for widget.js)
+router.get('/custom-chatbot/:widgetKey/config', chatbotController.getCustomChatbotConfig.bind(chatbotController));
 
 // Get documents for a chatbot
 router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));

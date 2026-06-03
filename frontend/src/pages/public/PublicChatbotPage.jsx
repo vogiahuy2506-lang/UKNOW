@@ -17,6 +17,15 @@ export default function PublicChatbotPage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Widget settings
+  const primaryColor = chatbot?.primary_color || chatbot?.theme_color || '#6366f1';
+  const backgroundColor = chatbot?.background_color || '#ffffff';
+  const textColor = chatbot?.text_color || '#1f2937';
+  const accentColor = chatbot?.accent_color || '#60A5FA';
+  const logoUrl = chatbot?.logo_url || '';
+  const showAvatar = chatbot?.show_avatar !== false;
+  const suggestedQuestions = chatbot?.suggested_questions || [];
+
   useEffect(() => {
     loadChatbot();
   }, [chatbotId]);
@@ -86,12 +95,17 @@ export default function PublicChatbotPage() {
     }
   };
 
+  const handleSuggestionClick = (question) => {
+    setInputText(question);
+    inputRef.current?.focus();
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Đang tải chatbot...</p>
+          <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: `${primaryColor} transparent transparent transparent` }}></div>
+          <p style={{ color: textColor, opacity: 0.6 }}>Đang tải chatbot...</p>
         </div>
       </div>
     );
@@ -99,35 +113,70 @@ export default function PublicChatbotPage() {
 
   if (error || !chatbot) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-xl shadow-sm">
-          <div className="text-4xl mb-4">🤖</div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Chatbot không tồn tại</h2>
-          <p className="text-gray-500">{error || 'Vui lòng kiểm tra lại đường dẫn.'}</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
+        <div className="text-center p-8 rounded-2xl shadow-lg" style={{ backgroundColor: '#fff' }}>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center text-3xl" style={{ backgroundColor: `${primaryColor}15` }}>
+            🤖
+          </div>
+          <h2 className="text-xl font-semibold mb-2" style={{ color: textColor }}>Chatbot không tồn tại</h2>
+          <p style={{ color: textColor, opacity: 0.6 }}>{error || 'Vui lòng kiểm tra lại đường dẫn.'}</p>
         </div>
       </div>
     );
   }
 
-  const themeColor = chatbot.theme_color || '#6366f1';
-
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
       {/* Header */}
       <div
-        className="px-4 py-3 text-white shadow-md"
-        style={{ backgroundColor: themeColor }}
+        className="shadow-lg"
+        style={{
+          background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
+          color: 'white'
+        }}
       >
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-lg">
-            🤖
-          </div>
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+          {showAvatar && (
+            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-xl" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              {logoUrl ? (
+                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                '🤖'
+              )}
+            </div>
+          )}
           <div>
-            <h1 className="font-semibold">{chatbot.name || 'AI Assistant'}</h1>
-            <p className="text-xs opacity-80">Đang trò chuyện</p>
+            <h1 className="font-semibold text-base">{chatbot.name || 'AI Assistant'}</h1>
+            <p className="text-xs opacity-80 flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+              Đang trò chuyện
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Suggested Questions */}
+      {suggestedQuestions.length > 0 && messages.length === 1 && (
+        <div className="max-w-lg mx-auto w-full px-4 pt-4">
+          <p className="text-xs font-medium mb-2" style={{ color: textColor, opacity: 0.6 }}>Câu hỏi gợi ý:</p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => handleSuggestionClick(q)}
+                className="px-4 py-2 rounded-full text-sm font-medium transition-all hover:scale-105"
+                style={{
+                  backgroundColor: `${primaryColor}15`,
+                  border: `1px solid ${primaryColor}30`,
+                  color: primaryColor
+                }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
@@ -138,12 +187,16 @@ export default function PublicChatbotPage() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                   msg.role === 'user'
                     ? 'text-white rounded-br-md'
-                    : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
+                    : 'rounded-bl-md shadow-sm'
                 }`}
-                style={msg.role === 'user' ? { backgroundColor: themeColor } : {}}
+                style={
+                  msg.role === 'user'
+                    ? { background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, color: 'white' }
+                    : { backgroundColor: '#fff', color: textColor, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
+                }
                 dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>') }}
               />
             </div>
@@ -151,11 +204,11 @@ export default function PublicChatbotPage() {
 
           {isTyping && (
             <div className="flex justify-start">
-              <div className="bg-white px-4 py-2.5 rounded-2xl rounded-bl-md shadow-sm">
+              <div className="px-4 py-3 rounded-2xl rounded-bl-md shadow-sm" style={{ backgroundColor: '#fff' }}>
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '0ms' }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '150ms' }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '300ms' }}></span>
                 </div>
               </div>
             </div>
@@ -166,8 +219,8 @@ export default function PublicChatbotPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t bg-white p-3">
-        <div className="max-w-lg mx-auto">
+      <div className="border-t" style={{ borderColor: `${primaryColor}20`, backgroundColor: '#fff' }}>
+        <div className="max-w-lg mx-auto px-4 py-3">
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -176,14 +229,18 @@ export default function PublicChatbotPage() {
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Nhập tin nhắn..."
-              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+              className="flex-1 px-4 py-3 border-2 rounded-full focus:outline-none text-sm transition-all"
+              style={{ 
+                borderColor: `${primaryColor}30`,
+                color: textColor
+              }}
               disabled={isTyping}
             />
             <button
               onClick={() => sendMessage(inputText)}
               disabled={!inputText.trim() || isTyping}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: themeColor }}
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, boxShadow: `0 4px 12px ${primaryColor}40` }}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>

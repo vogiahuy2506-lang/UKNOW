@@ -243,9 +243,32 @@ export function publicCorsMiddleware(req, res, next) {
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  } else {
+    // Allow requests without origin (curl, Postman, etc.)
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  return next();
+}
+
+/**
+ * Allow all origins CORS - for widget/iframe embedding on any website
+ */
+export function allowAllCorsMiddleware(req, res, next) {
+  const origin = req.headers.origin;
+
+  // Allow all origins
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
 
   // Handle preflight
   if (req.method === 'OPTIONS') {

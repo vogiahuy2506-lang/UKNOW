@@ -5,7 +5,46 @@ const CHANNEL_LABELS = (t) => ({
   zalo_oa: { label: t('inbox.zaloOA'), icon: '📱', color: 'bg-red-500' },
   facebook: { label: t('inbox.facebook'), icon: '📘', color: 'bg-blue-600' },
   zalo_personal: { label: t('inbox.zaloPersonal'), icon: '👤', color: 'bg-orange-500' },
+  zalo_group: { label: t('inbox.zaloGroup') || 'Zalo Nhóm', icon: '👥', color: 'bg-purple-500' },
 });
+
+const getDisplayName = (conv) => {
+  // Check visitor_info for group/personal details
+  const visitorInfo = conv.visitor_info || {};
+  
+  if (visitorInfo.is_group && visitorInfo.group_name) {
+    return visitorInfo.group_name;
+  }
+  
+  if (visitorInfo.sender_name) {
+    return visitorInfo.sender_name;
+  }
+  
+  return conv.visitorName || null;
+};
+
+const getMessageSource = (conv) => {
+  const visitorInfo = conv.visitor_info || {};
+  
+  if (visitorInfo.is_group) {
+    return {
+      type: 'group',
+      icon: '👥',
+      label: visitorInfo.group_name || 'Nhóm Zalo',
+    };
+  }
+  
+  // Check channel type
+  if (conv.channel === 'zalo_personal') {
+    return {
+      type: 'personal',
+      icon: '👤',
+      label: visitorInfo.sender_name || 'Zalo cá nhân',
+    };
+  }
+  
+  return null;
+};
 
 const formatTime = (dateString, t) => {
   if (!dateString) return '';
@@ -71,6 +110,8 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
           {conversations.map((conv) => {
             const channel = CHANNEL_LABELS(t)[conv.channel] || CHANNEL_LABELS(t).web;
             const isSelected = selectedId === conv.id;
+            const displayName = getDisplayName(conv);
+            const messageSource = getMessageSource(conv);
 
             return (
               <button
@@ -85,24 +126,29 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
                   <div className={`w-10 h-10 rounded-full ${channel.color} flex items-center justify-center text-white text-sm font-medium flex-shrink-0`}>
-                    {conv.visitorName ? conv.visitorName[0].toUpperCase() : '?'}
+                    {displayName ? displayName[0].toUpperCase() : '?'}
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-gray-900 truncate">
-                        {conv.visitorName || t('inbox.anonymousCustomer')}
+                        {displayName || t('inbox.anonymousCustomer')}
                       </span>
                       <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                         {formatTime(conv.lastMessageAt, t)}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs px-1.5 py-0.5 rounded ${channel.color} text-white`}>
                         {channel.icon} {channel.label}
                       </span>
+                      {messageSource && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                          {messageSource.icon} {messageSource.label}
+                        </span>
+                      )}
                       {conv.unreadCount > 0 && (
                         <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                           {conv.unreadCount}
