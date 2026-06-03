@@ -169,9 +169,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND c.id_user = $2
-       ORDER BY (cr.failed_sends::float / GREATEST(cr.successful_sends + cr.failed_sends, 1)) DESC,
-                duration_seconds DESC
-       LIMIT 10`,
+       ORDER BY cr.started_at DESC
+       LIMIT 20`,
       params
     ),
     safeQuery(

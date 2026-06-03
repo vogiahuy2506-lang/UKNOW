@@ -177,11 +177,24 @@ const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
   );
 };
 
+const runRowClass = (run) => {
+  const stuck = run.totalRecipients > 0 && run.successfulSends === 0 && run.status === 'running';
+  if (stuck) return 'bg-red-50';
+  if (run.status === 'failed') return 'bg-orange-50';
+  if (run.successfulSends > 0) return 'bg-emerald-50/40';
+  return '';
+};
+
 const TopRunsTable = ({ runs, t }) => (
   <div className="card overflow-hidden">
     <div className="border-b border-gray-100 px-5 py-4">
-      <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.topRuns')}</h2>
-      <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.topRunsDesc')}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.topRuns')}</h2>
+          <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.topRunsDesc')}</p>
+        </div>
+        <span className="text-xs text-gray-400">{t('userDeliveryMonitor.topRunsCount', { count: runs.length })}</span>
+      </div>
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -199,7 +212,7 @@ const TopRunsTable = ({ runs, t }) => (
           {runs.length === 0 ? (
             <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
           ) : runs.map((run) => (
-            <tr key={run.id}>
+            <tr key={run.id} className={runRowClass(run)}>
               <td className="px-5 py-3">
                 <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
                 <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
@@ -209,8 +222,8 @@ const TopRunsTable = ({ runs, t }) => (
                   {run.status}
                 </span>
               </td>
-              <td className="px-5 py-3 text-gray-700">
-                <span className="font-medium">{fmt(run.successfulSends)}</span>
+              <td className="px-5 py-3">
+                <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
                 <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>
               </td>
               <td className="px-5 py-3 text-gray-700">

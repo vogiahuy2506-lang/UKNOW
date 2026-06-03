@@ -5031,8 +5031,9 @@ export default {
     throughput: 'Tốc độ gửi theo giờ',
     noRecentErrors: 'Chưa có lỗi gần đây.',
     recentErrors: 'Lỗi gần đây',
-    topRuns: 'Run cần xem kỹ',
-    topRunsDesc: 'Ưu tiên các run có tỷ lệ lỗi cao hoặc chạy lâu.',
+    topRuns: 'Chiến dịch gần đây',
+    topRunsDesc: 'Tất cả chiến dịch trong khoảng thời gian đã chọn, mới nhất trước.',
+    topRunsCount: '{count} chiến dịch',
     healthTitle: 'Tình trạng tài khoản & hàng đợi',
     kpi: {
       sent: 'Tin đã gửi',

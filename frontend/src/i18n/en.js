@@ -5020,8 +5020,9 @@ export default {
     throughput: 'Sending speed by hour',
     noRecentErrors: 'No recent errors.',
     recentErrors: 'Recent errors',
-    topRuns: 'Runs to review',
-    topRunsDesc: 'Runs with high failure rate or long duration.',
+    topRuns: 'Recent campaigns',
+    topRunsDesc: 'All campaigns in the selected time window, newest first.',
+    topRunsCount: '{count} campaigns',
     healthTitle: 'Account & queue health',
     kpi: {
       sent: 'Messages sent',
