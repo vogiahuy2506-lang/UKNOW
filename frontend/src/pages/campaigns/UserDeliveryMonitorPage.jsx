@@ -135,11 +135,14 @@ const HealthPanel = ({ health, t }) => {
   );
 };
 
-const ChannelPanel = ({ channels, channelsRecent, t }) => {
+const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
   const recentMap = Object.fromEntries((channelsRecent || []).map((c) => [c.channel, c]));
   return (
     <div className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.channels')}</h2>
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.channels')}</h2>
+        <span className="text-xs text-gray-400">{t('userDeliveryMonitor.channelWindowHint', { days: windowDays })}</span>
+      </div>
       <div className="space-y-4">
         {channels.map((channel) => {
           const recent = recentMap[channel.channel];
@@ -356,7 +359,7 @@ export default function UserDeliveryMonitorPage() {
             </ResponsiveContainer>
           )}
         </div>
-        <ChannelPanel channels={data?.channels || []} channelsRecent={data?.channelsRecent} t={t} />
+        <ChannelPanel channels={data?.channels || []} channelsRecent={data?.channelsRecent} windowDays={windowDays} t={t} />
       </div>
 
       <TopRunsTable runs={data?.topRuns || []} t={t} />

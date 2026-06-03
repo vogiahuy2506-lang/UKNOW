@@ -5016,6 +5016,7 @@ export default {
     channels: 'Performance by channel',
     channelSub: '{sent} sent · {failed} failed · {clicked} clicks',
     channelRecent: 'Last 48h: {sent} sent · {failed} failed',
+    channelWindowHint: 'Campaigns started in the last {days} days',
     throughput: 'Sending speed by hour',
     noRecentErrors: 'No recent errors.',
     recentErrors: 'Recent errors',

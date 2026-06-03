@@ -83,7 +83,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          COUNT(*)::int AS count
        FROM customer_journey cj
        JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE cj.event_at >= NOW() - ($1::int * INTERVAL '1 day')
+       JOIN campaign_runs cr ON cr.id = cj.id_run
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND cj.event_type IN ('email_sent', 'zalo_sent')
          AND c.id_user = $2
        GROUP BY channel`,
@@ -94,8 +95,9 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
          COUNT(*)::int AS count
        FROM campaign_executions ce
+       JOIN campaign_runs cr ON cr.id = ce.id_run
        JOIN campaigns c ON c.id = ce.id_campaign
-       WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
          AND c.id_user = $2
        GROUP BY channel`,
@@ -106,7 +108,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        FROM email_messages em
        JOIN campaign_runs cr ON cr.id = em.id_campaign_run
        JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE em.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
          AND c.id_user = $2`,
       params
@@ -116,7 +118,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        FROM zalo_messages zm
        JOIN campaign_runs cr ON cr.id = zm.id_campaign_run
        JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE zm.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
@@ -133,7 +135,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          COUNT(*)::int AS count
        FROM customer_journey cj
        JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE cj.event_at >= NOW() - ($1::int * INTERVAL '1 day')
+       JOIN campaign_runs cr ON cr.id = cj.id_run
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND cj.event_type IN ('email_opened', 'email_clicked', 'zalo_clicked')
          AND c.id_user = $2
        GROUP BY cj.event_type, channel`,
@@ -229,7 +232,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          COUNT(*)::int AS count
        FROM customer_journey cj
        JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE cj.event_at >= NOW() - ($1::int * INTERVAL '1 day')
+       JOIN campaign_runs cr ON cr.id = cj.id_run
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND cj.event_type IN ('email_sent', 'zalo_sent')
          AND c.id_user = $2
        GROUP BY channel`,
@@ -240,8 +244,9 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
          COUNT(*)::int AS count
        FROM campaign_executions ce
+       JOIN campaign_runs cr ON cr.id = ce.id_run
        JOIN campaigns c ON c.id = ce.id_campaign
-       WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
          AND c.id_user = $2
        GROUP BY channel`,
@@ -252,7 +257,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        FROM email_messages em
        JOIN campaign_runs cr ON cr.id = em.id_campaign_run
        JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE em.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
          AND c.id_user = $2`,
       params48h
@@ -262,7 +267,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        FROM zalo_messages zm
        JOIN campaign_runs cr ON cr.id = zm.id_campaign_run
        JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE zm.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
