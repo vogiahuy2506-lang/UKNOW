@@ -61,7 +61,7 @@ export default function PublicChatbotPage() {
     setIsTyping(true);
 
     try {
-      const res = await api.post(`/chatbot-public/custom-chatbot/${chatbotId}/chat`, {
+      const res = await api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/chat`, {
         message: text,
         history: messages.slice(-10),
       });

@@ -38,4 +38,7 @@ router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomCh
 // Send message to custom chatbot (directly uses Gemini + KB)
 router.post('/custom-chatbot/:widgetKey/chat', chatbotController.chatWithCustomChatbot.bind(chatbotController));
 
+// Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
+router.post('/custom-chatbot/id/:chatbotId/chat', chatbotController.chatWithCustomChatbotById.bind(chatbotController));
+
 export default router;

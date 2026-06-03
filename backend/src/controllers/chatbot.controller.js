@@ -827,6 +827,84 @@ class ChatbotController {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  // Chat with chatbot by ID (not widgetKey) - for PublicChatbotPage
+  async chatWithCustomChatbotById(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const { message, history } = req.body;
+
+      if (!message?.trim()) {
+        return res.status(400).json({ success: false, message: 'message is required' });
+      }
+
+      // Get chatbot by ID from database
+      const chatbot = await chatbotRepository.findChatbotById(id);
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+      }
+
+      // Use chatbot's system instruction or default
+      const systemInstruction = chatbot.system_instruction || 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+
+      // Build history
+      const fullHistory = [
+        ...(history || []),
+        { role: 'user', content: message }
+      ];
+
+      // Build prompt
+      const prompt = `Hệ thống: ${systemInstruction}\n\n${fullHistory.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
+
+      // Get Gemini API key từ env
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+      if (!apiKey) {
+        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
+      }
+
+      // Call Gemini
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: chatbot.temperature || 0.7,
+            maxOutputTokens: chatbot.max_tokens || 2048,
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(500).json({ success: false, message: data.error.message });
+      }
+
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+
+      return res.json({
+        success: true,
+        data: {
+          role: 'assistant',
+          content: content,
+          created_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Chat by ID error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
 
 export default new ChatbotController();
