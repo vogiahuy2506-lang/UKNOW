@@ -3,7 +3,6 @@ import {
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamationCircle,
-  HiOutlineLightningBolt,
   HiOutlineRefresh,
   HiOutlineTrendingUp,
 } from 'react-icons/hi';

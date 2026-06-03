@@ -17,7 +17,6 @@ import {
   HiOutlineColorSwatch,
   HiOutlineLink,
   HiOutlineGlobe,
-  HiOutlineEye,
   HiOutlineChevronLeft,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';

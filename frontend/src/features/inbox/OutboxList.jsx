@@ -166,5 +166,6 @@ const OutboxList = ({ messages, isLoading, selectedId, onSelect, onLoadMore, has
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { formatDate };
 export default OutboxList;

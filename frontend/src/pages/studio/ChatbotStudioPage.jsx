@@ -2,14 +2,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   HiOutlineMenuAlt2,
   HiOutlineViewBoards,
-  HiOutlineChevronLeft,
   HiOutlinePaperAirplane,
-  HiOutlineSparkles,
-  HiOutlinePlus,
   HiOutlineTrash,
-  HiOutlineX,
   HiOutlineRefresh,
-  HiOutlineChatAlt2,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -28,8 +23,8 @@ function getChatbotTheme(chatbot) {
 }
 
 // Empty State with custom branding
-function EmptyState({ chatbot, onCreateNew }) {
-  const { primaryColor, accentColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
+function EmptyState({ chatbot, onCreateNew: _onCreateNew }) {
+  const { primaryColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
 
   return (
@@ -115,14 +110,14 @@ function EmptyState({ chatbot, onCreateNew }) {
 }
 
 // Chat Message Area with custom branding
-function ChatMessageArea({ chatbot, onUpdate }) {
+function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const { primaryColor, accentColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
+  const { primaryColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
 
   useEffect(() => {
@@ -351,12 +346,12 @@ function ChatMessageArea({ chatbot, onUpdate }) {
 
 function ChatbotStudioPage() {
   const [selectedBot, setSelectedBot] = useState(null);
-  const [bots, setBots] = useState([]);
+  const [_bots, setBots] = useState([]);
   const [mobilePanel, setMobilePanel] = useState(1);
   const [leftHidden, setLeftHidden] = useState(false);
   const [rightHidden, setRightHidden] = useState(false);
 
-  const { primaryColor, gradientStyle } = getChatbotTheme(selectedBot);
+  const { primaryColor } = getChatbotTheme(selectedBot);
 
   // Listen for settings close from mobile
   useEffect(() => {

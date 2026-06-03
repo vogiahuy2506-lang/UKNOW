@@ -1,17 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   HiOutlinePlus,
   HiOutlineTrash,
   HiOutlineSparkles,
   HiOutlineX,
-  HiOutlineRefresh,
-  HiOutlineSearch,
   HiOutlineAdjustments,
   HiOutlineStatusOnline,
-  HiOutlineStatusOffline,
   HiOutlineChevronRight,
   HiOutlineDocumentText,
-  HiOutlineMenuAlt2,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../services/chatbotApi';
