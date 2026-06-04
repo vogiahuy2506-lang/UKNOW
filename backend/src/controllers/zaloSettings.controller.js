@@ -15,6 +15,8 @@ import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
 import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
+import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
+
 
 class ZaloSettingsController {
   constructor() {
@@ -2158,7 +2160,24 @@ class ZaloSettingsController {
       );
 
       const items = [];
-      for (const recipient of normalizedRecipients) {
+      const parsePositiveInt = (value, defaultValue) => {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+        return parsed;
+      };
+      const minDelayMs = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+      const maxDelayMs = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      for (let i = 0; i < normalizedRecipients.length; i++) {
+        const recipient = normalizedRecipients[i];
+        if (i > 0) {
+          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
+          console.info(`[CampaignBuilder][ZaloPersonalPreviewDelay] delay_ms=${delayMs} to=${recipient}`);
+          await sleep(delayMs);
+        }
         try {
           const sent = await campaignZaloSenderService.sendPersonalMessage({
             api,
@@ -2173,11 +2192,25 @@ class ZaloSettingsController {
             phone: sent.phone || null,
             status: 'success',
             uid: sent.uid || null,
+            zaloName: sent.zaloName || null,
+            senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
             response: sent.response || null,
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });
         } catch (error) {
+          if (isZaloSenderBlockedError(error)) {
+            items.push({
+              recipient,
+              recipientType,
+              status: 'success',
+              skipReason: 'zalo_sender_blocked',
+              skipDetail: error?.message || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
+              attachments: templateAttachments,
+              attachmentsCount: preparedAttachments.length,
+            });
+            continue;
+          }
           items.push({
             recipient,
             recipientType,
@@ -2236,7 +2269,24 @@ class ZaloSettingsController {
       });
 
       const items = [];
-      for (const phone of normalizedRecipients) {
+      const parsePositiveInt = (value, defaultValue) => {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+        return parsed;
+      };
+      const minDelayMs = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+      const maxDelayMs = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      for (let i = 0; i < normalizedRecipients.length; i++) {
+        const phone = normalizedRecipients[i];
+        if (i > 0) {
+          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
+          console.info(`[CampaignBuilder][ZaloFriendPreviewDelay] delay_ms=${delayMs} to=${phone}`);
+          await sleep(delayMs);
+        }
         try {
           const sent = await campaignZaloSenderService.sendFriendRequest({
             api,
@@ -2313,7 +2363,24 @@ class ZaloSettingsController {
       );
 
       const items = [];
-      for (const groupId of normalizedGroupIds) {
+      const parsePositiveInt = (value, defaultValue) => {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+        return parsed;
+      };
+      const minDelayMs = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+      const maxDelayMs = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0)
+        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      for (let i = 0; i < normalizedGroupIds.length; i++) {
+        const groupId = normalizedGroupIds[i];
+        if (i > 0) {
+          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
+          console.info(`[CampaignBuilder][ZaloGroupPreviewDelay] delay_ms=${delayMs} to=${groupId}`);
+          await sleep(delayMs);
+        }
         try {
           if (groupIdSet.size > 0 && !groupIdSet.has(groupId)) {
             throw new Error(`Không tìm thấy nhóm ${groupId} trong tài khoản hiện tại`);

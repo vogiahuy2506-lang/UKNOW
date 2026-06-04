@@ -57,6 +57,8 @@ router.post('/:id/duplicate',
   campaignController.duplicate.bind(campaignController)
 );
 
+router.get('/delay-config', campaignController.getDelayConfig.bind(campaignController));
+
 // Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
 router.post('/:id/sync-founderai', founderaiController.syncCampaignUknow.bind(founderaiController));
 
