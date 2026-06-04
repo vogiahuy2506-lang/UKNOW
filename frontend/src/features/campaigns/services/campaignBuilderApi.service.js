@@ -128,6 +128,9 @@ const campaignBuilderApiService = {
       ...options,
     });
   },
+  getDelayConfig(options = {}) {
+    return api.get('/campaigns/delay-config', options);
+  },
 };
 
 export default campaignBuilderApiService;
