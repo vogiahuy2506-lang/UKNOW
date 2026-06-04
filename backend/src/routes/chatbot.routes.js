@@ -43,8 +43,15 @@ router.put('/chatbot/settings/:channel', chatbotController.updateChatbotSettings
 
 router.get('/custom-chatbots', chatbotController.listCustomChatbots.bind(chatbotController));
 router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId', chatbotController.getSubAssistant.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
+
+// Chatbot Channel Connections
+router.get('/custom-chatbots/:chatbotId/channels', chatbotController.getChatbotChannels.bind(chatbotController));
+router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', chatbotController.connectChatbotZaloOA.bind(chatbotController));
+router.post('/custom-chatbots/:chatbotId/channels/facebook', chatbotController.connectChatbotFacebook.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId/channels/:channelType', chatbotController.disconnectChatbotChannel.bind(chatbotController));
 
 // ── Channel Connections ──────────────────────────────────────────
 
@@ -52,6 +59,8 @@ router.get('/channels', chatbotController.listChannels.bind(chatbotController));
 router.post('/channels/connect/zalo-oa', chatbotController.connectZaloOA.bind(chatbotController));
 router.post('/channels/connect/facebook', chatbotController.connectFacebook.bind(chatbotController));
 router.delete('/channels/:channel', chatbotController.disconnectChannel.bind(chatbotController));
+router.post('/channels/test/zalo-oa', chatbotController.testZaloOAConnection.bind(chatbotController));
+router.post('/channels/test/facebook', chatbotController.testFacebookConnection.bind(chatbotController));
 
 // ── Web Widget ──────────────────────────────────────────────────
 

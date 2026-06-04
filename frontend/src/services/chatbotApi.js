@@ -129,6 +129,29 @@ const chatbotApi = {
     return response.data;
   },
 
+  // Test connections
+  testZaloOA: async (data) => {
+    const response = await api.post('/ai/chatbot/channels/test/zalo-oa', data);
+    return response.data;
+  },
+
+  testFacebook: async (data) => {
+    const response = await api.post('/ai/chatbot/channels/test/facebook', data);
+    return response.data;
+  },
+
+  // Complete Facebook OAuth connection
+  completeFacebookConnection: async (data) => {
+    const response = await api.post('/ai/chatbot/channels/connect/facebook', data);
+    return response.data;
+  },
+
+  // Complete Facebook OAuth connection for chatbot
+  completeFacebookOAuthForChatbot: async (chatbotId, data) => {
+    const response = await api.post(`/ai/chatbot/custom-chatbots/${chatbotId}/channels/facebook`, data);
+    return response.data;
+  },
+
   // ── Web Widget ───────────────────────────────────────────────
 
   listWidgets: async () => {
@@ -180,6 +203,32 @@ const chatbotApi = {
   // Delete chatbot
   deleteChatbot: async (chatbotId) => {
     const response = await api.delete(`/ai/chatbot/custom-chatbots/${chatbotId}`);
+    return response.data;
+  },
+
+  // ── Chatbot Channel Connections ──────────────────────────────────
+
+  // Get all channels for a chatbot
+  getChatbotChannels: async (chatbotId) => {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}/channels`);
+    return response.data;
+  },
+
+  // Connect Zalo OA to chatbot
+  connectChatbotZaloOA: async (chatbotId, data) => {
+    const response = await api.post(`/ai/chatbot/custom-chatbots/${chatbotId}/channels/zalo-oa`, data);
+    return response.data;
+  },
+
+  // Connect Facebook to chatbot
+  connectChatbotFacebook: async (chatbotId, data) => {
+    const response = await api.post(`/ai/chatbot/custom-chatbots/${chatbotId}/channels/facebook`, data);
+    return response.data;
+  },
+
+  // Disconnect channel from chatbot
+  disconnectChatbotChannel: async (chatbotId, channelType) => {
+    const response = await api.delete(`/ai/chatbot/custom-chatbots/${chatbotId}/channels/${channelType}`);
     return response.data;
   },
 

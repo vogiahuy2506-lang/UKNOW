@@ -1,11 +1,12 @@
 import axios from 'axios';
-import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
+import db from '../../../config/database.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
 class ZaloOAAdapter {
   /**
    * Send a reply message to a Zalo OA user.
+   * Uses credentials from database based on channel ID.
    * @param {object} params
    * @param {string} params.conversationId - internal conversation ID
    * @param {string} params.message - text reply
@@ -15,12 +16,19 @@ class ZaloOAAdapter {
    */
   async sendReply({ conversationId, message, userId, channelId, externalId }) {
     try {
-      const channel = await chatbotRepository.findChannelByType(userId, 'zalo_oa');
-      if (!channel?.credentials?.access_token) {
-        throw new Error('Zalo OA not connected or missing access token');
+      // Get credentials from database
+      let accessToken;
+      if (channelId) {
+        const { rows } = await db.query(
+          `SELECT credentials->>'access_token' as access_token FROM channel_connections WHERE id = $1`,
+          [channelId]
+        );
+        accessToken = rows[0]?.access_token;
       }
 
-      const accessToken = channel.credentials.access_token;
+      if (!accessToken) {
+        throw new Error('Zalo OA channel not found or missing access token');
+      }
 
       // Send text message
       await axios.post(
@@ -51,10 +59,11 @@ class ZaloOAAdapter {
   /**
    * Verify Zalo OA webhook.
    * @param {string} verifyToken
+   * @param {string} customVerifyToken - verify token from channel credentials
    * @returns {object} { challenge: string }
    */
-  verifyWebhook(verifyToken) {
-    const expectedToken = process.env.ZALO_OA_VERIFY_TOKEN || 'uknow_zalo_oa_verify';
+  verifyWebhook(verifyToken, customVerifyToken = null) {
+    const expectedToken = customVerifyToken || process.env.ZALO_OA_VERIFY_TOKEN || 'uknow_zalo_oa_verify';
     if (verifyToken !== expectedToken) {
       throw new Error('Invalid verify token');
     }
@@ -103,11 +112,10 @@ class ZaloOAAdapter {
   /**
    * Exchange short-lived code for long-lived access token.
    * @param {string} code
+   * @param {string} appId
+   * @param {string} appSecret
    */
-  async exchangeAccessToken(code) {
-    const appId = process.env.ZALO_OA_APP_ID;
-    const appSecret = process.env.ZALO_OA_APP_SECRET;
-
+  async exchangeAccessToken(code, appId, appSecret) {
     if (!appId || !appSecret) {
       throw new Error('Zalo OA credentials not configured');
     }
