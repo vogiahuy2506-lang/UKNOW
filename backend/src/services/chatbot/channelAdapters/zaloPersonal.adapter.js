@@ -88,7 +88,7 @@ class ZaloPersonalAdapter {
     ZaloPersonalAdapter.messageHandlers.set(String(accountId), { userId, handler });
 
     // Attach to listener
-    listener.on('message', (message) => {
+    listener.on('message', async (message) => {
       const stored = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
       if (stored?.handler) {
         // Access raw data from UserMessage object
@@ -133,9 +133,19 @@ class ZaloPersonalAdapter {
         
         console.log(`[ZaloPersonalAdapter] Incoming ${msgData.isGroup ? 'group' : 'personal'} message from ${msgData.fromUid}: ${String(msgData.content || '').substring(0, 50)}`);
         
-        stored.handler(msgData).catch((err) => {
-          console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.message);
-        });
+        // Save to database for unified inbox
+        try {
+          await this.saveMessageToDatabase(stored.userId, accountId, msgData);
+        } catch (dbErr) {
+          console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
+        }
+        
+        // Call custom handler if registered
+        if (stored.handler) {
+          stored.handler(msgData).catch((err) => {
+            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.message);
+          });
+        }
       }
     });
 
@@ -150,6 +160,84 @@ class ZaloPersonalAdapter {
   removeMessageHandler(accountId) {
     const key = String(accountId);
     ZaloPersonalAdapter.messageHandlers.delete(key);
+  }
+
+  /**
+   * Save incoming message to database (for unified inbox).
+   * Creates or updates conversation as needed.
+   * @param {number} userId
+   * @param {number} zaloSettingId
+   * @param {object} msgData - normalized message data
+   */
+  async saveMessageToDatabase(userId, zaloSettingId, msgData) {
+    const now = new Date().toISOString();
+
+    // Skip self-messages (sent by own account)
+    if (msgData.isSelf || msgData.fromUid === msgData.uid) {
+      return null;
+    }
+
+    // Get or create conversation
+    let { rows: convRows } = await db.query(
+      `SELECT * FROM zalo_personal_conversations 
+       WHERE id_zalo_setting = $1 AND external_id = $2`,
+      [zaloSettingId, msgData.fromUid]
+    );
+
+    let conversationId;
+    if (convRows.length === 0) {
+      // Create new conversation
+      const { rows: newConv } = await db.query(
+        `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [
+          userId,
+          zaloSettingId,
+          msgData.fromUid,
+          msgData.senderName || null,
+          JSON.stringify({
+            sender_name: msgData.senderName,
+            sender_avatar: msgData.senderAvatar,
+            is_group: msgData.isGroup || false,
+            group_name: msgData.groupName || null,
+          }),
+          now,
+        ]
+      );
+      conversationId = newConv[0].id;
+    } else {
+      conversationId = convRows[0].id;
+      // Update last_message_at
+      await db.query(
+        `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
+        [conversationId, now]
+      );
+    }
+
+    // Save message
+    const { rows: msgRows } = await db.query(
+      `INSERT INTO zalo_personal_messages 
+       (id_conversation, id_user, id_zalo_setting, role, content, external_id, external_ts, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        conversationId,
+        userId,
+        zaloSettingId,
+        'visitor',
+        msgData.content || msgData.message || '',
+        msgData.messageId || msgData.msgId,
+        msgData.timestamp ? new Date(msgData.timestamp) : now,
+        JSON.stringify({ _raw: msgData._raw }),
+        msgData.timestamp ? new Date(msgData.timestamp) : now,
+      ]
+    );
+
+    return {
+      conversationId,
+      messageId: msgRows[0].id,
+    };
   }
 
   /**
@@ -171,6 +259,27 @@ class ZaloPersonalAdapter {
         await api.sendText({ uid: externalId, message: message.slice(0, 4000) });
       } else {
         throw new Error('Zalo personal API does not support sendText');
+      }
+
+      // Also save the sent message to database
+      const now = new Date().toISOString();
+      const { rows: convRows } = await db.query(
+        `SELECT * FROM zalo_personal_conversations 
+         WHERE id_zalo_setting = $1 AND external_id = $2`,
+        [session.accountId, externalId]
+      );
+
+      if (convRows.length > 0) {
+        await db.query(
+          `INSERT INTO zalo_personal_messages 
+           (id_conversation, id_user, id_zalo_setting, role, content, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [convRows[0].id, userId, session.accountId, 'agent', message, now]
+        );
+        await db.query(
+          `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
+          [convRows[0].id, now]
+        );
       }
 
       console.log(`[ZaloPersonalAdapter] Sent reply to uid ${externalId}`);
