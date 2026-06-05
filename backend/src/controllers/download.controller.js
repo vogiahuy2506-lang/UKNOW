@@ -1,4 +1,5 @@
 import db from '../config/database.js';
+import downloadRepository from '../repositories/download.repository.js';
 import uploadController from './upload.controller.js';
 import { verifyFileToken } from '../utils/fileDownloadToken.js';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
@@ -111,19 +112,7 @@ class DownloadController {
 
   /** Lấy metadata file từ DB theo storage_key */
   async _getFileRow(storageKey) {
-    try {
-      const r = await db.query(
-        'SELECT id, display_name, original_name, mime_type FROM template_files WHERE storage_key = $1 LIMIT 1',
-        [storageKey]
-      );
-      return r.rows[0] || null;
-    } catch (err) {
-      if (err?.code === '42P01') {
-        console.warn('Cảnh báo: thiếu bảng template_files, bỏ qua truy vấn metadata file.');
-        return null;
-      }
-      throw err;
-    }
+    return downloadRepository.findFileByStorageKey(storageKey);
   }
 
   /**
@@ -245,12 +234,9 @@ class DownloadController {
     let emailRunId = null;
     if (emailTrackingToken) {
       try {
-        const emResult = await db.query(
-          'SELECT id, id_run FROM email_messages WHERE tracking_token = $1 LIMIT 1',
-          [emailTrackingToken]
-        );
-        emailMessageId = emResult.rows[0]?.id || null;
-        emailRunId = emResult.rows[0]?.id_run || null;
+        const emailMsg = await downloadRepository.findEmailMessageByTrackingToken(emailTrackingToken);
+        emailMessageId = emailMsg?.id || null;
+        emailRunId = emailMsg?.id_run || null;
       } catch { /* ignore */ }
     }
 
@@ -261,11 +247,8 @@ class DownloadController {
     let resolvedCustomerId = customerId || null;
     if (!resolvedCustomerId && email) {
       try {
-        const cuResult = await db.query(
-          'SELECT id FROM customers WHERE email = $1 LIMIT 1',
-          [email]
-        );
-        resolvedCustomerId = cuResult.rows[0]?.id || null;
+        const customer = await downloadRepository.findCustomerByEmail(email);
+        resolvedCustomerId = customer?.id || null;
       } catch { /* ignore */ }
     }
 
@@ -414,11 +397,7 @@ class DownloadController {
   async getPresignedDownload(req, res) {
     try {
       const { attachmentId } = req.params;
-      const r = await db.query(
-        'SELECT id, original_name, display_name, mime_type, storage_key, file_size FROM template_files WHERE id = $1',
-        [attachmentId]
-      );
-      const file = r.rows[0];
+      const file = await downloadRepository.findFileById(attachmentId);
       if (!file) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tệp' });
       }

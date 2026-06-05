@@ -1,4 +1,5 @@
 import db from '../config/database.js';
+import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'node:crypto';
@@ -338,23 +339,9 @@ class ZaloSettingsController {
     const cookieText = String(input?.accountIdentity?.cookieText || '').trim() || String(input?.fallbackCookieText || '').trim();
     const now = new Date();
 
-    const updated = await db.query(
-      `UPDATE zalo_settings
-       SET display_name = COALESCE(NULLIF($1, ''), display_name),
-           zalo_user_id = COALESCE(NULLIF($2, ''), zalo_user_id),
-           zalo_name = COALESCE(NULLIF($3, ''), zalo_name),
-           zalo_phone = COALESCE(NULLIF($4, ''), zalo_phone),
-           cookie_text = COALESCE(NULLIF($5, ''), cookie_text),
-           status = 'connected',
-           is_active = TRUE,
-           last_connected_at = $6,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $7 AND id = $8
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [displayName, zaloUserId, zaloName, zaloPhone, cookieText, now, userId, accountId]
+    const row = await zaloSettingRepository.updateAccountAfterCookieLogin(
+      userId, accountId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, now
     );
-
-    const row = updated.rows[0] || null;
     return row ? this.mapRow(row) : null;
   }
 
@@ -369,13 +356,7 @@ class ZaloSettingsController {
     const accountId = Number.parseInt(input?.accountId, 10);
     if (!Number.isFinite(userId) || !Number.isFinite(accountId)) return;
 
-    await db.query(
-      `UPDATE zalo_settings
-       SET status = 'disconnected',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $1 AND id = $2`,
-      [userId, accountId]
-    );
+    await zaloSettingRepository.markAccountDisconnected(userId, accountId);
     zaloAccountSessionService.clearAccountApi(accountId);
     zaloPersonalInboxService.invalidateAccountCache();
   }
@@ -501,63 +482,26 @@ class ZaloSettingsController {
     const cookieText = String(accountIdentity?.cookieText || '').trim();
 
     if (zaloUserId) {
-      const existedById = await db.query(
-        `SELECT id
-         FROM zalo_settings
-         WHERE id_user = $1 AND zalo_user_id = $2
-         LIMIT 1`,
-        [userId, zaloUserId]
-      );
+      const existedById = await zaloSettingRepository.findByZaloUserId(userId, zaloUserId);
 
-      if (existedById.rows.length > 0) {
-        const updated = await db.query(
-          `UPDATE zalo_settings
-           SET display_name = COALESCE(NULLIF($1, ''), display_name),
-               zalo_name = COALESCE(NULLIF($2, ''), zalo_name),
-               zalo_phone = COALESCE(NULLIF($3, ''), zalo_phone),
-               cookie_text = COALESCE(NULLIF($4, ''), cookie_text),
-               login_method = 'qr',
-               status = 'connected',
-               is_active = TRUE,
-               last_connected_at = $5,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $6
-           RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-          [displayName, zaloName, zaloPhone, cookieText, now, existedById.rows[0].id]
+      if (existedById) {
+        const updated = await zaloSettingRepository.updateQrConnectedById(
+          existedById.id, { displayName, zaloName, zaloPhone, cookieText }, now
         );
-        return this.mapRow(updated.rows[0]);
+        return this.mapRow(updated);
       }
     }
 
-    const existedByName = await db.query(
-      `SELECT id
-       FROM zalo_settings
-       WHERE id_user = $1 AND display_name = $2
-       LIMIT 1`,
-      [userId, displayName]
-    );
+    const existedByName = await zaloSettingRepository.findByDisplayName(userId, displayName);
 
-    if (existedByName.rows.length > 0) {
-      const updated = await db.query(
-        `UPDATE zalo_settings
-         SET zalo_user_id = COALESCE(NULLIF($1, ''), zalo_user_id),
-             zalo_name = COALESCE(NULLIF($2, ''), zalo_name),
-             zalo_phone = COALESCE(NULLIF($3, ''), zalo_phone),
-             cookie_text = COALESCE(NULLIF($4, ''), cookie_text),
-             display_name = COALESCE(NULLIF($5, ''), display_name),
-             login_method = 'qr',
-             status = 'connected',
-             is_active = TRUE,
-             last_connected_at = $6,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7
-         RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-        [zaloUserId, zaloName, zaloPhone, cookieText, displayName, now, existedByName.rows[0].id]
+    if (existedByName) {
+      const updated = await zaloSettingRepository.updateQrConnectedByDisplayNameId(
+        existedByName.id, { zaloUserId, zaloName, zaloPhone, cookieText, displayName }, now
       );
-      return this.mapRow(updated.rows[0]);
+      return this.mapRow(updated);
     }
 
-    const existingCount = await db.query('SELECT COUNT(*)::int AS total FROM zalo_settings WHERE id_user = $1', [userId]);
+    const existingCount = await zaloSettingRepository.countByUserId(userId);
     const zaloAccountLimitCheck = await checkUserResourceLimit({
       userId,
       roleCode,
@@ -569,18 +513,11 @@ class ZaloSettingsController {
       throw limitError;
     }
 
-    const isDefault = existingCount.rows[0]?.total === 0;
-    const inserted = await db.query(
-      `INSERT INTO zalo_settings (
-        id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, cookie_text, status, is_active, is_default, notes, last_connected_at
-      ) VALUES (
-        $1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), 'qr', NULLIF($6, ''), 'connected', TRUE, $7, NULL, $8
-      )
-      RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [userId, displayName, zaloUserId, zaloName, zaloPhone, cookieText, isDefault, now]
+    const isDefault = existingCount === 0;
+    const inserted = await zaloSettingRepository.insertAccount(
+      userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now
     );
-
-    return this.mapRow(inserted.rows[0]);
+    return this.mapRow(inserted);
   }
 
   /**
@@ -1601,22 +1538,11 @@ class ZaloSettingsController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user?.role);
       // Ép timestamptz để đồng bộ instant với session Asia/Ho_Chi_Minh (tránh +7h khi Node chạy TZ=UTC).
-      const result = await db.query(
-        `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
-                zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes,
-                zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
-                COALESCE(u.full_name, u.username) AS creator_name
-         FROM zalo_settings zs
-         LEFT JOIN users u ON zs.id_user = u.id
-         WHERE 1 = 1
-           ${isAdmin ? '' : 'AND zs.id_user = $1'}
-         ORDER BY zs.is_default DESC, zs.created_at DESC`,
-        isAdmin ? [] : [userId]
-      );
+      const rows = await zaloSettingRepository.findAccountsList(isAdmin, userId);
 
       const disconnectedIds = new Set();
       if (isAdmin) {
-        const accountsByOwner = result.rows.reduce((acc, row) => {
+        const accountsByOwner = rows.reduce((acc, row) => {
           const ownerId = Number.parseInt(row.id_user, 10);
           if (!Number.isFinite(ownerId)) return acc;
           if (!acc[ownerId]) acc[ownerId] = [];
@@ -1634,12 +1560,12 @@ class ZaloSettingsController {
       } else {
         const ownerDisconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
           userId,
-          accounts: result.rows,
+          accounts: rows,
         });
         ownerDisconnectedIds.forEach((id) => disconnectedIds.add(id));
       }
 
-      const normalizedRows = result.rows.map((row) => {
+      const normalizedRows = rows.map((row) => {
         if (!disconnectedIds.has(String(row.id))) return row;
         return {
           ...row,
@@ -1676,37 +1602,19 @@ class ZaloSettingsController {
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = parseInt(req.params.id, 10);
 
-      const deleted = await db.query(
-        `DELETE FROM zalo_settings
-         WHERE id = $1
-           ${isAdmin ? '' : 'AND id_user = $2'}
-         RETURNING id, id_user, is_default`,
-        isAdmin ? [accountId] : [accountId, userId]
-      );
+      const deleted = await zaloSettingRepository.deleteAccount(accountId, isAdmin, userId);
 
-      if (deleted.rows.length === 0) {
+      if (!deleted) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
       }
 
-      zaloAccountSessionService.clearAccountApi(deleted.rows[0].id);
+      zaloAccountSessionService.clearAccountApi(deleted.id);
 
       // Invalidate inbox cache
       zaloPersonalInboxService.invalidateAccountCache();
 
-      if (deleted.rows[0].is_default) {
-        const ownerUserId = deleted.rows[0].id_user;
-        await db.query(
-          `WITH first_row AS (
-             SELECT id FROM zalo_settings
-             WHERE id_user = $1
-             ORDER BY created_at ASC
-             LIMIT 1
-           )
-           UPDATE zalo_settings
-           SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP
-           WHERE id IN (SELECT id FROM first_row)`,
-          [ownerUserId]
-        );
+      if (deleted.is_default) {
+        await zaloSettingRepository.promoteNextDefaultAccount(deleted.id_user);
       }
 
       return res.json({ success: true, message: 'Đã xóa tài khoản Zalo' });
@@ -1782,15 +1690,7 @@ class ZaloSettingsController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
-      const accountResult = await db.query(
-        `SELECT id, id_user, display_name, cookie_text, is_active
-         FROM zalo_settings
-         WHERE id = $1
-           ${isAdmin ? '' : 'AND id_user = $2'}
-         LIMIT 1`,
-        isAdmin ? [accountId] : [accountId, userId]
-      );
-      const accountRow = accountResult.rows[0] || null;
+      const accountRow = await zaloSettingRepository.findAccountForRestore(accountId, isAdmin, userId);
       if (!accountRow) {
         return res.status(404).json({
           success: false,

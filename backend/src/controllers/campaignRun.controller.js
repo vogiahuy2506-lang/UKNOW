@@ -1,119 +1,20 @@
-import db from '../config/database.js';
 import { serverError } from '../helpers.js';
 import customerHelperService from '../services/customer/customerHelper.service.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
+import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 
 class CampaignRunController {
-  async hasCampaignRunSkippedSendsColumn() {
-    if (typeof this._hasCampaignRunSkippedSendsColumn === 'boolean') {
-      return this._hasCampaignRunSkippedSendsColumn;
-    }
-
-    try {
-      const columnResult = await db.query(
-        `SELECT 1
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = 'campaign_runs'
-           AND column_name = 'skipped_sends'
-         LIMIT 1`
-      );
-      this._hasCampaignRunSkippedSendsColumn = columnResult.rows.length > 0;
-    } catch {
-      this._hasCampaignRunSkippedSendsColumn = false;
-    }
-
-    return this._hasCampaignRunSkippedSendsColumn;
-  }
-
-  /**
-   * Detect whether customer_purchases has id_zalo_message for backward compatibility.
-   *
-   * @returns {Promise<boolean>}
-   */
-  async hasCustomerPurchaseZaloMessageColumn() {
-    if (typeof this._hasCustomerPurchaseZaloMessageColumn === 'boolean') {
-      return this._hasCustomerPurchaseZaloMessageColumn;
-    }
-
-    try {
-      const columnResult = await db.query(
-        `SELECT 1
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = 'customer_purchases'
-           AND column_name = 'id_zalo_message'
-         LIMIT 1`
-      );
-      this._hasCustomerPurchaseZaloMessageColumn = columnResult.rows.length > 0;
-    } catch {
-      this._hasCustomerPurchaseZaloMessageColumn = false;
-    }
-
-    return this._hasCustomerPurchaseZaloMessageColumn;
-  }
-
   // Lấy lịch sử chạy chiến dịch
   async getAll(req, res) {
     try {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role);
       const { campaignId, scheduleId, limit = 50 } = req.query;
-      const skippedSendsSelect = (await this.hasCampaignRunSkippedSendsColumn())
-        ? 'cr.skipped_sends'
-        : '0::integer';
 
-      // Ép sang `timestamptz` để node-pg trả về instant UTC đúng trong JSON.
-      // Dùng `::timestamptz` (theo session TIME ZONE đã set Asia/Ho_Chi_Minh trong `database.js`) thay vì
-      // `... AT TIME ZONE 'Asia/Ho_Chi_Minh'`: nếu cột thực tế là `timestamptz`, overload thứ hai của
-      // `AT TIME ZONE` sẽ strip về `timestamp` không múi → postgres-date coi là giờ máy chủ (thường UTC)
-      // và hiển thị VN bị cộng thêm +7h.
-      let query = `
-        SELECT
-          cr.id,
-          cr.id_campaign,
-          cr.id_schedule,
-          cr.run_type,
-          cr.status,
-          cr.started_at::timestamptz AS started_at,
-          cr.completed_at::timestamptz AS completed_at,
-          cr.total_recipients,
-          cr.successful_sends,
-          cr.failed_sends,
-          ${skippedSendsSelect} AS skipped_sends,
-          cr.error_message,
-          cr.run_metadata,
-          cr.created_at::timestamptz AS created_at,
-          cr.run_name,
-          c.campaign_name,
-          cs.schedule_name
-        FROM campaign_runs cr
-        JOIN campaigns c ON cr.id_campaign = c.id
-        LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
-        WHERE ($1::boolean = TRUE OR c.id_user = $2)
-      `;
-      const params = [isAdmin, userId];
-      let paramIndex = 3;
+      const rows = await campaignRunRepository.findRuns({ userId, isAdmin, campaignId, scheduleId, limit });
 
-      if (campaignId) {
-        query += ` AND cr.id_campaign = $${paramIndex}`;
-        params.push(campaignId);
-        paramIndex++;
-      }
-
-      if (scheduleId) {
-        query += ` AND cr.id_schedule = $${paramIndex}`;
-        params.push(scheduleId);
-        paramIndex++;
-      }
-
-      query += ` ORDER BY cr.started_at DESC LIMIT $${paramIndex}`;
-      params.push(limit);
-
-      const result = await db.query(query, params);
-
-      const runs = result.rows.map(row => ({
+      const runs = rows.map(row => ({
         id: row.id,
         campaignId: row.id_campaign,
         campaignName: row.campaign_name,
@@ -133,10 +34,7 @@ class CampaignRunController {
         createdAt: row.created_at,
       }));
 
-      return res.json({
-        success: true,
-        data: runs,
-      });
+      return res.json({ success: true, data: runs });
     } catch (error) {
       return serverError(res, 'CampaignRunController.getAll', error);
     }
@@ -194,52 +92,16 @@ class CampaignRunController {
         hasUpdatedAfterQ && String(execUpdatedAfterRaw).trim() !== ''
           ? String(execUpdatedAfterRaw).trim()
           : null;
-      const skippedSendsSelect = (await this.hasCampaignRunSkippedSendsColumn())
-        ? 'cr.skipped_sends'
-        : '0::integer';
 
-      const result = await db.query(
-        `SELECT
-           cr.id,
-           cr.id_campaign,
-           cr.id_schedule,
-           cr.run_type,
-           cr.status,
-           cr.started_at::timestamptz AS started_at,
-           cr.completed_at::timestamptz AS completed_at,
-           cr.total_recipients,
-           cr.successful_sends,
-           cr.failed_sends,
-           ${skippedSendsSelect} AS skipped_sends,
-           cr.error_message,
-           cr.run_metadata,
-           cr.created_at::timestamptz AS created_at,
-           cr.run_name,
-           c.campaign_name,
-           cs.schedule_name
-         FROM campaign_runs cr
-         JOIN campaigns c ON cr.id_campaign = c.id
-         LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
-         WHERE cr.id = $1
-           AND ($2::boolean = TRUE OR c.id_user = $3)`,
-        [id, isAdmin, userId]
-      );
+      const row = await campaignRunRepository.findRunById({ runId: id, isAdmin, userId });
 
-      if (result.rows.length === 0) {
+      if (!row) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch sử chạy',
         });
       }
 
-      const row = result.rows[0];
-
-      /**
-       * Map một dòng `campaign_executions` sang payload API (camelCase).
-       *
-       * @param {object} log hàng DB
-       * @returns {object}
-       */
       const mapExecutionLogRow = (log) => ({
         id: log.id,
         campaignId: log.id_campaign,
@@ -266,74 +128,22 @@ class CampaignRunController {
       let executionLogsNextAfterId = null;
 
       if (!useIncrementalLogQuery) {
-        const executionResult = await db.query(
-          `SELECT
-             ce.id,
-             ce.id_campaign,
-             ce.id_run,
-             ce.id_customer,
-             ce.status,
-             ce.action_type,
-             ce.path_taken,
-             ce.execution_data,
-             ce.error_message,
-             ce.created_at::timestamptz AS created_at,
-             ce.updated_at::timestamptz AS updated_at,
-             ce.node_id,
-             ce.node_name,
-             ce.node_type,
-             ce.node_subtype,
-             ce.node_order,
-             ce.progress_current,
-             ce.progress_total,
-             ce.node_result_json
-           FROM campaign_executions ce
-           WHERE ce.id_run = $1
-           ORDER BY ce.node_order ASC NULLS LAST, ce.created_at ASC, ce.id ASC`,
-          [id]
-        );
-        executionLogRows = executionResult.rows;
+        executionLogRows = await campaignRunRepository.findExecutionLogs(id);
       } else {
         const fetchSize = pageLimit + 1;
-        const executionResult = await db.query(
-          `SELECT
-             ce.id,
-             ce.id_campaign,
-             ce.id_run,
-             ce.id_customer,
-             ce.status,
-             ce.action_type,
-             ce.path_taken,
-             ce.execution_data,
-             ce.error_message,
-             ce.created_at::timestamptz AS created_at,
-             ce.updated_at::timestamptz AS updated_at,
-             ce.node_id,
-             ce.node_name,
-             ce.node_type,
-             ce.node_subtype,
-             ce.node_order,
-             ce.progress_current,
-             ce.progress_total,
-             ce.node_result_json
-           FROM campaign_executions ce
-           WHERE ce.id_run = $1
-             AND ($2::BIGINT IS NULL OR ce.id > $2)
-             AND (
-               $3::TIMESTAMPTZ IS NULL
-               OR ce.updated_at::timestamptz > $3::TIMESTAMPTZ
-             )
-           ORDER BY ce.id ASC
-           LIMIT $4`,
-          [id, safeAfterId, updatedAfterIso, fetchSize]
-        );
-        const rawRows = executionResult.rows;
+        const rawRows = await campaignRunRepository.findExecutionLogsIncremental({
+          runId: id,
+          afterId: safeAfterId,
+          updatedAfterIso,
+          fetchSize,
+        });
         executionLogsHasMore = rawRows.length > pageLimit;
         executionLogRows = executionLogsHasMore ? rawRows.slice(0, pageLimit) : rawRows;
         if (executionLogRows.length > 0) {
           executionLogsNextAfterId = executionLogRows[executionLogRows.length - 1].id;
         }
       }
+
       const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
       let trackingSummary = {
         link_click_count: 0,
@@ -343,35 +153,7 @@ class CampaignRunController {
       };
 
       try {
-        const normalizedStatusExpr = `LOWER(TRIM(COALESCE(${purchaseOrderStatusExpr}, '')))`;
-        const purchaseSummaryResult = await db.query(
-          `SELECT
-             COALESCE(COUNT(*) FILTER (
-               WHERE ${normalizedStatusExpr} IN ('completed', 'processing')
-             ), 0)::INTEGER AS purchase_count,
-             COALESCE(COUNT(*) FILTER (
-               WHERE ${normalizedStatusExpr} IN (
-                 'on-hold', 'on-holder', 'onhold', 'pending', 'interested'
-               )
-             ), 0)::INTEGER AS pending_count,
-             COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS customer_with_order_count
-           FROM customer_purchases cp
-           WHERE cp.id_run = $1`,
-          [id]
-        );
-        /** Tổng lượt click link: mỗi dòng customer_journey (email_clicked / zalo_clicked) là một lượt */
-        const clickSummaryResult = await db.query(
-          `SELECT
-             COALESCE(COUNT(*), 0)::INTEGER AS link_click_count
-           FROM customer_journey cj
-           WHERE cj.id_run = $1
-             AND cj.event_type IN ('email_clicked', 'zalo_clicked')`,
-          [id]
-        );
-        trackingSummary = {
-          ...(purchaseSummaryResult.rows[0] || trackingSummary),
-          ...(clickSummaryResult.rows[0] || {}),
-        };
+        trackingSummary = await campaignRunRepository.getTrackingSummary(id, purchaseOrderStatusExpr);
       } catch (summaryError) {
         console.warn(
           `[CampaignRunController.getById] Không thể tính tracking summary cho run=${id}:`,
@@ -413,10 +195,7 @@ class CampaignRunController {
         run.executionLogsNextAfterId = executionLogsNextAfterId;
       }
 
-      return res.json({
-        success: true,
-        data: run,
-      });
+      return res.json({ success: true, data: run });
     } catch (error) {
       return serverError(res, 'CampaignRunController.getById', error);
     }
@@ -465,10 +244,7 @@ class CampaignRunController {
       return res.json({
         success: true,
         message: 'Đã dừng lượt chạy chiến dịch',
-        data: {
-          runId,
-          status: 'stopped',
-        },
+        data: { runId, status: 'stopped' },
       });
     } catch (error) {
       return serverError(res, 'CampaignRunController.stopById', error);

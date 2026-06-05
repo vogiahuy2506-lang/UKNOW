@@ -2,8 +2,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
-import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
+import {
+  findActiveUserByEmail,
+  updatePasswordByEmail,
+  activateUserByEmail,
+  findMembershipsByEmployeeId,
+  insertRefreshToken,
+} from '../repositories/user/user.repository.js';
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
@@ -491,12 +497,9 @@ class AuthController {
     try {
       const { email } = req.body;
 
-      const result = await db.query(
-        `SELECT id FROM users WHERE email = $1 AND status = 'active'`,
-        [email]
-      );
+      const user = await findActiveUserByEmail(email);
 
-      if (result.rows.length > 0) {
+      if (user) {
         await verificationService.sendPasswordReset(email);
       }
 
@@ -525,14 +528,9 @@ class AuthController {
 
       const passwordHash = await bcrypt.hash(password, 10);
 
-      const result = await db.query(
-        `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE email = $2 AND status = 'active'
-         RETURNING id`,
-        [passwordHash, record.email]
-      );
+      const updated = await updatePasswordByEmail(passwordHash, record.email);
 
-      if (!result.rows[0]) {
+      if (!updated) {
         return res.status(400).json({ success: false, message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa' });
       }
 
@@ -560,16 +558,9 @@ class AuthController {
 
       const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
 
-      const result = await db.query(
-        `UPDATE users
-         SET password_hash = $1, status = 'active', updated_at = CURRENT_TIMESTAMP
-         WHERE email = $2 AND status = 'pending_activation'
-         RETURNING id, username, email, full_name, avatar_url, status, role, active_plan_id,
-                   NULL AS subscription_expires_at`,
-        [passwordHash, invitation.email]
-      );
+      const activated = await activateUserByEmail(passwordHash, invitation.email);
 
-      if (!result.rows[0]) {
+      if (!activated) {
         return res.status(400).json({ success: false, message: 'Tài khoản đã được kích hoạt trước đó', code: 'ALREADY_ACTIVATED' });
       }
 
@@ -578,7 +569,7 @@ class AuthController {
       return res.json({
         success: true,
         message: 'Kích hoạt tài khoản thành công',
-        data: { username: result.rows[0].username },
+        data: { username: activated.username },
       });
     } catch (error) {
       console.error('Activate account error:', error);
@@ -598,25 +589,7 @@ class AuthController {
       const formatted = this.formatUser(user);
 
       // Lấy danh sách tổ chức mà user đang là employee (để hiện Context Switcher)
-      const membershipsResult = await db.query(
-        `SELECT um.owner_id AS "ownerId",
-                u.full_name AS "ownerName",
-                u.username AS "ownerUsername",
-                u.avatar_url AS "ownerAvatarUrl",
-                um.permissions,
-                um.status,
-                um.daily_email_limit AS "dailyEmailLimit",
-                um.monthly_email_limit AS "monthlyEmailLimit",
-                um.daily_zalo_limit AS "dailyZaloLimit",
-                um.monthly_zalo_limit AS "monthlyZaloLimit"
-         FROM user_members um
-         JOIN users u ON u.id = um.owner_id
-         WHERE um.employee_id = $1 AND um.status = 'active'
-         ORDER BY um.created_at ASC`,
-        [user.id]
-      );
-
-      formatted.memberships = membershipsResult.rows;
+      formatted.memberships = await findMembershipsByEmployeeId(user.id);
 
       return res.json({ success: true, data: { user: formatted } });
     } catch (error) {
@@ -664,17 +637,13 @@ class AuthController {
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await db.query(
-      `INSERT INTO refresh_tokens (id_user, token_hash, device_info, ip_address, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [
-        user.id,
-        this.hashToken(token),
-        req.headers['user-agent'] || null,
-        req.ip || req.socket?.remoteAddress,
-        expiresAt,
-      ]
-    );
+    await insertRefreshToken({
+      userId: user.id,
+      tokenHash: this.hashToken(token),
+      deviceInfo: req.headers['user-agent'] || null,
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      expiresAt,
+    });
 
     return token;
   }

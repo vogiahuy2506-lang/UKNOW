@@ -295,3 +295,62 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
   );
   return rows;
 }
+
+export async function findActiveUserByEmail(email) {
+  const { rows } = await db.query(
+    `SELECT id FROM users WHERE email = $1 AND status = 'active'`,
+    [email]
+  );
+  return rows[0] || null;
+}
+
+export async function updatePasswordByEmail(passwordHash, email) {
+  const { rows } = await db.query(
+    `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+     WHERE email = $2 AND status = 'active'
+     RETURNING id`,
+    [passwordHash, email]
+  );
+  return rows[0] || null;
+}
+
+export async function activateUserByEmail(passwordHash, email) {
+  const { rows } = await db.query(
+    `UPDATE users
+     SET password_hash = $1, status = 'active', updated_at = CURRENT_TIMESTAMP
+     WHERE email = $2 AND status = 'pending_activation'
+     RETURNING id, username, email, full_name, avatar_url, status, role, active_plan_id,
+               NULL AS subscription_expires_at`,
+    [passwordHash, email]
+  );
+  return rows[0] || null;
+}
+
+export async function findMembershipsByEmployeeId(employeeId) {
+  const { rows } = await db.query(
+    `SELECT um.owner_id AS "ownerId",
+            u.full_name AS "ownerName",
+            u.username AS "ownerUsername",
+            u.avatar_url AS "ownerAvatarUrl",
+            um.permissions,
+            um.status,
+            um.daily_email_limit AS "dailyEmailLimit",
+            um.monthly_email_limit AS "monthlyEmailLimit",
+            um.daily_zalo_limit AS "dailyZaloLimit",
+            um.monthly_zalo_limit AS "monthlyZaloLimit"
+     FROM user_members um
+     JOIN users u ON u.id = um.owner_id
+     WHERE um.employee_id = $1 AND um.status = 'active'
+     ORDER BY um.created_at ASC`,
+    [employeeId]
+  );
+  return rows;
+}
+
+export async function insertRefreshToken({ userId, tokenHash, deviceInfo, ipAddress, expiresAt }) {
+  await db.query(
+    `INSERT INTO refresh_tokens (id_user, token_hash, device_info, ip_address, expires_at, created_at)
+     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+    [userId, tokenHash, deviceInfo, ipAddress, expiresAt]
+  );
+}
