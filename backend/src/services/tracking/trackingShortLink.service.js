@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import trackingShortLinkRepository from '../../repositories/trackingShortLink.repository.js';
 
 class TrackingShortLinkService {
   constructor() {
@@ -54,13 +54,13 @@ class TrackingShortLinkService {
     for (let attempt = 1; attempt <= this.maxGenerateRetry; attempt += 1) {
       const code = this.generateBase62Code(this.defaultCodeLength);
       try {
-        await db.query(
-          `INSERT INTO tracking_short_links
-             (short_code, destination_url, channel, tracking_token, link_key, created_at, updated_at)
-           VALUES
-             ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [code, targetUrl, channel, trackingToken, linkKey]
-        );
+        await trackingShortLinkRepository.create({
+          shortCode: code,
+          destinationUrl: targetUrl,
+          channel,
+          trackingToken,
+          linkKey,
+        });
         return `${baseUrl}/t/${code}`;
       } catch (error) {
         const isUniqueViolation = String(error?.code || '') === '23505';
@@ -79,47 +79,31 @@ class TrackingShortLinkService {
   }
 
   /**
-   * Resolve mã ngắn và redirect về URL đích đã lưu.
+   * Chuẩn hóa mã ngắn từ route public.
    *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   * @returns {Promise<import('express').Response>}
+   * @param {string} rawCode
+   * @returns {string}
    */
-  async redirectByCode(req, res) {
-    const rawCode = String(req.params.code || '').trim();
-    const code = rawCode.replace(/[^0-9a-zA-Z]/g, '');
-    if (!code) {
-      return res.status(404).json({
-        success: false,
-        message: 'Link rút gọn không hợp lệ hoặc đã hết hạn.',
-      });
+  normalizeShortCode(rawCode) {
+    return String(rawCode || '').trim().replace(/[^0-9a-zA-Z]/g, '');
+  }
+
+  /**
+   * Resolve mã ngắn sang URL đích đã lưu.
+   *
+   * @param {string} rawCode
+   * @returns {Promise<{ status: 'invalid'|'not_found'|'found', destinationUrl?: string }>}
+   */
+  async resolveByCode(rawCode) {
+    const code = this.normalizeShortCode(rawCode);
+    if (!code) return { status: 'invalid' };
+
+    const destinationUrl = await trackingShortLinkRepository.findDestinationUrlByCode(code);
+    if (!destinationUrl) {
+      return { status: 'not_found' };
     }
 
-    try {
-      const result = await db.query(
-        `SELECT destination_url
-         FROM tracking_short_links
-         WHERE short_code = $1
-            OR LOWER(short_code) = LOWER($1)
-         ORDER BY CASE WHEN short_code = $1 THEN 0 ELSE 1 END
-         LIMIT 1`,
-        [code]
-      );
-      const destinationUrl = String(result.rows[0]?.destination_url || '').trim();
-      if (!destinationUrl) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy link rút gọn hoặc link đã hết hạn.',
-        });
-      }
-      return res.redirect(302, destinationUrl);
-    } catch (error) {
-      console.error('Resolve tracking short code error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Không thể xử lý link rút gọn lúc này.',
-      });
-    }
+    return { status: 'found', destinationUrl };
   }
 }
 
