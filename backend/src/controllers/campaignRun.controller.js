@@ -5,6 +5,28 @@ import campaignRunService from '../services/campaign/campaignRun.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 
 class CampaignRunController {
+  async hasCampaignRunSkippedSendsColumn() {
+    if (typeof this._hasCampaignRunSkippedSendsColumn === 'boolean') {
+      return this._hasCampaignRunSkippedSendsColumn;
+    }
+
+    try {
+      const columnResult = await db.query(
+        `SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'campaign_runs'
+           AND column_name = 'skipped_sends'
+         LIMIT 1`
+      );
+      this._hasCampaignRunSkippedSendsColumn = columnResult.rows.length > 0;
+    } catch {
+      this._hasCampaignRunSkippedSendsColumn = false;
+    }
+
+    return this._hasCampaignRunSkippedSendsColumn;
+  }
+
   /**
    * Detect whether customer_purchases has id_zalo_message for backward compatibility.
    *
@@ -38,6 +60,9 @@ class CampaignRunController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role);
       const { campaignId, scheduleId, limit = 50 } = req.query;
+      const skippedSendsSelect = (await this.hasCampaignRunSkippedSendsColumn())
+        ? 'cr.skipped_sends'
+        : '0::integer';
 
       // Ép sang `timestamptz` để node-pg trả về instant UTC đúng trong JSON.
       // Dùng `::timestamptz` (theo session TIME ZONE đã set Asia/Ho_Chi_Minh trong `database.js`) thay vì
@@ -56,7 +81,7 @@ class CampaignRunController {
           cr.total_recipients,
           cr.successful_sends,
           cr.failed_sends,
-          cr.skipped_sends,
+          ${skippedSendsSelect} AS skipped_sends,
           cr.error_message,
           cr.run_metadata,
           cr.created_at::timestamptz AS created_at,
@@ -169,6 +194,9 @@ class CampaignRunController {
         hasUpdatedAfterQ && String(execUpdatedAfterRaw).trim() !== ''
           ? String(execUpdatedAfterRaw).trim()
           : null;
+      const skippedSendsSelect = (await this.hasCampaignRunSkippedSendsColumn())
+        ? 'cr.skipped_sends'
+        : '0::integer';
 
       const result = await db.query(
         `SELECT
@@ -182,7 +210,7 @@ class CampaignRunController {
            cr.total_recipients,
            cr.successful_sends,
            cr.failed_sends,
-           cr.skipped_sends,
+           ${skippedSendsSelect} AS skipped_sends,
            cr.error_message,
            cr.run_metadata,
            cr.created_at::timestamptz AS created_at,
