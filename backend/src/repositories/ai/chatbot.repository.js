@@ -492,6 +492,25 @@ class ChatbotRepository {
     );
     return rows[0] || null;
   }
+
+  async getChannelIdFromConversation(conversationId) {
+    const { rows } = await db.query(
+      `SELECT id_channel FROM channel_conversations WHERE id = $1`,
+      [conversationId]
+    );
+    return rows[0]?.id_channel ?? null;
+  }
+
+  async getConversationHistory(conversationId, limit) {
+    const { rows } = await db.query(
+      `SELECT * FROM chatbot_messages
+       WHERE id_conversation = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [conversationId, limit]
+    );
+    return rows;
+  }
 }
 
 export default new ChatbotRepository();

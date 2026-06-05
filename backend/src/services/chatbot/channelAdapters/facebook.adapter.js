@@ -1,5 +1,5 @@
 import axios from 'axios';
-import db from '../../../config/database.js';
+import chatbotChannelRepository from '../../../repositories/ai/chatbotChannel.repository.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 
@@ -18,11 +18,7 @@ class FacebookAdapter {
       // Get credentials from database
       let pageAccessToken;
       if (channelId) {
-        const { rows } = await db.query(
-          `SELECT credentials->>'page_access_token' as page_access_token FROM channel_connections WHERE id = $1`,
-          [channelId]
-        );
-        pageAccessToken = rows[0]?.page_access_token;
+        pageAccessToken = await chatbotChannelRepository.getChannelPageAccessToken(channelId);
       }
 
       if (!pageAccessToken) {

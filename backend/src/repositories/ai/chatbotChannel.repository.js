@@ -151,6 +151,22 @@ class ChatbotChannelRepository {
     );
     return rows;
   }
+
+  async getChannelAccessToken(channelId) {
+    const { rows } = await db.query(
+      `SELECT credentials->>'access_token' as access_token FROM channel_connections WHERE id = $1`,
+      [channelId]
+    );
+    return rows[0]?.access_token ?? null;
+  }
+
+  async getChannelPageAccessToken(channelId) {
+    const { rows } = await db.query(
+      `SELECT credentials->>'page_access_token' as page_access_token FROM channel_connections WHERE id = $1`,
+      [channelId]
+    );
+    return rows[0]?.page_access_token ?? null;
+  }
 }
 
 export default new ChatbotChannelRepository();

@@ -1,5 +1,5 @@
-import db from '../../config/database.js';
 import outboundMessageQueueService from '../queue/outboundMessageQueue.service.js';
+import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
 
 const CHANNEL_LABELS = {
   email: 'Email',
@@ -15,15 +15,8 @@ const clampWindowDays = (value) => {
 
 const toNumber = (value) => Number(value || 0);
 
-const safeQuery = async (sql, params = [], fallback = []) => {
-  try {
-    const result = await db.query(sql, params);
-    return result.rows || fallback;
-  } catch (error) {
-    if (error?.code === '42P01' || error?.code === '42703') return fallback;
-    throw error;
-  }
-};
+const safeQuery = (sql, params = [], fallback = []) =>
+  deliveryMonitorRepository.safeQuery(sql, params, fallback);
 
 const inferChannel = (row = {}) => {
   const raw = [

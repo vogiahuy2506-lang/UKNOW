@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
 
 const clampWindowDays = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -8,15 +8,8 @@ const clampWindowDays = (value) => {
 
 const toNumber = (value) => Number(value || 0);
 
-const safeQuery = async (sql, params = [], fallback = []) => {
-  try {
-    const result = await db.query(sql, params);
-    return result.rows || fallback;
-  } catch (error) {
-    if (error?.code === '42P01' || error?.code === '42703') return fallback;
-    throw error;
-  }
-};
+const safeQuery = (sql, params = [], fallback = []) =>
+  deliveryMonitorRepository.safeQuery(sql, params, fallback);
 
 const inferChannel = (row = {}) => {
   const raw = [row.channel, row.event_channel, row.node_subtype, row.action_type, row.campaign_type]

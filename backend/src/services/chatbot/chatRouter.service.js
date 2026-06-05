@@ -7,7 +7,6 @@ import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
-import db from '../../config/database.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -178,11 +177,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         await chatbotRepository.addWebChatMessage(conversationId, userId, { role, content });
       } else {
         // For channel messages, we need to get the channel ID from the conversation
-        const conv = await db.query(
-          `SELECT id_channel FROM channel_conversations WHERE id = $1`,
-          [conversationId]
-        );
-        const channelId = conv.rows[0]?.id_channel;
+        const channelId = await chatbotRepository.getChannelIdFromConversation(conversationId);
         if (channelId) {
           await chatbotRepository.addChannelMessage(conversationId, userId, channelId, {
             role,
@@ -238,16 +233,10 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       }
 
       // Get conversation history
-      const history = await db.query(
-        `SELECT * FROM chatbot_messages
-         WHERE id_conversation = $1
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        [conversationId, MAX_HISTORY_MESSAGES]
-      );
+      const historyRows = await chatbotRepository.getConversationHistory(conversationId, MAX_HISTORY_MESSAGES);
 
       // Reverse to get chronological order
-      const chatHistory = (history.rows || []).reverse().map(m => ({
+      const chatHistory = (historyRows || []).reverse().map(m => ({
         role: m.role === 'bot' ? 'model' : 'user',
         parts: [{ text: m.content }],
       }));

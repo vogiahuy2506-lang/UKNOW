@@ -1,5 +1,5 @@
 import axios from 'axios';
-import db from '../../../config/database.js';
+import chatbotChannelRepository from '../../../repositories/ai/chatbotChannel.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
@@ -19,11 +19,7 @@ class ZaloOAAdapter {
       // Get credentials from database
       let accessToken;
       if (channelId) {
-        const { rows } = await db.query(
-          `SELECT credentials->>'access_token' as access_token FROM channel_connections WHERE id = $1`,
-          [channelId]
-        );
-        accessToken = rows[0]?.access_token;
+        accessToken = await chatbotChannelRepository.getChannelAccessToken(channelId);
       }
 
       if (!accessToken) {
