@@ -91,7 +91,8 @@ class DiagnosticRepository {
   async getCampaignPrefill(campaignId) {
     const { rows: nodeRows } = await db.query(
       `SELECT config->>'zaloAccountId' AS zalo_account_id,
-              COALESCE(NULLIF(config->>'zaloMessage', ''), NULLIF(config->>'message', '')) AS message_text
+              COALESCE(NULLIF(config->>'zaloMessage', ''), NULLIF(config->>'message', '')) AS message_text,
+              COALESCE(NULLIF(config->>'zaloRecipientPhones', ''), NULLIF(config->>'recipientPhones', '')) AS recipient_phones_raw
        FROM campaign_nodes
        WHERE id_campaign = $1
          AND node_subtype = 'send_zalo_personal'
@@ -99,21 +100,33 @@ class DiagnosticRepository {
       [campaignId]
     );
 
-    const { rows: phoneRows } = await db.query(
-      `SELECT DISTINCT COALESCE(NULLIF(c.zalo_phone, ''), NULLIF(c.phone, '')) AS phone
-       FROM campaign_customers cc
-       JOIN customers c ON c.id = cc.id_customer
-       WHERE cc.id_campaign = $1
-         AND COALESCE(NULLIF(c.zalo_phone, ''), NULLIF(c.phone, '')) IS NOT NULL
+    // Lấy phones từ zalo_messages (campaign đã chạy) — đáng tin nhất
+    const { rows: sentRows } = await db.query(
+      `SELECT DISTINCT recipient_value AS phone
+       FROM zalo_messages
+       WHERE id_campaign = $1
+         AND channel = 'zalo_personal'
+         AND recipient_type = 'phone'
+         AND recipient_value IS NOT NULL
+         AND recipient_value <> ''
        ORDER BY phone
        LIMIT 20`,
       [campaignId]
     );
 
-    return {
-      node: nodeRows[0] || null,
-      phones: phoneRows.map((r) => r.phone),
-    };
+    const node = nodeRows[0] || null;
+
+    // Ưu tiên phones từ zalo_messages; fallback về config node nếu campaign chưa chạy
+    let phones = sentRows.map((r) => r.phone);
+    if (phones.length === 0 && node?.recipient_phones_raw) {
+      phones = node.recipient_phones_raw
+        .split(/[\n,;]+/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+    }
+
+    return { node, phones };
   }
 
   async listRecentRuns(limit = 10) {
