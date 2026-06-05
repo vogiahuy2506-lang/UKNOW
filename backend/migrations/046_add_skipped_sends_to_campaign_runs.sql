@@ -1,0 +1,2 @@
+ALTER TABLE campaign_runs
+  ADD COLUMN IF NOT EXISTS skipped_sends INTEGER NOT NULL DEFAULT 0;

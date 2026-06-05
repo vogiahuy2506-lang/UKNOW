@@ -165,7 +165,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          cr.completed_at::timestamptz AS completed_at,
          cr.total_recipients,
          COUNT(cj.id) FILTER (WHERE cj.event_type IN ('email_sent', 'zalo_sent'))::int AS successful_sends,
-         cr.failed_sends, cr.error_message,
+         cr.failed_sends, cr.skipped_sends, cr.error_message,
          c.campaign_name, c.campaign_type,
          EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
        FROM campaign_runs cr
@@ -348,7 +348,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       id: row.id, runName: row.run_name, campaignName: row.campaign_name, campaignType: row.campaign_type,
       status: row.status, startedAt: row.started_at, completedAt: row.completed_at,
       totalRecipients: toNumber(row.total_recipients), successfulSends: toNumber(row.successful_sends),
-      failedSends: toNumber(row.failed_sends), durationSeconds,
+      failedSends: toNumber(row.failed_sends), skippedSends: toNumber(row.skipped_sends), durationSeconds,
       throughputPerMinute: Math.round((toNumber(row.successful_sends) / minutes) * 10) / 10,
       failureRate: attempts > 0 ? Math.round((toNumber(row.failed_sends) / attempts) * 1000) / 10 : 0,
       errorMessage: row.error_message,

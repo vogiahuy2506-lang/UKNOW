@@ -2668,6 +2668,7 @@ class CampaignRunService {
       let totalRecipients = 0;
       let successfulSends = Number(runResult.rows[0]?.successful_sends || 0);
       let failedSends = Number(runResult.rows[0]?.failed_sends || 0);
+      let skippedSends = 0;
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
       /**
@@ -3366,7 +3367,7 @@ class CampaignRunService {
               // Đồng bộ timezone cho riêng log node email: luôn hiển thị mốc gửi theo UTC+7.
               item.sentAt = toHoChiMinhIso(sentAtTimestamp);
             }
-            const attempted = successfulSends + failedSends;
+            const attempted = successfulSends + failedSends + skippedSends;
             const sent = successfulSends;
             const failed = failedSends;
             return {
@@ -3376,6 +3377,7 @@ class CampaignRunService {
               meta: {
                 attempted,
                 sent,
+                skipped: skippedSends,
                 failed,
                 totalItems: sendResults.length,
               },
@@ -3499,7 +3501,7 @@ class CampaignRunService {
                   customerId: customer.id || null,
                   recipientEmail: recipientEmailForLog,
                   status: 'warning',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   executionData: buildSendEmailExecutionData(skippedPayload),
                 });
@@ -3531,7 +3533,7 @@ class CampaignRunService {
                   customerId: customer.id || null,
                   recipientEmail: recipientEmailForLog,
                   status: 'failed',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   errorMessage: bouncePayload.message,
                   executionData: buildSendEmailExecutionData(bouncePayload),
@@ -3584,7 +3586,7 @@ class CampaignRunService {
                   customerId: customer.id || null,
                   recipientEmail: recipientEmailForLog,
                   status: isRateLimitedRetryScheduled ? 'warning' : 'failed',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   errorMessage: failedMessage,
                   executionData: buildSendEmailExecutionData(failedPayload),
@@ -3596,7 +3598,7 @@ class CampaignRunService {
               }
 
               successfulSends += 1;
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const resultPayload = {
                 ...sendResult,
                 message: progressMessage,
@@ -3613,14 +3615,14 @@ class CampaignRunService {
                 customerId: customer.id || null,
                 recipientEmail: recipientEmailForLog,
                 status: 'success',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 executionData: buildSendEmailExecutionData(resultPayload),
               });
               return { success: true };
             } catch (error) {
               failedSends += 1;
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const failedPayload = {
                 to: customer.email,
                 status: 'failed',
@@ -3639,7 +3641,7 @@ class CampaignRunService {
                 customerId: customer.id || null,
                 recipientEmail: recipientEmailForLog,
                 status: 'failed',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 errorMessage: error.message,
                 executionData: buildSendEmailExecutionData(failedPayload),
@@ -3805,9 +3807,10 @@ class CampaignRunService {
               `UPDATE campaign_runs
                SET total_recipients = $1,
                    successful_sends = $2,
-                   failed_sends = $3
-               WHERE id = $4`,
-              [totalRecipients, successfulSends, failedSends, runId]
+                   failed_sends = $3,
+                   skipped_sends = $4
+               WHERE id = $5`,
+              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
             );
             if (shouldPauseUntilNextContinuousCycle) {
               break;
@@ -4043,9 +4046,10 @@ class CampaignRunService {
             `UPDATE campaign_runs
              SET total_recipients = $1,
                  successful_sends = $2,
-                 failed_sends = $3
-             WHERE id = $4`,
-            [totalRecipients, successfulSends, failedSends, runId]
+                 failed_sends = $3,
+                 skipped_sends = $4
+             WHERE id = $5`,
+            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
           );
           continue;
         }
@@ -4344,7 +4348,7 @@ class CampaignRunService {
            */
           const buildSendZaloPersonalExecutionData = (payload = {}) => {
             const item = { ...payload };
-            const attempted = successfulSends + failedSends;
+            const attempted = successfulSends + failedSends + skippedSends;
             return {
               message: String(payload?.messageText || payload?.message || ''),
               items: [item],
@@ -4352,6 +4356,7 @@ class CampaignRunService {
               meta: {
                 attempted,
                 sent: successfulSends,
+                skipped: skippedSends,
                 failed: failedSends,
                 totalItems: sendResults.length,
               },
@@ -4534,26 +4539,26 @@ class CampaignRunService {
               if (si != null && dedupedRecipients.length > 0) {
                 if (lastZaloPersonalTemplateStepIndex !== si) {
                   lastZaloPersonalTemplateStepIndex = si;
-                  zaloPersonalStepProgressStart = successfulSends + failedSends;
+                  zaloPersonalStepProgressStart = successfulSends + failedSends + skippedSends;
                 }
               }
             };
             const buildZaloPersonalProgressMessage = () => {
               const si = stepMeta?.stepIndex;
               if (si != null && dedupedRecipients.length > 0) {
-                return `Đã gửi ${successfulSends + failedSends - zaloPersonalStepProgressStart}/${dedupedRecipients.length}`;
+                return `Đã gửi ${successfulSends + failedSends + skippedSends - zaloPersonalStepProgressStart}/${dedupedRecipients.length}`;
               }
-              return `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              return `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
             };
             const getZaloPersonalProgressForLog = () => {
               const si = stepMeta?.stepIndex;
               if (si != null && dedupedRecipients.length > 0) {
                 return {
-                  current: successfulSends + failedSends - zaloPersonalStepProgressStart,
+                  current: successfulSends + failedSends + skippedSends - zaloPersonalStepProgressStart,
                   total: dedupedRecipients.length,
                 };
               }
-              return { current: successfulSends + failedSends, total: totalRecipients };
+              return { current: successfulSends + failedSends + skippedSends, total: totalRecipients };
             };
             let zaloMessageId = null;
             let customerId = extractCustomerIdFromRow(entryRow);
@@ -4571,7 +4576,7 @@ class CampaignRunService {
                 // eslint-disable-next-line no-await-in-loop
                 const unreachable = await zaloCampaignRecipientService.isPhoneUnreachable(userId, recipient);
                 if (unreachable) {
-                  successfulSends += 1;
+                  skippedSends += 1;
                   const progressMessage = buildZaloPersonalProgressMessage();
                   const sentAt = toHoChiMinhIso();
                   const accForLog = workingAccount;
@@ -4871,7 +4876,7 @@ class CampaignRunService {
                 return { success: false, deferred: true };
               }
               if (isZaloSenderBlockedError(error)) {
-                successfulSends += 1;
+                skippedSends += 1;
                 const progressMessage = buildZaloPersonalProgressMessage();
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(workingAccount);
@@ -4930,7 +4935,7 @@ class CampaignRunService {
                   error,
                   runId
                 );
-                successfulSends += 1;
+                skippedSends += 1;
                 const progressMessage = buildZaloPersonalProgressMessage();
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(workingAccount);
@@ -5310,9 +5315,10 @@ class CampaignRunService {
               `UPDATE campaign_runs
                SET total_recipients = $1,
                    successful_sends = $2,
-                   failed_sends = $3
-               WHERE id = $4`,
-              [totalRecipients, successfulSends, failedSends, runId]
+                   failed_sends = $3,
+                   skipped_sends = $4
+               WHERE id = $5`,
+              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
             );
             continue;
           }
@@ -5587,9 +5593,10 @@ class CampaignRunService {
             `UPDATE campaign_runs
              SET total_recipients = $1,
                  successful_sends = $2,
-                 failed_sends = $3
-             WHERE id = $4`,
-            [totalRecipients, successfulSends, failedSends, runId]
+                 failed_sends = $3,
+                 skipped_sends = $4
+             WHERE id = $5`,
+            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
           );
           continue;
         }
@@ -5687,7 +5694,7 @@ class CampaignRunService {
            */
           const buildSendZaloFriendExecutionData = (payload = {}) => {
             const item = { ...payload };
-            const attempted = successfulSends + failedSends;
+            const attempted = successfulSends + failedSends + skippedSends;
             return {
               message: String(payload?.messageText || payload?.message || ''),
               items: [item],
@@ -5695,6 +5702,7 @@ class CampaignRunService {
               meta: {
                 attempted,
                 sent: successfulSends,
+                skipped: skippedSends,
                 failed: failedSends,
                 totalItems: sendResults.length,
               },
@@ -5832,8 +5840,8 @@ class CampaignRunService {
             // eslint-disable-next-line no-await-in-loop
             const unreachableFriend = await zaloCampaignRecipientService.isPhoneUnreachable(userId, phone);
             if (unreachableFriend) {
-              successfulSends += 1;
-              const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+              skippedSends += 1;
+              const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const skipPayload = {
                 channel: 'zalo_friend_request',
                 accountId: account.id,
@@ -5856,7 +5864,7 @@ class CampaignRunService {
                 runId,
                 node,
                 status: 'success',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloFriendExecutionData(skipPayload),
               });
@@ -5916,7 +5924,7 @@ class CampaignRunService {
               });
               successfulSends += 1;
               markZaloOutboundSuccess({ accountId: workingAccount.id, channel: 'zalo_friend_request' });
-              const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const resultPayload = {
                 channel: 'zalo_friend_request',
                 accountId: workingAccount.id,
@@ -5951,7 +5959,7 @@ class CampaignRunService {
                 runId,
                 node,
                 status: 'success',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloFriendExecutionData(resultPayload),
               });
@@ -5976,8 +5984,8 @@ class CampaignRunService {
               }
               if (isZaloUnreachableRecipientError(error)) {
                 await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, phone, error, runId);
-                successfulSends += 1;
-                const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                skippedSends += 1;
+                const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                 const skipPayload = {
                   channel: 'zalo_friend_request',
                   accountId: workingAccount.id,
@@ -6000,7 +6008,7 @@ class CampaignRunService {
                   runId,
                   node,
                   status: 'success',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   executionData: buildSendZaloFriendExecutionData(skipPayload),
                 });
@@ -6027,7 +6035,7 @@ class CampaignRunService {
                     entryRow: entry?.row || null,
                   });
                   successfulSends += 1;
-                  const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                  const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const alreadyFriendPayload = {
                     channel: 'zalo_friend_request',
                     accountId: workingAccount.id,
@@ -6064,7 +6072,7 @@ class CampaignRunService {
                     runId,
                     node,
                     status: 'success',
-                    progressCurrent: successfulSends + failedSends,
+                    progressCurrent: successfulSends + failedSends + skippedSends,
                     progressTotal: totalRecipients,
                     executionData: buildSendZaloFriendExecutionData(alreadyFriendPayload),
                   });
@@ -6085,7 +6093,7 @@ class CampaignRunService {
                   }
                 } catch (customerSyncError) {
                   failedSends += 1;
-                  const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                  const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const failedPayload = {
                     channel: 'zalo_friend_request',
                     accountId: workingAccount.id,
@@ -6111,15 +6119,15 @@ class CampaignRunService {
                     runId,
                     node,
                     status: 'failed',
-                    progressCurrent: successfulSends + failedSends,
+                    progressCurrent: successfulSends + failedSends + skippedSends,
                     progressTotal: totalRecipients,
                     errorMessage: failedPayload.error,
                     executionData: buildSendZaloFriendExecutionData(failedPayload),
                   });
                 }
               } else if (isZaloSenderBlockedError(error)) {
-                successfulSends += 1;
-                const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                skippedSends += 1;
+                const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                 const senderBlockedPayload = {
                   channel: 'zalo_friend_request',
                   accountId: workingAccount.id,
@@ -6143,7 +6151,7 @@ class CampaignRunService {
                   runId,
                   node,
                   status: 'success',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   executionData: buildSendZaloFriendExecutionData(senderBlockedPayload),
                 });
@@ -6178,7 +6186,7 @@ class CampaignRunService {
                       ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
                     );
                     const errText = `${String(error?.message || '').trim()}${abandonNote}`;
-                    const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                    const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                     const failedPayload = {
                       channel: 'zalo_friend_request',
                       accountId: workingAccount.id,
@@ -6218,7 +6226,7 @@ class CampaignRunService {
                       runId,
                       node,
                       status: 'failed',
-                      progressCurrent: successfulSends + failedSends,
+                      progressCurrent: successfulSends + failedSends + skippedSends,
                       progressTotal: totalRecipients,
                       errorMessage: errText,
                       executionData: buildSendZaloFriendExecutionData(failedPayload),
@@ -6241,7 +6249,7 @@ class CampaignRunService {
                       zaloSendFailureCount: nextFail,
                     });
                     failedSends += 1;
-                    const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                    const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                     const failedPayload = {
                       channel: 'zalo_friend_request',
                       accountId: workingAccount.id,
@@ -6267,7 +6275,7 @@ class CampaignRunService {
                       runId,
                       node,
                       status: 'failed',
-                      progressCurrent: successfulSends + failedSends,
+                      progressCurrent: successfulSends + failedSends + skippedSends,
                       progressTotal: totalRecipients,
                       errorMessage: error.message,
                       executionData: buildSendZaloFriendExecutionData(failedPayload),
@@ -6275,7 +6283,7 @@ class CampaignRunService {
                   }
                 } else {
                   failedSends += 1;
-                  const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                  const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const failedPayload = {
                     channel: 'zalo_friend_request',
                     accountId: workingAccount.id,
@@ -6301,7 +6309,7 @@ class CampaignRunService {
                     runId,
                     node,
                     status: 'failed',
-                    progressCurrent: successfulSends + failedSends,
+                    progressCurrent: successfulSends + failedSends + skippedSends,
                     progressTotal: totalRecipients,
                     errorMessage: error.message,
                     executionData: buildSendZaloFriendExecutionData(failedPayload),
@@ -6335,9 +6343,10 @@ class CampaignRunService {
             `UPDATE campaign_runs
              SET total_recipients = $1,
                  successful_sends = $2,
-                 failed_sends = $3
-             WHERE id = $4`,
-            [totalRecipients, successfulSends, failedSends, runId]
+                 failed_sends = $3,
+                 skipped_sends = $4
+             WHERE id = $5`,
+            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
           );
           continue;
         }
@@ -6385,7 +6394,7 @@ class CampaignRunService {
            */
           const buildSendZaloGroupExecutionData = (payload = {}) => {
             const item = { ...payload };
-            const attempted = successfulSends + failedSends;
+            const attempted = successfulSends + failedSends + skippedSends;
             return {
               message: String(payload?.messageText || payload?.message || ''),
               items: [item],
@@ -6393,6 +6402,7 @@ class CampaignRunService {
               meta: {
                 attempted,
                 sent: successfulSends,
+                skipped: skippedSends,
                 failed: failedSends,
                 totalItems: sendResults.length,
               },
@@ -6468,7 +6478,7 @@ class CampaignRunService {
               });
               successfulSends += 1;
               markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_group' });
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
               const zaloName = senderName;
@@ -6513,7 +6523,7 @@ class CampaignRunService {
                 runId,
                 node,
                 status: 'success',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloGroupExecutionData(resultPayload),
               });
@@ -6526,8 +6536,8 @@ class CampaignRunService {
                 ? zaloGroupTemplateStepsForLimit.length
                 : 1;
               if (isZaloGroupUnreachableError(error)) {
-                successfulSends += 1;
-                const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+                skippedSends += 1;
+                const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(account);
                 const skipPayload = {
@@ -6560,7 +6570,7 @@ class CampaignRunService {
                   runId,
                   node,
                   status: 'success',
-                  progressCurrent: successfulSends + failedSends,
+                  progressCurrent: successfulSends + failedSends + skippedSends,
                   progressTotal: totalRecipients,
                   executionData: buildSendZaloGroupExecutionData(skipPayload),
                 });
@@ -6595,7 +6605,7 @@ class CampaignRunService {
                   const abandonNote = (
                     ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
                   );
-                  const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+                  const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const sentAt = toHoChiMinhIso();
                   const senderName = resolveZaloSenderName(account);
                   const zaloName = senderName;
@@ -6648,7 +6658,7 @@ class CampaignRunService {
                     runId,
                     node,
                     status: 'failed',
-                    progressCurrent: successfulSends + failedSends,
+                    progressCurrent: successfulSends + failedSends + skippedSends,
                     progressTotal: totalRecipients,
                     errorMessage: errText,
                     executionData: buildSendZaloGroupExecutionData(failedPayload),
@@ -6673,7 +6683,7 @@ class CampaignRunService {
                 });
               }
               failedSends += 1;
-              const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
               const zaloName = senderName;
@@ -6711,7 +6721,7 @@ class CampaignRunService {
                 runId,
                 node,
                 status: 'failed',
-                progressCurrent: successfulSends + failedSends,
+                progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
                 errorMessage: error.message,
                 executionData: buildSendZaloGroupExecutionData(failedPayload),
@@ -6911,9 +6921,10 @@ class CampaignRunService {
               `UPDATE campaign_runs
                SET total_recipients = $1,
                    successful_sends = $2,
-                   failed_sends = $3
-               WHERE id = $4`,
-              [totalRecipients, successfulSends, failedSends, runId]
+                   failed_sends = $3,
+                   skipped_sends = $4
+               WHERE id = $5`,
+              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
             );
             continue;
           }
@@ -7106,9 +7117,10 @@ class CampaignRunService {
             `UPDATE campaign_runs
              SET total_recipients = $1,
                  successful_sends = $2,
-                 failed_sends = $3
-             WHERE id = $4`,
-            [totalRecipients, successfulSends, failedSends, runId]
+                 failed_sends = $3,
+                 skipped_sends = $4
+             WHERE id = $5`,
+            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
           );
           continue;
         }
@@ -7213,18 +7225,20 @@ class CampaignRunService {
              completed_at = NULL,
              total_recipients = $1,
              successful_sends = $2,
-             failed_sends = $3
-             WHERE id = $4
+             failed_sends = $3,
+             skipped_sends = $4
+             WHERE id = $5
                AND status = 'running'`
           : `UPDATE campaign_runs SET
              status = 'completed',
              completed_at = CURRENT_TIMESTAMP,
              total_recipients = $1,
              successful_sends = $2,
-             failed_sends = $3
-             WHERE id = $4
+             failed_sends = $3,
+             skipped_sends = $4
+             WHERE id = $5
                AND status = 'running'`,
-        [totalRecipients, successfulSends, failedSends, runId]
+        [totalRecipients, successfulSends, failedSends, skippedSends, runId]
       );
 
       await db.query(
@@ -7246,7 +7260,7 @@ class CampaignRunService {
           + ledgerRetryHint
         );
       } else {
-        console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${failedSends} thất bại`);
+        console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${skippedSends} bỏ qua, ${failedSends} thất bại`);
       }
     } catch (error) {
       if (error?.code === 'CAMPAIGN_PAUSED_BY_ZALO_POOL_UNAVAILABLE') {

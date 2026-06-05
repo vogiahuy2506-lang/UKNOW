@@ -235,7 +235,11 @@ const TopRunsTable = ({ runs, t }) => (
                   {run.status}
                 </span>
               </td>
-              <td className="px-5 py-3 text-gray-700">{fmt(run.successfulSends)} / {fmt(run.failedSends)}</td>
+              <td className="px-5 py-3 text-gray-700">
+                <span className="text-emerald-700">{fmt(run.successfulSends)}</span>
+                {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
+                <span> / {fmt(run.failedSends)} lỗi</span>
+              </td>
               <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
               <td className="px-5 py-3 text-gray-700">{fmtPct(run.failureRate)}</td>
             </tr>

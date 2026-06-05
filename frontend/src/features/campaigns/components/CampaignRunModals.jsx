@@ -519,6 +519,7 @@ const CampaignRunModals = ({
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.status')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.recipient')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.success')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-amber-600 uppercase">Bỏ qua</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.failed')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.completed')}</th>
                       </tr>
@@ -547,6 +548,9 @@ const CampaignRunModals = ({
                           </td>
                           <td className="px-4 py-3 text-sm text-green-600">
                             {run.successfulSends || 0}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-amber-600">
+                            {run.skippedSends || 0}
                           </td>
                           <td className="px-4 py-3 text-sm text-red-600">
                             {run.failedSends || 0}

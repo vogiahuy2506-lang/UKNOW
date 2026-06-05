@@ -235,6 +235,7 @@ const TopRunsTable = ({ runs, t }) => (
               </td>
               <td className="px-5 py-3">
                 <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
+                {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
                 <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>
               </td>
               <td className="px-5 py-3 text-gray-700">
