@@ -13,6 +13,8 @@ router.use(authMiddleware);
 // Get all
 router.get('/', campaignController.getAll.bind(campaignController));
 
+router.get('/delay-config', campaignController.getDelayConfig.bind(campaignController));
+
 // Get by id
 router.get('/:id', campaignController.getById.bind(campaignController));
 
@@ -56,8 +58,6 @@ router.post('/:id/duplicate',
   handleValidationErrors,
   campaignController.duplicate.bind(campaignController)
 );
-
-router.get('/delay-config', campaignController.getDelayConfig.bind(campaignController));
 
 // Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
 router.post('/:id/sync-founderai', founderaiController.syncCampaignUknow.bind(founderaiController));

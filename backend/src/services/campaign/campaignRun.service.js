@@ -151,15 +151,15 @@ class CampaignRunService {
     const current = new Promise((resolve) => {
       releaseCurrent = resolve;
     });
-    this.zaloOutboundAccountMutex.set(key, previous.finally(() => current));
+    const combined = previous.finally(() => current);
+    this.zaloOutboundAccountMutex.set(key, combined);
 
     try {
       await previous;
       return await task();
     } finally {
       releaseCurrent();
-      const tail = this.zaloOutboundAccountMutex.get(key);
-      if (tail === previous.finally(() => current)) {
+      if (this.zaloOutboundAccountMutex.get(key) === combined) {
         this.zaloOutboundAccountMutex.delete(key);
       }
     }
