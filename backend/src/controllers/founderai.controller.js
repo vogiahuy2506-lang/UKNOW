@@ -604,35 +604,107 @@ class FounderAIController {
   }
 
   async getCustomers(req, res) {
-    return founderaiReadService.getCustomers(this, req, res);
+    try {
+      const { page = 1, per_page: perPage = 100 } = req.query;
+      const data = await founderaiReadService.getCustomers({ ctx: this, page, perPage });
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get Founder AI customers error:', error.response?.data || error.message);
+      return res.status(500).json({ success: false, message: 'Khong the lay du lieu khach hang tu Founder AI' });
+    }
   }
 
   async getCourses(req, res) {
-    return founderaiReadService.getCourses(this, req, res);
+    try {
+      const { page = 1, per_page: perPage = 100, status = 'any' } = req.query;
+      const data = await founderaiReadService.getCourses({ ctx: this, page, perPage, status });
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get Founder AI courses error:', error.response?.data || error.message);
+      return res.status(500).json({ success: false, message: 'Khong the lay du lieu khoa hoc tu Founder AI' });
+    }
   }
 
   async getOrders(req, res) {
-    return founderaiReadService.getOrders(this, req, res);
+    try {
+      const { page = 1, per_page: perPage = 100, status = 'completed,on-hold' } = req.query;
+      const data = await founderaiReadService.getOrders({ ctx: this, page, perPage, status });
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get Founder AI orders error:', error.response?.data || error.message);
+      return res.status(500).json({ success: false, message: 'Khong the lay du lieu don hang tu Founder AI' });
+    }
   }
 
   async syncCustomers(req, res) {
-    return founderaiSyncService.syncCustomers(this, req, res);
+    try {
+      const userId = req.user.id;
+      const result = await founderaiSyncService.syncCustomers({ ctx: this, userId });
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+      console.error('Sync Founder AI customers error:', error.message);
+      return res.status(500).json({ success: false, message: 'Khong the dong bo khach hang tu Founder AI' });
+    }
   }
 
   async syncCourses(req, res) {
-    return founderaiSyncService.syncCourses(this, req, res);
+    try {
+      const userId = req.user.id;
+      const result = await founderaiSyncService.syncCourses({ ctx: this, userId });
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+      console.error('Sync Founder AI courses error:', error.message);
+      return res.status(500).json({ success: false, message: 'Khong the dong bo khoa hoc tu Founder AI' });
+    }
   }
 
   async syncOrders(req, res) {
-    return founderaiSyncService.syncOrders(this, req, res);
+    try {
+      const userId = req.user.id;
+      const result = await founderaiSyncService.syncOrders({
+        ctx: this,
+        userId,
+        status: req.query?.status,
+        onlyMissing: req.query?.onlyMissing,
+        sources: req.query?.sources,
+        days: req.query?.days,
+        startDate: req.query?.startDate,
+        endDate: req.query?.endDate,
+      });
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+      console.error('Sync Founder AI orders error:', error.message);
+      return res.status(500).json({ success: false, message: 'Khong the dong bo don hang tu Founder AI' });
+    }
   }
 
   async getOrder(req, res) {
-    return founderaiReadService.getOrder(this, req, res);
+    try {
+      const { orderId } = req.params;
+      const data = await founderaiReadService.getOrder({ ctx: this, orderId });
+      return res.json({ success: true, data });
+    } catch (error) {
+      if (error.statusCode === 400) return res.status(400).json({ success: false, message: error.message });
+      if (error.response?.status === 404) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+      console.error('Get Founder AI order error:', error.response?.data || error.message);
+      return res.status(500).json({ success: false, message: 'Không thể lấy thông tin đơn hàng từ Founder AI' });
+    }
   }
 
   async syncOrder(req, res) {
-    return founderaiSyncService.syncOrder(this, req, res);
+    try {
+      const userId = req.user.id;
+      const { orderId } = req.params;
+      const result = await founderaiSyncService.syncOrder({ ctx: this, userId, orderId });
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+      console.error('Sync Founder AI single order error:', error.message);
+      return res.status(500).json({ success: false, message: 'Không thể đồng bộ đơn hàng từ Founder AI' });
+    }
   }
 
   /**
@@ -648,7 +720,16 @@ class FounderAIController {
   }
 
   async syncCampaignUknow(req, res) {
-    return founderaiSyncService.syncCampaignUknow(this, req, res);
+    try {
+      const userId = req.user.id;
+      const campaignId = req.params.id;
+      const result = await founderaiSyncService.syncCampaignUknow({ ctx: this, userId, campaignId });
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+      console.error('Lỗi đồng bộ Founder AI chiến dịch:', error.message);
+      return res.status(500).json({ success: false, message: 'Lỗi khi đồng bộ từ Founder AI' });
+    }
   }
 }
 

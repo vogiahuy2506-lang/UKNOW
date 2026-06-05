@@ -174,12 +174,12 @@ class CustomerZaloTrackingService {
    * Build redirect URL from tracking query. When in-app browser decodes early,
    * UTM params can leak out of `url` into top-level query and need to be merged back.
    *
-   * @param {import('express').Request} req
+   * @param {object} queryParams - req.query object
    * @param {string} defaultRedirect
    * @returns {string}
    */
-  resolveRedirectUrl(req, defaultRedirect) {
-    const rawUrl = String(req.query.url || '').trim();
+  resolveRedirectUrl(queryParams, defaultRedirect) {
+    const rawUrl = String(queryParams.url || '').trim();
     if (!rawUrl) return defaultRedirect;
 
     try {
@@ -190,7 +190,7 @@ class CustomerZaloTrackingService {
       }
 
       // Merge leaked query params (except `url`) back into destination URL.
-      for (const [key, value] of Object.entries(req.query || {})) {
+      for (const [key, value] of Object.entries(queryParams || {})) {
         if (key === 'url') continue;
         if (value === undefined || value === null) continue;
         const values = Array.isArray(value) ? value : [value];
@@ -216,16 +216,11 @@ class CustomerZaloTrackingService {
    * @param {import('express').Response} res
    * @returns {Promise<import('express').Response>}
    */
-  async trackZaloClick(req, res) {
+  async trackZaloClick({ token, redirectUrl, linkKey }) {
     const client = await db.getClient();
 
-    const defaultRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const token = String(req.params.token || '').trim();
-    const redirectUrl = this.resolveRedirectUrl(req, defaultRedirect);
-    const linkKey = String(req.query.lk || '').trim().slice(0, 120) || null;
-
     try {
-      if (!token) return res.redirect(302, redirectUrl);
+      if (!token) return { redirectUrl };
 
       await client.query('BEGIN');
 
@@ -377,7 +372,7 @@ class CustomerZaloTrackingService {
       client.release();
     }
 
-    return res.redirect(302, redirectUrl);
+    return { redirectUrl };
   }
 
 }

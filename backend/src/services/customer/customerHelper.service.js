@@ -2,26 +2,25 @@ import customerReadRepository from '../../repositories/customer/customerRead.rep
 
 class CustomerHelperService {
   /**
-   * Send transparent tracking pixel response.
+   * Return tracking pixel buffer and headers without touching res.
    *
-   * @param {import('express').Response} res
-   * @returns {import('express').Response}
+   * @returns {{ buffer: Buffer, headers: object }}
    */
-  sendTrackingPixel(res) {
-    const pixelBuffer = Buffer.from(
+  getTrackingPixelResponse() {
+    const buffer = Buffer.from(
       'R0lGODlhAQABAPAAAAAAAAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
       'base64'
     );
-
-    res.set({
-      'Content-Type': 'image/gif',
-      'Content-Length': pixelBuffer.length,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      Pragma: 'no-cache',
-      Expires: '0',
-    });
-
-    return res.status(200).send(pixelBuffer);
+    return {
+      buffer,
+      headers: {
+        'Content-Type': 'image/gif',
+        'Content-Length': buffer.length,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    };
   }
 
   /**

@@ -11,7 +11,9 @@ import customerMutationService from '../services/customer/customerMutation.servi
 
 class CustomerController {
   sendTrackingPixel(res) {
-    return customerHelperService.sendTrackingPixel(res);
+    const { buffer, headers } = customerHelperService.getTrackingPixelResponse();
+    res.set(headers);
+    return res.status(200).send(buffer);
   }
 
   mapJourneyEvent(row) {
@@ -317,7 +319,15 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async trackEmailOpen(req, res) {
-    return customerEmailTrackingService.trackEmailOpen(this, req, res);
+    const token = String(req.params.token || '').trim();
+    const clientIp =
+      String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+      req.socket?.remoteAddress ||
+      null;
+    const userAgent = req.get('user-agent') || null;
+    const referer = req.get('referer') || null;
+    await customerEmailTrackingService.trackEmailOpen({ token, clientIp, userAgent, referer });
+    return this.sendTrackingPixel(res);
   }
   // Tracking click link trong email
   /**
@@ -327,7 +337,12 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async trackEmailClick(req, res) {
-    return customerEmailTrackingService.trackEmailClick(req, res);
+    const token = String(req.params.token || '').trim();
+    const rawUrl = String(req.query.url || '').trim();
+    const label = String(req.query.label || '').trim().slice(0, 200) || null;
+    const linkKey = String(req.query.lk || '').trim().slice(0, 120) || null;
+    const { redirectUrl } = await customerEmailTrackingService.trackEmailClick({ token, rawUrl, label, linkKey });
+    return res.redirect(302, redirectUrl);
   }
 
   /**
@@ -337,7 +352,11 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async trackEmailUnsubscribe(req, res) {
-    return customerEmailTrackingService.trackEmailUnsubscribe(req, res);
+    const token = String(req.params.token || '').trim();
+    const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
+      || 'https://campaign.digiso.vn/privacy-policy';
+    const { statusCode, html } = await customerEmailTrackingService.trackEmailUnsubscribe({ token, privacyPolicyUrl });
+    return res.status(statusCode).send(html);
   }
 
   /**
@@ -348,7 +367,12 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async trackZaloClick(req, res) {
-    return customerZaloTrackingService.trackZaloClick(req, res);
+    const defaultRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const token = String(req.params.token || '').trim();
+    const linkKey = String(req.query.lk || '').trim().slice(0, 120) || null;
+    const redirectUrl = customerZaloTrackingService.resolveRedirectUrl(req.query, defaultRedirect);
+    const result = await customerZaloTrackingService.trackZaloClick({ token, redirectUrl, linkKey });
+    return res.redirect(302, result.redirectUrl);
   }
 
   /**

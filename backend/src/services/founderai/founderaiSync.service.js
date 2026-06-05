@@ -5,11 +5,10 @@ class UknowSyncService {
   /**
    * Sync customers from Founder AI API into local DB.
    */
-  async syncCustomers(ctx, req, res) {
+  async syncCustomers({ ctx, userId }) {
     const client = await db.getClient();
 
     try {
-      const userId = req.user.id;
       let page = 1;
       let hasMore = true;
       let inserted = 0;
@@ -48,17 +47,15 @@ class UknowSyncService {
         hasMore = page <= totalPages;
       }
 
-      res.json({
-        success: true,
+      return {
         message: `Dong bo khach hang thanh cong. Moi: ${inserted}, cap nhat: ${updated}`,
         data: { inserted, updated, processed },
-      });
+      };
     } catch (error) {
       console.error('Sync Founder AI customers error:', error.response?.data || error.message);
-      res.status(500).json({
-        success: false,
-        message: 'Khong the dong bo khach hang tu Founder AI',
-      });
+      const err = new Error('Khong the dong bo khach hang tu Founder AI');
+      err.statusCode = 500;
+      throw err;
     } finally {
       client.release();
     }
@@ -67,11 +64,10 @@ class UknowSyncService {
   /**
    * Sync courses from Founder AI API into local DB.
    */
-  async syncCourses(ctx, req, res) {
+  async syncCourses({ ctx, userId }) {
     const client = await db.getClient();
 
     try {
-      const userId = req.user.id;
       let page = 1;
       let hasMore = true;
       let inserted = 0;
@@ -99,17 +95,15 @@ class UknowSyncService {
         hasMore = page <= totalPages;
       }
 
-      res.json({
-        success: true,
+      return {
         message: `Dong bo khoa hoc thanh cong. Moi: ${inserted}, cap nhat: ${updated}`,
         data: { inserted, updated, processed },
-      });
+      };
     } catch (error) {
       console.error('Sync Founder AI courses error:', error.response?.data || error.message);
-      res.status(500).json({
-        success: false,
-        message: 'Khong the dong bo khoa hoc tu Founder AI',
-      });
+      const err = new Error('Khong the dong bo khoa hoc tu Founder AI');
+      err.statusCode = 500;
+      throw err;
     } finally {
       client.release();
     }
@@ -118,23 +112,22 @@ class UknowSyncService {
   /**
    * Sync orders in bulk from Founder AI API.
    */
-  async syncOrders(ctx, req, res) {
+  async syncOrders({ ctx, userId, status, onlyMissing, sources, days, startDate, endDate }) {
     const client = await db.getClient();
 
     try {
-      const userId = req.user.id;
       const hasOrderStatusColumn = await ctx.hasPurchaseOrderStatusColumn();
-      const requestedStatus = ctx.toNullableText(req.query?.status) || 'completed,on-hold';
+      const requestedStatus = ctx.toNullableText(status) || 'completed,on-hold';
       const normalizedStatus = requestedStatus
         .split(',')
         .map((item) => item.trim().toLowerCase().replace('onhold', 'on-hold'))
         .filter(Boolean)
         .join(',');
-      const onlyMissing = ctx.toBoolean(req.query?.onlyMissing);
-      const requestedSources = ctx.toNullableText(req.query?.sources) || '';
-      const requestedDays = Number.parseInt(req.query?.days, 10);
-      const startDateInput = ctx.toNullableText(req.query?.startDate);
-      const endDateInput = ctx.toNullableText(req.query?.endDate);
+      const onlyMissingBool = ctx.toBoolean(onlyMissing);
+      const requestedSources = ctx.toNullableText(sources) || '';
+      const requestedDays = Number.parseInt(days, 10);
+      const startDateInput = ctx.toNullableText(startDate);
+      const endDateInput = ctx.toNullableText(endDate);
 
       /**
        * Chuẩn hóa chuỗi nguồn UTM về 3 nhóm chính để lọc:
@@ -616,7 +609,7 @@ class UknowSyncService {
             [customerResult.customerId, String(order.id)]
           );
 
-          if (existingByOrderId.rows.length > 0 && onlyMissing) {
+          if (existingByOrderId.rows.length > 0 && onlyMissingBool) {
             const hasEnrichmentData = Boolean(
               orderLevelAttribution.campaignId
               || orderLevelAttribution.runId
@@ -751,7 +744,7 @@ class UknowSyncService {
                 touchedCampaignIds.add(existingPurchase.rows[0].id_campaign);
               }
 
-              if (onlyMissing) {
+              if (onlyMissingBool) {
                 skippedExistingPurchases += 1;
               } else {
                 if (hasOrderStatusColumn) {
@@ -853,8 +846,7 @@ class UknowSyncService {
         await ctx.recalculateCampaignConversion(client, campaignId);
       }
 
-      res.json({
-        success: true,
+      return {
         message: `Đồng bộ đơn hàng thành công. Đơn hợp lệ: ${processedOrders}, chi tiết mua: ${processedLineItems}`,
         data: {
           scannedOrders,
@@ -876,7 +868,7 @@ class UknowSyncService {
           appliedFilter: {
             status: normalizedStatus || 'completed,on-hold',
             sources: Array.from(allowedSources),
-            onlyMissing,
+            onlyMissing: onlyMissingBool,
             startDate: startBoundary ? startBoundary.toISOString() : null,
             endDate: endBoundary ? endBoundary.toISOString() : null,
             days:
@@ -885,13 +877,12 @@ class UknowSyncService {
                 : null,
           },
         },
-      });
+      };
     } catch (error) {
       console.error('Sync Founder AI orders error:', error.response?.data || error.message);
-      res.status(500).json({
-        success: false,
-        message: 'Khong the dong bo don hang tu Founder AI',
-      });
+      const err = new Error('Khong the dong bo don hang tu Founder AI');
+      err.statusCode = 500;
+      throw err;
     } finally {
       client.release();
     }
@@ -900,14 +891,14 @@ class UknowSyncService {
   /**
    * Sync one order from Founder AI API.
    */
-  async syncOrder(ctx, req, res) {
+  async syncOrder({ ctx, userId, orderId }) {
     const client = await db.getClient();
 
     try {
-      const userId = req.user.id;
-      const { orderId } = req.params;
       if (!orderId || Number.isNaN(parseInt(orderId, 10))) {
-        return res.status(400).json({ success: false, message: 'Mã đơn hàng không hợp lệ' });
+        const err = new Error('Mã đơn hàng không hợp lệ');
+        err.statusCode = 400;
+        throw err;
       }
 
       const hasOrderStatusColumn = await ctx.hasPurchaseOrderStatusColumn();
@@ -923,10 +914,9 @@ class UknowSyncService {
       const isInterestedOrder = orderStatus === 'on-hold';
 
       if (!isPurchasedOrder && !isInterestedOrder) {
-        return res.status(422).json({
-          success: false,
-          message: `Trạng thái đơn hàng '${orderStatus}' không được hỗ trợ (chỉ xử lý: on-hold, completed)`,
-        });
+        const err = new Error(`Trạng thái đơn hàng '${orderStatus}' không được hỗ trợ (chỉ xử lý: on-hold, completed)`);
+        err.statusCode = 422;
+        throw err;
       }
 
       // Quy ước mới: đơn hoàn thành lưu product_type = "complete".
@@ -943,7 +933,9 @@ class UknowSyncService {
       });
 
       if (!customerResult.customerId) {
-        return res.status(422).json({ success: false, message: 'Không thể xác định khách hàng từ đơn hàng này' });
+        const err = new Error('Không thể xác định khách hàng từ đơn hàng này');
+        err.statusCode = 422;
+        throw err;
       }
 
       const touchedCampaignIds = new Set();
@@ -1116,8 +1108,7 @@ class UknowSyncService {
         await ctx.recalculateCampaignConversion(client, campaignIdItem);
       }
 
-      res.json({
-        success: true,
+      return {
         message: `Đồng bộ đơn hàng #${order.id} thành công — ${statusLabel}`,
         data: {
           orderId: order.id,
@@ -1131,14 +1122,19 @@ class UknowSyncService {
           affectedCampaigns: touchedCampaignIds.size,
           lineItems: lineItemsSummary,
         },
-      });
+      };
     } catch (error) {
+      if (error.statusCode) throw error;
       const status = error.response?.status;
       if (status === 404) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+        const err = new Error('Không tìm thấy đơn hàng');
+        err.statusCode = 404;
+        throw err;
       }
       console.error('Sync Founder AI single order error:', error.response?.data || error.message);
-      res.status(500).json({ success: false, message: 'Không thể đồng bộ đơn hàng từ Founder AI' });
+      const err = new Error('Không thể đồng bộ đơn hàng từ Founder AI');
+      err.statusCode = 500;
+      throw err;
     } finally {
       client.release();
     }
@@ -1147,15 +1143,16 @@ class UknowSyncService {
   /**
    * Sync Founder AI status to campaign_customers for one campaign.
    */
-  async syncCampaignUknow(ctx, req, res) {
+  async syncCampaignUknow({ ctx, userId, campaignId: rawCampaignId }) {
     const client = await db.getClient();
 
     try {
-      const userId = req.user.id;
-      const campaignId = parseInt(req.params.id, 10);
+      const campaignId = parseInt(rawCampaignId, 10);
 
       if (!Number.isFinite(campaignId)) {
-        return res.status(400).json({ success: false, message: 'Campaign ID không hợp lệ' });
+        const err = new Error('Campaign ID không hợp lệ');
+        err.statusCode = 400;
+        throw err;
       }
 
       const campaignCheck = await client.query(
@@ -1163,7 +1160,9 @@ class UknowSyncService {
         [campaignId, userId]
       );
       if (campaignCheck.rows.length === 0) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy chiến dịch' });
+        const err = new Error('Không tìm thấy chiến dịch');
+        err.statusCode = 404;
+        throw err;
       }
 
       await ctx.ensureUknowStatusColumn();
@@ -1251,8 +1250,7 @@ class UknowSyncService {
         }
       }
 
-      res.json({
-        success: true,
+      return {
         message: `Đồng bộ hoàn tất. Đã cập nhật: ${synced}, không thay đổi: ${unchanged}${skipped ? `, bỏ qua: ${skipped}` : ''}`,
         data: {
           synced,
@@ -1260,10 +1258,13 @@ class UknowSyncService {
           skipped,
           total: campaignCustomers.length,
         },
-      });
+      };
     } catch (error) {
+      if (error.statusCode) throw error;
       console.error('Lỗi đồng bộ Founder AI chiến dịch:', error.response?.data || error.message);
-      res.status(500).json({ success: false, message: 'Lỗi khi đồng bộ từ Founder AI' });
+      const err = new Error('Lỗi khi đồng bộ từ Founder AI');
+      err.statusCode = 500;
+      throw err;
     } finally {
       client.release();
     }

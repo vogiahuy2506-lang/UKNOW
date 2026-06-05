@@ -1,21 +1,11 @@
 import db from '../../config/database.js';
 
 class CustomerEmailTrackingService {
-  async trackEmailOpen(ctx, req, res) {
+  async trackEmailOpen({ token, clientIp, userAgent, referer }) {
+    if (!token) return;
     const client = await db.getClient();
 
     try {
-      const token = String(req.params.token || '').trim();
-      if (!token) return ctx.sendTrackingPixel(res);
-
-      const clientIp =
-        String(req.headers['x-forwarded-for'] || '')
-          .split(',')[0]
-          .trim() ||
-        req.socket?.remoteAddress ||
-        null;
-      const userAgent = req.get('user-agent') || null;
-      const referer = req.get('referer') || null;
 
       await client.query('BEGIN');
 
@@ -126,8 +116,6 @@ class CustomerEmailTrackingService {
     } finally {
       client.release();
     }
-
-    return ctx.sendTrackingPixel(res);
   }
 
   /**
@@ -143,10 +131,7 @@ class CustomerEmailTrackingService {
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
-  async trackEmailUnsubscribe(req, res) {
-    const token = String(req.params.token || '').trim();
-    const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
-      || 'https://campaign.digiso.vn/privacy-policy';
+  async trackEmailUnsubscribe({ token, privacyPolicyUrl }) {
 
     /**
      * Render trang phản hồi hủy đăng ký song ngữ Việt/Anh.
@@ -196,12 +181,12 @@ class CustomerEmailTrackingService {
 </html>`;
 
     if (!token) {
-      return res.status(400).send(confirmHtml('Liên kết không hợp lệ', {
+      return { statusCode: 400, html: confirmHtml('Liên kết không hợp lệ', {
         headingVi: 'Liên kết không hợp lệ',
         textVi: 'Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.',
         headingEn: 'Invalid link',
         textEn: 'The unsubscribe link is invalid or has expired.',
-      }));
+      }) };
     }
 
     // Chỉ checkout client sau khi token hợp lệ — tránh rò rỉ kết nối khi return sớm ở trên.
@@ -219,12 +204,12 @@ class CustomerEmailTrackingService {
 
       if (messageResult.rows.length === 0) {
         await client.query('ROLLBACK');
-        return res.send(confirmHtml('Đã hủy đăng ký', {
+        return { statusCode: 200, html: confirmHtml('Đã hủy đăng ký', {
           headingVi: 'Đã hủy đăng ký nhận email',
           textVi: 'Bạn sẽ không nhận được email từ chúng tôi nữa.',
           headingEn: 'Unsubscribed successfully',
           textEn: 'You will no longer receive emails from us.',
-        }));
+        }) };
       }
 
       const message = messageResult.rows[0];
@@ -285,20 +270,18 @@ class CustomerEmailTrackingService {
       client.release();
     }
 
-    return res.send(confirmHtml('Đã hủy đăng ký', {
+    return { statusCode: 200, html: confirmHtml('Đã hủy đăng ký', {
       headingVi: 'Đã hủy đăng ký nhận email',
       textVi: 'Yêu cầu của bạn đã được ghi nhận. Bạn sẽ không nhận được email từ chúng tôi nữa.',
       headingEn: 'Unsubscribed successfully',
       textEn: 'Your request has been recorded. You will no longer receive emails from us.',
-    }));
+    }) };
   }
 
-  async trackEmailClick(req, res) {
+  async trackEmailClick({ token, rawUrl, label, linkKey }) {
     const client = await db.getClient();
 
     const defaultRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const token = String(req.params.token || '').trim();
-    const rawUrl = String(req.query.url || '').trim();
     let redirectUrl = defaultRedirect;
 
     if (rawUrl) {
@@ -313,11 +296,8 @@ class CustomerEmailTrackingService {
       }
     }
 
-    const label = String(req.query.label || '').trim().slice(0, 200) || null;
-    const linkKey = String(req.query.lk || '').trim().slice(0, 120) || null;
-
     try {
-      if (!token) return res.redirect(302, redirectUrl);
+      if (!token) return { redirectUrl };
 
       await client.query('BEGIN');
 
@@ -483,7 +463,7 @@ class CustomerEmailTrackingService {
       client.release();
     }
 
-    return res.redirect(302, redirectUrl);
+    return { redirectUrl };
   }
 }
 
