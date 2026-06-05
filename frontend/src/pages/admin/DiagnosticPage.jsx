@@ -130,7 +130,7 @@ export default function DiagnosticPage() {
   useEffect(() => {
     zaloSettingsApiService.listAccounts()
       .then((res) => {
-        const accounts = res.data?.data ?? res.data?.accounts ?? [];
+        const accounts = res.data?.data?.items ?? [];
         setZaloAccounts(accounts);
         if (accounts.length > 0) setAccountId(String(accounts[0].id));
       })
