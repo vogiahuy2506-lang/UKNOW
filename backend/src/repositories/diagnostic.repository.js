@@ -74,6 +74,48 @@ class DiagnosticRepository {
     );
   }
 
+  async listZaloCampaigns(limit = 100) {
+    const { rows } = await db.query(
+      `SELECT c.id, c.campaign_name, c.campaign_type, c.status,
+              u.full_name AS owner_name, u.email AS owner_email
+       FROM campaigns c
+       JOIN users u ON u.id = c.id_user
+       WHERE c.campaign_type = 'zalo'
+       ORDER BY c.id DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  }
+
+  async getCampaignPrefill(campaignId) {
+    const { rows: nodeRows } = await db.query(
+      `SELECT config->>'zaloAccountId' AS zalo_account_id,
+              COALESCE(NULLIF(config->>'zaloMessage', ''), NULLIF(config->>'message', '')) AS message_text
+       FROM campaign_nodes
+       WHERE id_campaign = $1
+         AND node_subtype = 'send_zalo_personal'
+       LIMIT 1`,
+      [campaignId]
+    );
+
+    const { rows: phoneRows } = await db.query(
+      `SELECT DISTINCT COALESCE(NULLIF(c.zalo_phone, ''), NULLIF(c.phone, '')) AS phone
+       FROM campaign_customers cc
+       JOIN customers c ON c.id = cc.id_customer
+       WHERE cc.id_campaign = $1
+         AND COALESCE(NULLIF(c.zalo_phone, ''), NULLIF(c.phone, '')) IS NOT NULL
+       ORDER BY phone
+       LIMIT 20`,
+      [campaignId]
+    );
+
+    return {
+      node: nodeRows[0] || null,
+      phones: phoneRows.map((r) => r.phone),
+    };
+  }
+
   async listRecentRuns(limit = 10) {
     const { rows } = await db.query(
       `SELECT dr.id, dr.channel, dr.status, dr.total_count, dr.sent_count, dr.failed_count,

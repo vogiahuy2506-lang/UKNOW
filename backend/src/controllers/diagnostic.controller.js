@@ -74,6 +74,37 @@ class DiagnosticController {
   async getSupportedChannels(req, res) {
     return res.json({ success: true, data: diagnosticRunnerService.getSupportedChannels() });
   }
+
+  async listCampaigns(req, res) {
+    try {
+      const campaigns = await diagnosticRepository.listZaloCampaigns(100);
+      return res.json({ success: true, data: campaigns });
+    } catch (err) {
+      console.error('[Diagnostic] listCampaigns error:', err.message);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  async getCampaignPrefill(req, res) {
+    try {
+      const campaignId = Number(req.params.id);
+      if (!Number.isFinite(campaignId)) {
+        return res.status(400).json({ success: false, message: 'campaignId không hợp lệ' });
+      }
+      const { node, phones } = await diagnosticRepository.getCampaignPrefill(campaignId);
+      return res.json({
+        success: true,
+        data: {
+          accountId: node?.zalo_account_id ? Number(node.zalo_account_id) : null,
+          messageText: node?.message_text || '',
+          phones,
+        },
+      });
+    } catch (err) {
+      console.error('[Diagnostic] getCampaignPrefill error:', err.message);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
 }
 
 export default new DiagnosticController();

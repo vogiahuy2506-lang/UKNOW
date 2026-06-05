@@ -11,5 +11,7 @@ router.get('/channels', ctrl.getSupportedChannels.bind(ctrl));
 router.post('/runs', ctrl.createRun.bind(ctrl));
 router.get('/runs', ctrl.listRuns.bind(ctrl));
 router.get('/runs/:id', ctrl.getRun.bind(ctrl));
+router.get('/campaigns', ctrl.listCampaigns.bind(ctrl));
+router.get('/campaigns/:id/prefill', ctrl.getCampaignPrefill.bind(ctrl));
 
 export default router;

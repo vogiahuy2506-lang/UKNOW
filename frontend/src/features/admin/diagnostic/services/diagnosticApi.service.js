@@ -15,6 +15,12 @@ const diagnosticApiService = {
   listRuns() {
     return api.get('/admin/diagnostic/runs');
   },
+  listCampaigns() {
+    return api.get('/admin/diagnostic/campaigns');
+  },
+  getCampaignPrefill(campaignId) {
+    return api.get(`/admin/diagnostic/campaigns/${campaignId}/prefill`);
+  },
 };
 
 export default diagnosticApiService;

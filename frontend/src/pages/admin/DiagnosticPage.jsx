@@ -7,6 +7,7 @@ import {
   HiOutlineLightningBolt,
   HiOutlineRefresh,
   HiOutlineX,
+  HiOutlineDownload,
 } from 'react-icons/hi';
 import diagnosticApiService from '../../features/admin/diagnostic/services/diagnosticApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
@@ -112,6 +113,10 @@ export default function DiagnosticPage() {
   const [submitting, setSubmitting]         = useState(false);
   const [formError, setFormError]           = useState('');
 
+  const [campaigns, setCampaigns]           = useState([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState('');
+  const [prefillLoading, setPrefillLoading] = useState(false);
+
   const [recentRuns, setRecentRuns]         = useState([]);
   const [activeRunId, setActiveRunId]       = useState(null);
   const [activeRun, setActiveRun]           = useState(null);
@@ -130,6 +135,10 @@ export default function DiagnosticPage() {
 
     diagnosticApiService.listRuns()
       .then((res) => setRecentRuns(res.data?.data ?? []))
+      .catch(() => {});
+
+    diagnosticApiService.listCampaigns()
+      .then((res) => setCampaigns(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -187,6 +196,22 @@ export default function DiagnosticPage() {
     }
   };
 
+  const handlePrefill = async () => {
+    if (!selectedCampaignId) return;
+    setPrefillLoading(true);
+    try {
+      const res = await diagnosticApiService.getCampaignPrefill(selectedCampaignId);
+      const { accountId: prefillAccountId, messageText: prefillMessage, phones } = res.data?.data ?? {};
+      if (prefillAccountId) setAccountId(String(prefillAccountId));
+      if (prefillMessage) setMessageText(prefillMessage);
+      if (phones?.length > 0) setRecipientsRaw(phones.join('\n'));
+    } catch {
+      // silently ignore
+    } finally {
+      setPrefillLoading(false);
+    }
+  };
+
   const handleSelectRun = (runId) => {
     clearInterval(pollRef.current);
     pollRef.current = null;
@@ -211,6 +236,37 @@ export default function DiagnosticPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="lg:col-span-2 card p-5 space-y-4">
           <h2 className="font-semibold text-gray-700">Cấu hình test</h2>
+
+          {/* Load from campaign */}
+          {campaigns.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-gray-600">Load từ chiến dịch có sẵn</p>
+              <div className="flex gap-2">
+                <select
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">— Chọn chiến dịch —</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.campaign_name} ({c.owner_name || c.owner_email})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handlePrefill}
+                  disabled={!selectedCampaignId || prefillLoading}
+                  className="btn btn-secondary shrink-0"
+                >
+                  {prefillLoading
+                    ? <HiOutlineRefresh className="w-4 h-4 animate-spin" />
+                    : <HiOutlineDownload className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Kênh gửi</label>
