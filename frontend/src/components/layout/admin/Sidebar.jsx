@@ -85,6 +85,11 @@ const superAdminMenuItems = (t) => [
     path: '/admin/audit-logs',
     icon: HiOutlineClipboard,
   },
+  {
+    name: t('nav.diagnosticTool'),
+    path: '/admin/diagnostic',
+    icon: HiOutlinePhone,
+  },
 ];
 
 // Menu dành cho user_admin và employee — vận hành marketing

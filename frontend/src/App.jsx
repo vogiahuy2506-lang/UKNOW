@@ -55,6 +55,7 @@ import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
+import DiagnosticPage from './pages/admin/DiagnosticPage';
 import AuditLogsPage from './pages/settings/AuditLogsPage';
 import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
@@ -304,6 +305,7 @@ function App() {
             <Route path="system" element={<AdminSystemPage />} />
             <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+            <Route path="diagnostic" element={<DiagnosticPage />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}

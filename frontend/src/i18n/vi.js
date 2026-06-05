@@ -198,6 +198,7 @@ export default {
     serverMonitoring: 'Giám sát máy chủ',
     deliveryMonitoring: 'Giám sát gửi tin',
     systemAuditLogs: 'Nhật ký hệ thống',
+    diagnosticTool: 'Kiểm tra hiệu năng',
     auditLogs: 'Nhật ký hoạt động',
     website: 'Trang web',
     siteHome: 'Trang chủ',

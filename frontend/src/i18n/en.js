@@ -198,6 +198,7 @@ export default {
     serverMonitoring: 'Server Monitoring',
     deliveryMonitoring: 'Delivery Monitoring',
     systemAuditLogs: 'System Audit Logs',
+    diagnosticTool: 'Send Diagnostics',
     auditLogs: 'Activity Logs',
     website: 'Website',
     siteHome: 'Home',
