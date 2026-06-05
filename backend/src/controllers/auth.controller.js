@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
+import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
 import {
   findActiveUserByEmail,
