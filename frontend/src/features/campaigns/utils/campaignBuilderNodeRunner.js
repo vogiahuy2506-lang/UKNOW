@@ -2131,7 +2131,6 @@ export const createCampaignNodeRunner = (deps) => {
         const entry = recipientEntries[index];
         const renderedMessage = renderFriendTemplateMessage(entry);
         if (index > 0) {
-          // eslint-disable-next-line no-await-in-loop
           await waitRandomTemplateStepDelay(`zalo_friend_request_${index + 1}`, signal, 'zalo');
         }
          

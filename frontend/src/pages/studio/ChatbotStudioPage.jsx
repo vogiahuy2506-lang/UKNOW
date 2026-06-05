@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  HiOutlineMenuAlt2,
   HiOutlineViewBoards,
   HiOutlinePaperAirplane,
   HiOutlineTrash,

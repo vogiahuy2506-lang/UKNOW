@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   HiOutlineChip, HiOutlineRefresh, HiOutlineExternalLink,
   HiOutlineX, HiOutlineCheckCircle, HiOutlineXCircle,
   HiOutlineLink, HiOutlineCode, HiOutlineChevronDown, HiOutlineChevronRight,
-  HiOutlinePlay, HiOutlineSearch, HiOutlineLogin, HiOutlineUserGroup,
+  HiOutlinePlay, HiOutlineLogin, HiOutlineUserGroup,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../services/chatbotApi';
@@ -185,7 +185,7 @@ function TestConnection({ channel, formData, onTest }) {
 
 // ── Guide Component ────────────────────────────────────────────
 
-function GuideSection({ channel, connectedChannel, t }) {
+function GuideSection({ channel, connectedChannel }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!channel.guide) return null;
@@ -319,7 +319,7 @@ async function initZaloOAuth() {
 
 // ── Page Select Modal ─────────────────────────────────────────
 
-function FacebookPageSelectModal({ pages, token, onSelect, onClose }) {
+function FacebookPageSelectModal({ pages, onSelect, onClose }) {
   const [selectedPage, setSelectedPage] = useState(null);
   const [connecting, setConnecting] = useState(false);
 
@@ -423,7 +423,6 @@ function ChannelConnectionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showConnect, setShowConnect] = useState(null);
   const [forms, setForms] = useState({});
   const [connecting, setConnecting] = useState(false);
   const [activeTab, setActiveTab] = useState('zalo_oa');
@@ -433,9 +432,17 @@ function ChannelConnectionsPage() {
   // Facebook page selection
   const [showPageSelect, setShowPageSelect] = useState(false);
   const [fbPages, setFbPages] = useState([]);
-  const [fbToken, setFbToken] = useState('');
 
   const channelDefs = getChannels(t);
+
+  const fetchChannels = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await chatbotApi.listChannels();
+      setChannels(res.data || []);
+    } catch { toast.error(t('errors.loadFailed')); }
+    finally { setLoading(false); }
+  }, [t]);
 
   // Handle OAuth callback params
   useEffect(() => {
@@ -466,7 +473,6 @@ function ChannelConnectionsPage() {
       try {
         const pages = JSON.parse(decodeURIComponent(facebookPages));
         setFbPages(pages);
-        setFbToken(token);
         setShowPageSelect(true);
         setActiveTab('facebook');
       } catch (e) {
@@ -480,16 +486,7 @@ function ChannelConnectionsPage() {
     }
 
     fetchChannels();
-  }, []);
-
-  const fetchChannels = async () => {
-    setLoading(true);
-    try {
-      const res = await chatbotApi.listChannels();
-      setChannels(res.data || []);
-    } catch { toast.error(t('errors.loadFailed')); }
-    finally { setLoading(false); }
-  };
+  }, [searchParams, setSearchParams, fetchChannels]);
 
   const getChannel = (id) => channels.find(c => c.channel === id);
 
@@ -535,7 +532,6 @@ function ChannelConnectionsPage() {
 
       if (res.success) {
         await fetchChannels();
-        setShowConnect(null);
         setForms(prev => ({ ...prev, [channelId]: {} }));
         setConnectionTest(null);
         toast.success(`${channelDef.name} đã được kết nối thành công!`);
@@ -565,7 +561,6 @@ function ChannelConnectionsPage() {
       {showPageSelect && (
         <FacebookPageSelectModal
           pages={fbPages}
-          token={fbToken}
           onSelect={() => {
             setShowPageSelect(false);
             fetchChannels();
@@ -726,7 +721,7 @@ function ChannelConnectionsPage() {
                   </div>
 
                   {/* Step-by-Step Guide */}
-                  <GuideSection channel={channelDef} connectedChannel={connectedChannel} t={t} />
+                  <GuideSection channel={channelDef} connectedChannel={connectedChannel} />
 
                   {/* Manual Connect Form */}
                   <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">

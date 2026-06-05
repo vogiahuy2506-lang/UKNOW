@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  HiOutlineCog,
   HiOutlineSave,
   HiOutlineRefresh,
   HiOutlineUpload,
@@ -291,83 +290,6 @@ function ChannelQuickTest({ channelType, channelLabel, connected }) {
             Kênh chưa được kết nối nên chưa thể test trực tiếp trong studio. Hãy hoàn tất cấu hình tại trang kết nối kênh trước.
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function ChannelGuideCard({
-  accent = 'blue',
-  icon,
-  title,
-  summary,
-  status,
-  cta,
-  docsUrl,
-  connectedInfo,
-  onOpenGuide,
-}) {
-  const palette = {
-    blue: {
-      shell: 'bg-slate-50 border-slate-200',
-      icon: 'bg-blue-100 text-blue-600',
-      soft: 'bg-blue-50 border-blue-100',
-      button: 'text-blue-600',
-    },
-    indigo: {
-      shell: 'bg-slate-50 border-slate-200',
-      icon: 'bg-indigo-100 text-indigo-600',
-      soft: 'bg-indigo-50 border-indigo-100',
-      button: 'text-indigo-600',
-    },
-  };
-
-  const current = palette[accent];
-
-  return (
-    <div className="w-full max-w-none space-y-4 min-w-0">
-      <div className={`w-full rounded-2xl border p-4 sm:p-5 ${current.shell}`}>
-        <div className="flex flex-col gap-4 w-full min-w-0">
-          <div className="flex items-start gap-3 w-full min-w-0">
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 ${current.icon}`}>
-              {icon}
-            </div>
-            <div className="min-w-0 flex-1 w-full">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between w-full min-w-0">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-slate-800 break-words">{title}</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-5 break-words">{summary}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0 lg:justify-end">
-                  {status}
-                  {docsUrl ? (
-                    <a
-                      href={docsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${current.button}`}
-                    >
-                      <HiOutlineExternalLink className="w-3.5 h-3.5" /> Tài liệu
-                    </a>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {connectedInfo ? (
-            <div className={`w-full rounded-xl border p-3 ${current.soft}`}>
-              {connectedInfo}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2 w-full">
-            <button type="button" onClick={onOpenGuide} className="btn btn-secondary text-xs">
-              <HiOutlineBookOpen className="w-4 h-4" /> Xem hướng dẫn
-            </button>
-            {cta}
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -712,7 +634,6 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   // Deploy
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [channels, setChannels] = useState([]);
-  const [channelsLoading, setChannelsLoading] = useState(false);
   const [channelConnecting, setChannelConnecting] = useState(false);
   const [showZaloConnectModal, setShowZaloConnectModal] = useState(false);
   const [zaloConnectForm, setZaloConnectForm] = useState({
@@ -786,9 +707,15 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     if (oauthChannel === 'facebook' && encodedPages && token) {
       try {
         const parsedPages = JSON.parse(encodedPages);
-        setFacebookPages(Array.isArray(parsedPages) ? parsedPages : []);
-        setFacebookUserToken(token);
-        setSelectedFacebookPage(Array.isArray(parsedPages) && parsedPages.length > 0 ? parsedPages[0] : null);
+        const firstPage = Array.isArray(parsedPages) ? parsedPages[0] : null;
+        if (firstPage) {
+          setFacebookConnectForm(prev => ({
+            ...prev,
+            display_name: firstPage.name || prev.display_name,
+            page_id: firstPage.id || '',
+            page_access_token: firstPage.access_token || token,
+          }));
+        }
         setShowFacebookConnectModal(true);
       } catch {
         toast.error('Không đọc được danh sách Facebook Pages');
@@ -817,14 +744,11 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
 
   const loadChannels = async (chatbotId) => {
     if (!chatbotId) return;
-    setChannelsLoading(true);
     try {
       const res = await chatbotApi.getChatbotChannels(chatbotId);
       if (res.success) setChannels(res.data || []);
     } catch {
       setChannels(chatbot?.channels || []);
-    } finally {
-      setChannelsLoading(false);
     }
   };
 
