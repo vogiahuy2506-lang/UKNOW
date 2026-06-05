@@ -369,43 +369,219 @@ ${linkItems}
   }
 
   async logEmailSent(payload) {
-    return emailSettingsSmtpService.logEmailSent(this, payload);
+    return emailSettingsSmtpService.logEmailSent(payload);
   }
 
   async getAll(req, res) {
-    return emailSettingsCrudService.getAll(req, res);
+    try {
+      const data = await emailSettingsCrudService.getAll({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        page: req.query.page,
+        limit: req.query.limit,
+        status: req.query.status,
+      });
+
+      return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      console.error('Get email settings error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+        ...(error.limitReached ? { limitReached: true } : {}),
+      });
+    }
   }
 
   async getById(req, res) {
-    return emailSettingsCrudService.getById(req, res);
+    try {
+      const data = await emailSettingsCrudService.getById({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        id: req.params.id,
+      });
+
+      return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      console.error('Get email setting error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   async create(req, res) {
-    return emailSettingsCrudService.create(req, res);
+    try {
+      const data = await emailSettingsCrudService.create({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        payload: req.body,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Tạo cấu hình email thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Create email setting error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+        ...(error.limitReached ? { limitReached: true } : {}),
+      });
+    }
   }
 
   async update(req, res) {
-    return emailSettingsCrudService.update(req, res);
+    try {
+      const data = await emailSettingsCrudService.update({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        id: req.params.id,
+        payload: req.body,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Cập nhật cấu hình email thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Update email setting error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   async delete(req, res) {
-    return emailSettingsCrudService.delete(req, res);
+    try {
+      await emailSettingsCrudService.delete({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        id: req.params.id,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Xóa cấu hình email thành công',
+      });
+    } catch (error) {
+      console.error('Delete email setting error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   async testConnection(req, res) {
-    return emailSettingsSmtpService.testConnection(this, req, res);
+    try {
+      const result = await emailSettingsSmtpService.testConnection(req.body, {
+        createSmtpTransporter: (input) => this.createSmtpTransporter(input),
+      });
+
+      return res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error('Test SMTP connection error:', error);
+      return res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
 
   async sendTestEmail(req, res) {
-    return emailSettingsSmtpService.sendTestEmail(this, req, res);
+    try {
+      const data = await emailSettingsSmtpService.sendTestEmail({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        id: req.params.id,
+        payload: req.body,
+      }, {
+        createSmtpTransporter: (input) => this.createSmtpTransporter(input),
+      });
+
+      return res.json({
+        success: true,
+        message: 'Gửi email thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Send test email error:', error);
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      return this.handleSmtpError(error, res);
+    }
   }
 
   async getActiveSettings(req, res) {
-    return emailSettingsCrudService.getActiveSettings(req, res);
+    try {
+      const data = await emailSettingsCrudService.getActiveSettings({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+      });
+
+      return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      console.error('Get active email settings error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   async sendCustomEmail(req, res) {
-    return emailSettingsSmtpService.sendCustomEmail(this, req, res);
+    try {
+      const data = await emailSettingsSmtpService.sendCustomEmail({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        payload: req.body,
+        trackingConfig: this.resolveTrackingBaseUrl(req),
+      }, {
+        normalizeEmailList: (value) => this.normalizeEmailList(value),
+        buildTrackedHtml: (...args) => this.buildTrackedHtml(...args),
+        buildMailAttachments: (items) => this.buildMailAttachments(items),
+        createSmtpTransporter: (input) => this.createSmtpTransporter(input),
+        formatUtc7: () => this.formatUtc7(),
+      });
+
+      return res.json({
+        success: true,
+        message: 'Gửi email thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Send custom email error:', error);
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          message: error.message,
+          ...(error.data ? { data: error.data } : {}),
+        });
+      }
+      return this.handleSmtpError(error, res);
+    }
   }
 
 }

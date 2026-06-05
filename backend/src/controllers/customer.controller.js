@@ -357,7 +357,24 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async create(req, res) {
-    return customerMutationService.create(this, req, res);
+    try {
+      const data = await customerMutationService.create({
+        userId: req.user.id,
+        payload: req.body,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Tạo khách hàng thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Create customer error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   // Bulk import/update customers
@@ -368,7 +385,24 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async bulkUpsert(req, res) {
-    return customerMutationService.bulkUpsert(this, req, res);
+    try {
+      const data = await customerMutationService.bulkUpsert({
+        userId: req.user.id,
+        payload: req.body,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Lưu khách hàng thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Bulk upsert customers error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   // Cập nhật customer
@@ -378,7 +412,25 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async update(req, res) {
-    return customerMutationService.update(this, req, res);
+    try {
+      const data = await customerMutationService.update({
+        userId: req.user.id,
+        id: req.params.id,
+        payload: req.body,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Cập nhật khách hàng thành công',
+        data,
+      });
+    } catch (error) {
+      console.error('Update customer error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
   // Xóa customer
@@ -388,7 +440,23 @@ class CustomerController {
    * @param {import('express').Response} res
    */
   async delete(req, res) {
-    return customerMutationService.delete(req, res);
+    try {
+      await customerMutationService.delete({
+        userId: req.user.id,
+        id: req.params.id,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Xóa khách hàng thành công',
+      });
+    } catch (error) {
+      console.error('Delete customer error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
   }
 
 }

@@ -1,23 +1,29 @@
-import db from '../config/database.js';
+import auditRepository from '../repositories/audit.repository.js';
 
 class AuditService {
-  async log({ userId, ownerId = null, category = 'workspace', action, entityType, entityId, details = {}, req = null }) {
+  async log({
+    userId,
+    ownerId = null,
+    category = 'workspace',
+    action,
+    entityType,
+    entityId,
+    details = {},
+    ipAddress = null,
+    userAgent = null,
+  }) {
     try {
-      await db.query(
-        `INSERT INTO audit_logs (id_user, owner_id, category, action, entity_type, entity_id, details, ip_address, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          userId || null,
-          ownerId || null,
-          category,
-          action,
-          entityType || null,
-          entityId || null,
-          JSON.stringify(details),
-          req?.ip || req?.connection?.remoteAddress || null,
-          req?.headers?.['user-agent'] || null,
-        ]
-      );
+      await auditRepository.createLog({
+        userId,
+        ownerId,
+        category,
+        action,
+        entityType,
+        entityId,
+        details,
+        ipAddress,
+        userAgent,
+      });
     } catch (err) {
       console.error('[AuditService] Failed to log audit:', err.message);
     }
@@ -25,94 +31,20 @@ class AuditService {
 
   // Employer view: logs scoped to their workspace (own actions + employees' actions)
   async getWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate, limit = 50, offset = 0 } = {}) {
-    const conditions = ['(owner_id = $1 OR (id_user = $1 AND category = \'workspace\'))'];
-    const params = [ownerId];
-    let i = 2;
-
-    if (actorId) { conditions.push(`id_user = $${i++}`); params.push(actorId); }
-    if (action)  { conditions.push(`action = $${i++}`); params.push(action); }
-    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
-    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
-    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
-
-    params.push(limit, offset);
-
-    const { rows } = await db.query(
-      `SELECT al.id, al.action, al.entity_type, al.entity_id, al.details,
-              al.ip_address, al.created_at,
-              u.full_name AS actor_name, u.username AS actor_username, u.avatar_url AS actor_avatar
-       FROM audit_logs al
-       LEFT JOIN users u ON u.id = al.id_user
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY al.created_at DESC
-       LIMIT $${i} OFFSET $${i + 1}`,
-      params
-    );
-    return rows;
+    return auditRepository.getWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate, limit, offset });
   }
 
   async countWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate } = {}) {
-    const conditions = ['(owner_id = $1 OR (id_user = $1 AND category = \'workspace\'))'];
-    const params = [ownerId];
-    let i = 2;
-
-    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
-    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
-    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
-    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
-    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
-
-    const { rows } = await db.query(
-      `SELECT COUNT(*)::int AS total FROM audit_logs WHERE ${conditions.join(' AND ')}`,
-      params
-    );
-    return rows[0].total;
+    return auditRepository.countWorkspaceLogs({ ownerId, actorId, action, entityType, startDate, endDate });
   }
 
   // Super admin view: system-level events only
   async getSystemLogs({ actorId, action, entityType, startDate, endDate, limit = 50, offset = 0 } = {}) {
-    const conditions = [`category = 'system'`];
-    const params = [];
-    let i = 1;
-
-    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
-    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
-    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
-    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
-    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
-
-    params.push(limit, offset);
-
-    const { rows } = await db.query(
-      `SELECT al.id, al.action, al.entity_type, al.entity_id, al.details,
-              al.ip_address, al.created_at,
-              u.full_name AS actor_name, u.username AS actor_username, u.email AS actor_email
-       FROM audit_logs al
-       LEFT JOIN users u ON u.id = al.id_user
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY al.created_at DESC
-       LIMIT $${i} OFFSET $${i + 1}`,
-      params
-    );
-    return rows;
+    return auditRepository.getSystemLogs({ actorId, action, entityType, startDate, endDate, limit, offset });
   }
 
   async countSystemLogs({ actorId, action, entityType, startDate, endDate } = {}) {
-    const conditions = [`category = 'system'`];
-    const params = [];
-    let i = 1;
-
-    if (actorId)    { conditions.push(`id_user = $${i++}`); params.push(actorId); }
-    if (action)     { conditions.push(`action = $${i++}`); params.push(action); }
-    if (entityType) { conditions.push(`entity_type = $${i++}`); params.push(entityType); }
-    if (startDate)  { conditions.push(`created_at >= $${i++}`); params.push(startDate); }
-    if (endDate)    { conditions.push(`created_at <= $${i++}`); params.push(endDate); }
-
-    const { rows } = await db.query(
-      `SELECT COUNT(*)::int AS total FROM audit_logs WHERE ${conditions.join(' AND ')}`,
-      params
-    );
-    return rows[0].total;
+    return auditRepository.countSystemLogs({ actorId, action, entityType, startDate, endDate });
   }
 }
 
@@ -177,31 +109,35 @@ export const AUDIT_ENTITY_TYPES = {
 
 /**
  * Log a workspace event (employer/employee action).
- * Call this in controllers where req is available.
  */
-export async function logWorkspace(req, action, entityType, entityId, details = {}) {
-  const userId = req.user?.id;
-  // owner_id = employer. If acting as employee (activeContext.type === 'employee'), owner is activeContext.ownerId.
-  const ownerId = req.user?.activeContext?.type === 'employee'
-    ? req.user.activeContext.ownerId
-    : userId;
-
-  return auditService.log({ userId, ownerId, category: 'workspace', action, entityType, entityId, details, req });
+export async function logWorkspace(context, action, entityType, entityId, details = {}) {
+  return auditService.log({
+    userId: context?.userId,
+    ownerId: context?.ownerId,
+    category: 'workspace',
+    action,
+    entityType,
+    entityId,
+    details,
+    ipAddress: context?.ipAddress || null,
+    userAgent: context?.userAgent || null,
+  });
 }
 
 /**
  * Log a system event (super admin action).
  */
-export async function logSystem(req, action, entityType, entityId, details = {}) {
+export async function logSystem(context, action, entityType, entityId, details = {}) {
   return auditService.log({
-    userId: req.user?.id,
-    ownerId: null,
+    userId: context?.userId,
+    ownerId: context?.ownerId || null,
     category: 'system',
     action,
     entityType,
     entityId,
     details,
-    req,
+    ipAddress: context?.ipAddress || null,
+    userAgent: context?.userAgent || null,
   });
 }
 

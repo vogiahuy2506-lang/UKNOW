@@ -1,6 +1,7 @@
 import * as adminPlansService from '../../services/admin/adminPlans.service.js';
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
+import { getSystemAuditContext } from '../../utils/auditContext.util.js';
 
 function handleError(res, err) {
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
@@ -62,7 +63,7 @@ export async function create(req, res) {
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
-    logSystem(req, AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
+    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
     return res.status(201).json({ success: true, message: 'Tạo gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -81,7 +82,7 @@ export async function update(req, res) {
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
     });
-    logSystem(req, AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
+    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
     return res.json({ success: true, message: 'Cập nhật gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -90,7 +91,7 @@ export async function update(req, res) {
 export async function remove(req, res) {
   try {
     const result = await adminPlansService.removePlan(Number(req.params.id));
-    logSystem(req, AUDIT_ACTIONS.PLAN_DELETED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { softDelete: !!result.softDeleted });
+    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_DELETED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { softDelete: !!result.softDeleted });
     return res.json({ success: true, message: result.message, data: result });
   } catch (err) { return handleError(res, err); }
 }

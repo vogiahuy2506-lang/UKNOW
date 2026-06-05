@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 
 class CustomerHelperService {
   /**
@@ -60,15 +60,7 @@ class CustomerHelperService {
   async resolvePurchaseOrderStatusExpr(alias = 'cp') {
     if (typeof this.hasCustomerPurchaseOrderStatusColumn !== 'boolean') {
       try {
-        const columnCheckResult = await db.query(
-          `SELECT 1
-           FROM information_schema.columns
-           WHERE table_schema = 'public'
-             AND table_name = 'customer_purchases'
-             AND column_name = 'order_status'
-           LIMIT 1`
-        );
-        this.hasCustomerPurchaseOrderStatusColumn = columnCheckResult.rows.length > 0;
+        this.hasCustomerPurchaseOrderStatusColumn = await customerReadRepository.hasPurchaseOrderStatusColumn();
       } catch {
         this.hasCustomerPurchaseOrderStatusColumn = false;
       }

@@ -1,6 +1,13 @@
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
+function createServiceError(message, statusCode, extra = {}) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  Object.assign(error, extra);
+  return error;
+}
+
 class EmailSettingsCrudService {
   mapListItem(item) {
     return {
@@ -23,238 +30,128 @@ class EmailSettingsCrudService {
     };
   }
 
-  async getAll(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const { page = 1, limit = 10, status } = req.query;
-      const pageNum = parseInt(page, 10);
-      const limitNum = parseInt(limit, 10);
-      const result = await emailSettingsRepository.getPagedByUser(userId, {
+  mapDetail(item) {
+    return {
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      smtpHost: item.smtp_host,
+      smtpPort: item.smtp_port,
+      smtpUsername: item.smtp_username,
+      useTls: item.use_tls,
+      dailyLimit: item.daily_limit,
+      hourlyLimit: item.hourly_limit,
+      dailySentCount: item.daily_sent_count,
+      totalSentCount: item.total_sent_count,
+      isVerified: item.is_verified,
+      status: item.status,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    };
+  }
+
+  mapMutationResult(item) {
+    return {
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      smtpHost: item.smtp_host,
+      smtpPort: item.smtp_port,
+      useTls: item.use_tls,
+      dailyLimit: item.daily_limit,
+      hourlyLimit: item.hourly_limit,
+      isVerified: item.is_verified,
+      status: item.status,
+    };
+  }
+
+  mapActiveItem(item) {
+    return {
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      smtpHost: item.smtp_host,
+      smtpPort: item.smtp_port,
+      isVerified: item.is_verified,
+      status: item.status,
+    };
+  }
+
+  async getAll({ userId, roleCode, page = 1, limit = 10, status }) {
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const result = await emailSettingsRepository.getPagedByUser(userId, {
+      page: pageNum,
+      limit: limitNum,
+      status,
+      roleCode,
+    });
+
+    return {
+      items: result.rows.map((item) => this.mapListItem(item)),
+      pagination: {
         page: pageNum,
         limit: limitNum,
-        status,
-        roleCode,
-      });
-
-      res.json({
-        success: true,
-        data: {
-          items: result.rows.map((item) => this.mapListItem(item)),
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: result.total,
-            totalPages: Math.ceil(result.total / limitNum),
-          },
-        },
-      });
-    } catch (error) {
-      console.error('Get email settings error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
+        total: result.total,
+        totalPages: Math.ceil(result.total / limitNum),
+      },
+    };
   }
 
-  async getById(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const { id } = req.params;
-      const item = await emailSettingsRepository.getById(userId, id, { roleCode });
-      if (!item) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy cấu hình email',
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          smtpHost: item.smtp_host,
-          smtpPort: item.smtp_port,
-          smtpUsername: item.smtp_username,
-          useTls: item.use_tls,
-          dailyLimit: item.daily_limit,
-          hourlyLimit: item.hourly_limit,
-          dailySentCount: item.daily_sent_count,
-          totalSentCount: item.total_sent_count,
-          isVerified: item.is_verified,
-          status: item.status,
-          createdAt: item.created_at,
-          updatedAt: item.updated_at,
-        },
-      });
-    } catch (error) {
-      console.error('Get email setting error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
+  async getById({ userId, roleCode, id }) {
+    const item = await emailSettingsRepository.getById(userId, id, { roleCode });
+    if (!item) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
+    return this.mapDetail(item);
   }
 
-  async create(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const {
-        name,
-        email,
-        smtpHost,
-        smtpPort,
-        smtpUsername,
-        smtpPassword,
-        useTls = true,
-        dailyLimit = 1000,
-        hourlyLimit = 100,
-      } = req.body;
-
-      const emailAccountLimitCheck = await checkUserResourceLimit({
-        userId,
-        roleCode,
-        resourceKey: 'emailAccounts',
-      });
-      if (!emailAccountLimitCheck.allowed) {
-        return res.status(400).json({
-          success: false,
-          message: emailAccountLimitCheck.message,
-          limitReached: true,
-        });
-      }
-
-      const item = await emailSettingsRepository.create(userId, {
-        name,
-        email,
-        smtpHost,
-        smtpPort,
-        smtpUsername,
-        smtpPassword,
-        useTls,
-        dailyLimit,
-        hourlyLimit,
-      });
-
-      res.status(201).json({
-        success: true,
-        message: 'Tạo cấu hình email thành công',
-        data: {
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          smtpHost: item.smtp_host,
-          smtpPort: item.smtp_port,
-          useTls: item.use_tls,
-          dailyLimit: item.daily_limit,
-          hourlyLimit: item.hourly_limit,
-          isVerified: item.is_verified,
-          status: item.status,
-        },
-      });
-    } catch (error) {
-      console.error('Create email setting error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
+  async create({ userId, roleCode, payload }) {
+    const emailAccountLimitCheck = await checkUserResourceLimit({
+      userId,
+      roleCode,
+      resourceKey: 'emailAccounts',
+    });
+    if (!emailAccountLimitCheck.allowed) {
+      throw createServiceError(emailAccountLimitCheck.message, 400, { limitReached: true });
     }
+
+    const item = await emailSettingsRepository.create(userId, {
+      name: payload.name,
+      email: payload.email,
+      smtpHost: payload.smtpHost,
+      smtpPort: payload.smtpPort,
+      smtpUsername: payload.smtpUsername,
+      smtpPassword: payload.smtpPassword,
+      useTls: payload.useTls ?? true,
+      dailyLimit: payload.dailyLimit ?? 1000,
+      hourlyLimit: payload.hourlyLimit ?? 100,
+    });
+
+    return this.mapMutationResult(item);
   }
 
-  async update(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const { id } = req.params;
-      const current = await emailSettingsRepository.getById(userId, id, { roleCode });
-      if (!current) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy cấu hình email',
-        });
-      }
-
-      const item = await emailSettingsRepository.update(userId, id, req.body, { roleCode });
-      res.json({
-        success: true,
-        message: 'Cập nhật cấu hình email thành công',
-        data: {
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          smtpHost: item.smtp_host,
-          smtpPort: item.smtp_port,
-          useTls: item.use_tls,
-          dailyLimit: item.daily_limit,
-          hourlyLimit: item.hourly_limit,
-          isVerified: item.is_verified,
-          status: item.status,
-        },
-      });
-    } catch (error) {
-      console.error('Update email setting error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
+  async update({ userId, roleCode, id, payload }) {
+    const current = await emailSettingsRepository.getById(userId, id, { roleCode });
+    if (!current) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
+
+    const item = await emailSettingsRepository.update(userId, id, payload, { roleCode });
+    return this.mapMutationResult(item);
   }
 
-  async delete(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const { id } = req.params;
-      const deleted = await emailSettingsRepository.delete(userId, id, { roleCode });
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy cấu hình email',
-        });
-      }
-
-      res.json({
-        success: true,
-        message: 'Xóa cấu hình email thành công',
-      });
-    } catch (error) {
-      console.error('Delete email setting error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
+  async delete({ userId, roleCode, id }) {
+    const deleted = await emailSettingsRepository.delete(userId, id, { roleCode });
+    if (!deleted) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
+    return true;
   }
 
-  async getActiveSettings(req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const rows = await emailSettingsRepository.getActiveByUser(userId, { roleCode });
-      res.json({
-        success: true,
-        data: rows.map((item) => ({
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          smtpHost: item.smtp_host,
-          smtpPort: item.smtp_port,
-          isVerified: item.is_verified,
-          status: item.status,
-        })),
-      });
-    } catch (error) {
-      console.error('Get active email settings error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
+  async getActiveSettings({ userId, roleCode }) {
+    const rows = await emailSettingsRepository.getActiveByUser(userId, { roleCode });
+    return rows.map((item) => this.mapActiveItem(item));
   }
 }
 

@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 
 class CustomerInterestedService {
   /**
@@ -58,171 +58,46 @@ class CustomerInterestedService {
       )`;
     }
 
-    /**
-     * Build và chạy bộ query lấy danh sách khách + thống kê khóa học.
-     *
-     * Luồng hoạt động:
-     * 1. Dựng các điều kiện lọc động theo campaign, khóa học, trạng thái, từ khóa.
-     * 2. Chạy song song query danh sách khách, tổng số, và danh sách khóa học.
-     * 3. Trả về raw result để tầng trên map thành response.
-     *
-     * @param {{scopedCampaignId: number|null, useCampaignScope: boolean}} params Scope truy vấn theo campaign
-     * @returns {Promise<{listResult: any, countResult: any, coursesResult: any}>}
-     */
-    const runDbQueries = async ({ scopedCampaignId, useCampaignScope = true }) => {
-      const params = [userId];
-      let whereCampaign = '';
-      if (useCampaignScope && Number.isFinite(scopedCampaignId)) {
-        params.push(scopedCampaignId);
-        whereCampaign = ` AND cp.id_campaign = $${params.length}`;
-      }
-
-      let whereCourse = '';
-      if (selectedCourseIds.length > 0) {
-        const coursePlaceholders = selectedCourseIds.map((_, idx) => `$${params.length + idx + 1}`).join(',');
-        params.push(...selectedCourseIds);
-        whereCourse = ` AND cp.id_course IN (${coursePlaceholders})`;
-      }
-
-      let whereCourseQuery = '';
-      if (normalizedCourseQuery) {
-        params.push(`%${normalizedCourseQuery}%`);
-        whereCourseQuery = ` AND (
-          COALESCE(crs.course_name, cp.product_name, '') ILIKE $${params.length}
-          OR COALESCE(crs.course_code, '') ILIKE $${params.length}
-          OR COALESCE(cp.product_name, '') ILIKE $${params.length}
-        )`;
-      }
-      let whereCourseStatus = '';
-      if (normalizedCourseStatuses.length > 0) {
-        params.push(normalizedCourseStatuses);
-        whereCourseStatus = ` AND LOWER(COALESCE(crs.status, 'publish')) = ANY($${params.length})`;
-      }
-
-      const excludeCourseIds = Array.isArray(notPurchasedCourseIds)
-        ? notPurchasedCourseIds.map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v))
-        : [];
-      let whereNotPurchased = '';
-      if (excludeCourseIds.length > 0) {
-        const placeholders = excludeCourseIds.map((_, idx) => `$${params.length + idx + 1}`).join(',');
-        params.push(...excludeCourseIds);
-        whereNotPurchased = ` AND cp.id_customer NOT IN (
-          SELECT id_customer FROM customer_purchases
-          WHERE id_user = $1 AND id_course IN (${placeholders})
-            AND LOWER(COALESCE(product_type, '')) != 'interested'
-        )`;
-      }
-
-      const listParams = [...params, limit];
-      const listQuery = `
-        SELECT MIN(cp.id) AS id,
-               cp.id_customer,
-               MIN(cp.id_course) AS id_course,
-               MIN(cp.id_campaign) AS id_campaign,
-               MIN(cp.order_id) AS order_id,
-               MIN(cp.product_name) AS product_name,
-               MIN(cp.product_type) AS product_type,
-               MIN(cp.amount) AS amount,
-               MIN(cp.currency) AS currency,
-               MIN(cp.payment_method) AS payment_method,
-               MAX(cp.purchase_date) AS purchase_date,
-               ${purchaseOrderStatusExpr} AS order_status,
-               c.full_name,
-               c.email,
-               c.phone,
-               MIN(c.zalo_id) AS zalo_id,
-               MIN(c.zalo_phone) AS zalo_phone,
-               MIN(c.customer_source) AS customer_source,
-               COALESCE(crs.course_name, MIN(cp.product_name)) AS course_name,
-               MIN(crs.course_code) AS course_code,
-               MIN(camp.campaign_name) AS campaign_name
-        FROM customer_purchases cp
-        JOIN customers c
-          ON c.id = cp.id_customer
-         AND c.id_user = $1
-        LEFT JOIN courses crs ON crs.id = cp.id_course
-        LEFT JOIN campaigns camp
-          ON camp.id = cp.id_campaign
-         AND camp.id_user = c.id_user
-        WHERE ${interestedCondition}
-          ${whereCampaign}
-          ${whereCourse}
-          ${whereCourseStatus}
-          ${whereCourseQuery}
-          ${whereNotPurchased}
-        GROUP BY cp.id_customer,
-                 c.full_name,
-                 c.email,
-                 c.phone,
-                 crs.course_name,
-                 ${purchaseOrderStatusExpr}
-        ORDER BY MAX(cp.purchase_date) DESC NULLS LAST, MIN(cp.id) DESC
-        LIMIT $${listParams.length}
-      `;
-
-      const countQuery = `
-        SELECT COUNT(*)::INTEGER AS total
-        FROM customer_purchases cp
-        JOIN customers c
-          ON c.id = cp.id_customer
-         AND c.id_user = $1
-        LEFT JOIN courses crs ON crs.id = cp.id_course
-        WHERE ${interestedCondition}
-          ${whereCampaign}
-          ${whereCourse}
-          ${whereCourseStatus}
-          ${whereCourseQuery}
-      `;
-
-      const coursesQuery = `
-        SELECT cp.id_course AS course_id,
-               COALESCE(crs.course_name, cp.product_name, 'Khoa hoc khong xac dinh') AS course_name,
-               crs.course_code,
-               COALESCE(crs.status, 'publish') AS status,
-               COUNT(*)::INTEGER AS total_items
-        FROM customer_purchases cp
-        JOIN customers c
-          ON c.id = cp.id_customer
-         AND c.id_user = $1
-        LEFT JOIN courses crs ON crs.id = cp.id_course
-        WHERE ${interestedCondition}
-          ${whereCampaign}
-          ${whereCourse}
-          ${whereCourseStatus}
-          ${whereCourseQuery}
-        GROUP BY cp.id_course, COALESCE(crs.course_name, cp.product_name, 'Khoa hoc khong xac dinh'), crs.course_code, crs.status
-        ORDER BY total_items DESC
-      `;
-
-      const [listResult, countResult, coursesResult] = await Promise.all([
-        db.query(listQuery, listParams),
-        db.query(countQuery, params),
-        db.query(coursesQuery, params),
-      ]);
-
-      return { listResult, countResult, coursesResult };
-    };
+    const normalizedNotPurchasedCourseIds = Array.isArray(notPurchasedCourseIds)
+      ? notPurchasedCourseIds.map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v))
+      : [];
 
     let scopedCampaignId = campaignIdNum;
     const shouldScopeByCampaign = Number.isFinite(campaignIdNum) && normalizedCustomerType === 'interested';
-    let { listResult, countResult, coursesResult } = await runDbQueries({
+    let result = await customerReadRepository.getInterestedCustomersWithCoursesRows({
+      userId,
       scopedCampaignId,
       useCampaignScope: shouldScopeByCampaign,
+      selectedCourseIds,
+      normalizedCourseStatuses,
+      normalizedCourseQuery,
+      normalizedNotPurchasedCourseIds,
+      interestedCondition,
+      purchaseOrderStatusExpr,
+      limit,
     });
     if (
       shouldScopeByCampaign &&
-      listResult.rows.length === 0 &&
-      coursesResult.rows.length === 0
+      result.rows.length === 0 &&
+      result.courses.length === 0
     ) {
       scopedCampaignId = null;
-      ({ listResult, countResult, coursesResult } = await runDbQueries({
+      result = await customerReadRepository.getInterestedCustomersWithCoursesRows({
+        userId,
         scopedCampaignId: null,
         useCampaignScope: false,
-      }));
+        selectedCourseIds,
+        normalizedCourseStatuses,
+        normalizedCourseQuery,
+        normalizedNotPurchasedCourseIds,
+        interestedCondition,
+        purchaseOrderStatusExpr,
+        limit,
+      });
     }
 
     return {
-      items: listResult.rows.map((row) => ({
+      items: result.rows.map((row) => ({
         id: row.id,
         customerId: row.id_customer,
         courseId: row.id_course,
@@ -245,7 +120,7 @@ class CustomerInterestedService {
         courseCode: row.course_code,
         campaignName: row.campaign_name,
       })),
-      courses: coursesResult.rows.map((row) => ({
+      courses: result.courses.map((row) => ({
         courseId: row.course_id,
         courseName: row.course_name,
         courseCode: row.course_code,
@@ -261,7 +136,7 @@ class CustomerInterestedService {
       },
       pagination: {
         limit,
-        total: countResult.rows[0]?.total || 0,
+        total: result.total || 0,
       },
     };
   }
@@ -290,17 +165,11 @@ class CustomerInterestedService {
       throw error;
     }
 
-    const coursesResult = await db.query(
-      `SELECT id, course_name, course_code
-       FROM courses
-       WHERE id_user = $1
-       ORDER BY course_name ASC`,
-      [userId]
-    );
+    const courses = await customerReadRepository.getCoursesByUser(userId);
 
     const courseByCode = new Map();
     const courseById = new Map();
-    coursesResult.rows.forEach((c) => {
+    courses.forEach((c) => {
       if (c.course_code) {
         const productId = parseInt(c.course_code, 10);
         if (Number.isFinite(productId)) {
@@ -325,7 +194,7 @@ class CustomerInterestedService {
       .map((v) => parseInt(v, 10))
       .filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx);
     const selectedCourseIdSet = new Set(selectedCourseIdsFromDB);
-    const selectedCourseMeta = coursesResult.rows
+    const selectedCourseMeta = courses
       .filter((course) => selectedCourseIdSet.has(parseInt(course.id, 10)))
       .map((course) => ({
         id: parseInt(course.id, 10),
@@ -466,7 +335,7 @@ class CustomerInterestedService {
     });
 
     const items = Array.from(customerMap.values());
-    const courses = coursesResult.rows
+    const coursesList = courses
       .filter((c) => {
         if (!normalizedCourseQuery) return true;
         const name = String(c.course_name || '').toLowerCase();
@@ -482,7 +351,7 @@ class CustomerInterestedService {
 
     return {
       items,
-      courses,
+      courses: coursesList,
       filters: {
         campaignId: null,
         courseIds: selectedCourseIdsFromDB,

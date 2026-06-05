@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 
 class CustomerQueryService {
   /**
@@ -48,17 +48,10 @@ class CustomerQueryService {
       .filter((id) => Number.isFinite(id));
     if (normalizedRunIds.length === 0) return new Map();
 
-    const executionResult = await db.query(
-      `SELECT id_run, execution_data
-       FROM campaign_executions
-       WHERE id_run = ANY($1::int[])
-         AND action_type = 'get_all_groups'
-       ORDER BY created_at ASC, id ASC`,
-      [normalizedRunIds]
-    );
+    const executionRows = await customerReadRepository.getZaloGroupExecutionsByRuns(normalizedRunIds);
 
     const map = new Map();
-    for (const row of executionResult.rows) {
+    for (const row of executionRows) {
       const runId = Number.parseInt(row.id_run, 10);
       if (!Number.isFinite(runId)) continue;
       const data = row.execution_data && typeof row.execution_data === 'object'
@@ -100,201 +93,19 @@ class CustomerQueryService {
     campaignId,
     purchaseOrderStatusExpr,
   }) {
-    const offset = (page - 1) * limit;
-    const parsedCampaignId = Number.parseInt(campaignId, 10);
-    const params = [userId];
-
-    let campaignParamIdx = null;
-    if (Number.isFinite(parsedCampaignId)) {
-      params.push(parsedCampaignId);
-      campaignParamIdx = params.length;
-    }
-
-    const uknowStatusExpr = campaignParamIdx
-      ? `(SELECT cc2.uknow_status FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-
-    const orderStatusExpr = campaignParamIdx
-      ? `(SELECT ${purchaseOrderStatusExpr} FROM customer_purchases cp WHERE cp.id_customer = c.id AND cp.id_campaign = $${campaignParamIdx} AND cp.id_run IS NOT NULL ORDER BY cp.purchase_date DESC NULLS LAST, cp.id DESC LIMIT 1)`
-      : `(SELECT ${purchaseOrderStatusExpr} FROM customer_purchases cp WHERE cp.id_customer = c.id AND cp.id_run IS NOT NULL ORDER BY cp.purchase_date DESC NULLS LAST, cp.id DESC LIMIT 1)`;
-
-    const campaignInteractionExpr = campaignParamIdx
-      ? `(SELECT cc2.has_clicked FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-    const campaignOpenedExpr = campaignParamIdx
-      ? `(SELECT cc2.has_opened FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-    const campaignReceivedExpr = campaignParamIdx
-      ? `(SELECT cc2.email_received_count FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-
-    // Ép timestamptz để API trả instant đúng; tránh node-pg parse `timestamp` theo TZ tiến trình.
-    let query = `
-      SELECT c.id, c.email, c.phone, c.full_name, c.customer_source,
-             c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
-             COALESCE((
-               SELECT COUNT(*)
-               FROM campaign_customers cc
-               JOIN campaigns cp ON cp.id = cc.id_campaign
-               WHERE cc.id_customer = c.id
-                 AND cp.id_user = c.id_user
-             ), 0)::INTEGER AS campaign_count,
-             (
-               SELECT MAX(cc.last_activity_at)::timestamptz
-               FROM campaign_customers cc
-               JOIN campaigns cp ON cp.id = cc.id_campaign
-               WHERE cc.id_customer = c.id
-                 AND cp.id_user = c.id_user
-             ) AS last_campaign_activity_at,
-             ${orderStatusExpr} AS order_status,
-             ${uknowStatusExpr} AS uknow_status,
-             ${campaignInteractionExpr} AS campaign_has_clicked,
-             ${campaignOpenedExpr} AS campaign_has_opened,
-             ${campaignReceivedExpr} AS campaign_email_received_count,
-             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at
-      FROM customers c
-      WHERE c.id_user = $1
-    `;
-    const normalizedStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
-    const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : '';
-
-    if (normalizedStatus) {
-      const isOrderStatus = ['completed', 'on-hold', 'onhold'].includes(normalizedStatus);
-      if (isOrderStatus) {
-        const mappedOrderStatus = normalizedStatus === 'onhold' ? 'on-hold' : normalizedStatus;
-        params.push(mappedOrderStatus);
-        query += ` AND EXISTS (
-          SELECT 1
-          FROM customer_purchases cp
-          WHERE cp.id_customer = c.id
-            AND cp.id_run IS NOT NULL
-            AND ${purchaseOrderStatusExpr} = $${params.length}
-        )`;
-      }
-    }
-
-    if (search) {
-      params.push(`%${search}%`);
-      query += ` AND (c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length} OR c.full_name ILIKE $${params.length})`;
-    }
-
-    if (normalizedSource) {
-      if (normalizedSource === 'uknow_campaign') {
-        query += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
-      } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
-        query += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
-      }
-    }
-
-    if (Number.isFinite(parsedCampaignId)) {
-      // Khi lọc theo chiến dịch, xem khách "đã tham gia" theo 4 nguồn:
-      // 1) campaign_customers, 2) campaign_participations, 3) customer_purchases, 4) customer_journey.
-      query += ` AND EXISTS (
-        SELECT 1
-        FROM campaigns cp
-        WHERE cp.id = $${campaignParamIdx}
-          AND cp.id_user = c.id_user
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM campaign_customers cc
-              WHERE cc.id_customer = c.id
-                AND cc.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM campaign_participations cpa
-              WHERE cpa.id_customer = c.id
-                AND cpa.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_purchases cpr
-              WHERE cpr.id_customer = c.id
-                AND cpr.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_journey cj
-              WHERE cj.id_customer = c.id
-                AND cj.id_campaign = cp.id
-            )
-          )
-      )`;
-    }
-
-    query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const result = await db.query(query, params);
-
-    let countQuery = 'SELECT COUNT(*) FROM customers c WHERE c.id_user = $1';
-    const countParams = [userId];
-    if (normalizedStatus) {
-      const isOrderStatus = ['completed', 'on-hold', 'onhold'].includes(normalizedStatus);
-      if (isOrderStatus) {
-        const mappedOrderStatus = normalizedStatus === 'onhold' ? 'on-hold' : normalizedStatus;
-        countParams.push(mappedOrderStatus);
-        countQuery += ` AND EXISTS (
-          SELECT 1
-          FROM customer_purchases cp
-          WHERE cp.id_customer = c.id
-            AND cp.id_run IS NOT NULL
-            AND ${purchaseOrderStatusExpr} = $${countParams.length}
-        )`;
-      }
-    }
-    if (search) {
-      countParams.push(`%${search}%`);
-      countQuery += ` AND (c.email ILIKE $${countParams.length} OR c.phone ILIKE $${countParams.length} OR c.full_name ILIKE $${countParams.length})`;
-    }
-    if (normalizedSource) {
-      if (normalizedSource === 'uknow_campaign') {
-        countQuery += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
-      } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
-        countQuery += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
-      }
-    }
-    if (Number.isFinite(parsedCampaignId)) {
-      countParams.push(parsedCampaignId);
-      // Đồng bộ điều kiện đếm với query dữ liệu để không lệch phân trang.
-      countQuery += ` AND EXISTS (
-        SELECT 1
-        FROM campaigns cp
-        WHERE cp.id = $${countParams.length}
-          AND cp.id_user = c.id_user
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM campaign_customers cc
-              WHERE cc.id_customer = c.id
-                AND cc.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM campaign_participations cpa
-              WHERE cpa.id_customer = c.id
-                AND cpa.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_purchases cpr
-              WHERE cpr.id_customer = c.id
-                AND cpr.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_journey cj
-              WHERE cj.id_customer = c.id
-                AND cj.id_campaign = cp.id
-            )
-          )
-      )`;
-    }
-    const countResult = await db.query(countQuery, countParams);
+    const { rows, total } = await customerReadRepository.getAllCustomerRows({
+      userId,
+      page,
+      limit,
+      status,
+      search,
+      source,
+      campaignId,
+      purchaseOrderStatusExpr,
+    });
 
     return {
-      items: result.rows.map((item) => ({
+      items: rows.map((item) => ({
         id: item.id,
         email: item.email,
         phone: item.phone,
@@ -318,8 +129,8 @@ class CustomerQueryService {
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
-        total: parseInt(countResult.rows[0].count, 10),
-        totalPages: Math.ceil(countResult.rows[0].count / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
@@ -358,84 +169,23 @@ class CustomerQueryService {
       throw error;
     }
 
-    const campaignResult = await db.query(
-      `SELECT id, campaign_type
-       FROM campaigns
-       WHERE id = $1 AND id_user = $2
-       LIMIT 1`,
-      [parsedCampaignId, userId],
-    );
-    if (campaignResult.rows.length === 0) {
+    const campaign = await customerReadRepository.getOwnedCampaign(parsedCampaignId, userId);
+    if (!campaign) {
       const error = new Error('Không tìm thấy chiến dịch');
       error.statusCode = 404;
       throw error;
     }
 
-    const queryParams = [parsedCampaignId];
-    let whereClause = `
-      WHERE zm.id_campaign = $1
-        AND LOWER(COALESCE(zm.channel, '')) = 'zalo_group'
-    `;
-    if (trimmedSearch) {
-      queryParams.push(`%${trimmedSearch}%`);
-      whereClause += `
-        AND (
-          COALESCE(zm.group_id, '') ILIKE $${queryParams.length}
-          OR COALESCE(zm.account_name, '') ILIKE $${queryParams.length}
-          OR COALESCE(zm.message_text, '') ILIKE $${queryParams.length}
-          OR COALESCE(zm.recipient_value, '') ILIKE $${queryParams.length}
-        )
-      `;
-    }
-
-    const dataResult = await db.query(
-      `SELECT
-         zm.id,
-         zm.id_campaign,
-         zm.id_run,
-         cr.run_name,
-         zm.group_id,
-         zm.recipient_value,
-         zm.account_id,
-         zm.account_name,
-         zm.message_text,
-         zm.tracking_metadata,
-         zm.click_count,
-         zm.first_clicked_at,
-         zm.last_clicked_at,
-         zm.sent_at,
-         zm.created_at,
-         COALESCE(COUNT(cp.id) FILTER (
-           WHERE ${purchaseOrderStatusExpr} IN ('on-hold', 'pending')
-         ), 0)::INTEGER AS pending_order_count,
-         COALESCE(COUNT(cp.id) FILTER (
-           WHERE ${purchaseOrderStatusExpr} IN ('completed', 'processing')
-         ), 0)::INTEGER AS completed_order_count,
-         COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS ordered_customer_count
-       FROM zalo_messages zm
-       LEFT JOIN campaign_runs cr ON cr.id = zm.id_run
-       LEFT JOIN customer_purchases cp ON cp.id_zalo_message = zm.id
-       ${whereClause}
-       GROUP BY
-         zm.id, zm.id_campaign, zm.id_run, cr.run_name, zm.group_id, zm.recipient_value,
-         zm.account_id, zm.account_name, zm.message_text, zm.tracking_metadata, zm.click_count,
-         zm.first_clicked_at, zm.last_clicked_at, zm.sent_at, zm.created_at
-       ORDER BY COALESCE(zm.sent_at, zm.created_at) DESC, zm.id DESC
-       LIMIT $${queryParams.length + 1}
-       OFFSET $${queryParams.length + 2}`,
-      [...queryParams, safeLimit, offset],
-    );
-
-    const countResult = await db.query(
-      `SELECT COUNT(*)::INTEGER AS total
-       FROM zalo_messages zm
-       ${whereClause}`,
-      queryParams,
-    );
-    const total = countResult.rows[0]?.total || 0;
+    const { rows, total } = await customerReadRepository.getCampaignZaloGroupMessagesRows({
+      campaignId: parsedCampaignId,
+      search: trimmedSearch,
+      limit: safeLimit,
+      offset,
+      purchaseOrderStatusExpr,
+    });
     const runIds = Array.from(
       new Set(
-        dataResult.rows
+        rows
           .map((row) => Number.parseInt(row.id_run, 10))
           .filter((id) => Number.isFinite(id))
       )
@@ -448,7 +198,7 @@ class CustomerQueryService {
     }
 
     return {
-      items: dataResult.rows.map((row) => {
+      items: rows.map((row) => {
         const parsedRunId = Number.parseInt(row.id_run, 10);
         const groupId = row.group_id || row.recipient_value || null;
         return {

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import db from '../config/database.js';
+import verificationRepository from '../repositories/verification.repository.js';
 import { sendSystemEmail } from '../utils/systemEmail.util.js';
 
 class VerificationService {
@@ -15,44 +15,24 @@ class VerificationService {
    */
   async saveVerificationCode(email, code, type = 'email_verification', expiresInMinutes = 10) {
     // Đánh dấu các mã cũ của email này là đã sử dụng
-    await db.query(
-      'UPDATE verification_codes SET is_used = TRUE WHERE LOWER(email) = LOWER($1) AND type = $2 AND is_used = FALSE',
-      [email, type]
-    );
+    await verificationRepository.markUnusedCodesAsUsed(email, type);
 
     // Dùng SQL NOW() để tránh lệch timezone giữa Node.js và DB server
-    const result = await db.query(
-      `INSERT INTO verification_codes (email, code, type, expires_at)
-       VALUES ($1, $2, $3, NOW() + ($4 || ' minutes')::interval)
-       RETURNING id`,
-      [email, code, type, expiresInMinutes]
-    );
-
-    return result.rows[0];
+    return verificationRepository.createCode({ email, code, type, expiresInMinutes });
   }
 
   /**
    * Xác minh mã
    */
   async verifyCode(email, code, type = 'email_verification') {
-    const result = await db.query(
-      `SELECT * FROM verification_codes
-       WHERE LOWER(email) = LOWER($1) AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
-       ORDER BY created_at DESC LIMIT 1`,
-      [email, code, type]
-    );
-
-    return result.rows[0] || null;
+    return verificationRepository.findValidCode({ email, code, type });
   }
 
   /**
    * Đánh dấu mã đã sử dụng
    */
   async markCodeAsUsed(id) {
-    await db.query(
-      'UPDATE verification_codes SET is_used = TRUE WHERE id = $1',
-      [id]
-    );
+    await verificationRepository.markAsUsed(id);
   }
 
   /**
@@ -100,13 +80,7 @@ class VerificationService {
    * Tìm invitation token (không cần email, chỉ cần token)
    */
   async findInvitationByToken(token) {
-    const result = await db.query(
-      `SELECT * FROM verification_codes
-       WHERE code = $1 AND type = 'employee_invitation' AND is_used = FALSE AND expires_at > NOW()
-       ORDER BY created_at DESC LIMIT 1`,
-      [token]
-    );
-    return result.rows[0] || null;
+    return verificationRepository.findValidToken({ token, type: 'employee_invitation' });
   }
 
   /**
@@ -162,13 +136,7 @@ class VerificationService {
    * Tìm password reset token
    */
   async findPasswordResetToken(token) {
-    const result = await db.query(
-      `SELECT * FROM verification_codes
-       WHERE code = $1 AND type = 'password_reset' AND is_used = FALSE AND expires_at > NOW()
-       ORDER BY created_at DESC LIMIT 1`,
-      [token]
-    );
-    return result.rows[0] || null;
+    return verificationRepository.findValidToken({ token, type: 'password_reset' });
   }
 
   /**

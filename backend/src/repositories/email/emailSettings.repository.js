@@ -189,6 +189,40 @@ class EmailSettingsRepository {
     );
   }
 
+  async withTransaction(callback) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async findEmailDeliveryStatus(userId, email) {
+    const result = await db.query(
+      `SELECT email_subscribed, email_hard_bounced
+       FROM customers
+       WHERE id_user = $1 AND LOWER(email) = $2
+       LIMIT 1`,
+      [userId, String(email || '').trim().toLowerCase()]
+    );
+    return result.rows[0] || null;
+  }
+
+  async markCustomerHardBounced(userId, email) {
+    await db.query(
+      `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
+       WHERE id_user = $1 AND LOWER(email) = $2`,
+      [userId, String(email || '').trim().toLowerCase()]
+    );
+  }
+
   async findCustomerByEmail(client, userId, email) {
     const result = await client.query('SELECT id FROM customers WHERE id_user = $1 AND email = $2 LIMIT 1', [
       userId,

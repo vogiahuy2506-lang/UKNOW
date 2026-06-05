@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 import customerHelperService from './customerHelper.service.js';
 
 class CustomerJourneyService {
@@ -16,11 +16,8 @@ class CustomerJourneyService {
       throw error;
     }
 
-    const customerResult = await db.query(
-      'SELECT id FROM customers WHERE id = $1 AND id_user = $2',
-      [customerId, userId]
-    );
-    if (customerResult.rows.length === 0) {
+    const customer = await customerReadRepository.findOwnedCustomer(customerId, userId);
+    if (!customer) {
       const error = new Error('Không tìm thấy khách hàng');
       error.statusCode = 404;
       throw error;
@@ -36,32 +33,9 @@ class CustomerJourneyService {
   async getCampaignParticipations({ userId, customerId }) {
     await this.assertCustomerOwnership(customerId, userId);
 
-    const participationResult = await db.query(
-      `SELECT cc.id_campaign,
-              c.campaign_name,
-              c.status AS campaign_status,
-              cc.joined_at,
-              cc.email_received_count,
-              cc.email_opened_count,
-              cc.email_clicked_count,
-              cc.has_opened,
-              cc.has_clicked,
-              cc.first_email_sent_at,
-              cc.last_email_sent_at,
-              cc.first_email_opened_at,
-              cc.last_email_opened_at,
-              cc.first_email_clicked_at,
-              cc.last_email_clicked_at,
-              cc.last_activity_at
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE cc.id_customer = $1
-         AND c.id_user = $2
-       ORDER BY cc.last_activity_at DESC NULLS LAST, cc.joined_at DESC`,
-      [customerId, userId]
-    );
+    const participationRows = await customerReadRepository.getCustomerCampaignParticipations(customerId, userId);
 
-    return participationResult.rows.map((item) => ({
+    return participationRows.map((item) => ({
       campaignId: item.id_campaign,
       campaignName: item.campaign_name,
       campaignStatus: item.campaign_status,
@@ -94,86 +68,13 @@ class CustomerJourneyService {
       ? parseInt(campaignId, 10)
       : null;
 
-    const eventParams = [customerId];
-    let eventFilter = '';
-    if (Number.isFinite(campaignIdNum)) {
-      eventParams.push(campaignIdNum);
-      eventFilter = ` AND cj.id_campaign = $${eventParams.length}`;
-    }
+    const [journeyEvents, emailMessages, participationRows] = await Promise.all([
+      customerReadRepository.getJourneyEvents({ customerId, campaignIdNum }),
+      customerReadRepository.getJourneyEmailMessages({ customerId, campaignIdNum }),
+      customerReadRepository.getJourneyCampaignParticipations({ customerId, userId, campaignIdNum }),
+    ]);
 
-    const journeyEventsResult = await db.query(
-      `SELECT cj.*,
-              c.campaign_name
-       FROM customer_journey cj
-       LEFT JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE cj.id_customer = $1
-         AND cj.id_run IS NOT NULL
-         ${eventFilter}
-       ORDER BY cj.event_at DESC
-       LIMIT 200`,
-      eventParams
-    );
-
-    const emailParams = [customerId];
-    let emailFilter = '';
-    if (Number.isFinite(campaignIdNum)) {
-      emailParams.push(campaignIdNum);
-      emailFilter = ` AND em.id_campaign = $${emailParams.length}`;
-    }
-
-    const emailMessagesResult = await db.query(
-      `SELECT em.id,
-              em.id_campaign,
-              c.campaign_name,
-              em.subject,
-              em.status,
-              em.sent_at,
-              em.first_opened_at,
-              em.last_opened_at,
-              em.open_count,
-              em.first_clicked_at,
-              em.click_count,
-              em.body_html,
-              em.body_text,
-              em.created_at
-       FROM email_messages em
-       LEFT JOIN campaigns c ON c.id = em.id_campaign
-       WHERE em.id_customer = $1
-         AND em.id_run IS NOT NULL
-         ${emailFilter}
-       ORDER BY COALESCE(em.sent_at, em.created_at) DESC
-       LIMIT 200`,
-      emailParams
-    );
-
-    const participationParams = [customerId, userId];
-    let participationFilter = '';
-    if (Number.isFinite(campaignIdNum)) {
-      participationParams.push(campaignIdNum);
-      participationFilter = ` AND cc.id_campaign = $${participationParams.length}`;
-    }
-
-    const participationResult = await db.query(
-      `SELECT cc.id_campaign,
-              c.campaign_name,
-              c.status AS campaign_status,
-              cc.joined_at,
-              cc.email_received_count,
-              cc.email_opened_count,
-              cc.email_clicked_count,
-              cc.has_opened,
-              cc.has_clicked,
-              cc.last_activity_at
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE cc.id_customer = $1
-         AND c.id_user = $2
-         ${participationFilter}
-       ORDER BY cc.last_activity_at DESC NULLS LAST, cc.joined_at DESC`,
-      participationParams
-    );
-
-    const rawJourneyEvents = journeyEventsResult.rows.map((row) => customerHelperService.mapJourneyEvent(row));
+    const rawJourneyEvents = journeyEvents.map((row) => customerHelperService.mapJourneyEvent(row));
     const existingEventKeys = new Set(
       rawJourneyEvents
         .filter((event) => event.idEmailMessage)
@@ -181,7 +82,7 @@ class CustomerJourneyService {
     );
 
     const derivedEmailEvents = [];
-    emailMessagesResult.rows.forEach((message) => {
+    emailMessages.forEach((message) => {
       const sentAt = message.sent_at || message.created_at;
       if (sentAt && !existingEventKeys.has(`email_sent:${message.id}`)) {
         derivedEmailEvents.push({
@@ -248,7 +149,7 @@ class CustomerJourneyService {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     const summary = {
-      campaigns: participationResult.rows.map((item) => ({
+      campaigns: participationRows.map((item) => ({
         campaignId: item.id_campaign,
         campaignName: item.campaign_name,
         campaignStatus: item.campaign_status,
@@ -260,7 +161,7 @@ class CustomerJourneyService {
         hasClicked: item.has_clicked,
         lastActivityAt: item.last_activity_at,
       })),
-      emailJourney: emailMessagesResult.rows.map((message, index) => ({
+      emailJourney: emailMessages.map((message, index) => ({
         emailIndex: index + 1,
         emailMessageId: message.id,
         campaignId: message.id_campaign,

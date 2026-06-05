@@ -1,8 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../config/database.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
+
+function createServiceError(message, statusCode, extra = {}) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  Object.assign(error, extra);
+  return error;
+}
 
 class EmailSettingsSmtpService {
   /**
@@ -53,17 +59,14 @@ class EmailSettingsSmtpService {
     return false;
   }
 
-  async logEmailSent(ctx, payload) {
+  async logEmailSent(payload) {
     const runIdNum = Number.isFinite(parseInt(payload?.runId, 10))
       ? parseInt(payload.runId, 10)
       : null;
     // Không có runId thì coi là gửi demo/manual, không tạo bản ghi email_messages/journey để tránh dữ liệu mồ côi.
     if (!runIdNum) return null;
 
-    const client = await db.getClient();
-    try {
-      await client.query('BEGIN');
-
+    return emailSettingsRepository.withTransaction(async (client) => {
       let campaignIdNum = Number.isFinite(parseInt(payload.campaignId, 10)) ? parseInt(payload.campaignId, 10) : null;
       const templateIdNum = Number.isFinite(parseInt(payload.emailTemplateId, 10))
         ? parseInt(payload.emailTemplateId, 10)
@@ -134,306 +137,245 @@ class EmailSettingsSmtpService {
         await emailSettingsRepository.incrementCampaignSent(client, campaignIdNum);
       }
 
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+      return emailMessageId;
+    });
   }
 
-  async testConnection(ctx, req, res) {
+  async testConnection(payload, deps) {
     try {
-      const { smtpHost, smtpPort, smtpUsername, smtpPassword } = req.body;
-      const transporter = ctx.createSmtpTransporter({
+      const { smtpHost, smtpPort, smtpUsername, smtpPassword } = payload;
+      const transporter = deps.createSmtpTransporter({
         host: smtpHost,
         port: smtpPort,
         username: smtpUsername,
         password: smtpPassword,
       });
       await transporter.verify();
-      res.json({
-        success: true,
-        message: 'Kết nối SMTP thành công',
-      });
+      return { message: 'Kết nối SMTP thành công' };
     } catch (error) {
-      console.error('Test SMTP connection error:', error);
-      res.status(400).json({
-        success: false,
-        message: 'Không thể kết nối đến SMTP server: ' + error.message,
-      });
+      throw createServiceError('Không thể kết nối đến SMTP server: ' + error.message, 400);
     }
   }
 
-  async sendTestEmail(ctx, req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const { id } = req.params;
-      const { to, subject, content, htmlContent } = req.body;
-      const setting = await emailSettingsRepository.getById(userId, id, { roleCode });
-      if (!setting) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy cấu hình email',
-        });
-      }
-
-      const transporter = ctx.createSmtpTransporter({
-        host: setting.smtp_host,
-        port: setting.smtp_port,
-        username: setting.smtp_username,
-        password: decryptSmtpSecret(setting.smtp_password),
-      });
-
-      const info = await transporter.sendMail({
-        text: content || 'Đây là email test từ hệ thống Founder AI',
-        html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
-      });
-
-      await emailSettingsRepository.incrementSentCount(id);
-      res.json({
-        success: true,
-        message: 'Gửi email thành công',
-        data: {
-          messageId: info.messageId,
-          to,
-          subject,
-        },
-      });
-    } catch (error) {
-      console.error('Send test email error:', error);
-      ctx.handleSmtpError(error, res);
+  async sendTestEmail({ userId, roleCode, id, payload }, deps) {
+    const { to, subject, content, htmlContent } = payload;
+    const setting = await emailSettingsRepository.getById(userId, id, { roleCode });
+    if (!setting) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
+
+    const transporter = deps.createSmtpTransporter({
+      host: setting.smtp_host,
+      port: setting.smtp_port,
+      username: setting.smtp_username,
+      password: decryptSmtpSecret(setting.smtp_password),
+    });
+
+    const info = await transporter.sendMail({
+      text: content || 'Đây là email test từ hệ thống Founder AI',
+      html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
+    });
+
+    await emailSettingsRepository.incrementSentCount(id);
+    return {
+      messageId: info.messageId,
+      to,
+      subject,
+    };
   }
 
-  async sendCustomEmail(ctx, req, res) {
-    try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
-      const isPreviewMode = this.normalizePreviewMode(req.body);
-      const isBuilderMode = this.normalizeBuilderMode(req.body);
-      const {
-        fromEmailId,
-        to,
-        cc,
-        bcc,
-        subject,
-        content,
-        htmlContent,
-        attachments,
-        campaignId,
-        emailTemplateId,
-        saveMessageLog,
-        customerId,
-        runId = null,
-      } = req.body;
-      const normalizedRunId = Number.isFinite(parseInt(runId, 10))
-        ? parseInt(runId, 10)
-        : null;
-      /**
-       * Builder chỉ dùng demo/test:
-       * - không tracking/unsubscribe rewrite
-       * - không ghi email_messages/customer_journey/campaign_participations
-       * - không update cờ bounce/subscribed ở bảng customer
-       */
-      const shouldForcePreviewOnly = isPreviewMode || isBuilderMode || !normalizedRunId;
-      const shouldSaveMessageLog = Boolean(saveMessageLog) && !shouldForcePreviewOnly;
+  async sendCustomEmail({ userId, roleCode, payload, trackingConfig }, deps) {
+    const isPreviewMode = this.normalizePreviewMode(payload);
+    const isBuilderMode = this.normalizeBuilderMode(payload);
+    const {
+      fromEmailId,
+      to,
+      cc,
+      bcc,
+      subject,
+      content,
+      htmlContent,
+      attachments,
+      campaignId,
+      emailTemplateId,
+      saveMessageLog,
+      customerId,
+      runId = null,
+    } = payload;
+    const normalizedRunId = Number.isFinite(parseInt(runId, 10))
+      ? parseInt(runId, 10)
+      : null;
+    /**
+     * Builder chỉ dùng demo/test:
+     * - không tracking/unsubscribe rewrite
+     * - không ghi email_messages/customer_journey/campaign_participations
+     * - không update cờ bounce/subscribed ở bảng customer
+     */
+    const shouldForcePreviewOnly = isPreviewMode || isBuilderMode || !normalizedRunId;
+    const shouldSaveMessageLog = Boolean(saveMessageLog) && !shouldForcePreviewOnly;
 
-      // Kiểm tra unsubscribe/hard bounce chỉ cho luồng run thật.
-      if (!shouldForcePreviewOnly && to) {
-        const customerCheck = await db.query(
-          `SELECT email_subscribed, email_hard_bounced
-           FROM customers
-           WHERE id_user = $1 AND LOWER(email) = $2
-           LIMIT 1`,
-          [userId, String(to).trim().toLowerCase()]
-        );
-        const row = customerCheck.rows[0];
-        if (row) {
-          if (row.email_subscribed === false) {
-            return res.status(422).json({
-              success: false,
-              message: 'Người nhận đã hủy đăng ký nhận email',
-              data: { skipped: true, reason: 'unsubscribed' },
-            });
-          }
-          if (row.email_hard_bounced === true) {
-            return res.status(422).json({
-              success: false,
-              message: 'Địa chỉ email người nhận bị hard bounce — không thể gửi',
-              data: { skipped: true, reason: 'hard_bounced' },
-            });
-          }
+    // Kiểm tra unsubscribe/hard bounce chỉ cho luồng run thật.
+    if (!shouldForcePreviewOnly && to) {
+      const row = await emailSettingsRepository.findEmailDeliveryStatus(userId, to);
+      if (row) {
+        if (row.email_subscribed === false) {
+          throw createServiceError('Người nhận đã hủy đăng ký nhận email', 422, {
+            data: { skipped: true, reason: 'unsubscribed' },
+          });
+        }
+        if (row.email_hard_bounced === true) {
+          throw createServiceError('Địa chỉ email người nhận bị hard bounce — không thể gửi', 422, {
+            data: { skipped: true, reason: 'hard_bounced' },
+          });
         }
       }
+    }
 
-      const ccList = ctx.normalizeEmailList(cc);
-      const bccList = ctx.normalizeEmailList(bcc);
-      const trackingToken = uuidv4();
-      const trackingConfig = ctx.resolveTrackingBaseUrl(req);
-      const { baseUrl: trackingBaseUrl, isPublic, source } = trackingConfig;
-      const trackingWarnings = [];
-      if (!shouldForcePreviewOnly && !isPublic) {
-        trackingWarnings.push(
-          'Tracking URL chưa public. Hãy đặt TRACKING_BASE_URL là domain HTTPS public để theo dõi mở/click từ Gmail.'
-        );
-      }
-
-      const setting = await emailSettingsRepository.getActiveById(userId, fromEmailId, { roleCode });
-      if (!setting) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy cấu hình email hoặc email chưa kích hoạt',
-        });
-      }
-
-      const transporter = ctx.createSmtpTransporter({
-        host: setting.smtp_host,
-        port: setting.smtp_port,
-        username: setting.smtp_username,
-        password: decryptSmtpSecret(setting.smtp_password),
-      });
-
-      const plainTextContent = content || 'Đây là email từ hệ thống Founder AI';
-      const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
-      // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
-      /**
-       * Luôn thêm footer hủy đăng ký/chính sách bảo mật cho cả Build và Run để email nhất quán.
-       * - Build/preview: chỉ thêm footer, tắt rewrite click tracking.
-       * - Run thật: giữ đầy đủ tracking open/click như hiện tại.
-       */
-      const trackedHtmlContent = await ctx.buildTrackedHtml(
-        rawHtml,
-        trackingBaseUrl,
-        trackingToken,
-        campaignId,
-        customerId,
-        normalizedRunId,
-        { enableClickTracking: !shouldForcePreviewOnly }
+    const ccList = deps.normalizeEmailList(cc);
+    const bccList = deps.normalizeEmailList(bcc);
+    const trackingToken = uuidv4();
+    const { baseUrl: trackingBaseUrl, isPublic, source } = trackingConfig;
+    const trackingWarnings = [];
+    if (!shouldForcePreviewOnly && !isPublic) {
+      trackingWarnings.push(
+        'Tracking URL chưa public. Hãy đặt TRACKING_BASE_URL là domain HTTPS public để theo dõi mở/click từ Gmail.'
       );
+    }
 
-      const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
-        ? await ctx.buildMailAttachments(attachments)
-        : [];
+    const setting = await emailSettingsRepository.getActiveById(userId, fromEmailId, { roleCode });
+    if (!setting) {
+      throw createServiceError('Không tìm thấy cấu hình email hoặc email chưa kích hoạt', 404);
+    }
 
-      let info;
-      try {
-        info = await transporter.sendMail({
-          from: `"${setting.name}" <${setting.email}>`,
-          to,
-          cc: ccList.length ? ccList : undefined,
-          bcc: bccList.length ? bccList : undefined,
-          subject: subject || 'Email từ Founder AI',
-          text: plainTextContent,
-          html: trackedHtmlContent || `<p>${plainTextContent}</p>`,
-          attachments: realMailAttachments.length ? realMailAttachments : undefined,
-        });
-      } catch (smtpError) {
-        // Phân loại và xử lý bounce khi SMTP từ chối
-        const smtpConfigError = isSmtpAuthConfigError(smtpError);
-        const bounceType = classifyBounceType(smtpError);
-        const bounceReason = String(smtpError?.message || '').slice(0, 500);
-        if (smtpConfigError) {
-          console.warn(`[sendCustomEmail] SMTP config/auth error cho ${to}: ${bounceReason}`);
-        } else {
-          console.warn(`[sendCustomEmail] SMTP ${bounceType} bounce cho ${to}: ${bounceReason}`);
-        }
+    const transporter = deps.createSmtpTransporter({
+      host: setting.smtp_host,
+      port: setting.smtp_port,
+      username: setting.smtp_username,
+      password: decryptSmtpSecret(setting.smtp_password),
+    });
 
-        // Chỉ tăng thống kê gửi ở luồng chạy thật có runId hợp lệ.
-        if (!shouldForcePreviewOnly) {
-          await emailSettingsRepository.incrementSentCount(fromEmailId).catch(() => {});
-        }
+    const plainTextContent = content || 'Đây là email từ hệ thống Founder AI';
+    const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
+    // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
+    /**
+     * Luôn thêm footer hủy đăng ký/chính sách bảo mật cho cả Build và Run để email nhất quán.
+     * - Build/preview: chỉ thêm footer, tắt rewrite click tracking.
+     * - Run thật: giữ đầy đủ tracking open/click như hiện tại.
+     */
+    const trackedHtmlContent = await deps.buildTrackedHtml(
+      rawHtml,
+      trackingBaseUrl,
+      trackingToken,
+      campaignId,
+      customerId,
+      normalizedRunId,
+      { enableClickTracking: !shouldForcePreviewOnly }
+    );
 
-        if (smtpConfigError) {
-          return res.status(422).json({
-            success: false,
-            message: `Lỗi cấu hình SMTP: ${bounceReason}`,
-            data: {
-              failed: true,
-              errorType: 'smtp_config',
-              error: bounceReason,
-              to,
-            },
-          });
-        }
+    const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
+      ? await deps.buildMailAttachments(attachments)
+      : [];
 
-        // Hard bounce chỉ cập nhật ở run thật, tránh làm bẩn dữ liệu khi Builder demo.
-        if (bounceType === 'hard' && !shouldForcePreviewOnly) {
-          await db.query(
-            `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
-             WHERE id_user = $1 AND LOWER(email) = $2`,
-            [userId, String(to).trim().toLowerCase()]
-          ).catch((e) => console.error('[sendCustomEmail] Lỗi cập nhật hard bounce:', e.message));
-        }
-
-        return res.status(422).json({
-          success: false,
-          message: `${bounceType === 'hard' ? 'Hard bounce' : 'Soft bounce'}: ${bounceReason}`,
-          data: {
-            bounced: true,
-            bounceType,
-            bounceReason,
-            to,
-          },
-        });
+    let info;
+    try {
+      info = await transporter.sendMail({
+        from: `"${setting.name}" <${setting.email}>`,
+        to,
+        cc: ccList.length ? ccList : undefined,
+        bcc: bccList.length ? bccList : undefined,
+        subject: subject || 'Email từ Founder AI',
+        text: plainTextContent,
+        html: trackedHtmlContent || `<p>${plainTextContent}</p>`,
+        attachments: realMailAttachments.length ? realMailAttachments : undefined,
+      });
+    } catch (smtpError) {
+      // Phân loại và xử lý bounce khi SMTP từ chối
+      const smtpConfigError = isSmtpAuthConfigError(smtpError);
+      const bounceType = classifyBounceType(smtpError);
+      const bounceReason = String(smtpError?.message || '').slice(0, 500);
+      if (smtpConfigError) {
+        console.warn(`[sendCustomEmail] SMTP config/auth error cho ${to}: ${bounceReason}`);
+      } else {
+        console.warn(`[sendCustomEmail] SMTP ${bounceType} bounce cho ${to}: ${bounceReason}`);
       }
 
-      // Chỉ tăng bộ đếm gửi trong DB với luồng run thật.
+      // Chỉ tăng thống kê gửi ở luồng chạy thật có runId hợp lệ.
       if (!shouldForcePreviewOnly) {
-        await emailSettingsRepository.incrementSentCount(fromEmailId);
+        await emailSettingsRepository.incrementSentCount(fromEmailId).catch(() => {});
       }
 
-      const sentAt = new Date();
-      if (shouldSaveMessageLog) {
-        try {
-          await this.logEmailSent(ctx, {
-            userId,
-            campaignId,
-            customerId,
-            emailTemplateId,
-            fromEmailId,
+      if (smtpConfigError) {
+        throw createServiceError(`Lỗi cấu hình SMTP: ${bounceReason}`, 422, {
+          data: {
+            failed: true,
+            errorType: 'smtp_config',
+            error: bounceReason,
             to,
-            subject,
-            trackedHtmlContent,
-            plainTextContent,
-            trackingToken,
-            info,
-            sentAt,
-            setting,
-            runId: normalizedRunId,
-          });
-        } catch (logError) {
-          console.error('Log email message error:', logError);
-        }
+          },
+        });
       }
 
-      res.json({
-        success: true,
-        message: 'Gửi email thành công',
+      // Hard bounce chỉ cập nhật ở run thật, tránh làm bẩn dữ liệu khi Builder demo.
+      if (bounceType === 'hard' && !shouldForcePreviewOnly) {
+        await emailSettingsRepository.markCustomerHardBounced(userId, to)
+          .catch((e) => console.error('[sendCustomEmail] Lỗi cập nhật hard bounce:', e.message));
+      }
+
+      throw createServiceError(`${bounceType === 'hard' ? 'Hard bounce' : 'Soft bounce'}: ${bounceReason}`, 422, {
         data: {
-          messageId: info.messageId,
-          from: setting.email,
+          bounced: true,
+          bounceType,
+          bounceReason,
           to,
-          cc: ccList,
-          bcc: bccList,
-          subject,
-          sentAt: ctx.formatUtc7(),
-          tracking: {
-            baseUrl: trackingBaseUrl,
-            source,
-            isPublic,
-            warnings: trackingWarnings,
-          },
         },
       });
-    } catch (error) {
-      console.error('Send custom email error:', error);
-      ctx.handleSmtpError(error, res);
     }
-  }
 
+    // Chỉ tăng bộ đếm gửi trong DB với luồng run thật.
+    if (!shouldForcePreviewOnly) {
+      await emailSettingsRepository.incrementSentCount(fromEmailId);
+    }
+
+    const sentAt = new Date();
+    if (shouldSaveMessageLog) {
+      try {
+        await this.logEmailSent({
+          userId,
+          campaignId,
+          customerId,
+          emailTemplateId,
+          fromEmailId,
+          to,
+          subject,
+          trackedHtmlContent,
+          plainTextContent,
+          trackingToken,
+          info,
+          sentAt,
+          setting,
+          runId: normalizedRunId,
+        });
+      } catch (logError) {
+        console.error('Log email message error:', logError);
+      }
+    }
+
+    return {
+      messageId: info.messageId,
+      from: setting.email,
+      to,
+      cc: ccList,
+      bcc: bccList,
+      subject,
+      sentAt: deps.formatUtc7(),
+      tracking: {
+        baseUrl: trackingBaseUrl,
+        source,
+        isPublic,
+        warnings: trackingWarnings,
+      },
+    };
+  }
 }
 
 export default new EmailSettingsSmtpService();

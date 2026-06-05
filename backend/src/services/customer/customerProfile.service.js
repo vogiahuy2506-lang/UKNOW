@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 import customerHelperService from './customerHelper.service.js';
 
 class CustomerProfileService {
@@ -9,135 +9,23 @@ class CustomerProfileService {
    * @returns {Promise<object|null>}
    */
   async getById({ userId, customerId }) {
-    const result = await db.query(
-      `SELECT
-          c.id, c.id_user, c.email, c.phone, c.zalo_id, c.zalo_phone, c.facebook_id,
-          c.full_name, c.gender, c.customer_source, c.source_landing_page, c.source_form_id,
-          c.utm_source, c.utm_medium, c.utm_campaign,
-          c.zalo_in_group, c.id_zalo_group,
-          c.zalo_group_joined_at::timestamptz AS zalo_group_joined_at,
-          c.zalo_is_friend,
-          c.zalo_friend_added_at::timestamptz AS zalo_friend_added_at,
-          c.has_purchased, c.total_orders, c.total_spent,
-          c.last_order_at::timestamptz AS last_order_at,
-          c.email_subscribed,
-          c.email_unsubscribed_at::timestamptz AS email_unsubscribed_at,
-          c.last_email_sent_at::timestamptz AS last_email_sent_at,
-          c.last_email_opened_at::timestamptz AS last_email_opened_at,
-          c.last_zalo_sent_at::timestamptz AS last_zalo_sent_at,
-          c.last_zalo_read_at::timestamptz AS last_zalo_read_at,
-          c.notes, c.custom_fields,
-          c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-          c.email_hard_bounced
-       FROM customers c WHERE c.id = $1 AND c.id_user = $2`,
-      [customerId, userId]
-    );
-    if (result.rows.length === 0) return null;
+    const customer = await customerReadRepository.getCustomerProfile(customerId, userId);
+    if (!customer) return null;
 
-    const customer = result.rows[0];
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
+    const [
+      purchases,
+      campaignParticipationsRows,
+      emailMessages,
+      journeyRows,
+    ] = await Promise.all([
+      customerReadRepository.getCustomerPurchases(customerId, purchaseOrderStatusExpr),
+      customerReadRepository.getCustomerCampaignParticipations(customerId, userId),
+      customerReadRepository.getCustomerEmailMessages(customerId),
+      customerReadRepository.getCustomerRecentJourneyEvents(customerId),
+    ]);
 
-    const purchasesResult = await db.query(
-      `SELECT cp.id, cp.id_customer, cp.id_course, cp.id_campaign, cp.product_name, cp.product_type,
-              cp.amount, cp.currency,
-              cp.purchase_date::timestamptz AS purchase_date,
-              cp.order_id, cp.payment_method,
-              cp.created_at::timestamptz AS created_at,
-              cp.id_email_message, cp.id_run, cp.id_zalo_message,
-              c.course_name,
-              c.course_code,
-              camp.campaign_name,
-              cc.email_received_count,
-              cc.email_clicked_count,
-              pe.event_data AS purchase_event_data
-       FROM customer_purchases cp
-       LEFT JOIN courses c ON c.id = cp.id_course
-       LEFT JOIN campaigns camp ON camp.id = cp.id_campaign
-       LEFT JOIN campaign_customers cc
-              ON cc.id_campaign = cp.id_campaign
-             AND cc.id_customer = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = CASE
-                WHEN ${purchaseOrderStatusExpr} = 'on-hold' THEN 'course_interest'
-                ELSE 'course_purchase'
-            END
-            AND COALESCE(cj.event_data->>'orderId', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_customer = $1
-       ORDER BY cp.purchase_date DESC
-       LIMIT 20`,
-      [customerId]
-    );
-
-    const campaignParticipationResult = await db.query(
-      `SELECT cc.id_campaign,
-              c.campaign_name,
-              c.status AS campaign_status,
-              cc.joined_at::timestamptz AS joined_at,
-              cc.email_received_count,
-              cc.email_opened_count,
-              cc.email_clicked_count,
-              cc.has_opened,
-              cc.has_clicked,
-              cc.first_email_sent_at::timestamptz AS first_email_sent_at,
-              cc.last_email_sent_at::timestamptz AS last_email_sent_at,
-              cc.first_email_opened_at::timestamptz AS first_email_opened_at,
-              cc.last_email_opened_at::timestamptz AS last_email_opened_at,
-              cc.first_email_clicked_at::timestamptz AS first_email_clicked_at,
-              cc.last_email_clicked_at::timestamptz AS last_email_clicked_at,
-              cc.last_activity_at::timestamptz AS last_activity_at
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE cc.id_customer = $1
-         AND c.id_user = $2
-       ORDER BY cc.last_activity_at DESC NULLS LAST, cc.joined_at DESC`,
-      [customerId, userId]
-    );
-
-    const emailMessagesResult = await db.query(
-      `SELECT em.id,
-              em.id_campaign,
-              c.campaign_name,
-              em.id_email_template,
-              et.template_name AS email_template_name,
-              em.sequence_message_order,
-              em.subject,
-              em.status,
-              em.sent_at::timestamptz AS sent_at,
-              em.delivered_at::timestamptz AS delivered_at,
-              em.first_opened_at::timestamptz AS first_opened_at,
-              em.last_opened_at::timestamptz AS last_opened_at,
-              em.open_count,
-              em.first_clicked_at::timestamptz AS first_clicked_at,
-              em.click_count,
-              em.body_html,
-              em.body_text,
-              em.created_at::timestamptz AS created_at
-       FROM email_messages em
-       LEFT JOIN campaigns c ON c.id = em.id_campaign
-       LEFT JOIN email_templates et ON et.id = em.id_email_template
-       WHERE em.id_customer = $1
-       ORDER BY COALESCE(em.sent_at, em.created_at) DESC
-       LIMIT 100`,
-      [customerId]
-    );
-
-    const journeyResult = await db.query(
-      `SELECT cj.id, cj.id_customer, cj.id_campaign, cj.event_type, cj.event_channel,
-              cj.id_node, cj.id_email_message, cj.id_zalo_message, cj.event_data,
-              cj.ip_address, cj.user_agent, cj.device_type, cj.country, cj.city,
-              cj.event_at::timestamptz AS event_at, cj.id_run
-       FROM customer_journey cj WHERE cj.id_customer = $1 ORDER BY cj.event_at DESC LIMIT 20`,
-      [customerId]
-    );
-
-    const campaignParticipations = campaignParticipationResult.rows.map((item) => ({
+    const campaignParticipations = campaignParticipationsRows.map((item) => ({
       campaignId: item.id_campaign,
       campaignName: item.campaign_name,
       campaignStatus: item.campaign_status,
@@ -156,7 +44,7 @@ class CustomerProfileService {
       lastActivityAt: item.last_activity_at,
     }));
 
-    const emailJourney = emailMessagesResult.rows.map((em, index) => ({
+    const emailJourney = emailMessages.map((em, index) => ({
       emailIndex: index + 1,
       emailMessageId: em.id,
       campaignId: em.id_campaign,
@@ -206,7 +94,7 @@ class CustomerProfileService {
       createdAt: customer.created_at,
       updatedAt: customer.updated_at,
       tags: [],
-      purchases: purchasesResult.rows.map((p) => {
+      purchases: purchases.map((p) => {
         const normalizedOrderStatus = String(p.order_status || '')
           .trim()
           .toLowerCase()
@@ -249,7 +137,7 @@ class CustomerProfileService {
       }),
       campaignParticipations,
       emailJourney,
-      journey: journeyResult.rows.map((j) => ({
+      journey: journeyRows.map((j) => ({
         id: j.id,
         eventType: j.event_type,
         eventChannel: j.event_channel,

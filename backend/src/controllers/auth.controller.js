@@ -6,6 +6,7 @@ import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getSystemAuditContext } from '../utils/auditContext.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -83,7 +84,7 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
 
-      logSystem(req, AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+      logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
 
       return res.status(201).json({
         success: true,
