@@ -4,8 +4,8 @@ import { HiArrowLeft, HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi'
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
-import api from '../../services/api';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
+import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
 import QRCode from 'qrcode';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
@@ -80,7 +80,7 @@ const CheckoutPage = () => {
             }
 
             if (displayPrice <= 0 && !appliedVoucher) {
-                const { data } = await api.post('/payments/activate-free', {
+                const { data } = await checkoutApiService.activateFreePlan({
                     planCode: plan.code,
                     billingPeriod,
                 });
@@ -92,7 +92,7 @@ const CheckoutPage = () => {
                 return;
             }
 
-            const { data } = await api.post('/payments/create-payment', {
+            const { data } = await checkoutApiService.createPayment({
                 planCode: plan.code,
                 userEmail,
                 billingPeriod,
@@ -165,8 +165,7 @@ const CheckoutPage = () => {
 
         pollingRef.current = setInterval(async () => {
             try {
-                const res = await fetch(`/api/payments/status/${orderCode}`);
-                const data = await res.json();
+                const data = await checkoutApiService.getPaymentStatus(orderCode);
                 if (data.status === 'success') {
                     clearInterval(pollingRef.current);
                     navigate('/payment-success', { state: { orderCode, fromCheckout: true } });

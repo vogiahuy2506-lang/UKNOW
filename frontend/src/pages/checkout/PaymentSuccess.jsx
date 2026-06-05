@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { HiOutlineCheckCircle, HiArrowRight, HiOutlineDocumentText } from 'react-icons/hi';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
+import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
 
 const GLASS_CARD = 'bg-white/70 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
 
@@ -25,8 +26,7 @@ const PaymentSuccessPage = () => {
                 return;
             }
             try {
-                const res = await fetch(`/api/payments/status/${code}`);
-                const data = await res.json();
+                const data = await checkoutApiService.getPaymentStatus(code);
                 if (data.status === 'success') {
                     setVerified(true);
                     setOrderCode(code);

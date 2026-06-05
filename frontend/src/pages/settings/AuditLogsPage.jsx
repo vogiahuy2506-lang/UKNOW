@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HiOutlineRefresh, HiOutlineSearch } from 'react-icons/hi';
-import api from '../../services/api';
+import auditLogsApiService from '../../features/settings/services/auditLogsApi.service';
 
 const ACTION_LABELS = {
   EMPLOYEE_ADDED: 'Thêm nhân viên',
@@ -61,7 +61,7 @@ export default function AuditLogsPage() {
     try {
       const params = { page: currentPage, limit: 50, ...filters };
       Object.keys(params).forEach((k) => !params[k] && delete params[k]);
-      const res = await api.get('/audit-logs', { params });
+      const res = await auditLogsApiService.getAuditLogs(params);
       setLogs(res.data.data || []);
       setPagination(res.data.pagination || { total: 0, page: 1, pages: 1 });
     } catch (e) {

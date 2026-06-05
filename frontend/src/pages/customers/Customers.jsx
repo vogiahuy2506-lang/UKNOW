@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import {
@@ -12,6 +11,7 @@ import {
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatDateOnly } from '../../features/customers/utils/customerDisplay.helpers';
+import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 
 const STATUS_MAP = (t) => ({
   active: { label: t('campaigns.active'), cls: 'badge-success' },
@@ -42,12 +42,12 @@ const Customers = () => {
   const fetchCampaigns = async () => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
+      const params = {
         page: pagination.page,
         limit: 20,
         ...(search && { search }),
-      });
-      const res = await api.get(`/campaigns?${params}`);
+      };
+      const res = await campaignApiService.getCampaigns(params);
       const data = res.data?.data || {};
       const visibleCampaigns = (data.items || []).filter(
         (item) => String(item?.status || '').toLowerCase() !== 'draft'

@@ -5,7 +5,7 @@ import {
   HiOutlineClipboardCopy, HiOutlineCheck,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import chatbotApi from '../../services/chatbotApi';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
 
 function WebWidgetPage() {

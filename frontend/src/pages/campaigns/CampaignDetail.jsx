@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { getCampaignEngagementStatDefinitions } from '../../utils/campaignDetailEngagementLabels';
+import campaignApiService from '../../features/campaigns/services/campaignApi.service';
+import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
 import {
   HiOutlineArrowLeft,
   HiOutlinePencil,
@@ -31,7 +32,7 @@ const CampaignDetail = () => {
 
   const fetchCampaign = async () => {
     try {
-      const response = await api.get(`/campaigns/${id}`);
+      const response = await campaignApiService.getCampaignById(id);
       setCampaign(response.data.data);
     } catch (error) {
       toast.error(t('campaigns.loadFailed'));
@@ -45,7 +46,7 @@ const CampaignDetail = () => {
     try {
       const newStatus = campaign.status === 'active' ? 'paused' : 'active';
       if (newStatus === 'paused') {
-        const runResponse = await api.get(`/campaign-runs?campaignId=${id}&limit=20`);
+        const runResponse = await campaignRunApiService.getCampaignRuns(`campaignId=${id}&limit=20`);
         const campaignRuns = Array.isArray(runResponse.data?.data) ? runResponse.data.data : [];
         const hasRunningCampaignRun = campaignRuns.some((run) => run.status === 'running');
 
@@ -55,7 +56,7 @@ const CampaignDetail = () => {
         }
       }
 
-      await api.put(`/campaigns/${id}`, {
+      await campaignApiService.updateCampaign(id, {
         status: newStatus,
       });
       toast.success(newStatus === 'active' ? t('campaigns.activateSuccess') : t('campaigns.pauseSuccess'));

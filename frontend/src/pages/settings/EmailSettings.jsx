@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -55,7 +55,7 @@ const EmailSettings = () => {
 
   const fetchEmailSettings = async () => {
     try {
-      const response = await api.get('/email-settings');
+      const response = await emailSettingsApiService.listEmailSettings();
       const items = response.data?.data?.items;
       setEmailSettings(Array.isArray(items) ? items : []);
     } catch (error) {
@@ -70,10 +70,10 @@ const EmailSettings = () => {
     e.preventDefault();
     try {
       if (selectedEmail && !isAddingNew) {
-        await api.put(`/email-settings/${selectedEmail.id}`, formData);
+        await emailSettingsApiService.updateEmailSetting(selectedEmail.id, formData);
         toast.success(t('emailSettings.updateSuccess'));
       } else {
-        await api.post('/email-settings', formData);
+        await emailSettingsApiService.createEmailSetting(formData);
         toast.success(t('emailSettings.addSuccess'));
       }
       fetchEmailSettings();
@@ -90,7 +90,7 @@ const EmailSettings = () => {
   const handleSelectEmail = async (email) => {
     try {
       setIsAddingNew(false);
-      const response = await api.get(`/email-settings/${email.id}`);
+      const response = await emailSettingsApiService.getEmailSetting(email.id);
       const item = response.data?.data;
       setSelectedEmail(email);
       setFormData({
@@ -116,7 +116,7 @@ const EmailSettings = () => {
   const handleDelete = async (id) => {
     if (!confirm(t('emailSettings.confirmDelete'))) return;
     try {
-      await api.delete(`/email-settings/${id}`);
+      await emailSettingsApiService.deleteEmailSetting(id);
       toast.success(t('emailSettings.deleted'));
       fetchEmailSettings();
     } catch (error) {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import api from '../../services/api';
 import { useI18n } from '../../i18n';
+import { activateAccount } from '../../features/auth/services/authApi.service';
 
 const ActivatePage = () => {
   const { t } = useI18n();
@@ -23,7 +23,7 @@ const ActivatePage = () => {
       return;
     }
 
-    api.post('/auth/activate', { token })
+    activateAccount({ token })
       .then((res) => {
         setTokenInfo({ username: res.data.data?.username || '' });
         setState('success');

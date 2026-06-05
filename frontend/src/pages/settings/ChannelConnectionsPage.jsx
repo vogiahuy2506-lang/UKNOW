@@ -6,7 +6,7 @@ import {
   HiOutlinePlay, HiOutlineLogin, HiOutlineUserGroup,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import chatbotApi from '../../services/chatbotApi';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
 import { useSearchParams } from 'react-router-dom';
 
@@ -287,10 +287,7 @@ function GuideSection({ channel, connectedChannel }) {
 
 async function initFacebookOAuth() {
   try {
-    const res = await fetch('/api/webhooks/oauth/facebook/init', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    });
-    const data = await res.json();
+    const data = await chatbotApi.initFacebookOAuth();
     if (data.success && data.auth_url) {
       window.location.href = data.auth_url;
     } else {
@@ -303,10 +300,7 @@ async function initFacebookOAuth() {
 
 async function initZaloOAuth() {
   try {
-    const res = await fetch('/api/webhooks/oauth/zalo-oa/init', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    });
-    const data = await res.json();
+    const data = await chatbotApi.initZaloOAuth();
     if (data.success && data.auth_url) {
       window.location.href = data.auth_url;
     } else {

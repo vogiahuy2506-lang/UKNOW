@@ -6,7 +6,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
-import api from '../../services/api';
+import { sendVerificationCode } from '../../features/auth/services/authApi.service';
 import {
   HiOutlineLockClosed,
   HiOutlineEye,
@@ -96,7 +96,7 @@ const OtpStep = ({ email, formData, onBack }) => {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      await api.post('/verification/send-code', { email });
+      await sendVerificationCode({ email });
       setDigits(['', '', '', '', '', '']);
       startTimer();
       toast.success(t('register.resendSuccess'));
@@ -229,7 +229,7 @@ const Register = () => {
   const onSubmit = async (data) => {
     setIsSendingCode(true);
     try {
-      await api.post('/verification/send-code', { email: data.email, username: data.username });
+      await sendVerificationCode({ email: data.email, username: data.username });
       setOtpData({
         email: data.email,
         formData: {

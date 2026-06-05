@@ -4,7 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../../services/api';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
 export default function PublicChatbotPage() {
   const { chatbotId } = useParams();
@@ -37,7 +37,7 @@ export default function PublicChatbotPage() {
   const loadChatbot = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/chatbot-public/chatbot/${chatbotId}`);
+      const res = await chatbotApi.getPublicChatbot(chatbotId);
       if (res.data.success) {
         setChatbot(res.data.data);
         setMessages([{
@@ -61,7 +61,7 @@ export default function PublicChatbotPage() {
     setIsTyping(true);
 
     try {
-      const res = await api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/chat`, {
+      const res = await chatbotApi.sendPublicChatbotMessage(chatbotId, {
         message: text,
         history: messages.slice(-10),
       });

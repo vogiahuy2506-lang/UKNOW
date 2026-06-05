@@ -8,7 +8,7 @@ import {
   HiOutlineChevronRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import api from '../../services/api';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChatbotSettings from './ChatbotSettings';
 import ChatListSidebar from './ChatListSidebar';
 
@@ -135,7 +135,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const res = await api.post('/ai/custom-chat', {
+      const res = await chatbotApi.sendCustomChat({
         history: [...history, { role: 'user', content: input }],
         chatbot_id: chatbot?.id,
         system_instruction: chatbot?.system_instruction,

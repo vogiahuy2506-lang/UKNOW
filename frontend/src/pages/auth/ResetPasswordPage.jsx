@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import api from '../../services/api';
 import { useI18n } from '../../i18n';
+import { resetPassword } from '../../features/auth/services/authApi.service';
 
 const ResetPasswordPage = () => {
   const { t } = useI18n();
@@ -20,7 +20,7 @@ const ResetPasswordPage = () => {
     setIsSubmitting(true);
     setServerError('');
     try {
-      await api.post('/auth/reset-password', { token, password: values.password });
+      await resetPassword({ token, password: values.password });
       navigate('/login?reset=1', { replace: true });
     } catch (err) {
       setServerError(err?.response?.data?.message || t('resetPassword.errorReset'));

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
 import { useI18n } from '../../i18n';
+import { requestPasswordReset } from '../../features/auth/services/authApi.service';
 
 const ForgotPasswordPage = () => {
   const { t } = useI18n();
@@ -19,7 +19,7 @@ const ForgotPasswordPage = () => {
     }
     setIsLoading(true);
     try {
-      await api.post('/auth/forgot-password', { email: email.trim() });
+      await requestPasswordReset({ email: email.trim() });
       setSubmitted(true);
     } catch {
       setError(t('forgotPassword.errorSend'));

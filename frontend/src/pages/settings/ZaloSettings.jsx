@@ -12,8 +12,8 @@ import {
   HiOutlineTrash,
   HiOutlineXCircle,
 } from 'react-icons/hi';
-import api from '../../services/api';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
+import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 
 /**
  * Chuẩn hóa dữ liệu tài khoản Zalo trả về từ API
@@ -85,7 +85,7 @@ const ZaloSettings = () => {
    */
   const fetchAccounts = async () => {
     try {
-      const response = await api.get('/zalo/accounts');
+      const response = await zaloSettingsApiService.listAccounts();
       const apiItems = response.data?.data?.items;
       const normalized = Array.isArray(apiItems) ? apiItems.map(normalizeAccount) : [];
       setAccounts(normalized);
@@ -138,7 +138,7 @@ const ZaloSettings = () => {
     }
 
     try {
-      await api.delete(`/zalo/accounts/${accountId}`);
+      await zaloSettingsApiService.deleteAccount(accountId);
       await fetchAccounts();
       toast.success(t('zaloSettings.deleteSuccess'));
     } catch (error) {
@@ -153,7 +153,7 @@ const ZaloSettings = () => {
     }
 
     try {
-      await api.patch(`/zalo/accounts/${accountId}/default`);
+      await zaloSettingsApiService.setDefaultAccount(accountId);
       await fetchAccounts();
       toast.success(t('zaloSettings.setDefaultSuccess'));
     } catch (error) {
@@ -169,7 +169,7 @@ const ZaloSettings = () => {
 
     try {
       setIsCreatingQr(true);
-      const response = await api.post('/zalo/accounts/login-qr');
+      const response = await zaloSettingsApiService.createLoginQr();
       const qrPath = response.data?.data?.qrPath;
       const qrImage = response.data?.data?.qrImage;
       const sessionKey = response.data?.data?.sessionKey;
@@ -229,7 +229,7 @@ const ZaloSettings = () => {
 
     setRestoringAccountIds((prev) => (prev.includes(accountId) ? prev : [...prev, accountId]));
     try {
-      await api.post(`/zalo/accounts/${accountId}/restore-session`);
+      await zaloSettingsApiService.restoreSession(accountId);
       await fetchAccounts();
       toast.success(t('zaloSettings.restoreSuccess', { accountName: account?.displayName || 'Zalo Account' }));
     } catch (error) {
@@ -262,7 +262,7 @@ const ZaloSettings = () => {
     const pollStatus = async () => {
       if (disposed) return;
       try {
-        const response = await api.get(`/zalo/accounts/login-qr/${qrPreview.sessionKey}/status`);
+        const response = await zaloSettingsApiService.getLoginQrStatus(qrPreview.sessionKey);
         const status = response.data?.data?.status;
         const message = response.data?.data?.message;
         const account = response.data?.data?.account;

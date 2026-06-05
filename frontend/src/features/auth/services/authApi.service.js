@@ -36,3 +36,19 @@ export async function getMyOrders() {
   const response = await api.get('/users/my-orders');
   return response.data;
 }
+
+export function activateAccount(payload) {
+  return api.post('/auth/activate', payload);
+}
+
+export function requestPasswordReset(payload) {
+  return api.post('/auth/forgot-password', payload);
+}
+
+export function resetPassword(payload) {
+  return api.post('/auth/reset-password', payload);
+}
+
+export function sendVerificationCode(payload) {
+  return api.post('/verification/send-code', payload);
+}

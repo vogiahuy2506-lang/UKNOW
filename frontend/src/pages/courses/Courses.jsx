@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import courseApiService from '../../features/courses/services/courseApi.service';
 import {
   HiOutlineAcademicCap,
   HiOutlineSearch,
@@ -75,12 +75,12 @@ const Courses = () => {
   const fetchCourses = async () => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
+      const params = {
         page: pagination.page,
         limit: 20,
         ...(search && { search }),
-      });
-      const res = await api.get(`/courses?${params}`);
+      };
+      const res = await courseApiService.getCourses(params);
       const data = res.data?.data || {};
       setCourses(data.courses || []);
       setPagination((p) => ({
@@ -105,7 +105,7 @@ const Courses = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const res = await api.post('/courses/sync');
+      const res = await courseApiService.syncCourses();
 
       if (res.data?.success) {
         toast.success(res.data.message || t('courses.syncSuccess'));

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import {
@@ -19,6 +18,7 @@ import {
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { useAuthStore } from '../../stores/authStore';
+import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 
 /**
  * Xác định chiến dịch có đang chạy hay không dựa trên số lượt chạy đang thực thi.
@@ -71,15 +71,15 @@ const Campaigns = () => {
   const fetchCampaigns = async () => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
+      const params = {
         page: pagination.page,
         limit: 10,
         ...(search && { search }),
         ...(statusFilter && { status: statusFilter }),
         ...(typeFilter && { type: typeFilter }),
-      });
+      };
 
-      const response = await api.get(`/campaigns?${params}`);
+      const response = await campaignApiService.getCampaigns(params);
       setCampaigns(response.data.data.items);
       setPagination(response.data.data.pagination);
     } catch (error) {
@@ -97,7 +97,7 @@ const Campaigns = () => {
 
   const handlePublish = async (id) => {
     try {
-      await api.post(`/campaigns/${id}/publish`);
+      await campaignApiService.publishCampaign(id);
       toast.success(t('campaigns.activateSuccess'));
       fetchCampaigns();
     } catch (error) {
@@ -117,7 +117,7 @@ const Campaigns = () => {
     }
 
     try {
-      await api.post(`/campaigns/${id}/pause`);
+      await campaignApiService.pauseCampaign(id);
       toast.success(t('campaigns.pauseSuccess'));
       fetchCampaigns();
     } catch (error) {
@@ -130,7 +130,7 @@ const Campaigns = () => {
     if (!confirm(t('campaigns.confirmDelete'))) return;
 
     try {
-      await api.delete(`/campaigns/${id}`);
+      await campaignApiService.deleteCampaign(id);
       toast.success(t('campaigns.deleteSuccess'));
       fetchCampaigns();
     } catch (error) {
@@ -158,7 +158,7 @@ const Campaigns = () => {
 
     setIsDuplicating(true);
     try {
-      await api.post(`/campaigns/${duplicateModal.campaign.id}/duplicate`, {
+      await campaignApiService.duplicateCampaign(duplicateModal.campaign.id, {
         campaignName: duplicateName.trim()
       });
       toast.success(t('campaigns.duplicateSuccess'));
@@ -191,7 +191,7 @@ const Campaigns = () => {
 
     try {
       setIsCreatingCampaign(true);
-      const response = await api.post('/campaigns', {
+      const response = await campaignApiService.createCampaign({
         campaignName: createCampaignForm.campaignName.trim(),
         description: '',
         campaignType: createCampaignForm.campaignType,

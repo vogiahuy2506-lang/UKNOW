@@ -6,9 +6,8 @@ import {
   HiOutlineDocumentText, HiOutlinePhotograph, HiOutlineUpload,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import aiApi from '../../services/aiApi';
-import api from '../../services/api';
 import { useI18n } from '../../i18n';
+import businessProfileApiService from '../../features/settings/services/businessProfileApi.service';
 
   const TONE_OPTIONS = (t) => [
   { value: 'professional', label: t('businessProfile.professional') },
@@ -216,7 +215,7 @@ const BusinessProfilePage = () => {
 
   const fetchProfile = async () => {
     try {
-      const res = await aiApi.getBusinessProfile();
+      const res = await businessProfileApiService.getBusinessProfile();
       if (res.data) {
         setHasProfile(true);
         setLogoPreview('');
@@ -260,9 +259,7 @@ const BusinessProfilePage = () => {
           try {
             const formData = new FormData();
             formData.append('file', blob, 'logo.jpg');
-            const res = await api.post('/uploads/logo', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            const res = await businessProfileApiService.uploadLogo(formData);
             set('logo_url', res.data.data.url);
           } catch {
             toast.error(t('businessProfile.uploadFailed'));
@@ -291,7 +288,7 @@ const BusinessProfilePage = () => {
     if (!form.company_name.trim()) { toast.error(t('businessProfile.companyRequired')); return; }
     setIsSaving(true);
     try {
-      await aiApi.saveBusinessProfile(form);
+      await businessProfileApiService.saveBusinessProfile(form);
       setHasProfile(true);
       toast.success(t('businessProfile.saveSuccess'));
     } catch { toast.error(t('businessProfile.saveFailed')); }

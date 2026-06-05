@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HiArrowLeft, HiOutlineSearch } from 'react-icons/hi';
-import chatbotApi from '../../services/chatbotApi';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ConversationList from '../../features/inbox/ConversationList';
 import MessageThread from '../../features/inbox/MessageThread';
 import ReplyInput from '../../features/inbox/ReplyInput';

@@ -29,12 +29,20 @@ export const campaignApiService = {
     return api.post(`/campaigns/${campaignId}/run`, payload);
   },
 
+  publishCampaign(campaignId) {
+    return api.post(`/campaigns/${campaignId}/publish`);
+  },
+
   pauseCampaign(campaignId) {
     return api.post(`/campaigns/${campaignId}/pause`);
   },
 
   resumeCampaign(campaignId) {
     return api.post(`/campaigns/${campaignId}/resume`);
+  },
+
+  duplicateCampaign(campaignId, payload) {
+    return api.post(`/campaigns/${campaignId}/duplicate`, payload);
   },
 };
 

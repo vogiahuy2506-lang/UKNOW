@@ -8,7 +8,7 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import api from '../../services/api';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
 function ChatMessageArea({ chatbot }) {
   const [messages, setMessages] = useState([]);
@@ -95,7 +95,7 @@ function ChatMessageArea({ chatbot }) {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       const fullHistory = [...history, userMessage];
 
-      const res = await api.post('/ai/custom-chat', {
+      const res = await chatbotApi.sendCustomChat({
         history: fullHistory,
         chatbot_id: chatbot?.id,
         system_instruction: chatbot?.system_instruction,

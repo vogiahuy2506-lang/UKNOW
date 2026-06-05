@@ -26,8 +26,7 @@ import {
   HiOutlinePlay,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import api from '../../services/api';
-import chatbotApi from '../../services/chatbotApi';
+import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
 
 const TABS = [
@@ -233,7 +232,7 @@ function ChannelQuickTest({ channelType, channelLabel, connected }) {
     setResult(null);
     setMessage('');
     try {
-      const response = await api.post(`/ai/chatbot/inbox/test-connection/${channelType}`);
+      const response = await chatbotApi.testInboxConnection(channelType);
       const ok = !!response.data?.success;
       setResult(ok ? 'success' : 'error');
       setMessage(response.data?.message || (ok ? 'Kiểm tra thành công' : 'Kiểm tra thất bại'));
@@ -734,7 +733,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const loadDocumentsForChatbot = async (chatbotId) => {
     if (!chatbotId) return;
     try {
-      const res = await api.get(`/ai/custom-chat/documents/${chatbotId}`);
+      const res = await chatbotApi.listCustomChatDocuments(chatbotId);
       if (res.data?.documents) setDocuments(res.data.documents);
       else setDocuments(chatbot?.documents || []);
     } catch {
@@ -933,9 +932,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       const fd = new FormData();
       fd.append('file', uploadForm.file);
       fd.append('chatbot_id', chatbot.id.toString());
-      const res = await api.post('/ai/custom-chat/upload', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await chatbotApi.uploadCustomChatDocument(fd);
       if (res.data?.success) {
         const newDoc = {
           id: Date.now(),
