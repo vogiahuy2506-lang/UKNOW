@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import campaignNodeDataRepository from '../../repositories/campaign/campaignNodeData.repository.js';
 import leadService from '../lead/lead.service.js';
 import campaignFlowService from './campaignFlow.service.js';
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
@@ -193,42 +194,14 @@ class CampaignNodeDataService {
           .map((item) => String(item || '').trim().toLowerCase())
           .filter((item, idx, arr) => item && arr.indexOf(item) === idx);
 
-        const queryParams = [selectedCourseIds];
-        let paramIdx = 2;
-        let whereClause = 'WHERE c.id = ANY($1)';
-        if (searchTerm) {
-          whereClause += ` AND (c.course_name ILIKE $${paramIdx} OR c.course_code ILIKE $${paramIdx})`;
-          queryParams.push(`%${searchTerm}%`);
-          paramIdx += 1;
-        }
-        if (selectedStatuses.length > 0) {
-          whereClause += ` AND c.status = ANY($${paramIdx})`;
-          queryParams.push(selectedStatuses);
-          paramIdx += 1;
-        }
-        queryParams.push(limit);
-
-        const courseResult = await db.query(
-          `SELECT
-             c.id,
-             c.course_code AS "courseCode",
-             c.course_name AS "courseName",
-             c.price,
-             c.original_price AS "originalPrice",
-             c.status,
-             c.description,
-             c.category,
-             c.thumbnail_url AS "thumbnailUrl",
-             c.created_at AS "createdAt",
-             c.updated_at AS "updatedAt"
-           FROM courses c
-           ${whereClause}
-           ORDER BY c.id DESC
-           LIMIT $${paramIdx}`,
-          queryParams
+        const courseRows = await campaignNodeDataRepository.findCoursesById(
+          selectedCourseIds,
+          searchTerm,
+          selectedStatuses,
+          limit
         );
 
-        return applyDataColumnSelectionToItems(courseResult.rows, config.dataSelectedColumns, 'courses_db');
+        return applyDataColumnSelectionToItems(courseRows, config.dataSelectedColumns, 'courses_db');
       }
 
       case 'manual_upload':
@@ -556,12 +529,8 @@ class CampaignNodeDataService {
         const chunk = normalizedCustomers.slice(offset, offset + chunkSize);
 
         try {
-          await client.query('BEGIN');
-          if (saveCustomersStmtTimeoutMs > 0) {
-            await client.query(`SET LOCAL statement_timeout = ${saveCustomersStmtTimeoutMs}`);
-          } else {
-            await client.query('SET LOCAL statement_timeout = 0');
-          }
+          await campaignNodeDataRepository.beginTransaction(client);
+          await campaignNodeDataRepository.setLocalStatementTimeout(client, saveCustomersStmtTimeoutMs);
 
           // --- Preload theo cụm: giảm N+1; cụm sau nhìn thấy bản ghi cụm trước đã commit ---
           const emailSet = new Set();
@@ -621,21 +590,9 @@ class CampaignNodeDataService {
           };
 
           if (preloadEmails.length > 0 || preloadPhones.length > 0) {
-            const parts = [];
-            const params = [userId];
-            let pi = 2;
-            if (preloadEmails.length > 0) {
-              parts.push(`LOWER(email) = ANY($${pi}::text[])`);
-              params.push(preloadEmails);
-              pi += 1;
-            }
-            if (preloadPhones.length > 0) {
-              parts.push(`phone = ANY($${pi}::text[])`);
-              params.push(preloadPhones);
-              pi += 1;
-            }
-            const preloadSql = `SELECT * FROM customers WHERE id_user = $1 AND (${parts.join(' OR ')})`;
-            const { rows: preloadRows } = await client.query(preloadSql, params);
+            const preloadRows = await campaignNodeDataRepository.preloadCustomersByEmailPhone(
+              client, userId, preloadEmails, preloadPhones
+            );
             for (const row of preloadRows) {
               indexCustomerRow(row);
             }
@@ -669,18 +626,10 @@ class CampaignNodeDataService {
                 unchanged += 1;
               } else {
                 unindexCustomerRow(existingRow);
-                await client.query(
-                  `UPDATE customers SET
-              email = COALESCE($1, email),
-              phone = COALESCE($2, phone),
-              full_name = COALESCE($3, full_name),
-              gender = COALESCE($4, gender),
-              customer_source = COALESCE($5, customer_source),
-              notes = COALESCE($6, notes),
-              updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7 AND id_user = $8`,
-                  [email, phone, fullName, gender, customerSource, notes, existingRow.id, userId]
-                );
+                await campaignNodeDataRepository.updateCustomer(client, {
+                  email, phone, fullName, gender, customerSource, notes,
+                  id: existingRow.id, userId,
+                });
                 // Đồng bộ object + map để lượt sau trong cùng transaction thấy đúng COALESCE như DB
                 existingRow.email = email != null ? email : existingRow.email;
                 existingRow.phone = phone != null ? phone : existingRow.phone;
@@ -693,13 +642,9 @@ class CampaignNodeDataService {
               }
               await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, existingRow.id, runId);
             } else {
-              const insertResult = await client.query(
-                `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING *`,
-                [userId, email, phone, fullName, gender, customerSource, notes]
-              );
-              const insertedRow = insertResult.rows[0];
+              const insertedRow = await campaignNodeDataRepository.insertCustomer(client, {
+                userId, email, phone, fullName, gender, customerSource, notes,
+              });
               saved += 1;
               if (insertedRow?.id) {
                 indexCustomerRow(insertedRow);
@@ -708,10 +653,10 @@ class CampaignNodeDataService {
             }
           }
 
-          await client.query('COMMIT');
+          await campaignNodeDataRepository.commitTransaction(client);
         } catch (chunkError) {
           try {
-            await client.query('ROLLBACK');
+            await campaignNodeDataRepository.rollbackTransaction(client);
           } catch {
             /* connection có thể đã ở trạng thái lỗi; bỏ qua lỗi rollback phụ */
           }

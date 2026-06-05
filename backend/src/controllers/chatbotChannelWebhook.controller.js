@@ -2,8 +2,6 @@ import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
-import chatbotRepository from '../repositories/ai/chatbot.repository.js';
-import db from '../config/database.js';
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -62,7 +60,7 @@ class ChatbotChannelWebhookController {
       const chatbotId = channel.id_chatbot;
 
       // Create conversation
-      const conv = await this.getOrCreateConversation({
+      const conv = await chatbotChannelRepository.getOrCreateConversation({
         chatbotId,
         channelId: channel.id,
         externalId: senderId,
@@ -70,7 +68,7 @@ class ChatbotChannelWebhookController {
       });
 
       // Log visitor message
-      await this.addMessage(conv.id, {
+      await chatbotChannelRepository.addMessage(conv.id, {
         role: 'visitor',
         content: message,
         message_type: 'text',
@@ -94,7 +92,7 @@ class ChatbotChannelWebhookController {
         });
 
         // Log bot response
-        await this.addMessage(conv.id, {
+        await chatbotChannelRepository.addMessage(conv.id, {
           role: 'bot',
           content: result.content,
           message_type: 'text',
@@ -161,7 +159,7 @@ class ChatbotChannelWebhookController {
 
       for (const msg of messages) {
         // Create conversation
-        const conv = await this.getOrCreateConversation({
+        const conv = await chatbotChannelRepository.getOrCreateConversation({
           chatbotId,
           channelId: channel.id,
           externalId: msg.senderId,
@@ -169,7 +167,7 @@ class ChatbotChannelWebhookController {
         });
 
         // Log visitor message
-        await this.addMessage(conv.id, {
+        await chatbotChannelRepository.addMessage(conv.id, {
           role: 'visitor',
           content: msg.message,
           message_type: 'text',
@@ -192,7 +190,7 @@ class ChatbotChannelWebhookController {
           });
 
           // Log bot response
-          await this.addMessage(conv.id, {
+          await chatbotChannelRepository.addMessage(conv.id, {
             role: 'bot',
             content: result.content,
             message_type: 'text',
@@ -205,46 +203,6 @@ class ChatbotChannelWebhookController {
     } catch (err) {
       console.error('[Facebook Webhook] Handle error:', err.message);
     }
-  }
-
-  // ── Helper Methods ───────────────────────────────────────────
-
-  async getOrCreateConversation({ chatbotId, channelId, externalId, source }) {
-    // Check for existing conversation
-    const existing = await db.query(
-      `SELECT * FROM chatbot_conversations
-       WHERE id_channel = $1 AND external_id = $2 AND status = 'active'
-       ORDER BY created_at DESC LIMIT 1`,
-      [channelId, externalId]
-    );
-
-    if (existing.rows[0]) {
-      return existing.rows[0];
-    }
-
-    // Create new conversation
-    const created = await db.query(
-      `INSERT INTO chatbot_conversations
-         (id_chatbot, id_channel, channel_type, external_id, source)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [chatbotId, channelId, source.replace('_oa', ''), externalId, source]
-    );
-
-    return created.rows[0];
-  }
-
-  async addMessage(conversationId, { role, content, message_type, external_id }) {
-    await db.query(
-      `INSERT INTO chatbot_messages (id_conversation, role, content, message_type, external_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [conversationId, role, content, message_type || 'text', external_id || null]
-    );
-
-    await db.query(
-      `UPDATE chatbot_conversations SET last_message_at = NOW() WHERE id = $1`,
-      [conversationId]
-    );
   }
 }
 

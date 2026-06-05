@@ -101,6 +101,42 @@ class ChatbotChannelRepository {
     );
   }
 
+  async getOrCreateConversation({ chatbotId, channelId, externalId, source }) {
+    const existing = await db.query(
+      `SELECT * FROM chatbot_conversations
+       WHERE id_channel = $1 AND external_id = $2 AND status = 'active'
+       ORDER BY created_at DESC LIMIT 1`,
+      [channelId, externalId]
+    );
+
+    if (existing.rows[0]) {
+      return existing.rows[0];
+    }
+
+    const created = await db.query(
+      `INSERT INTO chatbot_conversations
+         (id_chatbot, id_channel, channel_type, external_id, source)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [chatbotId, channelId, source.replace('_oa', ''), externalId, source]
+    );
+
+    return created.rows[0];
+  }
+
+  async addMessage(conversationId, { role, content, message_type, external_id }) {
+    await db.query(
+      `INSERT INTO chatbot_messages (id_conversation, role, content, message_type, external_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [conversationId, role, content, message_type || 'text', external_id || null]
+    );
+
+    await db.query(
+      `UPDATE chatbot_conversations SET last_message_at = NOW() WHERE id = $1`,
+      [conversationId]
+    );
+  }
+
   /**
    * Get all active channels of a type for a user
    */

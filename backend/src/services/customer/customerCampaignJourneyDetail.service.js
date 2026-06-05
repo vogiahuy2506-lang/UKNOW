@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import customerCampaignJourneyDetailRepository from '../../repositories/customer/customerCampaignJourneyDetail.repository.js';
 import customerHelperService from './customerHelper.service.js';
 
 class CustomerCampaignJourneyDetailService {
@@ -49,17 +49,10 @@ class CustomerCampaignJourneyDetailService {
       .filter((id) => Number.isFinite(id));
     if (normalizedRunIds.length === 0) return new Map();
 
-    const executionResult = await db.query(
-      `SELECT id_run, execution_data
-       FROM campaign_executions
-       WHERE id_run = ANY($1::int[])
-         AND action_type = 'get_all_groups'
-       ORDER BY created_at ASC, id ASC`,
-      [normalizedRunIds]
-    );
+    const rows = await customerCampaignJourneyDetailRepository.findZaloGroupExecutionData(normalizedRunIds);
 
     const map = new Map();
-    for (const row of executionResult.rows) {
+    for (const row of rows) {
       const runId = Number.parseInt(row.id_run, 10);
       if (!Number.isFinite(runId)) continue;
       const data = row.execution_data && typeof row.execution_data === 'object'
@@ -98,344 +91,33 @@ class CustomerCampaignJourneyDetailService {
       throw error;
     }
 
-    const ownershipResult = await db.query(
-      `SELECT c.id AS customer_id, cp.id AS campaign_id, cp.campaign_name
-       FROM customers c
-       JOIN campaigns cp ON cp.id = $2 AND cp.id_user = $3
-       WHERE c.id = $1 AND c.id_user = $3`,
-      [customerId, campaignId, userId]
-    );
+    const campaignInfo = await customerCampaignJourneyDetailRepository.findOwnership(customerId, campaignId, userId);
 
-    if (ownershipResult.rows.length === 0) {
+    if (!campaignInfo) {
       const error = new Error('Không tìm thấy khách hàng hoặc chiến dịch');
       error.statusCode = 404;
       throw error;
     }
-
-    const campaignInfo = ownershipResult.rows[0];
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
-    const participationResult = await db.query(
-      `SELECT joined_at::timestamptz AS joined_at,
-              email_received_count,
-              email_opened_count,
-              email_clicked_count,
-              has_opened,
-              has_clicked,
-              first_email_sent_at::timestamptz AS first_email_sent_at,
-              last_email_sent_at::timestamptz AS last_email_sent_at,
-              first_email_opened_at::timestamptz AS first_email_opened_at,
-              last_email_opened_at::timestamptz AS last_email_opened_at,
-              first_email_clicked_at::timestamptz AS first_email_clicked_at,
-              last_email_clicked_at::timestamptz AS last_email_clicked_at,
-              last_activity_at::timestamptz AS last_activity_at
-       FROM campaign_customers
-       WHERE id_customer = $1 AND id_campaign = $2
-       LIMIT 1`,
-      [customerId, campaignId]
-    );
+    const participation = await customerCampaignJourneyDetailRepository.findParticipation(customerId, campaignId);
+    const emailRows = await customerCampaignJourneyDetailRepository.findEmailMessages(customerId, campaignId);
+    const journeyRows = await customerCampaignJourneyDetailRepository.findJourneyEvents(customerId, campaignId);
+    const campaignPurchaseRows = await customerCampaignJourneyDetailRepository.findCampaignPurchases(customerId, campaignId, purchaseOrderStatusExpr);
+    const zaloMessageRows = await customerCampaignJourneyDetailRepository.findZaloMessages(customerId, campaignId);
 
-    const emailsResult = await db.query(
-      `SELECT em.id,
-              em.id_email_template,
-              et.template_name AS email_template_name,
-              em.id_run,
-              cr.run_name,
-              em.sequence_message_order,
-              em.subject,
-              em.sender_email,
-              em.sender_name,
-              em.recipient_email,
-              em.recipient_name,
-              em.status,
-              em.sent_at::timestamptz AS sent_at,
-              em.delivered_at::timestamptz AS delivered_at,
-              em.first_opened_at::timestamptz AS first_opened_at,
-              em.last_opened_at::timestamptz AS last_opened_at,
-              em.open_count,
-              em.first_clicked_at::timestamptz AS first_clicked_at,
-              em.click_count,
-              em.body_html,
-              em.body_text,
-              em.created_at::timestamptz AS created_at,
-              et.attachments AS template_attachments
-       FROM email_messages em
-       LEFT JOIN email_templates et ON et.id = em.id_email_template
-       LEFT JOIN campaign_runs cr ON cr.id = em.id_run
-       WHERE em.id_customer = $1
-         AND em.id_campaign = $2
-         AND em.id_run IS NOT NULL
-       ORDER BY COALESCE(em.sent_at, em.created_at) ASC, em.id ASC`,
-      [customerId, campaignId]
-    );
+    const customerSummary = await customerCampaignJourneyDetailRepository.findCustomerSummary(customerId, userId);
+    const campaignSummary = await customerCampaignJourneyDetailRepository.findCampaignSummary(campaignId, userId);
+    const overallSummary = await customerCampaignJourneyDetailRepository.findOverallSummary(userId);
+    const campaignConversionSummary = await customerCampaignJourneyDetailRepository.findCampaignConversionSummary(campaignId, userId, purchaseOrderStatusExpr);
+    const customerConversionSummary = await customerCampaignJourneyDetailRepository.findCustomerConversionSummary(customerId, userId, purchaseOrderStatusExpr);
+    const overallConversionSummary = await customerCampaignJourneyDetailRepository.findOverallConversionSummary(userId, purchaseOrderStatusExpr);
 
-    const journeyEventsResult = await db.query(
-      `SELECT cj.id, cj.id_customer, cj.id_campaign, cj.event_type, cj.event_channel,
-              cj.id_node, cj.id_email_message, cj.id_zalo_message, cj.event_data,
-              cj.ip_address, cj.user_agent, cj.device_type, cj.country, cj.city,
-              cj.event_at::timestamptz AS event_at, cj.id_run,
-              cp.campaign_name, cr.run_name
-       FROM customer_journey cj
-       LEFT JOIN campaigns cp ON cp.id = cj.id_campaign
-       LEFT JOIN campaign_runs cr ON cr.id = cj.id_run
-       WHERE cj.id_customer = $1 AND cj.id_campaign = $2 AND cj.id_run IS NOT NULL
-       ORDER BY cj.event_at DESC`,
-      [customerId, campaignId]
-    );
-
-    const campaignPurchasesResult = await db.query(
-      `SELECT cp.id, cp.id_customer, cp.id_course, cp.id_campaign, cp.product_name, cp.product_type,
-              cp.amount, cp.currency,
-              cp.purchase_date::timestamptz AS purchase_date,
-              cp.order_id, cp.payment_method,
-              cp.created_at::timestamptz AS created_at,
-              cp.id_email_message, cp.id_run, cp.id_zalo_message,
-              c.course_name,
-              c.course_code,
-              cr.run_name,
-              cc.email_received_count,
-              cc.email_clicked_count,
-              pe.event_data AS purchase_event_data
-       FROM customer_purchases cp
-       LEFT JOIN courses c ON c.id = cp.id_course
-       LEFT JOIN campaign_runs cr ON cr.id = cp.id_run
-       LEFT JOIN campaign_customers cc
-              ON cc.id_campaign = cp.id_campaign
-             AND cc.id_customer = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = CASE
-                WHEN ${purchaseOrderStatusExpr} = 'on-hold' THEN 'order_pending'
-                ELSE 'order_completed'
-            END
-            AND COALESCE(cj.event_data->>'orderId', cj.event_data->>'order_id', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_customer = $1
-         AND cp.id_campaign = $2
-         AND cp.id_run IS NOT NULL
-       ORDER BY cp.purchase_date DESC
-       LIMIT 50`,
-      [customerId, campaignId]
-    );
-
-    let zaloMessagesResult;
-    try {
-      zaloMessagesResult = await db.query(
-        `SELECT zm.id,
-                zm.id_run,
-                cr.run_name,
-                zm.channel,
-                zm.recipient_type,
-                zm.recipient_value,
-                zm.uid,
-                zm.group_id,
-                zm.account_id,
-                zm.account_name,
-                zm.message_text,
-                zm.click_count,
-                zm.first_clicked_at::timestamptz AS first_clicked_at,
-                zm.last_clicked_at::timestamptz AS last_clicked_at,
-                zm.sent_at::timestamptz AS sent_at,
-                zm.tracking_metadata
-         FROM zalo_messages zm
-         LEFT JOIN campaign_runs cr ON cr.id = zm.id_run
-         WHERE zm.id_campaign = $2
-           AND (
-             zm.id_customer = $1
-             OR EXISTS (
-               SELECT 1
-               FROM customer_purchases cpz
-               WHERE cpz.id_customer = $1
-                 AND cpz.id_campaign = $2
-                 AND cpz.id_zalo_message = zm.id
-             )
-           )
-           AND zm.id_run IS NOT NULL
-         ORDER BY COALESCE(zm.sent_at, zm.created_at) ASC, zm.id ASC`,
-        [customerId, campaignId]
-      );
-    } catch {
-      // Backward compatibility when customer_purchases.id_zalo_message does not exist.
-      zaloMessagesResult = await db.query(
-        `SELECT zm.id,
-                zm.id_run,
-                cr.run_name,
-                zm.channel,
-                zm.recipient_type,
-                zm.recipient_value,
-                zm.uid,
-                zm.group_id,
-                zm.account_id,
-                zm.account_name,
-                zm.message_text,
-                zm.click_count,
-                zm.first_clicked_at::timestamptz AS first_clicked_at,
-                zm.last_clicked_at::timestamptz AS last_clicked_at,
-                zm.sent_at::timestamptz AS sent_at,
-                zm.tracking_metadata
-         FROM zalo_messages zm
-         LEFT JOIN campaign_runs cr ON cr.id = zm.id_run
-         WHERE zm.id_customer = $1
-           AND zm.id_campaign = $2
-           AND zm.id_run IS NOT NULL
-         ORDER BY COALESCE(zm.sent_at, zm.created_at) ASC, zm.id ASC`,
-        [customerId, campaignId]
-      );
-    }
-
-    const participation = participationResult.rows[0] || null;
-    const customerSummaryResult = await db.query(
-      `SELECT
-          COALESCE(SUM(cc.email_received_count), 0)::INTEGER AS email_received_count,
-          COALESCE(SUM(cc.email_opened_count), 0)::INTEGER AS email_opened_count,
-          COALESCE(SUM(cc.email_clicked_count), 0)::INTEGER AS email_clicked_count,
-          COALESCE(COUNT(*), 0)::INTEGER AS campaign_count
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE cc.id_customer = $1
-         AND c.id_user = $2`,
-      [customerId, userId]
-    );
-
-    const campaignSummaryResult = await db.query(
-      `SELECT
-          COALESCE(COUNT(*), 0)::INTEGER AS participant_count,
-          COALESCE(SUM(cc.email_received_count), 0)::INTEGER AS email_received_count,
-          COALESCE(SUM(cc.email_opened_count), 0)::INTEGER AS email_opened_count,
-          COALESCE(SUM(cc.email_clicked_count), 0)::INTEGER AS email_clicked_count
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE cc.id_campaign = $1
-         AND c.id_user = $2`,
-      [campaignId, userId]
-    );
-
-    const overallSummaryResult = await db.query(
-      `SELECT
-          COALESCE(COUNT(*), 0)::INTEGER AS participant_count,
-          COALESCE(SUM(cc.email_received_count), 0)::INTEGER AS email_received_count,
-          COALESCE(SUM(cc.email_opened_count), 0)::INTEGER AS email_opened_count,
-          COALESCE(SUM(cc.email_clicked_count), 0)::INTEGER AS email_clicked_count
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE c.id_user = $1`,
-      [userId]
-    );
-
-    const campaignConversionSummaryResult = await db.query(
-      `SELECT
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'completed'
-          ), 0)::INTEGER AS purchase_count,
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'on-hold'
-          ), 0)::INTEGER AS interested_count,
-          COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS converted_customer_count,
-          COALESCE(SUM(cp.amount), 0) AS revenue,
-          COALESCE(SUM(
-            CASE
-              WHEN COALESCE(pe.event_data->>'attributedFromClick', 'false') IN ('true', '1', 'yes')
-                THEN 1
-              ELSE 0
-            END
-          ), 0)::INTEGER AS attributed_from_click_count
-       FROM customer_purchases cp
-       JOIN customers cu ON cu.id = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = 'order_completed'
-            AND COALESCE(cj.event_data->>'orderId', cj.event_data->>'order_id', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_campaign = $1
-         AND cu.id_user = $2`,
-      [campaignId, userId]
-    );
-
-    const customerConversionSummaryResult = await db.query(
-      `SELECT
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'completed'
-          ), 0)::INTEGER AS purchase_count,
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'on-hold'
-          ), 0)::INTEGER AS interested_count,
-          COALESCE(COUNT(DISTINCT cp.id_campaign), 0)::INTEGER AS campaign_conversion_count,
-          COALESCE(SUM(cp.amount), 0) AS revenue,
-          COALESCE(SUM(
-            CASE
-              WHEN COALESCE(pe.event_data->>'attributedFromClick', 'false') IN ('true', '1', 'yes')
-                THEN 1
-              ELSE 0
-            END
-          ), 0)::INTEGER AS attributed_from_click_count
-       FROM customer_purchases cp
-       JOIN customers cu ON cu.id = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = 'order_completed'
-            AND COALESCE(cj.event_data->>'orderId', cj.event_data->>'order_id', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_customer = $1
-         AND cp.id_campaign IS NOT NULL
-         AND cu.id_user = $2`,
-      [customerId, userId]
-    );
-
-    const overallConversionSummaryResult = await db.query(
-      `SELECT
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'completed'
-          ), 0)::INTEGER AS purchase_count,
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'on-hold'
-          ), 0)::INTEGER AS interested_count,
-          COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS converted_customer_count,
-          COALESCE(SUM(cp.amount), 0) AS revenue,
-          COALESCE(SUM(
-            CASE
-              WHEN COALESCE(pe.event_data->>'attributedFromClick', 'false') IN ('true', '1', 'yes')
-                THEN 1
-              ELSE 0
-            END
-          ), 0)::INTEGER AS attributed_from_click_count
-       FROM customer_purchases cp
-       JOIN customers cu ON cu.id = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = 'order_completed'
-            AND COALESCE(cj.event_data->>'orderId', cj.event_data->>'order_id', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_campaign IS NOT NULL
-         AND cu.id_user = $1`,
-      [userId]
-    );
-
-    const customerSummary = customerSummaryResult.rows[0] || {};
-    const campaignSummary = campaignSummaryResult.rows[0] || {};
-    const overallSummary = overallSummaryResult.rows[0] || {};
-    const campaignConversionSummary = campaignConversionSummaryResult.rows[0] || {};
-    const customerConversionSummary = customerConversionSummaryResult.rows[0] || {};
-    const overallConversionSummary = overallConversionSummaryResult.rows[0] || {};
+    // Wrap into .rows-compatible shape for downstream code
+    const emailsResult = { rows: emailRows };
+    const journeyEventsResult = { rows: journeyRows };
+    const campaignPurchasesResult = { rows: campaignPurchaseRows };
+    const zaloMessagesResult = { rows: zaloMessageRows };
 
     const runIdSet = new Set();
     emailsResult.rows.forEach((row) => {
@@ -458,17 +140,8 @@ class CustomerCampaignJourneyDetailService {
     const runIds = Array.from(runIdSet.values());
     let runs = [];
     if (runIds.length > 0) {
-      const runResult = await db.query(
-        `SELECT id, run_name, status,
-                started_at::timestamptz AS started_at,
-                completed_at::timestamptz AS completed_at,
-                run_type, run_metadata
-         FROM campaign_runs
-         WHERE id = ANY($1::int[])
-         ORDER BY started_at DESC NULLS LAST, id DESC`,
-        [runIds]
-      );
-      runs = runResult.rows.map((row) => ({
+      const runRows = await customerCampaignJourneyDetailRepository.findRunsByIds(runIds);
+      runs = runRows.map((row) => ({
         runId: row.id,
         runName: row.run_name || row.run_metadata?.runName || null,
         status: row.status || null,
@@ -560,11 +233,8 @@ class CustomerCampaignJourneyDetailService {
     const storageKeyToFileId = {};
     if (missingSkKeys.length > 0) {
       try {
-        const skResult = await db.query(
-          'SELECT id, storage_key FROM template_files WHERE storage_key = ANY($1)',
-          [missingSkKeys]
-        );
-        for (const r of skResult.rows) storageKeyToFileId[r.storage_key] = r.id;
+        const skRows = await customerCampaignJourneyDetailRepository.findTemplateFilesByStorageKeys(missingSkKeys);
+        for (const r of skRows) storageKeyToFileId[r.storage_key] = r.id;
       } catch {
         // ignore
       }

@@ -1,6 +1,6 @@
 import dns from 'dns/promises';
 import verificationService from '../services/verification.service.js';
-import db from '../config/database.js';
+import verificationRepository from '../repositories/verification.repository.js';
 
 class VerificationController {
   /**
@@ -34,22 +34,16 @@ class VerificationController {
       }
 
       // Kiểm tra email đã tồn tại chưa
-      const existingUser = await db.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
-      );
-      if (existingUser.rows.length > 0) {
+      const existingUser = await verificationRepository.userExistsByEmail(email);
+      if (existingUser) {
         console.log(`[Verification] Email already used: ${email}`);
         return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
       }
 
       // Kiểm tra username đã tồn tại chưa (nếu có truyền lên)
       if (username) {
-        const existingUsername = await db.query(
-          'SELECT id FROM users WHERE username = $1',
-          [username]
-        );
-        if (existingUsername.rows.length > 0) {
+        const existingUsername = await verificationRepository.userExistsByUsername(username);
+        if (existingUsername) {
           console.log(`[Verification] Username already used: ${username}`);
           return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
         }

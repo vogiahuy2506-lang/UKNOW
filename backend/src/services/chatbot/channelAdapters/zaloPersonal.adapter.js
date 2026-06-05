@@ -12,7 +12,7 @@
  * Note: This is a "bridge" because Zalo does NOT have an official public API
  * for personal accounts. This approach simulates interaction via browser automation.
  */
-import db from '../../../config/database.js';
+import zaloPersonalRepository from '../../../repositories/chatbot/zaloPersonal.repository.js';
 import zaloAccountSessionService from '../../zalo/zaloAccountSession.service.js';
 import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
 
@@ -27,17 +27,10 @@ class ZaloPersonalAdapter {
    */
   async getActiveSession(userId) {
     // Find zalo_settings for this user
-    const { rows } = await db.query(
-      `SELECT zs.*, zs.id as zalo_setting_id
-       FROM zalo_settings zs
-       WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected'
-       LIMIT 1`,
-      [userId]
-    );
+    const zaloSetting = await zaloPersonalRepository.findActiveSessionByUserId(userId);
 
-    if (!rows[0]) return null;
+    if (!zaloSetting) return null;
 
-    const zaloSetting = rows[0];
     const accountId = zaloSetting.id;
 
     const api = zaloAccountSessionService.getAccountApi(accountId);
@@ -51,15 +44,9 @@ class ZaloPersonalAdapter {
     const api = zaloAccountSessionService.getAccountApi(accountId);
     if (!api) return null;
 
-    const { rows } = await db.query(
-      `SELECT zs.*, zs.id as zalo_setting_id
-       FROM zalo_settings zs
-       WHERE zs.id = $1 AND zs.is_active = true AND zs.status = 'connected'
-       LIMIT 1`,
-      [accountId]
-    );
+    const zaloSetting = await zaloPersonalRepository.findActiveSessionByAccountId(accountId);
 
-    return rows[0] ? { api, accountId, zaloSetting: rows[0] } : null;
+    return zaloSetting ? { api, accountId, zaloSetting } : null;
   }
 
   /**
@@ -186,69 +173,51 @@ class ZaloPersonalAdapter {
     }
 
     // Get or create conversation
-    let { rows: convRows } = await db.query(
-      `SELECT * FROM zalo_personal_conversations 
-       WHERE id_zalo_setting = $1 AND external_id = $2`,
-      [zaloSettingId, msgData.fromUid]
-    );
+    let conversation = await zaloPersonalRepository.findConversation(zaloSettingId, msgData.fromUid);
 
     let conversationId;
-    if (convRows.length === 0) {
+    if (!conversation) {
       // Create new conversation
-      const { rows: newConv } = await db.query(
-        `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id`,
-        [
-          userId,
-          zaloSettingId,
-          msgData.fromUid,
-          msgData.senderName || null,
-          JSON.stringify({
-            sender_name: msgData.senderName,
-            sender_avatar: msgData.senderAvatar,
-            is_group: msgData.isGroup || false,
-            group_name: msgData.groupName || null,
-          }),
-          now,
-        ]
-      );
-      conversationId = newConv[0].id;
+      const newConv = await zaloPersonalRepository.insertConversation({
+        userId,
+        zaloSettingId,
+        externalId: msgData.fromUid,
+        visitorName: msgData.senderName || null,
+        visitorInfo: JSON.stringify({
+          sender_name: msgData.senderName,
+          sender_avatar: msgData.senderAvatar,
+          is_group: msgData.isGroup || false,
+          group_name: msgData.groupName || null,
+        }),
+        now,
+      });
+      conversationId = newConv.id;
     } else {
-      conversationId = convRows[0].id;
+      conversationId = conversation.id;
       // Update last_message_at
-      await db.query(
-        `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-        [conversationId, now]
-      );
+      await zaloPersonalRepository.touchConversation(conversationId, now);
     }
 
     // Save message
-    const { rows: msgRows } = await db.query(
-      `INSERT INTO zalo_personal_messages 
-       (id_conversation, id_user, id_zalo_setting, role, content, external_id, external_ts, metadata, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [
-        conversationId,
-        userId,
-        zaloSettingId,
-        'visitor',
-        msgData.content || msgData.message || '',
-        msgData.messageId || msgData.msgId,
-        msgData.timestamp ? new Date(msgData.timestamp) : now,
-        JSON.stringify({ 
-          _raw: msgData._raw,
-          sender_name: msgData.senderName,
-          is_group: msgData.isGroup || false,
-        }),
-        msgData.timestamp ? new Date(msgData.timestamp) : now,
-      ]
-    );
+    const msgRow = await zaloPersonalRepository.insertMessage({
+      conversationId,
+      userId,
+      zaloSettingId,
+      role: 'visitor',
+      content: msgData.content || msgData.message || '',
+      externalId: msgData.messageId || msgData.msgId,
+      externalTs: msgData.timestamp ? new Date(msgData.timestamp) : now,
+      metadata: JSON.stringify({
+        _raw: msgData._raw,
+        sender_name: msgData.senderName,
+        is_group: msgData.isGroup || false,
+      }),
+      createdAt: msgData.timestamp ? new Date(msgData.timestamp) : now,
+    });
 
     return {
       conversationId,
-      messageId: msgRows[0].id,
+      messageId: msgRow.id,
     };
   }
 
@@ -273,23 +242,17 @@ class ZaloPersonalAdapter {
 
       // Also save the sent message to database
       const now = new Date().toISOString();
-      const { rows: convRows } = await db.query(
-        `SELECT * FROM zalo_personal_conversations 
-         WHERE id_zalo_setting = $1 AND external_id = $2`,
-        [session.accountId, externalId]
-      );
+      const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
 
-      if (convRows.length > 0) {
-        await db.query(
-          `INSERT INTO zalo_personal_messages 
-           (id_conversation, id_user, id_zalo_setting, role, content, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [convRows[0].id, userId, session.accountId, 'agent', message, now]
-        );
-        await db.query(
-          `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-          [convRows[0].id, now]
-        );
+      if (conversation) {
+        await zaloPersonalRepository.insertAgentMessage({
+          conversationId: conversation.id,
+          userId,
+          zaloSettingId: session.accountId,
+          content: message,
+          now,
+        });
+        await zaloPersonalRepository.touchConversation(conversation.id, now);
       }
 
       console.log(`[ZaloPersonalAdapter] Sent reply to uid ${externalId}`);

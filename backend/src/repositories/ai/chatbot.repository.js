@@ -69,6 +69,17 @@ class ChatbotRepository {
     return rows[0] || null;
   }
 
+  async findFirstActiveChannelByType(channel) {
+    const { rows } = await db.query(
+      `SELECT cc.*, u.id AS user_id FROM channel_connections cc
+       JOIN users u ON u.id = cc.id_user
+       WHERE cc.channel = $1 AND cc.is_active = true
+       LIMIT 1`,
+      [channel]
+    );
+    return rows[0] || null;
+  }
+
   async upsertChannel(userId, channel, { display_name, credentials, webhook_url, webhook_token, settings }) {
     const { rows } = await db.query(
       `INSERT INTO channel_connections (id_user, channel, display_name, credentials, webhook_url, webhook_token, settings)
@@ -230,6 +241,42 @@ class ChatbotRepository {
       params
     );
     return rows.reverse();
+  }
+
+  async findWebChatConversationWithOwner(conversationId) {
+    const { rows } = await db.query(
+      `SELECT wc.*, ww.id_user FROM webchat_conversations wc
+       JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
+       WHERE wc.id = $1`,
+      [conversationId]
+    );
+    return rows[0] || null;
+  }
+
+  async findActiveWebChatConversationId({ widgetConfigId, sessionId }) {
+    const { rows } = await db.query(
+      `SELECT id FROM webchat_conversations
+       WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
+       ORDER BY created_at DESC LIMIT 1`,
+      [widgetConfigId, sessionId]
+    );
+    return rows[0]?.id || null;
+  }
+
+  async getAgentWebChatMessagesAfter({ conversationId, lastMessageId = null }) {
+    let query = `SELECT id, role, content, created_at FROM webchat_messages
+                 WHERE id_conversation = $1 AND role = 'agent'`;
+    const params = [conversationId];
+
+    if (lastMessageId) {
+      query += ` AND id > $2`;
+      params.push(lastMessageId);
+    }
+
+    query += ` ORDER BY created_at ASC`;
+
+    const { rows } = await db.query(query, params);
+    return rows;
   }
 
   async addWebChatMessage(conversationId, userId, { role, content, attachments, metadata }) {
@@ -400,6 +447,34 @@ class ChatbotRepository {
       [chatbotId, userId]
     );
     return rows[0] || null;
+  }
+
+  async getCustomChatbotDocuments(chatbotId) {
+    const { rows } = await db.query(
+      `SELECT id, chunk_text, source, chunk_index, created_at
+       FROM custom_chatbot_chunks
+       WHERE chatbot_id = $1
+       ORDER BY chunk_index`,
+      [chatbotId]
+    );
+
+    const docsMap = {};
+    for (const row of rows) {
+      const source = row.source || 'Unknown';
+      if (!docsMap[source]) {
+        docsMap[source] = {
+          id: row.id,
+          title: source,
+          type: 'file',
+          status: 'ready',
+          chunk_count: 0,
+          created_at: row.created_at,
+        };
+      }
+      docsMap[source].chunk_count++;
+    }
+
+    return Object.values(docsMap);
   }
 
   // Find chatbot by widget_key (public access)

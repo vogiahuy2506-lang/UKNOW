@@ -1,6 +1,6 @@
-import db from '../config/database.js';
 import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.service.js';
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
+import dashboardRepository from '../repositories/dashboard/dashboard.repository.js';
 
 class DashboardController {
   /**
@@ -222,7 +222,6 @@ class DashboardController {
     try {
       const userId = req.user.id;
       const roleCode = req.user.role;
-      const isAdmin = String(roleCode || '').trim().toLowerCase() === 'admin';
       const { campaignIds } = req.query;
 
       if (!campaignIds) {
@@ -243,38 +242,11 @@ class DashboardController {
         });
       }
 
-      const queryParams = [ids, isAdmin, userId];
-      const result = await db.query(
-        `SELECT id, campaign_name, campaign_type, status,
-                total_customers, total_sent, total_delivered,
-                total_opened, total_clicked, total_converted, total_revenue,
-                created_at, published_at
-         FROM campaigns
-         WHERE id = ANY($1::bigint[])
-           AND ($2::boolean = TRUE OR id_user = $3)`,
-        queryParams
-      );
+      const data = await dashboardRepository.compareCampaigns({ campaignIds: ids, userId, roleCode });
 
       res.json({
         success: true,
-        data: result.rows.map((c) => ({
-          id: c.id,
-          campaignName: c.campaign_name,
-          campaignType: c.campaign_type,
-          status: c.status,
-          totalCustomers: c.total_customers,
-          totalSent: c.total_sent,
-          totalDelivered: c.total_delivered,
-          totalOpened: c.total_opened,
-          totalClicked: c.total_clicked,
-          totalConverted: c.total_converted,
-          totalRevenue: c.total_revenue,
-          openRate: c.total_delivered > 0 ? ((c.total_opened / c.total_delivered) * 100).toFixed(2) : 0,
-          clickRate: c.total_opened > 0 ? ((c.total_clicked / c.total_opened) * 100).toFixed(2) : 0,
-          conversionRate: c.total_clicked > 0 ? ((c.total_converted / c.total_clicked) * 100).toFixed(2) : 0,
-          createdAt: c.created_at,
-          publishedAt: c.published_at
-        })),
+        data,
       });
     } catch (error) {
       console.error('Compare campaigns error:', error);

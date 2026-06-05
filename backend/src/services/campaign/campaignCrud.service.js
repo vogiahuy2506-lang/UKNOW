@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 
 class CampaignCrudService {
   /**
@@ -13,77 +14,11 @@ class CampaignCrudService {
     const offset = (page - 1) * limit;
     const isAdmin = isAdminRole(roleCode);
 
-    // Ép `timestamp without time zone` → `timestamptz` theo session TIME ZONE (Asia/Ho_Chi_Minh trong pool)
-    // để node-pg nhận đúng instant UTC; tránh parse theo TZ tiến trình Node (thường UTC) gây +7h trên UI.
-    let query = `
-      SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
-             c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
-             c.total_customers, c.total_sent, c.total_delivered,
-             c.total_opened, c.total_clicked, c.total_converted, c.total_revenue,
-             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
-             c.id_user,
-             COALESCE(u.full_name, u.username) AS creator_name,
-             COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
-             COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count
-      FROM campaigns c
-      LEFT JOIN users u ON c.id_user = u.id
-      LEFT JOIN LATERAL (
-        SELECT
-          COUNT(*) FILTER (WHERE cr.status = 'running') AS running_count,
-          COUNT(*) FILTER (WHERE cr.status = 'completed') AS completed_count
-        FROM campaign_runs cr
-        WHERE cr.id_campaign = c.id
-      ) run_stats ON TRUE
-      WHERE 1=1
-    `;
-    const params = [];
-
-    if (!isAdmin) {
-      params.push(userId);
-      query += ` AND c.id_user = $${params.length}`;
-    }
-
-    if (status) {
-      params.push(status);
-      query += ` AND c.status = $${params.length}`;
-    }
-    if (type) {
-      params.push(type);
-      query += ` AND c.campaign_type = $${params.length}`;
-    }
-    if (search) {
-      params.push(`%${search}%`);
-      query += ` AND c.campaign_name ILIKE $${params.length}`;
-    }
-
-    query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const result = await db.query(query, params);
-
-    let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE 1=1';
-    const countParams = [];
-    if (!isAdmin) {
-      countParams.push(userId);
-      countQuery += ` AND id_user = $${countParams.length}`;
-    }
-    if (status) {
-      countParams.push(status);
-      countQuery += ` AND status = $${countParams.length}`;
-    }
-    if (type) {
-      countParams.push(type);
-      countQuery += ` AND campaign_type = $${countParams.length}`;
-    }
-    if (search) {
-      countParams.push(`%${search}%`);
-      countQuery += ` AND campaign_name ILIKE $${countParams.length}`;
-    }
-    const countResult = await db.query(countQuery, countParams);
+    const rows = await campaignCrudRepository.findCampaigns({ userId, isAdmin, status, type, search, limit, offset });
+    const total = await campaignCrudRepository.countCampaigns({ userId, isAdmin, status, type, search });
 
     return {
-      items: result.rows.map((item) => ({
+      items: rows.map((item) => ({
         id: item.id,
         campaignName: item.campaign_name,
         description: item.description,
@@ -109,8 +44,8 @@ class CampaignCrudService {
       pagination: {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
-        total: parseInt(countResult.rows[0].count, 10),
-        totalPages: Math.ceil(countResult.rows[0].count / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
@@ -123,33 +58,12 @@ class CampaignCrudService {
    */
   async getCampaignById({ userId, roleCode, campaignId }) {
     const isAdmin = isAdminRole(roleCode);
-    const params = [campaignId];
-    let query = `
-      SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
-             c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
-             c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
-             c.timezone,
-             c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
-             c.total_converted, c.total_revenue,
-             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
-      FROM campaigns c WHERE c.id = $1`;
-    if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
-    }
-    const result = await db.query(query, params);
-    if (result.rows.length === 0) return null;
 
-    const campaign = result.rows[0];
-    const nodesResult = await db.query(
-      'SELECT * FROM campaign_nodes WHERE id_campaign = $1 ORDER BY execution_order',
-      [campaignId]
-    );
-    const connectionsResult = await db.query(
-      'SELECT * FROM campaign_connections WHERE id_campaign = $1',
-      [campaignId]
-    );
+    const campaign = await campaignCrudRepository.findCampaignById({ campaignId, isAdmin, userId });
+    if (!campaign) return null;
+
+    const nodesRows = await campaignCrudRepository.findNodesByCampaignId(campaignId);
+    const connectionsRows = await campaignCrudRepository.findConnectionsByCampaignId(campaignId);
 
     return {
       id: campaign.id,
@@ -173,7 +87,7 @@ class CampaignCrudService {
       updatedAt: campaign.updated_at,
       publishedAt: campaign.published_at,
       lastRunAt: campaign.last_run_at,
-      nodes: nodesResult.rows.map((node) => ({
+      nodes: nodesRows.map((node) => ({
         id: node.id,
         nodeType: node.node_type,
         nodeSubtype: node.node_subtype,
@@ -184,7 +98,7 @@ class CampaignCrudService {
         config: node.config,
         isActive: node.is_active,
       })),
-      connections: connectionsResult.rows.map((conn) => ({
+      connections: connectionsRows.map((conn) => ({
         id: conn.id,
         sourceNodeId: conn.source_node_id,
         targetNodeId: conn.target_node_id,
@@ -207,28 +121,12 @@ class CampaignCrudService {
       await client.query('BEGIN');
       const isAdmin = isAdminRole(roleCode);
 
-      const campaignParams = [campaignId];
-      let campaignQuery = `
-        SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
-               c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
-               c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
-               c.timezone,
-               c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
-               c.total_converted, c.total_revenue,
-               c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
-        FROM campaigns c WHERE c.id = $1`;
-      if (!isAdmin) {
-        campaignParams.push(userId);
-        campaignQuery += ` AND id_user = $${campaignParams.length}`;
-      }
-      const campaignResult = await client.query(campaignQuery, campaignParams);
-      if (campaignResult.rows.length === 0) {
+      const originalCampaign = await campaignCrudRepository.findCampaignByIdTx(client, { campaignId, isAdmin, userId });
+      if (!originalCampaign) {
         await client.query('ROLLBACK');
         return null;
       }
 
-      const originalCampaign = campaignResult.rows[0];
       const campaignLimitCheck = await checkUserResourceLimit({
         userId,
         roleCode,
@@ -242,75 +140,48 @@ class CampaignCrudService {
         throw limitError;
       }
 
-      const newCampaignResult = await client.query(
-        `INSERT INTO campaigns (
-          id_user, campaign_name, description, campaign_type, landing_page_url,
-          start_date, end_date, timezone, flow_json, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
-        RETURNING *`,
-        [
-          userId,
-          campaignName,
-          originalCampaign.description,
-          originalCampaign.campaign_type,
-          originalCampaign.landing_page_url,
-          originalCampaign.start_date,
-          originalCampaign.end_date,
-          originalCampaign.timezone,
-          originalCampaign.flow_json,
-        ]
-      );
-      const newCampaign = newCampaignResult.rows[0];
+      const newCampaign = await campaignCrudRepository.insertCampaignTx(client, {
+        userId,
+        campaignName,
+        description: originalCampaign.description,
+        campaignType: originalCampaign.campaign_type,
+        landingPageUrl: originalCampaign.landing_page_url,
+        startDate: originalCampaign.start_date,
+        endDate: originalCampaign.end_date,
+        timezone: originalCampaign.timezone,
+        flowJson: originalCampaign.flow_json,
+      });
 
-      const nodesResult = await client.query(
-        'SELECT * FROM campaign_nodes WHERE id_campaign = $1 ORDER BY id',
-        [campaignId]
-      );
+      const nodesRows = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
       const nodeIdMap = {};
-      for (const node of nodesResult.rows) {
-        const newNodeResult = await client.query(
-          `INSERT INTO campaign_nodes (
-            id_campaign, node_type, node_subtype, node_name, node_description,
-            position_x, position_y, config, execution_order
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          RETURNING id`,
-          [
-            newCampaign.id,
-            node.node_type,
-            node.node_subtype,
-            node.node_name,
-            node.node_description,
-            node.position_x,
-            node.position_y,
-            node.config,
-            node.execution_order,
-          ]
-        );
-        nodeIdMap[node.id] = newNodeResult.rows[0].id;
+      for (const node of nodesRows) {
+        const newNodeId = await campaignCrudRepository.insertNodeTx(client, {
+          campaignId: newCampaign.id,
+          nodeType: node.node_type,
+          nodeSubtype: node.node_subtype,
+          nodeName: node.node_name,
+          nodeDescription: node.node_description,
+          positionX: node.position_x,
+          positionY: node.position_y,
+          config: node.config,
+          executionOrder: node.execution_order,
+        });
+        nodeIdMap[node.id] = newNodeId;
       }
 
-      const connectionsResult = await client.query(
-        'SELECT * FROM campaign_connections WHERE id_campaign = $1',
-        [campaignId]
-      );
-      for (const conn of connectionsResult.rows) {
+      const connectionsRows = await campaignCrudRepository.findConnectionsByCampaignIdTx(client, campaignId);
+      for (const conn of connectionsRows) {
         const newSourceId = nodeIdMap[conn.source_node_id];
         const newTargetId = nodeIdMap[conn.target_node_id];
         if (newSourceId && newTargetId) {
-          await client.query(
-            `INSERT INTO campaign_connections (
-              id_campaign, source_node_id, target_node_id,
-              connection_type, connection_label, condition_config
-            ) VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              newCampaign.id,
-              newSourceId,
-              newTargetId,
-              conn.connection_type,
-              conn.connection_label,
-              conn.condition_config,
-            ]
-          );
+          await campaignCrudRepository.insertConnectionTx(client, {
+            campaignId: newCampaign.id,
+            sourceNodeId: newSourceId,
+            targetNodeId: newTargetId,
+            connectionType: conn.connection_type,
+            connectionLabel: conn.connection_label,
+            conditionConfig: conn.condition_config,
+          });
         }
       }
 
@@ -337,22 +208,7 @@ class CampaignCrudService {
    */
   async publishCampaign({ userId, roleCode, campaignId }) {
     const isAdmin = isAdminRole(roleCode);
-    const params = [campaignId];
-    let query = `UPDATE campaigns SET
-      status = 'active',
-      published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
-      updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1
-       AND status IN ('draft', 'paused')`;
-    if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
-    }
-    query += ' RETURNING *';
-
-    const result = await db.query(query, params);
-
-    return result.rows[0] || null;
+    return campaignCrudRepository.publishCampaign({ campaignId, isAdmin, userId });
   }
 
   /**
@@ -363,20 +219,7 @@ class CampaignCrudService {
    */
   async pauseCampaign({ userId, roleCode, campaignId }) {
     const isAdmin = isAdminRole(roleCode);
-    const params = [campaignId];
-    let query = `UPDATE campaigns SET
-      status = 'paused',
-      updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1 AND status = 'active'`;
-    if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
-    }
-    query += ' RETURNING *';
-
-    const result = await db.query(query, params);
-
-    return result.rows[0] || null;
+    return campaignCrudRepository.pauseCampaign({ campaignId, isAdmin, userId });
   }
 }
 

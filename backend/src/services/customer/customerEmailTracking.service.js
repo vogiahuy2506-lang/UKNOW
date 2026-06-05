@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import customerEmailTrackingRepository from '../../repositories/customer/customerEmailTracking.repository.js';
 
 class CustomerEmailTrackingService {
   async trackEmailOpen({ token, clientIp, userAgent, referer }) {
@@ -9,22 +10,9 @@ class CustomerEmailTrackingService {
 
       await client.query('BEGIN');
 
-      const messageResult = await client.query(
-        `UPDATE email_messages
-         SET open_count = COALESCE(open_count, 0) + 1,
-             first_opened_at = COALESCE(first_opened_at, CURRENT_TIMESTAMP),
-             last_opened_at = CURRENT_TIMESTAMP,
-             status = CASE
-               WHEN status IN ('pending', 'queued', 'sent', 'delivered') THEN 'opened'
-               ELSE status
-             END
-         WHERE tracking_token = $1
-         RETURNING id, id_campaign, id_customer, id_run`,
-        [token]
-      );
+      const message = await customerEmailTrackingRepository.updateEmailMessageOnOpen(client, token);
 
-      if (messageResult.rows.length > 0) {
-        const message = messageResult.rows[0];
+      if (message) {
 
         console.info('[email-open-pixel] tracked', {
           token,
@@ -36,68 +24,32 @@ class CustomerEmailTrackingService {
         });
 
         if (message.id_customer) {
-          await client.query(
-            'UPDATE customers SET last_email_opened_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [message.id_customer]
-          );
+          await customerEmailTrackingRepository.touchCustomerEmailOpenedAt(client, message.id_customer);
         }
 
         if (message.id_campaign && message.id_customer) {
-          await client.query(
-            `INSERT INTO campaign_customers (
-              id_campaign, id_customer, joined_at,
-              email_opened_count, has_opened,
-              first_email_opened_at, last_email_opened_at,
-              last_activity_at, updated_at
-             )
-             VALUES ($1, $2, CURRENT_TIMESTAMP, 1, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT (id_campaign, id_customer)
-             DO UPDATE SET
-               email_opened_count = campaign_customers.email_opened_count + 1,
-               has_opened = TRUE,
-               first_email_opened_at = COALESCE(campaign_customers.first_email_opened_at, CURRENT_TIMESTAMP),
-               last_email_opened_at = CURRENT_TIMESTAMP,
-               last_activity_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP`,
-            [message.id_campaign, message.id_customer]
-          );
+          await customerEmailTrackingRepository.upsertCampaignCustomerOpen(client, message.id_campaign, message.id_customer);
 
-          await client.query(
-            `INSERT INTO campaign_participations (id_customer, id_campaign, id_run, joined_at)
-             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-             ON CONFLICT (id_customer, id_campaign)
-             DO UPDATE SET id_run = COALESCE(EXCLUDED.id_run, campaign_participations.id_run)`,
-            [message.id_customer, message.id_campaign, message.id_run || null]
-          );
+          await customerEmailTrackingRepository.upsertCampaignParticipation(client, message.id_customer, message.id_campaign, message.id_run || null);
 
-          await client.query(
-            'UPDATE campaigns SET total_opened = COALESCE(total_opened, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [message.id_campaign]
-          );
+          await customerEmailTrackingRepository.incrementCampaignTotalOpened(client, message.id_campaign);
         }
 
         if (message.id_customer) {
-          const existingOpen = await client.query(
-            `SELECT 1 FROM customer_journey
-             WHERE id_email_message = $1 AND id_customer = $2 AND event_type = 'email_opened'
-             LIMIT 1`,
-            [message.id, message.id_customer]
-          );
-          if (existingOpen.rows.length === 0) {
-            await client.query(
-              `INSERT INTO customer_journey (id_customer, id_campaign, id_run, event_type, event_channel, id_email_message, event_data, event_at)
-               VALUES ($1, $2, $3, 'email_opened', 'email', $4, $5::jsonb, CURRENT_TIMESTAMP)`,
-              [
-                message.id_customer,
-                message.id_campaign,
-                message.id_run || null,
-                message.id,
-                JSON.stringify({
-                  trackingToken: token,
-                  description: 'Khach hang da mo email',
-                }),
-              ]
-            );
+          const alreadyOpened = await customerEmailTrackingRepository.hasJourneyEmailOpened(client, message.id, message.id_customer);
+          if (!alreadyOpened) {
+            await customerEmailTrackingRepository.insertJourneyEvent(client, {
+              customerId: message.id_customer,
+              campaignId: message.id_campaign,
+              runId: message.id_run || null,
+              eventType: 'email_opened',
+              eventChannel: 'email',
+              emailMessageId: message.id,
+              eventData: {
+                trackingToken: token,
+                description: 'Khach hang da mo email',
+              },
+            });
           }
         }
       } else {
@@ -194,15 +146,9 @@ class CustomerEmailTrackingService {
     try {
       await client.query('BEGIN');
 
-      const messageResult = await client.query(
-        `SELECT id, id_campaign, id_customer, id_run
-         FROM email_messages
-         WHERE tracking_token = $1
-         LIMIT 1`,
-        [token]
-      );
+      const message = await customerEmailTrackingRepository.findEmailMessageByToken(client, token);
 
-      if (messageResult.rows.length === 0) {
+      if (!message) {
         await client.query('ROLLBACK');
         return { statusCode: 200, html: confirmHtml('Đã hủy đăng ký', {
           headingVi: 'Đã hủy đăng ký nhận email',
@@ -212,46 +158,25 @@ class CustomerEmailTrackingService {
         }) };
       }
 
-      const message = messageResult.rows[0];
-
-      await client.query(
-        `UPDATE email_messages
-         SET status = 'unsubscribed'
-         WHERE tracking_token = $1 AND status NOT IN ('unsubscribed')`,
-        [token]
-      );
+      await customerEmailTrackingRepository.setEmailMessageUnsubscribed(client, token);
 
       if (message.id_customer) {
-        await client.query(
-          `UPDATE customers
-           SET email_subscribed = false,
-               email_unsubscribed_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1 AND (email_subscribed IS DISTINCT FROM false)`,
-          [message.id_customer]
-        );
+        await customerEmailTrackingRepository.unsubscribeCustomerEmail(client, message.id_customer);
 
-        const existingEvent = await client.query(
-          `SELECT 1 FROM customer_journey
-           WHERE id_email_message = $1 AND id_customer = $2 AND event_type = 'email_unsubscribed'
-           LIMIT 1`,
-          [message.id, message.id_customer]
-        );
-        if (existingEvent.rows.length === 0) {
-          await client.query(
-            `INSERT INTO customer_journey (id_customer, id_campaign, id_run, event_type, event_channel, id_email_message, event_data, event_at)
-             VALUES ($1, $2, $3, 'email_unsubscribed', 'email', $4, $5::jsonb, CURRENT_TIMESTAMP)`,
-            [
-              message.id_customer,
-              message.id_campaign,
-              message.id_run || null,
-              message.id,
-              JSON.stringify({
-                trackingToken: token,
-                description: 'Khách hàng đã hủy đăng ký nhận email',
-              }),
-            ]
-          );
+        const alreadyUnsubscribed = await customerEmailTrackingRepository.hasJourneyEmailUnsubscribed(client, message.id, message.id_customer);
+        if (!alreadyUnsubscribed) {
+          await customerEmailTrackingRepository.insertJourneyEvent(client, {
+            customerId: message.id_customer,
+            campaignId: message.id_campaign,
+            runId: message.id_run || null,
+            eventType: 'email_unsubscribed',
+            eventChannel: 'email',
+            emailMessageId: message.id,
+            eventData: {
+              trackingToken: token,
+              description: 'Khách hàng đã hủy đăng ký nhận email',
+            },
+          });
         }
 
         console.info('[email-unsubscribe] tracked', {
@@ -301,16 +226,9 @@ class CustomerEmailTrackingService {
 
       await client.query('BEGIN');
 
-      const messageResult = await client.query(
-        `SELECT id, id_campaign, id_customer, id_run
-         FROM email_messages
-         WHERE tracking_token = $1
-         FOR UPDATE`,
-        [token]
-      );
+      const message = await customerEmailTrackingRepository.findEmailMessageByTokenForUpdate(client, token);
 
-      if (messageResult.rows.length > 0) {
-        const message = messageResult.rows[0];
+      if (message) {
 
         if (message.id_campaign && message.id_customer && redirectUrl !== defaultRedirect) {
           try {
@@ -326,131 +244,54 @@ class CustomerEmailTrackingService {
           } catch {}
         }
 
-        await client.query(
-          `UPDATE email_messages
-           SET click_count = COALESCE(click_count, 0) + 1,
-               first_clicked_at = COALESCE(first_clicked_at, CURRENT_TIMESTAMP),
-               status = CASE
-                 WHEN status IN ('pending', 'queued', 'sent', 'delivered', 'opened') THEN 'clicked'
-                 ELSE status
-               END
-           WHERE id = $1`,
-          [message.id]
-        );
+        await customerEmailTrackingRepository.updateEmailMessageOnClick(client, message.id);
 
         if (message.id_campaign && message.id_customer) {
-          await client.query(
-            `INSERT INTO campaign_customers (
-              id_campaign, id_customer, joined_at,
-              email_clicked_count, has_clicked,
-              first_email_clicked_at, last_email_clicked_at,
-              last_activity_at, updated_at
-             )
-             VALUES ($1, $2, CURRENT_TIMESTAMP, 1, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT (id_campaign, id_customer)
-             DO UPDATE SET
-               email_clicked_count = campaign_customers.email_clicked_count + 1,
-               has_clicked = TRUE,
-               first_email_clicked_at = COALESCE(campaign_customers.first_email_clicked_at, CURRENT_TIMESTAMP),
-               last_email_clicked_at = CURRENT_TIMESTAMP,
-               last_activity_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP`,
-            [message.id_campaign, message.id_customer]
-          );
+          await customerEmailTrackingRepository.upsertCampaignCustomerClick(client, message.id_campaign, message.id_customer);
 
-          await client.query(
-            `INSERT INTO campaign_participations (id_customer, id_campaign, id_run, joined_at)
-             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-             ON CONFLICT (id_customer, id_campaign)
-             DO UPDATE SET id_run = COALESCE(EXCLUDED.id_run, campaign_participations.id_run)`,
-            [message.id_customer, message.id_campaign, message.id_run || null]
-          );
+          await customerEmailTrackingRepository.upsertCampaignParticipation(client, message.id_customer, message.id_campaign, message.id_run || null);
 
-          await client.query(
-            'UPDATE campaigns SET total_clicked = COALESCE(total_clicked, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [message.id_campaign]
-          );
+          await customerEmailTrackingRepository.incrementCampaignTotalClicked(client, message.id_campaign);
         }
 
         if (message.id_customer) {
-          const existingOpen = await client.query(
-            `SELECT 1 FROM customer_journey
-             WHERE id_email_message = $1 AND id_customer = $2 AND event_type = 'email_opened'
-             LIMIT 1`,
-            [message.id, message.id_customer]
-          );
-          if (existingOpen.rows.length === 0) {
-            await client.query(
-              `UPDATE email_messages
-               SET open_count = COALESCE(open_count, 0) + 1,
-                   first_opened_at = COALESCE(first_opened_at, CURRENT_TIMESTAMP),
-                   last_opened_at = CURRENT_TIMESTAMP,
-                   status = CASE
-                     WHEN status IN ('pending', 'queued', 'sent', 'delivered') THEN 'opened'
-                     ELSE status
-                   END
-               WHERE id = $1`,
-              [message.id]
-            );
+          const alreadyOpened = await customerEmailTrackingRepository.hasJourneyEmailOpened(client, message.id, message.id_customer);
+          if (!alreadyOpened) {
+            await customerEmailTrackingRepository.updateEmailMessageOnInferredOpen(client, message.id);
             if (message.id_campaign) {
-              await client.query(
-                `UPDATE campaign_customers
-                 SET email_opened_count = COALESCE(email_opened_count, 0) + 1,
-                     has_opened = TRUE,
-                     first_email_opened_at = COALESCE(first_email_opened_at, CURRENT_TIMESTAMP),
-                     last_email_opened_at = CURRENT_TIMESTAMP,
-                     last_activity_at = CURRENT_TIMESTAMP,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE id_campaign = $1 AND id_customer = $2`,
-                [message.id_campaign, message.id_customer]
-              );
+              await customerEmailTrackingRepository.updateCampaignCustomerInferredOpen(client, message.id_campaign, message.id_customer);
             }
-            await client.query(
-              `INSERT INTO customer_journey (id_customer, id_campaign, id_run, event_type, event_channel, id_email_message, event_data, event_at)
-               VALUES ($1, $2, $3, 'email_opened', 'email', $4, $5::jsonb, CURRENT_TIMESTAMP)`,
-              [
-                message.id_customer,
-                message.id_campaign,
-                message.id_run || null,
-                message.id,
-                JSON.stringify({ inferred: true, source: 'click', description: 'Mở email (suy ra từ click link)' }),
-              ]
-            );
+            await customerEmailTrackingRepository.insertJourneyEvent(client, {
+              customerId: message.id_customer,
+              campaignId: message.id_campaign,
+              runId: message.id_run || null,
+              eventType: 'email_opened',
+              eventChannel: 'email',
+              emailMessageId: message.id,
+              eventData: { inferred: true, source: 'click', description: 'Mở email (suy ra từ click link)' },
+            });
           }
         }
 
         if (message.id_customer) {
           const resolvedLinkKey = linkKey || redirectUrl;
-          const existingClick = await client.query(
-            `SELECT 1
-             FROM customer_journey
-             WHERE id_email_message = $1
-               AND id_customer = $2
-               AND event_type = 'email_clicked'
-               AND (
-                 COALESCE(event_data ->> 'linkKey', event_data ->> 'targetUrl', '') = $3
-               )
-             LIMIT 1`,
-            [message.id, message.id_customer, resolvedLinkKey]
-          );
-          if (existingClick.rows.length === 0) {
-            await client.query(
-              `INSERT INTO customer_journey (id_customer, id_campaign, id_run, event_type, event_channel, id_email_message, event_data, event_at)
-               VALUES ($1, $2, $3, 'email_clicked', 'email', $4, $5::jsonb, CURRENT_TIMESTAMP)`,
-              [
-                message.id_customer,
-                message.id_campaign,
-                message.id_run || null,
-                message.id,
-                JSON.stringify({
-                  trackingToken: token,
-                  targetUrl: redirectUrl,
-                  linkKey: resolvedLinkKey,
-                  label,
-                  description: 'Khách hàng đã click vào link trong email',
-                }),
-              ]
-            );
+          const alreadyClicked = await customerEmailTrackingRepository.hasJourneyEmailClicked(client, message.id, message.id_customer, resolvedLinkKey);
+          if (!alreadyClicked) {
+            await customerEmailTrackingRepository.insertJourneyEvent(client, {
+              customerId: message.id_customer,
+              campaignId: message.id_campaign,
+              runId: message.id_run || null,
+              eventType: 'email_clicked',
+              eventChannel: 'email',
+              emailMessageId: message.id,
+              eventData: {
+                trackingToken: token,
+                targetUrl: redirectUrl,
+                linkKey: resolvedLinkKey,
+                label,
+                description: 'Khách hàng đã click vào link trong email',
+              },
+            });
           }
         }
       }

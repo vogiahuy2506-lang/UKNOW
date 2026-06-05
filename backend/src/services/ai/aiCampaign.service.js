@@ -4,9 +4,9 @@ import { buildAdminContext } from './adminContext.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
-import db from '../../config/database.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
+import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 
 class AiCampaignService {
   /**
@@ -16,13 +16,8 @@ class AiCampaignService {
    */
   async getCourses(userId) {
     try {
-      const result = await db.query(
-        `SELECT id, course_name AS name, course_code AS code, status
-         FROM courses WHERE id_user = $1
-         ORDER BY created_at DESC LIMIT 50`,
-        [userId]
-      );
-      return result.rows.map(r => {
+      const rows = await aiCampaignRepository.getCourses(userId);
+      return rows.map(r => {
         let name = String(r.name || '');
         // Decode numeric entities first
         name = name.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
@@ -44,15 +39,8 @@ class AiCampaignService {
 
   async getEmailTemplates(userId) {
     try {
-      const result = await db.query(
-        `SELECT id, template_name, subject, category
-         FROM email_templates
-         WHERE id_user = $1 AND is_active = true
-         ORDER BY usage_count DESC, created_at DESC
-         LIMIT 10`,
-        [userId]
-      );
-      return result.rows.map(r => ({
+      const rows = await aiCampaignRepository.getEmailTemplates(userId);
+      return rows.map(r => ({
         id: r.id,
         name: r.template_name,
         subject: r.subject,
@@ -71,15 +59,8 @@ class AiCampaignService {
    */
   async getZaloAccounts(userId) {
     try {
-      const result = await db.query(
-        `SELECT id, display_name, zalo_name, status
-         FROM zalo_settings
-         WHERE id_user = $1 AND status = 'connected'
-         ORDER BY is_default DESC, created_at DESC
-         LIMIT 5`,
-        [userId]
-      );
-      return result.rows.map(r => ({
+      const rows = await aiCampaignRepository.getZaloAccounts(userId);
+      return rows.map(r => ({
         id: r.id,
         displayName: r.display_name,
         zaloName: r.zalo_name,
@@ -98,15 +79,8 @@ class AiCampaignService {
    */
   async getZaloTemplates(userId) {
     try {
-      const result = await db.query(
-        `SELECT id, template_name, template_code, body_text, category
-         FROM zalo_templates
-         WHERE id_user = $1
-         ORDER BY created_at DESC
-         LIMIT 10`,
-        [userId]
-      );
-      return result.rows.map(r => ({
+      const rows = await aiCampaignRepository.getZaloTemplates(userId);
+      return rows.map(r => ({
         id: r.id,
         name: r.template_name,
         code: r.template_code,
@@ -126,26 +100,11 @@ class AiCampaignService {
    */
   async getZaloGroups(userId) {
     try {
-      // Lấy account đầu tiên đã kết nối
-      const accountResult = await db.query(
-        `SELECT id FROM zalo_settings
-         WHERE id_user = $1 AND status = 'connected'
-         ORDER BY is_default DESC LIMIT 1`,
-        [userId]
-      );
-      if (!accountResult.rows.length) return [];
+      const accountId = await aiCampaignRepository.getDefaultZaloAccountId(userId);
+      if (!accountId) return [];
 
-      const accountId = accountResult.rows[0].id;
-      // Lấy groups từ bảng zalo_groups (nếu có)
-      const groupResult = await db.query(
-        `SELECT id, group_id, group_name, member_count
-         FROM zalo_groups
-         WHERE id_zalo_setting = $1
-         ORDER BY member_count DESC
-         LIMIT 10`,
-        [accountId]
-      );
-      return groupResult.rows.map(r => ({
+      const rows = await aiCampaignRepository.getZaloGroupsByAccountId(accountId);
+      return rows.map(r => ({
         id: r.id,
         groupId: r.group_id,
         groupName: r.group_name,
@@ -164,15 +123,8 @@ class AiCampaignService {
    */
   async getLandingPages(userId) {
     try {
-      const result = await db.query(
-        `SELECT slug, COALESCE(title, slug) AS title, is_published
-         FROM landing_pages
-         WHERE id_user = $1
-         ORDER BY updated_at DESC
-         LIMIT 20`,
-        [userId]
-      );
-      return result.rows.map(r => ({
+      const rows = await aiCampaignRepository.getLandingPages(userId);
+      return rows.map(r => ({
         slug: r.slug,
         title: r.title,
         isPublished: r.is_published,
@@ -231,38 +183,18 @@ class AiCampaignService {
    */
   async getCustomerStats(userId) {
     try {
-      // Lấy số liệu tổng quan
-      const totalResult = await db.query(
-        `SELECT COUNT(*) as total FROM customers WHERE id_user = $1`,
-        [userId]
-      );
-      
-      // Lấy số khách có email
-      const emailResult = await db.query(
-        `SELECT COUNT(*) as count FROM customers 
-         WHERE id_user = $1 AND email IS NOT NULL AND email <> ''`,
-        [userId]
-      );
-      
-      // Lấy số khách có Zalo ID
-      const zaloResult = await db.query(
-        `SELECT COUNT(*) as count FROM customers 
-         WHERE id_user = $1 AND (zalo_id IS NOT NULL OR zalo_phone IS NOT NULL)`,
-        [userId]
-      );
-
-      // Lấy số khách có phone
-      const phoneResult = await db.query(
-        `SELECT COUNT(*) as count FROM customers 
-         WHERE id_user = $1 AND phone IS NOT NULL AND phone <> ''`,
-        [userId]
-      );
+      const [totalRow, emailRow, zaloRow, phoneRow] = await Promise.all([
+        aiCampaignRepository.getCustomerStatTotal(userId),
+        aiCampaignRepository.getCustomerStatEmail(userId),
+        aiCampaignRepository.getCustomerStatZalo(userId),
+        aiCampaignRepository.getCustomerStatPhone(userId),
+      ]);
 
       return {
-        total: parseInt(totalResult.rows[0]?.total || 0, 10),
-        hasEmail: parseInt(emailResult.rows[0]?.count || 0, 10),
-        hasZalo: parseInt(zaloResult.rows[0]?.count || 0, 10),
-        hasPhone: parseInt(phoneResult.rows[0]?.count || 0, 10),
+        total: parseInt(totalRow?.total || 0, 10),
+        hasEmail: parseInt(emailRow?.count || 0, 10),
+        hasZalo: parseInt(zaloRow?.count || 0, 10),
+        hasPhone: parseInt(phoneRow?.count || 0, 10),
       };
     } catch (e) {
       console.warn('[AI] Không lấy được customer stats:', e.message);

@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import customerZaloTrackingRepository from '../../repositories/customer/customerZaloTracking.repository.js';
 
 class CustomerZaloTrackingService {
   /**
@@ -76,37 +77,16 @@ class CustomerZaloTrackingService {
     const parsedCampaignId = Number.parseInt(campaignId, 10);
     if (!normalizedUid || !Number.isFinite(parsedCampaignId)) return null;
 
-    const userResult = await client.query(
-      `SELECT id_user
-       FROM campaigns
-       WHERE id = $1
-       LIMIT 1`,
-      [parsedCampaignId]
-    );
-    const userId = Number.parseInt(userResult.rows[0]?.id_user, 10);
+    const rawUserId = await customerZaloTrackingRepository.getCampaignUserId(client, parsedCampaignId);
+    const userId = Number.parseInt(rawUserId, 10);
     if (!Number.isFinite(userId)) return null;
 
-    const existingResult = await client.query(
-      `SELECT id
-       FROM customers
-       WHERE id_user = $1
-         AND zalo_id = $2
-       ORDER BY id ASC
-       LIMIT 1`,
-      [userId, normalizedUid]
-    );
-    const existingCustomerId = Number.parseInt(existingResult.rows[0]?.id, 10);
+    const rawExisting = await customerZaloTrackingRepository.findCustomerByZaloUid(client, userId, normalizedUid);
+    const existingCustomerId = Number.parseInt(rawExisting, 10);
     if (Number.isFinite(existingCustomerId)) return existingCustomerId;
 
-    const insertedResult = await client.query(
-      `INSERT INTO customers
-         (id_user, zalo_id, customer_source, utm_source, created_at, updated_at)
-       VALUES
-         ($1, $2, 'uknow_campaign', 'zalo_person_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       RETURNING id`,
-      [userId, normalizedUid]
-    );
-    const insertedCustomerId = Number.parseInt(insertedResult.rows[0]?.id, 10);
+    const rawInserted = await customerZaloTrackingRepository.createPlaceholderCustomerByZaloUid(client, userId, normalizedUid);
+    const insertedCustomerId = Number.parseInt(rawInserted, 10);
     return Number.isFinite(insertedCustomerId) ? insertedCustomerId : null;
   }
 
@@ -224,37 +204,16 @@ class CustomerZaloTrackingService {
 
       await client.query('BEGIN');
 
-      const messageResult = await client.query(
-        `SELECT id, id_campaign, id_run, id_customer, group_id, channel
-         FROM zalo_messages
-         WHERE tracking_token = $1
-         FOR UPDATE`,
-        [token]
-      );
+      const message = await customerZaloTrackingRepository.findZaloMessageByToken(client, token);
 
-      if (messageResult.rows.length > 0) {
-        const message = messageResult.rows[0];
-
-        const updateResult = await client.query(
-          `UPDATE zalo_messages
-           SET click_count = COALESCE(click_count, 0) + 1,
-               first_clicked_at = COALESCE(first_clicked_at, CURRENT_TIMESTAMP),
-               last_clicked_at = CURRENT_TIMESTAMP,
-               tracking_metadata = COALESCE(tracking_metadata, '{}'::jsonb) || $2::jsonb,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1
-           RETURNING click_count`,
-          [
-            message.id,
-            JSON.stringify({
-              lastClickedUrl: redirectUrl,
-              lastClickedAt: new Date().toISOString(),
-            }),
-          ],
-        );
+      if (message) {
+        const clickMetadata = {
+          lastClickedUrl: redirectUrl,
+          lastClickedAt: new Date().toISOString(),
+        };
+        const clickCount = await customerZaloTrackingRepository.incrementZaloMessageClickCount(client, message.id, clickMetadata);
 
         const parsedCustomerId = this.parseCustomerIdFromRedirectUrl(redirectUrl);
-        const clickCount = Number(updateResult.rows?.[0]?.click_count || 0);
         const isZaloGroup = this.isZaloGroupMessage(message) || this.isZaloGroupUtmSource(redirectUrl);
         const messageCustomerId = Number.parseInt(message.id_customer, 10);
         const rawUtmSource = this.parseUtmSourceFromRedirectUrl(redirectUrl);
@@ -277,13 +236,7 @@ class CustomerZaloTrackingService {
         const canTrackJourney = isZaloGroup || Number.isFinite(journeyCustomerId);
 
         if (!Number.isFinite(messageCustomerId) && Number.isFinite(trackedCustomerId)) {
-          await client.query(
-            `UPDATE zalo_messages
-             SET id_customer = COALESCE(id_customer, $2),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $1`,
-            [message.id, trackedCustomerId]
-          );
+          await customerZaloTrackingRepository.setZaloMessageCustomer(client, message.id, trackedCustomerId);
         }
 
         // Link Zalo UID to customer record for zalo_person_campaign clicks
@@ -293,16 +246,7 @@ class CustomerZaloTrackingService {
           normalizedUtmSource === 'zalo_person_campaign' &&
           Number.isFinite(trackedCustomerId)
         ) {
-          await client.query(
-            `UPDATE customers
-             SET zalo_id = CASE
-                             WHEN zalo_id IS NULL OR zalo_id = '' THEN $1
-                             ELSE zalo_id
-                           END,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2`,
-            [zaloUidFromUrl, trackedCustomerId]
-          );
+          await customerZaloTrackingRepository.linkZaloUidToCustomer(client, trackedCustomerId, zaloUidFromUrl);
         }
 
         if (canTrackJourney) {
@@ -315,50 +259,31 @@ class CustomerZaloTrackingService {
           });
 
           if (isZaloGroup) {
-            // Zalo group: keep every click event as a separate journey row.
-            await client.query(
-              `INSERT INTO customer_journey
-                 (id_customer, id_campaign, id_run, event_type, event_channel, id_zalo_message, event_data, event_at)
-               VALUES
-                 ($1, $2, $3, 'zalo_clicked', $4, $5, $6::jsonb, CURRENT_TIMESTAMP)`,
-              [
-                journeyCustomerId,
-                message.id_campaign,
-                message.id_run || null,
-                eventChannel,
-                message.id,
-                JSON.stringify(eventData),
-              ]
-            );
+            await customerZaloTrackingRepository.insertZaloClickJourney(client, {
+              customerId: journeyCustomerId,
+              campaignId: message.id_campaign,
+              runId: message.id_run,
+              channel: eventChannel,
+              messageId: message.id,
+              eventData,
+            });
           } else {
-            const existingClick = await client.query(
-              `SELECT id
-               FROM customer_journey
-               WHERE event_type = 'zalo_clicked'
-                 AND id_zalo_message = $1
-                 AND event_channel = $2
-                 AND id_customer IS NOT DISTINCT FROM $3
-                 AND COALESCE(event_data ->> 'linkKey', event_data ->> 'targetUrl', '') = $4
-               LIMIT 1`,
-              [message.id, eventChannel, journeyCustomerId, resolvedLinkKey]
-            );
+            const exists = await customerZaloTrackingRepository.findExistingPersonalZaloClickJourney(client, {
+              messageId: message.id,
+              channel: eventChannel,
+              customerId: journeyCustomerId,
+              linkKey: resolvedLinkKey,
+            });
 
-            // Zalo personal: keep one journey row per unique clicked link.
-            if (existingClick.rows.length === 0) {
-              await client.query(
-                `INSERT INTO customer_journey
-                   (id_customer, id_campaign, id_run, event_type, event_channel, id_zalo_message, event_data, event_at)
-                 VALUES
-                   ($1, $2, $3, 'zalo_clicked', $4, $5, $6::jsonb, CURRENT_TIMESTAMP)`,
-                [
-                  journeyCustomerId,
-                  message.id_campaign,
-                  message.id_run || null,
-                  eventChannel,
-                  message.id,
-                  JSON.stringify(eventData),
-                ]
-              );
+            if (!exists) {
+              await customerZaloTrackingRepository.insertZaloClickJourney(client, {
+                customerId: journeyCustomerId,
+                campaignId: message.id_campaign,
+                runId: message.id_run,
+                channel: eventChannel,
+                messageId: message.id,
+                eventData,
+              });
             }
           }
         }

@@ -1,5 +1,5 @@
-import db from '../../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
+import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
 import { checkUserEmailSendLimit } from '../../utils/userSendLimit.util.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import campaignFlowService from './campaignFlow.service.js';
@@ -233,11 +233,7 @@ class CampaignEmailSenderService {
     if (bucket.templates.has(templateKey)) {
       return bucket.templates.get(templateKey);
     }
-    const templateResult = await db.query(
-      'SELECT * FROM email_templates WHERE id = $1',
-      [templateId]
-    );
-    const template = templateResult.rows[0] || null;
+    const template = await campaignEmailSenderRepository.findEmailTemplateById(templateId);
     bucket.templates.set(templateKey, template);
     return template;
   }
@@ -263,19 +259,9 @@ class CampaignEmailSenderService {
     if (bucket.settings.has(settingsKey)) {
       return bucket.settings.get(settingsKey);
     }
-    let settingsResult;
-    if (fromEmailId) {
-      settingsResult = await db.query(
-        "SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'",
-        [fromEmailId, userId]
-      );
-    } else {
-      settingsResult = await db.query(
-        "SELECT * FROM email_settings WHERE id_user = $1 AND status = 'active' LIMIT 1",
-        [userId]
-      );
-    }
-    const settings = settingsResult.rows[0] || null;
+    const settings = fromEmailId
+      ? await campaignEmailSenderRepository.findEmailSettingsById(fromEmailId, userId)
+      : await campaignEmailSenderRepository.findDefaultEmailSettings(userId);
     if (!settings) {
       throw new Error('Chưa cấu hình email settings');
     }
@@ -574,11 +560,9 @@ class CampaignEmailSenderService {
 
     let customerId = null;
     if (customer.email) {
-      const customerResult = await db.query(
-        'SELECT id, email_subscribed, email_hard_bounced FROM customers WHERE id_user = $1 AND LOWER(email) = $2 LIMIT 1',
-        [campaign.id_user, customer.email.toLowerCase()]
+      const customerRow = await campaignEmailSenderRepository.findCustomerByEmail(
+        campaign.id_user, customer.email.toLowerCase()
       );
-      const customerRow = customerResult.rows[0] || null;
       customerId = customerRow?.id || null;
 
       // Bỏ qua khách hàng đã hủy đăng ký nhận email
@@ -667,10 +651,7 @@ class CampaignEmailSenderService {
       // Cập nhật email_message nếu đã được insert (sẽ insert trước khi throw bounce)
       // Ở đây chưa insert nên chỉ log thống kê SMTP settings và trả bounce result.
       // Ghi thống kê tạm thời để biết đã cố gửi
-      await db.query(
-        'UPDATE email_settings SET daily_sent_count = daily_sent_count + 1, total_sent_count = total_sent_count + 1 WHERE id = $1',
-        [settings.id]
-      ).catch(() => {});
+      await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id).catch(() => {});
 
       if (providerRateLimitError) {
         const retryConfig = this.resolveProviderRateLimitRetryConfig();
@@ -730,12 +711,7 @@ class CampaignEmailSenderService {
             nodeId: logNodeIdForDb,
             emailStep: logEmailStepForDb,
           });
-          await db.query(
-            `UPDATE email_messages
-             SET status = 'failed', bounce_reason = $1
-             WHERE tracking_token = $2`,
-            [bounceReason, failedTrackingToken]
-          );
+          await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
           console.error('[sendEmailToCustomer] Lỗi ghi log SMTP config error:', logErr.message);
         }
@@ -771,12 +747,7 @@ class CampaignEmailSenderService {
             nodeId: logNodeIdForDb,
             emailStep: logEmailStepForDb,
           });
-          await db.query(
-            `UPDATE email_messages
-             SET status = 'failed', bounce_reason = $1
-             WHERE tracking_token = $2`,
-            [bounceReason, failedTrackingToken]
-          );
+          await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
           console.error('[sendEmailToCustomer] Lỗi ghi log SMTP delivery error:', logErr.message);
         }
@@ -791,10 +762,8 @@ class CampaignEmailSenderService {
 
       // Hard bounce: đánh dấu khách hàng để bỏ qua lần gửi tiếp theo
       if (bounceType === 'hard' && customerId) {
-        await db.query(
-          'UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-          [customerId]
-        ).catch((e) => console.error('[sendEmailToCustomer] Lỗi cập nhật hard bounce:', e.message));
+        await campaignEmailSenderRepository.markCustomerHardBounced(customerId)
+          .catch((e) => console.error('[sendEmailToCustomer] Lỗi cập nhật hard bounce:', e.message));
         console.info(`[CampaignRun][Email] mark_hard_bounce run=${runId} customerId=${customerId}`);
       }
 
@@ -821,12 +790,7 @@ class CampaignEmailSenderService {
           emailStep: logEmailStepForDb,
         });
         // Cập nhật email_message vừa insert sang status bounced
-        await db.query(
-          `UPDATE email_messages
-           SET status = 'bounced', bounced_at = $1, bounce_reason = $2
-           WHERE tracking_token = $3`,
-          [bouncedAt, bounceReason, bounceTrackingToken]
-        );
+        await campaignEmailSenderRepository.markEmailMessageBounced(bounceTrackingToken, bouncedAt, bounceReason);
       } catch (logErr) {
         console.error('[sendEmailToCustomer] Lỗi ghi log bounce:', logErr.message);
       }
@@ -843,10 +807,7 @@ class CampaignEmailSenderService {
       `[CampaignRun][Email] success run=${runId} to=${customer.email} messageId=${info?.messageId || 'n/a'}`
     );
 
-    await db.query(
-      'UPDATE email_settings SET daily_sent_count = daily_sent_count + 1, total_sent_count = total_sent_count + 1 WHERE id = $1',
-      [settings.id]
-    );
+    await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id);
 
     const sentAt = new Date();
     if (config.saveMessageLog !== false) {

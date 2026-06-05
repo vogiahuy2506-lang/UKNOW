@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
 import crypto from 'node:crypto';
 import { checkUserZaloSendLimit } from '../../utils/userSendLimit.util.js';
 import path from 'node:path';
@@ -1303,14 +1303,7 @@ class CampaignZaloSenderService {
       : null;
     if (!normalizedAccountId || !normalizedUserId) return null;
 
-    const accountResult = await db.query(
-      `SELECT id, display_name, status, is_active, cookie_text
-       FROM zalo_settings
-       WHERE id = $1 AND id_user = $2
-       LIMIT 1`,
-      [normalizedAccountId, normalizedUserId]
-    );
-    return accountResult.rows[0] || null;
+    return campaignZaloSenderRepository.findAccountRestoreSource(normalizedAccountId, normalizedUserId);
   }
 
   /**
@@ -1337,17 +1330,13 @@ class CampaignZaloSenderService {
     try {
       const api = await this.restoreApiFromCookieText(safeCookieText);
       const now = new Date();
-      await db.query(
-        `UPDATE zalo_settings
-         SET status = 'connected',
-             is_active = TRUE,
-             display_name = COALESCE(NULLIF($1, ''), display_name),
-             cookie_text = COALESCE(NULLIF($2, ''), cookie_text),
-             last_connected_at = $3,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4 AND id_user = $5`,
-        [String(fallbackDisplayName || '').trim(), safeCookieText, now, normalizedAccountId, normalizedUserId]
-      );
+      await campaignZaloSenderRepository.markAccountConnected({
+        accountId: normalizedAccountId,
+        userId: normalizedUserId,
+        displayName: String(fallbackDisplayName || '').trim(),
+        cookieText: safeCookieText,
+        now,
+      });
       zaloAccountSessionService.setAccountApi(normalizedAccountId, api);
       zaloAccountSessionService.startAccountListenerSafely({
         accountId: normalizedAccountId,
@@ -1411,18 +1400,7 @@ class CampaignZaloSenderService {
       throw new Error('Chưa chọn tài khoản Zalo gửi');
     }
 
-    const accountResult = await db.query(
-      `SELECT id, id_user, display_name, status, is_active, is_default, cookie_text,
-              zalo_personal_outbound_per_hour_limit,
-              zalo_personal_outbound_delay_min_ms,
-              zalo_personal_outbound_delay_max_ms
-       FROM zalo_settings
-       WHERE id = $1
-         ${isAdmin ? '' : 'AND id_user = $2'}
-       LIMIT 1`,
-      isAdmin ? [normalizedId] : [normalizedId, userId]
-    );
-    const account = accountResult.rows[0] || null;
+    const account = await campaignZaloSenderRepository.findCampaignZaloAccount(normalizedId, userId, isAdmin);
     if (!account) {
       throw new Error('Không tìm thấy tài khoản Zalo đã chọn');
     }
@@ -1488,13 +1466,7 @@ class CampaignZaloSenderService {
       : null;
     if (!normalizedAccountId || !normalizedUserId) return;
 
-    await db.query(
-      `UPDATE zalo_settings
-       SET status = 'disconnected',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND id_user = $2`,
-      [normalizedAccountId, normalizedUserId]
-    );
+    await campaignZaloSenderRepository.markAccountDisconnected(normalizedAccountId, normalizedUserId);
     zaloAccountSessionService.clearAccountApi(normalizedAccountId);
   }
 
@@ -1588,14 +1560,7 @@ class CampaignZaloSenderService {
 
     if (!disconnectedIds.length) return new Set();
 
-    await db.query(
-      `UPDATE zalo_settings
-       SET status = 'disconnected',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $1
-         AND id = ANY($2::bigint[])`,
-      [normalizedUserId, disconnectedIds]
-    );
+    await campaignZaloSenderRepository.bulkMarkAccountsDisconnected(normalizedUserId, disconnectedIds);
     disconnectedIds.forEach((id) => zaloAccountSessionService.clearAccountApi(id));
 
     return new Set(disconnectedIds.map((id) => String(id)));

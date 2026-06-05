@@ -2,7 +2,6 @@ import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
-import db from '../config/database.js';
 
 class ChatbotWebhookController {
   // ── Zalo OA Webhook (Token-based) ──────────────────────────────────
@@ -233,19 +232,12 @@ class ChatbotWebhookController {
       }
 
       // Find the user who owns this Zalo OA channel
-      const channels = await db.query(
-        `SELECT cc.*, u.id AS user_id FROM channel_connections cc
-         JOIN users u ON u.id = cc.id_user
-         WHERE cc.channel = 'zalo_oa' AND cc.is_active = true
-         LIMIT 1`
-      );
-
-      if (!channels.rows.length) {
+      const channel = await chatbotRepository.findFirstActiveChannelByType('zalo_oa');
+      if (!channel) {
         console.warn('[ZaloOA] No active Zalo OA channel found');
         return;
       }
 
-      const channel = channels.rows[0];
       const { message, senderId, messageId } = event;
 
       const conv = await chatbotRepository.getOrCreateChannelConversation({
@@ -314,19 +306,11 @@ class ChatbotWebhookController {
       const messages = facebookAdapter.parseWebhookEvent(req.body);
       if (!messages.length) return;
 
-      const channels = await db.query(
-        `SELECT cc.*, u.id AS user_id FROM channel_connections cc
-         JOIN users u ON u.id = cc.id_user
-         WHERE cc.channel = 'facebook' AND cc.is_active = true
-         LIMIT 1`
-      );
-
-      if (!channels.rows.length) {
+      const channel = await chatbotRepository.findFirstActiveChannelByType('facebook');
+      if (!channel) {
         console.warn('[Facebook] No active Facebook channel found');
         return;
       }
-
-      const channel = channels.rows[0];
 
       for (const msg of messages) {
         const conv = await chatbotRepository.getOrCreateChannelConversation({

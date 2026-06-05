@@ -44,6 +44,22 @@ class VerificationRepository {
     );
     return result.rows[0] || null;
   }
+
+  async userExistsByEmail(email) {
+    const result = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    return result.rows.length > 0;
+  }
+
+  async userExistsByUsername(username) {
+    const result = await db.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
+    return result.rows.length > 0;
+  }
 }
 
 export default new VerificationRepository();

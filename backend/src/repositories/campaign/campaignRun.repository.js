@@ -1,6 +1,28 @@
 import db from '../../config/database.js';
 
 class CampaignRunRepository {
+  async hasSkippedSendsColumn() {
+    if (typeof this._hasSkippedSendsColumn === 'boolean') {
+      return this._hasSkippedSendsColumn;
+    }
+
+    try {
+      const result = await db.query(
+        `SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'campaign_runs'
+           AND column_name = 'skipped_sends'
+         LIMIT 1`
+      );
+      this._hasSkippedSendsColumn = result.rows.length > 0;
+    } catch {
+      this._hasSkippedSendsColumn = false;
+    }
+
+    return this._hasSkippedSendsColumn;
+  }
+
   /**
    * SELECT run_metadata FROM campaign_runs WHERE id = $1 AND status = 'running'
    *
@@ -58,6 +80,18 @@ class CampaignRunRepository {
    * @returns {Promise<void>}
    */
   async updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends }) {
+    if (!(await this.hasSkippedSendsColumn())) {
+      await db.query(
+        `UPDATE campaign_runs
+         SET total_recipients = $1,
+             successful_sends = $2,
+             failed_sends = $3
+         WHERE id = $4`,
+        [totalRecipients, successfulSends, failedSends, runId]
+      );
+      return;
+    }
+
     await db.query(
       `UPDATE campaign_runs
        SET total_recipients = $1,
@@ -130,6 +164,189 @@ class CampaignRunRepository {
     return result.rows.length > 0;
   }
 
+  async findRuns({ userId, isAdmin, campaignId = null, scheduleId = null, limit = 50 }) {
+    const skippedSendsSelect = (await this.hasSkippedSendsColumn())
+      ? 'cr.skipped_sends'
+      : '0::integer';
+
+    let query = `
+      SELECT
+        cr.id,
+        cr.id_campaign,
+        cr.id_schedule,
+        cr.run_type,
+        cr.status,
+        cr.started_at::timestamptz AS started_at,
+        cr.completed_at::timestamptz AS completed_at,
+        cr.total_recipients,
+        cr.successful_sends,
+        cr.failed_sends,
+        ${skippedSendsSelect} AS skipped_sends,
+        cr.error_message,
+        cr.run_metadata,
+        cr.created_at::timestamptz AS created_at,
+        cr.run_name,
+        c.campaign_name,
+        cs.schedule_name
+      FROM campaign_runs cr
+      JOIN campaigns c ON cr.id_campaign = c.id
+      LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
+      WHERE ($1::boolean = TRUE OR c.id_user = $2)
+    `;
+    const params = [isAdmin, userId];
+    let paramIndex = 3;
+
+    if (campaignId) {
+      query += ` AND cr.id_campaign = $${paramIndex}`;
+      params.push(campaignId);
+      paramIndex += 1;
+    }
+
+    if (scheduleId) {
+      query += ` AND cr.id_schedule = $${paramIndex}`;
+      params.push(scheduleId);
+      paramIndex += 1;
+    }
+
+    query += ` ORDER BY cr.started_at DESC LIMIT $${paramIndex}`;
+    params.push(limit);
+
+    const result = await db.query(query, params);
+    return result.rows;
+  }
+
+  async findRunById({ runId, isAdmin, userId }) {
+    const skippedSendsSelect = (await this.hasSkippedSendsColumn())
+      ? 'cr.skipped_sends'
+      : '0::integer';
+
+    const result = await db.query(
+      `SELECT
+         cr.id,
+         cr.id_campaign,
+         cr.id_schedule,
+         cr.run_type,
+         cr.status,
+         cr.started_at::timestamptz AS started_at,
+         cr.completed_at::timestamptz AS completed_at,
+         cr.total_recipients,
+         cr.successful_sends,
+         cr.failed_sends,
+         ${skippedSendsSelect} AS skipped_sends,
+         cr.error_message,
+         cr.run_metadata,
+         cr.created_at::timestamptz AS created_at,
+         cr.run_name,
+         c.campaign_name,
+         cs.schedule_name
+       FROM campaign_runs cr
+       JOIN campaigns c ON cr.id_campaign = c.id
+       LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
+       WHERE cr.id = $1
+         AND ($2::boolean = TRUE OR c.id_user = $3)`,
+      [runId, isAdmin, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async findExecutionLogs(runId) {
+    const result = await db.query(
+      `SELECT
+         ce.id,
+         ce.id_campaign,
+         ce.id_run,
+         ce.id_customer,
+         ce.status,
+         ce.action_type,
+         ce.path_taken,
+         ce.execution_data,
+         ce.error_message,
+         ce.created_at::timestamptz AS created_at,
+         ce.updated_at::timestamptz AS updated_at,
+         ce.node_id,
+         ce.node_name,
+         ce.node_type,
+         ce.node_subtype,
+         ce.node_order,
+         ce.progress_current,
+         ce.progress_total,
+         ce.node_result_json
+       FROM campaign_executions ce
+       WHERE ce.id_run = $1
+       ORDER BY ce.node_order ASC NULLS LAST, ce.created_at ASC, ce.id ASC`,
+      [runId]
+    );
+    return result.rows;
+  }
+
+  async findExecutionLogsIncremental({ runId, afterId = null, updatedAfterIso = null, fetchSize }) {
+    const result = await db.query(
+      `SELECT
+         ce.id,
+         ce.id_campaign,
+         ce.id_run,
+         ce.id_customer,
+         ce.status,
+         ce.action_type,
+         ce.path_taken,
+         ce.execution_data,
+         ce.error_message,
+         ce.created_at::timestamptz AS created_at,
+         ce.updated_at::timestamptz AS updated_at,
+         ce.node_id,
+         ce.node_name,
+         ce.node_type,
+         ce.node_subtype,
+         ce.node_order,
+         ce.progress_current,
+         ce.progress_total,
+         ce.node_result_json
+       FROM campaign_executions ce
+       WHERE ce.id_run = $1
+         AND ($2::BIGINT IS NULL OR ce.id > $2)
+         AND (
+           $3::TIMESTAMPTZ IS NULL
+           OR ce.updated_at::timestamptz > $3::TIMESTAMPTZ
+         )
+       ORDER BY ce.id ASC
+       LIMIT $4`,
+      [runId, afterId, updatedAfterIso, fetchSize]
+    );
+    return result.rows;
+  }
+
+  async getTrackingSummary(runId, purchaseOrderStatusExpr) {
+    const normalizedStatusExpr = `LOWER(TRIM(COALESCE(${purchaseOrderStatusExpr}, '')))`;
+    const purchaseSummaryResult = await db.query(
+      `SELECT
+         COALESCE(COUNT(*) FILTER (
+           WHERE ${normalizedStatusExpr} IN ('completed', 'processing')
+         ), 0)::INTEGER AS purchase_count,
+         COALESCE(COUNT(*) FILTER (
+           WHERE ${normalizedStatusExpr} IN (
+             'on-hold', 'on-holder', 'onhold', 'pending', 'interested'
+           )
+         ), 0)::INTEGER AS pending_count,
+         COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS customer_with_order_count
+       FROM customer_purchases cp
+       WHERE cp.id_run = $1`,
+      [runId]
+    );
+    const clickSummaryResult = await db.query(
+      `SELECT
+         COALESCE(COUNT(*), 0)::INTEGER AS link_click_count
+       FROM customer_journey cj
+       WHERE cj.id_run = $1
+         AND cj.event_type IN ('email_clicked', 'zalo_clicked')`,
+      [runId]
+    );
+
+    return {
+      ...(purchaseSummaryResult.rows[0] || {}),
+      ...(clickSummaryResult.rows[0] || {}),
+    };
+  }
+
   /**
    * Get the current status of a run.
    *
@@ -170,6 +387,30 @@ class CampaignRunRepository {
    * @returns {Promise<void>}
    */
   async finalizeRun(runId, hasPendingRecipientDue, { totalRecipients, successfulSends, failedSends, skippedSends }) {
+    if (!(await this.hasSkippedSendsColumn())) {
+      await db.query(
+        hasPendingRecipientDue
+          ? `UPDATE campaign_runs SET
+             status = 'running',
+             completed_at = NULL,
+             total_recipients = $1,
+             successful_sends = $2,
+             failed_sends = $3
+             WHERE id = $4
+               AND status = 'running'`
+          : `UPDATE campaign_runs SET
+             status = 'completed',
+             completed_at = CURRENT_TIMESTAMP,
+             total_recipients = $1,
+             successful_sends = $2,
+             failed_sends = $3
+             WHERE id = $4
+               AND status = 'running'`,
+        [totalRecipients, successfulSends, failedSends, runId]
+      );
+      return;
+    }
+
     await db.query(
       hasPendingRecipientDue
         ? `UPDATE campaign_runs SET

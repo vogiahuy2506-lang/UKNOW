@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import campaignExecutionLogRepository from '../../repositories/campaign/campaignExecutionLog.repository.js';
 
 class CampaignExecutionLogService {
   /**
@@ -157,11 +157,8 @@ class CampaignExecutionLogService {
     const email = String(recipientEmail || '').trim().toLowerCase();
     if (email) {
       try {
-        const byEmail = await db.query(
-          `SELECT id FROM customers WHERE LOWER(TRIM(email)) = $1 ORDER BY id ASC LIMIT 1`,
-          [email]
-        );
-        if (byEmail.rows[0]?.id != null) return byEmail.rows[0].id;
+        const id = await campaignExecutionLogRepository.findCustomerIdByEmail(email);
+        if (id != null) return id;
       } catch {
         // Fallback sang id thô
       }
@@ -169,8 +166,8 @@ class CampaignExecutionLogService {
     const parsed = Number.parseInt(rawCustomerId, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
     try {
-      const result = await db.query('SELECT id FROM customers WHERE id = $1 LIMIT 1', [parsed]);
-      return result.rows.length > 0 ? parsed : null;
+      const exists = await campaignExecutionLogRepository.customerExists(parsed);
+      return exists ? parsed : null;
     } catch {
       return null;
     }
@@ -230,18 +227,9 @@ class CampaignExecutionLogService {
 
     // Một node trong một run chỉ nên một hàng log; mọi lần ghi sau cập nhật + merge payload.
     if (nodeId) {
-      const existingLogResult = await db.query(
-        `SELECT id, execution_data, node_result_json
-         FROM campaign_executions
-         WHERE id_run = $1
-           AND node_id = $2
-         ORDER BY id DESC
-         LIMIT 1`,
-        [runId, nodeId]
-      );
+      const existingLog = await campaignExecutionLogRepository.findLatestByRunAndNode(runId, nodeId);
 
-      if (existingLogResult.rows.length > 0) {
-        const existingLog = existingLogResult.rows[0];
+      if (existingLog) {
         const mergedExecutionData = this.mergeExecutionData(
           existingLog.execution_data ?? existingLog.node_result_json,
           parsedIncomingExecutionData
@@ -250,66 +238,40 @@ class CampaignExecutionLogService {
           ? JSON.stringify(mergedExecutionData)
           : null;
 
-        await db.query(
-          `UPDATE campaign_executions
-           SET id_campaign = $1,
-               id_customer = $2,
-               status = $3,
-               action_type = $4,
-               node_name = $5,
-               node_type = $6,
-               node_subtype = $7,
-               node_order = $8,
-               progress_current = $9,
-               progress_total = $10,
-               execution_data = $11,
-               node_result_json = $12,
-               error_message = $13,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $14`,
-          [
-            campaignId,
-            safeCustomerId,
-            status,
-            nodeSubtype || nodeType,
-            nodeName,
-            nodeType,
-            nodeSubtype,
-            nodeOrder,
-            progressCurrent,
-            progressTotal,
-            serializedMergedExecutionData,
-            serializedMergedExecutionData,
-            errorMessage,
-            existingLog.id,
-          ]
-        );
+        await campaignExecutionLogRepository.updateExecutionLog(existingLog.id, {
+          campaignId,
+          safeCustomerId,
+          status,
+          actionType: nodeSubtype || nodeType,
+          nodeName,
+          nodeType,
+          nodeSubtype,
+          nodeOrder,
+          progressCurrent,
+          progressTotal,
+          serializedExecutionData: serializedMergedExecutionData,
+          errorMessage,
+        });
         return;
       }
     }
 
-    await db.query(
-      `INSERT INTO campaign_executions
-        (id_campaign, id_run, id_customer, status, action_type, node_id, node_name, node_type, node_subtype, node_order, progress_current, progress_total, execution_data, node_result_json, error_message, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [
-        campaignId,
-        runId,
-        safeCustomerId,
-        status,
-        nodeSubtype || nodeType,
-        nodeId,
-        nodeName,
-        nodeType,
-        nodeSubtype,
-        nodeOrder,
-        progressCurrent,
-        progressTotal,
-        serializedExecutionData,
-        serializedExecutionData,
-        errorMessage,
-      ]
-    );
+    await campaignExecutionLogRepository.insertExecutionLog({
+      campaignId,
+      runId,
+      safeCustomerId,
+      status,
+      actionType: nodeSubtype || nodeType,
+      nodeId,
+      nodeName,
+      nodeType,
+      nodeSubtype,
+      nodeOrder,
+      progressCurrent,
+      progressTotal,
+      serializedExecutionData,
+      errorMessage,
+    });
   }
 }
 

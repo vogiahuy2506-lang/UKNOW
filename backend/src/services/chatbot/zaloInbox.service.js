@@ -11,7 +11,7 @@
  * 5. Route đến AI chatbot (nếu có cấu hình)
  * 6. Lưu response của AI (role='bot')
  */
-import db from '../../config/database.js';
+import zaloInboxRepository from '../../repositories/chatbot/zaloInbox.repository.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import chatRouterService from './chatRouter.service.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
@@ -136,11 +136,13 @@ class ZaloPersonalInboxService {
   async restoreSessionsFromDb() {
     console.log('[ZaloInbox] restoreSessionsFromDb: STARTING');
     try {
-      const { rows: accounts, error: queryError } = await db.query(
-        `SELECT zs.id as account_id, zs.id_user, zs.cookie_text, zs.is_active, zs.status
-         FROM zalo_settings zs
-         WHERE zs.is_active = true AND zs.status = 'connected' AND zs.cookie_text IS NOT NULL`
-      ).catch(e => ({ rows: [], error: e }));
+      let accounts, queryError;
+      try {
+        accounts = await zaloInboxRepository.findConnectedAccountsWithSessions();
+      } catch (e) {
+        accounts = [];
+        queryError = e;
+      }
 
       if (queryError) {
         console.error('[ZaloInbox] Query error:', queryError.message);
@@ -154,9 +156,7 @@ class ZaloPersonalInboxService {
 
       if (accounts.length === 0) {
         // Debug: check what accounts exist
-        const { rows: allAccounts } = await db.query(
-          `SELECT id, id_user, is_active, status, cookie_text IS NOT NULL as has_cookie FROM zalo_settings WHERE id_user IS NOT NULL LIMIT 10`
-        );
+        const allAccounts = await zaloInboxRepository.findAllAccountsSample();
         console.log('[ZaloInbox] All zalo_settings (sample):', JSON.stringify(allAccounts));
         return;
       }
@@ -210,12 +210,7 @@ class ZaloPersonalInboxService {
     if (!forceRefresh && (now - this._accountCache.timestamp) < this._accountCache.ttlMs) {
       return this._accountCache.data;
     }
-    const { rows } = await db.query(
-      `SELECT zs.id as account_id, zs.id_user, zs.display_name as account_display_name,
-              zs.zalo_name, zs.zalo_user_id, zs.status as account_status
-       FROM zalo_settings zs
-       WHERE zs.is_active = true AND zs.status = 'connected'`
-    );
+    const rows = await zaloInboxRepository.findActiveConnectedAccounts();
     this._accountCache.data = rows;
     this._accountCache.timestamp = now;
     return rows;
@@ -240,13 +235,9 @@ class ZaloPersonalInboxService {
     }
 
     // Verify account exists and is active
-    const { rows } = await db.query(
-      `SELECT id FROM zalo_settings 
-       WHERE id = $1 AND id_user = $2 AND is_active = true AND status = 'connected'`,
-      [accountId, userId]
-    );
+    const row = await zaloInboxRepository.findActiveAccount(accountId, userId);
 
-    if (rows[0]) {
+    if (row) {
       this.zaloSettingCache.set(cacheKey, accountId);
       return accountId;
     }
@@ -279,13 +270,7 @@ class ZaloPersonalInboxService {
    */
   async isMessageProcessed(externalId, zaloSettingId) {
     if (!externalId || !zaloSettingId) return false;
-    const { rows } = await db.query(
-      `SELECT 1 FROM zalo_personal_messages
-       WHERE external_id = $1 AND id_zalo_setting = $2
-       LIMIT 1`,
-      [externalId, zaloSettingId]
-    );
-    return rows.length > 0;
+    return zaloInboxRepository.isMessageProcessed(externalId, zaloSettingId);
   }
 
   /**
@@ -302,26 +287,11 @@ class ZaloPersonalInboxService {
       metadata.sender_name = senderName;
     }
     
-    await db.query(
-      `INSERT INTO zalo_personal_messages 
-       (id_conversation, id_user, id_zalo_setting, role, content, message_type, external_id, external_ts, metadata, created_at)
-       VALUES ($1, $2, $3, 'visitor', $4, 'text', $5, $6, $7, $8)`,
-      [
-        conversationId,
-        userId,
-        zaloSettingId,
-        message,
-        externalId,
-        externalTs ? new Date(externalTs) : now,
-        JSON.stringify(metadata),
-        now,
-      ]
-    );
+    await zaloInboxRepository.insertVisitorMessage({
+      conversationId, userId, zaloSettingId, message, externalId, externalTs, metadata, now,
+    });
     // Update conversation last_message_at
-    await db.query(
-      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-      [conversationId, now]
-    );
+    await zaloInboxRepository.touchConversation(conversationId, now);
   }
 
   /**
@@ -329,16 +299,8 @@ class ZaloPersonalInboxService {
    */
   async saveBotResponse(conversationId, zaloSettingId, userId, content) {
     const now = new Date().toISOString();
-    await db.query(
-      `INSERT INTO zalo_personal_messages 
-       (id_conversation, id_user, id_zalo_setting, role, content, message_type, created_at)
-       VALUES ($1, $2, $3, 'bot', $4, 'text', $5)`,
-      [conversationId, userId, zaloSettingId, content, now]
-    );
-    await db.query(
-      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-      [conversationId, now]
-    );
+    await zaloInboxRepository.insertBotMessage(conversationId, zaloSettingId, userId, content, now);
+    await zaloInboxRepository.touchConversation(conversationId, now);
   }
 
   /**
@@ -499,45 +461,27 @@ class ZaloPersonalInboxService {
    */
   async getOrCreateConversation(zaloSettingId, userId, externalId, visitorName, visitorInfo) {
     // Try to find existing conversation
-    const { rows: existing } = await db.query(
-      `SELECT * FROM zalo_personal_conversations 
-       WHERE id_zalo_setting = $1 AND external_id = $2`,
-      [zaloSettingId, externalId]
-    );
+    const conv = await zaloInboxRepository.findConversation(zaloSettingId, externalId);
 
-    if (existing[0]) {
-      const conv = existing[0];
-      const updates = [];
-      const values = [];
-      let paramIndex = 1;
-
-      // Update visitor_name if new name is provided and different
-      if (visitorName && conv.visitor_name !== visitorName) {
-        updates.push(`visitor_name = $${paramIndex++}`);
-        values.push(visitorName);
-      }
+    if (conv) {
+      const newName = (visitorName && conv.visitor_name !== visitorName) ? visitorName : null;
+      let newInfo = null;
 
       // Update visitor_info if provided and different
       if (visitorInfo) {
         const currentInfo = conv.visitor_info || {};
-        const shouldUpdate = 
+        const shouldUpdate =
           visitorInfo.sender_name !== currentInfo.sender_name ||
           visitorInfo.group_name !== currentInfo.group_name ||
           visitorInfo.sender_id !== currentInfo.sender_id;
-        
+
         if (shouldUpdate) {
-          updates.push(`visitor_info = $${paramIndex++}`);
-          values.push(JSON.stringify(visitorInfo));
+          newInfo = visitorInfo;
         }
       }
 
-      // Execute update if there are changes
-      if (updates.length > 0) {
-        values.push(conv.id);
-        await db.query(
-          `UPDATE zalo_personal_conversations SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
-          values
-        );
+      if (newName !== null || newInfo !== null) {
+        await zaloInboxRepository.updateConversationVisitor(conv.id, newName, newInfo);
         console.log(`[ZaloInbox] Updated conversation ${conv.id} with name: ${visitorName}`);
       }
 
@@ -545,28 +489,14 @@ class ZaloPersonalInboxService {
     }
 
     // Create new conversation
-    const { rows } = await db.query(
-      `INSERT INTO zalo_personal_conversations 
-       (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING *`,
-      [userId, zaloSettingId, externalId, visitorName, JSON.stringify(visitorInfo)]
-    );
-
-    return rows[0];
+    return zaloInboxRepository.createConversation(userId, zaloSettingId, externalId, visitorName, visitorInfo);
   }
 
   /**
    * Backfill tên cho tất cả conversations cũ chưa có tên
    */
   async backfillConversationNames(userId, accountId, zaloSettingId) {
-    const { rows: conversations } = await db.query(
-      `SELECT id, external_id, visitor_name, visitor_info 
-       FROM zalo_personal_conversations 
-       WHERE id_user = $1 AND id_zalo_setting = $2
-       AND (visitor_name IS NULL OR visitor_name LIKE 'User %' OR visitor_name LIKE 'Nhóm %' OR visitor_info::text NOT LIKE '%sender_name%' OR visitor_info::text NOT LIKE '%group_name%')`,
-      [userId, zaloSettingId]
-    );
+    const conversations = await zaloInboxRepository.findConversationsForBackfill(userId, zaloSettingId);
 
     console.log(`[ZaloInbox] Backfilling names for ${conversations.length} conversations`);
 
@@ -598,12 +528,7 @@ class ZaloPersonalInboxService {
         }
 
         if (displayName) {
-          await db.query(
-            `UPDATE zalo_personal_conversations 
-             SET visitor_name = $1, visitor_info = $2 
-             WHERE id = $3`,
-            [displayName, JSON.stringify(updatedVisitorInfo), conv.id]
-          );
+          await zaloInboxRepository.backfillConversationName(conv.id, displayName, updatedVisitorInfo);
           console.log(`[ZaloInbox] Backfilled: ${externalId} -> ${displayName} (${isGroup ? 'group' : 'personal'})`);
         }
       } catch (err) {
@@ -640,17 +565,11 @@ class ZaloPersonalInboxService {
       if (accountRow) {
         account = accountRow;
       } else {
-        const result = await db.query(
-          `SELECT zs.id, zs.id_user, zs.display_name
-           FROM zalo_settings zs
-           WHERE zs.id = $1 AND zs.is_active = true AND zs.status = 'connected'`,
-          [accountId]
-        );
-        if (!result.rows[0]) {
+        account = await zaloInboxRepository.findAccountById(accountId);
+        if (!account) {
           console.log(`[ZaloInbox] Account ${accountId} not found or not connected`);
           return false;
         }
-        account = result.rows[0];
       }
 
       const { id_user: userId } = account;
@@ -747,17 +666,11 @@ class ZaloPersonalInboxService {
       if (accountRow) {
         account = accountRow;
       } else {
-        const result = await db.query(
-          `SELECT zs.id, zs.id_user, zs.display_name
-           FROM zalo_settings zs
-           WHERE zs.id = $1 AND zs.is_active = true AND zs.status = 'connected'`,
-          [accountId]
-        );
-        if (!result.rows[0]) {
+        account = await zaloInboxRepository.findAccountById(accountId);
+        if (!account) {
           console.log(`[ZaloInbox] Account ${accountId} not found or not connected`);
           return false;
         }
-        account = result.rows[0];
       }
 
       const { id_user: userId } = account;

@@ -1,6 +1,6 @@
-import db from '../config/database.js';
 import { serverError } from '../helpers.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
+import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 
 class CampaignScheduleController {
@@ -10,37 +10,9 @@ class CampaignScheduleController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role);
 
-      // Ép timestamptz để node-pg không parse naive timestamp theo TZ tiến trình (UTC).
-      const result = await db.query(
-        `SELECT
-           cs.id,
-           cs.id_campaign,
-           cs.schedule_name,
-           cs.schedule_type,
-           cs.cron_expression,
-           cs.enabled,
-           cs.last_run_at::timestamptz AS last_run_at,
-           cs.next_run_at::timestamptz AS next_run_at,
-           cs.run_count,
-           cs.created_at::timestamptz AS created_at,
-           cs.updated_at::timestamptz AS updated_at,
-           c.campaign_name AS campaign_name,
-           lr.status AS last_run_status
-         FROM campaign_schedules cs
-         JOIN campaigns c ON cs.id_campaign = c.id
-         LEFT JOIN LATERAL (
-           SELECT cr.status
-           FROM campaign_runs cr
-           WHERE cr.id_schedule = cs.id
-           ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
-           LIMIT 1
-         ) lr ON TRUE
-         WHERE ($1::boolean = TRUE OR c.id_user = $2)
-         ORDER BY cs.created_at DESC`,
-        [isAdmin, userId]
-      );
+      const rows = await campaignScheduleRepository.findAll({ userId, isAdmin });
 
-      const schedules = result.rows.map(row => ({
+      const schedules = rows.map(row => ({
         id: row.id,
         campaignId: row.id_campaign,
         campaignName: row.campaign_name,
@@ -72,43 +44,15 @@ class CampaignScheduleController {
       const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
 
-      const result = await db.query(
-        `SELECT
-           cs.id,
-           cs.id_campaign,
-           cs.schedule_name,
-           cs.schedule_type,
-           cs.cron_expression,
-           cs.enabled,
-           cs.last_run_at::timestamptz AS last_run_at,
-           cs.next_run_at::timestamptz AS next_run_at,
-           cs.run_count,
-           cs.created_at::timestamptz AS created_at,
-           cs.updated_at::timestamptz AS updated_at,
-           c.campaign_name AS campaign_name,
-           lr.status AS last_run_status
-         FROM campaign_schedules cs
-         JOIN campaigns c ON cs.id_campaign = c.id
-         LEFT JOIN LATERAL (
-           SELECT cr.status
-           FROM campaign_runs cr
-           WHERE cr.id_schedule = cs.id
-           ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
-           LIMIT 1
-         ) lr ON TRUE
-         WHERE cs.id = $1
-           AND ($2::boolean = TRUE OR c.id_user = $3)`,
-        [id, isAdmin, userId]
-      );
+      const row = await campaignScheduleRepository.findById({ id, userId, isAdmin });
 
-      if (result.rows.length === 0) {
+      if (!row) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch chạy',
         });
       }
 
-      const row = result.rows[0];
       const schedule = {
         id: row.id,
         campaignId: row.id_campaign,
@@ -142,50 +86,29 @@ class CampaignScheduleController {
       const { campaignId, scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
-      const campaignCheck = await db.query(
-        `SELECT id
-         FROM campaigns
-         WHERE id = $1
-           AND ($2::boolean = TRUE OR id_user = $3)`,
-        [campaignId, isAdmin, userId]
-      );
-
-      if (campaignCheck.rows.length === 0) {
+      const campaignExists = await campaignScheduleRepository.checkCampaignExists({ campaignId, userId, isAdmin });
+      if (!campaignExists) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy chiến dịch',
         });
       }
 
-      const runningCheck = await db.query(
-        `SELECT id
-         FROM campaign_runs
-         WHERE id_campaign = $1 AND status = 'running'
-         LIMIT 1`,
-        [campaignId]
-      );
-      if (runningCheck.rows.length > 0) {
+      const hasRunningRun = await campaignScheduleRepository.hasRunningCampaignRun(campaignId);
+      if (hasRunningRun) {
         return res.status(409).json({
           success: false,
           message: 'Chiến dịch đang chạy, tạm thời chưa thể lên lịch',
         });
       }
 
-      // Tạo lịch chạy mới
-      const result = await db.query(
-        `INSERT INTO campaign_schedules 
-         (id_campaign, schedule_name, schedule_type, cron_expression, enabled)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
-           last_run_at::timestamptz AS last_run_at,
-           next_run_at::timestamptz AS next_run_at,
-           run_count,
-           created_at::timestamptz AS created_at,
-           updated_at::timestamptz AS updated_at`,
-        [campaignId, scheduleName, scheduleType, cronExpression, enabled !== false]
-      );
-
-      const row = result.rows[0];
+      const row = await campaignScheduleRepository.create({
+        campaignId,
+        scheduleName,
+        scheduleType,
+        cronExpression,
+        enabled,
+      });
       const schedule = {
         id: row.id,
         campaignId: row.id_campaign,
@@ -222,22 +145,14 @@ class CampaignScheduleController {
       const { scheduleName, scheduleType, cronExpression, enabled } = req.body;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
-      const scheduleCheck = await db.query(
-        `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.run_count, cs.last_run_at::timestamptz AS last_run_at FROM campaign_schedules cs
-         JOIN campaigns c ON cs.id_campaign = c.id
-         WHERE cs.id = $1
-           AND ($2::boolean = TRUE OR c.id_user = $3)`,
-        [id, isAdmin, userId]
-      );
-
-      if (scheduleCheck.rows.length === 0) {
+      const scheduleData = await campaignScheduleRepository.findMutableById({ id, userId, isAdmin });
+      if (!scheduleData) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch chạy',
         });
       }
 
-      const scheduleData = scheduleCheck.rows[0];
       const isOnceCompleted = (
         scheduleData.schedule_type === 'once'
         && (Number(scheduleData.run_count || 0) > 0 || scheduleData.last_run_at)
@@ -251,14 +166,8 @@ class CampaignScheduleController {
       }
 
       if (enabled === true) {
-        const runningCheck = await db.query(
-          `SELECT id
-           FROM campaign_runs
-           WHERE id_campaign = $1 AND status = 'running'
-           LIMIT 1`,
-          [scheduleData.id_campaign]
-        );
-        if (runningCheck.rows.length > 0) {
+        const hasRunningRun = await campaignScheduleRepository.hasRunningCampaignRun(scheduleData.id_campaign);
+        if (hasRunningRun) {
           return res.status(409).json({
             success: false,
             message: 'Chiến dịch đang chạy, chưa thể bật lịch',
@@ -266,25 +175,13 @@ class CampaignScheduleController {
         }
       }
 
-      // Cập nhật
-      const result = await db.query(
-        `UPDATE campaign_schedules SET
-         schedule_name = COALESCE($1, schedule_name),
-         schedule_type = COALESCE($2, schedule_type),
-         cron_expression = COALESCE($3, cron_expression),
-         enabled = COALESCE($4, enabled),
-         updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
-         RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
-           last_run_at::timestamptz AS last_run_at,
-           next_run_at::timestamptz AS next_run_at,
-           run_count,
-           created_at::timestamptz AS created_at,
-           updated_at::timestamptz AS updated_at`,
-        [scheduleName, scheduleType, cronExpression, enabled, id]
-      );
-
-      const row = result.rows[0];
+      const row = await campaignScheduleRepository.update({
+        id,
+        scheduleName,
+        scheduleType,
+        cronExpression,
+        enabled,
+      });
       const schedule = {
         id: row.id,
         campaignId: row.id_campaign,
@@ -320,23 +217,15 @@ class CampaignScheduleController {
       const { id } = req.params;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
-      const scheduleCheck = await db.query(
-        `SELECT cs.id FROM campaign_schedules cs
-         JOIN campaigns c ON cs.id_campaign = c.id
-         WHERE cs.id = $1
-           AND ($2::boolean = TRUE OR c.id_user = $3)`,
-        [id, isAdmin, userId]
-      );
-
-      if (scheduleCheck.rows.length === 0) {
+      const schedule = await campaignScheduleRepository.findMutableById({ id, userId, isAdmin });
+      if (!schedule) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch chạy',
         });
       }
 
-      // Xóa
-      await db.query('DELETE FROM campaign_schedules WHERE id = $1', [id]);
+      await campaignScheduleRepository.delete(id);
 
       return res.json({
         success: true,

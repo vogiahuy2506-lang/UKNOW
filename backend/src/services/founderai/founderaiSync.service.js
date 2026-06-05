@@ -1,5 +1,6 @@
 import axios from 'axios';
 import db from '../../config/database.js';
+import founderaiSyncRepository from '../../repositories/founderai/founderaiSync.repository.js';
 
 class UknowSyncService {
   /**
@@ -242,48 +243,23 @@ class UknowSyncService {
         };
         if (!customerId || !orderId) return emptyAttribution;
 
-        const byOrder = await dbClient.query(
-          `SELECT id_campaign, id_run, id_email_message, id_zalo_message
-           FROM customer_journey
-           WHERE id_customer = $1
-             AND (
-               COALESCE(event_data->>'order_id', '') = $2
-               OR COALESCE(event_data->>'orderId', '') = $2
-             )
-           ORDER BY event_at DESC NULLS LAST, id DESC
-           LIMIT 1`,
-          [customerId, String(orderId)]
-        );
-        if (byOrder.rows.length > 0) {
+        const byOrder = await founderaiSyncRepository.findJourneyByOrderId(dbClient, customerId, orderId);
+        if (byOrder) {
           return {
-            campaignId: byOrder.rows[0].id_campaign || null,
-            runId: byOrder.rows[0].id_run || null,
-            emailMessageId: byOrder.rows[0].id_email_message || null,
-            zaloMessageId: byOrder.rows[0].id_zalo_message || null,
+            campaignId: byOrder.id_campaign || null,
+            runId: byOrder.id_run || null,
+            emailMessageId: byOrder.id_email_message || null,
+            zaloMessageId: byOrder.id_zalo_message || null,
           };
         }
 
-        const byRecentJourney = await dbClient.query(
-          `SELECT id_campaign, id_run, id_email_message, id_zalo_message
-           FROM customer_journey
-           WHERE id_customer = $1
-             AND event_at <= $2
-             AND (
-               id_run IS NOT NULL
-               OR id_email_message IS NOT NULL
-               OR id_zalo_message IS NOT NULL
-               OR id_campaign IS NOT NULL
-             )
-           ORDER BY event_at DESC NULLS LAST, id DESC
-           LIMIT 1`,
-          [customerId, purchaseDate]
-        );
-        if (byRecentJourney.rows.length > 0) {
+        const byRecentJourney = await founderaiSyncRepository.findRecentJourneyBefore(dbClient, customerId, purchaseDate);
+        if (byRecentJourney) {
           return {
-            campaignId: byRecentJourney.rows[0].id_campaign || null,
-            runId: byRecentJourney.rows[0].id_run || null,
-            emailMessageId: byRecentJourney.rows[0].id_email_message || null,
-            zaloMessageId: byRecentJourney.rows[0].id_zalo_message || null,
+            campaignId: byRecentJourney.id_campaign || null,
+            runId: byRecentJourney.id_run || null,
+            emailMessageId: byRecentJourney.id_email_message || null,
+            zaloMessageId: byRecentJourney.id_zalo_message || null,
           };
         }
 
@@ -394,63 +370,32 @@ class UknowSyncService {
           })),
         };
 
-        const existingEvent = await client.query(
-          `SELECT id
-           FROM customer_journey
-           WHERE id_customer = $1
-             AND event_type = $2
-             AND (
-               COALESCE(event_data->>'order_id', '') = $3
-               OR COALESCE(event_data->>'orderId', '') = $3
-             )
-           ORDER BY id DESC
-           LIMIT 1`,
-          [customerId, eventType, orderId]
-        );
+        const existingEvent = await founderaiSyncRepository.findJourneyOrderEvent(client, customerId, eventType, orderId);
 
-        if (existingEvent.rows.length > 0) {
-          await client.query(
-            `UPDATE customer_journey
-             SET
-               id_campaign = COALESCE($1, id_campaign),
-               id_run = COALESCE($2, id_run),
-               id_email_message = COALESCE($3, id_email_message),
-               id_zalo_message = COALESCE($4, id_zalo_message),
-               event_channel = COALESCE($5, event_channel),
-               event_data = $6::jsonb,
-               event_at = COALESCE($7, event_at)
-             WHERE id = $8`,
-            [
-              attribution?.campaignId || null,
-              attribution?.runId || null,
-              attribution?.emailMessageId || null,
-              attribution?.zaloMessageId || null,
-              eventChannel,
-              JSON.stringify(eventData),
-              purchaseDate || null,
-              existingEvent.rows[0].id,
-            ]
-          );
+        if (existingEvent) {
+          await founderaiSyncRepository.updateJourneyOrderEvent(client, existingEvent.id, {
+            campaignId: attribution?.campaignId || null,
+            runId: attribution?.runId || null,
+            emailMessageId: attribution?.emailMessageId || null,
+            zaloMessageId: attribution?.zaloMessageId || null,
+            eventChannel,
+            eventDataJson: JSON.stringify(eventData),
+            purchaseDate: purchaseDate || null,
+          });
           return;
         }
 
-        await client.query(
-          `INSERT INTO customer_journey (
-              id_customer, id_campaign, id_run, event_type, event_channel,
-              id_email_message, id_zalo_message, event_data, event_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)`,
-          [
-            customerId,
-            attribution?.campaignId || null,
-            attribution?.runId || null,
-            eventType,
-            eventChannel,
-            attribution?.emailMessageId || null,
-            attribution?.zaloMessageId || null,
-            JSON.stringify(eventData),
-            purchaseDate || new Date().toISOString(),
-          ]
-        );
+        await founderaiSyncRepository.insertJourneyOrderEvent(client, {
+          customerId,
+          campaignId: attribution?.campaignId || null,
+          runId: attribution?.runId || null,
+          eventType,
+          eventChannel,
+          emailMessageId: attribution?.emailMessageId || null,
+          zaloMessageId: attribution?.zaloMessageId || null,
+          eventDataJson: JSON.stringify(eventData),
+          purchaseDate: purchaseDate || new Date().toISOString(),
+        });
       };
 
       const allowedSources = new Set(
@@ -600,16 +545,9 @@ class UknowSyncService {
             purchaseDate,
           });
 
-          const existingByOrderId = await client.query(
-            `SELECT id, id_campaign, id_run, id_email_message
-             FROM customer_purchases
-             WHERE id_customer = $1
-               AND order_id = $2
-             ORDER BY id DESC`,
-            [customerResult.customerId, String(order.id)]
-          );
+          const existingByOrderId = await founderaiSyncRepository.findPurchasesByOrderId(client, customerResult.customerId, String(order.id));
 
-          if (existingByOrderId.rows.length > 0 && onlyMissingBool) {
+          if (existingByOrderId.length > 0 && onlyMissingBool) {
             const hasEnrichmentData = Boolean(
               orderLevelAttribution.campaignId
               || orderLevelAttribution.runId
@@ -617,32 +555,21 @@ class UknowSyncService {
             );
 
             if (hasEnrichmentData) {
-              const enriched = await client.query(
-                `UPDATE customer_purchases
-                 SET
-                   id_campaign = COALESCE(id_campaign, $1::bigint),
-                   id_run = COALESCE(id_run, $2::integer),
-                   id_email_message = COALESCE(id_email_message, $3::bigint)
-                 WHERE id_customer = $4
-                   AND order_id = $5
-                   AND (
-                     (id_campaign IS NULL AND $1::bigint IS NOT NULL)
-                     OR (id_run IS NULL AND $2::integer IS NOT NULL)
-                     OR (id_email_message IS NULL AND $3::bigint IS NOT NULL)
-                   )`,
-                [
-                  orderLevelAttribution.campaignId,
-                  orderLevelAttribution.runId,
-                  orderLevelAttribution.emailMessageId,
-                  customerResult.customerId,
-                  String(order.id),
-                ]
+              const enrichedCount = await founderaiSyncRepository.enrichPurchaseAttribution(
+                client,
+                customerResult.customerId,
+                String(order.id),
+                {
+                  campaignId: orderLevelAttribution.campaignId,
+                  runId: orderLevelAttribution.runId,
+                  emailMessageId: orderLevelAttribution.emailMessageId,
+                }
               );
-              enrichedExistingPurchases += enriched.rowCount || 0;
+              enrichedExistingPurchases += enrichedCount;
               if (orderLevelAttribution.campaignId) touchedCampaignIds.add(orderLevelAttribution.campaignId);
             }
 
-            skippedExistingPurchases += existingByOrderId.rows.length;
+            skippedExistingPurchases += existingByOrderId.length;
             continue;
           }
 
@@ -677,136 +604,57 @@ class UknowSyncService {
               clickTracking: attribution,
             });
 
-            const existingPurchase = await client.query(
-              `SELECT id, id_campaign
-               FROM customer_purchases
-               WHERE id_customer = $1
-                 AND order_id = $2
-                 AND product_name = $3
-               LIMIT 1`,
-              [customerResult.customerId, String(order.id), productName]
+            const existingPurchase = await founderaiSyncRepository.findPurchaseByOrderAndProduct(
+              client,
+              customerResult.customerId,
+              String(order.id),
+              productName
             );
 
-            if (existingPurchase.rows.length === 0) {
-              if (hasOrderStatusColumn) {
-                await client.query(
-                  `INSERT INTO customer_purchases (
-                      id_customer, id_course, product_name, product_type,
-                      amount, currency, purchase_date, order_id, order_status, payment_method,
-                      id_campaign, id_run, id_email_message
-                   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-                  [
-                    customerResult.customerId,
-                    ensuredCourse.courseId,
-                    productName,
-                    purchaseStage,
-                    lineTotal,
-                    currency,
-                    purchaseDate,
-                    String(order.id),
-                    normalizedOrderStatus,
-                    paymentMethod,
-                    finalAttribution.campaignId,
-                    finalAttribution.runId,
-                    finalAttribution.emailMessageId,
-                  ]
-                );
-              } else {
-                await client.query(
-                  `INSERT INTO customer_purchases (
-                      id_customer, id_course, product_name, product_type,
-                      amount, currency, purchase_date, order_id, payment_method,
-                      id_campaign, id_run, id_email_message
-                   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-                  [
-                    customerResult.customerId,
-                    ensuredCourse.courseId,
-                    productName,
-                    purchaseStage,
-                    lineTotal,
-                    currency,
-                    purchaseDate,
-                    String(order.id),
-                    paymentMethod,
-                    finalAttribution.campaignId,
-                    finalAttribution.runId,
-                    finalAttribution.emailMessageId,
-                  ]
-                );
-              }
+            if (!existingPurchase) {
+              await founderaiSyncRepository.insertPurchase(client, hasOrderStatusColumn, {
+                customerId: customerResult.customerId,
+                courseId: ensuredCourse.courseId,
+                productName,
+                purchaseStage,
+                lineTotal,
+                currency,
+                purchaseDate,
+                orderId: String(order.id),
+                orderStatus: normalizedOrderStatus,
+                paymentMethod,
+                campaignId: finalAttribution.campaignId,
+                runId: finalAttribution.runId,
+                emailMessageId: finalAttribution.emailMessageId,
+              });
               insertedPurchases += 1;
               if (finalAttribution.campaignId) {
                 attributedPurchases += 1;
                 touchedCampaignIds.add(finalAttribution.campaignId);
               }
             } else {
-              if (existingPurchase.rows[0]?.id_campaign) {
-                touchedCampaignIds.add(existingPurchase.rows[0].id_campaign);
+              if (existingPurchase.id_campaign) {
+                touchedCampaignIds.add(existingPurchase.id_campaign);
               }
 
               if (onlyMissingBool) {
                 skippedExistingPurchases += 1;
               } else {
-                if (hasOrderStatusColumn) {
-                  await client.query(
-                    `UPDATE customer_purchases
-                     SET
-                       id_course = COALESCE($1, id_course),
-                       product_type = COALESCE($2, product_type),
-                       amount = $3,
-                       currency = COALESCE($4, currency),
-                       purchase_date = COALESCE($5, purchase_date),
-                       order_status = COALESCE($6, order_status),
-                       payment_method = COALESCE($7, payment_method),
-                       id_campaign = COALESCE(id_campaign, $8),
-                       id_run = COALESCE(id_run, $9),
-                       id_email_message = COALESCE(id_email_message, $10)
-                     WHERE id = $11`,
-                    [
-                      ensuredCourse.courseId,
-                      purchaseStage,
-                      lineTotal,
-                      currency,
-                      purchaseDate,
-                      normalizedOrderStatus,
-                      paymentMethod,
-                      finalAttribution.campaignId,
-                      finalAttribution.runId,
-                      finalAttribution.emailMessageId,
-                      existingPurchase.rows[0].id,
-                    ]
-                  );
-                } else {
-                  await client.query(
-                    `UPDATE customer_purchases
-                     SET
-                       id_course = COALESCE($1, id_course),
-                       product_type = COALESCE($2, product_type),
-                       amount = $3,
-                       currency = COALESCE($4, currency),
-                       purchase_date = COALESCE($5, purchase_date),
-                       payment_method = COALESCE($6, payment_method),
-                       id_campaign = COALESCE(id_campaign, $7),
-                       id_run = COALESCE(id_run, $8),
-                       id_email_message = COALESCE(id_email_message, $9)
-                     WHERE id = $10`,
-                    [
-                      ensuredCourse.courseId,
-                      purchaseStage,
-                      lineTotal,
-                      currency,
-                      purchaseDate,
-                      paymentMethod,
-                      finalAttribution.campaignId,
-                      finalAttribution.runId,
-                      finalAttribution.emailMessageId,
-                      existingPurchase.rows[0].id,
-                    ]
-                  );
-                }
+                await founderaiSyncRepository.updatePurchase(client, hasOrderStatusColumn, existingPurchase.id, {
+                  courseId: ensuredCourse.courseId,
+                  purchaseStage,
+                  lineTotal,
+                  currency,
+                  purchaseDate,
+                  orderStatus: normalizedOrderStatus,
+                  paymentMethod,
+                  campaignId: finalAttribution.campaignId,
+                  runId: finalAttribution.runId,
+                  emailMessageId: finalAttribution.emailMessageId,
+                });
                 updatedPurchases += 1;
 
-                if (!existingPurchase.rows[0]?.id_campaign && finalAttribution.campaignId) {
+                if (!existingPurchase.id_campaign && finalAttribution.campaignId) {
                   attributedPurchases += 1;
                 }
                 if (finalAttribution.campaignId) touchedCampaignIds.add(finalAttribution.campaignId);
@@ -970,113 +818,44 @@ class UknowSyncService {
         const attributedEmailMessageId = attribution?.emailMessageId || null;
         const attributedFromClick = !!attribution;
 
-        const existingPurchase = await client.query(
-          `SELECT id, id_campaign
-           FROM customer_purchases
-           WHERE id_customer = $1
-             AND order_id = $2
-             AND product_name = $3
-           LIMIT 1`,
-          [customerResult.customerId, String(order.id), productName]
+        const existingPurchase = await founderaiSyncRepository.findPurchaseByOrderAndProduct(
+          client,
+          customerResult.customerId,
+          String(order.id),
+          productName
         );
 
-        if (existingPurchase.rows.length === 0) {
-          if (hasOrderStatusColumn) {
-            await client.query(
-              `INSERT INTO customer_purchases (
-                  id_customer, id_course, product_name, product_type,
-                  amount, currency, purchase_date, order_id, order_status, payment_method, id_campaign
-               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-              [
-                customerResult.customerId,
-                ensuredCourse.courseId,
-                productName,
-                purchaseStage,
-                lineTotal,
-                currency,
-                purchaseDate,
-                String(order.id),
-                orderStatus,
-                paymentMethod,
-                attributedCampaignId,
-              ]
-            );
-          } else {
-            await client.query(
-              `INSERT INTO customer_purchases (
-                  id_customer, id_course, product_name, product_type,
-                  amount, currency, purchase_date, order_id, payment_method, id_campaign
-               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-              [
-                customerResult.customerId,
-                ensuredCourse.courseId,
-                productName,
-                purchaseStage,
-                lineTotal,
-                currency,
-                purchaseDate,
-                String(order.id),
-                paymentMethod,
-                attributedCampaignId,
-              ]
-            );
-          }
+        if (!existingPurchase) {
+          await founderaiSyncRepository.insertPurchaseSingle(client, hasOrderStatusColumn, {
+            customerId: customerResult.customerId,
+            courseId: ensuredCourse.courseId,
+            productName,
+            purchaseStage,
+            lineTotal,
+            currency,
+            purchaseDate,
+            orderId: String(order.id),
+            orderStatus,
+            paymentMethod,
+            campaignId: attributedCampaignId,
+          });
           insertedPurchases += 1;
           if (attributedCampaignId) touchedCampaignIds.add(attributedCampaignId);
         } else {
-          if (existingPurchase.rows[0]?.id_campaign) {
-            touchedCampaignIds.add(existingPurchase.rows[0].id_campaign);
+          if (existingPurchase.id_campaign) {
+            touchedCampaignIds.add(existingPurchase.id_campaign);
           }
 
-          if (hasOrderStatusColumn) {
-            await client.query(
-              `UPDATE customer_purchases
-               SET
-                 id_course = COALESCE($1, id_course),
-                 product_type = $2,
-                 amount = $3,
-                 currency = COALESCE($4, currency),
-                 purchase_date = COALESCE($5, purchase_date),
-                 order_status = $6,
-                 payment_method = COALESCE($7, payment_method),
-                 id_campaign = COALESCE(id_campaign, $8)
-               WHERE id = $9`,
-              [
-                ensuredCourse.courseId,
-                purchaseStage,
-                lineTotal,
-                currency,
-                purchaseDate,
-                orderStatus,
-                paymentMethod,
-                attributedCampaignId,
-                existingPurchase.rows[0].id,
-              ]
-            );
-          } else {
-            await client.query(
-              `UPDATE customer_purchases
-               SET
-                 id_course = COALESCE($1, id_course),
-                 product_type = $2,
-                 amount = $3,
-                 currency = COALESCE($4, currency),
-                 purchase_date = COALESCE($5, purchase_date),
-                 payment_method = COALESCE($6, payment_method),
-                 id_campaign = COALESCE(id_campaign, $7)
-               WHERE id = $8`,
-              [
-                ensuredCourse.courseId,
-                purchaseStage,
-                lineTotal,
-                currency,
-                purchaseDate,
-                paymentMethod,
-                attributedCampaignId,
-                existingPurchase.rows[0].id,
-              ]
-            );
-          }
+          await founderaiSyncRepository.updatePurchaseSingle(client, hasOrderStatusColumn, existingPurchase.id, {
+            courseId: ensuredCourse.courseId,
+            purchaseStage,
+            lineTotal,
+            currency,
+            purchaseDate,
+            orderStatus,
+            paymentMethod,
+            campaignId: attributedCampaignId,
+          });
           updatedPurchases += 1;
           if (attributedCampaignId) touchedCampaignIds.add(attributedCampaignId);
         }
@@ -1155,11 +934,8 @@ class UknowSyncService {
         throw err;
       }
 
-      const campaignCheck = await client.query(
-        'SELECT id FROM campaigns WHERE id = $1 AND id_user = $2 LIMIT 1',
-        [campaignId, userId]
-      );
-      if (campaignCheck.rows.length === 0) {
+      const campaignExists = await founderaiSyncRepository.campaignBelongsToUser(client, campaignId, userId);
+      if (!campaignExists) {
         const err = new Error('Không tìm thấy chiến dịch');
         err.statusCode = 404;
         throw err;
@@ -1167,15 +943,7 @@ class UknowSyncService {
 
       await ctx.ensureUknowStatusColumn();
 
-      const campaignCustomersResult = await client.query(
-        `SELECT c.id, c.email, c.phone
-         FROM campaign_customers cc
-         JOIN customers c ON c.id = cc.id_customer
-         WHERE cc.id_campaign = $1`,
-        [campaignId]
-      );
-
-      const campaignCustomers = campaignCustomersResult.rows;
+      const campaignCustomers = await founderaiSyncRepository.findCampaignCustomers(client, campaignId);
       let synced = 0;
       let unchanged = 0;
       let skipped = 0;
@@ -1238,12 +1006,7 @@ class UknowSyncService {
         }
 
         if (newStatus) {
-          await client.query(
-            `UPDATE campaign_customers
-             SET uknow_status = $1, updated_at = CURRENT_TIMESTAMP
-             WHERE id_campaign = $2 AND id_customer = $3`,
-            [newStatus, campaignId, customer.id]
-          );
+          await founderaiSyncRepository.updateCampaignCustomerUknowStatus(client, newStatus, campaignId, customer.id);
           synced += 1;
         } else {
           unchanged += 1;

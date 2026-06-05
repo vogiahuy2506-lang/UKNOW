@@ -1,16 +1,11 @@
 import aiCampaignService from '../services/ai/aiCampaign.service.js';
 import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
+import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
-import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
-import ragEngineService from '../services/chatbot/ragEngine.service.js';
+import customChatService from '../services/ai/customChat.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
-import db from '../config/database.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
-import multer from 'multer';
-import { extractTextFromBuffer } from '../utils/fileExtractor.util.js';
-
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 class AiController {
   /**
@@ -306,16 +301,16 @@ class AiController {
       }
 
       // Tự động tạo email templates từ inline content trước khi normalize
-      await this._autoCreateEmailTemplates(script.nodes, req.user.id);
+      await aiCampaignDraftService.autoCreateEmailTemplates(script.nodes, req.user.id);
 
       // Normalize AI nodes to match database schema (uses snake_case: node_type, node_subtype)
       // AI returns: { nodeType: "action", nodeSubtype: "send_email" } but DB needs: { node_type: "send_email", node_subtype: "send_email" }
       console.log('[AI Controller] Raw script nodes:', JSON.stringify(script.nodes, null, 2));
-      const normalizedNodes = this._normalizeNodes(script.nodes);
+      const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
 
       // Auto-fill fromEmailId và zaloAccountId với channel đầu tiên của user
-      await this._autoFillEmailChannels(normalizedNodes, req.user.id);
-      await this._autoFillZaloAccounts(normalizedNodes, req.user.id);
+      await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
+      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
 
       // Normalize connections: support { source, target } or { sourceNodeId, targetNodeId }
       const normalizedConnections = (script.connections || []).map(conn => ({
@@ -384,7 +379,7 @@ class AiController {
       }
 
       // Normalize AI nodes trước khi đẩy vào campaign
-      const normalizedNodes = this._normalizeNodes(script.nodes);
+      const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
 
       // Re-use campaignController.update logic to push nodes/connections
       const updateReq = {
@@ -475,14 +470,14 @@ class AiController {
       }
 
       // Tự động tạo email templates từ inline content
-      await this._autoCreateEmailTemplates(script.nodes, req.user.id);
+      await aiCampaignDraftService.autoCreateEmailTemplates(script.nodes, req.user.id);
 
       // Normalize AI nodes trước khi tạo campaign
-      const normalizedNodes = this._normalizeNodes(script.nodes);
+      const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
 
       // Auto-fill fromEmailId với SMTP channel đầu tiên của user
-      await this._autoFillEmailChannels(normalizedNodes, req.user.id);
-      await this._autoFillZaloAccounts(normalizedNodes, req.user.id);
+      await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
+      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -647,203 +642,6 @@ class AiController {
   }
 
   /**
-   * Normalize AI nodes to match database schema.
-   * AI returns: { nodeType: "action", nodeSubtype: "send_email" } 
-   * DB needs: { node_type: "send_email", node_subtype: "send_email" }
-   * 
-   * @param {Array} nodes - Array of AI-generated nodes
-   * @returns {Array} Normalized nodes for database
-   */
-
-  /**
-   * Với mỗi send_email node có emailBody inline (emailTemplateId=null),
-   * tự động tạo template trong DB và gán emailTemplateId.
-   */
-  async _autoCreateEmailTemplates(nodes, userId) {
-    for (const node of nodes) {
-      const cfg = node.config || node.nodeConfig || {};
-      const nodeType = node.nodeType || node.type || node.node_type || '';
-      const isSendEmail = ['send_email', 'email', 'email_send'].includes(nodeType) ||
-        ['send_email', 'email', 'email_send'].includes(node.nodeSubtype || node.subtype || '');
-      if (!isSendEmail) continue;
-      if (cfg.emailTemplateId || !cfg.emailBody) continue;
-
-      try {
-        const name = node.nodeName || node.name || 'Email từ AI';
-        const { rows } = await db.query(
-          `INSERT INTO email_templates (id_user, template_name, template_code, subject, body_html, body_text, attachments, variables, category)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-          [
-            userId,
-            name,
-            `ai_${Date.now()}`,
-            cfg.emailSubject || name,
-            cfg.emailBody,
-            '',
-            JSON.stringify([]),
-            JSON.stringify([]),
-            'marketing',
-          ]
-        );
-        cfg.emailTemplateId = rows[0].id;
-        cfg.emailBody = '';
-        cfg.emailSubject = '';
-        node.config = cfg;
-        console.log(`[AI] Auto-created email template id=${rows[0].id} for node "${name}"`);
-      } catch (e) {
-        console.warn('[AI] Không tạo được email template tự động:', e.message);
-      }
-    }
-  }
-
-  async _autoFillEmailChannels(nodes, userId) {
-    try {
-      const { rows } = await db.query(
-        `SELECT id FROM email_settings WHERE id_user = $1 AND status = 'active' ORDER BY id ASC LIMIT 1`,
-        [userId]
-      );
-      if (!rows.length) return;
-      const defaultChannelId = rows[0].id;
-      for (const node of nodes) {
-        const cfg = node.config || {};
-        const nodeType = node.node_type || node.nodeType || node.type || '';
-        const isSendEmail = ['send_email', 'email', 'email_send'].includes(nodeType) ||
-          ['send_email', 'email', 'email_send'].includes(node.nodeSubtype || node.subtype || '');
-        if (!isSendEmail) continue;
-        if (!cfg.fromEmailId) {
-          cfg.fromEmailId = defaultChannelId;
-          node.config = cfg;
-        }
-      }
-    } catch (e) {
-      console.warn('[AI] Không lấy được email settings:', e.message);
-    }
-  }
-
-  async _autoFillZaloAccounts(nodes, userId) {
-    try {
-      const { rows } = await db.query(
-        `SELECT id FROM zalo_settings WHERE id_user = $1 AND is_active = true ORDER BY id ASC LIMIT 1`,
-        [userId]
-      );
-      if (!rows.length) return;
-      const defaultAccountId = rows[0].id;
-      const zaloNodeTypes = ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'select_zalo_account'];
-      for (const node of nodes) {
-        const cfg = node.config || {};
-        const nodeType = node.node_type || node.nodeType || node.type || '';
-        if (!zaloNodeTypes.includes(nodeType)) continue;
-        if (!cfg.zaloAccountId) {
-          cfg.zaloAccountId = defaultAccountId;
-          node.config = cfg;
-        }
-      }
-    } catch (e) {
-      console.warn('[AI] Không lấy được zalo settings:', e.message);
-    }
-  }
-
-  _normalizeNodes(nodes) {
-    if (!Array.isArray(nodes)) return [];
-    
-    return nodes.map(node => {
-      // Support multiple formats: { nodeType, nodeSubtype } OR { type, subtype } OR AI format { type, id }
-      const nodeSubtype = node.nodeSubtype || node.subtype || node.node_subtype || '';
-      let nodeType = node.nodeType || node.type || node.node_type || '';
-
-      // Map based on nodeSubtype first (higher priority)
-      if (['send_email', 'email', 'email_send', 'email_action'].includes(nodeType) || 
-          ['send_email', 'email', 'email_send', 'email_action'].includes(nodeSubtype)) {
-        nodeType = 'send_email';
-      } else if (['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeType) || 
-                 ['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeSubtype)) {
-        nodeType = 'send_zalo_personal';
-      } else if (['send_zalo_group', 'zalo_group'].includes(nodeType) || 
-                 ['send_zalo_group', 'zalo_group'].includes(nodeSubtype)) {
-        nodeType = 'send_zalo_group';
-      } else if (['send_zalo_friend_request', 'zalo_friend'].includes(nodeType) || 
-                 ['send_zalo_friend_request', 'zalo_friend'].includes(nodeSubtype)) {
-        nodeType = 'send_zalo_friend_request';
-      } else if (['wait_time', 'wait', 'delay', 'schedule'].includes(nodeType) || 
-                 ['wait_time', 'wait', 'delay', 'schedule'].includes(nodeSubtype)) {
-        nodeType = 'delay';
-      } else if (['start', 'trigger', 'manual'].includes(nodeType) || 
-                 ['start', 'trigger', 'manual'].includes(nodeSubtype)) {
-        nodeType = 'trigger'; // DB enum uses 'trigger' not 'start'
-      } else if (nodeType === 'end') {
-        nodeType = 'end';
-      } else if (['condition', 'filter', 'branch', 'split'].includes(nodeType) ||
-                 ['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
-        nodeType = 'condition';
-      } else if (['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet',
-                  'read_landing_leads', 'read_courses_db'].includes(nodeSubtype)) {
-        // Source data node: giữ nguyên subtype làm node_type để campaign runner xử lý đúng
-        nodeType = nodeSubtype;
-      } else if (nodeType === 'data') {
-        // DATA node: dùng nodeSubtype làm node_type thực sự
-        if (['interested_customers', 'read_interested_customers'].includes(nodeSubtype)) {
-          nodeType = 'interested_customers';
-        } else if (['tag_contact', 'tag'].includes(nodeSubtype)) {
-          nodeType = 'tag_contact';
-        } else if (['update_attribute', 'update_field'].includes(nodeSubtype)) {
-          nodeType = 'update_attribute';
-        } else if (['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
-          nodeType = 'condition';
-        } else if (['wait', 'wait_time', 'delay'].includes(nodeSubtype)) {
-          nodeType = 'delay';
-        }
-        // nodeSubtype không xác định → giữ nguyên 'data'
-      } else if (['zns', 'zalo_message'].includes(nodeType) ||
-                 ['zns', 'zalo_message'].includes(nodeSubtype)) {
-        nodeType = 'zns';
-      } else if (nodeType === 'sms' || nodeSubtype === 'sms') {
-        nodeType = 'sms';
-      } else if (!nodeType) {
-        nodeType = 'trigger';
-      }
-
-      // Support multiple ID formats: tempId, id, or AI format
-      const nodeId = node.tempId || node.id || `node_${Math.random().toString(36).substring(2, 11)}`;
-      
-      // Build config from AI format or standard format
-      let config = node.config || node.settings || {};
-      
-      // Handle AI format where email data is in top-level fields
-      if (node.type === 'email' || node.subtype === 'email') {
-        config = {
-          emailSubject: node.subject || '',
-          emailBody: node.bodyHtml || node.body || '',
-          bodyText: node.bodyText || '',
-          templateName: node.templateName || '',
-          templateMappings: [],
-          enableLinkTracking: true,
-          saveMessageLog: true,
-        };
-      }
-      
-      // Handle AI format where wait data is in { duration: { value, unit } }
-      if (node.type === 'wait' && node.duration) {
-        config = {
-          amount: node.duration.value || 1,
-          unit: node.duration.unit || 'days',
-        };
-      }
-
-      return {
-        id: nodeId,
-        tempId: nodeId,
-        node_type: nodeType,
-        node_subtype: nodeSubtype,
-        node_name: node.name || node.nodeName || node.templateName || 'Node',
-        node_description: node.description || node.nodeDescription || '',
-        position_x: node.position?.x || node.positionX || node.position_x || 0,
-        position_y: node.position?.y || node.positionY || node.position_y || 0,
-        config,
-      };
-    });
-  }
-
-  /**
    * Custom AI Chat - dùng cho widget, Zalo OA, Facebook, Studio chat
    * Uses system_instruction và settings từ chatbot để tùy chỉnh AI
    * Includes RAG context from uploaded documents
@@ -851,104 +649,23 @@ class AiController {
   async customChat(req, res) {
     try {
       const { history, chatbot_id, system_instruction, temperature, max_tokens } = req.body;
-
-      if (!history || !Array.isArray(history) || history.length === 0) {
-        return res.status(400).json({ success: false, message: 'history is required' });
-      }
-
-      const chatbotId = parseInt(chatbot_id) || 0;
-      const userId = req.user?.id || 1;
-
-      // Get RAG context from custom chatbot chunks
-      let ragContext = '';
-      try {
-        const lastUserMessage = [...history].reverse().find(m => m.role === 'user')?.content || '';
-        if (lastUserMessage) {
-          const chunks = await this._searchChunks(chatbotId, userId, lastUserMessage);
-          if (chunks.length > 0) {
-            ragContext = `\n\nTài liệu tham khảo từ Knowledge Base:\n${chunks.map(c => `- ${c}`).join('\n')}`;
-          }
-        }
-      } catch (e) {
-        console.warn('[CustomChat] RAG search failed:', e.message);
-      }
-
-      // Build system prompt
-      const defaultSystem = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
-      const systemPrompt = system_instruction || defaultSystem;
-
-      // Build prompt với history + RAG context
-      const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
-
-      // Get Gemini API key từ env
-      const apiKey = process.env.GEMINI_API_KEY;
-      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-      if (!apiKey) {
-        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
-      }
-
-      // Call Gemini
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: temperature || 0.7,
-            maxOutputTokens: Math.min(max_tokens || 2048, 65536),
-          }
-        })
+      const data = await customChatService.chat({
+        history,
+        chatbotId: parseInt(chatbot_id, 10) || 0,
+        userId: req.user?.id || 1,
+        systemInstruction: system_instruction,
+        temperature,
+        maxTokens: max_tokens,
       });
-
-      const data = await response.json();
-
-      if (data.error) {
-        return res.status(500).json({ success: false, message: data.error.message });
-      }
-
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
 
       return res.json({
         success: true,
-        content: content,
-        type: 'text',
+        ...data,
       });
     } catch (error) {
       console.error('[CustomChat] Error:', error);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
-  }
-
-  /**
-   * Search chunks for RAG context (simple keyword matching)
-   */
-  async _searchChunks(chatbotId, userId, query) {
-    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-    if (words.length === 0) return [];
-
-    // Get all chunks for this chatbot
-    const result = await db.query(`
-      SELECT chunk_text FROM custom_chatbot_chunks
-      WHERE chatbot_id = $1 AND user_id = $2
-      ORDER BY chunk_index
-    `, [chatbotId, userId]);
-
-    if (!result.rows.length) return [];
-
-    // Simple relevance scoring based on keyword matches
-    const scored = result.rows.map(row => {
-      const text = row.chunk_text.toLowerCase();
-      const score = words.filter(w => text.includes(w)).length;
-      return { text: row.chunk_text, score };
-    });
-
-    // Return top 5 most relevant chunks
-    return scored
-      .filter(c => c.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(c => c.text);
   }
 
   /**
@@ -956,61 +673,19 @@ class AiController {
    */
   async customChatUpload(req, res) {
     try {
-      const { chatbot_id } = req.body;
-      const file = req.file;
-
-      if (!file) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
-      }
-
-      // Extract text from file
-      const text = await extractTextFromBuffer(file.buffer, file.originalname);
-
-      if (!text || text.trim().length < 10) {
-        return res.status(400).json({ success: false, message: 'Could not extract text from file' });
-      }
-
-      // Create a temporary KB for this chatbot if needed
-      // For now, store chunks in memory with chatbot_id
-      const chunks = this._chunkText(text, 500);
-      const apiKey = process.env.GEMINI_API_KEY;
-
-      // Generate embeddings
-      let embeddings = [];
-      if (apiKey) {
-        try {
-          const { embedTexts } = await import('../utils/embeddingClient.util.js');
-          embeddings = await embedTexts(chunks.map((c, i) => `[${i}] ${c}`));
-        } catch (e) {
-          console.warn('[CustomChat] Embedding failed, using text only:', e.message);
-        }
-      }
-
-      // Store chunks in database
-      const chatbotId = parseInt(chatbot_id) || 0;
-      const userId = req.user?.id || 1;
-
-      // Store in custom_chatbot_chunks table
-      await db.query(`
-        DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1
-      `, [chatbotId]);
-
-      for (let i = 0; i < chunks.length; i++) {
-        await db.query(`
-          INSERT INTO custom_chatbot_chunks (chatbot_id, user_id, chunk_text, embedding, chunk_index, source)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [chatbotId, userId, chunks[i], embeddings[i] || null, i, file.originalname]);
-      }
+      const data = await customChatService.uploadDocument({
+        chatbotId: parseInt(req.body.chatbot_id, 10) || 0,
+        userId: req.user?.id || 1,
+        file: req.file,
+      });
 
       return res.json({
         success: true,
-        message: `Đã xử lý ${chunks.length} đoạn từ file`,
-        chunks: chunks.length,
-        preview: chunks.slice(0, 3).join('\n\n').substring(0, 500),
+        ...data,
       });
     } catch (error) {
       console.error('[CustomChatUpload] Error:', error);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 
@@ -1019,59 +694,16 @@ class AiController {
    */
   async getCustomChatbotDocuments(req, res) {
     try {
-      const { chatbotId } = req.params;
-      const id = parseInt(chatbotId);
-
-      const result = await db.query(`
-        SELECT id, chunk_text, source, chunk_index, created_at
-        FROM custom_chatbot_chunks
-        WHERE chatbot_id = $1
-        ORDER BY chunk_index
-      `, [id]);
-
-      // Group by source (document)
-      const docsMap = {};
-      for (const row of result.rows) {
-        const source = row.source || 'Unknown';
-        if (!docsMap[source]) {
-          docsMap[source] = {
-            id: row.id,
-            title: source,
-            type: 'file',
-            status: 'ready',
-            chunk_count: 0,
-            created_at: row.created_at,
-          };
-        }
-        docsMap[source].chunk_count++;
-      }
+      const documents = await customChatService.getDocuments(parseInt(req.params.chatbotId, 10));
 
       return res.json({
         success: true,
-        documents: Object.values(docsMap),
+        documents,
       });
     } catch (error) {
       console.error('[CustomChat] Get documents error:', error);
       return res.status(500).json({ success: false, message: error.message });
     }
-  }
-
-  _chunkText(text, chunkSize = 500) {
-    const paragraphs = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
-    const chunks = [];
-    let buffer = '';
-
-    for (const para of paragraphs) {
-      if (buffer.length + para.length + 1 <= chunkSize) {
-        buffer += (buffer ? '\n\n' : '') + para;
-      } else {
-        if (buffer) chunks.push(buffer);
-        buffer = para;
-      }
-    }
-    if (buffer) chunks.push(buffer);
-
-    return chunks;
   }
 }
 

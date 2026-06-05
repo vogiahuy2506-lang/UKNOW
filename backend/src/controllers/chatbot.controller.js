@@ -6,7 +6,6 @@ import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import sseService from '../services/sse.service.js';
-import db from '../config/database.js';
 import uploadController from './upload.controller.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
@@ -651,17 +650,11 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'conversationId and content are required' });
       }
 
-      const conv = await db.query(
-        `SELECT wc.*, ww.id_user FROM webchat_conversations wc
-         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
-         WHERE wc.id = $1`,
-        [conversationId]
-      );
+      const conv = await chatbotRepository.findWebChatConversationWithOwner(conversationId);
 
-      if (!conv.rows[0]) return res.status(404).json({ success: false, message: 'Conversation not found' });
+      if (!conv) return res.status(404).json({ success: false, message: 'Conversation not found' });
 
-      const userId = conv.rows[0].id_user;
-      const widgetConfigId = conv.rows[0].id_widget_config;
+      const userId = conv.id_user;
 
       // Log visitor message
       await chatbotRepository.addWebChatMessage(conversationId, userId, {
@@ -669,9 +662,6 @@ class ChatbotController {
         content,
         attachments,
       });
-
-      // Get widget config for AI routing
-      const widget = await chatbotRepository.findWidgetByKey(conv.rows[0].session_id);
 
       // Route to AI
       const result = await chatRouterService.routeMessage({
@@ -863,33 +853,11 @@ class ChatbotController {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
 
-      const result = await db.query(`
-        SELECT id, chunk_text, source, chunk_index, created_at
-        FROM custom_chatbot_chunks
-        WHERE chatbot_id = $1
-        ORDER BY chunk_index
-      `, [id]);
-
-      // Group by source (document)
-      const docsMap = {};
-      for (const row of result.rows) {
-        const source = row.source || 'Unknown';
-        if (!docsMap[source]) {
-          docsMap[source] = {
-            id: row.id,
-            title: source,
-            type: 'file',
-            status: 'ready',
-            chunk_count: 0,
-            created_at: row.created_at,
-          };
-        }
-        docsMap[source].chunk_count++;
-      }
+      const documents = await chatbotRepository.getCustomChatbotDocuments(id);
 
       return res.json({
         success: true,
-        documents: Object.values(docsMap),
+        documents,
       });
     } catch (err) {
       console.error('[CustomChatbot] Get documents error:', err);
@@ -1141,37 +1109,24 @@ class ChatbotController {
       }
 
       // Find conversation
-      const { rows: convRows } = await db.query(
-        `SELECT id FROM webchat_conversations
-         WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
-         ORDER BY created_at DESC LIMIT 1`,
-        [widgetConfig.id, sessionId]
-      );
+      const conversationId = await chatbotRepository.findActiveWebChatConversationId({
+        widgetConfigId: widgetConfig.id,
+        sessionId,
+      });
 
-      if (!convRows[0]) {
+      if (!conversationId) {
         return res.json({ success: true, data: { messages: [], sessionId } });
       }
 
-      const conversationId = convRows[0].id;
-
-      // Get messages (only agent replies that are newer than lastMessageId)
-      let query = `SELECT id, role, content, created_at FROM webchat_messages
-                   WHERE id_conversation = $1 AND role = 'agent'`;
-      const params = [conversationId];
-
-      if (lastMessageId) {
-        query += ` AND id > $2`;
-        params.push(lastMessageId);
-      }
-
-      query += ` ORDER BY created_at ASC`;
-
-      const { rows } = await db.query(query, params);
+      const messages = await chatbotRepository.getAgentWebChatMessagesAfter({
+        conversationId,
+        lastMessageId,
+      });
 
       return res.json({
         success: true,
         data: {
-          messages: rows.map(m => ({
+          messages: messages.map(m => ({
             id: m.id,
             role: 'assistant',
             content: m.content,
