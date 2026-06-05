@@ -199,7 +199,10 @@ const normalizeSendNodeItem = (nodeSubtype, payload = {}) => {
     ?? payloadRest?.accountName
     ?? payloadRest?.fromName
     ?? null;
-  const zaloName = payloadRest?.zaloName
+    const zaloName = payloadRest?.zalo_display
+    ?? payloadRest?.zaloDisplay
+    ?? payloadRest?.zaloName
+    ?? payloadRest?.display_name
     ?? payloadRest?.recipientName
     ?? payloadRest?.displayName
     ?? payloadRest?.name

@@ -806,6 +806,8 @@ class CampaignZaloSenderService {
     const directCandidates = [
       friend?.display_name,
       friend?.displayName,
+      friend?.zalo_display,
+      friend?.zaloDisplay,
       friend?.zalo_name,
       friend?.zaloName,
       friend?.name,
@@ -813,11 +815,15 @@ class CampaignZaloSenderService {
       friend?.username,
       friend?.profile?.display_name,
       friend?.profile?.displayName,
+      friend?.profile?.zalo_display,
+      friend?.profile?.zaloDisplay,
       friend?.profile?.zalo_name,
       friend?.profile?.zaloName,
       friend?.profile?.name,
       friend?.data?.display_name,
       friend?.data?.displayName,
+      friend?.data?.zalo_display,
+      friend?.data?.zaloDisplay,
       friend?.data?.zalo_name,
       friend?.data?.zaloName,
       friend?.data?.name,
@@ -1619,7 +1625,15 @@ class CampaignZaloSenderService {
     if (!uid) {
       throw new Error(`Không tìm thấy user Zalo theo số ${safePhone}`);
     }
-    return uid;
+    const zaloName = String(
+      userInfo?.zalo_display
+        || userInfo?.zaloDisplay
+        || userInfo?.display_name
+        || userInfo?.zalo_name
+        || userInfo?.zaloName
+        || ''
+    ).trim() || null;
+    return { uid, zaloName, zalo_display: zaloName };
   }
 
   /**
@@ -1638,7 +1652,7 @@ class CampaignZaloSenderService {
       throw new Error(normalizedRecipientType === 'uid' ? 'Thiếu UID người nhận' : 'Thiếu số điện thoại');
     }
     if (normalizedRecipientType === 'uid') {
-      return safeRecipient;
+      return { uid: safeRecipient, zaloName: null };
     }
     return this.resolveUidFromPhone(api, safeRecipient);
   }
@@ -1723,7 +1737,7 @@ class CampaignZaloSenderService {
       ? 'uid'
       : 'phone';
     const normalizedRecipient = String(recipient || '').trim();
-    const uid = await this.resolveUidFromRecipient({
+    const { uid, zaloName } = await this.resolveUidFromRecipient({
       api,
       recipient: normalizedRecipient,
       recipientType: normalizedRecipientType,
@@ -1740,6 +1754,8 @@ class CampaignZaloSenderService {
       recipientType: normalizedRecipientType,
       phone: normalizedRecipientType === 'phone' ? normalizedRecipient : '',
       uid,
+      zaloName,
+      zalo_display: zaloName,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
       status: 'success',
       response: sendResult.response || null,
@@ -1794,7 +1810,7 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequest({ api, phone, message }) {
-    const uid = await this.resolveUidFromPhone(api, phone);
+    const { uid } = await this.resolveUidFromPhone(api, phone);
     const sendResponse = await executeWithZaloTimeoutRetry({
       operationName: 'send_friend_request',
       operation: () => api.sendFriendRequest(String(message || ''), uid),

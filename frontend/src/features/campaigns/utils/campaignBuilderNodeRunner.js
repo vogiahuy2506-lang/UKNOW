@@ -242,25 +242,56 @@ export const createCampaignNodeRunner = (deps) => {
     if (normalized === 'fixed' || normalized === 'all_exclude') return normalized;
     return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
   };
-  // Đồng bộ delay với Campaign Run để Build phản ánh sát hành vi thực thi thực tế.
-  const EMAIL_API_DELAY_MIN_MS = 50;
-  const EMAIL_API_DELAY_MAX_MS = 250;
-  const ZALO_API_DELAY_MIN_MS = 25;
-  const ZALO_API_DELAY_MAX_MS = 125;
-  const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
-  const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
+
+  let cachedDelayConfig = null;
+  const resolveDelayConfig = async (signal) => {
+    if (cachedDelayConfig) return cachedDelayConfig;
+    try {
+      const resp = await apiService.getDelayConfig({ signal });
+      if (resp.data?.success && resp.data?.data) {
+        cachedDelayConfig = resp.data.data;
+        return cachedDelayConfig;
+      }
+    } catch (err) {
+      console.warn('[CampaignBuilder][DelayConfig] Failed to fetch delay config from backend, using fallback of 1s', err);
+    }
+    cachedDelayConfig = {
+      zalo_personal: { minMs: 1000, maxMs: 1000 },
+      zalo_group: { minMs: 1000, maxMs: 1000 },
+      zalo_friend: { minMs: 1000, maxMs: 1000 },
+      email: { minMs: 1000, maxMs: 1000 }
+    };
+    return cachedDelayConfig;
+  };
   const getRandomDelayMsByRange = (minMs, maxMs) => Math.floor(
     Math.random() * (maxMs - minMs + 1)
   ) + minMs;
-  const getDelayRangeByChannel = (channel = 'email') => {
+  const getDelayRangeByChannel = async (channel = 'email', signal) => {
+    const config = await resolveDelayConfig(signal);
     const normalizedChannel = String(channel || '').trim().toLowerCase();
-    if (normalizedChannel === 'zalo_group_template') {
-      return { minMs: ZALO_GROUP_TEMPLATE_DELAY_MIN_MS, maxMs: ZALO_GROUP_TEMPLATE_DELAY_MAX_MS };
+
+    if (normalizedChannel === 'zalo_group' || normalizedChannel === 'zalo_group_template') {
+      return {
+        minMs: config.zalo_group?.minMs ?? 1000,
+        maxMs: config.zalo_group?.maxMs ?? 1000
+      };
     }
-    if (normalizedChannel === 'zalo') {
-      return { minMs: ZALO_API_DELAY_MIN_MS, maxMs: ZALO_API_DELAY_MAX_MS };
+    if (normalizedChannel === 'zalo_friend' || normalizedChannel === 'zalo_friend_request') {
+      return {
+        minMs: config.zalo_friend?.minMs ?? 1000,
+        maxMs: config.zalo_friend?.maxMs ?? 1000
+      };
     }
-    return { minMs: EMAIL_API_DELAY_MIN_MS, maxMs: EMAIL_API_DELAY_MAX_MS };
+    if (normalizedChannel === 'zalo' || normalizedChannel === 'zalo_personal') {
+      return {
+        minMs: config.zalo_personal?.minMs ?? 1000,
+        maxMs: config.zalo_personal?.maxMs ?? 1000
+      };
+    }
+    return {
+      minMs: config.email?.minMs ?? 1000,
+      maxMs: config.email?.maxMs ?? 1000
+    };
   };
   const buildAbortError = () => {
     const error = new Error('Run cancelled');
@@ -359,12 +390,12 @@ export const createCampaignNodeRunner = (deps) => {
       account?.name
     );
     const zaloName = resolveDisplayName(
+      row?.display_name,
+      row?.displayName,
       item?.zaloName,
       item?.recipientName,
-      item?.displayName,
       row?.full_name,
       row?.fullName,
-      row?.display_name,
       row?.displayName,
       row?.name,
       fallbackRecipient
@@ -1808,6 +1839,9 @@ export const createCampaignNodeRunner = (deps) => {
           if (recipientsForStep.length <= 0) return;
           if (zaloPreviewPoolParallel > 1) {
             for (let offset = 0; offset < recipientsForStep.length; offset += zaloPreviewPoolParallel) {
+              if (offset > 0) {
+                await waitRandomTemplateStepDelay(`zalo_personal_single_batch_${offset}`, signal, 'zalo');
+              }
               const batch = recipientsForStep.slice(offset, offset + zaloPreviewPoolParallel);
                
               await Promise.all(
@@ -2093,12 +2127,13 @@ export const createCampaignNodeRunner = (deps) => {
         return renderTemplateString(templateBody, vars).trim();
       };
 
-      for (const entry of recipientEntries) {
+      for (let index = 0; index < recipientEntries.length; index += 1) {
+        const entry = recipientEntries[index];
         const renderedMessage = renderFriendTemplateMessage(entry);
-         
-        await waitRandomPreviewApiDelay('zalo_friend_request_single', signal, {
-          channel: 'zalo',
-        });
+        if (index > 0) {
+          // eslint-disable-next-line no-await-in-loop
+          await waitRandomTemplateStepDelay(`zalo_friend_request_${index + 1}`, signal, 'zalo');
+        }
          
         const response = await apiService.sendPreviewZaloFriendRequest({
           accountId: selectedAccount.id,

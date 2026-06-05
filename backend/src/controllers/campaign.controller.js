@@ -1082,6 +1082,56 @@ class CampaignController {
       });
     }
   }
+
+    /**
+   * Lấy cấu hình delay từ environment variables để đồng bộ với Campaign Builder preview.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+    async getDelayConfig(req, res) {
+      try {
+        const parsePositiveInt = (value, defaultValue) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+          return parsed;
+        };
+  
+        const zaloPersonalMin = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+        const zaloPersonalMax = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+  
+        const zaloGroupMin = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+        const zaloGroupMax = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+  
+        const zaloFriendMin = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
+        const zaloFriendMax = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0)
+          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
+  
+        const emailMin = parsePositiveInt(process.env.EMAIL_INTER_MESSAGE_MIN_MS, 1000);
+        const emailMax = parsePositiveInt(process.env.EMAIL_INTER_MESSAGE_MAX_MS, 1000);
+  
+        res.json({
+          success: true,
+          data: {
+            zalo_personal: { minMs: zaloPersonalMin, maxMs: zaloPersonalMax },
+            zalo_group: { minMs: zaloGroupMin, maxMs: zaloGroupMax },
+            zalo_friend: { minMs: zaloFriendMin, maxMs: zaloFriendMax },
+            email: { minMs: emailMin, maxMs: emailMax }
+          }
+        });
+      } catch (error) {
+        console.error('Get delay config error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Lỗi server khi lấy cấu hình delay'
+        });
+      }
+    }
+
 }
 
 export default new CampaignController();

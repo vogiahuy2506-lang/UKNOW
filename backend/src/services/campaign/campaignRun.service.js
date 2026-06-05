@@ -5,7 +5,10 @@ import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
-import { isZaloUnreachableRecipientError } from '../../utils/zaloPhoneCampaign.util.js';
+import {
+  isZaloSenderBlockedError,
+  isZaloUnreachableRecipientError,
+} from '../../utils/zaloPhoneCampaign.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
@@ -62,6 +65,7 @@ class CampaignRunService {
       process.env.CONTINUOUS_ZALO_GROUP_BATCH_SIZE,
       6
     );
+    this.zaloOutboundAccountMutex = new Map();
     // Với continuous + BullMQ, mặc định tắt random delay để worker queue chủ động điều tiết tốc độ.
     this.CONTINUOUS_RANDOM_DELAY_ENABLED = parseEnvBoolean(
       process.env.CONTINUOUS_RANDOM_DELAY_ENABLED,
@@ -133,6 +137,31 @@ class CampaignRunService {
     {
       const rawMax = Number.parseInt(process.env.CONTINUOUS_ZALO_MAX_SEND_FAILURES, 10);
       this.CONTINUOUS_ZALO_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
+    }
+  }
+  
+  async runWithZaloAccountMutex(accountId, task) {
+    const key = String(accountId || '').trim();
+    if (!key || typeof task !== 'function') {
+      return task();
+    }
+
+    const previous = this.zaloOutboundAccountMutex.get(key) || Promise.resolve();
+    let releaseCurrent = null;
+    const current = new Promise((resolve) => {
+      releaseCurrent = resolve;
+    });
+    this.zaloOutboundAccountMutex.set(key, previous.finally(() => current));
+
+    try {
+      await previous;
+      return await task();
+    } finally {
+      releaseCurrent();
+      const tail = this.zaloOutboundAccountMutex.get(key);
+      if (tail === previous.finally(() => current)) {
+        this.zaloOutboundAccountMutex.delete(key);
+      }
     }
   }
 
@@ -330,6 +359,23 @@ class CampaignRunService {
     const untilMs = Math.max(prevUntil, candidateUntil);
     this.zaloPersonalPhoneLookupCooldownUntil.set(key, untilMs);
     return untilMs;
+  }
+  
+  /**
+   * Nhận diện lỗi tài khoản Zalo mất phiên đăng nhập/không sẵn sàng để loại khỏi pool gửi.
+   *
+   * @param {unknown} error
+   * @returns {boolean}
+   */
+  isZaloAccountUnavailableError(error) {
+    const msg = String(error?.message ?? error ?? '').trim().toLowerCase();
+    if (!msg) return false;
+    return msg.includes('phiên đăng nhập zalo của tài khoản đã chọn không còn hiệu lực')
+      || msg.includes('vui lòng đăng nhập lại trong cài đặt zalo')
+      || msg.includes('tài khoản zalo đã chọn chưa ở trạng thái sẵn sàng')
+      || msg.includes('không tìm thấy tài khoản zalo đã chọn')
+      || msg.includes('cookie_text_empty')
+      || msg.includes('restore_session_failed');
   }
 
   /**
@@ -2073,6 +2119,8 @@ class CampaignRunService {
             entryRow.fullName,
             entryRow.display_name,
             entryRow.displayName,
+            entryRow.zalo_display,
+            entryRow.zaloDisplay,
             entryRow.name,
             entryRow.customer_name,
             entryRow.zalo_name,
@@ -2083,15 +2131,40 @@ class CampaignRunService {
           : [];
         const responseCandidates = sendResult && typeof sendResult === 'object'
           ? [
+            sendResult.zalo_display,
+            sendResult.zaloDisplay,
+            sendResult.zaloName,
+            sendResult.zalo_name,
             sendResult.fullName,
+            sendResult.full_name,
             sendResult.displayName,
+            sendResult.display_name,
             sendResult.name,
             sendResult.friendName,
+            sendResult.friend_name,
             sendResult.recipientName,
+            sendResult.recipient_name,
             sendResult.toName,
+            sendResult.to_name,
           ]
           : [];
-        const candidates = [...rowCandidates, ...responseCandidates, fallbackRecipient];
+          const prioritizedRowCandidates = rowCandidates.length
+          ? [
+            entryRow?.zalo_name,
+            entryRow?.zaloName,
+            entryRow?.zalo_display,
+            entryRow?.zaloDisplay,
+            entryRow?.friend_name,
+            entryRow?.friendName,
+            entryRow?.display_name,
+            entryRow?.displayName,
+            entryRow?.full_name,
+            entryRow?.fullName,
+            entryRow?.name,
+            entryRow?.customer_name,
+          ]
+          : [];
+        const candidates = [...responseCandidates, ...prioritizedRowCandidates, fallbackRecipient];
         for (const candidate of candidates) {
           const value = String(candidate || '').trim();
           if (value) return value;
@@ -4252,6 +4325,8 @@ class CampaignRunService {
             ? config.zaloPersonalTemplateSteps.filter((step) => Number.isFinite(parseInt(step?.templateId, 10)))
             : [];
           const sendResults = [];
+          const unavailableMultiAccountIds = new Set();
+          const unavailableMultiAccountErrors = new Map();
           /**
            * Theo dõi template Zalo cá nhân: mỗi lần đổi `stepIndex` (template 1 → 2),
            * chuỗi «Đã gửi X/Y» trong log chỉ đếm trong phạm vi template hiện tại (Y = số người nhận).
@@ -4298,6 +4373,33 @@ class CampaignRunService {
           const recipientBindingMap = new Map();
 
           /**
+           * Re-check các tài khoản đã từng bị loại do lỗi login để đưa lại vào pool nếu đã đăng nhập lại.
+           * @returns {Promise<void>}
+           */
+          const recoverUnavailableMultiAccounts = async () => {
+            if (!unavailableMultiAccountIds.size) return;
+            const pendingRecoverIds = Array.from(unavailableMultiAccountIds);
+            for (const accountId of pendingRecoverIds) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                const recoveredAccount = await campaignZaloSenderService.getCampaignZaloAccount({
+                  userId,
+                  accountId,
+                  roleCode,
+                });
+                // eslint-disable-next-line no-await-in-loop
+                await campaignZaloSenderService.getConnectedApiOrSyncStatus({
+                  accountId: recoveredAccount.id,
+                  userId: recoveredAccount.userId || userId,
+                });
+                unavailableMultiAccountIds.delete(String(accountId));
+                unavailableMultiAccountErrors.delete(String(accountId));
+              } catch {
+                // Chưa recover thì giữ nguyên blacklist và thử lại ở lần pick tiếp theo.
+              }
+            }
+          };
+          /**
            * Chọn tài khoản Zalo gửi khi bật đa tài khoản: ưu tiên binding theo SĐT; UID thì xáo trộn pool (không lưu DB).
            *
            * @param {string} recipient
@@ -4306,6 +4408,19 @@ class CampaignRunService {
            */
           const pickMultiZaloPersonalAccount = async (recipient, rt) => {
             const poolSet = new Set(multiAccountIds.map((x) => String(x)));
+            await recoverUnavailableMultiAccounts();
+            const availablePoolIds = multiAccountIds.filter(
+              (id) => !unavailableMultiAccountIds.has(String(id || '').trim())
+            );
+            if (!availablePoolIds.length) {
+              const allUnavailableError = new Error(
+                'Tất cả tài khoản Zalo trong pool đều mất đăng nhập hoặc không sẵn sàng.'
+              );
+              allUnavailableError.code = 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE';
+              allUnavailableError.unavailableAccountIds = [...unavailableMultiAccountIds];
+              allUnavailableError.unavailableReasons = Object.fromEntries(unavailableMultiAccountErrors.entries());
+              throw allUnavailableError;
+            }
             /**
              * Map ghim account theo từng khách trong suốt node hiện tại:
              * - Ưu tiên khóa theo customerId (nếu có)
@@ -4332,7 +4447,11 @@ class CampaignRunService {
               recipientEntryMap.get(String(recipient || '').trim())?.row || null
             );
             const pinnedAccountId = bindingKey ? String(recipientBindingMap.get(bindingKey) || '') : '';
-            if (pinnedAccountId && poolSet.has(pinnedAccountId)) {
+            if (
+              pinnedAccountId
+              && poolSet.has(pinnedAccountId)
+              && !unavailableMultiAccountIds.has(pinnedAccountId)
+            ) {
               return campaignZaloSenderService.getCampaignZaloAccount({
                 userId,
                 accountId: pinnedAccountId,
@@ -4348,7 +4467,11 @@ class CampaignRunService {
                   normalized,
                   runId
                 );
-                if (bound && poolSet.has(String(bound))) {
+                if (
+                  bound
+                  && poolSet.has(String(bound))
+                  && !unavailableMultiAccountIds.has(String(bound))
+                ) {
                   if (bindingKey) {
                     recipientBindingMap.set(bindingKey, String(bound));
                   }
@@ -4360,7 +4483,7 @@ class CampaignRunService {
                 }
               }
               const nowMs = Date.now();
-              const order = shuffleMultiAccountIds([...multiAccountIds]);
+              const order = shuffleMultiAccountIds([...availablePoolIds]);
               const notInPhoneCooldown = order.filter((id) => {
                 const until = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(String(id))) || 0;
                 return until <= nowMs;
@@ -4379,7 +4502,7 @@ class CampaignRunService {
                 roleCode,
               });
             }
-            const uidOrder = shuffleMultiAccountIds([...multiAccountIds]);
+            const uidOrder = shuffleMultiAccountIds([...availablePoolIds]);
             const pickedUidAccountId = String(uidOrder[0] || '');
             if (bindingKey && pickedUidAccountId) {
               recipientBindingMap.set(bindingKey, pickedUidAccountId);
@@ -4434,6 +4557,8 @@ class CampaignRunService {
             // Extract Zalo UID from entry row (available when source is a Zalo friends node)
             const entryZaloUid = extractZaloUidFromRow(entryRow);
             let trackingToken = '';
+            let resolvedRecipientZaloName = null;
+
             /** Tài khoản/API thực tế cho lần gửi (đa tài khoản thì khác nhau theo SĐT). */
             let workingAccount = account;
             let workingApi = api;
@@ -4494,15 +4619,59 @@ class CampaignRunService {
                 }
               }
               if (multiEnabled) {
+                const maxSwitchAttempt = Math.max(1, multiAccountIds.length);
+                let switched = false;
+                for (let switchAttempt = 0; switchAttempt < maxSwitchAttempt; switchAttempt += 1) {
                 // eslint-disable-next-line no-await-in-loop
                 workingAccount = await pickMultiZaloPersonalAccount(recipient, recipientType);
                 // eslint-disable-next-line no-await-in-loop
-                workingApi = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
-                  accountId: workingAccount.id,
-                  userId: workingAccount.userId || userId,
-                });
-                await waitRandomApiDelay('zalo_personal_multi_account');
+                try {
+                  // eslint-disable-next-line no-await-in-loop
+                  workingApi = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
+                    accountId: workingAccount.id,
+                    userId: workingAccount.userId || userId,
+                  });
+                  unavailableMultiAccountIds.delete(String(workingAccount.id || '').trim());
+                  unavailableMultiAccountErrors.delete(String(workingAccount.id || '').trim());
+                  switched = true;
+                  break;
+                } catch (accountError) {
+                  if (!this.isZaloAccountUnavailableError(accountError)) {
+                    throw accountError;
+                  }
+                  const unavailableAccountId = String(workingAccount?.id || '').trim();
+                  if (unavailableAccountId) {
+                    unavailableMultiAccountIds.add(unavailableAccountId);
+                    unavailableMultiAccountErrors.set(
+                      unavailableAccountId,
+                      String(accountError?.message || '').trim() || 'account_unavailable'
+                    );
+                  }
+                  if (unavailableMultiAccountIds.size >= multiAccountIds.length) {
+                    const allUnavailableError = new Error(
+                      'Tất cả tài khoản Zalo trong pool đều mất đăng nhập hoặc không sẵn sàng.'
+                    );
+                    allUnavailableError.code = 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE';
+                    allUnavailableError.unavailableAccountIds = [...unavailableMultiAccountIds];
+                    allUnavailableError.unavailableReasons = Object.fromEntries(unavailableMultiAccountErrors.entries());
+                    throw allUnavailableError;
+                  }
+                }
               }
+              if (!switched) {
+                const allUnavailableError = new Error(
+                  'Tất cả tài khoản Zalo trong pool đều mất đăng nhập hoặc không sẵn sàng.'
+                );
+                allUnavailableError.code = 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE';
+                allUnavailableError.unavailableAccountIds = [...unavailableMultiAccountIds];
+                allUnavailableError.unavailableReasons = Object.fromEntries(unavailableMultiAccountErrors.entries());
+                throw allUnavailableError;
+              }
+              await waitRandomApiDelay('zalo_personal_multi_account');
+            }
+            const sendOutcome = await this.runWithZaloAccountMutex(
+              workingAccount.id,
+              async () => {
               // Policy Zalo outbound: giới hạn theo tài khoản + kênh (có thể override từng TK trên zalo_settings).
               await enforceZaloOutboundPolicyBeforeSend({
                 accountId: workingAccount.id,
@@ -4521,11 +4690,12 @@ class CampaignRunService {
                * Resolve UID trước khi tạo tracking để tránh lưu tracking "mồ côi"
                * trong các trường hợp Zalo trả về lỗi tra số/quota và cần defer.
                */
-              const resolvedRecipientUid = await campaignZaloSenderService.resolveUidFromRecipient({
+              const { uid: resolvedRecipientUid, zaloName: lookupZaloName } = await campaignZaloSenderService.resolveUidFromRecipient({
                 api: workingApi,
                 recipient,
                 recipientType,
               });
+              resolvedRecipientZaloName = String(lookupZaloName || '').trim() || null;
               trackingToken = campaignZaloSenderService.createTrackingToken();
               zaloMessageId = await createZaloMessageTrackingRecord({
                 nodeId: node.id,
@@ -4571,12 +4741,23 @@ class CampaignRunService {
                 message: trackedMessage,
                 attachments,
               });
-              successfulSends += 1;
+              if (resolvedRecipientZaloName && !sendResult.zaloName && !sendResult.zalo_display) {
+                sendResult.zaloName = resolvedRecipientZaloName;
+                sendResult.zalo_display = resolvedRecipientZaloName;
+              }
               markZaloOutboundSuccess({
                 accountId: workingAccount.id,
                 channel: 'zalo_personal',
                 zaloAccountPolicyHint: workingAccount,
               });
+              return {
+                sendResult,
+                trackedMessage,
+              };
+            }
+          );
+          successfulSends += 1;
+          const { sendResult, trackedMessage } = sendOutcome;
               const progressMessage = buildZaloPersonalProgressMessage();
               // UID resolved by Zalo API (always available after successful send)
               const resolvedUid = String(sendResult.uid || entryZaloUid || '').trim();
@@ -4593,6 +4774,7 @@ class CampaignRunService {
                 accountName: workingAccount.displayName,
                 senderName,
                 zaloName,
+                zalo_display: zaloName,
                 groupName: null,
                 recipientType,
                 recipient,
@@ -4647,6 +4829,21 @@ class CampaignRunService {
               if (error?.code === 'RUN_STOPPED') {
                 throw error;
               }
+              if (error?.code === 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE') {
+                await db.query(
+                  `UPDATE campaigns
+                   SET status = 'paused',
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $1 AND status = 'active'`,
+                  [campaignId]
+                );
+                const pauseNote = new Error(
+                  'Tất cả tài khoản Zalo trong pool đều mất đăng nhập hoặc không sẵn sàng. '
+                  + 'Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại ít nhất một tài khoản rồi kích hoạt lại.'
+                );
+                pauseNote.code = 'CAMPAIGN_PAUSED_BY_ZALO_POOL_UNAVAILABLE';
+                throw pauseNote;
+              }
               // RUN_YIELD_SLOT là tín hiệu điều phối slot/resume, không phải lỗi gửi.
               if (error?.code === 'RUN_YIELD_SLOT') {
                 throw error;
@@ -4669,6 +4866,56 @@ class CampaignRunService {
                 }
                 // Không có wait hợp lệ thì vẫn thoát yên lặng, không tính failed/log execution.
                 return { success: false, deferred: true };
+              }
+              if (isZaloSenderBlockedError(error)) {
+                successfulSends += 1;
+                const progressMessage = buildZaloPersonalProgressMessage();
+                const sentAt = toHoChiMinhIso();
+                const senderName = resolveZaloSenderName(workingAccount);
+                const zaloName = resolveZaloRecipientName({
+                  entryRow,
+                  sendResult: null,
+                  fallbackRecipient: recipient,
+                });
+                const senderBlockedPayload = {
+                  channel: 'zalo_personal',
+                  accountId: workingAccount.id,
+                  accountName: workingAccount.displayName,
+                  senderName,
+                  zaloName,
+                  groupName: null,
+                  recipientType,
+                  recipient,
+                  customerId,
+                  zaloMessageId,
+                  phone: recipientType === 'phone' ? recipient : null,
+                  message,
+                  status: 'success',
+                  skipReason: 'zalo_sender_blocked',
+                  skipDetail: String(error?.message || '').trim()
+                    || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
+                  messageText: progressMessage,
+                  sentAt,
+                  templateId: stepMeta?.templateId || null,
+                  stepIndex: stepMeta?.stepIndex || null,
+                  attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+                  trackingToken,
+                  variables,
+                };
+                sendResults.push(senderBlockedPayload);
+                {
+                  const zpLog = getZaloPersonalProgressForLog();
+                  await campaignExecutionLogService.logExecutionNode({
+                    campaignId,
+                    runId,
+                    node,
+                    status: 'success',
+                    progressCurrent: zpLog.current,
+                    progressTotal: zpLog.total,
+                    executionData: buildSendZaloPersonalExecutionData(senderBlockedPayload),
+                  });
+                }
+                return { success: true, skippedSenderBlocked: true };
               }
               if (
                 recipientType === 'phone'
@@ -4762,6 +5009,7 @@ class CampaignRunService {
                     accountName: workingAccount.displayName,
                     senderName,
                     zaloName,
+                    zalo_display: zaloName,
                     groupName: null,
                     recipientType,
                     recipient,
@@ -6897,6 +7145,18 @@ class CampaignRunService {
         console.log(`[Campaign ${campaignId}] Hoàn thành: ${successfulSends} thành công, ${failedSends} thất bại`);
       }
     } catch (error) {
+      if (error?.code === 'CAMPAIGN_PAUSED_BY_ZALO_POOL_UNAVAILABLE') {
+        await db.query(
+          `UPDATE campaign_runs SET
+           status = 'completed',
+           completed_at = CURRENT_TIMESTAMP,
+           error_message = $1
+           WHERE id = $2`,
+          [String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng'), runId]
+        );
+        console.warn(`[Campaign ${campaignId}] ${String(error?.message || '').trim()}`);
+        return;
+      }
       if (error?.code === 'RUN_STOPPED') {
         console.log(`[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
         return;

@@ -81,8 +81,6 @@ export function isZaloUnreachableRecipientError(error) {
   ) {
     return true;
   }
-  // Người nhận chặn OA / tài khoản gửi hoặc Zalo báo không thể nhận tin từ bạn (khác cụm "người lạ").
-  if (probe.includes('không thể nhận tin nhắn từ bạn')) return true;
   // Tài khoản Zalo người nhận bị hạn chế theo chính sách nền tảng.
   if (probe.includes('vi phạm chính sách') && probe.includes('zalo')) return true;
   if (probe.includes('người dùng này đã bị chặn') && probe.includes('vi phạm')) return true;
@@ -114,6 +112,11 @@ export function isZaloUnreachableRecipientError(error) {
   if (probe.includes('not found') && probe.includes('user')) return true;
   if (probe.includes('no user') && probe.includes('phone')) return true;
   return false;
+}
+export function isZaloSenderBlockedError(error) {
+  const probe = buildZaloRecipientErrorProbe(error);
+  if (!probe) return false;
+  return probe.includes('không thể nhận tin nhắn từ bạn');
 }
 
 /**
