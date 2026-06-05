@@ -253,7 +253,7 @@ export default function DiagnosticPage() {
                 >
                   {zaloAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.display_name} {a.status !== 'connected' ? '(chưa kết nối)' : ''}
+                      {a.displayName} {a.status !== 'connected' ? '(chưa kết nối)' : ''}
                     </option>
                   ))}
                 </select>
