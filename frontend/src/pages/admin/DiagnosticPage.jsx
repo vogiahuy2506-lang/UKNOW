@@ -210,7 +210,7 @@ export default function DiagnosticPage() {
   const needsAccount = channel === 'zalo_personal' || channel === 'zalo_group';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <HiOutlineBeaker className="w-6 h-6 text-orange-500" />
@@ -349,6 +349,15 @@ export default function DiagnosticPage() {
                 <span className="text-xs text-gray-400">{fmtTime(activeRun.created_at)}</span>
               </div>
               <RunLog run={activeRun} messages={activeMessages} />
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!activeRun && recentRuns.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 flex flex-col items-center justify-center text-center gap-3 h-64">
+              <HiOutlineBeaker className="w-10 h-10 text-gray-200" />
+              <p className="text-gray-400 text-sm">Kết quả test sẽ hiển thị ở đây</p>
+              <p className="text-gray-300 text-xs">Nhập số điện thoại, tin nhắn rồi bấm "Chạy test"</p>
             </div>
           )}
 
