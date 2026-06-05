@@ -5,12 +5,14 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineClipboardCopy,
+  HiOutlineDocumentText,
   HiOutlineExternalLink,
   HiOutlineLink,
   HiOutlinePlay,
   HiOutlinePlus,
   HiOutlineRefresh,
   HiOutlineTrash,
+  HiOutlineUpload,
   HiOutlineX,
   HiOutlineXCircle,
 } from 'react-icons/hi';
@@ -436,6 +438,245 @@ export function FacebookChannelCard({ channel, onConnect, onDisconnect, onOpenGu
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export function FacebookConnectModal({
+  open,
+  form,
+  connecting,
+  onClose,
+  onSubmit,
+  onChange,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Kết nối Facebook Messenger</h3>
+            <p className="text-xs text-slate-400 mt-1">Nhập Page ID và Page Access Token để kết nối chatbot với Fanpage của bạn.</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="p-5 space-y-4">
+          <FieldRow label="Tên hiển thị">
+            <TextInput
+              value={form.display_name}
+              onChange={e => onChange(prev => ({ ...prev, display_name: e.target.value }))}
+              placeholder="VD: Facebook Page bán hàng"
+            />
+          </FieldRow>
+          <FieldRow label="Facebook Page ID">
+            <TextInput
+              value={form.page_id}
+              onChange={e => onChange(prev => ({ ...prev, page_id: e.target.value }))}
+              placeholder="Nhập Page ID (số)"
+              required
+            />
+          </FieldRow>
+          <FieldRow label="Page Access Token" hint="Token phải có quyền pages_messaging và không hết hạn">
+            <Textarea
+              value={form.page_access_token}
+              onChange={e => onChange(prev => ({ ...prev, page_access_token: e.target.value }))}
+              placeholder="EAAxxxxxxxxxxxxx..."
+              rows={4}
+              required
+            />
+          </FieldRow>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 leading-5">
+            Sau khi kết nối thành công, webhook URL sẽ được sinh để bạn cấu hình trên Facebook Developer Console.
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-ghost">Hủy</button>
+            <button type="submit" disabled={connecting} className="btn btn-primary disabled:opacity-50">
+              {connecting ? 'Đang kết nối...' : 'Kết nối Facebook'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function ZaloConnectModal({
+  open,
+  form,
+  connecting,
+  onClose,
+  onSubmit,
+  onChange,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Kết nối Zalo Official Account</h3>
+            <p className="text-xs text-slate-400 mt-1">Nhập App ID và App Secret để kết nối thật với chatbot này.</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="p-5 space-y-4">
+          <FieldRow label="Tên hiển thị">
+            <TextInput
+              value={form.display_name}
+              onChange={e => onChange(prev => ({ ...prev, display_name: e.target.value }))}
+              placeholder="VD: Zalo OA bán hàng"
+            />
+          </FieldRow>
+          <FieldRow label="Zalo App ID">
+            <TextInput
+              value={form.zalo_app_id}
+              onChange={e => onChange(prev => ({ ...prev, zalo_app_id: e.target.value }))}
+              placeholder="Nhập App ID"
+              required
+            />
+          </FieldRow>
+          <FieldRow label="Zalo App Secret">
+            <TextInput
+              type="password"
+              value={form.zalo_app_secret}
+              onChange={e => onChange(prev => ({ ...prev, zalo_app_secret: e.target.value }))}
+              placeholder="Nhập App Secret"
+              required
+            />
+          </FieldRow>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700 leading-5">
+            Sau khi kết nối thành công, hệ thống sẽ sinh webhook URL riêng cho chatbot này để bạn cấu hình trong Zalo Developer.
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-ghost">Hủy</button>
+            <button type="submit" disabled={connecting} className="btn btn-primary disabled:opacity-50">
+              {connecting ? 'Đang kết nối...' : 'Kết nối Zalo OA'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function UploadDocumentModal({
+  open,
+  form,
+  uploading,
+  fileInputRef,
+  onClose,
+  onSubmit,
+  onFileSelect,
+  onChange,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Upload Tài Liệu</h3>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="p-5 space-y-4">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls"
+              className="hidden" onChange={onFileSelect} />
+            {form.file ? (
+              <>
+                <HiOutlineDocumentText className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-700">{form.file.name}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {(form.file.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </>
+            ) : (
+              <>
+                <HiOutlineUpload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-600">Click hoặc kéo thả file vào đây</p>
+                <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT, CSV (tối đa 10MB)</p>
+              </>
+            )}
+          </div>
+          <FieldRow label="Tiêu đề (tùy chọn)">
+            <TextInput
+              value={form.title}
+              onChange={e => onChange(p => ({ ...p, title: e.target.value }))}
+              placeholder="Nhập tiêu đề tài liệu"
+            />
+          </FieldRow>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-ghost">Hủy</button>
+            <button type="submit" disabled={uploading || !form.file} className="btn btn-primary disabled:opacity-50">
+              {uploading ? 'Đang tải...' : 'Upload'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function TextDocumentModal({
+  open,
+  form,
+  adding,
+  onClose,
+  onSubmit,
+  onChange,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Thêm Văn Bản Kiến Thức</h3>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="p-5 space-y-4">
+          <FieldRow label="Tiêu đề (tùy chọn)">
+            <TextInput
+              value={form.title}
+              onChange={e => onChange(p => ({ ...p, title: e.target.value }))}
+              placeholder="VD: FAQ về sản phẩm"
+            />
+          </FieldRow>
+          <FieldRow label="Nội dung">
+            <Textarea
+              value={form.content}
+              onChange={e => onChange(p => ({ ...p, content: e.target.value }))}
+              rows={8}
+              placeholder="Dán nội dung văn bản, FAQ, thông tin sản phẩm..."
+              required
+            />
+          </FieldRow>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-ghost">Hủy</button>
+            <button type="submit" disabled={adding || !form.content.trim()} className="btn btn-primary disabled:opacity-50">
+              {adding ? 'Đang thêm...' : 'Lưu lại'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
