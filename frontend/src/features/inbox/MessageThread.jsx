@@ -28,10 +28,13 @@ const isSameDay = (date1, date2) => {
   return new Date(date1).toDateString() === new Date(date2).toDateString();
 };
 
-const MessageBubble = ({ message, isOwn, showDate, t }) => {
+const MessageBubble = ({ message, isOwn, showDate, t, isGroupConversation }) => {
   const isBot = message.role === 'bot';
   const isAgent = message.role === 'agent';
   const isVisitor = message.role === 'visitor';
+  
+  // Get sender name from message metadata
+  const senderName = message.metadata?.sender_name || message.visitor_info?.sender_name || message.sender_name;
 
   return (
     <>
@@ -45,9 +48,13 @@ const MessageBubble = ({ message, isOwn, showDate, t }) => {
 
       <div className={`flex mb-3 ${isOwn || isAgent ? 'justify-end' : 'justify-start'}`}>
         <div className={`max-w-[75%] ${isOwn || isAgent ? 'order-2' : 'order-1'}`}>
-          {/* Sender label */}
+          {/* Sender label - show name only for group messages, "Khách hàng" for personal */}
           <div className={`text-xs text-gray-500 mb-1 ${isOwn || isAgent ? 'text-right' : 'text-left'}`}>
-            {isVisitor && t('inbox.customer')}
+            {isVisitor && (
+              isGroupConversation 
+                ? (senderName || t('inbox.customer'))  // Group: show sender name or fallback
+                : t('inbox.customer')  // Personal: always show "Khách hàng"
+            )}
             {isBot && t('inbox.bot')}
             {isAgent && t('inbox.you')}
           </div>
@@ -86,10 +93,15 @@ const MessageBubble = ({ message, isOwn, showDate, t }) => {
   );
 };
 
-const MessageThread = ({ messages, isLoading }) => {
+const MessageThread = ({ messages, isLoading, conversation }) => {
   const { t } = useI18n();
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Check if this is a group conversation - check by name prefix or visitor_info flag
+  const isGroupConversation = 
+    conversation?.visitor_info?.is_group === true || 
+    String(conversation?.visitor_name || '').startsWith('Nhóm ');
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -136,6 +148,7 @@ const MessageThread = ({ messages, isLoading }) => {
           isOwn={msg.role === 'agent'}
           showDate={msg.showDate}
           t={t}
+          isGroupConversation={isGroupConversation}
         />
       ))}
       <div ref={messagesEndRef} />

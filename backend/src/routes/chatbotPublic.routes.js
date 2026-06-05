@@ -42,4 +42,7 @@ router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotControl
 // Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
 router.post('/custom-chatbot/id/:chatbotId/chat', chatbotController.chatWithCustomChatbotById.bind(chatbotController));
 
+// Get messages for polling agent replies
+router.get('/custom-chatbot/id/:chatbotId/messages', chatbotController.getChatMessages.bind(chatbotController));
+
 export default router;

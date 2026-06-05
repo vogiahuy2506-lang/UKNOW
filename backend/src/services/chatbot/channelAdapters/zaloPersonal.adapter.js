@@ -95,9 +95,17 @@ class ZaloPersonalAdapter {
         const rawData = message?.data || message;
 
         // Determine message source type (personal chat vs group)
-        const isGroup = rawData?.clientGroupId || rawData?.threadType === 1 || 
-                        rawData?.idTo?.startsWith('g_') || 
-                        (rawData?.idTo && String(rawData.idTo).length > 15);
+        // Group message indicators:
+        // 1. clientGroupId is present
+        // 2. threadType === 1 (Zalo internal group indicator)
+        // 3. idTo starts with 'g_' prefix
+        // 4. isGroup flag is explicitly true in raw data
+        const isGroup = Boolean(
+          rawData?.clientGroupId || 
+          rawData?.threadType === 1 || 
+          rawData?.idTo?.startsWith('g_') ||
+          rawData?.isGroup === true
+        );
         
         // Build normalized message object with full metadata
         const msgData = {
@@ -229,7 +237,11 @@ class ZaloPersonalAdapter {
         msgData.content || msgData.message || '',
         msgData.messageId || msgData.msgId,
         msgData.timestamp ? new Date(msgData.timestamp) : now,
-        JSON.stringify({ _raw: msgData._raw }),
+        JSON.stringify({ 
+          _raw: msgData._raw,
+          sender_name: msgData.senderName,
+          is_group: msgData.isGroup || false,
+        }),
         msgData.timestamp ? new Date(msgData.timestamp) : now,
       ]
     );
@@ -255,11 +267,9 @@ class ZaloPersonalAdapter {
 
     try {
       const api = session.api;
-      if (api.sendText) {
-        await api.sendText({ uid: externalId, message: message.slice(0, 4000) });
-      } else {
-        throw new Error('Zalo personal API does not support sendText');
-      }
+      // zca-js uses sendMessage(payload, uid) - NOT sendText
+      const payload = String(message || '').slice(0, 4000);
+      await api.sendMessage(payload, externalId);
 
       // Also save the sent message to database
       const now = new Date().toISOString();

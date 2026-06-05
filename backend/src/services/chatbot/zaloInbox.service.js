@@ -15,6 +15,7 @@ import db from '../../config/database.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import chatRouterService from './chatRouter.service.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
+import sseService from '../sse.service.js';
 import {
   drainPendingAccounts,
   markAccountRegistered,
@@ -35,6 +36,97 @@ class ZaloPersonalInboxService {
     this._registeredAccounts = new Set();
     // Mutex để tránh race condition khi nhiều cron chạy đồng thời
     this._isRefreshing = false;
+    // Cache group info để tránh gọi API nhiều lần
+    this._groupNameCache = new Map();
+  }
+
+  /**
+   * Lấy tên nhóm từ Zalo API (có cache)
+   */
+  async getGroupName(accountId, groupId) {
+    const cacheKey = `group_${accountId}_${groupId}`;
+    if (this._groupNameCache.has(cacheKey)) {
+      return this._groupNameCache.get(cacheKey);
+    }
+
+    const api = zaloAccountSessionService.getAccountApi(accountId);
+    if (!api) {
+      console.warn(`[ZaloInbox] getGroupName: No API for account ${accountId}`);
+      return null;
+    }
+
+    try {
+      console.log(`[ZaloInbox] getGroupName: Calling API for group ${groupId}`);
+      const result = await api.getGroupInfo(groupId);
+      console.log(`[ZaloInbox] getGroupName result:`, JSON.stringify(result)?.substring(0, 200));
+      
+      // Try different response formats
+      let groupName = null;
+      
+      // Format 1: { gridInfoMap: { [groupId]: { name: "..." } } } - ACTUAL FORMAT FROM API
+      if (result?.gridInfoMap?.[groupId]?.name) {
+        groupName = result.gridInfoMap[groupId].name;
+      }
+      // Format 2: { gridInfoMap: { [groupId]: { groupName: "..." } } }
+      else if (result?.gridInfoMap?.[groupId]?.groupName) {
+        groupName = result.gridInfoMap[groupId].groupName;
+      }
+      // Format 3: { groupName: "..." }
+      else if (result?.groupName) {
+        groupName = result.groupName;
+      }
+      // Format 4: { name: "..." }
+      else if (result?.name) {
+        groupName = result.name;
+      }
+      // Format 5: { data: { groupName: "..." } }
+      else if (result?.data?.groupName) {
+        groupName = result.data.groupName;
+      }
+      // Format 6: { data: { name: "..." } }
+      else if (result?.data?.name) {
+        groupName = result.data.name;
+      }
+
+      if (groupName) {
+        this._groupNameCache.set(cacheKey, groupName);
+        console.log(`[ZaloInbox] getGroupName(${groupId}) = "${groupName}"`);
+      } else {
+        console.warn(`[ZaloInbox] getGroupName: No name found in result for ${groupId}`);
+      }
+      return groupName;
+    } catch (err) {
+      console.warn(`[ZaloInbox] getGroupName failed for ${groupId}:`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Lấy thông tin user profile từ uid (có cache)
+   */
+  async getUserProfile(accountId, uid) {
+    const cacheKey = `user_${accountId}_${uid}`;
+    if (this._groupNameCache.has(cacheKey)) {
+      return this._groupNameCache.get(cacheKey);
+    }
+
+    const api = zaloAccountSessionService.getAccountApi(accountId);
+    if (!api) return null;
+
+    try {
+      const result = await api.getUserInfo(uid);
+      // Response format: { changed_profiles: { [uid]: { displayName, zaloName, ... } } }
+      const profile = result?.changed_profiles?.[uid];
+      if (profile) {
+        this._groupNameCache.set(cacheKey, profile);
+        console.log(`[ZaloInbox] getUserProfile(${uid}) = "${profile.displayName || profile.zaloName}"`);
+        return profile;
+      }
+      return null;
+    } catch (err) {
+      console.warn(`[ZaloInbox] Failed to get user profile for ${uid}:`, err.message);
+      return null;
+    }
   }
 
   /**
@@ -44,15 +136,30 @@ class ZaloPersonalInboxService {
   async restoreSessionsFromDb() {
     console.log('[ZaloInbox] restoreSessionsFromDb: STARTING');
     try {
-      const { rows: accounts } = await db.query(
-        `SELECT zs.id as account_id, zs.id_user, zs.cookie_text
+      const { rows: accounts, error: queryError } = await db.query(
+        `SELECT zs.id as account_id, zs.id_user, zs.cookie_text, zs.is_active, zs.status
          FROM zalo_settings zs
          WHERE zs.is_active = true AND zs.status = 'connected' AND zs.cookie_text IS NOT NULL`
-      );
+      ).catch(e => ({ rows: [], error: e }));
 
-      console.log(`[ZaloInbox] Found ${accounts.length} accounts to restore sessions`);
+      if (queryError) {
+        console.error('[ZaloInbox] Query error:', queryError.message);
+        return;
+      }
 
-      if (accounts.length === 0) return;
+      console.log(`[ZaloInbox] Found ${accounts.length} accounts with valid sessions to restore`);
+      if (accounts.length > 0) {
+        console.log(`[ZaloInbox] Accounts:`, accounts.map(a => ({ id: a.account_id, is_active: a.is_active, status: a.status, has_cookie: !!a.cookie_text })));
+      }
+
+      if (accounts.length === 0) {
+        // Debug: check what accounts exist
+        const { rows: allAccounts } = await db.query(
+          `SELECT id, id_user, is_active, status, cookie_text IS NOT NULL as has_cookie FROM zalo_settings WHERE id_user IS NOT NULL LIMIT 10`
+        );
+        console.log('[ZaloInbox] All zalo_settings (sample):', JSON.stringify(allAccounts));
+        return;
+      }
 
       // Import zaloSettingsController để gọi restore
       console.log('[ZaloInbox] Importing zaloSettingsController...');
@@ -184,8 +291,17 @@ class ZaloPersonalInboxService {
   /**
    * Lưu tin nhắn visitor vào zalo_personal_messages
    */
-  async saveIncomingMessage(conversationId, zaloSettingId, userId, message, externalId, externalTs, rawData) {
+  async saveIncomingMessage(conversationId, zaloSettingId, userId, message, externalId, externalTs, rawData, senderName = null) {
     const now = new Date().toISOString();
+    
+    // Build metadata with sender info for group messages
+    const metadata = {
+      _raw: rawData,
+    };
+    if (senderName) {
+      metadata.sender_name = senderName;
+    }
+    
     await db.query(
       `INSERT INTO zalo_personal_messages 
        (id_conversation, id_user, id_zalo_setting, role, content, message_type, external_id, external_ts, metadata, created_at)
@@ -197,7 +313,7 @@ class ZaloPersonalInboxService {
         message,
         externalId,
         externalTs ? new Date(externalTs) : now,
-        JSON.stringify({ _raw: rawData }),
+        JSON.stringify(metadata),
         now,
       ]
     );
@@ -269,6 +385,30 @@ class ZaloPersonalInboxService {
       // Xác định externalId dựa trên nguồn: group message dùng groupId, personal dùng senderId
       const externalId = isGroup ? String(groupId) : String(senderId);
 
+      // Lấy tên nhóm nếu là group message và không có sẵn
+      let resolvedGroupName = groupName;
+      if (isGroup && !groupName && groupId) {
+        resolvedGroupName = await this.getGroupName(accountId, groupId);
+        if (resolvedGroupName) {
+          console.log(`[ZaloInbox] Lấy được tên nhóm ${groupId}: ${resolvedGroupName}`);
+        }
+      }
+
+      // Lấy tên sender từ API nếu không có sẵn
+      let resolvedSenderName = senderName;
+      if (!senderName && senderId) {
+        const profile = await this.getUserProfile(accountId, senderId);
+        if (profile) {
+          resolvedSenderName = profile.displayName || profile.zaloName;
+          console.log(`[ZaloInbox] Lấy được tên sender ${senderId}: ${resolvedSenderName}`);
+        }
+      }
+
+      // Xác định tên hiển thị cho conversation
+      const displayName = isGroup 
+        ? (resolvedGroupName || groupName || `Nhóm ${groupId}`)
+        : (resolvedSenderName || senderName || `User ${senderId}`);
+
       // Build visitor info với đầy đủ metadata
       const visitorInfo = {
         source: isGroup ? 'zalo_group' : 'zalo_personal',
@@ -277,10 +417,10 @@ class ZaloPersonalInboxService {
         is_group: isGroup,
         // Group info
         group_id: groupId,
-        group_name: groupName,
+        group_name: resolvedGroupName || groupName,
         // Sender info
         sender_id: senderId,
-        sender_name: senderName,
+        sender_name: resolvedSenderName || senderName,
         sender_avatar: rawMessage?.senderAvatar || null,
         // Message info
         message_type: messageType,
@@ -288,7 +428,7 @@ class ZaloPersonalInboxService {
       };
 
       // Tạo hoặc lấy conversation
-      const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, isGroup ? groupName : senderName, visitorInfo);
+      const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, displayName, visitorInfo);
 
       // Lưu tin nhắn visitor (lưu cả raw message để giữ thông tin gốc)
       await this.saveIncomingMessage(
@@ -298,8 +438,19 @@ class ZaloPersonalInboxService {
         content,
         messageId,
         timestamp,
-        rawMessage
+        rawMessage,
+        resolvedSenderName || senderName // Pass sender name for group messages
       );
+
+      // Broadcast SSE event to frontend for real-time update
+      sseService.broadcast(String(userId), 'inbox:new_message', {
+        conversationId: conversation.id,
+        channel: 'zalo_personal',
+        message: content,
+        senderId: senderId,
+        senderName: resolvedSenderName || senderName,
+        timestamp,
+      });
 
       const sourceType = isGroup ? `nhóm ${groupName || groupId}` : `cá nhân ${senderId}`;
       console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
@@ -349,13 +500,48 @@ class ZaloPersonalInboxService {
   async getOrCreateConversation(zaloSettingId, userId, externalId, visitorName, visitorInfo) {
     // Try to find existing conversation
     const { rows: existing } = await db.query(
-      `SELECT id FROM zalo_personal_conversations 
+      `SELECT * FROM zalo_personal_conversations 
        WHERE id_zalo_setting = $1 AND external_id = $2`,
       [zaloSettingId, externalId]
     );
 
     if (existing[0]) {
-      return existing[0];
+      const conv = existing[0];
+      const updates = [];
+      const values = [];
+      let paramIndex = 1;
+
+      // Update visitor_name if new name is provided and different
+      if (visitorName && conv.visitor_name !== visitorName) {
+        updates.push(`visitor_name = $${paramIndex++}`);
+        values.push(visitorName);
+      }
+
+      // Update visitor_info if provided and different
+      if (visitorInfo) {
+        const currentInfo = conv.visitor_info || {};
+        const shouldUpdate = 
+          visitorInfo.sender_name !== currentInfo.sender_name ||
+          visitorInfo.group_name !== currentInfo.group_name ||
+          visitorInfo.sender_id !== currentInfo.sender_id;
+        
+        if (shouldUpdate) {
+          updates.push(`visitor_info = $${paramIndex++}`);
+          values.push(JSON.stringify(visitorInfo));
+        }
+      }
+
+      // Execute update if there are changes
+      if (updates.length > 0) {
+        values.push(conv.id);
+        await db.query(
+          `UPDATE zalo_personal_conversations SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+          values
+        );
+        console.log(`[ZaloInbox] Updated conversation ${conv.id} with name: ${visitorName}`);
+      }
+
+      return { ...conv, visitor_name: visitorName || conv.visitor_name };
     }
 
     // Create new conversation
@@ -363,11 +549,67 @@ class ZaloPersonalInboxService {
       `INSERT INTO zalo_personal_conversations 
        (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING id`,
+       RETURNING *`,
       [userId, zaloSettingId, externalId, visitorName, JSON.stringify(visitorInfo)]
     );
 
     return rows[0];
+  }
+
+  /**
+   * Backfill tên cho tất cả conversations cũ chưa có tên
+   */
+  async backfillConversationNames(userId, accountId, zaloSettingId) {
+    const { rows: conversations } = await db.query(
+      `SELECT id, external_id, visitor_name, visitor_info 
+       FROM zalo_personal_conversations 
+       WHERE id_user = $1 AND id_zalo_setting = $2
+       AND (visitor_name IS NULL OR visitor_name LIKE 'User %' OR visitor_name LIKE 'Nhóm %' OR visitor_info::text NOT LIKE '%sender_name%' OR visitor_info::text NOT LIKE '%group_name%')`,
+      [userId, zaloSettingId]
+    );
+
+    console.log(`[ZaloInbox] Backfilling names for ${conversations.length} conversations`);
+
+    for (const conv of conversations) {
+      try {
+        const externalId = conv.external_id;
+        const visitorInfo = conv.visitor_info || {};
+        const isGroup = visitorInfo.is_group;
+        
+        let displayName = null;
+        let updatedVisitorInfo = { ...visitorInfo };
+
+        if (isGroup) {
+          // For groups, use getGroupName
+          const groupId = visitorInfo.group_id || externalId;
+          const groupName = await this.getGroupName(accountId, groupId);
+          if (groupName) {
+            displayName = groupName;
+            updatedVisitorInfo.group_name = groupName;
+          }
+        } else {
+          // For personal, use getUserProfile
+          const profile = await this.getUserProfile(accountId, externalId);
+          if (profile) {
+            displayName = profile.displayName || profile.zaloName;
+            updatedVisitorInfo.sender_name = displayName;
+            updatedVisitorInfo.sender_id = externalId;
+          }
+        }
+
+        if (displayName) {
+          await db.query(
+            `UPDATE zalo_personal_conversations 
+             SET visitor_name = $1, visitor_info = $2 
+             WHERE id = $3`,
+            [displayName, JSON.stringify(updatedVisitorInfo), conv.id]
+          );
+          console.log(`[ZaloInbox] Backfilled: ${externalId} -> ${displayName} (${isGroup ? 'group' : 'personal'})`);
+        }
+      } catch (err) {
+        console.warn(`[ZaloInbox] Failed to backfill ${conv.external_id}:`, err.message);
+      }
+    }
   }
 
   /**
@@ -434,6 +676,13 @@ class ZaloPersonalInboxService {
       if (success) {
         markAccountRegistered(accountId);
         console.log(`[ZaloInbox] ✅ Successfully registered listener for account ${accountId}`);
+        
+        // Backfill tên cho các conversation cũ
+        setTimeout(() => {
+          this.backfillConversationNames(userId, accountId, zaloSettingId).catch(err => {
+            console.warn('[ZaloInbox] Backfill error:', err.message);
+          });
+        }, 2000);
       } else {
         console.warn(`[ZaloInbox] ❌ Failed to register listener for account ${accountId}`);
       }

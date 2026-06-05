@@ -6,6 +6,7 @@ import MessageThread from '../../features/inbox/MessageThread';
 import ReplyInput from '../../features/inbox/ReplyInput';
 import { useI18n } from '../../i18n';
 import toast from 'react-hot-toast';
+import useInboxSSE from '../../hooks/useInboxSSE';
 
 const CHANNEL_FILTERS = (t) => [
   { value: '', label: t('inbox.allChannels') },
@@ -111,27 +112,22 @@ const InboxPage = () => {
     }
   }, [t]);
 
-  // Handle conversation selection
-  const handleSelectConversation = useCallback(async (conv) => {
-    setSelectedConversation(conv);
-    await fetchMessages(conv);
-
-    if (conv.unreadCount > 0) {
-      try {
-        await chatbotApi.markAsRead(conv.id, conv.type);
-        setConversations(prev =>
-          prev.map(c =>
-            c.id === conv.id && c.type === conv.type
-              ? { ...c, unreadCount: 0 }
-              : c
-          )
-        );
-        fetchUnreadCount();
-      } catch (err) {
-        console.error('Failed to mark as read:', err);
-      }
+  // Handle SSE new message - refresh messages when they arrive
+  const handleNewMessage = useCallback((data) => {
+    console.log('[InboxPage] SSE New message:', data);
+    fetchConversations(true);
+    if (selectedConversation && data.conversationId === selectedConversation.id) {
+      fetchMessages(selectedConversation);
     }
-  }, [fetchMessages, fetchUnreadCount]);
+  }, [fetchConversations, fetchMessages, selectedConversation]);
+
+  // Handle SSE unread count change
+  const handleUnreadChange = useCallback(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
+  // Connect to SSE for real-time updates
+  useInboxSSE(handleNewMessage, handleUnreadChange);
 
   // Handle send message
   const handleSendMessage = useCallback(async (content) => {
@@ -175,24 +171,34 @@ const InboxPage = () => {
     setFilters(prev => ({ ...prev, search: value }));
   }, []);
 
+  // Handle conversation selection
+  const handleSelectConversation = useCallback(async (conv) => {
+    setSelectedConversation(conv);
+    await fetchMessages(conv);
+
+    if (conv.unreadCount > 0) {
+      try {
+        await chatbotApi.markAsRead(conv.id, conv.type);
+        setConversations(prev =>
+          prev.map(c =>
+            c.id === conv.id && c.type === conv.type
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
+        );
+        fetchUnreadCount();
+      } catch (err) {
+        console.error('Failed to mark as read:', err);
+      }
+    }
+  }, [fetchMessages, fetchUnreadCount]);
+
   // Initial load
   useEffect(() => {
     fetchConversations(true);
     fetchUnreadCount();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.channel, filters.search]);
-
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!selectedConversation) {
-        fetchConversations(true);
-      }
-      fetchUnreadCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [selectedConversation, fetchConversations, fetchUnreadCount]);
 
   // Back to list on mobile
   const handleBack = () => {
@@ -217,11 +223,13 @@ const InboxPage = () => {
         <div className="px-4 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-gray-900">{t('inbox.title')}</h1>
-            {unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                {unreadCount} {t('inbox.unread')}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                  {unreadCount} {t('inbox.unread')}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Search */}
@@ -299,7 +307,11 @@ const InboxPage = () => {
             </div>
 
             {/* Messages */}
-            <MessageThread messages={messages} isLoading={isLoadingMessages} />
+            <MessageThread 
+              messages={messages} 
+              isLoading={isLoadingMessages}
+              conversation={selectedConversation}
+            />
 
             {/* Reply input */}
             <ReplyInput
