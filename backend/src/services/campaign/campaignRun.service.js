@@ -1,10 +1,13 @@
 import db from '../../config/database.js';
+import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
+import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
 import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
+import ZaloRateLimiter from './zaloRateLimiter.js';
 import {
   isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
@@ -66,69 +69,12 @@ class CampaignRunService {
       process.env.CONTINUOUS_ZALO_GROUP_BATCH_SIZE,
       6
     );
-    this.zaloOutboundAccountMutex = new Map();
     // Với continuous + BullMQ, mặc định tắt random delay để worker queue chủ động điều tiết tốc độ.
     this.CONTINUOUS_RANDOM_DELAY_ENABLED = parseEnvBoolean(
       process.env.CONTINUOUS_RANDOM_DELAY_ENABLED,
       false
     );
-    // --- Zalo outbound policy (áp cho cá nhân / nhóm / kết bạn) ---
-    // Lưu state rate-limit theo `accountId + channel` dùng chung cho toàn bộ run.
-    // Mục tiêu: mỗi tài khoản Zalo có nhịp gửi ổn định và không vượt 100 tin/giờ/kênh.
-    this.zaloOutboundRateLimitState = new Map();
-    // Zalo cá nhân: khi API báo tra số điện thoại quá nhiều lần/giờ → cooldown toàn tài khoản (theo accountId).
-    this.zaloPersonalPhoneLookupCooldownUntil = new Map();
-    this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS = parsePositiveInt(
-      process.env.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS,
-      3 * 60 * 60 * 1000
-    );
 
-    // Cấu hình chung: 100 tin/giờ, khoảng cách 20–50s, chặn 23:00–06:00 (giờ Việt Nam).
-    this.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT = parsePositiveInt(
-      process.env.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT,
-      100
-    );
-    this.ZALO_OUTBOUND_RATE_WINDOW_MS = parsePositiveInt(
-      process.env.ZALO_OUTBOUND_RATE_WINDOW_MS,
-      60 * 60 * 1000
-    );
-    this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT = parsePositiveInt(
-      process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT,
-      20_000
-    );
-    this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT = parsePositiveInt(
-      process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT,
-      50_000
-    );
-    if (this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT < this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT) {
-      this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT = this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT;
-    }
-    const quietStartRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START, 10);
-    const quietEndRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END, 10);
-    this.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = Number.isFinite(quietStartRaw) ? quietStartRaw : 23;
-    this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = Number.isFinite(quietEndRaw) ? quietEndRaw : 6;
-
-    // Override theo kênh (nếu không set thì dùng default chung).
-    // Tương thích ngược: nếu vẫn cấu hình `ZALO_PERSONAL_BLOCK_*` thì coi như limit/window của kênh cá nhân.
-    this.ZALO_PERSONAL_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_PERSONAL_PER_HOUR_LIMIT, 0);
-    this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0);
-    this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0);
-    this.ZALO_PERSONAL_BLOCK_SEND_LIMIT = parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_SEND_LIMIT, 0);
-    this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS = parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_COOLDOWN_MS, 0);
-
-    this.ZALO_GROUP_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_GROUP_PER_HOUR_LIMIT, 0);
-    this.ZALO_GROUP_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0);
-    this.ZALO_GROUP_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0);
-
-    this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT, 0);
-    this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0);
-    this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0);
-
-    // Chờ Zalo outbound dài (hết quota/giờ yên lặng/cooldown tra số): nếu >= ngưỡng này thì nhả slot và resume sau qua scheduler.
-    this.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS = parsePositiveInt(
-      process.env.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS,
-      60_000
-    );
     // One-shot/non-continuous: nếu thời gian chờ giữa các step quá dài thì nhả slot để không block queue.
     this.NON_CONTINUOUS_YIELD_SLOT_MIN_WAIT_MS = parsePositiveInt(
       process.env.NON_CONTINUOUS_YIELD_SLOT_MIN_WAIT_MS,
@@ -139,31 +85,35 @@ class CampaignRunService {
       const rawMax = Number.parseInt(process.env.CONTINUOUS_ZALO_MAX_SEND_FAILURES, 10);
       this.CONTINUOUS_ZALO_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
     }
+
+    // --- Zalo rate-limit state & policy (extracted to ZaloRateLimiter) ---
+    const quietStartRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START, 10);
+    const quietEndRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END, 10);
+    this.zaloRateLimiter = new ZaloRateLimiter({
+      ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT, 100),
+      ZALO_OUTBOUND_RATE_WINDOW_MS: parsePositiveInt(process.env.ZALO_OUTBOUND_RATE_WINDOW_MS, 60 * 60 * 1000),
+      ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 20_000),
+      ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 50_000),
+      ZALO_OUTBOUND_QUIET_HOURS_START_SAFE: Number.isFinite(quietStartRaw) ? quietStartRaw : 23,
+      ZALO_OUTBOUND_QUIET_HOURS_END_SAFE: Number.isFinite(quietEndRaw) ? quietEndRaw : 6,
+      ZALO_PERSONAL_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_PERSONAL_PER_HOUR_LIMIT, 0),
+      ZALO_PERSONAL_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0),
+      ZALO_PERSONAL_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0),
+      ZALO_PERSONAL_BLOCK_SEND_LIMIT: parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_SEND_LIMIT, 0),
+      ZALO_PERSONAL_BLOCK_COOLDOWN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_COOLDOWN_MS, 0),
+      ZALO_GROUP_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_GROUP_PER_HOUR_LIMIT, 0),
+      ZALO_GROUP_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0),
+      ZALO_GROUP_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0),
+      ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT, 0),
+      ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0),
+      ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0),
+      ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS, 3 * 60 * 60 * 1000),
+      ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS: parsePositiveInt(process.env.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS, 60_000),
+    });
   }
   
   async runWithZaloAccountMutex(accountId, task) {
-    const key = String(accountId || '').trim();
-    if (!key || typeof task !== 'function') {
-      return task();
-    }
-
-    const previous = this.zaloOutboundAccountMutex.get(key) || Promise.resolve();
-    let releaseCurrent = null;
-    const current = new Promise((resolve) => {
-      releaseCurrent = resolve;
-    });
-    const combined = previous.finally(() => current);
-    this.zaloOutboundAccountMutex.set(key, combined);
-
-    try {
-      await previous;
-      return await task();
-    } finally {
-      releaseCurrent();
-      if (this.zaloOutboundAccountMutex.get(key) === combined) {
-        this.zaloOutboundAccountMutex.delete(key);
-      }
-    }
+    return this.zaloRateLimiter.runWithZaloAccountMutex(accountId, task);
   }
 
   /**
@@ -180,11 +130,7 @@ class CampaignRunService {
    * @returns {Promise<boolean>} true nếu nên thoát sớm khỏi `_doExecuteCampaign`
    */
   async _exitIfRunDeferredUntilFuture(runId) {
-    const result = await db.query(
-      `SELECT run_metadata FROM campaign_runs WHERE id = $1 AND status = 'running' LIMIT 1`,
-      [runId]
-    );
-    const meta = result.rows[0]?.run_metadata || {};
+    const meta = (await campaignRunRepository.getRunMetadata(runId)) || {};
     const deferredConfigs = [
       {
         untilKey: 'zaloOutboundDeferredUntil',
@@ -206,13 +152,7 @@ class CampaignRunService {
       }
       const untilMs = Date.parse(String(raw));
       if (!Number.isFinite(untilMs)) {
-        await db.query(
-          `UPDATE campaign_runs
-           SET run_metadata = COALESCE(run_metadata, '{}'::jsonb)
-             - $2::text - $3::text - $4::text
-           WHERE id = $1 AND status = 'running'`,
-          [runId, deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]
-        );
+        await campaignRunRepository.clearDeferMetadataKeys(runId, [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]);
         continue;
       }
       if (untilMs > Date.now()) {
@@ -226,13 +166,7 @@ class CampaignRunService {
         );
         return true;
       }
-      await db.query(
-        `UPDATE campaign_runs
-         SET run_metadata = COALESCE(run_metadata, '{}'::jsonb)
-           - $2::text - $3::text - $4::text
-         WHERE id = $1 AND status = 'running'`,
-        [runId, deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]
-      );
+      await campaignRunRepository.clearDeferMetadataKeys(runId, [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]);
     }
     return false;
   }
@@ -243,11 +177,7 @@ class CampaignRunService {
    * @returns {string}
    */
   _explainZaloQuietHoursPolicyForLog() {
-    const qs = this.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
-    const qe = this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
-    return (
-      `chặn gửi từ ${qs}h đêm đến trước ${qe}h sáng (giờ Việt Nam, Asia/Ho_Chi_Minh; không dùng giờ UTC của VPS hay múi hệ thống)`
-    );
+    return this.zaloRateLimiter.explainQuietHoursPolicyForLog();
   }
 
   /**
@@ -286,12 +216,7 @@ class CampaignRunService {
       [reasonKey]: String(reason || 'wait'),
       [atKey]: new Date().toISOString(),
     };
-    await db.query(
-      `UPDATE campaign_runs
-       SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $1::jsonb
-       WHERE id = $2 AND status = 'running'`,
-      [JSON.stringify(patch), runId]
-    );
+    await campaignRunRepository.patchRunMetadata(runId, patch);
     const quietNote = String(reason) === 'quiet_hours' ? ` — ${this._explainZaloQuietHoursPolicyForLog()}` : '';
     const err = new Error(
       `${label} chờ ${Math.round(w / 1000)}s (${String(reason || 'wait')}) — resume ~ ${resumeLabel}${quietNote} — nhả slot, scheduler/resume sẽ chạy tiếp.`
@@ -336,30 +261,17 @@ class CampaignRunService {
    * @returns {boolean}
    */
   isZaloPersonalPhoneLookupRateLimitError(error) {
-    const msg = String(error?.message ?? error ?? '').trim().toLowerCase();
-    if (!msg) return false;
-    return msg.includes('tìm số điện thoại quá nhiều')
-      || (msg.includes('quá nhiều lần trong 1 giờ') && msg.includes('bất thường'))
-      || msg.includes('vượt quá số request cho phép');
+    return this.zaloRateLimiter.isZaloPersonalPhoneLookupRateLimitError(error);
   }
 
   /**
    * Đặt cooldown gửi Zalo cá nhân cho tài khoản (sau lỗi tra số quá nhiều).
-   * Nếu đã có mốc sau hơn thì giữ mốc đó; nếu không thì cộng thêm `ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS` kể từ bây giờ.
    *
    * @param {string|number} accountId
    * @returns {number} epoch ms mốc hết cooldown
    */
   scheduleZaloPersonalPhoneLookupCooldown(accountId) {
-    const key = String(accountId ?? '').trim();
-    if (!key) return 0;
-    const nowMs = Date.now();
-    const prevUntil = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(key)) || 0;
-    // 3 giờ kể từ lần lỗi này; không rút ngắn nếu đang còn cooldown dài hơn.
-    const candidateUntil = nowMs + this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS;
-    const untilMs = Math.max(prevUntil, candidateUntil);
-    this.zaloPersonalPhoneLookupCooldownUntil.set(key, untilMs);
-    return untilMs;
+    return this.zaloRateLimiter.scheduleZaloPersonalPhoneLookupCooldown(accountId);
   }
   
   /**
@@ -527,12 +439,7 @@ class CampaignRunService {
 
     if (runRecord?.id) {
       try {
-        await db.query(
-          `UPDATE campaign_runs
-           SET run_name = $1
-           WHERE id = $2`,
-          [finalRunName, runRecord.id]
-        );
+        await campaignRunRepository.updateRunName(runRecord.id, finalRunName);
       } catch {
         // Keep compatibility when run_name column does not exist.
       }
@@ -551,32 +458,12 @@ class CampaignRunService {
    */
   async stopCampaignRun({ runId, userId, roleCode }) {
     const isAdmin = isAdminRole(roleCode);
-    const result = await db.query(
-      `UPDATE campaign_runs cr
-       SET status = 'stopped',
-           completed_at = CURRENT_TIMESTAMP,
-           error_message = 'Đã dừng bởi người dùng'
-       FROM campaigns c
-       WHERE cr.id = $1
-         AND cr.id_campaign = c.id
-         AND ($2::boolean = TRUE OR c.id_user = $3)
-         AND cr.status = 'running'
-       RETURNING cr.id, cr.status`,
-      [runId, isAdmin, userId]
-    );
+    const stoppedRows = await campaignRunRepository.stopRun(runId, isAdmin, userId);
 
-    if (result.rows.length === 0) {
-      const existsResult = await db.query(
-        `SELECT 1
-         FROM campaign_runs cr
-         JOIN campaigns c ON c.id = cr.id_campaign
-         WHERE cr.id = $1
-           AND ($2::boolean = TRUE OR c.id_user = $3)
-         LIMIT 1`,
-        [runId, isAdmin, userId]
-      );
+    if (stoppedRows.length === 0) {
+      const found = await campaignRunRepository.checkRunExists(runId, isAdmin, userId);
       return {
-        found: existsResult.rows.length > 0,
+        found,
         stopped: false,
       };
     }
@@ -716,14 +603,7 @@ class CampaignRunService {
    * @returns {Promise<void>}
    */
   async ensureRunStillRunning(runId) {
-    const result = await db.query(
-      `SELECT status
-       FROM campaign_runs
-       WHERE id = $1
-       LIMIT 1`,
-      [runId]
-    );
-    const status = String(result.rows[0]?.status || '').trim().toLowerCase();
+    const status = String(await campaignRunRepository.getRunStatus(runId) || '').trim().toLowerCase();
     if (status === 'running') return;
     const stopError = new Error('Lượt chạy đã được dừng');
     stopError.code = 'RUN_STOPPED';
@@ -1088,7 +968,7 @@ class CampaignRunService {
       const yieldOrSleepZaloOutboundWait = async (waitMs, reason) => {
         const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
         if (w <= 0) return;
-        if (w >= this.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
+        if (w >= this.zaloRateLimiter.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
           await this.persistZaloDeferYieldSlot({ runId, campaignId, waitMs: w, reason });
         }
         await sleepWithRunCheck(w);
@@ -1133,70 +1013,8 @@ class CampaignRunService {
        * @param {object|null} [accountHint] bản ghi tài khoản từ `getCampaignZaloAccount` (optional fields override)
        * @returns {{limitPerWindow: number, windowMs: number, minDelayMs: number, maxDelayMs: number}}
        */
-      const resolveZaloOutboundPolicy = (channel, accountHint = null) => {
-        const base = {
-          limitPerWindow: this.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT,
-          windowMs: this.ZALO_OUTBOUND_RATE_WINDOW_MS,
-          minDelayMs: this.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT,
-          maxDelayMs: this.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT,
-        };
-        const safeChannel = String(channel || '').trim();
-        let policy;
-        if (safeChannel === 'zalo_group') {
-          const limit = this.ZALO_GROUP_PER_HOUR_LIMIT > 0 ? this.ZALO_GROUP_PER_HOUR_LIMIT : 0;
-          const minMs = this.ZALO_GROUP_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_GROUP_INTER_MESSAGE_MIN_MS : 0;
-          const maxMs = this.ZALO_GROUP_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_GROUP_INTER_MESSAGE_MAX_MS : 0;
-          policy = {
-            ...base,
-            ...(limit ? { limitPerWindow: limit } : {}),
-            ...(minMs ? { minDelayMs: minMs } : {}),
-            ...(maxMs ? { maxDelayMs: maxMs } : {}),
-          };
-        } else if (safeChannel === 'zalo_friend_request') {
-          const limit = this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT > 0 ? this.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT : 0;
-          const minMs = this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS : 0;
-          const maxMs = this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS : 0;
-          policy = {
-            ...base,
-            ...(limit ? { limitPerWindow: limit } : {}),
-            ...(minMs ? { minDelayMs: minMs } : {}),
-            ...(maxMs ? { maxDelayMs: maxMs } : {}),
-          };
-        } else {
-          // default: zalo_personal
-          const legacyLimit = this.ZALO_PERSONAL_BLOCK_SEND_LIMIT > 0 ? this.ZALO_PERSONAL_BLOCK_SEND_LIMIT : 0;
-          const legacyWindow = this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS > 0 ? this.ZALO_PERSONAL_BLOCK_COOLDOWN_MS : 0;
-          const limit = this.ZALO_PERSONAL_PER_HOUR_LIMIT > 0 ? this.ZALO_PERSONAL_PER_HOUR_LIMIT : legacyLimit;
-          const minMs = this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS > 0 ? this.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS : 0;
-          const maxMs = this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS > 0 ? this.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS : 0;
-          policy = {
-            ...base,
-            ...(limit ? { limitPerWindow: limit } : {}),
-            ...(legacyWindow ? { windowMs: legacyWindow } : {}),
-            ...(minMs ? { minDelayMs: minMs } : {}),
-            ...(maxMs ? { maxDelayMs: maxMs } : {}),
-          };
-        }
-        if (safeChannel === 'zalo_personal' && accountHint && typeof accountHint === 'object') {
-          const accLim = Number.parseInt(accountHint.zaloPersonalOutboundPerHourLimit, 10);
-          if (Number.isFinite(accLim) && accLim > 0) {
-            policy = { ...policy, limitPerWindow: accLim };
-          }
-          const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
-          const dMax = Number.parseInt(accountHint.zaloPersonalOutboundDelayMaxMs, 10);
-          let nextMin = policy.minDelayMs;
-          let nextMax = policy.maxDelayMs;
-          if (Number.isFinite(dMin) && dMin >= 0) {
-            nextMin = dMin;
-          }
-          if (Number.isFinite(dMax) && dMax >= 0) {
-            nextMax = dMax;
-          }
-          nextMax = Math.max(nextMin, nextMax);
-          policy = { ...policy, minDelayMs: nextMin, maxDelayMs: nextMax };
-        }
-        return policy;
-      };
+      const resolveZaloOutboundPolicy = (channel, accountHint = null) =>
+        this.zaloRateLimiter.resolveOutboundPolicy(channel, accountHint);
       /**
        * Nếu đang trong khung giờ yên lặng (mặc định 23:00–06:00), trả về mốc thời gian được phép gửi tiếp theo.
        * Giờ trên đồng hồ Việt Nam: cộng offset +7 rồi đọc getUTC* — không dùng múi giờ OS/Node, không phải “23h–6h UTC”.
@@ -1204,132 +1022,18 @@ class CampaignRunService {
        * @param {number} nowMs
        * @returns {number|null} epoch ms của quietEnd (giờ VN) kế tiếp, hoặc null nếu không bị chặn.
        */
-      const computeNextAllowedZaloSendAtByQuietHours = (nowMs) => {
-        const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
-        const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
-        const hour = shifted.getUTCHours();
-        const quietStart = this.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
-        const quietEnd = this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
-        const isQuiet = hour >= quietStart || hour < quietEnd;
-        if (!isQuiet) return null;
-
-        const year = shifted.getUTCFullYear();
-        const month = shifted.getUTCMonth(); // 0-based
-        const day = shifted.getUTCDate();
-        const addDays = hour >= quietStart ? 1 : 0;
-        const targetLocalUtcMs = Date.UTC(year, month, day + addDays, quietEnd, 0, 0, 0);
-        const targetEpochMs = targetLocalUtcMs - utcPlusSevenOffsetMs;
-        return targetEpochMs > nowMs ? targetEpochMs : null;
-      };
-      /**
-       * Enforce rate-limit + giờ yên lặng cho outbound Zalo theo `accountId + channel`.
-       *
-       * Luồng hoạt động:
-       * 1. Nếu rơi vào 23:00–06:00: chờ đến 06:00 (chờ dài → có thể nhả slot theo env).
-       * 2. Nếu đủ quota cửa sổ: chờ qua cửa sổ (chờ dài → có thể nhả slot).
-       * 3. Nếu đã từng gửi trước đó: sleep ngẫu nhiên 20–50s rồi kiểm tra lại (thường giữ slot).
-       * 4. Khi đủ điều kiện, đánh dấu `lastAttemptAtMs` và cho phép gọi API gửi.
-       *
-       * @param {object} input
-       * @param {string|number} input.accountId
-       * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
-       * @param {object|null} [input.zaloAccountPolicyHint] gợi ý policy theo từng TK (cá nhân), từ `getCampaignZaloAccount`
-       * @returns {Promise<void>}
-       */
-      const enforceZaloOutboundPolicyBeforeSend = async ({ accountId, channel, zaloAccountPolicyHint = null }) => {
-        const safeAccountId = String(accountId || '').trim();
-        const safeChannel = String(channel || '').trim();
-        if (!safeAccountId || !safeChannel) return;
-
-        const stateKey = `${safeAccountId}:${safeChannel}`;
-        const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
-        while (true) {
-          await this.ensureRunStillRunning(runId);
-          const nowMs = Date.now();
-
-          // Cooldown 3h (hoặc env) khi Zalo báo tra số điện thoại quá nhiều — chỉ áp kênh cá nhân, theo tài khoản.
-          if (safeChannel === 'zalo_personal') {
-            const phoneLookupUntilMs = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0;
-            if (phoneLookupUntilMs > nowMs) {
-              const waitMs = phoneLookupUntilMs - nowMs;
-              console.log(
-                `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-                + `phone_lookup_cooldown=true wait_ms=${waitMs}`
-              );
-              await yieldOrSleepZaloOutboundWait(waitMs, 'phone_lookup_cooldown');
-              continue;
-            }
-          }
-
-          const quietUntilMs = computeNextAllowedZaloSendAtByQuietHours(nowMs);
-          if (quietUntilMs) {
-            const waitMs = Math.max(0, quietUntilMs - nowMs);
-            console.log(
-              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-              + `quiet_hours=true (${this._explainZaloQuietHoursPolicyForLog()}) `
-              + `resume_at=${formatUtcAndVietnamForLog(quietUntilMs)} wait_ms=${waitMs}`
-            );
-            await yieldOrSleepZaloOutboundWait(waitMs, 'quiet_hours');
-            continue;
-          }
-
-          const policy = resolveZaloOutboundPolicy(safeChannel, zaloAccountPolicyHint);
-          const limitPerWindow = Math.max(1, Number.parseInt(policy.limitPerWindow, 10) || 1);
-          const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
-          const minDelayMs = Math.max(0, Number.parseInt(policy.minDelayMs, 10) || 0);
-          const maxDelayMs = Math.max(minDelayMs, Number.parseInt(policy.maxDelayMs, 10) || minDelayMs);
-
-          const current = this.zaloOutboundRateLimitState.get(stateKey) || {
-            windowStartMs: nowMs,
-            successCount: 0,
-            lastAttemptAtMs: null,
-            policyFingerprint: null,
-          };
-          // Khi policy theo TK thay đổi (sửa DB / env), reset cửa sổ đếm để tránh state cũ sai quota.
-          const policyFingerprint = `${limitPerWindow}:${windowMs}:${minDelayMs}:${maxDelayMs}`;
-          if (current.policyFingerprint != null && current.policyFingerprint !== policyFingerprint) {
-            current.windowStartMs = nowMs;
-            current.successCount = 0;
-            current.lastAttemptAtMs = null;
-          }
-          current.policyFingerprint = policyFingerprint;
-          if (nowMs - current.windowStartMs >= windowMs) {
-            this.zaloOutboundRateLimitState.delete(stateKey);
-            current.windowStartMs = nowMs;
-            current.successCount = 0;
-          }
-
-          if (current.successCount >= limitPerWindow) {
-            const targetMs = current.windowStartMs + windowMs;
-            const waitMs = Math.max(0, targetMs - nowMs);
-            const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
-            console.log(
-              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-              + `rate_limited=true success=${current.successCount}/${limitPerWindow} `
-              + `window_start=${current.windowStartMs} now_local=${shifted.toISOString()} wait_ms=${waitMs}`
-            );
-            await yieldOrSleepZaloOutboundWait(waitMs, 'rate_limited');
-            continue;
-          }
-
-          if (current.lastAttemptAtMs) {
-            const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
-            console.log(
-              `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-              + `inter_message_delay_ms=${delayMs}`
-            );
-            await sleepWithRunCheck(delayMs);
-            // Sau khi sleep, quay lại vòng lặp để tránh vượt mốc 23:00 hoặc cửa sổ giờ.
-            current.lastAttemptAtMs = null;
-            this.zaloOutboundRateLimitState.set(stateKey, current);
-            continue;
-          }
-
-          current.lastAttemptAtMs = nowMs;
-          this.zaloOutboundRateLimitState.set(stateKey, current);
-          return;
-        }
-      };
+      const computeNextAllowedZaloSendAtByQuietHours = (nowMs) =>
+        this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(nowMs);
+      const enforceZaloOutboundPolicyBeforeSend = ({ accountId, channel, zaloAccountPolicyHint = null }) =>
+        this.zaloRateLimiter.enforceOutboundPolicyBeforeSend({
+          accountId,
+          channel,
+          zaloAccountPolicyHint,
+          yieldOrSleep: yieldOrSleepZaloOutboundWait,
+          sleepWithRunCheck,
+          ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
+          runId,
+        });
       /**
        * Ghi nhận một lần gửi thành công để tính quota theo giờ.
        *
@@ -1338,28 +1042,8 @@ class CampaignRunService {
        * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
        * @param {object|null} [input.zaloAccountPolicyHint] gợi ý policy theo từng TK (cá nhân)
        */
-      const markZaloOutboundSuccess = ({ accountId, channel, zaloAccountPolicyHint = null }) => {
-        const safeAccountId = String(accountId || '').trim();
-        const safeChannel = String(channel || '').trim();
-        if (!safeAccountId || !safeChannel) return;
-        const stateKey = `${safeAccountId}:${safeChannel}`;
-        const nowMs = Date.now();
-        const current = this.zaloOutboundRateLimitState.get(stateKey) || {
-          windowStartMs: nowMs,
-          successCount: 0,
-          lastAttemptAtMs: null,
-          policyFingerprint: null,
-        };
-        const policy = resolveZaloOutboundPolicy(safeChannel, zaloAccountPolicyHint);
-        const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
-        if (nowMs - current.windowStartMs >= windowMs) {
-          this.zaloOutboundRateLimitState.delete(stateKey);
-          current.windowStartMs = nowMs;
-          current.successCount = 0;
-        }
-        current.successCount += 1;
-        this.zaloOutboundRateLimitState.set(stateKey, current);
-      };
+      const markZaloOutboundSuccess = ({ accountId, channel, zaloAccountPolicyHint = null }) =>
+        this.zaloRateLimiter.markOutboundSuccess({ accountId, channel, zaloAccountPolicyHint });
       /**
        * Chờ ngẫu nhiên 0.25-1.25 giây giữa 2 lần gửi nhóm trong cùng một template step.
        *
@@ -1498,33 +1182,25 @@ class CampaignRunService {
         }
         if (!isRecipientLedgerTableAvailable) return createEmptyRecipientProgress();
         try {
-          const progressResult = await db.query(
-            `SELECT last_completed_step, is_fully_completed, meta
-             FROM campaign_run_recipient_steps
-             WHERE id_run = $1
-               AND id_node = $2
-               AND channel = $3
-               AND recipient_key = $4
-             LIMIT 1`,
-            [runId, nodeId, channel, safeRecipientKey]
-          );
-          if (progressResult.rows.length === 0) {
+          const progressRow = await recipientLedgerRepository.getRecipientProgress({
+            runId,
+            nodeId,
+            channel,
+            recipientKey: safeRecipientKey,
+          });
+          if (!progressRow) {
             if (Number.isFinite(resumeFromRunId) && resumeFromRunId > 0) {
-              const resumeResult = await db.query(
-                `SELECT last_completed_step, is_fully_completed, meta
-                 FROM campaign_run_recipient_steps
-                 WHERE id_run = $1
-                   AND id_node = $2
-                   AND channel = $3
-                   AND recipient_key = $4
-                 LIMIT 1`,
-                [resumeFromRunId, nodeId, channel, safeRecipientKey]
-              );
-              if (resumeResult.rows.length > 0) {
-                const resumeMeta = resumeResult.rows[0].meta || {};
+              const resumeRow = await recipientLedgerRepository.getRecipientProgress({
+                runId: resumeFromRunId,
+                nodeId,
+                channel,
+                recipientKey: safeRecipientKey,
+              });
+              if (resumeRow) {
+                const resumeMeta = resumeRow.meta || {};
                 const resumedProgress = {
-                  lastCompletedStep: Number.parseInt(resumeResult.rows[0].last_completed_step, 10) || 0,
-                  isFullyCompleted: Boolean(resumeResult.rows[0].is_fully_completed),
+                  lastCompletedStep: Number.parseInt(resumeRow.last_completed_step, 10) || 0,
+                  isFullyCompleted: Boolean(resumeRow.is_fully_completed),
                   firstSentAt: resumeMeta?.firstSentAt || null,
                   lastCompletedAt: resumeMeta?.lastCompletedAt || null,
                   nextDueAt: resumeMeta?.nextDueAt || null,
@@ -1537,10 +1213,10 @@ class CampaignRunService {
             }
             return createEmptyRecipientProgress();
           }
-          const meta = progressResult.rows[0].meta || {};
+          const meta = progressRow.meta || {};
           const currentProgress = {
-            lastCompletedStep: Number.parseInt(progressResult.rows[0].last_completed_step, 10) || 0,
-            isFullyCompleted: Boolean(progressResult.rows[0].is_fully_completed),
+            lastCompletedStep: Number.parseInt(progressRow.last_completed_step, 10) || 0,
+            isFullyCompleted: Boolean(progressRow.is_fully_completed),
             firstSentAt: meta?.firstSentAt || null,
             lastCompletedAt: meta?.lastCompletedAt || null,
             nextDueAt: meta?.nextDueAt || null,
@@ -1638,52 +1314,18 @@ class CampaignRunService {
               ? { zaloAbandonReason: String(zaloAbandonReason).trim() }
               : {}),
           };
-          await db.query(
-            `INSERT INTO campaign_run_recipient_steps
-             (id_run, id_campaign, id_node, channel, recipient_key, last_completed_step, is_fully_completed, last_sent_at, meta, updated_at)
-             VALUES (
-               $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP,
-               CASE
-                 WHEN COALESCE($9::boolean, FALSE) THEN
-                   CASE WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason')
-                   ELSE ($8::jsonb - 'retryCount') END
-                 WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'zaloSendFailureCount' - 'zaloAbandonReason')
-                 ELSE $8::jsonb
-               END,
-               CURRENT_TIMESTAMP
-             )
-             ON CONFLICT (id_run, id_node, channel, recipient_key)
-             DO UPDATE SET
-               last_completed_step = GREATEST(campaign_run_recipient_steps.last_completed_step, EXCLUDED.last_completed_step),
-               is_fully_completed = campaign_run_recipient_steps.is_fully_completed OR EXCLUDED.is_fully_completed,
-               last_sent_at = CURRENT_TIMESTAMP,
-               meta = CASE
-                 WHEN COALESCE($9::boolean, FALSE) THEN
-                   CASE WHEN COALESCE($10::boolean, FALSE) THEN (
-                     COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                   ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason'
-                   ELSE (
-                     COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                   ) - 'retryCount' END
-                 WHEN COALESCE($10::boolean, FALSE) THEN (
-                   COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                 ) - 'zaloSendFailureCount' - 'zaloAbandonReason'
-                 ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-               END,
-               updated_at = CURRENT_TIMESTAMP`,
-            [
-              runId,
-              campaignId,
-              nodeId,
-              channel,
-              safeRecipientKey,
-              safeCompletedStep,
-              isFullyCompleted,
-              JSON.stringify(metaPayload),
-              removeRetryCountFromMeta,
-              removeZaloFailureFromMeta,
-            ]
-          );
+          await recipientLedgerRepository.upsertRecipientProgress({
+            runId,
+            campaignId,
+            nodeId,
+            channel,
+            recipientKey: safeRecipientKey,
+            completedStep: safeCompletedStep,
+            isFullyCompleted,
+            metaPayload,
+            removeRetryCountFromMeta,
+            removeZaloFailureFromMeta,
+          });
         } catch (error) {
           if (String(error?.code || '') === '42P01' || String(error?.code || '') === '42703') {
             isRecipientLedgerTableAvailable = false;
@@ -1938,30 +1580,24 @@ class CampaignRunService {
       const flowJsonHasZaloPersonalMulti = campaignFlowService.flowJsonHasZaloPersonalMultiAccount(
         campaign?.flow_json
       );
-      const runResult = await db.query(
-        `SELECT run_metadata, successful_sends, failed_sends
-         FROM campaign_runs
-         WHERE id = $1
-         LIMIT 1`,
-        [runId]
-      );
-      const runSource = String(runResult.rows[0]?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
-      const rawAdjacentDelay = Number.parseInt(runResult.rows[0]?.run_metadata?.adjacentZaloNodeDelayMs, 10);
+      const runRow = await campaignRunRepository.getRunForExecution(runId);
+      const runSource = String(runRow?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
+      const rawAdjacentDelay = Number.parseInt(runRow?.run_metadata?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay > 0
         ? rawAdjacentDelay
         : 0;
-      const rawContinuousMode = runResult.rows[0]?.run_metadata?.continuousMode;
+      const rawContinuousMode = runRow?.run_metadata?.continuousMode;
       isContinuousMode = runSource === 'campaign_run'
         && (rawContinuousMode === true || String(rawContinuousMode).trim().toLowerCase() === 'true');
-      const rawResumeFromRunId = Number.parseInt(runResult.rows[0]?.run_metadata?.resumeFromRunId, 10);
+      const rawResumeFromRunId = Number.parseInt(runRow?.run_metadata?.resumeFromRunId, 10);
       if (isContinuousMode && Number.isFinite(rawResumeFromRunId) && rawResumeFromRunId > 0) {
         const normalizedRunId = Number.parseInt(runId, 10);
         resumeFromRunId = rawResumeFromRunId !== normalizedRunId ? rawResumeFromRunId : null;
       }
-      const rawPollIntervalMs = Number.parseInt(runResult.rows[0]?.run_metadata?.pollIntervalMs, 10);
+      const rawPollIntervalMs = Number.parseInt(runRow?.run_metadata?.pollIntervalMs, 10);
       const rawPollIntervalMinutes = Number.parseInt(
-        runResult.rows[0]?.run_metadata?.continuousCycleMinutes
-          ?? runResult.rows[0]?.run_metadata?.pollIntervalMinutes,
+        runRow?.run_metadata?.continuousCycleMinutes
+          ?? runRow?.run_metadata?.pollIntervalMinutes,
         10
       );
       if (isContinuousMode && Number.isFinite(rawPollIntervalMs)) {
@@ -2666,8 +2302,8 @@ class CampaignRunService {
       const nodeOutputs = {};
       let lastOutputItems = [];
       let totalRecipients = 0;
-      let successfulSends = Number(runResult.rows[0]?.successful_sends || 0);
-      let failedSends = Number(runResult.rows[0]?.failed_sends || 0);
+      let successfulSends = Number(runRow?.successful_sends || 0);
+      let failedSends = Number(runRow?.failed_sends || 0);
       let skippedSends = 0;
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
@@ -2747,27 +2383,9 @@ class CampaignRunService {
       const syncPendingEmailRetryFromLedger = async () => {
         if (isContinuousMode || hasPendingRecipientDue || !isRecipientLedgerTableAvailable) return;
         try {
-          const pendingRetryResult = await db.query(
-            `SELECT
-               COUNT(*)::int AS pending_count,
-               COUNT(*) FILTER (
-                 WHERE meta ? 'retryCount'
-                   AND TRIM(COALESCE(meta->>'retryCount', '')) <> ''
-                   AND TRIM(meta->>'retryCount') ~ '^[0-9]+$'
-                   AND (meta->>'retryCount')::int > 0
-               )::int AS pending_with_retry_meta
-             FROM campaign_run_recipient_steps
-             WHERE id_run = $1
-               AND COALESCE(is_fully_completed, FALSE) = FALSE
-               AND NULLIF(TRIM(COALESCE(meta->>'nextDueAt', '')), '') IS NOT NULL
-               AND (meta->>'nextDueAt')::timestamptz > NOW()`,
-            [runId]
-          );
-          const pendingCount = Number.parseInt(pendingRetryResult.rows[0]?.pending_count, 10) || 0;
-          const pendingWithRetryMeta = Number.parseInt(
-            pendingRetryResult.rows[0]?.pending_with_retry_meta,
-            10
-          ) || 0;
+          const pendingRow = await recipientLedgerRepository.countPendingDue(runId);
+          const pendingCount = Number.parseInt(pendingRow?.pending_count, 10) || 0;
+          const pendingWithRetryMeta = Number.parseInt(pendingRow?.pending_with_retry_meta, 10) || 0;
           if (pendingCount > 0) {
             hasPendingRecipientDue = true;
             pendingRecipientDueCount = Math.max(pendingRecipientDueCount, pendingCount);
@@ -3803,15 +3421,7 @@ class CampaignRunService {
             });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
-            await db.query(
-              `UPDATE campaign_runs
-               SET total_recipients = $1,
-                   successful_sends = $2,
-                   failed_sends = $3,
-                   skipped_sends = $4
-               WHERE id = $5`,
-              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-            );
+            await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
             if (shouldPauseUntilNextContinuousCycle) {
               break;
             }
@@ -4042,15 +3652,7 @@ class CampaignRunService {
             });
           }
 
-          await db.query(
-            `UPDATE campaign_runs
-             SET total_recipients = $1,
-                 successful_sends = $2,
-                 failed_sends = $3,
-                 skipped_sends = $4
-             WHERE id = $5`,
-            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-          );
+          await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
         }
 
@@ -4493,7 +4095,7 @@ class CampaignRunService {
               const nowMs = Date.now();
               const order = shuffleMultiAccountIds([...availablePoolIds]);
               const notInPhoneCooldown = order.filter((id) => {
-                const until = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(String(id))) || 0;
+                const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
                 return until <= nowMs;
               });
               const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
@@ -4862,7 +4464,7 @@ class CampaignRunService {
                 console.log(
                   `[CampaignRun][ZaloPersonal] run=${runId} account=${workingAccount.id} `
                   + `lỗi_giới_hạn_zalo (tra_số / vượt_request) → cooldown `
-                  + `${Math.round(this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs}`
+                  + `${Math.round(this.zaloRateLimiter.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs}`
                 );
                 if (waitMs > 0) {
                   await this.persistZaloDeferYieldSlot({
@@ -5311,15 +4913,7 @@ class CampaignRunService {
             });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
-            await db.query(
-              `UPDATE campaign_runs
-               SET total_recipients = $1,
-                   successful_sends = $2,
-                   failed_sends = $3,
-                   skipped_sends = $4
-               WHERE id = $5`,
-              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-            );
+            await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
             continue;
           }
 
@@ -5589,15 +5183,7 @@ class CampaignRunService {
             });
           }
 
-          await db.query(
-            `UPDATE campaign_runs
-             SET total_recipients = $1,
-                 successful_sends = $2,
-                 failed_sends = $3,
-                 skipped_sends = $4
-             WHERE id = $5`,
-            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-          );
+          await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
         }
 
@@ -5750,7 +5336,7 @@ class CampaignRunService {
             const nowMs = Date.now();
             const order = shuffleFriendMultiAccountIds([...friendMultiAccountIds]);
             const notInPhoneCooldown = order.filter((id) => {
-              const until = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(String(id))) || 0;
+              const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
               return until <= nowMs;
             });
             const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
@@ -6339,15 +5925,7 @@ class CampaignRunService {
             });
           }
 
-          await db.query(
-            `UPDATE campaign_runs
-             SET total_recipients = $1,
-                 successful_sends = $2,
-                 failed_sends = $3,
-                 skipped_sends = $4
-             WHERE id = $5`,
-            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-          );
+          await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
         }
 
@@ -6917,15 +6495,7 @@ class CampaignRunService {
             });
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
-            await db.query(
-              `UPDATE campaign_runs
-               SET total_recipients = $1,
-                   successful_sends = $2,
-                   failed_sends = $3,
-                   skipped_sends = $4
-               WHERE id = $5`,
-              [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-            );
+            await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
             continue;
           }
 
@@ -7113,15 +6683,7 @@ class CampaignRunService {
             });
           }
 
-          await db.query(
-            `UPDATE campaign_runs
-             SET total_recipients = $1,
-                 successful_sends = $2,
-                 failed_sends = $3,
-                 skipped_sends = $4
-             WHERE id = $5`,
-            [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-          );
+          await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
         }
 
@@ -7218,28 +6780,7 @@ class CampaignRunService {
 
       await syncPendingEmailRetryFromLedger();
 
-      await db.query(
-        hasPendingRecipientDue && !isContinuousMode
-          ? `UPDATE campaign_runs SET
-             status = 'running',
-             completed_at = NULL,
-             total_recipients = $1,
-             successful_sends = $2,
-             failed_sends = $3,
-             skipped_sends = $4
-             WHERE id = $5
-               AND status = 'running'`
-          : `UPDATE campaign_runs SET
-             status = 'completed',
-             completed_at = CURRENT_TIMESTAMP,
-             total_recipients = $1,
-             successful_sends = $2,
-             failed_sends = $3,
-             skipped_sends = $4
-             WHERE id = $5
-               AND status = 'running'`,
-        [totalRecipients, successfulSends, failedSends, skippedSends, runId]
-      );
+      await campaignRunRepository.finalizeRun(runId, hasPendingRecipientDue && !isContinuousMode, { totalRecipients, successfulSends, failedSends, skippedSends });
 
       await db.query(
         `UPDATE campaigns SET
@@ -7264,14 +6805,7 @@ class CampaignRunService {
       }
     } catch (error) {
       if (error?.code === 'CAMPAIGN_PAUSED_BY_ZALO_POOL_UNAVAILABLE') {
-        await db.query(
-          `UPDATE campaign_runs SET
-           status = 'completed',
-           completed_at = CURRENT_TIMESTAMP,
-           error_message = $1
-           WHERE id = $2`,
-          [String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng'), runId]
-        );
+        await campaignRunRepository.completeRunWithError(runId, String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng'));
         console.warn(`[Campaign ${campaignId}] ${String(error?.message || '').trim()}`);
         return;
       }
@@ -7287,14 +6821,7 @@ class CampaignRunService {
         return;
       }
       console.error(`[Campaign ${campaignId}] Lỗi thực thi:`, error);
-      await db.query(
-        `UPDATE campaign_runs SET
-         status = 'failed',
-         completed_at = CURRENT_TIMESTAMP,
-         error_message = $1
-         WHERE id = $2`,
-        [error.message, runId]
-      );
+      await campaignRunRepository.failRun(runId, error.message);
     } finally {
       // Giải phóng worker slot nếu run kết thúc đột ngột trong lúc đang xử lý.
       // _releaseContinuousWorker là idempotent – an toàn khi chưa giữ slot.
