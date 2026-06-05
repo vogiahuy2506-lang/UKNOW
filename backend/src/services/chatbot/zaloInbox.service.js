@@ -349,13 +349,29 @@ class ZaloPersonalInboxService {
   async getOrCreateConversation(zaloSettingId, userId, externalId, visitorName, visitorInfo) {
     // Try to find existing conversation
     const { rows: existing } = await db.query(
-      `SELECT id FROM zalo_personal_conversations 
+      `SELECT * FROM zalo_personal_conversations 
        WHERE id_zalo_setting = $1 AND external_id = $2`,
       [zaloSettingId, externalId]
     );
 
     if (existing[0]) {
-      return existing[0];
+      // Update visitor_name if changed (e.g., user changed their Zalo name)
+      const conv = existing[0];
+      if (visitorName && conv.visitor_name !== visitorName) {
+        await db.query(
+          `UPDATE zalo_personal_conversations SET visitor_name = $1 WHERE id = $2`,
+          [visitorName, conv.id]
+        );
+        conv.visitor_name = visitorName;
+      }
+      // Update visitor_info if provided
+      if (visitorInfo && JSON.stringify(visitorInfo) !== JSON.stringify(conv.visitor_info)) {
+        await db.query(
+          `UPDATE zalo_personal_conversations SET visitor_info = $1 WHERE id = $2`,
+          [JSON.stringify(visitorInfo), conv.id]
+        );
+      }
+      return conv;
     }
 
     // Create new conversation
@@ -363,7 +379,7 @@ class ZaloPersonalInboxService {
       `INSERT INTO zalo_personal_conversations 
        (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING id`,
+       RETURNING *`,
       [userId, zaloSettingId, externalId, visitorName, JSON.stringify(visitorInfo)]
     );
 

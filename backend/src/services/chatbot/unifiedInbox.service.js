@@ -191,10 +191,12 @@ class UnifiedInboxService {
     try {
       const adapter = this._getChannelAdapter(conversation.channel);
       if (adapter?.sendReply) {
+        // Zalo Personal cần externalId (uid của người nhận), không phải conversationId
         const params = {
-          conversationId: conversation.external_id,
+          externalId: conversation.external_id,
           message: content.trim(),
           attachments,
+          userId,
         };
         
         if (conversationType === 'channel') {
