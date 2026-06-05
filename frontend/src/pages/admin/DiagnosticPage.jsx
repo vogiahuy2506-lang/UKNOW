@@ -275,66 +275,67 @@ export default function DiagnosticPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        {/* ── Config Form ── */}
-        <div className="lg:col-span-2">
-          <form onSubmit={handleSubmit} className="card overflow-hidden divide-y divide-gray-100">
-            {/* Title row */}
-            <div className="px-5 py-4">
-              <h2 className="text-sm font-semibold text-gray-800">Cấu hình test</h2>
+      {/* ── Config Form — full width ── */}
+      <form onSubmit={handleSubmit} className="card overflow-hidden divide-y divide-gray-100">
+        {/* Title row */}
+        <div className="px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-800">Cấu hình test</h2>
+        </div>
+
+        {/* Campaign prefill */}
+        {campaigns.length > 0 && (
+          <div className="px-5 py-3 bg-orange-50/40">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-orange-700 flex items-center gap-1.5 shrink-0">
+                <HiOutlineDownload className="w-3.5 h-3.5" />
+                Load từ chiến dịch
+              </span>
+              <select
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+                className="flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+              >
+                <option value="">— Chọn chiến dịch —</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.campaign_name} ({c.owner_name || c.owner_email})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handlePrefill}
+                disabled={!selectedCampaignId || prefillLoading}
+                className="btn btn-secondary shrink-0 px-3"
+                title="Load dữ liệu"
+              >
+                {prefillLoading
+                  ? <HiOutlineRefresh className="w-4 h-4 animate-spin" />
+                  : <HiOutlineChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Fields grid */}
+        <div className="px-5 py-5 space-y-4">
+          {/* Row 1: Kênh + Tài khoản + Delay */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Kênh gửi</label>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
+                <option value="zalo_personal">Zalo Cá nhân</option>
+                <option value="zalo_group" disabled>Zalo Nhóm (sắp ra mắt)</option>
+                <option value="email" disabled>Email (sắp ra mắt)</option>
+              </select>
             </div>
 
-            {/* Campaign prefill */}
-            {campaigns.length > 0 && (
-              <div className="px-5 py-4 bg-orange-50/40 space-y-2.5">
-                <p className="text-xs font-medium text-orange-700 flex items-center gap-1.5">
-                  <HiOutlineDownload className="w-3.5 h-3.5" />
-                  Load từ chiến dịch có sẵn
-                </p>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedCampaignId}
-                    onChange={(e) => setSelectedCampaignId(e.target.value)}
-                    className="flex-1 border border-orange-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-                  >
-                    <option value="">— Chọn chiến dịch —</option>
-                    {campaigns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.campaign_name} ({c.owner_name || c.owner_email})
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handlePrefill}
-                    disabled={!selectedCampaignId || prefillLoading}
-                    className="btn btn-secondary shrink-0 px-3"
-                    title="Load dữ liệu"
-                  >
-                    {prefillLoading
-                      ? <HiOutlineRefresh className="w-4 h-4 animate-spin" />
-                      : <HiOutlineChevronRight className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Fields */}
-            <div className="px-5 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Kênh gửi</label>
-                <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
-                  <option value="zalo_personal">Zalo Cá nhân</option>
-                  <option value="zalo_group" disabled>Zalo Nhóm (sắp ra mắt)</option>
-                  <option value="email" disabled>Email (sắp ra mắt)</option>
-                </select>
-              </div>
-
+            <div>
               {needsAccount && (
-                <div>
+                <>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Tài khoản Zalo</label>
                   {zaloAccounts.length === 0 ? (
-                    <p className="text-xs text-red-500">Không tìm thấy tài khoản Zalo nào đang kết nối</p>
+                    <p className="text-xs text-red-500 mt-2">Không tìm thấy tài khoản Zalo nào đang kết nối</p>
                   ) : (
                     <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputCls}>
                       {zaloAccounts.map((a) => (
@@ -344,150 +345,154 @@ export default function DiagnosticPage() {
                       ))}
                     </select>
                   )}
-                </div>
+                </>
               )}
-
-              <div>
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-600">Số điện thoại</label>
-                  <span className={`text-xs tabular-nums ${phoneCount > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
-                    {phoneCount} / 20
-                  </span>
-                </div>
-                <textarea
-                  value={recipientsRaw}
-                  onChange={(e) => setRecipientsRaw(e.target.value)}
-                  rows={4}
-                  placeholder={'0901234567\n0907654321\n0912345678'}
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
-                />
-                <p className="text-xs text-gray-400 mt-1">Mỗi số một dòng</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Nội dung tin nhắn</label>
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  rows={4}
-                  placeholder="Xin chào! Đây là tin nhắn test từ hệ thống..."
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-600">Delay giữa tin</label>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-semibold text-primary-600">{delaySeconds}s</span>
-                    <span className="text-xs text-gray-400">(production: 20–50s)</span>
-                  </div>
-                </div>
-                <input
-                  type="range" min={1} max={60} step={1}
-                  value={delaySeconds}
-                  onChange={(e) => setDelaySeconds(Number(e.target.value))}
-                  className="w-full accent-primary-500"
-                />
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>1s</span>
-                  <span>60s</span>
-                </div>
-              </div>
             </div>
 
-            {/* Submit footer */}
-            <div className="px-5 py-4 bg-gray-50/60">
-              {formError && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5 mb-3">
-                  <HiOutlineX className="w-4 h-4 shrink-0" /> {formError}
-                </p>
-              )}
-              <button type="submit" disabled={submitting} className="btn btn-primary w-full justify-center">
-                {submitting
-                  ? <><HiOutlineRefresh className="mr-2 w-4 h-4 animate-spin" /> Đang khởi tạo...</>
-                  : <><HiOutlineLightningBolt className="mr-2 w-4 h-4" /> Chạy test</>}
-              </button>
+            <div>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-600">Delay giữa tin</label>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-semibold text-primary-600">{delaySeconds}s</span>
+                  <span className="text-xs text-gray-400">(production: 20–50s)</span>
+                </div>
+              </div>
+              <input
+                type="range" min={1} max={60} step={1}
+                value={delaySeconds}
+                onChange={(e) => setDelaySeconds(Number(e.target.value))}
+                className="w-full accent-primary-500 mt-1"
+              />
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>1s</span>
+                <span>60s</span>
+              </div>
             </div>
-          </form>
+          </div>
+
+          {/* Row 2: SĐT + Nội dung */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-600">Số điện thoại</label>
+                <span className={`text-xs tabular-nums ${phoneCount > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
+                  {phoneCount} / 20 · mỗi số một dòng
+                </span>
+              </div>
+              <textarea
+                value={recipientsRaw}
+                onChange={(e) => setRecipientsRaw(e.target.value)}
+                rows={5}
+                placeholder={'0901234567\n0907654321\n0912345678'}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Nội dung tin nhắn</label>
+              <textarea
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                rows={5}
+                placeholder="Xin chào! Đây là tin nhắn test từ hệ thống..."
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* ── Results Panel ── */}
-        <div className="lg:col-span-3 space-y-4">
-          {/* Active run */}
-          {activeRun && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="font-semibold text-gray-900 shrink-0">Run #{activeRun.id}</span>
-                  <span className="text-gray-200">|</span>
-                  <span className="text-sm text-gray-500 truncate">{CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel}</span>
-                  <RunStatusBadge status={activeRun.status} />
-                </div>
-                <span className="text-xs text-gray-400 shrink-0">{fmtTime(activeRun.created_at)}</span>
-              </div>
-              <div className="p-5">
-                <RunLog run={activeRun} messages={activeMessages} />
-              </div>
-            </div>
-          )}
+        {/* Submit footer */}
+        <div className="px-5 py-4 bg-gray-50/60 flex items-center justify-between gap-4">
+          <div>
+            {formError && (
+              <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <HiOutlineX className="w-4 h-4 shrink-0" /> {formError}
+              </p>
+            )}
+          </div>
+          <button type="submit" disabled={submitting} className="btn btn-primary shrink-0">
+            {submitting
+              ? <><HiOutlineRefresh className="mr-2 w-4 h-4 animate-spin" /> Đang khởi tạo...</>
+              : <><HiOutlineLightningBolt className="mr-2 w-4 h-4" /> Chạy test</>}
+          </button>
+        </div>
+      </form>
 
-          {/* Empty state */}
-          {!activeRun && recentRuns.length === 0 && (
-            <div className="card flex flex-col items-center justify-center text-center gap-4 py-20">
-              <div className="p-4 rounded-2xl bg-gray-50">
-                <HiOutlineBeaker className="w-8 h-8 text-gray-300" />
+      {/* ── Results Panel ── */}
+      <div className="space-y-4">
+        {/* Active run */}
+        {activeRun && (
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="font-semibold text-gray-900 shrink-0">Run #{activeRun.id}</span>
+                <span className="text-gray-200">|</span>
+                <span className="text-sm text-gray-500 truncate">{CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel}</span>
+                <RunStatusBadge status={activeRun.status} />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Kết quả test sẽ hiển thị ở đây</p>
-                <p className="text-xs text-gray-400 mt-1">Nhập số điện thoại, tin nhắn rồi bấm "Chạy test"</p>
-              </div>
+              <span className="text-xs text-gray-400 shrink-0">{fmtTime(activeRun.created_at)}</span>
             </div>
-          )}
+            <div className="p-5">
+              <RunLog run={activeRun} messages={activeMessages} />
+            </div>
+          </div>
+        )}
 
-          {/* Recent runs */}
-          {recentRuns.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-700">Các lần test gần đây</h2>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {recentRuns.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => handleSelectRun(r.id)}
-                    className={`w-full text-left px-5 py-3.5 transition-colors ${
-                      activeRunId === r.id ? 'bg-primary-50' : 'hover:bg-gray-50/60'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <span className="text-gray-400 text-xs tabular-nums">#{r.id}</span>
-                          <span className="font-medium text-gray-900">
-                            {CHANNEL_LABELS[r.channel] ?? r.channel}
-                          </span>
-                          {r.account_display_name && (
-                            <span className="text-gray-400 font-normal">· {r.account_display_name}</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2.5">
-                          <span className="tabular-nums">{r.sent_count}/{r.total_count} đã gửi</span>
-                          {r.failed_count > 0 && (
-                            <span className="text-red-400">{r.failed_count} thất bại</span>
-                          )}
-                          <span>delay {r.inter_message_delay_ms / 1000}s</span>
-                          <span>{fmtTime(r.created_at)}</span>
-                        </div>
+        {/* Empty state */}
+        {!activeRun && recentRuns.length === 0 && (
+          <div className="card flex flex-col items-center justify-center text-center gap-4 py-14">
+            <div className="p-4 rounded-2xl bg-gray-50">
+              <HiOutlineBeaker className="w-8 h-8 text-gray-300" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Kết quả test sẽ hiển thị ở đây</p>
+              <p className="text-xs text-gray-400 mt-1">Nhập số điện thoại, tin nhắn rồi bấm "Chạy test"</p>
+            </div>
+          </div>
+        )}
+
+        {/* Recent runs */}
+        {recentRuns.length > 0 && (
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-700">Các lần test gần đây</h2>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {recentRuns.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => handleSelectRun(r.id)}
+                  className={`w-full text-left px-5 py-3.5 transition-colors ${
+                    activeRunId === r.id ? 'bg-primary-50' : 'hover:bg-gray-50/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="text-gray-400 text-xs tabular-nums">#{r.id}</span>
+                        <span className="font-medium text-gray-900">
+                          {CHANNEL_LABELS[r.channel] ?? r.channel}
+                        </span>
+                        {r.account_display_name && (
+                          <span className="text-gray-400 font-normal">· {r.account_display_name}</span>
+                        )}
                       </div>
-                      <RunStatusBadge status={r.status} />
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2.5">
+                        <span className="tabular-nums">{r.sent_count}/{r.total_count} đã gửi</span>
+                        {r.failed_count > 0 && (
+                          <span className="text-red-400">{r.failed_count} thất bại</span>
+                        )}
+                        <span>delay {r.inter_message_delay_ms / 1000}s</span>
+                        <span>{fmtTime(r.created_at)}</span>
+                      </div>
                     </div>
-                  </button>
-                ))}
-              </div>
+                    <RunStatusBadge status={r.status} />
+                  </div>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
