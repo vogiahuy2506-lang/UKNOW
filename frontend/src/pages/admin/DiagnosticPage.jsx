@@ -22,34 +22,13 @@ const STATUS_ICON = {
   pending: <HiOutlineClock className="text-gray-400 w-4 h-4" />,
 };
 
-const STATUS_LABEL = {
-  sent: 'Đã gửi', failed: 'Thất bại', sending: 'Đang gửi', pending: 'Chờ',
-};
+const STATUS_LABEL = { sent: 'Đã gửi', failed: 'Thất bại', sending: 'Đang gửi', pending: 'Chờ' };
 
-const CHANNEL_LABELS = {
-  zalo_personal: 'Zalo Cá nhân',
-  zalo_group:    'Zalo Nhóm',
-  email:         'Email',
-};
+const CHANNEL_LABELS = { zalo_personal: 'Zalo Cá nhân', zalo_group: 'Zalo Nhóm', email: 'Email' };
 
 const POLL_INTERVAL_MS = 1500;
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-function StatCard({ label, value, color = 'gray' }) {
-  const colors = {
-    gray:  'bg-gray-50 text-gray-700',
-    green: 'bg-green-50 text-green-700',
-    red:   'bg-red-50 text-red-700',
-    blue:  'bg-blue-50 text-blue-700',
-  };
-  return (
-    <div className={`rounded-xl p-4 ${colors[color]}`}>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs mt-0.5 opacity-70">{label}</div>
-    </div>
-  );
-}
-
+// ── RunLog ────────────────────────────────────────────────────────────────────
 function RunLog({ run, messages }) {
   const sent   = run.sent_count ?? 0;
   const failed = run.failed_count ?? 0;
@@ -62,42 +41,56 @@ function RunLog({ run, messages }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Tổng"         value={total}           color="gray" />
-        <StatCard label="Đã gửi"       value={sent}            color="green" />
-        <StatCard label="Thất bại"     value={failed}          color={failed > 0 ? 'red' : 'gray'} />
-        <StatCard label="Delay TB"     value={fmtDelay(avgDelay)} color="blue" />
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-gray-50 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-gray-800">{total}</div>
+          <div className="text-xs text-gray-500 mt-0.5">Tổng</div>
+        </div>
+        <div className="bg-green-50 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-green-700">{sent}</div>
+          <div className="text-xs text-green-600 mt-0.5">Đã gửi</div>
+        </div>
+        <div className={`${failed > 0 ? 'bg-red-50' : 'bg-gray-50'} rounded-lg p-3 text-center`}>
+          <div className={`text-xl font-bold ${failed > 0 ? 'text-red-700' : 'text-gray-800'}`}>{failed}</div>
+          <div className={`text-xs mt-0.5 ${failed > 0 ? 'text-red-600' : 'text-gray-500'}`}>Thất bại</div>
+        </div>
+        <div className="bg-blue-50 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-blue-700">{fmtDelay(avgDelay)}</div>
+          <div className="text-xs text-blue-600 mt-0.5">Delay TB</div>
+        </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-100">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <th className="px-4 py-2 text-left w-10">#</th>
-              <th className="px-4 py-2 text-left">Số điện thoại</th>
-              <th className="px-4 py-2 text-left w-28">Trạng thái</th>
-              <th className="px-4 py-2 text-left w-24">Thời gian</th>
-              <th className="px-4 py-2 text-left w-24">Delay</th>
-              <th className="px-4 py-2 text-left">Lỗi</th>
+            <tr className="border-b border-gray-100">
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Số điện thoại</th>
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Trạng thái</th>
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Thời gian</th>
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Delay</th>
+              <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Lỗi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {messages.map((m) => (
-              <tr key={m.seq} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2 text-gray-400">{m.seq}</td>
-                <td className="px-4 py-2 font-mono font-medium">{m.recipient}</td>
-                <td className="px-4 py-2">
+              <tr key={m.seq} className="hover:bg-gray-50/60 transition-colors">
+                <td className="py-3 pr-4 text-gray-400">{m.seq}</td>
+                <td className="py-3 pr-4 font-mono font-medium text-gray-900">{m.recipient}</td>
+                <td className="py-3 pr-4">
                   <span className="flex items-center gap-1.5">
                     {STATUS_ICON[m.status] ?? STATUS_ICON.pending}
-                    <span>{STATUS_LABEL[m.status] ?? m.status}</span>
+                    <span className="text-gray-700">{STATUS_LABEL[m.status] ?? m.status}</span>
                   </span>
                 </td>
-                <td className="px-4 py-2 text-gray-500">{fmtTime(m.sent_at)}</td>
-                <td className="px-4 py-2 text-gray-500">{fmtDelay(m.delay_ms)}</td>
-                <td className="px-4 py-2 text-red-500 text-xs">
-                  {m.error_message
-                    ? <span title={m.error_message}>{m.error_code || 'ERR'}: {m.error_message.slice(0, 60)}{m.error_message.length > 60 ? '…' : ''}</span>
-                    : null}
+                <td className="py-3 pr-4 text-gray-500">{fmtTime(m.sent_at)}</td>
+                <td className="py-3 pr-4 text-gray-500">{fmtDelay(m.delay_ms)}</td>
+                <td className="py-3 text-red-500 text-xs">
+                  {m.error_message && (
+                    <span title={m.error_message}>
+                      {m.error_code || 'ERR'}: {m.error_message.slice(0, 60)}{m.error_message.length > 60 ? '…' : ''}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -110,23 +103,22 @@ function RunLog({ run, messages }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DiagnosticPage() {
-  const [zaloAccounts, setZaloAccounts]   = useState([]);
-  const [channel, setChannel]             = useState('zalo_personal');
-  const [accountId, setAccountId]         = useState('');
-  const [messageText, setMessageText]     = useState('');
-  const [recipientsRaw, setRecipientsRaw] = useState('');
-  const [delaySeconds, setDelaySeconds]   = useState(10);
-  const [submitting, setSubmitting]       = useState(false);
-  const [formError, setFormError]         = useState('');
+  const [zaloAccounts, setZaloAccounts]     = useState([]);
+  const [channel, setChannel]               = useState('zalo_personal');
+  const [accountId, setAccountId]           = useState('');
+  const [messageText, setMessageText]       = useState('');
+  const [recipientsRaw, setRecipientsRaw]   = useState('');
+  const [delaySeconds, setDelaySeconds]     = useState(10);
+  const [submitting, setSubmitting]         = useState(false);
+  const [formError, setFormError]           = useState('');
 
-  const [recentRuns, setRecentRuns]       = useState([]);
-  const [activeRunId, setActiveRunId]     = useState(null);
-  const [activeRun, setActiveRun]         = useState(null);
+  const [recentRuns, setRecentRuns]         = useState([]);
+  const [activeRunId, setActiveRunId]       = useState(null);
+  const [activeRun, setActiveRun]           = useState(null);
   const [activeMessages, setActiveMessages] = useState([]);
 
   const pollRef = useRef(null);
 
-  // Load Zalo accounts + recent runs on mount
   useEffect(() => {
     zaloSettingsApiService.listAccounts()
       .then((res) => {
@@ -141,7 +133,6 @@ export default function DiagnosticPage() {
       .catch(() => {});
   }, []);
 
-  // Polling while run is active
   const fetchActiveRun = useCallback(async (runId) => {
     try {
       const res = await diagnosticApiService.getRun(runId);
@@ -172,15 +163,10 @@ export default function DiagnosticPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
-    const recipients = recipientsRaw
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
+    const recipients = recipientsRaw.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!messageText.trim()) return setFormError('Vui lòng nhập nội dung tin nhắn');
     if (recipients.length === 0) return setFormError('Vui lòng nhập ít nhất 1 số điện thoại');
     if (recipients.length > 20) return setFormError('Tối đa 20 số điện thoại mỗi lần test');
-
     try {
       setSubmitting(true);
       const res = await diagnosticApiService.createRun({
@@ -201,7 +187,7 @@ export default function DiagnosticPage() {
     }
   };
 
-  const handleSelectRun = async (runId) => {
+  const handleSelectRun = (runId) => {
     clearInterval(pollRef.current);
     pollRef.current = null;
     setActiveRunId(runId);
@@ -209,51 +195,42 @@ export default function DiagnosticPage() {
 
   const needsAccount = channel === 'zalo_personal' || channel === 'zalo_group';
 
+  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <HiOutlineBeaker className="w-6 h-6 text-orange-500" />
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">Kiểm tra hiệu năng gửi tin</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Gửi thực tế với số lượng nhỏ — quan sát timing, delay và lỗi từng tin</p>
+          <h1 className="text-2xl font-bold text-gray-900">Kiểm tra hiệu năng gửi tin</h1>
+          <p className="mt-1 text-sm text-gray-500">Gửi thực tế với số lượng nhỏ — quan sát timing, delay và lỗi từng tin</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
         {/* Form */}
-        <form onSubmit={handleSubmit} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4 h-fit">
+        <form onSubmit={handleSubmit} className="lg:col-span-2 card p-5 space-y-4">
           <h2 className="font-semibold text-gray-700">Cấu hình test</h2>
 
-          {/* Channel */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Kênh gửi</label>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-            >
+            <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
               <option value="zalo_personal">Zalo Cá nhân</option>
               <option value="zalo_group" disabled>Zalo Nhóm (sắp ra mắt)</option>
               <option value="email" disabled>Email (sắp ra mắt)</option>
             </select>
           </div>
 
-          {/* Zalo account */}
           {needsAccount && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Tài khoản Zalo</label>
               {zaloAccounts.length === 0 ? (
                 <p className="text-xs text-red-500">Không tìm thấy tài khoản Zalo nào đang kết nối</p>
               ) : (
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
+                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputCls}>
                   {zaloAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.displayName} {a.status !== 'connected' ? '(chưa kết nối)' : ''}
+                      {a.displayName}{a.status !== 'connected' ? ' (chưa kết nối)' : ''}
                     </option>
                   ))}
                 </select>
@@ -261,24 +238,22 @@ export default function DiagnosticPage() {
             </div>
           )}
 
-          {/* Recipients */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              Số điện thoại <span className="text-gray-400">(mỗi số 1 dòng, tối đa 20)</span>
+              Số điện thoại <span className="text-gray-400 font-normal">(mỗi số 1 dòng, tối đa 20)</span>
             </label>
             <textarea
               value={recipientsRaw}
               onChange={(e) => setRecipientsRaw(e.target.value)}
               rows={5}
               placeholder={'0901234567\n0907654321\n0912345678'}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
             <p className="text-xs text-gray-400 mt-0.5">
               {recipientsRaw.split('\n').filter((s) => s.trim()).length} số
             </p>
           </div>
 
-          {/* Message */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nội dung tin nhắn</label>
             <textarea
@@ -286,22 +261,21 @@ export default function DiagnosticPage() {
               onChange={(e) => setMessageText(e.target.value)}
               rows={4}
               placeholder="Xin chào! Đây là tin nhắn test từ hệ thống..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
           </div>
 
-          {/* Delay */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              Delay giữa tin: <span className="font-semibold text-orange-600">{delaySeconds}s</span>
-              <span className="text-gray-400 ml-1">(production: 20–50s)</span>
+              Delay giữa tin:{' '}
+              <span className="font-semibold text-primary-600">{delaySeconds}s</span>
+              <span className="text-gray-400 font-normal ml-1">(production: 20–50s)</span>
             </label>
             <input
-              type="range"
-              min={1} max={60} step={1}
+              type="range" min={1} max={60} step={1}
               value={delaySeconds}
               onChange={(e) => setDelaySeconds(Number(e.target.value))}
-              className="w-full accent-orange-500"
+              className="w-full accent-primary-500"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-0.5">
               <span>1s (nhanh)</span>
@@ -311,18 +285,14 @@ export default function DiagnosticPage() {
 
           {formError && (
             <p className="text-sm text-red-500 flex items-center gap-1">
-              <HiOutlineX className="w-4 h-4" /> {formError}
+              <HiOutlineX className="w-4 h-4 shrink-0" /> {formError}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-          >
+          <button type="submit" disabled={submitting} className="btn btn-primary w-full justify-center">
             {submitting
-              ? <><HiOutlineRefresh className="w-4 h-4 animate-spin" /> Đang khởi tạo...</>
-              : <><HiOutlineLightningBolt className="w-4 h-4" /> Chạy test</>}
+              ? <><HiOutlineRefresh className="mr-2 w-4 h-4 animate-spin" /> Đang khởi tạo...</>
+              : <><HiOutlineLightningBolt className="mr-2 w-4 h-4" /> Chạy test</>}
           </button>
         </form>
 
@@ -330,20 +300,20 @@ export default function DiagnosticPage() {
         <div className="lg:col-span-3 space-y-4">
           {/* Active run */}
           {activeRun && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-gray-900">
                     Run #{activeRun.id} — {CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel}
                   </span>
                   {activeRun.status === 'running' && (
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full animate-pulse">Đang chạy</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 animate-pulse">Đang chạy</span>
                   )}
                   {activeRun.status === 'completed' && (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Hoàn tất</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Hoàn tất</span>
                   )}
                   {activeRun.status === 'failed' && (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Thất bại</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Thất bại</span>
                   )}
                 </div>
                 <span className="text-xs text-gray-400">{fmtTime(activeRun.created_at)}</span>
@@ -354,7 +324,7 @@ export default function DiagnosticPage() {
 
           {/* Empty state */}
           {!activeRun && recentRuns.length === 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 flex flex-col items-center justify-center text-center gap-3 h-64">
+            <div className="card p-10 flex flex-col items-center justify-center text-center gap-3 min-h-[16rem]">
               <HiOutlineBeaker className="w-10 h-10 text-gray-200" />
               <p className="text-gray-400 text-sm">Kết quả test sẽ hiển thị ở đây</p>
               <p className="text-gray-300 text-xs">Nhập số điện thoại, tin nhắn rồi bấm "Chạy test"</p>
@@ -363,29 +333,31 @@ export default function DiagnosticPage() {
 
           {/* Recent runs */}
           {recentRuns.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="card p-5">
               <h2 className="font-semibold text-gray-700 mb-3">Các lần test gần đây</h2>
-              <div className="space-y-2">
+              <div className="divide-y divide-gray-50">
                 {recentRuns.map((r) => (
                   <button
                     key={r.id}
                     onClick={() => handleSelectRun(r.id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-colors ${
-                      activeRunId === r.id
-                        ? 'border-orange-200 bg-orange-50'
-                        : 'border-gray-100 hover:bg-gray-50'
+                    className={`w-full text-left px-3 py-3 rounded-lg text-sm transition-colors ${
+                      activeRunId === r.id ? 'bg-primary-50' : 'hover:bg-gray-50/60'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-700">
+                      <span className="font-medium text-gray-900">
                         #{r.id} — {CHANNEL_LABELS[r.channel] ?? r.channel}
-                        {r.account_display_name && <span className="text-gray-400 font-normal ml-1">({r.account_display_name})</span>}
+                        {r.account_display_name && (
+                          <span className="text-gray-400 font-normal ml-1">({r.account_display_name})</span>
+                        )}
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                         r.status === 'completed' ? 'bg-green-100 text-green-700'
                         : r.status === 'failed'  ? 'bg-red-100 text-red-700'
                         : 'bg-yellow-100 text-yellow-700'
-                      }`}>{r.status === 'completed' ? 'Hoàn tất' : r.status === 'failed' ? 'Thất bại' : 'Đang chạy'}</span>
+                      }`}>
+                        {r.status === 'completed' ? 'Hoàn tất' : r.status === 'failed' ? 'Thất bại' : 'Đang chạy'}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-400 mt-1 flex gap-3">
                       <span>{r.sent_count}/{r.total_count} đã gửi</span>
