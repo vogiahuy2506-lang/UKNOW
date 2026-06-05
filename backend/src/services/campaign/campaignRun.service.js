@@ -4594,7 +4594,7 @@ class CampaignRunService {
                     zaloMessageId: null,
                     phone: recipient,
                     message,
-                    status: 'success',
+                    status: 'skipped',
                     skipReason: 'zalo_unreachable_cached',
                     skipDetail: 'SĐT đã đánh dấu không gửi được Zalo — bỏ qua, không tốn slot gửi.',
                     messageText: progressMessage,
@@ -4893,7 +4893,7 @@ class CampaignRunService {
                   zaloMessageId,
                   phone: recipientType === 'phone' ? recipient : null,
                   message,
-                  status: 'success',
+                  status: 'skipped',
                   skipReason: 'zalo_sender_blocked',
                   skipDetail: String(error?.message || '').trim()
                     || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
@@ -4952,7 +4952,7 @@ class CampaignRunService {
                   zaloMessageId,
                   phone: recipient,
                   message,
-                  status: 'success',
+                  status: 'skipped',
                   skipReason: 'zalo_unreachable',
                   skipDetail: String(error?.message || '').trim()
                     || 'SĐT không hợp lệ hoặc không tìm thấy trên Zalo — đã ghi nhận, không tốn slot gửi.',
@@ -5840,7 +5840,7 @@ class CampaignRunService {
                 accountName: account.displayName,
                 phone,
                 requestMessage: message,
-                status: 'success',
+                status: 'skipped',
                 contentMode,
                 skipReason: 'zalo_unreachable_cached',
                 skipDetail: 'SĐT đã đánh dấu không gửi được Zalo — bỏ qua lời mời kết bạn, không tốn slot.',
@@ -5984,7 +5984,7 @@ class CampaignRunService {
                   accountName: workingAccount.displayName,
                   phone,
                   requestMessage: message,
-                  status: 'success',
+                  status: 'skipped',
                   contentMode,
                   skipReason: 'zalo_unreachable',
                   skipDetail: String(error?.message || '').trim()
@@ -6126,7 +6126,7 @@ class CampaignRunService {
                   accountName: workingAccount.displayName,
                   phone,
                   requestMessage: message,
-                  status: 'success',
+                  status: 'skipped',
                   contentMode,
                   skipReason: 'zalo_sender_blocked',
                   skipDetail: String(error?.message || '').trim()
@@ -6540,7 +6540,7 @@ class CampaignRunService {
                   groupName,
                   zaloMessageId,
                   message,
-                  status: 'success',
+                  status: 'skipped',
                   skipReason: 'zalo_group_unreachable',
                   skipDetail: String(error?.message || '').trim()
                     || 'Nhóm không còn tồn tại hoặc tài khoản không còn trong nhóm.',

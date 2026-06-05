@@ -2203,7 +2203,7 @@ class ZaloSettingsController {
             items.push({
               recipient,
               recipientType,
-              status: 'success',
+              status: 'skipped',
               skipReason: 'zalo_sender_blocked',
               skipDetail: error?.message || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
               attachments: templateAttachments,
