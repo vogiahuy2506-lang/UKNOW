@@ -6,6 +6,7 @@ import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import {
+  isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from '../../utils/zaloPhoneCampaign.util.js';
@@ -1293,6 +1294,7 @@ class CampaignRunService {
           }
           current.policyFingerprint = policyFingerprint;
           if (nowMs - current.windowStartMs >= windowMs) {
+            this.zaloOutboundRateLimitState.delete(stateKey);
             current.windowStartMs = nowMs;
             current.successCount = 0;
           }
@@ -1351,6 +1353,7 @@ class CampaignRunService {
         const policy = resolveZaloOutboundPolicy(safeChannel, zaloAccountPolicyHint);
         const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
         if (nowMs - current.windowStartMs >= windowMs) {
+          this.zaloOutboundRateLimitState.delete(stateKey);
           current.windowStartMs = nowMs;
           current.successCount = 0;
         }
@@ -6114,6 +6117,51 @@ class CampaignRunService {
                     executionData: buildSendZaloFriendExecutionData(failedPayload),
                   });
                 }
+              } else if (isZaloSenderBlockedError(error)) {
+                successfulSends += 1;
+                const progressMessage = `Đã xử lý ${successfulSends + failedSends}/${totalRecipients}`;
+                const senderBlockedPayload = {
+                  channel: 'zalo_friend_request',
+                  accountId: workingAccount.id,
+                  accountName: workingAccount.displayName,
+                  phone,
+                  requestMessage: message,
+                  status: 'success',
+                  contentMode,
+                  skipReason: 'zalo_sender_blocked',
+                  skipDetail: String(error?.message || '').trim()
+                    || 'Người nhận chặn lời mời kết bạn từ tài khoản gửi hiện tại.',
+                  customerId: Number.parseInt(customerId, 10) || null,
+                  zaloMessageId,
+                  trackingToken,
+                  messageText: progressMessage,
+                };
+                sendResults.push(senderBlockedPayload);
+                // eslint-disable-next-line no-await-in-loop
+                await campaignExecutionLogService.logExecutionNode({
+                  campaignId,
+                  runId,
+                  node,
+                  status: 'success',
+                  progressCurrent: successfulSends + failedSends,
+                  progressTotal: totalRecipients,
+                  executionData: buildSendZaloFriendExecutionData(senderBlockedPayload),
+                });
+                if (isContinuousMode) {
+                  const completedAtIso = toHoChiMinhIso();
+                  // eslint-disable-next-line no-await-in-loop
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_friend_request',
+                    recipientKey: phone,
+                    completedStep: 1,
+                    totalSteps: 1,
+                    firstSentAt: progress?.firstSentAt || completedAtIso,
+                    lastCompletedAt: completedAtIso,
+                    nextDueAt: null,
+                    removeZaloFailureFromMeta: true,
+                  });
+                }
               } else {
                 if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
                   // eslint-disable-next-line no-await-in-loop
@@ -6477,6 +6525,62 @@ class CampaignRunService {
               const totalGroupSteps = zaloGroupTemplateStepsForLimit.length > 0
                 ? zaloGroupTemplateStepsForLimit.length
                 : 1;
+              if (isZaloGroupUnreachableError(error)) {
+                successfulSends += 1;
+                const progressMessage = `Đã gửi ${successfulSends + failedSends}/${totalRecipients}`;
+                const sentAt = toHoChiMinhIso();
+                const senderName = resolveZaloSenderName(account);
+                const skipPayload = {
+                  channel: 'zalo_group',
+                  accountId: account.id,
+                  accountName: account.displayName,
+                  senderName,
+                  zaloName: senderName,
+                  groupId,
+                  groupName,
+                  zaloMessageId,
+                  message,
+                  status: 'success',
+                  skipReason: 'zalo_group_unreachable',
+                  skipDetail: String(error?.message || '').trim()
+                    || 'Nhóm không còn tồn tại hoặc tài khoản không còn trong nhóm.',
+                  messageText: progressMessage,
+                  sentAt,
+                  templateId: stepMeta?.templateId || null,
+                  stepIndex: stepMeta?.stepIndex || null,
+                  attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+                  trackingToken,
+                  variables,
+                  attachments: attachmentList,
+                };
+                sendResults.push(skipPayload);
+                // eslint-disable-next-line no-await-in-loop
+                await campaignExecutionLogService.logExecutionNode({
+                  campaignId,
+                  runId,
+                  node,
+                  status: 'success',
+                  progressCurrent: successfulSends + failedSends,
+                  progressTotal: totalRecipients,
+                  executionData: buildSendZaloGroupExecutionData(skipPayload),
+                });
+                if (isContinuousMode) {
+                  const completedAtIso = toHoChiMinhIso();
+                  // eslint-disable-next-line no-await-in-loop
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_group',
+                    recipientKey: groupId,
+                    completedStep: totalGroupSteps,
+                    totalSteps: totalGroupSteps,
+                    firstSentAt: completedAtIso,
+                    lastCompletedAt: completedAtIso,
+                    nextDueAt: null,
+                    removeZaloFailureFromMeta: true,
+                  });
+                }
+                return { success: true, skippedGroupUnreachable: true };
+              }
               if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
                 // eslint-disable-next-line no-await-in-loop
                 const zp = await getRecipientProgress({

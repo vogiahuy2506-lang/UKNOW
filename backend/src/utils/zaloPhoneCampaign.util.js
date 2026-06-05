@@ -119,6 +119,17 @@ export function isZaloSenderBlockedError(error) {
   return probe.includes('không thể nhận tin nhắn từ bạn');
 }
 
+export function isZaloGroupUnreachableError(error) {
+  const probe = buildZaloRecipientErrorProbe(error);
+  if (!probe) return false;
+  if (probe.includes('không tìm thấy nhóm') && probe.includes('tài khoản')) return true;
+  if (probe.includes('nhóm không tồn tại')) return true;
+  if ((probe.includes('không thể gửi') || probe.includes('không thể nhận')) && probe.includes('nhóm')) return true;
+  if (probe.includes('không còn là thành viên') && probe.includes('nhóm')) return true;
+  if (probe.includes('bị xóa khỏi nhóm') || probe.includes('đã rời nhóm')) return true;
+  return false;
+}
+
 /**
  * Suy ra mã reason ngắn (tối đa 50 ký tự cột `reason`) để lưu DB từ message lỗi.
  *
