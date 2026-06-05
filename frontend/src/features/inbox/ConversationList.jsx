@@ -26,20 +26,23 @@ const getDisplayName = (conv) => {
 const getMessageSource = (conv) => {
   const visitorInfo = conv.visitor_info || {};
   
+  // If it's a group message, always show group info (don't duplicate with channel badge)
   if (visitorInfo.is_group) {
     return {
       type: 'group',
       icon: '👥',
       label: visitorInfo.group_name || 'Nhóm Zalo',
+      isGroup: true,
     };
   }
   
-  // Check channel type
+  // For personal messages within zalo_personal channel
   if (conv.channel === 'zalo_personal') {
     return {
       type: 'personal',
       icon: '👤',
-      label: visitorInfo.sender_name || 'Zalo cá nhân',
+      label: visitorInfo.sender_name || conv.visitorName || 'Zalo cá nhân',
+      isGroup: false,
     };
   }
   
@@ -144,7 +147,8 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                       <span className={`text-xs px-1.5 py-0.5 rounded ${channel.color} text-white`}>
                         {channel.icon} {channel.label}
                       </span>
-                      {messageSource && (
+                      {/* Only show source badge if it's different from channel (e.g., group name for personal channel) */}
+                      {messageSource && !messageSource.isGroup && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                           {messageSource.icon} {messageSource.label}
                         </span>

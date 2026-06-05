@@ -17,6 +17,14 @@ export default function PublicChatbotPage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Generate session ID for this browser
+  const sessionId = useRef(localStorage.getItem(`uknow_session_${chatbotId}`) || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Save session ID
+  useEffect(() => {
+    localStorage.setItem(`uknow_session_${chatbotId}`, sessionId.current);
+  }, [chatbotId]);
+
   // Widget settings
   const primaryColor = chatbot?.primary_color || chatbot?.theme_color || '#6366f1';
   const backgroundColor = chatbot?.background_color || '#ffffff';
@@ -29,6 +37,26 @@ export default function PublicChatbotPage() {
   useEffect(() => {
     loadChatbot();
   }, [chatbotId]);
+
+  // Load messages from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`uknow_msgs_${chatbotId}_${sessionId.current}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      } catch (e) {}
+    }
+  }, [chatbotId, sessionId.current]);
+
+  // Save messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(`uknow_msgs_${chatbotId}_${sessionId.current}`, JSON.stringify(messages));
+    }
+  }, [messages, chatbotId, sessionId.current]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,6 +92,7 @@ export default function PublicChatbotPage() {
       const res = await api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/chat`, {
         message: text,
         history: messages.slice(-10),
+        sessionId: sessionId.current,
       });
 
       if (res.data.success && res.data.data) {

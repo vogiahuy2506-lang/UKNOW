@@ -619,6 +619,12 @@ class ZaloSettingsController {
     if (account?.id) {
       addPendingAccount(account.id);
       zaloPersonalInboxService.invalidateAccountCache();
+      // Trigger immediate refresh of listeners
+      setTimeout(() => {
+        zaloPersonalInboxService.refreshListeners(true).catch(err => {
+          console.warn('[ZaloSettings] Failed to refresh inbox listeners:', err.message);
+        });
+      }, 100);
     }
   }
 
@@ -1834,6 +1840,12 @@ class ZaloSettingsController {
         // Notify inbox service to register listener for this account
         addPendingAccount(accountId);
         zaloPersonalInboxService.invalidateAccountCache();
+        // Trigger immediate refresh of listeners
+        setTimeout(() => {
+          zaloPersonalInboxService.refreshListeners(true).catch(err => {
+            console.warn('[ZaloSettings] Failed to refresh inbox listeners:', err.message);
+          });
+        }, 100);
 
         return res.json({
           success: true,

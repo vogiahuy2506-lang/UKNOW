@@ -5,6 +5,7 @@ import chatbotChannelRepository from '../repositories/ai/chatbotChannel.reposito
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
+import sseService from '../services/sse.service.js';
 import db from '../config/database.js';
 import uploadController from './upload.controller.js';
 
@@ -977,7 +978,7 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
-      const { message, history } = req.body;
+      const { message, history, sessionId } = req.body;
 
       if (!message?.trim()) {
         return res.status(400).json({ success: false, message: 'message is required' });
@@ -988,6 +989,62 @@ class ChatbotController {
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+      }
+
+      // Get or create widget config for this chatbot
+      let widgetConfigs = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
+      let widgetConfig = widgetConfigs.find(w => w.id_sub_assistant === chatbot.id_sub_assistant);
+      
+      // If no widget exists, create a default one for this chatbot
+      if (!widgetConfig) {
+        const widgetKey = `chatbot_${chatbot.id}_${Date.now()}`;
+        const newWidget = await chatbotRepository.createWidget(chatbot.id_user, {
+          id_sub_assistant: chatbot.id_sub_assistant,
+          widget_key: widgetKey,
+          display_name: chatbot.name || 'Web Chat',
+          theme_color: chatbot.primary_color || '#6366f1',
+          primary_color: chatbot.primary_color || '#6366f1',
+          welcome_message: chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+        });
+        widgetConfig = newWidget;
+      }
+
+      // Create or find conversation
+      const visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      let conversation;
+      
+      if (widgetConfig) {
+        // Find existing conversation by session
+        conversation = await chatbotRepository.getOrCreateWebChatConversation({
+          userId: chatbot.id_user,
+          widgetConfigId: widgetConfig.id,
+          sessionId: visitorSessionId,
+        });
+      }
+
+      // Save visitor message
+      if (conversation) {
+        await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+          role: 'visitor',
+          content: message,
+        });
+
+    // Broadcast SSE for real-time update
+    sseService.broadcast(String(chatbot.id_user), 'inbox:new_message', {
+      conversationId: conversation.id,
+      conversationType: 'webchat',
+      channel: 'web',
+      message: message,
+      senderName: 'Khách',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Broadcast unread count change
+    sseService.broadcast(String(chatbot.id_user), 'inbox:unread_change', {
+      conversationId: conversation.id,
+      conversationType: 'webchat',
+      change: 1,
+    });
       }
 
       // Use chatbot's system instruction or default
@@ -1031,16 +1088,100 @@ class ChatbotController {
 
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
 
+      // Save assistant response
+      if (conversation) {
+        await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+          role: 'assistant',
+          content: content,
+        });
+      }
+
       return res.json({
         success: true,
         data: {
           role: 'assistant',
           content: content,
           created_at: new Date().toISOString(),
+          sessionId: visitorSessionId,
         },
       });
     } catch (err) {
       console.error('[CustomChatbot] Chat by ID error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // Get messages for a session (for polling new agent replies)
+  async getChatMessages(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const { sessionId, lastMessageId } = req.query;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      if (!sessionId) {
+        return res.status(400).json({ success: false, message: 'sessionId is required' });
+      }
+
+      // Get chatbot
+      const chatbot = await chatbotRepository.findChatbotById(id);
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      // Get widget config
+      const widgetConfigs = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
+      const widgetConfig = widgetConfigs.find(w => w.id_sub_assistant === chatbot.id_sub_assistant);
+
+      if (!widgetConfig) {
+        return res.json({ success: true, data: { messages: [], sessionId } });
+      }
+
+      // Find conversation
+      const { rows: convRows } = await db.query(
+        `SELECT id FROM webchat_conversations
+         WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
+         ORDER BY created_at DESC LIMIT 1`,
+        [widgetConfig.id, sessionId]
+      );
+
+      if (!convRows[0]) {
+        return res.json({ success: true, data: { messages: [], sessionId } });
+      }
+
+      const conversationId = convRows[0].id;
+
+      // Get messages (only agent replies that are newer than lastMessageId)
+      let query = `SELECT id, role, content, created_at FROM webchat_messages
+                   WHERE id_conversation = $1 AND role = 'agent'`;
+      const params = [conversationId];
+
+      if (lastMessageId) {
+        query += ` AND id > $2`;
+        params.push(lastMessageId);
+      }
+
+      query += ` ORDER BY created_at ASC`;
+
+      const { rows } = await db.query(query, params);
+
+      return res.json({
+        success: true,
+        data: {
+          messages: rows.map(m => ({
+            id: m.id,
+            role: 'assistant',
+            content: m.content,
+            createdAt: m.created_at,
+          })),
+          sessionId,
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] Get messages error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

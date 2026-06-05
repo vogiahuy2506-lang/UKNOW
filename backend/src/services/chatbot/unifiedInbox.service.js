@@ -2,12 +2,15 @@ import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repositor
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
+import sseService from '../sse.service.js';
 
 class UnifiedInboxService {
   /**
    * Get all conversations with pagination and filters
    */
   async getConversations(userId, filters = {}) {
+    console.log('[UnifiedInboxService] getConversations called:', { userId, filters });
+
     const [conversations, total, unreadByChannel] = await Promise.all([
       unifiedInboxRepository.getConversations(userId, filters),
       unifiedInboxRepository.getConversationsCount(userId, filters),
@@ -186,6 +189,23 @@ class UnifiedInboxService {
       channelId,
       { role: 'agent', content: content.trim(), attachments }
     );
+
+    // Broadcast SSE for real-time update
+    sseService.broadcast(String(userId), 'inbox:new_message', {
+      conversationId: parseInt(conversationId),
+      conversationType,
+      channel: conversation.channel,
+      message: content.trim(),
+      senderName: 'Agent',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Broadcast unread count change
+    sseService.broadcast(String(userId), 'inbox:unread_change', {
+      conversationId: parseInt(conversationId),
+      conversationType,
+      change: -1,
+    });
 
     // Send via channel adapter
     try {

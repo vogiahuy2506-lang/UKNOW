@@ -1,11 +1,70 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import sseService from '../services/sse.service.js';
 import multer from 'multer';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// ── SSE Stream (parse JWT from query param for SSE compatibility) ───
+router.get('/inbox/stream', (req, res) => {
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering if present
+  
+  // Parse JWT token from query param (EventSource doesn't support headers)
+  const token = req.query.token;
+  if (!token) {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(401).json({ success: false, message: 'Unauthorized' });
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(401).json({ success: false, message: 'Invalid token' });
+    return;
+  }
+
+  // Token uses userIdentifier, nameidentifier (Microsoft), or userId depending on how it was created
+  // Microsoft-style tokens use URL-formatted keys
+  const userIdentifierClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
+  const userId = decoded.userId || decoded.userIdentifier || decoded.nameidentifier || decoded[userIdentifierClaim];
+  if (!userId) {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(401).json({ success: false, message: 'Invalid token - no userId' });
+    return;
+  }
+
+  // Send initial connection message
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', userId })}\n\n`);
+  
+  // Register client
+  sseService.addClient(userId, res);
+  
+  // Keep connection alive with heartbeat
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`: heartbeat\n\n`);
+    } catch (e) {
+      clearInterval(heartbeat);
+    }
+  }, 30000);
+  
+  // Cleanup on close
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseService.removeClient(userId, res);
+  });
+});
 
 router.use(authMiddleware);
 
