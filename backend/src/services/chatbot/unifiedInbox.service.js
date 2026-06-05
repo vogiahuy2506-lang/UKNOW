@@ -1,6 +1,7 @@
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
+import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 
 class UnifiedInboxService {
   /**
@@ -188,15 +189,19 @@ class UnifiedInboxService {
 
     // Send via channel adapter
     try {
-      if (conversationType === 'channel') {
-        const adapter = this._getChannelAdapter(conversation.channel);
-        if (adapter?.sendReply) {
-          await adapter.sendReply({
-            conversationId: conversation.external_id,
-            message: content.trim(),
-            attachments,
-          });
+      const adapter = this._getChannelAdapter(conversation.channel);
+      if (adapter?.sendReply) {
+        const params = {
+          conversationId: conversation.external_id,
+          message: content.trim(),
+          attachments,
+        };
+        
+        if (conversationType === 'channel') {
+          params.channelId = channelId;
         }
+        
+        await adapter.sendReply(params);
       }
     } catch (sendError) {
       console.warn('[UnifiedInbox] Failed to send via channel adapter:', sendError.message);
@@ -213,6 +218,7 @@ class UnifiedInboxService {
     const adapters = {
       zalo_oa: zaloOAAdapter,
       facebook: facebookAdapter,
+      zalo_personal: zaloPersonalAdapter,
     };
     return adapters[channel];
   }

@@ -1,11 +1,14 @@
 import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
 import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import db from '../config/database.js';
 import uploadController from './upload.controller.js';
+
+const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
 class ChatbotController {
   // ── Knowledge Base ─────────────────────────────────────────────
@@ -190,10 +193,12 @@ class ChatbotController {
 
   async deleteDocument(req, res) {
     try {
+      console.log('[Chatbot] Delete document:', req.params.docId, req.user.id);
       const deleted = await knowledgeBaseService.deleteDocument(parseInt(req.params.docId), req.user.id);
       if (!deleted) return res.status(404).json({ success: false, message: 'Document not found' });
       return res.json({ success: true, message: 'Document deleted' });
     } catch (err) {
+      console.error('[Chatbot] Delete document error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -344,19 +349,35 @@ class ChatbotController {
 
       const access_token = data.access_token;
 
+      // Generate unique webhook token
+      const crypto = await import('crypto');
+      const webhookToken = crypto.randomBytes(32).toString('hex');
+      const verifyToken = crypto.randomBytes(16).toString('hex');
+
       const channel = await chatbotRepository.upsertChannel(req.user.id, 'zalo_oa', {
         display_name: display_name || 'Zalo OA',
         credentials: { 
           zalo_app_id, 
           zalo_app_secret,
           access_token, 
+          verify_token: verifyToken,
           token_expires_at: data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : null,
           connected_at: new Date().toISOString() 
         },
-        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/zalo-oa`,
+        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/zalo-oa/${webhookToken}`,
+        webhook_token: webhookToken,
       });
 
-      return res.json({ success: true, data: { id: channel.id, display_name: channel.display_name }, message: 'Zalo OA đã được kết nối' });
+      return res.json({ 
+        success: true, 
+        data: { 
+          id: channel.id, 
+          display_name: channel.display_name,
+          webhook_url: channel.webhook_url,
+          verify_token: verifyToken,
+        }, 
+        message: 'Zalo OA đã được kết nối' 
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -367,13 +388,33 @@ class ChatbotController {
       const { page_access_token, page_id, page_name } = req.body;
       if (!page_access_token) return res.status(400).json({ success: false, message: 'Page access token required' });
 
+      // Generate unique webhook token
+      const crypto = await import('crypto');
+      const webhookToken = crypto.randomBytes(32).toString('hex');
+      const verifyToken = crypto.randomBytes(16).toString('hex');
+
       const channel = await chatbotRepository.upsertChannel(req.user.id, 'facebook', {
         display_name: page_name || page_id || 'Facebook Page',
-        credentials: { page_access_token, page_id, connected_at: new Date().toISOString() },
-        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/facebook`,
+        credentials: { 
+          page_access_token, 
+          page_id, 
+          verify_token: verifyToken,
+          connected_at: new Date().toISOString() 
+        },
+        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/facebook/${webhookToken}`,
+        webhook_token: webhookToken,
       });
 
-      return res.json({ success: true, data: channel, message: 'Facebook Page connected' });
+      return res.json({ 
+        success: true, 
+        data: {
+          id: channel.id,
+          display_name: channel.display_name,
+          webhook_url: channel.webhook_url,
+          verify_token: verifyToken,
+        },
+        message: 'Facebook Page đã được kết nối' 
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -383,6 +424,104 @@ class ChatbotController {
     try {
       await chatbotRepository.deactivateChannel(req.user.id, req.params.channel);
       return res.json({ success: true, message: `Channel ${req.params.channel} disconnected` });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── Test Connection ────────────────────────────────────────────
+
+  async testZaloOAConnection(req, res) {
+    try {
+      const { zalo_app_id, zalo_app_secret } = req.body;
+      if (!zalo_app_id || !zalo_app_secret) {
+        return res.status(400).json({ success: false, message: 'App ID và App Secret là bắt buộc' });
+      }
+
+      // Gọi Zalo API để lấy Access Token
+      const response = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Client-Id': zalo_app_id,
+          'Client-Secret': zalo_app_secret,
+        },
+        body: 'grant_type=app_credentials',
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(400).json({
+          success: false,
+          message: `Lỗi Zalo: ${data.message || data.error_description || 'Không thể kết nối'}`,
+          error_code: data.error,
+        });
+      }
+
+      // Lấy thông tin OA Profile
+      let oaInfo = {};
+      try {
+        const profileResponse = await fetch(`${ZALO_OA_API_BASE}/oa/getprofile`, {
+          method: 'GET',
+          headers: { access_token: data.access_token },
+        });
+        oaInfo = await profileResponse.json();
+      } catch (e) {
+        console.warn('[ZaloOA] Could not fetch profile:', e.message);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Kết nối Zalo OA thành công!',
+        data: {
+          oa_name: oaInfo?.name || 'Zalo OA',
+          oa_id: oaInfo?.oa_id || zalo_app_id,
+          is_verified: oaInfo?.is_verified || false,
+        },
+      });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async testFacebookConnection(req, res) {
+    try {
+      const { page_access_token, page_id } = req.body;
+      if (!page_access_token) {
+        return res.status(400).json({ success: false, message: 'Page Access Token là bắt buộc' });
+      }
+
+      // Verify token bằng cách gọi Facebook Graph API
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/me?access_token=${page_access_token}`
+      );
+      const data = await response.json();
+
+      if (data.error) {
+        return res.status(400).json({
+          success: false,
+          message: `Lỗi Facebook: ${data.error?.message || 'Token không hợp lệ'}`,
+          error_code: data.error?.type,
+        });
+      }
+
+      // Kiểm tra page_id nếu được cung cấp
+      if (page_id && data.id !== page_id) {
+        return res.status(400).json({
+          success: false,
+          message: `Page ID không khớp. Token thuộc về Page ID: ${data.id}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Kết nối Facebook thành công!',
+        data: {
+          page_name: data.name,
+          page_id: data.id,
+        },
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -902,6 +1041,199 @@ class ChatbotController {
       });
     } catch (err) {
       console.error('[CustomChatbot] Chat by ID error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── Chatbot Channel Connections ─────────────────────────────────
+
+  /**
+   * Get all channel connections for a chatbot
+   * GET /ai/chatbot/custom-chatbots/:chatbotId/channels
+   */
+  async getChatbotChannels(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // Verify chatbot belongs to user
+      const chatbot = await chatbotRepository.findChatbotById(id);
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const channels = await chatbotChannelRepository.findByChatbotId(id);
+
+      // Strip sensitive credentials
+      const sanitized = channels.map(ch => ({
+        id: ch.id,
+        channel_type: ch.channel_type,
+        display_name: ch.display_name,
+        external_channel_id: ch.external_channel_id,
+        is_active: ch.is_active,
+        webhook_url: ch.webhook_url,
+        connected_at: ch.connected_at,
+        last_activity_at: ch.last_activity_at,
+      }));
+
+      return res.json({ success: true, data: sanitized });
+    } catch (err) {
+      console.error('[ChatbotChannel] Get channels error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Connect Zalo OA to chatbot
+   * POST /ai/chatbot/custom-chatbots/:chatbotId/channels/zalo-oa
+   */
+  async connectChatbotZaloOA(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const { zalo_app_id, zalo_app_secret, display_name } = req.body;
+      if (!zalo_app_id || !zalo_app_secret) {
+        return res.status(400).json({ success: false, message: 'App ID và App Secret là bắt buộc' });
+      }
+
+      // Get access token from Zalo
+      const response = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Client-Id': zalo_app_id,
+          'Client-Secret': zalo_app_secret,
+        },
+        body: 'grant_type=app_credentials',
+      });
+
+      const data = await response.json();
+      
+      console.log('[Zalo OA] Token response:', JSON.stringify(data));
+
+      if (data.error || !data.access_token) {
+        return res.status(400).json({
+          success: false,
+          message: `Lỗi kết nối Zalo: ${data.message || data.error_description || 'App ID hoặc App Secret không đúng. Vui lòng kiểm tra lại trên Zalo Developer Console.'}`,
+        });
+      }
+
+      // Generate unique webhook token
+      const crypto = await import('crypto');
+      const webhookToken = crypto.randomBytes(32).toString('hex');
+      const verifyToken = crypto.randomBytes(16).toString('hex');
+
+      // Save channel connection
+      const channel = await chatbotChannelRepository.upsertChannel(id, 'zalo_oa', {
+        display_name: display_name || 'Zalo OA',
+        external_channel_id: zalo_app_id,
+        credentials: {
+          zalo_app_id,
+          zalo_app_secret,
+          access_token: data.access_token,
+          verify_token: verifyToken,
+          token_expires_at: data.expires_in
+            ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+            : null,
+        },
+        webhook_token: webhookToken,
+        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/chatbot/zalo-oa/${webhookToken}`,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          id: channel.id,
+          display_name: channel.display_name,
+          webhook_url: channel.webhook_url,
+          verify_token: verifyToken,
+        },
+        message: 'Zalo OA đã được kết nối với chatbot',
+      });
+    } catch (err) {
+      console.error('[ChatbotChannel] Connect Zalo error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Connect Facebook to chatbot
+   * POST /ai/chatbot/custom-chatbots/:chatbotId/channels/facebook
+   */
+  async connectChatbotFacebook(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId);
+
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const { page_access_token, page_id, page_name } = req.body;
+      if (!page_access_token || !page_id) {
+        return res.status(400).json({ success: false, message: 'Page Access Token và Page ID là bắt buộc' });
+      }
+
+      // Generate unique webhook token
+      const crypto = await import('crypto');
+      const webhookToken = crypto.randomBytes(32).toString('hex');
+      const verifyToken = crypto.randomBytes(16).toString('hex');
+
+      // Save channel connection
+      const channel = await chatbotChannelRepository.upsertChannel(id, 'facebook', {
+        display_name: page_name || `Page ${page_id}`,
+        external_channel_id: page_id,
+        credentials: {
+          page_access_token,
+          page_id,
+          verify_token: verifyToken,
+        },
+        webhook_token: webhookToken,
+        webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/chatbot/facebook/${webhookToken}`,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          id: channel.id,
+          display_name: channel.display_name,
+          webhook_url: channel.webhook_url,
+          verify_token: verifyToken,
+        },
+        message: 'Facebook Page đã được kết nối với chatbot',
+      });
+    } catch (err) {
+      console.error('[ChatbotChannel] Connect Facebook error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Disconnect channel from chatbot
+   * DELETE /ai/chatbot/custom-chatbots/:chatbotId/channels/:channelType
+   */
+  async disconnectChatbotChannel(req, res) {
+    try {
+      const { chatbotId, channelType } = req.params;
+
+      if (!['zalo_oa', 'facebook'].includes(channelType)) {
+        return res.status(400).json({ success: false, message: 'Invalid channel type' });
+      }
+
+      await chatbotChannelRepository.deactivateChannel(parseInt(chatbotId), channelType);
+
+      return res.json({ success: true, message: 'Channel đã được ngắt kết nối' });
+    } catch (err) {
+      console.error('[ChatbotChannel] Disconnect error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

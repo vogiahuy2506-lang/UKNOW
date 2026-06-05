@@ -39,7 +39,7 @@ class UnifiedInboxRepository {
     // Unified query for all conversations
     const query = `
       WITH all_conversations AS (
-        -- Channel conversations (Zalo OA, Facebook, Zalo Personal)
+        -- Channel conversations (Zalo OA, Facebook)
         SELECT
           cc.id,
           cc.id_user,
@@ -52,6 +52,7 @@ class UnifiedInboxRepository {
           'channel' as conversation_type,
           cc.id_channel,
           NULL::BIGINT as id_widget_config,
+          NULL::BIGINT as id_zalo_setting,
           ch.channel,
           ch.display_name as channel_display_name,
           ch.is_active as channel_is_active,
@@ -76,6 +77,44 @@ class UnifiedInboxRepository {
 
         UNION ALL
 
+        -- Zalo Personal conversations
+        SELECT
+          zp.id,
+          zp.id_user,
+          zp.external_id,
+          zp.visitor_name,
+          zp.visitor_info,
+          zp.started_at,
+          zp.last_message_at,
+          zp.status,
+          'zalo_personal' as conversation_type,
+          NULL::BIGINT as id_channel,
+          NULL::BIGINT as id_widget_config,
+          zp.id_zalo_setting,
+          'zalo_personal' as channel,
+          COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name,
+          CASE WHEN zs.status = 'connected' THEN true ELSE false END as channel_is_active,
+          (
+            SELECT content FROM zalo_personal_messages
+            WHERE id_conversation = zp.id
+            ORDER BY created_at DESC LIMIT 1
+          ) as last_message,
+          (
+            SELECT COUNT(*) FROM zalo_personal_messages
+            WHERE id_conversation = zp.id AND role = 'visitor' AND is_read = false
+          ) as unread_count,
+          (
+            SELECT created_at FROM zalo_personal_messages
+            WHERE id_conversation = zp.id
+            ORDER BY created_at DESC LIMIT 1
+          ) as last_message_at_override
+        FROM zalo_personal_conversations zp
+        LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
+        WHERE zp.id_user = $1 ${searchFilter}
+        ${status ? `AND zp.status = '${status}'` : ''}
+
+        UNION ALL
+
         -- Web chat conversations
         SELECT
           wc.id,
@@ -89,6 +128,7 @@ class UnifiedInboxRepository {
           'webchat' as conversation_type,
           NULL::BIGINT as id_channel,
           wc.id_widget_config,
+          NULL::BIGINT as id_zalo_setting,
           'web' as channel,
           ww.display_name as channel_display_name,
           ww.is_active as channel_is_active,
@@ -155,6 +195,11 @@ class UnifiedInboxRepository {
 
         UNION ALL
 
+        SELECT zp.id FROM zalo_personal_conversations zp
+        WHERE zp.id_user = $1 ${status ? `AND zp.status = '${status}'` : ''} ${searchFilter}
+
+        UNION ALL
+
         SELECT wc.id FROM webchat_conversations wc
         WHERE wc.id_user = $1 ${status ? `AND wc.status = '${status}'` : ''} ${searchFilter}
       ) as combined
@@ -174,6 +219,15 @@ class UnifiedInboxRepository {
          FROM channel_conversations cc
          JOIN channel_connections ch ON ch.id = cc.id_channel
          WHERE cc.id = $1 AND cc.id_user = $2`,
+        [conversationId, userId]
+      );
+      return rows[0] || null;
+    } else if (conversationType === 'zalo_personal') {
+      const { rows } = await db.query(
+        `SELECT zp.*, 'zalo_personal' as channel, COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name
+         FROM zalo_personal_conversations zp
+         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
+         WHERE zp.id = $1 AND zp.id_user = $2`,
         [conversationId, userId]
       );
       return rows[0] || null;
@@ -205,6 +259,15 @@ class UnifiedInboxRepository {
         params
       );
       return rows.reverse();
+    } else if (conversationType === 'zalo_personal') {
+      const { rows } = await db.query(
+        `SELECT * FROM zalo_personal_messages
+         WHERE id_conversation = $1 ${beforeFilter}
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        params
+      );
+      return rows.reverse();
     } else {
       const { rows } = await db.query(
         `SELECT * FROM webchat_messages
@@ -229,6 +292,12 @@ class UnifiedInboxRepository {
          WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
         [conversationId, now]
       );
+    } else if (conversationType === 'zalo_personal') {
+      await db.query(
+        `UPDATE zalo_personal_messages SET is_read = true, read_at = $2
+         WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
+        [conversationId, now]
+      );
     } else {
       await db.query(
         `UPDATE webchat_messages SET is_read = true, read_at = $2
@@ -249,6 +318,10 @@ class UnifiedInboxRepository {
           JOIN channel_conversations cc ON cc.id = cm.id_conversation
           WHERE cc.id_user = $1 AND cm.role = 'visitor' AND cm.is_read = false
         ) + (
+          SELECT COUNT(*) FROM zalo_personal_messages zpm
+          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+          WHERE zpc.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
+        ) + (
           SELECT COUNT(*) FROM webchat_messages wm
           JOIN webchat_conversations wc ON wc.id = wm.id_conversation
           WHERE wc.id_user = $1 AND wm.role = 'visitor' AND wm.is_read = false
@@ -268,6 +341,13 @@ class UnifiedInboxRepository {
           SELECT COUNT(*) FROM webchat_messages wm
           JOIN webchat_conversations wc ON wc.id = wm.id_conversation
           WHERE wc.id_user = $1 AND wm.role = 'visitor' AND wm.is_read = false
+        ) as unread
+      UNION ALL
+      SELECT
+        'zalo_personal' as channel, (
+          SELECT COUNT(*) FROM zalo_personal_messages zpm
+          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+          WHERE zpc.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
         ) as unread
       UNION ALL
       SELECT
@@ -297,6 +377,23 @@ class UnifiedInboxRepository {
       );
       await db.query(
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
+        [conversationId, now]
+      );
+    } else if (conversationType === 'zalo_personal') {
+      // Get zalo_setting_id from conversation
+      const { rows } = await db.query(
+        `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
+        [conversationId]
+      );
+      const zaloSettingId = rows[0]?.id_zalo_setting;
+      
+      await db.query(
+        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, is_read, read_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7)`,
+        [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), now]
+      );
+      await db.query(
+        `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
         [conversationId, now]
       );
     } else {
@@ -350,6 +447,7 @@ class UnifiedInboxRepository {
       searchFilter = `AND (
         cc.visitor_name ILIKE $${paramIndex} OR
         cw.visitor_name ILIKE $${paramIndex} OR
+        zp.visitor_name ILIKE $${paramIndex} OR
         cm.content ILIKE $${paramIndex}
       )`;
       params.push(`%${search}%`);
@@ -358,7 +456,7 @@ class UnifiedInboxRepository {
 
     const query = `
       WITH outbox_messages AS (
-        -- Channel messages (Zalo OA, Facebook, Zalo Personal) sent by agent
+        -- Channel messages (Zalo OA, Facebook) sent by agent
         SELECT
           cm.id,
           cm.id_user,
@@ -383,6 +481,35 @@ class UnifiedInboxRepository {
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
         WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+
+        UNION ALL
+
+        -- Zalo Personal messages sent by agent
+        SELECT
+          zpm.id,
+          zpm.id_user,
+          zpm.id_conversation,
+          zpc.visitor_name,
+          zpc.visitor_info,
+          zpc.external_id,
+          zpc.status as conversation_status,
+          'zalo_personal' as conversation_type,
+          'zalo_personal' as channel,
+          COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name,
+          zpm.content,
+          zpm.attachments,
+          zpm.created_at,
+          zpm.is_read,
+          zpm.read_at,
+          (
+            SELECT COUNT(*) FROM zalo_personal_messages
+            WHERE id_conversation = zpc.id AND role = 'visitor' AND is_read = false
+          ) as unread_count
+        FROM zalo_personal_messages zpm
+        JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+        LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateFilter} ${searchFilter}
+        ${channel === 'zalo_personal' ? channelFilter : ''}
 
         UNION ALL
 
@@ -454,6 +581,7 @@ class UnifiedInboxRepository {
       searchFilter = `AND (
         cc.visitor_name ILIKE $${paramIndex} OR
         cw.visitor_name ILIKE $${paramIndex} OR
+        zp.visitor_name ILIKE $${paramIndex} OR
         cm.content ILIKE $${paramIndex}
       )`;
       params.push(`%${search}%`);
@@ -466,6 +594,13 @@ class UnifiedInboxRepository {
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
         WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+
+        UNION ALL
+
+        SELECT zpm.id FROM zalo_personal_messages zpm
+        JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateFilter} ${searchFilter}
+        ${channel === 'zalo_personal' ? channelFilter : ''}
 
         UNION ALL
 
@@ -495,6 +630,19 @@ class UnifiedInboxRepository {
           SELECT COUNT(*) FROM webchat_messages wm
           JOIN webchat_conversations wc ON wc.id = wm.id_conversation
           WHERE wc.id_user = $1 AND wm.role = 'agent' AND wm.is_read = true
+        ) as total_read
+      UNION ALL
+      SELECT
+        'zalo_personal' as channel,
+        (
+          SELECT COUNT(*) FROM zalo_personal_messages zpm
+          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent'
+        ) as total_sent,
+        (
+          SELECT COUNT(*) FROM zalo_personal_messages zpm
+          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND zpm.is_read = true
         ) as total_read
       UNION ALL
       SELECT
@@ -535,6 +683,25 @@ class UnifiedInboxRepository {
        WHERE cm.id = $1 AND cm.id_user = $2 AND cm.role = 'agent'`,
       [messageId, userId]
     );
+
+    if (rows.length > 0) return rows[0];
+
+    // Try zalo_personal_messages
+    ({ rows } = await db.query(
+      `SELECT zpm.*, zpc.visitor_name, zpc.visitor_info, zpc.external_id, zpc.status as conversation_status,
+              'zalo_personal' as conversation_type, 'zalo_personal' as channel, 
+              COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name,
+              (
+                SELECT content FROM zalo_personal_messages
+                WHERE id_conversation = zpc.id AND role = 'visitor'
+                ORDER BY created_at DESC LIMIT 1
+              ) as last_reply
+       FROM zalo_personal_messages zpm
+       JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
+       LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
+       WHERE zpm.id = $1 AND zpm.id_user = $2 AND zpm.role = 'agent'`,
+      [messageId, userId]
+    ));
 
     if (rows.length > 0) return rows[0];
 

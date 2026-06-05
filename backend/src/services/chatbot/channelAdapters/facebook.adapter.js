@@ -1,26 +1,33 @@
 import axios from 'axios';
-import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
+import db from '../../../config/database.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 
 class FacebookAdapter {
   /**
    * Send a reply via Facebook Messenger Send API.
+   * Uses credentials from database based on channel ID.
    * @param {object} params
    * @param {string} params.externalId - Facebook PSID
    * @param {string} params.message - text reply
    * @param {number} params.userId
+   * @param {number} params.channelId - channel_connections.id
    */
-  async sendReply({ externalId, message, userId }) {
+  async sendReply({ externalId, message, userId, channelId }) {
     try {
-      const channel = await chatbotRepository.findChannelByType(userId, 'facebook');
-      const pageAccessToken = channel?.credentials?.page_access_token;
+      // Get credentials from database
+      let pageAccessToken;
+      if (channelId) {
+        const { rows } = await db.query(
+          `SELECT credentials->>'page_access_token' as page_access_token FROM channel_connections WHERE id = $1`,
+          [channelId]
+        );
+        pageAccessToken = rows[0]?.page_access_token;
+      }
 
       if (!pageAccessToken) {
         throw new Error('Facebook Page access token not configured');
       }
-
-      const pageId = channel?.credentials?.page_id;
 
       await axios.post(
         `${FB_GRAPH_BASE}/me/messages`,
@@ -48,9 +55,10 @@ class FacebookAdapter {
    * @param {string} mode
    * @param {string} token
    * @param {string} challenge
+   * @param {string} customVerifyToken - verify token from channel credentials
    */
-  verifyWebhook(mode, token, challenge) {
-    const verifyToken = process.env.FACEBOOK_VERIFY_TOKEN || 'uknow_fb_verify';
+  verifyWebhook(mode, token, challenge, customVerifyToken = null) {
+    const verifyToken = customVerifyToken || process.env.FACEBOOK_VERIFY_TOKEN || 'founderai';
     if (mode === 'subscribe' && token === verifyToken) {
       return { challenge };
     }

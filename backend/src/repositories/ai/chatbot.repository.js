@@ -59,20 +59,32 @@ class ChatbotRepository {
     return rows[0] || null;
   }
 
-  async upsertChannel(userId, channel, { display_name, credentials, webhook_url, settings }) {
+  async findChannelByWebhookToken(webhookToken) {
     const { rows } = await db.query(
-      `INSERT INTO channel_connections (id_user, channel, display_name, credentials, webhook_url, settings)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `SELECT cc.*, u.id AS user_id FROM channel_connections cc
+       JOIN users u ON u.id = cc.id_user
+       WHERE cc.webhook_token = $1 AND cc.is_active = true`,
+      [webhookToken]
+    );
+    return rows[0] || null;
+  }
+
+  async upsertChannel(userId, channel, { display_name, credentials, webhook_url, webhook_token, settings }) {
+    const { rows } = await db.query(
+      `INSERT INTO channel_connections (id_user, channel, display_name, credentials, webhook_url, webhook_token, settings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (id_user, channel) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          credentials = EXCLUDED.credentials,
          webhook_url = EXCLUDED.webhook_url,
+         webhook_token = COALESCE(EXCLUDED.webhook_token, channel_connections.webhook_token),
          settings = EXCLUDED.settings,
          is_active = true,
          updated_at = NOW()
        RETURNING *`,
       [userId, channel, display_name || null,
        JSON.stringify(credentials || {}), webhook_url || null,
+       webhook_token || null,
        JSON.stringify(settings || {})]
     );
     return rows[0];

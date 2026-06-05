@@ -1,6 +1,9 @@
 import express from 'express';
 import webhookController from '../controllers/webhook.controller.js';
 import chatbotWebhookController from '../controllers/chatbotWebhook.controller.js';
+import chatbotChannelWebhookController from '../controllers/chatbotChannelWebhook.controller.js';
+import oauthController from '../controllers/oauth.controller.js';
+import authMiddleware from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -38,32 +41,36 @@ router.get('/KlgV4OVxHJrppf8XXBaeArFAIJI_I6XjCJWu.html', (req, res) => {
 </html>`);
 });
 
-/**
- * GET /api/webhooks/zalo-oa
- *
- * Zalo OA webhook verification (GET from Zalo when setting up webhook).
- */
-router.get('/zalo-oa', chatbotWebhookController.verifyZaloOA.bind(chatbotWebhookController));
+// ── Chatbot Webhooks (token-based routing) ─────────────────────
 
 /**
- * POST /api/webhooks/zalo-oa
- *
- * Zalo OA webhook — receives incoming messages from Zalo Official Account.
+ * GET/POST /api/webhooks/chatbot/zalo-oa/:token
+ * Webhook cho Zalo OA của chatbot cụ thể
  */
+router.get('/chatbot/zalo-oa/:token', chatbotChannelWebhookController.verifyZaloOA.bind(chatbotChannelWebhookController));
+router.post('/chatbot/zalo-oa/:token', chatbotChannelWebhookController.handleZaloOA.bind(chatbotChannelWebhookController));
+
+/**
+ * GET/POST /api/webhooks/chatbot/facebook/:token
+ * Webhook cho Facebook Messenger của chatbot cụ thể
+ */
+router.get('/chatbot/facebook/:token', chatbotChannelWebhookController.verifyFacebook.bind(chatbotChannelWebhookController));
+router.post('/chatbot/facebook/:token', chatbotChannelWebhookController.handleFacebook.bind(chatbotChannelWebhookController));
+
+// ── Legacy Webhooks (backwards compatibility) ─────────────────
+
+/**
+ * Legacy Zalo OA webhook
+ * @deprecated
+ */
+router.get('/zalo-oa', chatbotWebhookController.verifyZaloOA.bind(chatbotWebhookController));
 router.post('/zalo-oa', chatbotWebhookController.handleZaloOA.bind(chatbotWebhookController));
 
 /**
- * GET /api/webhooks/facebook
- *
- * Facebook Messenger webhook verification.
+ * Legacy Facebook webhook
+ * @deprecated
  */
 router.get('/facebook', chatbotWebhookController.verifyFacebook.bind(chatbotWebhookController));
-
-/**
- * POST /api/webhooks/facebook
- *
- * Facebook Messenger webhook — receives incoming messages.
- */
 router.post('/facebook', chatbotWebhookController.handleFacebook.bind(chatbotWebhookController));
 
 /**
@@ -73,5 +80,16 @@ router.post('/facebook', chatbotWebhookController.handleFacebook.bind(chatbotWeb
  * WooCommerce gọi khi có sự kiện đơn hàng.
  */
 router.post('/woocommerce/order', webhookController.handleOrder.bind(webhookController));
+
+// ── OAuth Routes (public - no auth) ──────────────────────────────
+
+// Facebook OAuth callback (public)
+router.get('/oauth/facebook/init', oauthController.initFacebookOAuth.bind(oauthController));
+router.get('/oauth/callback/facebook', oauthController.handleFacebookCallback.bind(oauthController));
+router.post('/oauth/facebook/complete', authMiddleware, oauthController.completeFacebookConnection.bind(oauthController));
+
+// Zalo OA OAuth callback (public)
+router.get('/oauth/zalo-oa/init', oauthController.initZaloOAuth.bind(oauthController));
+router.get('/oauth/callback/zalo-oa', oauthController.handleZaloCallback.bind(oauthController));
 
 export default router;

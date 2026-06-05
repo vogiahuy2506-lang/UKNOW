@@ -224,6 +224,64 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
     return 'Xin chào! Tôi có thể giúp gì cho bạn?';
   }
+
+  /**
+   * Route message for a custom chatbot (Studio)
+   * This is used by chatbot channel webhooks
+   */
+  async routeChatbotMessage({ chatbotId, message, conversationId }) {
+    try {
+      // Get chatbot info
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot) {
+        throw new Error('Chatbot not found');
+      }
+
+      // Get conversation history
+      const history = await db.query(
+        `SELECT * FROM chatbot_messages
+         WHERE id_conversation = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [conversationId, MAX_HISTORY_MESSAGES]
+      );
+
+      // Reverse to get chronological order
+      const chatHistory = (history.rows || []).reverse().map(m => ({
+        role: m.role === 'bot' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
+      // Build system prompt
+      const systemPrompt = `Bạn là ${chatbot.name || 'Trợ lý AI'}.
+
+## MÔ TẢ
+${chatbot.description || 'Một trợ lý AI hữu ích.'}
+
+## HƯỚNG DẪN
+${chatbot.system_instruction || 'Hãy trả lời câu hỏi một cách hữu ích và thân thiện.'}
+
+## QUY TẮC
+- Trả lời bằng tiếng Việt
+- Không dùng markdown bold/italic
+- Nếu không biết, hãy nói rõ`;
+
+      // Call AI
+      const response = await this._callAI({
+        systemPrompt,
+        history: chatHistory,
+        message,
+        model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+        temperature: chatbot.temperature || 0.7,
+        maxTokens: chatbot.max_tokens || 2048,
+      });
+
+      return { content: response.text };
+    } catch (err) {
+      console.error('[ChatRouter] routeChatbotMessage error:', err);
+      return { content: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.' };
+    }
+  }
 }
 
 export default new ChatRouterService();

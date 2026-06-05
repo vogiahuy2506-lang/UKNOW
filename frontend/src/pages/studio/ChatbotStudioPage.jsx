@@ -5,6 +5,8 @@ import {
   HiOutlinePaperAirplane,
   HiOutlineTrash,
   HiOutlineRefresh,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -179,9 +181,9 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col" style={{ backgroundColor: `${primaryColor}05` }}>
+    <div className="flex-1 flex flex-col bg-white">
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ backgroundColor: bgColor, borderColor: `${primaryColor}20` }}>
+      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
@@ -308,7 +310,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t" style={{ backgroundColor: bgColor, borderColor: `${primaryColor}20` }}>
+      <div className="p-4 border-t border-gray-100 bg-white">
         <div className="flex gap-3 items-end">
           <textarea
             ref={inputRef}
@@ -347,22 +349,11 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 function ChatbotStudioPage() {
   const [selectedBot, setSelectedBot] = useState(null);
   const [_bots, setBots] = useState([]);
-  const [mobilePanel, setMobilePanel] = useState(1);
-  const [leftHidden, setLeftHidden] = useState(false);
-  const [rightHidden, setRightHidden] = useState(false);
-
-  const { primaryColor } = getChatbotTheme(selectedBot);
-
-  // Listen for settings close from mobile
-  useEffect(() => {
-    const handler = () => setMobilePanel(1);
-    document.addEventListener('studio:close-settings', handler);
-    return () => document.removeEventListener('studio:close-settings', handler);
-  }, []);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   const handleSelectBot = useCallback((bot) => {
     setSelectedBot(bot);
-    setMobilePanel(1);
   }, []);
 
   const handleUpdateBot = useCallback((updatedBot) => {
@@ -375,118 +366,99 @@ function ChatbotStudioPage() {
   }, []);
 
   return (
-    <div className="h-full flex overflow-hidden" style={{ backgroundColor: `${primaryColor}05` }}>
-      {/* Desktop: Left Toggle Bar */}
-      <div className="hidden md:flex w-10 shrink-0 flex-col items-center justify-center gap-3 border-r z-10"
-        style={{ backgroundColor: '#fff', borderColor: `${primaryColor}15` }}>
-        <button
-          onClick={() => setLeftHidden(!leftHidden)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
-          style={{
-            backgroundColor: leftHidden ? `${primaryColor}15` : '#f8f9fa',
-            color: leftHidden ? primaryColor : '#64748b',
-          }}
-          title={leftHidden ? 'Hiện danh sách bot' : 'Ẩn danh sách bot'}
-        >
-          <HiOutlineMenuAlt2 className="w-5 h-5" />
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">AI Chatbot</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Quản lý và thiết lập chatbot AI cho doanh nghiệp của bạn.
+        </p>
       </div>
 
-      {/* Left Sidebar */}
-      <div className={`
-        ${leftHidden ? 'w-0 overflow-hidden' : 'w-72'}
-        hidden md:block shrink-0 transition-all duration-300
-      `}>
-        <ChatListSidebar
-          selectedBot={selectedBot}
-          onSelectBot={handleSelectBot}
-          onCreateNew={handleCreateNew}
-        />
-      </div>
-
-      {/* Mobile: left sidebar as overlay */}
-      <div className={`
-        md:hidden fixed inset-0 z-40 transition-transform duration-300
-        ${mobilePanel === 0 ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="w-full max-w-[85vw] h-full">
-          <ChatListSidebar
-            selectedBot={selectedBot}
-            onSelectBot={handleSelectBot}
-            onCreateNew={handleCreateNew}
-          />
+      <div className="flex flex-col xl:flex-row gap-6 items-start">
+        {/* Left Sidebar (List) */}
+        <div className={`transition-all duration-300 ease-in-out shrink-0 ${leftCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-72'}`}>
+          <div className="card h-[700px] flex flex-col overflow-hidden relative">
+            <button
+              onClick={() => setLeftCollapsed(!leftCollapsed)}
+              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+              title={leftCollapsed ? 'Mở rộng' : 'Thu gọn'}
+            >
+              {leftCollapsed ? <HiOutlineChevronRight className="w-4 h-4" /> : <HiOutlineChevronLeft className="w-4 h-4" />}
+            </button>
+            <div className={`flex-1 overflow-hidden transition-opacity duration-200 ${leftCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <ChatListSidebar
+                selectedBot={selectedBot}
+                onSelectBot={handleSelectBot}
+                onCreateNew={handleCreateNew}
+              />
+            </div>
+            {leftCollapsed && (
+              <div className="absolute inset-0 flex flex-col items-center pt-16">
+                <div className="w-8 h-8 bg-primary-100 text-primary-600 rounded-lg flex items-center justify-center font-bold">
+                  {_bots.length}
+                </div>
+                <div className="text-slate-400 font-semibold tracking-widest mt-8 rotate-180" style={{ writingMode: 'vertical-rl' }}>
+                  CHATBOTS
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        {mobilePanel === 0 && (
-          <div
-            className="absolute inset-0 bg-black/30 -z-10"
-            onClick={() => setMobilePanel(1)}
-          />
-        )}
-      </div>
 
-      {/* Center Chat */}
-      <div className="flex-1 min-w-0 flex flex-col rounded-tl-2xl overflow-hidden">
-        {selectedBot ? (
-          <ChatMessageArea
-            key={`chat-${selectedBot.id}`}
-            chatbot={selectedBot}
-            onUpdate={handleUpdateBot}
-          />
-        ) : (
-          <EmptyState chatbot={selectedBot} onCreateNew={handleCreateNew} />
-        )}
-      </div>
-
-      {/* Right Settings */}
-      <div className={`
-        ${rightHidden ? 'w-0 overflow-hidden' : 'w-96'}
-        hidden md:block shrink-0 transition-all duration-300
-      `}>
-        {!rightHidden && selectedBot && (
-          <ChatbotSettings
-            key={`settings-${selectedBot.id}`}
-            chatbot={selectedBot}
-            onUpdate={handleUpdateBot}
-          />
-        )}
-      </div>
-
-      {/* Mobile: right settings as overlay */}
-      <div className={`
-        md:hidden fixed inset-0 z-40 transition-transform duration-300
-        ${mobilePanel === 2 ? 'translate-x-0' : 'translate-x-full'}
-      `}>
-        <div className="w-full max-w-[90vw] ml-auto h-full">
-          {selectedBot && (
-            <ChatbotSettings
-              key={`settings-mobile-${selectedBot.id}`}
-              chatbot={selectedBot}
-              onUpdate={handleUpdateBot}
-            />
-          )}
+        {/* Middle Chat (Preview) */}
+        <div className="flex-1 w-full min-w-0 transition-all duration-300">
+          <div className="card h-[700px] flex flex-col overflow-hidden">
+            {selectedBot ? (
+              <ChatMessageArea
+                key={`chat-${selectedBot.id}`}
+                chatbot={selectedBot}
+                onUpdate={handleUpdateBot}
+              />
+            ) : (
+              <EmptyState chatbot={selectedBot} onCreateNew={handleCreateNew} />
+            )}
+          </div>
         </div>
-        {mobilePanel === 2 && (
-          <div
-            className="absolute inset-0 bg-black/30 -z-10"
-            onClick={() => setMobilePanel(1)}
-          />
-        )}
-      </div>
 
-      {/* Desktop: Right Toggle Bar */}
-      <div className="hidden md:flex w-10 shrink-0 flex-col items-center justify-center gap-3 border-l z-10"
-        style={{ backgroundColor: '#fff', borderColor: `${primaryColor}15` }}>
-        <button
-          onClick={() => setRightHidden(!rightHidden)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
-          style={{
-            backgroundColor: rightHidden ? `${primaryColor}15` : '#f8f9fa',
-            color: rightHidden ? primaryColor : '#64748b',
-          }}
-          title={rightHidden ? 'Hiện cài đặt' : 'Ẩn cài đặt'}
-        >
-          <HiOutlineViewBoards className="w-5 h-5" />
-        </button>
+        {/* Right Settings */}
+        <div className={`transition-all duration-300 ease-in-out shrink-0 ${rightCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-[400px]'}`}>
+          <div className="card h-[700px] flex flex-col overflow-hidden relative">
+            <button
+              onClick={() => setRightCollapsed(!rightCollapsed)}
+              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+              title={rightCollapsed ? 'Mở rộng' : 'Thu gọn'}
+            >
+              {rightCollapsed ? <HiOutlineChevronLeft className="w-4 h-4" /> : <HiOutlineChevronRight className="w-4 h-4" />}
+            </button>
+            <div className={`flex-1 overflow-hidden transition-opacity duration-200 ${rightCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              {selectedBot ? (
+                <ChatbotSettings
+                  key={`settings-${selectedBot.id}`}
+                  chatbot={selectedBot}
+                  onUpdate={handleUpdateBot}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8 text-center h-full">
+                  <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <p className="text-sm">Chọn một chatbot để cấu hình</p>
+                </div>
+              )}
+            </div>
+            {rightCollapsed && (
+              <div className="absolute inset-0 flex flex-col items-center pt-16">
+                <div className="w-8 h-8 bg-primary-100 text-primary-600 rounded-lg flex items-center justify-center font-bold">
+                  <HiOutlineViewBoards className="w-4 h-4" />
+                </div>
+                <div className="writing-vertical-rl text-slate-400 font-semibold tracking-widest mt-8 rotate-180" style={{ writingMode: 'vertical-rl' }}>
+                  CÀI ĐẶT
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

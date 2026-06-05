@@ -109,7 +109,7 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {conversations.map((conv) => {
             const channel = CHANNEL_LABELS(t)[conv.channel] || CHANNEL_LABELS(t).web;
-            const isSelected = selectedId === conv.id;
+            const isSelected = selectedId === `${conv.type}-${conv.id}`;
             const displayName = getDisplayName(conv);
             const messageSource = getMessageSource(conv);
 
