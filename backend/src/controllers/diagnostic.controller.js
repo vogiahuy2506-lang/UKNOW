@@ -91,12 +91,12 @@ class DiagnosticController {
       if (!Number.isFinite(campaignId)) {
         return res.status(400).json({ success: false, message: 'campaignId không hợp lệ' });
       }
-      const { node, phones } = await diagnosticRepository.getCampaignPrefill(campaignId);
+      const { node, phones, messageText } = await diagnosticRepository.getCampaignPrefill(campaignId);
       return res.json({
         success: true,
         data: {
           accountId: node?.zalo_account_id ? Number(node.zalo_account_id) : null,
-          messageText: node?.message_text || '',
+          messageText,
           phones,
         },
       });

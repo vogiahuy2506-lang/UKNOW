@@ -90,9 +90,21 @@ class DiagnosticRepository {
 
   async getCampaignPrefill(campaignId) {
     const { rows: nodeRows } = await db.query(
-      `SELECT config->>'zaloAccountId' AS zalo_account_id,
-              COALESCE(NULLIF(config->>'zaloMessage', ''), NULLIF(config->>'message', '')) AS message_text,
-              COALESCE(NULLIF(config->>'zaloRecipientPhones', ''), NULLIF(config->>'recipientPhones', '')) AS recipient_phones_raw
+      `SELECT
+         config->>'zaloAccountId' AS zalo_account_id,
+         COALESCE(
+           NULLIF(config->>'zaloMessage', ''),
+           NULLIF(config->>'message', ''),
+           (
+             SELECT NULLIF(TRIM(COALESCE(zt.body_text, zt.body_html)), '')
+             FROM zalo_templates zt
+             WHERE zt.id = (
+               CAST(NULLIF(TRIM(config->'zaloPersonalTemplateSteps'->0->>'templateId'), '') AS INTEGER)
+             )
+             LIMIT 1
+           )
+         ) AS message_text,
+         COALESCE(NULLIF(config->>'zaloRecipientPhones', ''), NULLIF(config->>'recipientPhones', '')) AS recipient_phones_raw
        FROM campaign_nodes
        WHERE id_campaign = $1
          AND node_subtype = 'send_zalo_personal'
@@ -105,7 +117,6 @@ class DiagnosticRepository {
       `SELECT DISTINCT recipient_value AS phone
        FROM zalo_messages
        WHERE id_campaign = $1
-         AND channel = 'zalo_personal'
          AND recipient_type = 'phone'
          AND recipient_value IS NOT NULL
          AND recipient_value <> ''
@@ -114,9 +125,20 @@ class DiagnosticRepository {
       [campaignId]
     );
 
+    // Lấy message_text từ zalo_messages nếu node config không có
+    const { rows: msgRows } = await db.query(
+      `SELECT message_text
+       FROM zalo_messages
+       WHERE id_campaign = $1
+         AND message_text IS NOT NULL
+         AND message_text <> ''
+       LIMIT 1`,
+      [campaignId]
+    );
+
     const node = nodeRows[0] || null;
 
-    // Ưu tiên phones từ zalo_messages; fallback về config node nếu campaign chưa chạy
+    // Ưu tiên phones từ zalo_messages; fallback về config node
     let phones = sentRows.map((r) => r.phone);
     if (phones.length === 0 && node?.recipient_phones_raw) {
       phones = node.recipient_phones_raw
@@ -126,7 +148,10 @@ class DiagnosticRepository {
         .slice(0, 20);
     }
 
-    return { node, phones };
+    // Ưu tiên message từ node config (đã có template join); fallback về zalo_messages
+    const messageText = node?.message_text || msgRows[0]?.message_text || '';
+
+    return { node, phones, messageText };
   }
 
   async listRecentRuns(limit = 10) {
