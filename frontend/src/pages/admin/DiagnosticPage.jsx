@@ -8,7 +8,6 @@ import {
   HiOutlineRefresh,
   HiOutlineX,
   HiOutlineDownload,
-  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import diagnosticApiService from '../../features/admin/diagnostic/services/diagnosticApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
@@ -236,11 +235,13 @@ export default function DiagnosticPage() {
     }
   };
 
-  const handlePrefill = async () => {
-    if (!selectedCampaignId) return;
+  const handlePrefill = async (campaignId) => {
+    if (!campaignId) return;
+    setMessageText('');
+    setRecipientsRaw('');
     setPrefillLoading(true);
     try {
-      const res = await diagnosticApiService.getCampaignPrefill(selectedCampaignId);
+      const res = await diagnosticApiService.getCampaignPrefill(campaignId);
       const { accountId: prefillAccountId, messageText: prefillMessage, phones } = res.data?.data ?? {};
       if (prefillAccountId)   setAccountId(String(prefillAccountId));
       if (prefillMessage)     setMessageText(prefillMessage);
@@ -287,32 +288,27 @@ export default function DiagnosticPage() {
           <div className="px-5 py-3 bg-orange-50/40">
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-orange-700 flex items-center gap-1.5 shrink-0">
-                <HiOutlineDownload className="w-3.5 h-3.5" />
+                {prefillLoading
+                  ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
+                  : <HiOutlineDownload className="w-3.5 h-3.5" />}
                 Load từ chiến dịch
               </span>
               <select
                 value={selectedCampaignId}
-                onChange={(e) => setSelectedCampaignId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedCampaignId(id);
+                  handlePrefill(id);
+                }}
                 className="flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
               >
-                <option value="">— Chọn chiến dịch —</option>
+                <option value="">— Chọn chiến dịch để tự động điền —</option>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.campaign_name} ({c.owner_name || c.owner_email})
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={handlePrefill}
-                disabled={!selectedCampaignId || prefillLoading}
-                className="btn btn-secondary shrink-0 px-3"
-                title="Load dữ liệu"
-              >
-                {prefillLoading
-                  ? <HiOutlineRefresh className="w-4 h-4 animate-spin" />
-                  : <HiOutlineChevronRight className="w-4 h-4" />}
-              </button>
             </div>
           </div>
         )}
