@@ -3,14 +3,13 @@ import { useLocation } from 'react-router-dom';
 import EmailTemplates from './EmailTemplates';
 import { useI18n } from '../../i18n';
 
-const TABS = [
-  { key: 'email', label: 'channelTemplates.email' },
-  { key: 'zalo', label: 'channelTemplates.zalo' },
-];
-
 const ChannelTemplates = () => {
   const { t } = useI18n();
   const [active, setActive] = useState('email');
+  const TABS = [
+    { key: 'email', label: t('channelTemplates.email') },
+    { key: 'zalo', label: t('channelTemplates.zalo') },
+  ];
   const location = useLocation();
 
   // Nếu chatbot AI truyền draft qua navigation state,
@@ -26,31 +25,14 @@ const ChannelTemplates = () => {
   }, [aiDraft]);
 
   return (
-    <div className="space-y-6">
-      {/* Tab switcher */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setActive(key)}
-            className={`px-5 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              active === key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t(label)}
-          </button>
-        ))}
-      </div>
-
-      <EmailTemplates
-        key={active}
-        isZaloTemplate={active === 'zalo'}
-        aiDraft={active === (aiDraft?.channel || 'email') ? aiDraft : null}
-      />
-    </div>
+    <EmailTemplates
+      key={active}
+      isZaloTemplate={active === 'zalo'}
+      aiDraft={active === (aiDraft?.channel || 'email') ? aiDraft : null}
+      channelTabs={TABS}
+      activeChannel={active}
+      onChannelChange={setActive}
+    />
   );
 };
 

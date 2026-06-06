@@ -18,6 +18,9 @@ const EmailTemplateListSection = ({
   setSearchTerm,
   onCreateTemplate,
   onManageLabels,
+  channelTabs = null,
+  activeChannel = null,
+  onChannelChange = null,
   getCategoryBadge,
   handlePreview,
   handleDuplicate,
@@ -38,8 +41,26 @@ const EmailTemplateListSection = ({
 
   return (
   <>
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
       <div>
+        {channelTabs && onChannelChange && (
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-3">
+            {channelTabs.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onChannelChange(key)}
+                className={`px-5 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  activeChannel === key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
           {title || t('templates.libraryTitle')}
         </h1>
@@ -47,7 +68,7 @@ const EmailTemplateListSection = ({
           {description || t('templates.templateDescription')}
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 md:mt-0 mt-2">
         {onManageLabels && (
           <button
             onClick={onManageLabels}

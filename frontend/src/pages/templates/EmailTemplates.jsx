@@ -22,7 +22,7 @@ import {
   wrapEmailSrcDoc,
 } from '../../features/templates/utils/emailTemplateEditor.helpers';
 
-const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
+const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = null, activeChannel = null, onChannelChange = null }) => {
   const { t } = useI18n();
   const templateApiService = isZaloTemplate ? zaloTemplateApiService : emailTemplateApiService;
   const templateKindLabel = isZaloTemplate ? 'zalo' : 'email';
@@ -712,6 +712,9 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
           setShowEditorModal(true);
         }}
         onManageLabels={() => setShowLabelModal(true)}
+        channelTabs={channelTabs}
+        activeChannel={activeChannel}
+        onChannelChange={onChannelChange}
         getCategoryBadge={(cat) => getCategoryBadge(cat, labels)}
         handlePreview={handlePreview}
         handleDuplicate={handleDuplicate}
