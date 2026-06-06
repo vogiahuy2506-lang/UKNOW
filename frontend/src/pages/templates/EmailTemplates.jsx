@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import EmailTemplateListSection from '../../features/templates/components/EmailTemplateListSection';
@@ -7,6 +7,8 @@ import EmailTemplatePreviewModal from '../../features/templates/components/Email
 import EmailTemplateAttachmentsModal from '../../features/templates/components/EmailTemplateAttachmentsModal';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
+import templateLabelApiService from '../../features/templates/services/templateLabelApi.service';
+import CreateLabelModal from '../../features/templates/components/CreateLabelModal';
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service';
 import fetchAllTemplateListPages from '../../features/templates/utils/fetchAllTemplateListPages';
 import useEmailTemplateDerivedData from '../../features/templates/hooks/useEmailTemplateDerivedData';
@@ -33,17 +35,8 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
-  const categories = useMemo(() => {
-    const seen = new Set();
-    const result = [];
-    for (const tpl of templates) {
-      if (tpl.category && !seen.has(tpl.category)) {
-        seen.add(tpl.category);
-        result.push(tpl.category);
-      }
-    }
-    return result.sort();
-  }, [templates]);
+  const [labels, setLabels] = useState([]);
+  const [showLabelModal, setShowLabelModal] = useState(false);
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -89,6 +82,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
 
   useEffect(() => {
     fetchTemplates();
+    fetchLabels();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ fetch 1 lần lúc mount
   }, []);
 
@@ -140,6 +134,25 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchLabels = async () => {
+    try {
+      const res = await templateLabelApiService.getLabels();
+      setLabels(res.data?.data ?? []);
+    } catch {
+      // non-critical — keep empty
+    }
+  };
+
+  const handleCreateLabel = async (payload) => {
+    const res = await templateLabelApiService.createLabel(payload);
+    setLabels((prev) => [...prev, res.data.data].sort((a, b) => a.name.localeCompare(b.name)));
+  };
+
+  const handleDeleteLabel = async (id) => {
+    await templateLabelApiService.deleteLabel(id);
+    setLabels((prev) => prev.filter((l) => l.id !== id));
   };
 
   const fetchTemplateDetail = async (id) => {
@@ -688,7 +701,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         isLoading={isLoading}
         filteredTemplates={filteredTemplates}
         templates={templates}
-        categories={categories}
+        labels={labels}
         filterCategory={filterCategory}
         setFilterCategory={setFilterCategory}
         searchTerm={searchTerm}
@@ -698,7 +711,8 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
           resetForm();
           setShowEditorModal(true);
         }}
-        getCategoryBadge={getCategoryBadge}
+        onManageLabels={() => setShowLabelModal(true)}
+        getCategoryBadge={(cat) => getCategoryBadge(cat, labels)}
         handlePreview={handlePreview}
         handleDuplicate={handleDuplicate}
         handleEdit={handleEdit}
@@ -760,7 +774,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         hideHtmlTab={isZaloTemplate}
         subjectLabel={subjectLabel}
         templateKindLabel={templateKindLabel}
-        categories={categories}
+        labels={labels}
       />
 
       <FullScreenOverlay isOpen={Boolean(lockedTemplate)} className="p-4">
@@ -808,7 +822,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         showPreviewModal={showPreviewModal}
         previewTemplate={previewTemplate}
         previewAttachments={previewAttachments}
-        getCategoryBadge={getCategoryBadge}
+        getCategoryBadge={(cat) => getCategoryBadge(cat, labels)}
         handleOpenAttachment={handleOpenAttachment}
         setShowPreviewModal={setShowPreviewModal}
         wrapEmailSrcDoc={wrapEmailSrcDoc}
@@ -831,6 +845,13 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         }}
         setDeletedAttachments={setDeletedAttachments}
         setFormData={setFormData}
+      />
+      <CreateLabelModal
+        isOpen={showLabelModal}
+        onClose={() => setShowLabelModal(false)}
+        onCreated={handleCreateLabel}
+        onDeleted={handleDeleteLabel}
+        existingLabels={labels}
       />
     </div>
   );

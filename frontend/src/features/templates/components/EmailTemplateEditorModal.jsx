@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import {
   HiOutlineEye,
   HiOutlinePaperClip,
@@ -6,9 +7,63 @@ import {
   HiOutlineTrash,
   HiOutlineUpload,
   HiOutlineSparkles,
+  HiOutlineChevronDown,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
+
+const LabelPicker = ({ value, labels, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selected = labels.find((l) => l.name === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-left flex items-center gap-2"
+      >
+        {selected ? (
+          <>
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: selected.color }} />
+            <span className="text-sm text-gray-800 flex-1">{selected.name}</span>
+          </>
+        ) : (
+          <span className="text-sm text-gray-400 flex-1">{value || 'Chọn nhãn...'}</span>
+        )}
+        <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {labels.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-gray-400">Chưa có nhãn nào</div>
+          ) : (
+            labels.map((label) => (
+              <button
+                key={label.id}
+                type="button"
+                onClick={() => { onChange(label.name); setOpen(false); }}
+                className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-gray-50 transition-colors ${value === label.name ? 'bg-primary-50' : ''}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: label.color }} />
+                <span className="text-sm text-gray-800">{label.name}</span>
+                {value === label.name && <span className="ml-auto text-primary-600 text-xs">✓</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EmailTemplateEditorModal = ({
   showEditorModal,
@@ -61,7 +116,7 @@ const EmailTemplateEditorModal = ({
   hideHtmlTab = false,
   subjectLabel,
   templateKindLabel = 'email',
-  categories = [],
+  labels = [],
 }) => {
   const { t } = useI18n();
 
@@ -136,18 +191,11 @@ const EmailTemplateEditorModal = ({
           </div>
           <div className="col-span-2 space-y-1">
             <label className="text-sm font-medium text-gray-700">{t('emailTemplateEditor.category')}</label>
-            <input
-              list="tpl-category-suggestions"
+            <LabelPicker
               value={formData.category}
-              onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-              placeholder="Nhập hoặc chọn nhãn..."
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+              labels={labels}
+              onChange={(val) => setFormData((prev) => ({ ...prev, category: val }))}
             />
-            <datalist id="tpl-category-suggestions">
-              {['marketing', 'notification', ...categories.filter((c) => c !== 'marketing' && c !== 'notification')].map((cat) => (
-                <option key={cat} value={cat} />
-              ))}
-            </datalist>
           </div>
         </div>
 

@@ -184,25 +184,30 @@ export const resolveAttachmentKey = (attachment) => {
   return null;
 };
 
-export const getCategoryBadge = (category) => {
-  switch (category) {
-    case 'marketing':
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-          Marketing
-        </span>
-      );
-    case 'notification':
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-          Thông báo
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-          {category}
-        </span>
-      );
+export const getCategoryBadge = (category, labels = []) => {
+  if (!category) return null;
+
+  const label = labels.find((l) => l.name === category);
+  if (label) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
+        style={{
+          backgroundColor: label.color + '1a',
+          color: label.color,
+          borderColor: label.color + '55',
+        }}
+      >
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: label.color }} />
+        {label.name}
+      </span>
+    );
   }
+
+  // fallback cho data cũ không có trong bảng labels
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+      {category}
+    </span>
+  );
 };

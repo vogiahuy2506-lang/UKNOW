@@ -4,23 +4,20 @@ import {
   HiOutlineEye,
   HiOutlinePlus,
   HiOutlineSearch,
+  HiOutlineTag,
   HiOutlineTrash,
 } from 'react-icons/hi';
-
-const CATEGORY_LABELS = {
-  marketing: 'Marketing',
-  notification: 'Thông báo',
-};
 
 const EmailTemplateListSection = ({
   isLoading,
   filteredTemplates,
-  categories = [],
+  labels = [],
   filterCategory,
   setFilterCategory,
   searchTerm,
   setSearchTerm,
   onCreateTemplate,
+  onManageLabels,
   getCategoryBadge,
   handlePreview,
   handleDuplicate,
@@ -35,8 +32,8 @@ const EmailTemplateListSection = ({
   const { t } = useI18n();
 
   const tabs = [
-    { id: '', label: t('common.all') },
-    ...categories.map((cat) => ({ id: cat, label: CATEGORY_LABELS[cat] ?? cat })),
+    { id: '', label: t('common.all'), color: null },
+    ...labels.map((lbl) => ({ id: lbl.name, label: lbl.name, color: lbl.color })),
   ];
 
   return (
@@ -50,28 +47,45 @@ const EmailTemplateListSection = ({
           {description || t('templates.templateDescription')}
         </p>
       </div>
-      <button
-        onClick={onCreateTemplate}
-        className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center font-medium"
-      >
-        <HiOutlinePlus className="w-5 h-5 mr-2" />
-        {t('templates.createTemplate')}
-      </button>
+      <div className="flex items-center gap-2">
+        {onManageLabels && (
+          <button
+            onClick={onManageLabels}
+            className="border border-gray-300 text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 text-sm font-medium"
+          >
+            <HiOutlineTag className="w-4 h-4" />
+            Tạo nhãn mới
+          </button>
+        )}
+        <button
+          onClick={onCreateTemplate}
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center font-medium"
+        >
+          <HiOutlinePlus className="w-5 h-5 mr-2" />
+          {t('templates.createTemplate')}
+        </button>
+      </div>
     </div>
 
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
-        {tabs.map((cat) => (
+        {tabs.map((tab) => (
           <button
-            key={cat.id}
-            onClick={() => setFilterCategory(cat.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-              filterCategory === cat.id
+            key={tab.id}
+            onClick={() => setFilterCategory(tab.id)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 ${
+              filterCategory === tab.id
                 ? 'bg-white text-primary-600 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
             }`}
           >
-            {cat.label}
+            {tab.color && (
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: tab.color }}
+              />
+            )}
+            {tab.label}
           </button>
         ))}
       </div>
