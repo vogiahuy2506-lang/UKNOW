@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   HiOutlineEye,
   HiOutlinePaperClip,
@@ -10,7 +11,6 @@ import {
   HiOutlineChevronDown,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
-import FullScreenOverlay from '../../../components/FullScreenOverlay';
 
 const LabelPicker = ({ value, labels, onChange }) => {
   const [open, setOpen] = useState(false);
@@ -129,9 +129,13 @@ const EmailTemplateEditorModal = ({
     { name: t('emailTemplateEditor.suggestedPhone'), key: 'so_dien_thoai' },
   ];
 
-  return (
-  <FullScreenOverlay isOpen={showEditorModal}>
-    <div className="bg-white rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden">
+  if (!showEditorModal) return null;
+
+  return createPortal(
+    <div
+      className="fixed z-[9999] bg-white shadow-xl border-l border-gray-200 flex flex-col overflow-hidden"
+      style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
+    >
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600">
@@ -630,8 +634,8 @@ const EmailTemplateEditorModal = ({
           </button>
         </div>
       </form>
-    </div>
-  </FullScreenOverlay>
+    </div>,
+    document.body
   );
 };
 
