@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { HiOutlineTag, HiOutlineTrash } from 'react-icons/hi';
+import FullScreenOverlay from '../../../components/FullScreenOverlay';
 
 const COLOR_OPTIONS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -12,8 +13,6 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
   const [color, setColor] = useState(COLOR_OPTIONS[5]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +33,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
   const isDeletable = (label) => label.name !== 'marketing' && label.name !== 'notification';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <FullScreenOverlay isOpen={isOpen} backdropClassName="bg-black/50" className="p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600">
@@ -152,7 +151,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
           </form>
         </div>
       </div>
-    </div>
+    </FullScreenOverlay>
   );
 };
 
