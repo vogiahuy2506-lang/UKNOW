@@ -7,9 +7,15 @@ import {
   HiOutlineTrash,
 } from 'react-icons/hi';
 
+const CATEGORY_LABELS = {
+  marketing: 'Marketing',
+  notification: 'Thông báo',
+};
+
 const EmailTemplateListSection = ({
   isLoading,
   filteredTemplates,
+  categories = [],
   filterCategory,
   setFilterCategory,
   searchTerm,
@@ -27,6 +33,12 @@ const EmailTemplateListSection = ({
   searchPlaceholder,
 }) => {
   const { t } = useI18n();
+
+  const tabs = [
+    { id: '', label: t('common.all') },
+    ...categories.map((cat) => ({ id: cat, label: CATEGORY_LABELS[cat] ?? cat })),
+  ];
+
   return (
   <>
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -49,11 +61,7 @@ const EmailTemplateListSection = ({
 
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto">
-        {[
-          { id: '', label: t('common.all') },
-          { id: 'marketing', label: t('aiChatbot.marketing') },
-          { id: 'notification', label: t('aiChatbot.notification') },
-        ].map((cat) => (
+        {tabs.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setFilterCategory(cat.id)}

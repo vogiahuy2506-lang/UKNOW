@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import EmailTemplateListSection from '../../features/templates/components/EmailTemplateListSection';
@@ -32,6 +32,18 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+
+  const categories = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const tpl of templates) {
+      if (tpl.category && !seen.has(tpl.category)) {
+        seen.add(tpl.category);
+        result.push(tpl.category);
+      }
+    }
+    return result.sort();
+  }, [templates]);
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -676,6 +688,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         isLoading={isLoading}
         filteredTemplates={filteredTemplates}
         templates={templates}
+        categories={categories}
         filterCategory={filterCategory}
         setFilterCategory={setFilterCategory}
         searchTerm={searchTerm}
@@ -747,6 +760,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null }) => {
         hideHtmlTab={isZaloTemplate}
         subjectLabel={subjectLabel}
         templateKindLabel={templateKindLabel}
+        categories={categories}
       />
 
       <FullScreenOverlay isOpen={Boolean(lockedTemplate)} className="p-4">

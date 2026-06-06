@@ -61,6 +61,7 @@ const EmailTemplateEditorModal = ({
   hideHtmlTab = false,
   subjectLabel,
   templateKindLabel = 'email',
+  categories = [],
 }) => {
   const { t } = useI18n();
 
@@ -135,19 +136,18 @@ const EmailTemplateEditorModal = ({
           </div>
           <div className="col-span-2 space-y-1">
             <label className="text-sm font-medium text-gray-700">{t('emailTemplateEditor.category')}</label>
-            <select
+            <input
+              list="tpl-category-suggestions"
               value={formData.category}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  category: e.target.value,
-                }))
-              }
+              onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+              placeholder="Nhập hoặc chọn nhãn..."
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-            >
-              <option value="marketing">{t('aiChatbot.marketing')}</option>
-              <option value="notification">{t('aiChatbot.notification')}</option>
-            </select>
+            />
+            <datalist id="tpl-category-suggestions">
+              {['marketing', 'notification', ...categories.filter((c) => c !== 'marketing' && c !== 'notification')].map((cat) => (
+                <option key={cat} value={cat} />
+              ))}
+            </datalist>
           </div>
         </div>
 
