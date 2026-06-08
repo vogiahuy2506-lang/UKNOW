@@ -305,6 +305,28 @@ class ZaloPersonalInboxService {
 
       console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}`);
 
+      // Check if this is a group message by checking raw flags
+      // Zalo sends group messages with additional context in rawMessage
+      const rawData = rawMessage?._raw || rawMessage;
+      const clientGroupId = rawData?.clientGroupId || rawData?.gridId || null;
+      const idTo = rawData?.idTo || '';
+      
+      // Strong indicators of group message
+      const hasGroupContext = Boolean(
+        clientGroupId || 
+        rawData?.isGroup === true ||
+        rawData?.isPublicGroup === true ||
+        rawData?.isChatRoom === true ||
+        idTo?.startsWith('g_') ||
+        idTo?.startsWith('group_')
+      );
+      
+      // If message has group context, skip AI routing (someone texting into a group should NOT get personal reply)
+      if (hasGroupContext) {
+        console.log(`[ZaloInbox] Skipping AI routing: message has group context (clientGroupId=${clientGroupId}, idTo=${idTo})`);
+        return;
+      }
+
       // Check if this sender has ever been part of a group conversation
       // If yes, skip AI routing (they might be a group member texting personally)
       const existingGroupConv = await zaloPersonalRepository.findGroupConversationBySender(
