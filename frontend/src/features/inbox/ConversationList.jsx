@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useI18n } from '../../i18n';
+import ConfirmModal from './ConfirmModal';
 
 const CHANNEL_LABELS = (t) => ({
   web: { label: t('inbox.webChat'), icon: '💬', color: 'bg-blue-500' },
@@ -77,12 +79,22 @@ const truncateMessage = (message, maxLength = 50) => {
 
 const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLoadMore, hasMore, onDelete }) => {
   const { t } = useI18n();
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const handleDelete = (e, conv) => {
+  const handleDeleteClick = (e, conv) => {
     e.stopPropagation();
-    if (window.confirm(t('inbox.confirmDelete') || 'Bạn có chắc muốn xóa cuộc trò chuyện này?')) {
-      onDelete(conv);
+    setDeleteTarget(conv);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      onDelete(deleteTarget);
+      setDeleteTarget(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteTarget(null);
   };
 
   return (
@@ -155,7 +167,7 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                         </span>
                         {onDelete && (
                           <button
-                            onClick={(e) => handleDelete(e, conv)}
+                            onClick={(e) => handleDeleteClick(e, conv)}
                             className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
                             title={t('common.delete') || 'Xóa'}
                           >
@@ -214,6 +226,17 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
           )}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={deleteTarget !== null}
+        title={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
+        message={t('inbox.confirmDelete') || 'Bạn có chắc muốn xóa cuộc trò chuyện này?'}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        confirmText={t('common.delete') || 'Xóa'}
+        cancelText={t('common.cancel') || 'Hủy'}
+        danger
+      />
     </div>
   );
 };

@@ -1492,6 +1492,8 @@ export default {
     settingsSaved: 'Chatbot settings saved',
     saveFailed: 'Cannot save chatbot settings',
     toggleFailed: 'Cannot toggle chatbot',
+    chatbotDisabled: 'chatbot disabled',
+    connectFirst: 'Please connect a Zalo personal account first',
   },
 
   inbox: {
@@ -1521,6 +1523,7 @@ export default {
     markAsRead: 'Mark as read',
     reply: 'Reply',
     confirmDelete: 'Are you sure you want to delete this conversation?',
+    confirmDeleteTitle: 'Delete conversation',
   },
 
   outbox: {

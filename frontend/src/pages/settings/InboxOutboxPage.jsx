@@ -86,15 +86,20 @@ const InboxPage = () => {
   const handleDeleteConversation = async (conv) => {
     try {
       const response = await chatbotApi.deleteConversation(conv.id, conv.type);
-      if (response.success) {
+      // Check for success in response (axios wraps the data)
+      const success = response?.success || response?.data?.success;
+      if (success) {
         toast.success(t('common.deleted') || 'Đã xóa');
-        // Remove from list
-        setConversations(prev => prev.filter(c => c.id !== conv.id));
+        // Refresh the conversation list
+        await fetchConversations(true);
         // If deleted conversation was selected, deselect it
         if (selectedConversation?.id === conv.id) {
           setSelectedConversation(null);
           setMessages([]);
         }
+      } else {
+        console.error('Delete failed:', response);
+        toast.error(t('errors.deleteFailed') || 'Xóa thất bại');
       }
     } catch (err) {
       console.error('Failed to delete conversation:', err);

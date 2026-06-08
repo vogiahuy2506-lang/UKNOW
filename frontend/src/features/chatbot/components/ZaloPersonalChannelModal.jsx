@@ -103,7 +103,7 @@ export default function ZaloPersonalChannelModal({ open, onClose }) {
                 </svg>
               </div>
               <p className="text-sm font-medium text-slate-600 mb-1">{t('zaloPersonalChatbot.noAccounts')}</p>
-              <p className="text-xs text-slate-400">Vui lòng kết nối tài khoản Zalo cá nhân trước</p>
+              <p className="text-xs text-slate-400">{t('zaloPersonalChatbot.connectFirst')}</p>
             </div>
           ) : (
             <div className="p-4 space-y-3">
@@ -171,7 +171,7 @@ export default function ZaloPersonalChannelModal({ open, onClose }) {
         {/* Footer */}
         <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
           <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
-            Đóng
+            {t('common.close')}
           </button>
         </div>
       </div>

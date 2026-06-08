@@ -80,10 +80,26 @@ class ZaloPersonalRepository {
    * @param {string} now ISO timestamp
    * @returns {Promise<void>}
    */
-  async touchConversation(conversationId, now) {
+  async touchConversation(conversationId, now, visitorName = null, visitorInfo = null) {
+    const updates = ['last_message_at = $2'];
+    const params = [conversationId, now];
+    let paramIndex = 3;
+
+    if (visitorName !== null) {
+      updates.push(`visitor_name = $${paramIndex}`);
+      params.push(visitorName);
+      paramIndex++;
+    }
+
+    if (visitorInfo !== null) {
+      updates.push(`visitor_info = $${paramIndex}`);
+      params.push(JSON.stringify(visitorInfo));
+      paramIndex++;
+    }
+
     await db.query(
-      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-      [conversationId, now]
+      `UPDATE zalo_personal_conversations SET ${updates.join(', ')} WHERE id = $1`,
+      params
     );
   }
 

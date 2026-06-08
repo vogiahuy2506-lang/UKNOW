@@ -217,8 +217,34 @@ class ZaloPersonalAdapter {
       conversationId = newConv.id;
     } else {
       conversationId = conversation.id;
-      // Update last_message_at
-      await zaloPersonalRepository.touchConversation(conversationId, now);
+      // Update last_message_at and visitor info if changed
+      const existingInfo = typeof conversation.visitor_info === 'string' 
+        ? JSON.parse(conversation.visitor_info) 
+        : (conversation.visitor_info || {});
+      
+      // Update if is_group status changed or group info is new
+      const needsUpdate = (
+        existingInfo.is_group !== isGroup ||
+        (isGroup && existingInfo.group_id !== msgData.groupId) ||
+        (isGroup && !existingInfo.group_name && msgData.groupName)
+      );
+
+      if (needsUpdate) {
+        await zaloPersonalRepository.touchConversation(
+          conversationId,
+          now,
+          displayName,
+          {
+            sender_name: msgData.senderName,
+            sender_avatar: msgData.senderAvatar,
+            is_group: isGroup,
+            group_id: msgData.groupId || null,
+            group_name: msgData.groupName || null,
+          }
+        );
+      } else {
+        await zaloPersonalRepository.touchConversation(conversationId, now);
+      }
     }
 
     // Save message

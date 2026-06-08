@@ -1,4 +1,5 @@
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
+import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
@@ -333,14 +334,19 @@ class UnifiedInboxService {
 
     // Delegate to the appropriate adapter
     switch (type) {
-      case 'zalo_personal':
-        await zaloPersonalAdapter.deleteConversation(userId, conversationId);
-        break;
+      case 'zalo_personal': {
+        const result = await zaloPersonalAdapter.deleteConversation(userId, conversationId);
+        console.log('[UnifiedInboxService] zalo_personal delete result:', result);
+        return result;
+      }
+      case 'webchat': {
+        const result = await chatbotRepository.deleteWebChatConversation(conversationId, userId);
+        console.log('[UnifiedInboxService] webchat delete result:', result);
+        return result;
+      }
       default:
         throw new Error('Unsupported conversation type');
     }
-
-    return { success: true };
   }
 }
 

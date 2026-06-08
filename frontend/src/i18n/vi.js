@@ -1501,6 +1501,8 @@ export default {
     settingsSaved: 'Đã lưu cấu hình chatbot',
     saveFailed: 'Không thể lưu cấu hình chatbot',
     toggleFailed: 'Không thể bật/tắt chatbot',
+    chatbotDisabled: 'chatbot đang tắt',
+    connectFirst: 'Vui lòng kết nối tài khoản Zalo cá nhân trước',
   },
 
   inbox: {
@@ -1531,6 +1533,7 @@ export default {
     markAsRead: 'Đánh dấu đã đọc',
     reply: 'Trả lời',
     confirmDelete: 'Bạn có chắc muốn xóa cuộc trò chuyện này?',
+    confirmDeleteTitle: 'Xóa cuộc trò chuyện',
   },
 
   outbox: {
