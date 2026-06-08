@@ -18,6 +18,7 @@ import {
   HiOutlineExternalLink,
   HiOutlineShieldCheck,
   HiOutlineLink,
+  HiOutlineQrcode,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -28,9 +29,15 @@ import {
   ChannelQuickTest,
   ChecklistStep,
   CopyField,
+  DeployScriptModal,
+  DeployIframeModal,
+  DeployPublicLinkModal,
+  ZaloChannelModal,
+  FacebookChannelModal,
   FacebookConnectModal,
   FacebookChannelCard,
   FieldRow,
+  PublicLinkCard,
   SectionCard,
   Textarea,
   TextDocumentModal,
@@ -54,7 +61,11 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('general');
   const [saving, setSaving] = useState(false);
-  const [deployTab, setDeployTab] = useState('script');
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [showIframeModal, setShowIframeModal] = useState(false);
+  const [showPublicLinkModal, setShowPublicLinkModal] = useState(false);
+  const [showZaloChannelModal, setShowZaloChannelModal] = useState(false);
+  const [showFacebookChannelModal, setShowFacebookChannelModal] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -76,6 +87,31 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   });
 
   const [newQuestion, setNewQuestion] = useState('');
+
+  // ── localStorage persistence ──────────────────────────────────────────────────
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    if (!chatbot?.id) return;
+    const savedForm = localStorage.getItem(`chatbot_form_${chatbot.id}`);
+    if (savedForm) {
+      try {
+        const parsed = JSON.parse(savedForm);
+        setForm(prev => ({ ...prev, ...parsed }));
+      } catch (e) {
+        console.warn('Failed to load saved form:', e);
+      }
+    }
+  }, [chatbot?.id]);
+
+  // Save form to localStorage whenever it changes (debounced)
+  useEffect(() => {
+    if (!chatbot?.id) return;
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem(`chatbot_form_${chatbot.id}`, JSON.stringify(form));
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [form, chatbot?.id]);
 
   // Documents
   const [documents, setDocuments] = useState([]);
@@ -314,18 +350,22 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       };
 
       let updatedBot;
+      let saveSuccess = false;
       try {
         const res = await chatbotApi.updateChatbot(chatbot.id, updateData);
-        if (res.success) {
-          updatedBot = { ...chatbot, ...res.data };
+        if (res.success && res.data) {
+          // Always set suggested_questions from form to ensure it's saved correctly
+          updatedBot = { ...chatbot, ...res.data, suggested_questions: form.suggested_questions || [] };
+          saveSuccess = true;
         } else {
-          throw new Error(res.message);
+          throw new Error(res.message || 'Save failed');
         }
       } catch (apiError) {
         console.warn('[ChatbotSettings] API save failed, using localStorage:', apiError.message);
         updatedBot = {
           ...chatbot,
           ...updateData,
+          suggested_questions: form.suggested_questions || [],
           widget_settings: {
             primary_color: form.primary_color,
             background_color: form.background_color,
@@ -334,7 +374,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
             position: form.position,
             logo_url: form.logo_url,
             show_avatar: form.show_avatar,
-            suggested_questions: form.suggested_questions,
+            suggested_questions: form.suggested_questions || [],
           },
         };
         const bots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
@@ -343,10 +383,22 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           bots[idx] = updatedBot;
           localStorage.setItem('uknow_chatbots', JSON.stringify(bots));
         }
+        saveSuccess = true;
       }
 
-      onUpdate(updatedBot);
-      toast.success(t('common.success'));
+      if (saveSuccess) {
+        onUpdate(updatedBot);
+        toast.success(t('common.success'));
+        // Verify by re-reading from localStorage
+        const verifyBots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
+        const verifyBot = verifyBots.find(b => b.id === chatbot.id);
+        if (verifyBot?.widget_settings) {
+          const ws = verifyBot.widget_settings;
+          if (ws.primary_color !== form.primary_color || ws.text_color !== form.text_color) {
+            toast.error('Có lỗi khi lưu cài đặt giao diện. Vui lòng thử lại.');
+          }
+        }
+      }
     } catch (err) {
       toast.error(err.message || t('errors.saveFailed'));
     } finally {
@@ -392,6 +444,18 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       toast.error(t('errors.validationError'));
       return;
     }
+    // Validate file size (10MB)
+    if (uploadForm.file.size > 10 * 1024 * 1024) {
+      toast.error('File quá lớn. Vui lòng chọn file nhỏ hơn 10MB.');
+      return;
+    }
+    // Validate file type
+    const allowedTypes = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx'];
+    const ext = uploadForm.file.name.split('.').pop()?.toLowerCase();
+    if (!allowedTypes.includes(ext)) {
+      toast.error(`Định dạng file không được hỗ trợ. Vui lòng sử dụng: ${allowedTypes.join(', ')}`);
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
@@ -405,13 +469,13 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           type: 'file',
           file_name: uploadForm.file.name,
           status: 'ready',
-          chunk_count: res.data.chunks,
+          chunk_count: res.data.chunks || 0,
           created_at: new Date().toISOString(),
         };
         setDocuments(prev => [newDoc, ...prev]);
         setShowUploadModal(false);
         setUploadForm({ title: '', file: null });
-        toast.success(`Đã upload: ${res.data.chunks} chunks`);
+        toast.success(`Đã huấn luyện thành công: ${res.data.chunks || 0} đoạn`);
         const bots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
         const idx = bots.findIndex(b => b.id === chatbot.id);
         if (idx >= 0) {
@@ -422,7 +486,9 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         toast.error(res.data?.message || t('errors.uploadFailed'));
       }
     } catch (err) {
-      toast.error(err.message || t('errors.uploadFailed'));
+      console.error('[Upload] Error:', err);
+      const errorMsg = err?.response?.data?.message || err?.message || t('errors.uploadFailed');
+      toast.error(`Upload thất bại: ${errorMsg}`);
     } finally {
       setUploading(false);
     }
@@ -518,6 +584,14 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const zaloWebhookUrl = zaloChannel?.webhook_url || `${productionApiBase}/api/webhooks/zalo-oa`;
   const facebookWebhookUrl = facebookChannel?.webhook_url || `${productionApiBase}/api/webhooks/facebook`;
   const facebookVerifyToken = 'founderai';
+  const publicChatbotUrl = `${productionApiBase}/chat/${chatbot.widget_key || chatbot.id}`;
+
+  const copyPublicUrl = () => {
+    navigator.clipboard.writeText(publicChatbotUrl);
+    setWidgetCopied(true);
+    toast.success(t('common.copied'));
+    setTimeout(() => setWidgetCopied(false), 2000);
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -580,79 +654,151 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           {activeTab === 'general' && (
             <div className="space-y-5">
 
-              {/* Thông tin cơ bản */}
+              {/* Gộp: Thông tin + AI + Câu hỏi gợi ý */}
               <SectionCard
                 icon={HiOutlineChatAlt2}
-                title="Thông tin cơ bản"
-                subtitle="Tên, mô tả và lời chào mặc định"
+                title="Cấu hình chatbot"
+                subtitle="Thông tin cơ bản, AI và giao diện"
                 accent="purple"
               >
-                <div className="space-y-4">
-                  <FieldRow label="Tên chatbot" hint="Tên hiển thị của chatbot trên website">
-                    <TextInput
-                      value={form.name}
-                      onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                      placeholder="VD: Trợ lý AI"
-                    />
-                  </FieldRow>
-                  <FieldRow label="Mô tả ngắn">
-                    <Textarea
-                      value={form.description}
-                      onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                      placeholder="Mô tả chatbot giúp gì cho người dùng..."
-                      rows={2}
-                    />
-                  </FieldRow>
-                  <FieldRow label="Tin nhắn chào mừng">
-                    <Textarea
-                      value={form.greeting_msg}
-                      onChange={e => setForm(p => ({ ...p, greeting_msg: e.target.value }))}
-                      placeholder="VD: Xin chào! Tôi có thể giúp gì cho bạn?"
-                      rows={2}
-                    />
-                  </FieldRow>
-                  <div className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
-                      <p className="text-xs text-slate-400">Bật để chatbot nhận và trả lời tin nhắn</p>
-                    </div>
-                    <Toggle
-                      checked={form.is_active}
-                      onChange={val => setForm(p => ({ ...p, is_active: val }))}
-                    />
-                  </div>
-                </div>
-              </SectionCard>
+                <div className="space-y-5">
 
-              {/* Hành vi AI */}
-              <SectionCard
-                icon={HiOutlineSparkles}
-                title="Hành vi AI"
-                subtitle="System prompt và tham số mô hình"
-                accent="blue"
-              >
-                <div className="space-y-4">
-                  <FieldRow label="System Instructions" hint={`${form.system_instruction?.length || 0} / 2000 ký tự`}>
-                    <Textarea
-                      value={form.system_instruction}
-                      onChange={e => setForm(p => ({ ...p, system_instruction: e.target.value }))}
-                      placeholder="Nhập prompt hướng dẫn chi tiết (Ví dụ: Bạn là một trợ lý ảo thân thiện...)"
-                      rows={5}
-                    />
-                  </FieldRow>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="label mb-0">Độ sáng tạo (Temperature)</label>
-                      <span className="text-xs font-mono text-slate-500">{form.temperature}</span>
+                  {/* Thông tin cơ bản */}
+                  <div className="space-y-4">
+                    <FieldRow label="Tên chatbot" hint="Tên hiển thị của chatbot trên website">
+                      <TextInput
+                        value={form.name}
+                        onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="VD: Trợ lý AI"
+                      />
+                    </FieldRow>
+                    <FieldRow label="Tin nhắn chào mừng">
+                      <Textarea
+                        value={form.greeting_msg}
+                        onChange={e => setForm(p => ({ ...p, greeting_msg: e.target.value }))}
+                        placeholder="VD: Xin chào! Tôi có thể giúp gì cho bạn?"
+                        rows={2}
+                      />
+                    </FieldRow>
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
+                        <p className="text-xs text-slate-400">Bật để chatbot nhận và trả lời tin nhắn</p>
+                      </div>
+                      <Toggle
+                        checked={form.is_active}
+                        onChange={val => setForm(p => ({ ...p, is_active: val }))}
+                      />
                     </div>
-                    <input type="range" min="0" max="1" step="0.05" value={form.temperature}
-                      onChange={e => setForm(p => ({ ...p, temperature: parseFloat(e.target.value) }))}
-                      className="w-full accent-primary-600"
-                    />
-                    <div className="flex justify-between text-xs text-slate-400 mt-1">
-                      <span>Chính xác</span>
-                      <span>Sáng tạo</span>
+                  </div>
+
+                  <div className="border-t border-slate-100" />
+
+                  {/* Hành vi AI */}
+                  <div className="space-y-4">
+                    <FieldRow label="System Instructions" hint={`${form.system_instruction?.length || 0} / 2000 ký tự`}>
+                      <Textarea
+                        value={form.system_instruction}
+                        onChange={e => setForm(p => ({ ...p, system_instruction: e.target.value }))}
+                        placeholder="Nhập prompt hướng dẫn chi tiết (Ví dụ: Bạn là một trợ lý ảo thân thiện...)"
+                        rows={5}
+                      />
+                    </FieldRow>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="label mb-0">Độ sáng tạo (Temperature)</label>
+                        <span className="text-xs font-mono text-slate-500">{form.temperature}</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.05" value={form.temperature}
+                        onChange={e => setForm(p => ({ ...p, temperature: parseFloat(e.target.value) }))}
+                        className="w-full accent-primary-600"
+                      />
+                      <div className="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>Chính xác</span>
+                        <span>Sáng tạo</span>
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="border-t border-slate-100" />
+
+                  {/* Câu hỏi gợi ý */}
+                  <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <label className="label mb-0">Câu hỏi gợi ý</label>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Hiển thị khi người dùng bắt đầu chat</p>
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        (form.suggested_questions || []).length >= 5
+                          ? 'bg-amber-100 text-amber-600'
+                          : 'bg-violet-100 text-violet-600'
+                      }`}>
+                        {(form.suggested_questions || []).length}/5
+                      </span>
+                    </div>
+
+                    {/* Input Row */}
+                    <div className="flex gap-2 mb-3">
+                      <div className="flex-1 relative">
+                        <TextInput
+                          value={newQuestion}
+                          onChange={e => setNewQuestion(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); addSuggestedQuestion(); }
+                            if (e.key === 'Escape') { setNewQuestion(''); }
+                          }}
+                          placeholder="Nhập câu hỏi gợi ý..."
+                          disabled={(form.suggested_questions || []).length >= 5}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addSuggestedQuestion}
+                        disabled={(form.suggested_questions || []).length >= 5}
+                        className="btn btn-secondary shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <HiOutlinePlus className="w-4 h-4" />
+                      </button>
+                      {(form.suggested_questions || []).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, suggested_questions: [] }))}
+                          className="btn bg-slate-100 text-slate-600 hover:bg-slate-200 shrink-0 text-xs px-3"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Questions List */}
+                    {(form.suggested_questions || []).length > 0 ? (
+                      <div className="space-y-1.5">
+                        {form.suggested_questions.map((q, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-violet-100 group hover:border-violet-300 transition-colors">
+                            <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {i + 1}
+                            </span>
+                            <span className="flex-1 text-sm text-slate-700 truncate">{q}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeSuggestedQuestion(i)}
+                              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"
+                            >
+                              <HiOutlineX className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400">
+                        <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-xs">Chưa có câu hỏi gợi ý nào</p>
+                        <p className="text-[10px] mt-0.5">Nhập câu hỏi và nhấn Enter hoặc + để thêm</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </SectionCard>
@@ -665,23 +811,30 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                 accent="orange"
               >
                 <div className="space-y-5">
-                  {/* Avatar & Logo URLs */}
-                  <div className="grid grid-cols-1 gap-4">
-                    <FieldRow label="Avatar URL">
-                      <TextInput
-                        type="url"
-                        value={form.avatar_url}
-                        onChange={e => setForm(p => ({ ...p, avatar_url: e.target.value }))}
-                        placeholder="https://example.com/avatar.png"
-                      />
-                    </FieldRow>
-                    <FieldRow label="Logo URL">
-                      <TextInput
-                        type="url"
-                        value={form.logo_url}
-                        onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
-                        placeholder="https://example.com/logo.png"
-                      />
+                  {/* Icon URL */}
+                  <div>
+                    <FieldRow label="Icon chatbot" hint="Icon hiển thị trong widget">
+                      <div className="flex items-center gap-3 bg-slate-50 rounded-lg p-3">
+                        {form.logo_url ? (
+                          <img src={form.logo_url} alt="icon" className="w-10 h-10 rounded-lg object-cover bg-slate-200" onError={e => e.target.style.display = 'none'} />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center text-violet-400">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          </div>
+                        )}
+                        <input
+                          type="url"
+                          value={form.logo_url}
+                          onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
+                          placeholder="https://example.com/icon.png"
+                          className="flex-1 bg-transparent text-sm outline-none border-none p-0" />
+                        {form.logo_url && (
+                          <button type="button" onClick={() => setForm(p => ({ ...p, logo_url: '' }))}
+                            className="p-1 text-slate-400 hover:text-red-500 transition-colors">
+                            <HiOutlineX className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </FieldRow>
                   </div>
 
@@ -746,36 +899,6 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                       checked={form.show_avatar}
                       onChange={val => setForm(p => ({ ...p, show_avatar: val }))}
                     />
-                  </div>
-
-                  {/* Suggested Questions */}
-                  <div>
-                    <label className="label mb-2.5">Câu hỏi gợi ý <span className="text-slate-400 font-normal">(tối đa 5)</span></label>
-                    <div className="flex gap-2 mb-3">
-                      <TextInput
-                        value={newQuestion}
-                        onChange={e => setNewQuestion(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSuggestedQuestion())}
-                        placeholder="Nhập câu hỏi gợi ý..."
-                      />
-                      <button type="button" onClick={addSuggestedQuestion}
-                        className="btn btn-secondary shrink-0">
-                        <HiOutlinePlus className="w-4 h-4" /> Thêm
-                      </button>
-                    </div>
-                    {form.suggested_questions?.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {form.suggested_questions.map((q, i) => (
-                          <span key={i} className="inline-flex items-center gap-1.5 pr-1.5 pl-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
-                            <span className="max-w-[160px] truncate">{q}</span>
-                            <button type="button" onClick={() => removeSuggestedQuestion(i)}
-                              className="p-0.5 rounded-full hover:bg-primary-100 transition-colors">
-                              <HiOutlineX className="w-3.5 h-3.5" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               </SectionCard>
@@ -863,111 +986,131 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                 subtitle="Nhúng chatbot lên website hoặc kết nối kênh"
                 accent="blue"
               >
-                <div className="space-y-5">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700">Chọn phương thức triển khai</p>
-                        <p className="text-xs text-slate-400 mt-1">Nhúng chatbot lên website hoặc kết nối kênh hội thoại bên ngoài.</p>
+                <div className="space-y-3">
+                  {/* Quick Action Buttons for Website/iFrame/PublicLink */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowScriptModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                        </svg>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-start lg:justify-end">
-                        {[
-                          { id: 'script',    label: 'Website Script' },
-                          { id: 'iframe',    label: 'iFrame' },
-                          { id: 'zalo',      label: 'Zalo OA' },
-                          { id: 'facebook',  label: 'Facebook' },
-                        ].map(tab => (
-                          <button key={tab.id} type="button" onClick={() => setDeployTab(tab.id)}
-                            className={`min-w-0 px-4 py-2 rounded-xl text-xs font-medium transition-colors border ${
-                              deployTab === tab.id
-                                ? 'bg-white text-slate-800 border-slate-200 shadow-sm'
-                                : 'bg-transparent text-slate-500 border-transparent hover:text-slate-700 hover:bg-white/70'
-                            }`}
-                          >
-                            <span className="truncate block">{tab.label}</span>
-                          </button>
-                        ))}
+                      <span className="text-xs font-medium text-slate-700">Script</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowIframeModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                        </svg>
                       </div>
-                    </div>
+                      <span className="text-xs font-medium text-slate-700">iFrame</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPublicLinkModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-purple-300 hover:bg-purple-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                        <HiOutlineQrcode className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-medium text-slate-700">Link</span>
+                    </button>
                   </div>
 
-                  {deployTab === 'script' && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 min-w-0 w-full space-y-3">
-                      <p className="text-xs text-slate-500">
-                        Copy đoạn mã bên dưới và dán vào thẻ <code className="bg-slate-100 px-1 rounded">&#x3C;head&#x3E;</code> hoặc trước thẻ đóng <code className="bg-slate-100 px-1 rounded">&#x3C;/body&#x3E;</code> trên website.
-                      </p>
-                      <div className="relative">
-                        <pre className="bg-slate-900 text-green-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
-                          {`<script>
-  window.customChatbotConfig = {
-    token: '${chatbot.widget_key || chatbot.id}',
-    baseUrl: '${typeof window !== 'undefined' ? window.location.origin : ''}',
-    primaryColor: '${form.primary_color}',
-    backgroundColor: '${form.background_color}',
-    textColor: '${form.text_color}',
-    accentColor: '${form.accent_color}',
-    position: '${form.position}',
-    welcomeMessage: '${form.greeting_msg || 'Xin chào!'}'
-  };
-</script>
-<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/widget.js" defer></script>`}
-                        </pre>
-                        <button type="button" onClick={copyWidgetCode}
-                          className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-                          {widgetCopied
-                            ? <><HiOutlineCheck className="w-3.5 h-3.5" /> Đã copy</>
-                            : <><HiOutlineCode className="w-3.5 h-3.5" /> Copy code</>
-                          }
-                        </button>
+                  {/* Channel Connection Cards - Now as buttons to open modals */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowZaloChannelModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold group-hover:bg-blue-200 transition-colors">
+                        Z
                       </div>
-                    </div>
-                  )}
-
-                  {deployTab === 'iframe' && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 min-w-0 w-full space-y-3">
-                      <p className="text-xs text-slate-500">
-                        Sử dụng iFrame để nhúng giao diện chat vào một trang cố định trên website.
-                      </p>
-                      <div className="relative">
-                        <pre className="bg-slate-900 text-blue-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
-                          {`<iframe
-  src="${typeof window !== 'undefined' ? window.location.origin : ''}/chat/${chatbot.id}"
-  width="100%" height="600"
-  style="border:none;border-radius:12px;"
-  allow="microphone;camera"
-></iframe>`}
-                        </pre>
-                        <button type="button" onClick={copyIframeCode}
-                          className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-                          <HiOutlineCode className="w-3.5 h-3.5" /> Copy code
-                        </button>
+                      <div className="text-center">
+                        <span className="text-xs font-medium text-slate-700">Zalo OA</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{zaloChannel ? 'Đã kết nối' : 'Chưa kết nối'}</p>
                       </div>
-                    </div>
-                  )}
+                    </button>
 
-                  {deployTab === 'zalo' && (
-                    <ZaloChannelCard
-                      channel={zaloChannel}
-                      onConnect={() => setShowZaloConnectModal(true)}
-                      onDisconnect={() => handleDisconnectChannel('zalo_oa')}
-                      onOpenGuide={() => setShowChannelGuideModal('zalo')}
-                      webhookUrl={zaloWebhookUrl}
-                      chatbotId={chatbot.id}
-                    />
-                  )}
-
-                  {deployTab === 'facebook' && (
-                    <FacebookChannelCard
-                      channel={facebookChannel}
-                      onConnect={() => setShowFacebookConnectModal(true)}
-                      onDisconnect={() => handleDisconnectChannel('facebook')}
-                      onOpenGuide={() => setShowChannelGuideModal('facebook')}
-                      webhookUrl={facebookWebhookUrl}
-                      verifyToken={facebookVerifyToken}
-                    />
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => setShowFacebookChannelModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                        </svg>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs font-medium text-slate-700">Facebook</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{facebookChannel ? 'Đã kết nối' : 'Chưa kết nối'}</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
               </SectionCard>
+
+              {/* Script Modal */}
+              <DeployScriptModal
+                open={showScriptModal}
+                chatbot={chatbot}
+                form={form}
+                onClose={() => setShowScriptModal(false)}
+                onCopy={copyWidgetCode}
+                copied={widgetCopied}
+              />
+
+              {/* iFrame Modal */}
+              <DeployIframeModal
+                open={showIframeModal}
+                chatbot={chatbot}
+                onClose={() => setShowIframeModal(false)}
+                onCopy={copyIframeCode}
+              />
+
+              {/* Public Link Modal */}
+              <DeployPublicLinkModal
+                open={showPublicLinkModal}
+                chatbot={chatbot}
+                form={form}
+                onClose={() => setShowPublicLinkModal(false)}
+              />
+
+              {/* Zalo Channel Modal */}
+              <ZaloChannelModal
+                open={showZaloChannelModal}
+                channel={zaloChannel}
+                form={form}
+                onClose={() => setShowZaloChannelModal(false)}
+                onConnect={() => setShowZaloConnectModal(true)}
+                onDisconnect={() => handleDisconnectChannel('zalo_oa')}
+                onOpenGuide={() => setShowChannelGuideModal('zalo')}
+                webhookUrl={zaloWebhookUrl}
+              />
+
+              {/* Facebook Channel Modal */}
+              <FacebookChannelModal
+                open={showFacebookChannelModal}
+                channel={facebookChannel}
+                onClose={() => setShowFacebookChannelModal(false)}
+                onConnect={() => setShowFacebookConnectModal(true)}
+                onDisconnect={() => handleDisconnectChannel('facebook')}
+                onOpenGuide={() => setShowChannelGuideModal('facebook')}
+                webhookUrl={facebookWebhookUrl}
+                verifyToken={facebookVerifyToken}
+              />
             </div>
           )}
 
