@@ -310,6 +310,7 @@ class ZaloPersonalInboxService {
       const rawData = rawMessage?._raw || rawMessage;
       const clientGroupId = rawData?.clientGroupId || rawData?.gridId || null;
       const idTo = rawData?.idTo || '';
+      const threadType = rawData?.threadType;
       
       // Strong indicators of group message
       const hasGroupContext = Boolean(
@@ -317,13 +318,21 @@ class ZaloPersonalInboxService {
         rawData?.isGroup === true ||
         rawData?.isPublicGroup === true ||
         rawData?.isChatRoom === true ||
+        rawData?.threadType === 1 ||    // 1 = group in zca-js
+        rawData?.threadType === 2 ||    // 2 = community in zca-js
         idTo?.startsWith('g_') ||
-        idTo?.startsWith('group_')
+        idTo?.startsWith('group_') ||
+        idTo?.startsWith('c_')
       );
+      
+      // If threadType is explicitly set and indicates group, log it
+      if (threadType !== undefined) {
+        console.log(`[ZaloInbox] threadType=${threadType} detected (0=personal, 1=group, 2=community), hasGroupContext=${hasGroupContext}`);
+      }
       
       // If message has group context, skip AI routing (someone texting into a group should NOT get personal reply)
       if (hasGroupContext) {
-        console.log(`[ZaloInbox] Skipping AI routing: message has group context (clientGroupId=${clientGroupId}, idTo=${idTo})`);
+        console.log(`[ZaloInbox] Skipping AI routing: message has group context (clientGroupId=${clientGroupId}, idTo=${idTo}, threadType=${threadType})`);
         return;
       }
 
@@ -338,6 +347,23 @@ class ZaloPersonalInboxService {
         const prevGroupName = visitorInfo?.group_name || existingGroupConv.visitor_name || 'group';
         console.log(`[ZaloInbox] Skipping AI routing: sender ${senderId} was previously in ${prevGroupName}`);
         return;
+      }
+      
+      // Additional check: look at conversation history to see if this externalId was ever marked as group
+      const existingConv = await zaloPersonalRepository.findConversation(zaloSettingId, String(senderId));
+      if (existingConv?.visitor_info) {
+        try {
+          const convInfo = typeof existingConv.visitor_info === 'string' 
+            ? JSON.parse(existingConv.visitor_info) 
+            : existingConv.visitor_info;
+          if (convInfo?.is_group === true) {
+            const prevGroupName = convInfo?.group_name || 'group';
+            console.log(`[ZaloInbox] Skipping AI routing: sender ${senderId} was previously in group ${prevGroupName}`);
+            return;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
       }
 
       // Build message type
@@ -436,8 +462,9 @@ class ZaloPersonalInboxService {
       console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
 
       // Skip AI routing for group messages - only reply personal chats
-      if (isGroup) {
-        console.log(`[ZaloInbox] Skipping AI routing for group message (groupId: ${groupId})`);
+      // Use hasGroupContext as backup check (catches cases where isGroup=false but group indicators exist)
+      if (isGroup || hasGroupContext) {
+        console.log(`[ZaloInbox] Skipping AI routing for group message (isGroup=${isGroup}, hasGroupContext=${hasGroupContext}, groupId: ${groupId || clientGroupId})`);
         return;
       }
 
@@ -471,6 +498,18 @@ class ZaloPersonalInboxService {
       console.log(`[ZaloInbox] ✅ is_enabled=true, calling chatRouterService... content="${String(content).substring(0, 100)}"`);
       try {
         console.log(`[ZaloInbox] >>> Before chatRouterService call`);
+        
+        // Determine if this is truly a group message
+        // Use hasGroupContext as the authoritative check for blocking group AI replies
+        const isGroupMessage = isGroup || hasGroupContext;
+        const effectiveGroupId = groupId || clientGroupId || null;
+        
+        // If it's a group message, do NOT route to AI at all
+        if (isGroupMessage) {
+          console.log(`[ZaloInbox] ❌ Blocking AI route: detected as group message (isGroup=${isGroup}, hasGroupContext=${hasGroupContext}, groupId=${effectiveGroupId})`);
+          return;
+        }
+        
         const result = await chatRouterService.routeMessageWithSettings({
           channel: 'zalo_personal',
           userId,
@@ -491,8 +530,8 @@ class ZaloPersonalInboxService {
             message: result.content,
             userId,
             conversationInfo: {
-              is_group: isGroup,
-              group_id: groupId,
+              is_group: false, // Explicitly false - we already filtered out group messages
+              group_id: null,
             },
           });
 
