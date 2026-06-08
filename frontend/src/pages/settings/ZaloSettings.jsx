@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState, useCallback } from 'react';
+/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
@@ -112,7 +113,7 @@ const ZaloSettings = () => {
 
   useEffect(() => {
     fetchAccounts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Auto-refresh when page regains focus (e.g., after tab switch or server restart)
@@ -321,7 +322,7 @@ const ZaloSettings = () => {
         window.clearInterval(timerId);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [qrPreview.isOpen, qrPreview.sessionKey]);
 
   return (

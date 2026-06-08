@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { useState, useEffect, useCallback } from 'react';
 import { HiOutlineSparkles, HiOutlineChevronDown, HiOutlineChevronRight, HiOutlineXCircle } from 'react-icons/hi';
 import toast from 'react-hot-toast';

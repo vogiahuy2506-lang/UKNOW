@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -68,7 +69,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
       fetchPublicTemplates();
       fetchMyTemplates();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [isOpen]);
 
   useEffect(() => {

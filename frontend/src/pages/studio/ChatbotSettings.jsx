@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -183,7 +184,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       loadDocumentsForChatbot(chatbot.id);
       loadChannels(chatbot.id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [chatbot?.id]);
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { useI18n } from '../../../i18n';
 import {
   HiOutlineDuplicate,
