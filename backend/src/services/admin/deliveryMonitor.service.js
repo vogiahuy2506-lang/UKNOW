@@ -157,6 +157,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     zaloDisconnectedRows,
     pendingRetryRows,
     zaloSkipRows,
+    totalIntendedRows,
   ] = await Promise.all([
     safeQuery(
       `SELECT status, COUNT(*)::int AS count
@@ -306,6 +307,17 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       params,
       [{ count: 0 }]
     ),
+    safeQuery(
+      `SELECT
+         COALESCE(SUM(total_recipients), 0)::int AS total,
+         COALESCE(SUM(successful_sends), 0)::int AS successful,
+         COALESCE(SUM(skipped_sends), 0)::int AS skipped
+       FROM campaign_runs
+       WHERE started_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND total_recipients > 0`,
+      params,
+      [{ total: 0, successful: 0, skipped: 0 }]
+    ),
   ]);
 
   const queueMetrics = await outboundMessageQueueService.getQueueMetrics();
@@ -348,6 +360,9 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
   );
   summary.attempts = summary.sent + summary.failed;
   summary.successRate = summary.attempts > 0 ? Math.round((summary.sent / summary.attempts) * 1000) / 10 : 0;
+  const totalIntended = toNumber(totalIntendedRows[0]?.total);
+  summary.totalIntended = totalIntended;
+  summary.reachRate = totalIntended > 0 ? Math.round((summary.sent / totalIntended) * 1000) / 10 : null;
 
   const topRuns = topRunRows.map(mapTopRunRow);
 

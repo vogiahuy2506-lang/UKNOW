@@ -421,8 +421,22 @@ export default function AdminDeliveryMonitorPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <KpiCard icon={HiOutlineCheckCircle} label={t('adminDeliveryMonitor.kpi.sent')} value={fmt(summary.sent)} sub={t('adminDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })} tone="green" />
-        <KpiCard icon={HiOutlineExclamationCircle} label={t('adminDeliveryMonitor.kpi.failed')} value={fmt(summary.failed)} sub={t('adminDeliveryMonitor.kpi.successRate', { rate: fmtPct(summary.successRate) })} tone={summary.failed > 0 ? 'red' : 'green'} />
+        <KpiCard
+          icon={HiOutlineCheckCircle}
+          label={t('adminDeliveryMonitor.kpi.sent')}
+          value={fmt(summary.sent)}
+          sub={summary.totalIntended > 0
+            ? t('adminDeliveryMonitor.kpi.reachRate', { rate: fmtPct(summary.reachRate), total: fmt(summary.totalIntended) })
+            : t('adminDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })}
+          tone={summary.reachRate !== null && summary.reachRate < 70 ? 'red' : 'green'}
+        />
+        <KpiCard
+          icon={HiOutlineExclamationCircle}
+          label={t('adminDeliveryMonitor.kpi.failed')}
+          value={fmt(summary.failed)}
+          sub={t('adminDeliveryMonitor.kpi.successRate', { rate: fmtPct(summary.successRate) })}
+          tone={summary.failed > 0 ? 'red' : 'green'}
+        />
         <KpiCard icon={HiOutlineTrendingUp} label={t('adminDeliveryMonitor.kpi.clicked')} value={fmt(summary.clicked)} sub={t('adminDeliveryMonitor.kpi.opened', { opened: fmt(summary.opened) })} tone="blue" />
         <KpiCard icon={HiOutlineClock} label={t('adminDeliveryMonitor.kpi.runningRuns')} value={fmt(summary.runningRuns)} sub={t('adminDeliveryMonitor.kpi.totalRuns', { total: fmt(summary.totalRuns) })} tone="orange" />
       </div>
