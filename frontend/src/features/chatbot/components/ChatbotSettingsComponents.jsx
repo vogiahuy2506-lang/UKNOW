@@ -5,6 +5,8 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineClipboardCopy,
+  HiOutlineCode,
+  HiOutlineCheck,
   HiOutlineDocumentText,
   HiOutlineExternalLink,
   HiOutlineLink,
@@ -770,6 +772,200 @@ export function ChannelGuideModal({
               ) : null}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DeployScriptModal({ open, chatbot, form, onClose, onCopy, copied }) {
+  if (!open) return null;
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const code = `<script>
+  window.customChatbotConfig = {
+    token: '${chatbot.widget_key || chatbot.id}',
+    baseUrl: '${baseUrl}',
+    primaryColor: '${form.primary_color}',
+    backgroundColor: '${form.background_color}',
+    textColor: '${form.text_color}',
+    accentColor: '${form.accent_color}',
+    logoUrl: '${form.logo_url || ''}',
+    showAvatar: ${form.show_avatar !== false},
+    suggestedQuestions: ${JSON.stringify(form.suggested_questions || [])},
+    position: '${form.position}',
+    welcomeMessage: '${form.greeting_msg || 'Xin chào! Tôi có thể giúp gì cho bạn?'}'
+  };
+</script>
+<script src="${baseUrl}/widget.js" defer></script>`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Nhúng Script</h3>
+            <p className="text-xs text-slate-400 mt-1">Dán đoạn code này vào website để hiển thị widget chatbot.</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3 overflow-y-auto max-h-[calc(90vh-76px)]">
+          <div className="relative">
+            <pre className="bg-slate-900 text-green-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">{code}</pre>
+            <button type="button" onClick={onCopy}
+              className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+              {copied
+                ? <><HiOutlineCheck className="w-3.5 h-3.5" /> Đã copy</>
+                : <><HiOutlineCode className="w-3.5 h-3.5" /> Copy code</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DeployIframeModal({ open, chatbot, onClose, onCopy }) {
+  if (!open) return null;
+
+  const src = typeof window !== 'undefined'
+    ? `${window.location.origin}/chat/${chatbot.id}`
+    : `/chat/${chatbot.id}`;
+  const code = `<iframe src="${src}" width="100%" height="600" style="border:none;border-radius:12px;" allow="microphone;camera"></iframe>`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Nhúng iFrame</h3>
+            <p className="text-xs text-slate-400 mt-1">Dán code này vào website để hiển thị chatbot trong iframe.</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3 overflow-y-auto max-h-[calc(90vh-76px)]">
+          <div className="relative">
+            <pre className="bg-slate-900 text-blue-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">{code}</pre>
+            <button type="button" onClick={onCopy}
+              className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+              <HiOutlineCode className="w-3.5 h-3.5" /> Copy code
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DeployPublicLinkModal({ open, chatbot, onClose }) {
+  if (!open) return null;
+
+  const publicUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/chat/${chatbot.widget_key || chatbot.id}`
+    : `https://founderai.biz/chat/${chatbot.widget_key || chatbot.id}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Link công khai</h3>
+            <p className="text-xs text-slate-400 mt-1">Chia sẻ link này để khách truy cập chatbot trực tiếp.</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4 overflow-y-auto max-h-[calc(90vh-76px)]">
+          <CopyField label="URL chatbot" value={publicUrl} tone="purple" />
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-600 hover:underline"
+          >
+            <HiOutlineExternalLink className="w-3.5 h-3.5" /> Mở link trong tab mới
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ZaloChannelModal({
+  open,
+  channel,
+  onClose,
+  onConnect,
+  onDisconnect,
+  onOpenGuide,
+  webhookUrl,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Zalo Official Account</h3>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto max-h-[calc(90vh-76px)]">
+          <ZaloChannelCard
+            channel={channel}
+            onConnect={onConnect}
+            onDisconnect={onDisconnect}
+            onOpenGuide={onOpenGuide}
+            webhookUrl={webhookUrl}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FacebookChannelModal({
+  open,
+  channel,
+  onClose,
+  onConnect,
+  onDisconnect,
+  onOpenGuide,
+  webhookUrl,
+  verifyToken,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Facebook Messenger</h3>
+          <button type="button" onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <HiOutlineX className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto max-h-[calc(90vh-76px)]">
+          <FacebookChannelCard
+            channel={channel}
+            onConnect={onConnect}
+            onDisconnect={onDisconnect}
+            onOpenGuide={onOpenGuide}
+            webhookUrl={webhookUrl}
+            verifyToken={verifyToken}
+          />
         </div>
       </div>
     </div>
