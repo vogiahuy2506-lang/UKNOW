@@ -98,9 +98,6 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       rm.duration_seconds
     FROM run_metrics rm
     ORDER BY
-      rm.failed_sends DESC,
-      (rm.failed_sends::float / GREATEST(rm.successful_sends + rm.failed_sends, 1)) DESC,
-      rm.duration_seconds DESC,
       rm.started_at DESC
     LIMIT ${Number.parseInt(limit, 10)}`;
 }

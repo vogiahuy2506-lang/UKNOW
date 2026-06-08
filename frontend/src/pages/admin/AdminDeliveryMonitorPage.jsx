@@ -223,8 +223,8 @@ const SignalsPanel = ({ signals, t }) => (
 const TopRunsTable = ({ runs, t }) => (
   <div className="card overflow-hidden">
     <div className="border-b border-gray-100 px-5 py-4">
-      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.topRuns')}</h2>
-      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.topRunsDesc')}</p>
+      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.recentRuns')}</h2>
+      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.recentRunsDesc')}</p>
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
