@@ -166,7 +166,7 @@ class ChatRouterService {
 
     // Send reply via adapter
     if (adapter.sendReply) {
-      await adapter.sendReply({ conversationId, message: aiResponse.text });
+      await adapter.sendReply({ conversationId, message: aiResponse.text, conversationInfo: visitorInfo });
     }
 
     return { type: 'text', content: aiResponse.text };

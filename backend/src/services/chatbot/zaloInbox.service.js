@@ -445,6 +445,10 @@ class ZaloPersonalInboxService {
             externalId: String(senderId),
             message: result.content,
             userId,
+            conversationInfo: {
+              is_group: isGroup,
+              group_id: groupId,
+            },
           });
 
           if (sendResult.success) {

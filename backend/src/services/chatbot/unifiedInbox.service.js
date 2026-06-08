@@ -218,6 +218,10 @@ class UnifiedInboxService {
           message: content.trim(),
           attachments,
           userId,
+          conversationInfo: {
+            is_group: conversation.is_group,
+            group_id: conversation.group_id,
+          },
         };
         
         if (conversationType === 'channel') {

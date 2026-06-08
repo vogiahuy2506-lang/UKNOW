@@ -82,17 +82,35 @@ class ZaloPersonalAdapter {
         const rawData = message?.data || message;
 
         // Determine message source type (personal chat vs group)
-        // Group message indicators:
-        // 1. clientGroupId is present
-        // 2. threadType === 1 (Zalo internal group indicator)
-        // 3. idTo starts with 'g_' prefix
-        // 4. isGroup flag is explicitly true in raw data
+        // Group message indicators - multiple checks for reliability:
         const isGroup = Boolean(
           rawData?.clientGroupId || 
           rawData?.threadType === 1 || 
           rawData?.idTo?.startsWith('g_') ||
-          rawData?.isGroup === true
+          rawData?.isGroup === true ||
+          rawData?.isPublicGroup === true ||
+          rawData?.isChatRoom === true ||
+          (rawData?.zaloExt && rawData.zaloExt.isGroup === true)
         );
+        
+        // Extract groupId with multiple fallbacks
+        let detectedGroupId = null;
+        if (rawData?.clientGroupId) {
+          detectedGroupId = rawData.clientGroupId;
+        } else if (isGroup && rawData?.idTo?.startsWith('g_')) {
+          detectedGroupId = rawData.idTo;
+        } else if (rawData?.zaloExt?.groupId) {
+          detectedGroupId = rawData.zaloExt.groupId;
+        }
+        
+        console.log(`[ZaloPersonalAdapter] Message detection:`, {
+          isGroup,
+          clientGroupId: rawData?.clientGroupId,
+          threadType: rawData?.threadType,
+          idTo: rawData?.idTo,
+          zaloExt: rawData?.zaloExt,
+          rawKeys: Object.keys(rawData || {}).slice(0, 10),
+        });
         
         // Build normalized message object with full metadata
         const msgData = {
@@ -114,7 +132,7 @@ class ZaloPersonalAdapter {
           threadId: rawData.threadId || rawData.idTo,
           // Source context: personal or group
           isGroup: isGroup,
-          groupId: rawData.clientGroupId || (isGroup ? rawData.idTo : null),
+          groupId: detectedGroupId || rawData.clientGroupId || (isGroup ? rawData.idTo : null),
           groupName: rawData.groupName || null,
           // Full sender info
           senderName: rawData.displayName || rawData.alias || rawData.coinsName || null,
@@ -277,7 +295,7 @@ class ZaloPersonalAdapter {
    * @param {string} params.message - text reply
    * @param {number} params.userId
    */
-  async sendReply({ externalId, message, userId }) {
+  async sendReply({ externalId, message, userId, conversationInfo }) {
     const session = await this.getActiveSession(userId);
     if (!session?.api) {
       return { success: false, error: 'No active Zalo personal session' };
@@ -285,9 +303,29 @@ class ZaloPersonalAdapter {
 
     try {
       const api = session.api;
-      // zca-js uses sendMessage(payload, uid) - NOT sendText
       const payload = String(message || '').slice(0, 4000);
-      await api.sendMessage(payload, externalId);
+
+      // Check if this is a group conversation
+      const isGroup = conversationInfo?.is_group;
+      let sendTarget = externalId;
+
+      if (isGroup && conversationInfo?.group_id) {
+        // For group messages, send TO the group (not to individual user)
+        // The group_id format from zca-js is typically "g_xxx"
+        sendTarget = conversationInfo.group_id.startsWith('g_')
+          ? conversationInfo.group_id
+          : `g_${conversationInfo.group_id}`;
+        console.log(`[ZaloPersonalAdapter] Sending reply to group ${sendTarget}`);
+      } else if (isGroup && externalId?.startsWith('group_')) {
+        // Extract groupId from externalId format: "group_{groupId}_{senderId}"
+        const parts = externalId.split('_');
+        if (parts.length >= 2) {
+          sendTarget = parts[1].startsWith('g_') ? parts[1] : `g_${parts[1]}`;
+          console.log(`[ZaloPersonalAdapter] Sending reply to group ${sendTarget}`);
+        }
+      }
+
+      await api.sendMessage(payload, sendTarget);
 
       // Also save the sent message to database
       const now = new Date().toISOString();
