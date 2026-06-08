@@ -348,8 +348,13 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Xác định externalId dựa trên nguồn: group message dùng groupId, personal dùng senderId
-      const externalId = isGroup ? String(groupId) : String(senderId);
+      // Xác định externalId dựa trên nguồn: 
+      // - Group: dùng senderId để phân biệt từng người trong nhóm
+      // - Personal: dùng senderId
+      // Format group message: "group_{groupId}_{senderId}" để tránh trùng lặp
+      const externalId = isGroup 
+        ? `group_${groupId}_${senderId}` 
+        : String(senderId);
 
       // Lấy tên nhóm nếu là group message và không có sẵn
       let resolvedGroupName = groupName;
@@ -371,9 +376,16 @@ class ZaloPersonalInboxService {
       }
 
       // Xác định tên hiển thị cho conversation
-      const displayName = isGroup 
-        ? (resolvedGroupName || groupName || `Nhóm ${groupId}`)
-        : (resolvedSenderName || senderName || `User ${senderId}`);
+      // - Group: hiển thị tên người gửi + tên nhóm
+      // - Personal: hiển thị tên người gửi
+      let displayName;
+      if (isGroup) {
+        const senderDisplay = resolvedSenderName || senderName || `User ${senderId}`;
+        const groupDisplay = resolvedGroupName || groupName || `Nhóm ${groupId}`;
+        displayName = `${senderDisplay} (${groupDisplay})`;
+      } else {
+        displayName = resolvedSenderName || senderName || `User ${senderId}`;
+      }
 
       // Build visitor info với đầy đủ metadata
       const visitorInfo = {

@@ -173,8 +173,29 @@ class ZaloPersonalAdapter {
       return null;
     }
 
+    // Determine externalId based on source:
+    // - Group: use senderId to distinguish each person in the group
+    // - Personal: use senderId
+    // Format: "group_{groupId}_{senderId}" for group messages
+    const isGroup = msgData.isGroup || false;
+    const externalId = isGroup && msgData.groupId
+      ? `group_${msgData.groupId}_${msgData.fromUid}`
+      : String(msgData.fromUid);
+
+    // Determine display name:
+    // - Group: show sender name + group name
+    // - Personal: show sender name
+    let displayName;
+    if (isGroup && msgData.groupId) {
+      const senderDisplay = msgData.senderName || `User ${msgData.fromUid}`;
+      const groupDisplay = msgData.groupName || `Nhóm ${msgData.groupId}`;
+      displayName = `${senderDisplay} (${groupDisplay})`;
+    } else {
+      displayName = msgData.senderName || null;
+    }
+
     // Get or create conversation
-    let conversation = await zaloPersonalRepository.findConversation(zaloSettingId, msgData.fromUid);
+    let conversation = await zaloPersonalRepository.findConversation(zaloSettingId, externalId);
 
     let conversationId;
     if (!conversation) {
@@ -182,12 +203,13 @@ class ZaloPersonalAdapter {
       const newConv = await zaloPersonalRepository.insertConversation({
         userId,
         zaloSettingId,
-        externalId: msgData.fromUid,
-        visitorName: msgData.senderName || null,
+        externalId,
+        visitorName: displayName,
         visitorInfo: JSON.stringify({
           sender_name: msgData.senderName,
           sender_avatar: msgData.senderAvatar,
-          is_group: msgData.isGroup || false,
+          is_group: isGroup,
+          group_id: msgData.groupId || null,
           group_name: msgData.groupName || null,
         }),
         now,
