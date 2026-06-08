@@ -52,6 +52,27 @@ class ZaloPersonalRepository {
   }
 
   /**
+   * Find a group conversation by sender ID.
+   * This is used when Zalo API doesn't include group indicators in the message.
+   *
+   * @param {number} zaloSettingId
+   * @param {string} senderId
+   * @returns {Promise<object|null>}
+   */
+  async findGroupConversationBySender(zaloSettingId, senderId) {
+    const { rows } = await db.query(
+      `SELECT * FROM zalo_personal_conversations
+       WHERE id_zalo_setting = $1 
+         AND external_id LIKE $2
+         AND visitor_info::text LIKE '%"is_group":true%'
+       ORDER BY last_message_at DESC
+       LIMIT 1`,
+      [zaloSettingId, `group_%_${senderId}`]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Insert a new conversation and return it.
    *
    * @param {object} params
