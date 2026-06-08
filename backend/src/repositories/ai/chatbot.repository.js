@@ -298,6 +298,18 @@ class ChatbotRepository {
     return rows[0];
   }
 
+  async deleteWebChatConversation(conversationId, userId) {
+    await db.query(
+      `DELETE FROM webchat_messages WHERE id_conversation = $1`,
+      [conversationId]
+    );
+    const result = await db.query(
+      `DELETE FROM webchat_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
+      [conversationId, userId]
+    );
+    return result.rowCount > 0;
+  }
+
   // ── Channel Conversations & Messages ───────────────────────────
 
   async getOrCreateChannelConversation({ channelId, userId, externalId, visitorName, visitorInfo }) {

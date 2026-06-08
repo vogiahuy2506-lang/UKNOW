@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HiOutlineSparkles, HiOutlineChevronDown, HiOutlineChevronRight, HiOutlineXCircle, HiOutlineCheckCircle } from 'react-icons/hi';
+import { HiOutlineCheckCircle, HiOutlineXCircle } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import chatbotApi from '../../chatbot/services/chatbotApi.service';
-import { AIConfig } from '../../chatbot/components/ChatbotSettingsComponents';
 import zaloSettingsApiService from '../../settings/services/zaloSettingsApi.service';
 
 /**
- * Zalo Personal Channel Modal - contains full chatbot settings for each Zalo personal account
+ * Zalo Personal Channel Modal - unified chatbot settings, per-account enable/disable only
  */
 export default function ZaloPersonalChannelModal({ open, onClose }) {
   const { t } = useI18n();
@@ -60,17 +59,6 @@ export default function ZaloPersonalChannelModal({ open, onClose }) {
     } catch (error) {
       console.error('[ZaloPersonalChannelModal] Toggle failed:', error);
       toast.error(t('zaloPersonalChatbot.toggleFailed'));
-    }
-  };
-
-  const handleSaveConfig = async (account, formData) => {
-    try {
-      const res = await chatbotApi.updateZaloAccountChatbotSettings(account.id, formData);
-      setChatbotSettings(prev => ({ ...prev, [account.id]: res.data?.data }));
-      toast.success(t('zaloPersonalChatbot.settingsSaved'));
-    } catch (error) {
-      console.error('[ZaloPersonalChannelModal] Save failed:', error);
-      toast.error(t('zaloPersonalChatbot.saveFailed'));
     }
   };
 
@@ -188,54 +176,5 @@ export default function ZaloPersonalChannelModal({ open, onClose }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Inline settings form for a single Zalo personal account
- */
-function AccountSettingsForm({ account, settings, onSave }) {
-  const { t } = useI18n();
-  const [form, setForm] = useState({
-    is_enabled: settings?.is_enabled || false,
-    welcome_message: settings?.welcome_message || '',
-    ai_model: settings?.ai_model || 'gemini-2.5-flash',
-    temperature: settings?.temperature || 0.7,
-    max_tokens: settings?.max_tokens || 2048,
-    response_style: settings?.response_style || 'friendly',
-  });
-
-  useEffect(() => {
-    setForm({
-      is_enabled: settings?.is_enabled || false,
-      welcome_message: settings?.welcome_message || '',
-      ai_model: settings?.ai_model || 'gemini-2.5-flash',
-      temperature: settings?.temperature || 0.7,
-      max_tokens: settings?.max_tokens || 2048,
-      response_style: settings?.response_style || 'friendly',
-    });
-  }, [settings]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(form);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <AIConfig
-        config={form}
-        onChange={updated => setForm(p => ({ ...p, ...updated }))}
-        options={{ showSystemInstruction: false, compact: true }}
-      />
-      <div className="flex justify-end pt-2 border-t border-slate-100">
-        <button
-          type="submit"
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          {t('common.save')}
-        </button>
-      </div>
-    </form>
   );
 }

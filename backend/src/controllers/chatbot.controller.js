@@ -408,6 +408,7 @@ class ChatbotController {
   /**
    * Update chatbot settings for a specific Zalo account
    * PUT /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
+   * Note: Only is_enabled is saved per-account; other settings use unified chatbot settings
    */
   async updateZaloAccountChatbotSettings(req, res) {
     try {
@@ -415,7 +416,12 @@ class ChatbotController {
       if (!zaloSettingId) {
         return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
       }
-      const settings = await chatbotZaloAccountRepository.upsertSettings(req.user.id, zaloSettingId, req.body);
+      // Only save is_enabled - other settings use unified chatbot settings
+      const settings = await chatbotZaloAccountRepository.setEnabled(
+        req.user.id, 
+        zaloSettingId, 
+        req.body.is_enabled
+      );
       return res.json({ success: true, data: settings });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

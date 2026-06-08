@@ -439,27 +439,25 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Kiểm tra chatbot settings cho tài khoản Zalo cụ thể này
+      // Unified chatbot settings (shared across all channels)
+      const chatbotSettings = await chatbotRepository.getSettings(userId, 'global');
+
+      // Check per-account enable/disable
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
 
-      // Nếu không có settings cho tài khoản này, lấy settings từ main chatbot
-      const mainChatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
-      
-      // Merge: per-account settings (nếu có) override main settings
-      const chatbotSettings = {
-        ...mainChatbotSettings,
-        ...accountSettings,
-        // Luôn dùng main chatbot's KB
-        id_sub_assistant: null,
-      };
-
-      console.log(`[ZaloInbox] Final chatbotSettings for userId=${userId}, zaloSettingId=${zaloSettingId}:`, JSON.stringify(chatbotSettings));
-
-      // Chỉ route đến AI nếu chatbot được bật cho tài khoản này
-      if (!chatbotSettings?.is_enabled) {
+      // If chatbot is not enabled for this account, skip
+      if (!accountSettings?.is_enabled) {
         console.log(`[ZaloInbox] Chatbot is disabled for account ${zaloSettingId} - skipping AI routing`);
         return;
       }
+
+      // Override is_enabled with account-specific setting
+      const finalSettings = {
+        ...chatbotSettings,
+        is_enabled: accountSettings.is_enabled,
+      };
+
+      console.log(`[ZaloInbox] Final chatbotSettings for userId=${userId}, zaloSettingId=${zaloSettingId}:`, JSON.stringify(finalSettings));
 
       // Route đến AI chatbot với cấu hình riêng của tài khoản
       console.log(`[ZaloInbox] ✅ is_enabled=true, calling chatRouterService... content="${String(content).substring(0, 100)}"`);
@@ -470,18 +468,7 @@ class ZaloPersonalInboxService {
           userId,
           message: content,
           conversationId: conversation.id,
-          chatbotSettings: {
-            is_enabled: chatbotSettings.is_enabled,
-            id_sub_assistant: chatbotSettings.id_sub_assistant,
-            ai_model: chatbotSettings.ai_model || 'gemini-2.5-flash',
-            temperature: parseFloat(chatbotSettings.temperature || 0.7),
-            max_tokens: chatbotSettings.max_tokens || 2048,
-            response_style: chatbotSettings.response_style || 'friendly',
-            welcome_message: chatbotSettings.welcome_message,
-            system_instruction: chatbotSettings.system_instruction,
-            sub_assistant_name: chatbotSettings.sub_assistant_name,
-            greeting_msg: chatbotSettings.greeting_msg,
-          },
+          chatbotSettings: finalSettings,
           visitorInfo: {
             source: 'zalo_personal',
             senderId,
