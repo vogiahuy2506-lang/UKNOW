@@ -4999,6 +4999,7 @@ export default {
       successRate: 'Tỷ lệ thành công / lượt thử: {rate}',
       opened: 'Đã mở: {opened}',
       totalRuns: 'Tổng run: {total}',
+      runBreakdown: 'Tổng: {total} · {failed} lỗi · {completed} hoàn thành',
     },
     chart: {
       email: 'Email',
@@ -5086,6 +5087,7 @@ export default {
       successRate: 'Tỷ lệ thành công / lượt thử: {rate}',
       opened: 'Đã mở: {opened}',
       totalRuns: 'Tổng run: {total}',
+      runBreakdown: 'Tổng: {total} · {failed} lỗi · {completed} hoàn thành',
     },
     chart: {
       email: 'Email',

@@ -361,8 +361,10 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
   summary.attempts = summary.sent + summary.failed;
   summary.successRate = summary.attempts > 0 ? Math.round((summary.sent / summary.attempts) * 1000) / 10 : 0;
   const totalIntended = toNumber(totalIntendedRows[0]?.total);
+  const intendedSuccessful = toNumber(totalIntendedRows[0]?.successful);
   summary.totalIntended = totalIntended;
-  summary.reachRate = totalIntended > 0 ? Math.round((summary.sent / totalIntended) * 1000) / 10 : null;
+  // Numerator and denominator both scoped to runs with total_recipients > 0, so the ratio is comparable
+  summary.reachRate = totalIntended > 0 ? Math.round((intendedSuccessful / totalIntended) * 1000) / 10 : null;
 
   const topRuns = topRunRows.map(mapTopRunRow);
 

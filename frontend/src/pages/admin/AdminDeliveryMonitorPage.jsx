@@ -438,7 +438,17 @@ export default function AdminDeliveryMonitorPage() {
           tone={summary.failed > 0 ? 'red' : 'green'}
         />
         <KpiCard icon={HiOutlineTrendingUp} label={t('adminDeliveryMonitor.kpi.clicked')} value={fmt(summary.clicked)} sub={t('adminDeliveryMonitor.kpi.opened', { opened: fmt(summary.opened) })} tone="blue" />
-        <KpiCard icon={HiOutlineClock} label={t('adminDeliveryMonitor.kpi.runningRuns')} value={fmt(summary.runningRuns)} sub={t('adminDeliveryMonitor.kpi.totalRuns', { total: fmt(summary.totalRuns) })} tone="orange" />
+        <KpiCard
+          icon={HiOutlineClock}
+          label={t('adminDeliveryMonitor.kpi.runningRuns')}
+          value={fmt(summary.runningRuns)}
+          sub={t('adminDeliveryMonitor.kpi.runBreakdown', {
+            total: fmt(summary.totalRuns),
+            failed: fmt(summary.failedRuns),
+            completed: fmt(summary.completedRuns),
+          })}
+          tone={summary.failedRuns > 0 ? 'red' : 'orange'}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
