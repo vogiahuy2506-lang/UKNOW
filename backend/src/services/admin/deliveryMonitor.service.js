@@ -243,7 +243,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
            cr.started_at,
            cr.completed_at,
            cr.total_recipients,
-           cr.skipped_sends,
+           0::int AS skipped_sends,
            cr.error_message,
            c.campaign_name,
            c.campaign_type,
@@ -287,7 +287,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
                   COALESCE(efbr.failed_sends, 0)::float
                   / GREATEST(
                     COALESCE(sbr.successful_sends, 0)
-                    + COALESCE(efbr.failed_sends, 0)
+                    + COALESCE(efbr.failed_sends, 0),
                     1
                   )
                 ) DESC,
