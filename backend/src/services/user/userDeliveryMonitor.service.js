@@ -100,7 +100,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT 'email' AS channel, COUNT(*)::int AS count
        FROM email_messages em
-       JOIN campaign_runs cr ON cr.id = em.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = em.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
@@ -110,7 +110,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT COALESCE(zm.channel, 'zalo') AS channel, COUNT(*)::int AS count
        FROM zalo_messages zm
-       JOIN campaign_runs cr ON cr.id = zm.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = zm.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
@@ -152,22 +152,90 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       params
     ),
     safeQuery(
-      `SELECT
-         cr.id, cr.run_name, cr.status,
-         cr.started_at::timestamptz AS started_at,
-         cr.completed_at::timestamptz AS completed_at,
-         cr.total_recipients,
-         COUNT(cj.id) FILTER (WHERE cj.event_type IN ('email_sent', 'zalo_sent'))::int AS successful_sends,
-         cr.failed_sends, cr.skipped_sends, cr.error_message,
-         c.campaign_name, c.campaign_type,
-         EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
-       FROM campaign_runs cr
-       JOIN campaigns c ON c.id = cr.id_campaign
-       LEFT JOIN customer_journey cj ON cj.id_run = cr.id
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND c.id_user = $2
-       GROUP BY cr.id, c.campaign_name, c.campaign_type
-       ORDER BY cr.started_at DESC
+      `WITH run_base AS (
+         SELECT
+           cr.id,
+           cr.run_name,
+           cr.status,
+           cr.started_at,
+           cr.completed_at,
+           cr.total_recipients,
+           cr.skipped_sends,
+           cr.error_message,
+           c.campaign_name,
+           c.campaign_type,
+           EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
+         FROM campaign_runs cr
+         JOIN campaigns c ON c.id = cr.id_campaign
+         WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
+           AND c.id_user = $2
+       ),
+       sent_by_run AS (
+         SELECT cj.id_run, COUNT(*)::int AS successful_sends
+         FROM customer_journey cj
+         JOIN run_base rb ON rb.id = cj.id_run
+         WHERE cj.event_type IN ('email_sent', 'zalo_sent')
+         GROUP BY cj.id_run
+       ),
+       execution_failures_by_run AS (
+         SELECT ce.id_run, COUNT(*)::int AS failed_sends
+         FROM campaign_executions ce
+         JOIN run_base rb ON rb.id = ce.id_run
+         WHERE LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
+         GROUP BY ce.id_run
+       ),
+       email_failures_by_run AS (
+         SELECT em.id_run, COUNT(*)::int AS failed_sends
+         FROM email_messages em
+         JOIN run_base rb ON rb.id = em.id_run
+         WHERE LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
+         GROUP BY em.id_run
+       ),
+       zalo_failures_by_run AS (
+         SELECT zm.id_run, COUNT(*)::int AS failed_sends
+         FROM zalo_messages zm
+         JOIN run_base rb ON rb.id = zm.id_run
+         WHERE LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
+         GROUP BY zm.id_run
+       )
+       SELECT
+         rb.id,
+         rb.run_name,
+         rb.status,
+         rb.started_at::timestamptz AS started_at,
+         rb.completed_at::timestamptz AS completed_at,
+         rb.total_recipients,
+         COALESCE(sbr.successful_sends, 0)::int AS successful_sends,
+         (
+           COALESCE(efbr.failed_sends, 0)
+           + COALESCE(emfbr.failed_sends, 0)
+           + COALESCE(zmfbr.failed_sends, 0)
+         )::int AS failed_sends,
+         rb.skipped_sends,
+         rb.error_message,
+         rb.campaign_name,
+         rb.campaign_type,
+         rb.duration_seconds
+       FROM run_base rb
+       LEFT JOIN sent_by_run sbr ON sbr.id_run = rb.id
+       LEFT JOIN execution_failures_by_run efbr ON efbr.id_run = rb.id
+       LEFT JOIN email_failures_by_run emfbr ON emfbr.id_run = rb.id
+       LEFT JOIN zalo_failures_by_run zmfbr ON zmfbr.id_run = rb.id
+       ORDER BY (
+                  (
+                    COALESCE(efbr.failed_sends, 0)
+                    + COALESCE(emfbr.failed_sends, 0)
+                    + COALESCE(zmfbr.failed_sends, 0)
+                  )::float
+                  / GREATEST(
+                    COALESCE(sbr.successful_sends, 0)
+                    + COALESCE(efbr.failed_sends, 0)
+                    + COALESCE(emfbr.failed_sends, 0)
+                    + COALESCE(zmfbr.failed_sends, 0),
+                    1
+                  )
+                ) DESC,
+                rb.started_at DESC
        LIMIT 20`,
       params
     ),
@@ -252,7 +320,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT 'email' AS channel, COUNT(*)::int AS count
        FROM email_messages em
-       JOIN campaign_runs cr ON cr.id = em.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = em.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
@@ -262,7 +330,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT COALESCE(zm.channel, 'zalo') AS channel, COUNT(*)::int AS count
        FROM zalo_messages zm
-       JOIN campaign_runs cr ON cr.id = zm.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = zm.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
