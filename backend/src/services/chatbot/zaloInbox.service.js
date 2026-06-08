@@ -276,36 +276,6 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Lưu tin nhắn visitor vào zalo_personal_messages
-   */
-  async saveIncomingMessage(conversationId, zaloSettingId, userId, message, externalId, externalTs, rawData, senderName = null) {
-    const now = new Date().toISOString();
-    
-    // Build metadata with sender info for group messages
-    const metadata = {
-      _raw: rawData,
-    };
-    if (senderName) {
-      metadata.sender_name = senderName;
-    }
-    
-    await zaloInboxRepository.insertVisitorMessage({
-      conversationId, userId, zaloSettingId, message, externalId, externalTs, metadata, now,
-    });
-    // Update conversation last_message_at
-    await zaloInboxRepository.touchConversation(conversationId, now);
-  }
-
-  /**
-   * Lưu response của bot vào zalo_personal_messages
-   */
-  async saveBotResponse(conversationId, zaloSettingId, userId, content) {
-    const now = new Date().toISOString();
-    await zaloInboxRepository.insertBotMessage(conversationId, zaloSettingId, userId, content, now);
-    await zaloInboxRepository.touchConversation(conversationId, now);
-  }
-
-  /**
    * Xử lý một tin nhắn đến từ Zalo cá nhân
    */
   async processIncomingMessage(userId, accountId, zaloSettingId, rawMessage) {
@@ -408,19 +378,8 @@ class ZaloPersonalInboxService {
       // Tạo hoặc lấy conversation
       const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, displayName, visitorInfo);
 
-      // Lưu tin nhắn visitor (lưu cả raw message để giữ thông tin gốc)
-      await this.saveIncomingMessage(
-        conversation.id,
-        zaloSettingId,
-        userId,
-        content,
-        messageId,
-        timestamp,
-        rawMessage,
-        resolvedSenderName || senderName // Pass sender name for group messages
-      );
-
       // Broadcast SSE event to frontend for real-time update
+      // Note: Message đã được lưu bởi zaloPersonal.adapter.js saveMessageToDatabase()
       sseService.broadcast(String(userId), 'inbox:new_message', {
         conversationId: conversation.id,
         channel: 'zalo_personal',
@@ -485,7 +444,7 @@ class ZaloPersonalInboxService {
           });
 
           if (sendResult.success) {
-            await this.saveBotResponse(conversation.id, zaloSettingId, userId, result.content);
+            // Message đã được lưu bởi zaloPersonalAdapter.sendReply()
             console.log(`[ZaloInbox] Đã gửi reply cho ${senderId}`);
           } else {
             console.warn(`[ZaloInbox] Gửi reply thất bại: ${sendResult.error}`);
