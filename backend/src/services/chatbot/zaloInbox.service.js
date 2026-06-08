@@ -14,6 +14,7 @@
 import zaloInboxRepository from '../../repositories/chatbot/zaloInbox.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
+import zaloPersonalRepository from '../../repositories/chatbot/zaloPersonal.repository.js';
 import chatRouterService from './chatRouter.service.js';
 import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
@@ -303,6 +304,19 @@ class ZaloPersonalInboxService {
       const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
 
       console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}`);
+
+      // Check if this sender has ever been part of a group conversation
+      // If yes, skip AI routing (they might be a group member texting personally)
+      const existingGroupConv = await zaloPersonalRepository.findGroupConversationBySender(
+        zaloSettingId,
+        String(senderId)
+      );
+      if (existingGroupConv) {
+        const visitorInfo = existingGroupConv.visitor_info ? JSON.parse(existingGroupConv.visitor_info) : {};
+        const prevGroupName = visitorInfo?.group_name || existingGroupConv.visitor_name || 'group';
+        console.log(`[ZaloInbox] Skipping AI routing: sender ${senderId} was previously in ${prevGroupName}`);
+        return;
+      }
 
       // Build message type
       const msgType = rawMessage?.msgType || rawMessage?.type || 1;
