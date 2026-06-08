@@ -3,7 +3,7 @@ import templateLabelRepository from '../repositories/templateLabel.repository.js
 class TemplateLabelController {
   async list(req, res) {
     try {
-      const labels = await templateLabelRepository.findAll();
+      const labels = await templateLabelRepository.findAll(req.user.id);
       return res.json({ success: true, data: labels });
     } catch (err) {
       console.error('[TemplateLabel] list error:', err.message);
@@ -38,8 +38,8 @@ class TemplateLabelController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'id không hợp lệ' });
       }
-      const deleted = await templateLabelRepository.deleteById(id);
-      if (!deleted) return res.status(404).json({ success: false, message: 'Không tìm thấy nhãn' });
+      const deleted = await templateLabelRepository.deleteById(id, req.user.id);
+      if (!deleted) return res.status(404).json({ success: false, message: 'Không tìm thấy nhãn hoặc bạn không có quyền xoá' });
       return res.json({ success: true });
     } catch (err) {
       console.error('[TemplateLabel] remove error:', err.message);

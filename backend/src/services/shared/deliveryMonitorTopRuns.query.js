@@ -19,7 +19,7 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
         cr.total_recipients,
         COALESCE(cr.successful_sends, 0)::int AS run_successful_sends,
         COALESCE(cr.failed_sends, 0)::int AS run_failed_sends,
-        0::int AS skipped_sends,
+        COALESCE(cr.skipped_sends, 0)::int AS skipped_sends,
         cr.error_message,
         c.campaign_name,
         c.campaign_type,
