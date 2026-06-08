@@ -265,20 +265,6 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
          JOIN run_base rb ON rb.id = ce.id_run
          WHERE LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
          GROUP BY ce.id_run
-       ),
-       email_failures_by_run AS (
-         SELECT em.id_run, COUNT(*)::int AS failed_sends
-         FROM email_messages em
-         JOIN run_base rb ON rb.id = em.id_run
-         WHERE LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
-         GROUP BY em.id_run
-       ),
-       zalo_failures_by_run AS (
-         SELECT zm.id_run, COUNT(*)::int AS failed_sends
-         FROM zalo_messages zm
-         JOIN run_base rb ON rb.id = zm.id_run
-         WHERE LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
-         GROUP BY zm.id_run
        )
        SELECT
          rb.id,
@@ -288,11 +274,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
          rb.completed_at::timestamptz AS completed_at,
          rb.total_recipients,
          COALESCE(sbr.successful_sends, 0)::int AS successful_sends,
-         (
-           COALESCE(efbr.failed_sends, 0)
-           + COALESCE(emfbr.failed_sends, 0)
-           + COALESCE(zmfbr.failed_sends, 0)
-         )::int AS failed_sends,
+         COALESCE(efbr.failed_sends, 0)::int AS failed_sends,
          rb.skipped_sends,
          rb.error_message,
          rb.campaign_name,
@@ -301,19 +283,11 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        FROM run_base rb
        LEFT JOIN sent_by_run sbr ON sbr.id_run = rb.id
        LEFT JOIN execution_failures_by_run efbr ON efbr.id_run = rb.id
-       LEFT JOIN email_failures_by_run emfbr ON emfbr.id_run = rb.id
-       LEFT JOIN zalo_failures_by_run zmfbr ON zmfbr.id_run = rb.id
        ORDER BY (
-                  (
-                    COALESCE(efbr.failed_sends, 0)
-                    + COALESCE(emfbr.failed_sends, 0)
-                    + COALESCE(zmfbr.failed_sends, 0)
-                  )::float
+                  COALESCE(efbr.failed_sends, 0)::float
                   / GREATEST(
                     COALESCE(sbr.successful_sends, 0)
                     + COALESCE(efbr.failed_sends, 0)
-                    + COALESCE(emfbr.failed_sends, 0)
-                    + COALESCE(zmfbr.failed_sends, 0),
                     1
                   )
                 ) DESC,
