@@ -56,8 +56,9 @@ class CustomDomainService {
       throw new Error('Domain already registered');
     }
 
-    // Get verification token and DNS instructions
-    const dnsInstructions = this._generateDnsInstructions(domain);
+    // Generate token once, use for both dnsConfig and database
+    const verificationToken = crypto.randomBytes(16).toString('hex');
+    const dnsInstructions = this._generateDnsInstructions(domain, verificationToken);
 
     // Create domain record
     const domainRecord = await customDomainRepository.insert({
@@ -65,6 +66,7 @@ class CustomDomainService {
       domain,
       subdomain,
       landingPageId,
+      verificationToken,
       dnsConfig: dnsInstructions,
       cnameTarget: process.env.LP_CNAME_TARGET || 'lp.uknow.vn',
       verificationMethod: 'txt',
@@ -159,7 +161,6 @@ class CustomDomainService {
     if (verificationResult.success) {
       await customDomainRepository.updateById(id, {
         verificationStatus: 'verified',
-        verificationStatus: 'verified',
         sslStatus: 'pending',
         status: 'active',
         isVerified: true,
@@ -208,7 +209,8 @@ class CustomDomainService {
       throw new Error('Domain not found');
     }
 
-    const instructions = this._generateDnsInstructions(domain.domain);
+    // Use saved token from database, not generate new one
+    const instructions = this._generateDnsInstructions(domain.domain, domain.verification_token);
 
     return {
       domain: domain.domain,
@@ -251,10 +253,10 @@ class CustomDomainService {
   /**
    * Generate DNS instructions for domain verification.
    * @private
+   * @param {string} domain
+   * @param {string} verificationToken
    */
-  _generateDnsInstructions(domain) {
-    const verificationToken = crypto.randomBytes(16).toString('hex');
-
+  _generateDnsInstructions(domain, verificationToken) {
     return {
       records: [
         {

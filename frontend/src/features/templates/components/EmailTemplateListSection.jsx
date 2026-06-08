@@ -6,7 +6,9 @@ import {
   HiOutlineSearch,
   HiOutlineTag,
   HiOutlineTrash,
+  HiOutlineQuestionMarkCircle,
 } from 'react-icons/hi';
+import { useState } from 'react';
 
 const EmailTemplateListSection = ({
   isLoading,
@@ -33,6 +35,7 @@ const EmailTemplateListSection = ({
   searchPlaceholder,
 }) => {
   const { t } = useI18n();
+  const [showHelp, setShowHelp] = useState(false);
 
   const tabs = [
     { id: '', label: t('common.all'), color: null },
@@ -66,6 +69,13 @@ const EmailTemplateListSection = ({
         </h1>
         <p className="text-gray-500 mt-1">
           {description || t('templates.templateDescription')}
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="ml-2 text-blue-500 hover:text-blue-700 underline text-sm"
+          >
+            Hướng dẫn sử dụng
+          </button>
         </p>
       </div>
       <div className="flex items-center gap-2 md:mt-0 mt-2">
@@ -212,6 +222,55 @@ const EmailTemplateListSection = ({
             </div>
           </div>
         ))}
+      </div>
+    )}
+    {showHelp && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-auto">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Hướng dẫn sử dụng Template</h3>
+              <button
+                onClick={() => setShowHelp(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4 text-sm text-gray-600">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="font-medium text-blue-800 mb-1">Template là gì?</p>
+                <p>Template giúp bạn lưu sẵn nội dung tin nhắn để gửi cho khách hàng qua Email hoặc Zalo một cách nhanh chóng và nhất quán.</p>
+              </div>
+              <div>
+                <p className="font-medium text-gray-800 mb-2">Cách tạo Template mới:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Nhấn nút "Tạo template mới"</li>
+                  <li>Điền tên template và nội dung tin nhắn</li>
+                  <li>Sử dụng biến (variables) để cá nhân hóa tin nhắn như: {"{{"}ten_khach{"}}"}, {"{{"}email_khach{"}}"}</li>
+                  <li>Nhấn "Lưu" để hoàn tất</li>
+                </ol>
+              </div>
+              <div>
+                <p className="font-medium text-gray-800 mb-2">Cách sử dụng trong Campaign:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Tạo Campaign mới</li>
+                  <li>Chọn bước gửi Email/Zalo</li>
+                  <li>Chọn Template đã tạo từ danh sách</li>
+                  <li>Hệ thống sẽ tự động thay thế biến bằng thông tin khách hàng</li>
+                </ol>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="font-medium text-green-800 mb-1">Mẹo:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Dùng nhãn (labels) để phân loại template theo mục đích</li>
+                  <li>Tạo nhiều biến để tăng tính cá nhân hóa</li>
+                  <li>Preview trước khi lưu để kiểm tra nội dung</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )}
   </>

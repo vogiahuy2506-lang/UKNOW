@@ -8,9 +8,10 @@ import { resolveFrontendOriginFromEnv } from '../../utils/landingHtmlInjection.u
 
 // Lazy import to avoid circular dependency
 let clearVerifiedDomainsCache = null;
-function getClearCacheFn() {
+async function getClearCacheFn() {
   if (!clearVerifiedDomainsCache) {
-    clearVerifiedDomainsCache = require('../../middleware/dynamicCors.middleware.js').clearVerifiedDomainsCache;
+    const module = await import('../../middleware/dynamicCors.middleware.js');
+    clearVerifiedDomainsCache = module.clearVerifiedDomainsCache;
   }
   return clearVerifiedDomainsCache;
 }
@@ -249,7 +250,7 @@ class LandingPageDomainService {
             cfRecordId: cfResult.recordId,
           });
           // Clear CORS cache so new domain is immediately allowed
-          getClearCacheFn()();
+          await getClearCacheFn();
           return this.getForLanding(landingPageId, authUser);
         } catch (e) {
           if (e?.code === '23505') {
@@ -276,8 +277,7 @@ class LandingPageDomainService {
         cfRecordId: null,
       });
       // Clear CORS cache so new domain is immediately allowed (even if pending)
-      // Clear CORS cache so new domain is immediately allowed (even if pending)
-      getClearCacheFn()();
+      await getClearCacheFn();
       return this.getForLanding(landingPageId, authUser);
     } catch (e) {
       if (e?.code === '23505') {
@@ -403,8 +403,7 @@ class LandingPageDomainService {
         cfRecordId: cfResult.recordId,
       });
       // Clear CORS cache so auto-provisioned subdomain is immediately allowed
-      // Clear CORS cache so new domain is immediately allowed (even if pending)
-      getClearCacheFn()();
+      await getClearCacheFn();
       console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
       return { hostname, cfManaged: true };
     } catch (e) {

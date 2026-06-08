@@ -8,6 +8,7 @@ import { initScheduler } from './utils/scheduler.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 import { runMigrations } from './utils/migrationRunner.util.js';
+import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 
 const app = createApp();
 
@@ -94,4 +95,12 @@ app.listen(PORT, async () => {
   initScheduler();
   await outboundMessageQueueService.startWorker();
   console.log(`Cleanup task scheduled`);
+
+  // Restore Zalo sessions after all services are initialized
+  // This ensures accounts remain connected even after server restart/update
+  setTimeout(() => {
+    initZaloSessionRestoration().catch((error) => {
+      console.error('[Startup] Failed to restore Zalo sessions:', error.message);
+    });
+  }, 3000);
 });

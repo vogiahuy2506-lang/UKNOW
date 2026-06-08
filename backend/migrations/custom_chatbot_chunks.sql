@@ -12,3 +12,9 @@ CREATE TABLE IF NOT EXISTS custom_chatbot_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_custom_chatbot_chunks_chatbot ON custom_chatbot_chunks(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_custom_chatbot_chunks_user ON custom_chatbot_chunks(user_id);
+
+-- Chạy migration này để đổi sang vector type
+ALTER TABLE custom_chatbot_chunks 
+ALTER COLUMN embedding TYPE jsonb USING embedding::jsonb;
+
+-- Hoặc tạo bảng mới với vector type

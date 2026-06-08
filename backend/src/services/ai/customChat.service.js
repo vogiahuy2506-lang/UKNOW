@@ -1,7 +1,101 @@
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 
+/** Timeout for Gemini API calls (30 seconds) */
+const GEMINI_TIMEOUT_MS = 30000;
+
+/** Retry configuration for transient errors */
+const RETRY_CONFIG = {
+  maxRetries: 2,
+  retryDelayMs: 1000,
+  retryableErrors: ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
+};
+
 class CustomChatService {
+  /**
+   * Call Gemini API with timeout and retry logic
+   */
+  async callGeminiWithRetry(prompt, options = {}) {
+    const { temperature = 0.7, maxTokens = 2048 } = options;
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+    if (!apiKey) {
+      const error = new Error('GEMINI_API_KEY not configured');
+      error.status = 500;
+      throw error;
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature,
+        maxOutputTokens: Math.min(maxTokens, 65536),
+      },
+    });
+
+    // Retry loop
+    let lastError;
+    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+      try {
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          // Retry on 5xx errors
+          if (response.status >= 500 && attempt < RETRY_CONFIG.maxRetries) {
+            console.warn(`[Gemini] Attempt ${attempt + 1} failed with ${response.status}, retrying...`);
+            await sleep(RETRY_CONFIG.retryDelayMs * (attempt + 1));
+            continue;
+          }
+          const error = new Error(errorData?.error?.message || `Gemini API error: ${response.status}`);
+          error.status = response.status >= 500 ? 502 : 500;
+          throw error;
+        }
+
+        const data = await response.json();
+        if (data.error) {
+          const error = new Error(data.error.message);
+          error.status = 500;
+          throw error;
+        }
+
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } catch (err) {
+        lastError = err;
+
+        // Check if error is retryable
+        const isRetryable =
+          err.name === 'AbortError' || // Timeout
+          RETRY_CONFIG.retryableErrors.some(e => err.message?.includes(e) || err.code === e);
+
+        if (isRetryable && attempt < RETRY_CONFIG.maxRetries) {
+          console.warn(`[Gemini] Attempt ${attempt + 1} failed (${err.message}), retrying...`);
+          await sleep(RETRY_CONFIG.retryDelayMs * (attempt + 1));
+          continue;
+        }
+
+        // Non-retryable error or max retries reached
+        throw err;
+      }
+    }
+
+    // Should not reach here, but just in case
+    throw lastError;
+  }
+
   async chat({ history, chatbotId, userId, systemInstruction, temperature, maxTokens }) {
     if (!history || !Array.isArray(history) || history.length === 0) {
       const error = new Error('history is required');
@@ -25,42 +119,57 @@ class CustomChatService {
     const defaultSystem = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
     const systemPrompt = systemInstruction || defaultSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-    if (!apiKey) {
-      const error = new Error('GEMINI_API_KEY not configured');
-      error.status = 500;
-      throw error;
+    try {
+      const content = await this.callGeminiWithRetry(prompt, { temperature, maxTokens });
+
+      return {
+        content: content || 'Xin lỗi, tôi không có câu trả lời.',
+        type: 'text',
+      };
+    } catch (err) {
+      console.error('[CustomChat] Gemini call failed:', err.message);
+
+      // Return user-friendly error
+      if (err.name === 'AbortError' || err.message.includes('timeout')) {
+        const error = new Error('AI đang bận, vui lòng thử lại sau vài giây.');
+        error.status = 504;
+        error.code = 'TIMEOUT';
+        throw error;
+      }
+
+      if (err.status === 502) {
+        const error = new Error('AI gặp sự cố tạm thời, vui lòng thử lại.');
+        error.status = 502;
+        error.code = 'UPSTREAM_ERROR';
+        throw error;
+      }
+
+      throw err;
     }
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: temperature || 0.7,
-          maxOutputTokens: Math.min(maxTokens || 2048, 65536),
-        },
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.error) {
-      const error = new Error(data.error.message);
-      error.status = 500;
-      throw error;
-    }
-
-    return {
-      content: data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.',
-      type: 'text',
-    };
   }
 
   async searchChunks({ chatbotId, userId, query }) {
+    try {
+      // Try embedding-based search first
+      const { embedText } = await import('../../utils/embeddingClient.util.js');
+      const queryEmbedding = await embedText(query);
+      const results = await customChatDocumentRepository.searchByEmbedding({
+        chatbotId,
+        userId,
+        queryEmbedding,
+        minSimilarity: 0.35, // Lower threshold for better recall
+        limit: 5,
+      });
+      if (results.length > 0) {
+        console.log(`[RAG] Found ${results.length} relevant chunks for query: "${query.substring(0, 50)}..."`);
+        return results.map(r => r.chunk_text);
+      }
+    } catch (embedError) {
+      console.warn('[CustomChat] Embedding search failed, falling back to keyword search:', embedError.message);
+    }
+
+    // Fallback: keyword matching
     const words = query.toLowerCase().split(/\s+/).filter((word) => word.length > 2);
     if (words.length === 0) return [];
 
@@ -164,6 +273,11 @@ class CustomChatService {
 
     return chunks;
   }
+}
+
+/** Helper function for sleep/delay */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default new CustomChatService();

@@ -13,6 +13,7 @@ import {
   HiOutlineMail,
   HiOutlinePhone,
   HiOutlineUser,
+  HiOutlineInformationCircle,
 } from 'react-icons/hi';
 import customerApiService from '../../features/customers/services/customerApi.service';
 import Modal from '../../components/Modal';
@@ -277,6 +278,18 @@ const CustomerDetail = () => {
             <div className="flex items-center gap-2 text-gray-700">
               <HiOutlineMail className="h-5 w-5 text-gray-400" />
               <span>{customer.email || '--'}</span>
+              {customer.email ? null : (
+                <div className="relative group">
+                  <button type="button" className="text-blue-500 hover:text-blue-700">
+                    <HiOutlineInformationCircle className="h-4 w-4" />
+                  </button>
+                  <div className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg text-xs text-gray-600 z-10 hidden group-hover:block">
+                    <p className="font-medium text-gray-700 mb-1">Cách khách hàng thêm email:</p>
+                    <p>Khách hàng có thể nhập email khi điền form thông tin trên chatbot hoặc landing page của bạn.</p>
+                    <a href="/settings/chatbot" className="block mt-2 text-blue-600 hover:underline">Cài đặt chatbot</a>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 text-gray-700">
               <HiOutlinePhone className="h-5 w-5 text-gray-400" />

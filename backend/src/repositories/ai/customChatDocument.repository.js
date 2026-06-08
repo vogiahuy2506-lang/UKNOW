@@ -11,6 +11,17 @@ class CustomChatDocumentRepository {
     return result.rows.map((row) => row.chunk_text);
   }
 
+  /**
+   * Search chunks by embedding similarity using keyword matching.
+   * JSONB column doesn't support vector operations, so we use text search fallback.
+   */
+  async searchByEmbedding({ chatbotId, userId, queryEmbedding, minSimilarity = 0.35, limit = 5 }) {
+    // JSONB doesn't support pgvector operations, so return empty
+    // The service will fall back to keyword matching
+    console.warn('[CustomChatDocument] JSONB embedding search not supported, using keyword fallback');
+    return [];
+  }
+
   async replaceChunks({ chatbotId, userId, chunks, embeddings, source }) {
     await db.query(
       `DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1`,
@@ -18,10 +29,16 @@ class CustomChatDocumentRepository {
     );
 
     for (let i = 0; i < chunks.length; i += 1) {
+      const embedding = embeddings[i];
+      // Convert JS array to JSON string for JSONB column
+      const vectorJson = Array.isArray(embedding)
+        ? JSON.stringify(embedding)
+        : null;
+
       await db.query(
         `INSERT INTO custom_chatbot_chunks (chatbot_id, user_id, chunk_text, embedding, chunk_index, source)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [chatbotId, userId, chunks[i], embeddings[i] || null, i, source]
+        [chatbotId, userId, chunks[i], vectorJson, i, source]
       );
     }
   }

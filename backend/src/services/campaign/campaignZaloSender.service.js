@@ -12,6 +12,7 @@ import outboundMessageQueueService, {
 } from '../queue/outboundMessageQueue.service.js';
 import trackingShortLinkService from '../tracking/trackingShortLink.service.js';
 import { getZaloHttpPolyfillOption } from '../../utils/zaloUndiciFetch.util.js';
+import { restoreZaloSessionFromCookie } from '../../utils/zaloSessionRestore.util.js';
 
 /**
  * Ánh xạ mảng với giới hạn đồng thời — tránh bắn hàng trăm request Zalo cùng lúc khi enrich tên nhóm.
@@ -44,6 +45,65 @@ class CampaignZaloSenderService {
     this.defaultZaloUserAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
     this.defaultZaloLanguage = 'vi';
+  }
+
+  /**
+   * Restore all disconnected Zalo accounts by trying to reconnect from saved cookies.
+   * Called periodically by scheduler to fix accounts that "out" due to server restart.
+   *
+   * @returns {Promise<{total: number, restored: number, failed: number}>}
+   */
+  async restoreDisconnectedZaloAccounts() {
+    try {
+      const result = await campaignZaloSenderRepository.findConnectedAccountsNeedingRestore();
+      if (!result.rows || result.rows.length === 0) {
+        return { total: 0, restored: 0, failed: 0 };
+      }
+
+      let restored = 0;
+      let failed = 0;
+
+      for (const account of result.rows) {
+        const accountId = Number.parseInt(account.id, 10);
+        const userId = Number.parseInt(account.id_user, 10);
+        if (!Number.isFinite(accountId) || !Number.isFinite(userId)) {
+          continue;
+        }
+
+        // Check if already has active session in memory
+        if (zaloAccountSessionService.getAccountApi(accountId)) {
+          continue;
+        }
+
+        const cookieText = account.cookie_text;
+        if (!cookieText) {
+          console.warn(`[ZaloRestore] No cookie for account ${accountId}, marking disconnected`);
+          await this.markAccountDisconnected({ accountId, userId });
+          failed++;
+          continue;
+        }
+
+        const restoredApi = await this.tryAutoRestoreSession({
+          accountId,
+          userId,
+          cookieText,
+          fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
+        });
+
+        if (restoredApi) {
+          restored++;
+          console.log(`[ZaloRestore] Successfully restored account ${accountId}`);
+        } else {
+          failed++;
+          console.warn(`[ZaloRestore] Failed to restore account ${accountId}`);
+        }
+      }
+
+      return { total: result.rows.length, restored, failed };
+    } catch (error) {
+      console.error('[ZaloRestore] Error restoring accounts:', error.message);
+      return { total: 0, restored: 0, failed: 0 };
+    }
   }
 
   /**
@@ -1255,37 +1315,21 @@ class CampaignZaloSenderService {
 
   /**
    * Try restore zca-js API from saved cookie_text.
+   * Sử dụng zaloSessionRestore utility để có logic restore hiệu quả nhất.
    *
    * @param {string} cookieText
    * @returns {Promise<any>}
    */
   async restoreApiFromCookieText(cookieText) {
-    const credentialCandidates = this.buildLoginCredentialCandidates(cookieText);
-    if (!credentialCandidates.length) {
-      throw new Error('COOKIE_TEXT_EMPTY');
+    console.log('[CampaignZaloSender] restoreApiFromCookieText called');
+    try {
+      const api = await restoreZaloSessionFromCookie(cookieText);
+      console.log('[CampaignZaloSender] restoreApiFromCookieText success:', !!api);
+      return api;
+    } catch (error) {
+      console.error('[CampaignZaloSender] restoreApiFromCookieText failed:', error.message);
+      throw error;
     }
-
-    let lastError = null;
-    for (const credentials of credentialCandidates) {
-      const zalo = new Zalo({
-        selfListen: false,
-        checkUpdate: true,
-        logging: false,
-        ...getZaloHttpPolyfillOption(),
-      });
-
-      try {
-        if (!zalo?.login || typeof zalo.login !== 'function') {
-          throw new Error('UNSUPPORTED_ZALO_LOGIN_METHOD');
-        }
-        const api = await zalo.login(credentials);
-        if (api) return api;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError || new Error('RESTORE_SESSION_FAILED');
   }
 
   /**
@@ -1308,6 +1352,11 @@ class CampaignZaloSenderService {
 
   /**
    * Best-effort auto-restore account session from cookie_text.
+   *
+   * NOTE: This function will NOT mark account as disconnected if restore fails.
+   * The session might be temporarily unavailable or expired, but the cookie
+   * might still be valid. Keep the account in its current state and let
+   * keep-alive scheduler retry later.
    *
    * @param {object} input
    * @returns {Promise<any|null>}
@@ -1344,8 +1393,15 @@ class CampaignZaloSenderService {
         context: 'tryAutoRestoreSession',
       });
       return api;
-    } catch {
-      await this.markAccountDisconnected({ accountId: normalizedAccountId, userId: normalizedUserId });
+    } catch (error) {
+      // IMPORTANT: Do NOT mark as disconnected when restore fails!
+      // The session might be temporarily unavailable or Zalo might have
+      // revoked it server-side, but we should keep trying without changing
+      // the account status. This prevents false disconnections.
+      console.warn(
+        `[ZaloRestore] Failed to restore session for account ${normalizedAccountId}: ${error.message}. ` +
+        `Will retry later. Cookie is preserved.`
+      );
       return null;
     }
   }

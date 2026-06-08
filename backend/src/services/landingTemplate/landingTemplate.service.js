@@ -9,11 +9,11 @@ import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
  */
 class LandingTemplateService {
   /**
-   * Get all available templates.
+   * Get all available templates (public only).
    * @returns {Promise<object[]>}
    */
   async getTemplates() {
-    return landingTemplateRepository.listAll();
+    return landingTemplateRepository.listPublic();
   }
 
   /**
@@ -40,6 +40,38 @@ class LandingTemplateService {
    */
   async getCategories() {
     return landingTemplateRepository.getCategoriesWithCount();
+  }
+
+  /**
+   * Get templates created by user.
+   * @param {number} userId
+   * @returns {Promise<object[]>}
+   */
+  async getMyTemplates(userId) {
+    return landingTemplateRepository.listByUser(userId);
+  }
+
+  /**
+   * Create a new template.
+   * @param {object} data
+   * @returns {Promise<object>}
+   */
+  async createTemplate(data) {
+    return landingTemplateRepository.create(data);
+  }
+
+  /**
+   * Delete a template (only by owner).
+   * @param {number} id
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteTemplate(id, userId) {
+    const deleted = await landingTemplateRepository.deleteByIdAndUser(id, userId);
+    if (!deleted) {
+      throw new Error('Template not found or you do not have permission to delete it');
+    }
+    return true;
   }
 
   /**

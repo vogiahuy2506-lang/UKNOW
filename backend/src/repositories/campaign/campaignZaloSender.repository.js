@@ -103,6 +103,23 @@ class CampaignZaloSenderRepository {
       [userId, accountIds]
     );
   }
+
+  /**
+   * Find all connected Zalo accounts that need session restoration.
+   * Returns accounts where status='connected' but may not have active memory session.
+   *
+   * @returns {Promise<{rows: Array}>}
+   */
+  async findConnectedAccountsNeedingRestore() {
+    return db.query(
+      `SELECT id, id_user, display_name, status, is_active, cookie_text
+       FROM zalo_settings
+       WHERE status = 'connected'
+         AND is_active = TRUE
+         AND cookie_text IS NOT NULL
+         AND cookie_text <> ''`
+    );
+  }
 }
 
 export default new CampaignZaloSenderRepository();

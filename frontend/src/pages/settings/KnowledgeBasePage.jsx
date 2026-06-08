@@ -110,12 +110,16 @@ function KnowledgeBasePage() {
       formData.append('title', uploadForm.title || uploadForm.file.name);
       formData.append('file', uploadForm.file);
       const res = await chatbotApi.uploadDocument(selectedKb.id, formData);
-      setDocuments(prev => [res.data, ...prev]);
+      // API returns { success, data: doc } - res is already the data object
+      if (res && res.id) {
+        setDocuments(prev => [res, ...prev]);
+      }
       setShowUploadModal(false);
       setUploadForm({ title: '', file: null });
       toast.success(t('chatbot.knowledgeBase.processing'));
-    } catch { toast.error(t('errors.uploadFailed')); }
-    finally { setUploading(false); }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('errors.uploadFailed'));
+    } finally { setUploading(false); }
   };
 
   const addTextContent = async (e) => {
@@ -124,12 +128,16 @@ function KnowledgeBasePage() {
     setAddingText(true);
     try {
       const res = await chatbotApi.addTextDocument(selectedKb.id, textForm);
-      setDocuments(prev => [res.data, ...prev]);
+      // API returns { success, data: doc } - res is already the data object
+      if (res && res.id) {
+        setDocuments(prev => [res, ...prev]);
+      }
       setShowTextModal(false);
       setTextForm({ title: '', content: '' });
-      toast.success(t('chatbot.knowledgeBase.processing'));
-    } catch { toast.error(t('errors.addFailed')); }
-    finally { setAddingText(false); }
+      toast.success(res?.message || t('chatbot.knowledgeBase.processing'));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('errors.addFailed'));
+    } finally { setAddingText(false); }
   };
 
   const addUrlContent = async (e) => {
@@ -138,12 +146,16 @@ function KnowledgeBasePage() {
     setAddingText(true);
     try {
       const res = await chatbotApi.addUrlDocument(selectedKb.id, urlForm);
-      setDocuments(prev => [res.data, ...prev]);
+      // API returns { success, data: doc, message } - res is already the data object
+      if (res && res.id) {
+        setDocuments(prev => [res, ...prev]);
+      }
       setShowTextModal(false);
       setUrlForm({ title: '', url: '' });
-      toast.success(t('chatbot.knowledgeBase.fetching'));
-    } catch { toast.error(t('errors.addFailed')); }
-    finally { setAddingText(false); }
+      toast.success(res?.message || t('chatbot.knowledgeBase.fetching'));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('errors.addFailed'));
+    } finally { setAddingText(false); }
   };
 
   const deleteDocument = async (doc) => {

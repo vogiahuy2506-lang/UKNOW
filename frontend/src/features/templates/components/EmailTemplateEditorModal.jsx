@@ -114,6 +114,7 @@ const EmailTemplateEditorModal = ({
   handleRemoveVariable,
   handleAddSuggestedVariable,
   hideHtmlTab = false,
+  hideSubjectField = false,
   subjectLabel,
   templateKindLabel = 'email',
   labels = [],
@@ -177,23 +178,25 @@ const EmailTemplateEditorModal = ({
               required
             />
           </div>
-          <div className="col-span-6 space-y-1">
-            <label className="text-sm font-medium text-gray-700">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
-            <input
-              type="text"
-              value={formData.subject}
-              ref={subjectInputRef}
-              onFocus={() => setActiveInput('subject')}
-              onClick={() => setActiveInput('subject')}
-              onChange={(e) =>
-                updateSubjectValue(e.target.value, e.target.selectionStart || 0)
-              }
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-              placeholder={t('emailTemplateEditor.subjectPlaceholder')}
-              required
-            />
-          </div>
-          <div className="col-span-2 space-y-1">
+          {!hideSubjectField && (
+            <div className="col-span-6 space-y-1">
+              <label className="text-sm font-medium text-gray-700">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
+              <input
+                type="text"
+                value={formData.subject}
+                ref={subjectInputRef}
+                onFocus={() => setActiveInput('subject')}
+                onClick={() => setActiveInput('subject')}
+                onChange={(e) =>
+                  updateSubjectValue(e.target.value, e.target.selectionStart || 0)
+                }
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                placeholder={t('emailTemplateEditor.subjectPlaceholder')}
+                required
+              />
+            </div>
+          )}
+          <div className={`space-y-1 ${hideSubjectField ? 'col-span-8' : 'col-span-2'}`}>
             <label className="text-sm font-medium text-gray-700">{t('emailTemplateEditor.category')}</label>
             <LabelPicker
               value={formData.category}
