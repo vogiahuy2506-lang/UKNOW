@@ -6,12 +6,9 @@ import {
   HiOutlineUpload,
   HiOutlineDocumentText,
   HiOutlineTrash,
-  HiOutlineCode,
-  HiOutlineCheck,
   HiOutlinePlus,
   HiOutlineX,
   HiOutlineChatAlt2,
-  HiOutlineSparkles,
   HiOutlineGlobeAlt,
   HiOutlineColorSwatch,
   HiOutlineBookOpen,
@@ -35,9 +32,7 @@ import {
   ZaloChannelModal,
   FacebookChannelModal,
   FacebookConnectModal,
-  FacebookChannelCard,
   FieldRow,
-  PublicLinkCard,
   SectionCard,
   Textarea,
   TextDocumentModal,
@@ -45,7 +40,6 @@ import {
   Toggle,
   UploadDocumentModal,
   ZaloConnectModal,
-  ZaloChannelCard,
 } from '../../features/chatbot/components/ChatbotSettingsComponents';
 
 const TABS = [
@@ -584,14 +578,6 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const zaloWebhookUrl = zaloChannel?.webhook_url || `${productionApiBase}/api/webhooks/zalo-oa`;
   const facebookWebhookUrl = facebookChannel?.webhook_url || `${productionApiBase}/api/webhooks/facebook`;
   const facebookVerifyToken = 'founderai';
-  const publicChatbotUrl = `${productionApiBase}/chat/${chatbot.widget_key || chatbot.id}`;
-
-  const copyPublicUrl = () => {
-    navigator.clipboard.writeText(publicChatbotUrl);
-    setWidgetCopied(true);
-    toast.success(t('common.copied'));
-    setTimeout(() => setWidgetCopied(false), 2000);
-  };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
