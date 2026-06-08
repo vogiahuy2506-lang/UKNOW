@@ -407,8 +407,19 @@ class ChatbotRepository {
   }
 
   async updateChatbot(chatbotId, userId, data) {
-    const { rows } = await db.query(
-      `UPDATE custom_chatbots SET
+    // Handle suggested_questions specially - COALESCE doesn't work well with arrays
+    // If data.suggested_questions is undefined, keep the old value
+    // If it's an empty array [], set it to empty array
+    const suggestedQuestions = data.suggested_questions === undefined
+      ? null  // null means "don't update this field"
+      : data.suggested_questions;  // empty array or array with values
+
+    // Build query dynamically based on whether suggested_questions is being updated
+    let query, params;
+
+    if (suggestedQuestions === null) {
+      // Don't update suggested_questions field
+      query = `UPDATE custom_chatbots SET
          name = COALESCE($3, name),
          description = COALESCE($4, description),
          system_instruction = COALESCE($5, system_instruction),
@@ -425,17 +436,47 @@ class ChatbotRepository {
          position = COALESCE($16, position),
          border_radius = COALESCE($17, border_radius),
          chat_height = COALESCE($18, chat_height),
-         suggested_questions = COALESCE($19, suggested_questions),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
-       RETURNING *`,
-      [chatbotId, userId,
+       RETURNING *`;
+      params = [chatbotId, userId,
        data.name, data.description, data.system_instruction, data.greeting_msg,
        data.avatar_url, data.theme_color, data.welcome_message,
        data.primary_color, data.background_color, data.text_color, data.accent_color,
        data.logo_url, data.show_avatar, data.position, data.border_radius,
-       data.chat_height, data.suggested_questions]
-    );
+       data.chat_height];
+    } else {
+      // Update suggested_questions field
+      query = `UPDATE custom_chatbots SET
+         name = COALESCE($3, name),
+         description = COALESCE($4, description),
+         system_instruction = COALESCE($5, system_instruction),
+         greeting_msg = COALESCE($6, greeting_msg),
+         avatar_url = COALESCE($7, avatar_url),
+         theme_color = COALESCE($8, theme_color),
+         welcome_message = COALESCE($9, welcome_message),
+         primary_color = COALESCE($10, primary_color),
+         background_color = COALESCE($11, background_color),
+         text_color = COALESCE($12, text_color),
+         accent_color = COALESCE($13, accent_color),
+         logo_url = COALESCE($14, logo_url),
+         show_avatar = COALESCE($15, show_avatar),
+         position = COALESCE($16, position),
+         border_radius = COALESCE($17, border_radius),
+         chat_height = COALESCE($18, chat_height),
+         suggested_questions = $19,
+         updated_at = NOW()
+       WHERE id = $1 AND id_user = $2
+       RETURNING *`;
+      params = [chatbotId, userId,
+       data.name, data.description, data.system_instruction, data.greeting_msg,
+       data.avatar_url, data.theme_color, data.welcome_message,
+       data.primary_color, data.background_color, data.text_color, data.accent_color,
+       data.logo_url, data.show_avatar, data.position, data.border_radius,
+       data.chat_height, suggestedQuestions];
+    }
+
+    const { rows } = await db.query(query, params);
     return rows[0] || null;
   }
 
