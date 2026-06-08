@@ -82,8 +82,8 @@ class ZaloPersonalAdapter {
         const rawData = message?.data || message;
 
         // Determine message source type (personal chat vs group)
-        // Group message indicators - multiple checks for reliability:
-        // IMPORTANT: Zalo API often doesn't include group indicators, so we use heuristics
+        // Only check for EXPLICIT group indicators - do NOT use heuristics for personal messages
+        // Zalo personal chat IDs can also be long numeric, so heuristics cause false positives
         const isGroup = Boolean(
           rawData?.clientGroupId || 
           rawData?.threadType === 1 || 
@@ -94,13 +94,10 @@ class ZaloPersonalAdapter {
           (rawData?.zaloExt && rawData.zaloExt.isGroup === true) ||
           rawData?.gridId ||
           rawData?.groupId ||
-          // Heuristic: if idTo is a very long numeric ID (19+ digits), likely a group
-          (rawData?.idTo && /^[0-9]{19,}$/.test(rawData.idTo)) ||
-          // Heuristic: idTo starts with 'group_' prefix
           rawData?.idTo?.startsWith('group_')
         );
         
-        // Extract groupId with multiple fallbacks
+        // Extract groupId with explicit indicators only
         let detectedGroupId = null;
         if (rawData?.clientGroupId) {
           detectedGroupId = rawData.clientGroupId;
@@ -114,9 +111,6 @@ class ZaloPersonalAdapter {
           detectedGroupId = rawData.idTo;
         } else if (rawData?.zaloExt?.groupId) {
           detectedGroupId = rawData.zaloExt.groupId;
-        } else if (rawData?.idTo && /^[0-9]{19,}$/.test(rawData.idTo)) {
-          // Heuristic: long numeric ID is likely a group
-          detectedGroupId = rawData.idTo;
         }
         
         console.log(`[ZaloPersonalAdapter] Message detection:`, {
@@ -210,23 +204,10 @@ class ZaloPersonalAdapter {
       return null;
     }
 
-    // Check if this sender already has a group conversation
-    // (Zalo API doesn't always include group indicators in every message)
-    const existingGroupConv = await zaloPersonalRepository.findGroupConversationBySender(
-      zaloSettingId,
-      String(msgData.fromUid)
-    );
-
-    // Determine if this is a group message:
-    // 1. Raw data indicates group
-    // 2. Sender already has an existing group conversation
-    const isGroup = msgData.isGroup || (existingGroupConv !== null);
-
-    // Use existing group info if we found one
-    const groupId = msgData.groupId || (existingGroupConv?.visitor_info ? 
-      JSON.parse(existingGroupConv.visitor_info)?.group_id : null) || null;
-    const groupName = msgData.groupName || (existingGroupConv?.visitor_info ?
-      JSON.parse(existingGroupConv.visitor_info)?.group_name : null) || null;
+    // Use the isGroup flag from the normalized msgData
+    const isGroup = msgData.isGroup === true;
+    const groupId = msgData.groupId || null;
+    const groupName = msgData.groupName || null;
 
     // Determine externalId based on source:
     // - Group: use senderId to distinguish each person in the group
