@@ -8,6 +8,7 @@ import { initScheduler } from './utils/scheduler.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 import { runMigrations } from './utils/migrationRunner.util.js';
+import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 
 const app = createApp();
 
@@ -86,6 +87,42 @@ process.on('SIGTERM', () => {
   gracefulShutdown('SIGTERM');
 });
 
+const restoreZaloSessionsOnStartup = async () => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, id_user, display_name, cookie_text
+       FROM zalo_settings
+       WHERE status = 'connected' AND is_active = true
+         AND cookie_text IS NOT NULL AND TRIM(cookie_text) != ''`
+    );
+    if (!rows.length) return;
+
+    console.log(`[Startup] Restoring ${rows.length} Zalo session(s) from saved cookies...`);
+    let restored = 0;
+    let failed = 0;
+
+    for (const account of rows) {
+      try {
+        await campaignZaloSenderService.tryAutoRestoreSession({
+          accountId: account.id,
+          userId: account.id_user,
+          cookieText: account.cookie_text,
+          fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
+        });
+        restored++;
+        console.log(`[Startup] ✓ Restored Zalo session for account ${account.id} (${account.display_name || '?'})`);
+      } catch (err) {
+        failed++;
+        console.warn(`[Startup] ✗ Failed to restore Zalo session for account ${account.id}: ${err?.message || 'unknown'}`);
+      }
+    }
+
+    console.log(`[Startup] Zalo sessions: ${restored} restored, ${failed} could not restore (marked disconnected).`);
+  } catch (err) {
+    console.warn(`[Startup] Zalo session restore skipped: ${err?.message}`);
+  }
+};
+
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -93,5 +130,6 @@ app.listen(PORT, async () => {
   setupCleanupTask();
   initScheduler();
   await outboundMessageQueueService.startWorker();
+  await restoreZaloSessionsOnStartup();
   console.log(`Cleanup task scheduled`);
 });
