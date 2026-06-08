@@ -23,6 +23,7 @@ import {
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
 import chatbotApi from '../services/chatbotApi.service';
+import ZaloPersonalChannelModal from './ZaloPersonalChannelModal';
 
 export function SectionCard({ icon: Icon, title, subtitle, children, accent = 'slate' }) {
   const colors = {
@@ -45,6 +46,171 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
         </div>
       </div>
       <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+// ── AI Model Configuration ────────────────────────────────────────────────────
+
+const AVAILABLE_AI_MODELS = [
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google', badge: 'fast' },
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'Google', badge: 'stable' },
+  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', provider: 'Google', badge: 'legacy' },
+];
+
+const RESPONSE_STYLES = [
+  { value: 'friendly', label: 'Thân thiện', desc: 'Gần gũi, dùng emoji phù hợp' },
+  { value: 'professional', label: 'Chuyên nghiệp', desc: 'Ngắn gọn, súc tích' },
+  { value: 'casual', label: 'Thoải mái', desc: 'Như trò chuyện bạn bè' },
+];
+
+/**
+ * AI Configuration component - dùng chung cho cả Chatbot Settings & Zalo Personal
+ * 
+ * @param {Object}  config        - { ai_model, temperature, max_tokens, welcome_message, response_style, system_instruction }
+ * @param {Function} onChange     - (updatedConfig) => void - callback khi config thay đổi
+ * @param {Object}  options       - { showSystemInstruction?: boolean, compact?: boolean }
+ */
+export function AIConfig({ config = {}, onChange, options = {} }) {
+  const { showSystemInstruction = true, compact = false } = options;
+  
+  const update = (key, value) => {
+    onChange?.({ ...config, [key]: value });
+  };
+
+  const aiModelOptions = AVAILABLE_AI_MODELS;
+
+  return (
+    <div className={`space-y-${compact ? '4' : '5'}`}>
+      {/* AI Model */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
+            Model AI
+          </label>
+          <span className="text-xs text-slate-400">
+            {aiModelOptions.find(m => m.value === (config.ai_model || 'gemini-2.5-flash'))?.provider}
+          </span>
+        </div>
+        <select
+          value={config.ai_model || 'gemini-2.5-flash'}
+          onChange={e => update('ai_model', e.target.value)}
+          className="input w-full"
+        >
+          {aiModelOptions.map(model => (
+            <option key={model.value} value={model.value}>
+              {model.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Response Style */}
+      <div>
+        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
+          Phong cách trả lời
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {RESPONSE_STYLES.map(style => (
+            <button
+              key={style.value}
+              type="button"
+              onClick={() => update('response_style', style.value)}
+              className={`p-2.5 rounded-lg border text-left transition-all ${
+                config.response_style === style.value
+                  ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className={`text-xs font-medium ${config.response_style === style.value ? 'text-primary-700' : 'text-slate-700'}`}>
+                {style.label}
+              </div>
+              {!compact && (
+                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{style.desc}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Temperature */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
+            Độ sáng tạo
+          </label>
+          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+            {config.temperature ?? 0.7}
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={config.temperature ?? 0.7}
+          onChange={e => update('temperature', parseFloat(e.target.value))}
+          className="w-full accent-primary-600"
+        />
+        <div className="flex justify-between text-xs text-slate-400 mt-1">
+          <span>Chính xác</span>
+          <span>Sáng tạo</span>
+        </div>
+      </div>
+
+      {/* Max Tokens */}
+      <div>
+        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
+          Giới hạn độ dài phản hồi
+        </label>
+        <select
+          value={config.max_tokens || 2048}
+          onChange={e => update('max_tokens', parseInt(e.target.value))}
+          className="input w-full"
+        >
+          <option value={512}>Ngắn gọn (512 tokens)</option>
+          <option value={1024}>Vừa phải (1024 tokens)</option>
+          <option value={2048}>Tiêu chuẩn (2048 tokens)</option>
+          <option value={4096}>Dài (4096 tokens)</option>
+        </select>
+      </div>
+
+      {/* Welcome Message */}
+      <div>
+        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
+          Tin nhắn chào mở đầu
+        </label>
+        <textarea
+          value={config.welcome_message || ''}
+          onChange={e => update('welcome_message', e.target.value)}
+          placeholder="VD: Chào bạn! Tôi có thể giúp gì cho bạn?"
+          rows={compact ? 2 : 3}
+          className="input resize-y min-h-[60px]"
+        />
+        <p className="text-[10px] text-slate-400 mt-1">Tin nhắn này sẽ được gửi khi người dùng bắt đầu cuộc trò chuyện</p>
+      </div>
+
+      {/* System Instruction */}
+      {showSystemInstruction && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
+              Hướng dẫn AI
+            </label>
+            <span className="text-[10px] text-slate-400">
+              {(config.system_instruction || '').length}/2000
+            </span>
+          </div>
+          <textarea
+            value={config.system_instruction || ''}
+            onChange={e => update('system_instruction', e.target.value)}
+            placeholder="VD: Bạn là một trợ lý ảo thân thiện của công ty ABC, chuyên tư vấn về sản phẩm..."
+            rows={compact ? 3 : 5}
+            maxLength={2000}
+            className="input resize-y"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1580,3 +1746,6 @@ export function FacebookChannelModal({ open, channel, onClose, onConnect, onDisc
     </div>
   );
 }
+
+// Re-export ZaloPersonalChannelModal from its own file
+export { default as ZaloPersonalChannelModal } from './ZaloPersonalChannelModal';

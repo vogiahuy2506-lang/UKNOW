@@ -22,6 +22,9 @@ router.get('/:id/html', landingTemplateController.getHtml.bind(landingTemplateCo
 // POST /api/landing-templates - Create new template (requires auth)
 router.post('/', authMiddleware, landingTemplateController.create.bind(landingTemplateController));
 
+// PUT /api/landing-templates/:id - Update template (requires auth)
+router.put('/:id', authMiddleware, landingTemplateController.update.bind(landingTemplateController));
+
 // DELETE /api/landing-templates/:id - Delete template (requires auth)
 router.delete('/:id', authMiddleware, landingTemplateController.delete.bind(landingTemplateController));
 

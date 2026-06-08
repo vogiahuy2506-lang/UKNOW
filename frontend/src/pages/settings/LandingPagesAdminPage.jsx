@@ -273,7 +273,7 @@ export default function LandingPagesAdminPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 border-b border-gray-100 bg-gray-50/50">
-                <th className="p-3 font-medium">Subdomain</th>
+                <th className="p-3 font-medium">{t('landingPagesAdmin.slug')}</th>
                 <th className="p-3 font-medium">{t('landingPagesAdmin.titleCol')}</th>
                 <th className="p-3 font-medium">{t('landingPagesAdmin.published')}</th>
                 <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.views')}</th>

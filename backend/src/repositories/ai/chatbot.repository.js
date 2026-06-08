@@ -18,8 +18,8 @@ class ChatbotRepository {
     const { rows } = await db.query(
       `INSERT INTO chatbot_settings
          (id_user, channel, id_sub_assistant, is_enabled, welcome_message,
-          ai_model, temperature, max_tokens, response_style, settings)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ai_model, temperature, max_tokens, response_style, system_instruction, settings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (id_user, channel) DO UPDATE SET
          id_sub_assistant = EXCLUDED.id_sub_assistant,
          is_enabled = EXCLUDED.is_enabled,
@@ -28,6 +28,7 @@ class ChatbotRepository {
          temperature = EXCLUDED.temperature,
          max_tokens = EXCLUDED.max_tokens,
          response_style = EXCLUDED.response_style,
+         system_instruction = EXCLUDED.system_instruction,
          settings = EXCLUDED.settings,
          updated_at = NOW()
        RETURNING *`,
@@ -36,6 +37,7 @@ class ChatbotRepository {
        data.welcome_message || null, data.ai_model || 'gemini-2.5-flash',
        data.temperature || 0.7, data.max_tokens || 2048,
        data.response_style || 'friendly',
+       data.system_instruction || null,
        JSON.stringify(data.settings || {})]
     );
     return rows[0];

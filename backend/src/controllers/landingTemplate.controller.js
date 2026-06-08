@@ -116,6 +116,46 @@ class LandingTemplateController {
   }
 
   /**
+   * PUT /api/landing-templates/:id
+   * Update an existing template (only by owner).
+   */
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic } = req.body;
+
+      const template = await landingTemplateService.updateTemplate(Number.parseInt(id, 10), userId, {
+        name,
+        description,
+        category,
+        thumbnailUrl,
+        cssVariables,
+        defaultConfig,
+        isPublic,
+      });
+
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Template not found or you do not have permission to update it',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: template,
+      });
+    } catch (error) {
+      console.error('[LandingTemplate] Update error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to update template',
+      });
+    }
+  }
+
+  /**
    * DELETE /api/landing-templates/:id
    * Delete a template.
    */

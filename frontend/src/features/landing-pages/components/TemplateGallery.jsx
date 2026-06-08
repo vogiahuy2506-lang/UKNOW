@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 import {
   HiOutlineX, HiOutlineSearch, HiOutlineCheck,
   HiOutlineTemplate, HiOutlineColorSwatch, HiOutlineUser,
-  HiOutlineGlobeAlt, HiOutlineStar, HiOutlineTrash
+  HiOutlineGlobeAlt, HiOutlineStar, HiOutlineTrash, HiOutlineSwitchHorizontal
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import api from '../../../services/api.js';
+import { updateLandingTemplate } from '../services/landingPagesAdminApi.service.js';
 
 /**
  * Template Gallery Modal - Browse and select landing page templates
@@ -29,6 +30,37 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [previewHtml, setPreviewHtml] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // { action: 'delete'|'togglePublic', template: object }
+
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    const { action, template } = confirmModal;
+
+    try {
+      if (action === 'delete') {
+        await api.delete(`/landing-templates/${template.id}`);
+        toast.success('Đã xóa template');
+        fetchMyTemplates();
+        if (selectedTemplate?.id === template.id) {
+          setSelectedTemplate(null);
+          setPreviewHtml(null);
+        }
+      } else if (action === 'togglePublic') {
+        await updateLandingTemplate(template.id, {
+          isPublic: !template.isPublic,
+        });
+        toast.success(template.isPublic ? 'Đã hủy công khai template' : 'Đã công khai template');
+        fetchMyTemplates();
+        if (selectedTemplate?.id === template.id) {
+          setSelectedTemplate(prev => ({ ...prev, isPublic: !prev.isPublic }));
+        }
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setConfirmModal(null);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -120,21 +152,17 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
     }
   };
 
-  const handleDeleteTemplate = async (templateId, e) => {
+  const handleDeleteTemplate = (templateId, e) => {
     e.stopPropagation();
-    if (!window.confirm('Bạn có chắc muốn xóa template này?')) return;
-    
-    try {
-      await api.delete(`/landing-templates/${templateId}`);
-      toast.success('Đã xóa template');
-      fetchMyTemplates();
-      if (selectedTemplate?.id === templateId) {
-        setSelectedTemplate(null);
-        setPreviewHtml(null);
-      }
-    } catch (e) {
-      toast.error('Không thể xóa template');
+    const template = myTemplates.find(t => t.id === templateId);
+    if (template) {
+      setConfirmModal({ action: 'delete', template });
     }
+  };
+
+  const handleTogglePublic = (template, e) => {
+    e.stopPropagation();
+    setConfirmModal({ action: 'togglePublic', template });
   };
 
   const displayedTemplates = activeTab === 'public' ? templates : myTemplates;
@@ -418,13 +446,26 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                         </div>
                         
                         {activeTab === 'my' && (
-                          <button
-                            onClick={(e) => handleDeleteTemplate(template.id, e)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                            title="Xóa template"
-                          >
-                            <HiOutlineTrash className="w-4 h-4" />
-                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={(e) => handleTogglePublic(template, e)}
+                              className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+                                template.isPublic
+                                  ? 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                                  : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                              }`}
+                              title={template.isPublic ? 'Hủy công khai' : 'Công khai'}
+                            >
+                              <HiOutlineSwitchHorizontal className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteTemplate(template.id, e)}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                              title="Xóa template"
+                            >
+                              <HiOutlineTrash className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
                       </div>
                       
@@ -508,6 +549,63 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6">
+              <div className={`w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                confirmModal.action === 'delete' ? 'bg-red-100' : 'bg-orange-100'
+              }`}>
+                {confirmModal.action === 'delete' ? (
+                  <HiOutlineTrash className="w-6 h-6 text-red-600" />
+                ) : (
+                  <HiOutlineGlobeAlt className={`w-6 h-6 ${confirmModal.template.isPublic ? 'text-green-600' : 'text-orange-600'}`} />
+                )}
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                {confirmModal.action === 'delete' ? 'Xóa template?' : (
+                  confirmModal.template.isPublic ? 'Hủy công khai?' : 'Công khai template?'
+                )}
+              </h3>
+              <p className="text-sm text-gray-500 text-center mb-6">
+                {confirmModal.action === 'delete' ? (
+                  `Bạn có chắc muốn xóa template "${confirmModal.template.name}"? Hành động này không thể hoàn tác.`
+                ) : (
+                  confirmModal.template.isPublic ? (
+                    `Template "${confirmModal.template.name}" sẽ không còn hiển thị với người dùng khác.`
+                  ) : (
+                    `Template "${confirmModal.template.name}" sẽ được hiển thị công khai cho mọi người.`
+                  )
+                )}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmModal(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleConfirmAction}
+                  className={`flex-1 px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                    confirmModal.action === 'delete'
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : confirmModal.template.isPublic
+                        ? 'bg-gray-600 hover:bg-gray-700'
+                        : 'bg-orange-600 hover:bg-orange-700'
+                  }`}
+                >
+                  {confirmModal.action === 'delete' ? 'Xóa' : (
+                    confirmModal.template.isPublic ? 'Hủy công khai' : 'Công khai'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

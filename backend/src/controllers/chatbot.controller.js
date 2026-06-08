@@ -2,6 +2,7 @@ import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
 import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
+import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAccount.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
@@ -380,6 +381,89 @@ class ChatbotController {
     try {
       const settings = await chatbotRepository.upsertSettings(req.user.id, req.params.channel, req.body);
       return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────
+
+  /**
+   * Get chatbot settings for a specific Zalo account
+   * GET /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
+   */
+  async getZaloAccountChatbotSettings(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      const settings = await chatbotZaloAccountRepository.getSettings(req.user.id, zaloSettingId);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Update chatbot settings for a specific Zalo account
+   * PUT /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
+   */
+  async updateZaloAccountChatbotSettings(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      const settings = await chatbotZaloAccountRepository.upsertSettings(req.user.id, zaloSettingId, req.body);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Toggle chatbot for a specific Zalo account
+   * POST /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot/toggle
+   */
+  async toggleZaloAccountChatbot(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
+      }
+      const settings = await chatbotZaloAccountRepository.setEnabled(req.user.id, zaloSettingId, enabled);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * List all Zalo accounts with their chatbot settings for current user
+   * GET /api/ai/chatbot/zalo-accounts/chatbot
+   */
+  async listZaloAccountsWithChatbotSettings(req, res) {
+    try {
+      const settings = await chatbotZaloAccountRepository.getAllSettingsForUser(req.user.id);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Get sub-assistants for dropdown selection
+   * GET /api/ai/chatbot/sub-assistants/chatbot-dropdown
+   */
+  async getSubAssistantsForChatbot(req, res) {
+    try {
+      const subAssistants = await chatbotZaloAccountRepository.getSubAssistants(req.user.id);
+      return res.json({ success: true, data: subAssistants });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

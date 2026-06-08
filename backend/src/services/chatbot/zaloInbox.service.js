@@ -8,12 +8,14 @@
  * 2. Khi có tin nhắn đến → xử lý qua event handler
  * 3. Lưu tin nhắn visitor vào zalo_personal_messages với role='visitor'
  * 4. Tạo conversation nếu chưa có
- * 5. Route đến AI chatbot (nếu có cấu hình)
+ * 5. Route đến AI chatbot (nếu có cấu hình cho tài khoản này)
  * 6. Lưu response của AI (role='bot')
  */
 import zaloInboxRepository from '../../repositories/chatbot/zaloInbox.repository.js';
+import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import chatRouterService from './chatRouter.service.js';
+import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import sseService from '../sse.service.js';
 import {
@@ -317,6 +319,8 @@ class ZaloPersonalInboxService {
       }
       const timestamp = rawMessage?.timestamp || rawMessage?.time || rawMessage?.createdAt;
 
+      console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
+
       // Detect message source: personal chat vs group
       const isGroup = rawMessage?.isGroup === true;
       const groupId = rawMessage?.groupId || null;
@@ -417,21 +421,61 @@ class ZaloPersonalInboxService {
       const sourceType = isGroup ? `nhóm ${groupName || groupId}` : `cá nhân ${senderId}`;
       console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
 
-      // Chỉ route đến AI chatbot cho tin nhắn text từ cá nhân
-      // Không tự động reply trong nhóm để tránh spam
+      // Skip AI routing for group messages - only reply personal chats
+      if (isGroup) {
+        console.log(`[ZaloInbox] Skipping AI routing for group message (groupId: ${groupId})`);
+        return;
+      }
 
-      // Route đến AI chatbot
+      // Kiểm tra chatbot settings cho tài khoản Zalo cụ thể này
+      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+
+      // Nếu không có settings cho tài khoản này, lấy settings từ main chatbot
+      const mainChatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
+      
+      // Merge: per-account settings (nếu có) override main settings
+      const chatbotSettings = {
+        ...mainChatbotSettings,
+        ...accountSettings,
+        // Luôn dùng main chatbot's KB
+        id_sub_assistant: null,
+      };
+
+      console.log(`[ZaloInbox] Final chatbotSettings for userId=${userId}, zaloSettingId=${zaloSettingId}:`, JSON.stringify(chatbotSettings));
+
+      // Chỉ route đến AI nếu chatbot được bật cho tài khoản này
+      if (!chatbotSettings?.is_enabled) {
+        console.log(`[ZaloInbox] Chatbot is disabled for account ${zaloSettingId} - skipping AI routing`);
+        return;
+      }
+
+      // Route đến AI chatbot với cấu hình riêng của tài khoản
+      console.log(`[ZaloInbox] ✅ is_enabled=true, calling chatRouterService... content="${String(content).substring(0, 100)}"`);
       try {
-        const result = await chatRouterService.routeMessage({
+        console.log(`[ZaloInbox] >>> Before chatRouterService call`);
+        const result = await chatRouterService.routeMessageWithSettings({
           channel: 'zalo_personal',
           userId,
           message: content,
           conversationId: conversation.id,
+          chatbotSettings: {
+            is_enabled: chatbotSettings.is_enabled,
+            id_sub_assistant: chatbotSettings.id_sub_assistant,
+            ai_model: chatbotSettings.ai_model || 'gemini-2.5-flash',
+            temperature: parseFloat(chatbotSettings.temperature || 0.7),
+            max_tokens: chatbotSettings.max_tokens || 2048,
+            response_style: chatbotSettings.response_style || 'friendly',
+            welcome_message: chatbotSettings.welcome_message,
+            system_instruction: chatbotSettings.system_instruction,
+            sub_assistant_name: chatbotSettings.sub_assistant_name,
+            greeting_msg: chatbotSettings.greeting_msg,
+          },
           visitorInfo: {
             source: 'zalo_personal',
             senderId,
           },
         });
+        console.log(`[ZaloInbox] <<< After chatRouterService call, result=`, JSON.stringify(result));
 
         // Gửi reply nếu AI có response
         if (result.type === 'text' && result.content) {
@@ -452,7 +496,7 @@ class ZaloPersonalInboxService {
         console.error('[ZaloInbox] Lỗi khi route đến AI:', aiError.message);
       }
     } catch (error) {
-      console.error('[ZaloInbox] Lỗi xử lý tin nhắn:', error.message);
+      console.error('[ZaloInbox] Lỗi xử lý tin nhắn:', error.stack || error.message);
     }
   }
 

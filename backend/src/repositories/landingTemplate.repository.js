@@ -239,6 +239,47 @@ class LandingTemplateRepository {
     );
     return result.rowCount > 0;
   }
+
+  /**
+   * Update a template (only by owner).
+   * @param {number} id
+   * @param {number} userId
+   * @param {object} data
+   * @returns {Promise<object|null>}
+   */
+  async updateByIdAndUser(id, userId, data) {
+    const { name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic } = data;
+
+    const result = await db.query(
+      `UPDATE landing_page_templates
+       SET
+         name = COALESCE($1, name),
+         description = COALESCE($2, description),
+         category = COALESCE($3, category),
+         thumbnail_url = COALESCE($4, thumbnail_url),
+         css_variables = COALESCE($5, css_variables),
+         default_config = COALESCE($6, default_config),
+         is_public = COALESCE($7, is_public),
+         updated_at = NOW()
+       WHERE id = $8 AND user_id = $9 AND is_active = TRUE
+       RETURNING
+         id,
+         name,
+         category,
+         description,
+         thumbnail_url AS "thumbnailUrl",
+         html_structure AS "htmlStructure",
+         css_variables AS "cssVariables",
+         default_config AS "defaultConfig",
+         is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
+      [name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic, id, userId]
+    );
+    return result.rows[0] || null;
+  }
 }
 
 export default new LandingTemplateRepository();

@@ -176,3 +176,16 @@ export async function deleteLandingCustomDomain(landingPageId) {
   const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`);
   return data;
 }
+
+/**
+ * Cập nhật template landing page (chỉ owner).
+ *
+ * @param {number} id
+ * @param {object} body
+ * @returns {Promise<object>}
+ */
+export async function updateLandingTemplate(id, body) {
+  const { data } = await api.put(`/landing-templates/${id}`, body);
+  if (!data?.success || !data?.data) throw new Error(data?.message || 'Không cập nhật được');
+  return data.data;
+}

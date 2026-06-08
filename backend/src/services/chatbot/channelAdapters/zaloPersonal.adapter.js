@@ -137,8 +137,9 @@ class ZaloPersonalAdapter {
         
         // Call custom handler if registered
         if (stored.handler) {
+          console.log(`[ZaloPersonalAdapter] Calling handler for account ${accountId}...`);
           stored.handler(msgData).catch((err) => {
-            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.message);
+            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
           });
         }
       }

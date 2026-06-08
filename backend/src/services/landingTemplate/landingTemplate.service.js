@@ -75,6 +75,17 @@ class LandingTemplateService {
   }
 
   /**
+   * Update an existing template (only by owner).
+   * @param {number} id
+   * @param {number} userId
+   * @param {object} data
+   * @returns {Promise<object|null>}
+   */
+  async updateTemplate(id, userId, data) {
+    return landingTemplateRepository.updateByIdAndUser(id, userId, data);
+  }
+
+  /**
    * Generate landing page HTML from prompt using AI.
    * @param {object} params
    * @param {string} params.prompt - User's request
