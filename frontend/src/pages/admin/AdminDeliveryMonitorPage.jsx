@@ -255,15 +255,19 @@ const TopRunsTable = ({ runs, t }) => (
                 </span>
               </td>
               <td className="px-5 py-3 text-gray-700">
-                <p>
-                  <span className={run.successfulSends > 0 ? 'text-emerald-700 font-medium' : 'text-gray-700'}>{fmt(run.successfulSends)}</span>
-                  {run.totalRecipients > 0 && <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>}
-                </p>
+                {(run.successfulSends > 0 || run.totalRecipients > 0) ? (
+                  <p>
+                    <span className={run.successfulSends > 0 ? 'text-emerald-700 font-medium' : 'text-gray-500'}>{fmt(run.successfulSends)}</span>
+                    {run.totalRecipients > 0 && <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>}
+                  </p>
+                ) : (
+                  <p className="text-gray-400">—</p>
+                )}
                 {(run.failedSends > 0 || run.skippedSends > 0) && (
                   <p className="mt-0.5 text-xs">
                     {run.failedSends > 0 && <span className="text-red-500">· {fmt(run.failedSends)} lỗi</span>}
-                    {run.failedSends > 0 && run.skippedSends > 0 && <span className="text-gray-300 mx-1"> </span>}
-                    {run.skippedSends > 0 && <span className="text-amber-500">· {fmt(run.skippedSends)} bỏ qua</span>}
+                    {run.failedSends > 0 && run.skippedSends > 0 && <span className="mx-1.5" />}
+                    {run.skippedSends > 0 && <span className="ml-1 text-amber-500">· {fmt(run.skippedSends)} bỏ qua</span>}
                   </p>
                 )}
               </td>

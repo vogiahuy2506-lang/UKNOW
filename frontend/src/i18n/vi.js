@@ -4968,7 +4968,7 @@ export default {
     noData: 'Chưa có dữ liệu trong khoảng thời gian này.',
     campaign: 'Chiến dịch',
     status: 'Trạng thái',
-    sentFailed: 'Thành công / lỗi',
+    sentFailed: 'Kết quả gửi',
     speed: 'Tốc độ',
     failRate: 'Tỷ lệ lỗi',
     channels: 'Hiệu quả theo kênh',
