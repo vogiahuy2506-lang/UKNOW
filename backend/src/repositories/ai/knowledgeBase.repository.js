@@ -96,14 +96,11 @@ class KnowledgeBaseRepository {
 
   async findDocumentById(id, userId) {
     const { rows } = await db.query(
-      `SELECT * FROM kb_documents WHERE id = $1 AND id_user = $2`,
+      `SELECT d.* FROM kb_documents d
+       INNER JOIN kb_knowledge_bases kb ON d.id_kb = kb.id
+       WHERE d.id = $1 AND kb.id_user = $2`,
       [id, userId]
     );
-    if (rows.length === 0) {
-      // Debug: try to find the doc without user filter
-      const { rows: allRows } = await db.query(`SELECT id, id_user, title FROM kb_documents WHERE id = $1`, [id]);
-      console.log('[KB Repo] findDocumentById - doc exists:', allRows);
-    }
     return rows[0] || null;
   }
 
@@ -148,9 +145,10 @@ class KnowledgeBaseRepository {
       }
     }
 
-    // CASCADE xóa kb_chunks
+    // Xóa document (đã verified ownership qua KB)
     const { rows } = await db.query(
-      `DELETE FROM kb_documents WHERE id = $1 AND id_user = $2 RETURNING id`,
+      `DELETE FROM kb_documents WHERE id = $1 AND id_kb IN 
+       (SELECT id FROM kb_knowledge_bases WHERE id_user = $2) RETURNING id`,
       [id, userId]
     );
     return rows[0]?.id || null;
