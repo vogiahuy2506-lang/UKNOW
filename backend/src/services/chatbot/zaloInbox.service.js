@@ -176,9 +176,13 @@ class ZaloPersonalInboxService {
         try {
           console.log(`[ZaloInbox] Restoring session for account ${account.account_id}...`);
           // Tạo mock request/response để gọi restoreAccountSessionByCookie
+          // skipMarkDisconnectedOnFail: true → nếu cookie hỏng thoáng qua thì KHÔNG mark
+          // disconnected trong DB; giữ nguyên 'connected' để cron retry sau 5 phút.
+          // Chỉ mark disconnected khi user chủ động restore từ UI.
           const mockReq = {
             user: { id: account.id_user, role: 'user' },
-            params: { id: String(account.account_id) }
+            params: { id: String(account.account_id) },
+            skipMarkDisconnectedOnFail: true,
           };
           const mockRes = {
             status: () => mockRes,

@@ -1757,10 +1757,20 @@ class ZaloSettingsController {
           },
         });
       } catch (error) {
-        await this.markAccountDisconnectedAfterRestoreFail({
-          userId: accountRow.id_user,
-          accountId,
-        });
+        if (req.skipMarkDisconnectedOnFail) {
+          // Startup / cron restore: giữ nguyên 'connected' trong DB, cron sẽ retry sau 5 phút.
+          // Không mark disconnected vì lỗi có thể chỉ là network timeout thoáng qua.
+          console.warn(
+            `[ZaloSettings] Startup restore failed for account ${accountId} (keeping DB status) — will retry: ${error?.message}`
+          );
+          zaloAccountSessionService.clearAccountApi(accountId);
+        } else {
+          // Restore chủ động từ UI: mới mark disconnected để user biết cần scan QR lại.
+          await this.markAccountDisconnectedAfterRestoreFail({
+            userId: accountRow.id_user,
+            accountId,
+          });
+        }
         return res.status(400).json({
           success: false,
           message:
