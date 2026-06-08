@@ -68,7 +68,7 @@ class CustomDomainService {
       landingPageId,
       verificationToken,
       dnsConfig: dnsInstructions,
-      cnameTarget: process.env.LP_CNAME_TARGET || 'lp.uknow.vn',
+      cnameTarget: process.env.LP_CNAME_TARGET || 'founderai.biz',
       verificationMethod: 'txt',
     });
 
@@ -269,7 +269,7 @@ class CustomDomainService {
         {
           type: 'CNAME',
           name: domain.startsWith('www.') ? domain : `www.${domain}`,
-          value: process.env.LP_CNAME_TARGET || 'lp.uknow.vn',
+          value: process.env.LP_CNAME_TARGET || 'founderai.biz',
           ttl: 3600,
           description: 'Add this CNAME record to enable www subdomain',
         },

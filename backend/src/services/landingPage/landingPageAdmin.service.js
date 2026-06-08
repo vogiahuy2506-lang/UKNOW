@@ -105,7 +105,7 @@ class LandingPageAdminService {
       idUser: userId,
     });
 
-    // Tự động cấp subdomain slug.lp.uknow.vn qua Cloudflare (lỗi CF không làm fail)
+    // Tự động cấp subdomain slug.founderai.biz qua Cloudflare (lỗi CF không làm fail)
     const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
     return { ...lp, customDomain: domainResult.hostname, cfManaged: domainResult.cfManaged };
   }

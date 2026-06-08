@@ -88,11 +88,11 @@ function expectedTxtContent(token) {
 }
 
 function cnameTarget() {
-  return String(process.env.LP_CNAME_TARGET || 'lp.uknow.vn').trim();
+  return String(process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
 }
 
 function subdomainBase() {
-  return String(process.env.LP_SUBDOMAIN_BASE || process.env.LP_CNAME_TARGET || 'lp.uknow.vn').trim();
+  return String(process.env.LP_SUBDOMAIN_BASE || process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
 }
 
 function buildAutoHostname(slug) {
@@ -334,7 +334,7 @@ class LandingPageDomainService {
     }
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
     // Clear CORS cache so verified domain is immediately allowed
-    clearVerifiedDomainsCache();
+    await getClearCacheFn();
     return this.getForLanding(landingPageId, authUser);
   }
 
@@ -364,12 +364,12 @@ class LandingPageDomainService {
 
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
     // Clear CORS cache so removed domain is no longer allowed
-    clearVerifiedDomainsCache();
+    await getClearCacheFn();
     return { ok: true };
   }
 
   /**
-   * Tự động cấp subdomain `slug.lp.uknow.vn` khi tạo landing page.
+   * Tự động cấp subdomain `slug.founderai.biz` khi tạo landing page.
    * Gọi sau khi landing page đã được insert vào DB.
    * Lỗi CF không làm fail toàn bộ — chỉ log warning.
    *
@@ -433,7 +433,7 @@ class LandingPageDomainService {
 
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
     // Clear CORS cache so removed subdomain is no longer allowed
-    clearVerifiedDomainsCache();
+    await getClearCacheFn();
   }
 }
 
