@@ -405,6 +405,12 @@ class ZaloPersonalInboxService {
         return;
       }
 
+      // Skip non-text messages (stickers, images, etc.)
+      if (messageType !== 'text' || !content?.trim()) {
+        console.log(`[ZaloInbox] Skipping non-text message: type=${messageType}, hasContent=${!!content}`);
+        return;
+      }
+
       // Unified chatbot settings (shared across all channels)
       const chatbotSettings = await chatbotRepository.getSettings(userId, 'global');
 
