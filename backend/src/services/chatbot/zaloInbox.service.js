@@ -296,10 +296,13 @@ class ZaloPersonalInboxService {
       console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
 
       // Detect message source: personal chat vs group
-      const isGroup = rawMessage?.isGroup === true;
-      const groupId = rawMessage?.groupId || null;
-      const groupName = rawMessage?.groupName || null;
-      const senderName = rawMessage?.senderName || null;
+      // Use the isGroup from msgData if available, otherwise fallback to raw flags
+      const isGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true;
+      const groupId = rawMessage?.groupId || rawMessage?.group_id || null;
+      const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
+      const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
+
+      console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}`);
 
       // Build message type
       const msgType = rawMessage?.msgType || rawMessage?.type || 1;
