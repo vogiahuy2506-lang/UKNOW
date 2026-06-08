@@ -50,13 +50,6 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       WHERE LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
       GROUP BY em.id_run
     ),
-    zalo_failures_by_run AS (
-      SELECT zm.id_run, COUNT(*)::int AS failed_sends
-      FROM zalo_messages zm
-      JOIN run_base rb ON rb.id = zm.id_run
-      WHERE LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
-      GROUP BY zm.id_run
-    ),
     run_metrics AS (
       SELECT
         rb.*,
@@ -64,14 +57,14 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
         GREATEST(
           rb.run_failed_sends,
           COALESCE(efbr.failed_sends, 0),
-          COALESCE(emfbr.failed_sends, 0) + COALESCE(zmfbr.failed_sends, 0),
+          COALESCE(emfbr.failed_sends, 0),
           CASE
             WHEN LOWER(rb.status) = 'failed'
               AND NULLIF(BTRIM(COALESCE(rb.error_message, '')), '') IS NOT NULL
               AND GREATEST(COALESCE(sbr.successful_sends, 0), rb.run_successful_sends) = 0
               AND rb.run_failed_sends = 0
               AND COALESCE(efbr.failed_sends, 0) = 0
-              AND COALESCE(emfbr.failed_sends, 0) + COALESCE(zmfbr.failed_sends, 0) = 0
+              AND COALESCE(emfbr.failed_sends, 0) = 0
             THEN 1
             ELSE 0
           END
@@ -80,7 +73,6 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       LEFT JOIN sent_by_run sbr ON sbr.id_run = rb.id
       LEFT JOIN execution_failures_by_run efbr ON efbr.id_run = rb.id
       LEFT JOIN email_failures_by_run emfbr ON emfbr.id_run = rb.id
-      LEFT JOIN zalo_failures_by_run zmfbr ON zmfbr.id_run = rb.id
     )
     SELECT
       rm.id,
