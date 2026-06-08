@@ -43,6 +43,7 @@ function KnowledgeBasePage() {
   const [urlForm, setUrlForm] = useState({ title: '', url: '' });
   const [activeTab, setActiveTab] = useState('documents');
   const [deletingDoc, setDeletingDoc] = useState(null);
+  const [deletingDocData, setDeletingDocData] = useState(null);
   const fileInputRef = useRef(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,13 +159,14 @@ function KnowledgeBasePage() {
     } finally { setAddingText(false); }
   };
 
-  const deleteDocument = async (doc) => {
-    if (!confirm(`Xóa tài liệu "${doc.title}"?`)) return;
-    setDeletingDoc(doc.id);
+  const deleteDocument = async () => {
+    if (!deletingDocData) return;
+    setDeletingDoc(deletingDocData.id);
     try {
-      await chatbotApi.deleteDocument(selectedKb.id, doc.id);
-      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      await chatbotApi.deleteDocument(selectedKb.id, deletingDocData.id);
+      setDocuments(prev => prev.filter(d => d.id !== deletingDocData.id));
       toast.success(t('common.success'));
+      setDeletingDocData(null);
     } catch { toast.error(t('errors.deleteFailed')); }
     finally { setDeletingDoc(null); }
   };
@@ -366,7 +368,7 @@ function KnowledgeBasePage() {
                                 </button>
                               )}
                               <button
-                                onClick={() => deleteDocument(doc)}
+                                onClick={() => setDeletingDocData(doc)}
                                 disabled={deletingDoc === doc.id}
                                 className="p-1.5 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
                               >
@@ -606,6 +608,38 @@ function KnowledgeBasePage() {
                   <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{chunk.chunk_text}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Document Modal */}
+      {deletingDocData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HiOutlineTrash className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800 mb-2">{t('chatbot.knowledgeBase.deleteDoc') || 'Xóa tài liệu'}</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Bạn có chắc muốn xóa tài liệu <span className="font-medium text-slate-700">"{deletingDocData.title}"</span>? Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeletingDocData(null)}
+                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={deleteDocument}
+                  disabled={!!deletingDoc}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 disabled:opacity-60 transition-colors"
+                >
+                  {deletingDoc ? <><HiOutlineRefresh className="w-4 h-4 animate-spin inline" />{t('common.deleting')}</> : t('common.delete')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

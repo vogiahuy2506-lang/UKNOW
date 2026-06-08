@@ -135,6 +135,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [uploading, setUploading] = useState(false);
   const [addingText, setAddingText] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState(null);
+  const [deletingDocData, setDeletingDocData] = useState(null);
   const fileInputRef = useRef(null);
 
   // Deploy
@@ -538,18 +539,14 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     }
   };
 
-  const handleDeleteDoc = async (doc) => {
-    if (!confirm(`Xóa tài liệu "${doc.title}"?`)) return;
-    setDeletingDoc(doc.id);
+  const handleDeleteDoc = async () => {
+    if (!deletingDocData) return;
+    setDeletingDoc(deletingDocData.id);
     try {
-      setDocuments(prev => prev.filter(d => d.id !== doc.id));
-      const bots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
-      const idx = bots.findIndex(b => b.id === chatbot.id);
-      if (idx >= 0) {
-        bots[idx].documents = bots[idx].documents.filter(d => d.id !== doc.id);
-        localStorage.setItem('uknow_chatbots', JSON.stringify(bots));
-      }
+      await chatbotApi.deleteDocument(chatbot.id, deletingDocData.id);
+      setDocuments(prev => prev.filter(d => d.id !== deletingDocData.id));
       toast.success(t('common.success'));
+      setDeletingDocData(null);
     } catch {
       toast.error(t('errors.deleteFailed'));
     } finally {
@@ -950,7 +947,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                               </div>
                             </div>
                           </div>
-                          <button type="button" onClick={() => handleDeleteDoc(doc)}
+                          <button type="button" onClick={() => setDeletingDocData(doc)}
                             disabled={deletingDoc === doc.id}
                             className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50">
                             {deletingDoc === doc.id
@@ -1390,6 +1387,38 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         onSubmit={handleAddText}
         onChange={setTextForm}
       />
+
+      {/* Delete Document Modal */}
+      {deletingDocData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HiOutlineTrash className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800 mb-2">{t('chatbot.knowledgeBase.deleteDoc') || 'Xóa tài liệu'}</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Bạn có chắc muốn xóa tài liệu <span className="font-medium text-slate-700">"{deletingDocData.title}"</span>? Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeletingDocData(null)}
+                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleDeleteDoc}
+                  disabled={!!deletingDoc}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 disabled:opacity-60 transition-colors"
+                >
+                  {deletingDoc ? <><HiOutlineRefresh className="w-4 h-4 animate-spin inline" />{t('common.deleting')}</> : t('common.delete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

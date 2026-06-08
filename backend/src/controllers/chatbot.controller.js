@@ -275,8 +275,9 @@ class ChatbotController {
 
   async deleteDocument(req, res) {
     try {
-      console.log('[Chatbot] Delete document:', req.params.docId, req.user.id);
-      const deleted = await knowledgeBaseService.deleteDocument(parseInt(req.params.docId), req.user.id);
+      const docId = parseInt(req.params.docId);
+      console.log('[Chatbot] Delete document - docId:', docId, 'userId:', req.user.id, 'user:', req.user);
+      const deleted = await knowledgeBaseService.deleteDocument(docId, req.user.id);
       if (!deleted) return res.status(404).json({ success: false, message: 'Document not found' });
       return res.json({ success: true, message: 'Document deleted' });
     } catch (err) {

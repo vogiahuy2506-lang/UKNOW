@@ -329,6 +329,19 @@ class UploadController {
     return fs.readFile(tempFilePath);
   }
 
+  async deleteTempFileById(tempId, originalName) {
+    const ext = path.extname(originalName || '');
+    const tempFileName = `${tempId}${ext}`;
+    const tempFilePath = path.join(this.tempDir, tempFileName);
+    try {
+      await fs.unlink(tempFilePath);
+      return true;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return true;
+      throw error;
+    }
+  }
+
   // Xóa temp file
   /**
    * Xóa một file tạm khỏi temp_uploads/ theo tên file.

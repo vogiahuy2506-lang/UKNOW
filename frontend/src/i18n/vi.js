@@ -8,6 +8,7 @@ export default {
     save: 'Lưu',
     cancel: 'Hủy',
     delete: 'Xóa',
+    deleting: 'Đang xóa...',
     edit: 'Sửa',
     create: 'Tạo mới',
     search: 'Tìm kiếm',
@@ -2092,6 +2093,7 @@ export default {
       creating: 'Đang tạo...',
       noChunks: 'Chưa có chunks nào. Upload tài liệu để bắt đầu.',
       knowledgeBases: 'Knowledge Bases',
+      deleteDoc: 'Xóa tài liệu',
     },
     subAssistant: {
       title: 'Sub-Assistants',

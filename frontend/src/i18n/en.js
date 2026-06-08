@@ -2081,6 +2081,7 @@ export default {
       creating: 'Creating...',
       noChunks: 'No chunks yet. Upload documents to start.',
       knowledgeBases: 'Knowledge Bases',
+      deleteDoc: 'Delete document',
     },
     subAssistant: {
       title: 'Sub-Assistants',

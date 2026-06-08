@@ -99,6 +99,11 @@ class KnowledgeBaseRepository {
       `SELECT * FROM kb_documents WHERE id = $1 AND id_user = $2`,
       [id, userId]
     );
+    if (rows.length === 0) {
+      // Debug: try to find the doc without user filter
+      const { rows: allRows } = await db.query(`SELECT id, id_user, title FROM kb_documents WHERE id = $1`, [id]);
+      console.log('[KB Repo] findDocumentById - doc exists:', allRows);
+    }
     return rows[0] || null;
   }
 
@@ -129,6 +134,20 @@ class KnowledgeBaseRepository {
   }
 
   async deleteDocument(id, userId) {
+    // Lấy thông tin document trước khi xóa
+    const doc = await this.findDocumentById(id, userId);
+    if (!doc) return null;
+
+    // Xóa file đã upload nếu có
+    if (doc.source_type === 'file' && doc.file_name) {
+      try {
+        const { uploadController } = await import('../../controllers/upload.controller.js');
+        await uploadController.deleteTempFileById(`kb_${id}`, doc.file_name);
+      } catch (e) {
+        console.warn(`[KB] Could not delete uploaded file for doc ${id}:`, e.message);
+      }
+    }
+
     // CASCADE xóa kb_chunks
     const { rows } = await db.query(
       `DELETE FROM kb_documents WHERE id = $1 AND id_user = $2 RETURNING id`,
