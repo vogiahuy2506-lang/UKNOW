@@ -117,8 +117,8 @@ const userMenuItems = (t) => [
     name: t('nav.landingPage'),
     icon: HiOutlineGlobeAlt,
     children: [
-      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, ownerOnly: true },
-      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, ownerOnly: true },
+      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, adminUsernameOnly: true },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, adminUsernameOnly: true },
       { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
       { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
     ],
@@ -150,7 +150,7 @@ const userMenuItems = (t) => [
     name: t('nav.orders'),
     path: '/app/orders',
     icon: HiOutlineClipboardList,
-    ownerOnly: true,
+    adminUsernameOnly: true,
   },
   {
     name: t('nav.employees'),

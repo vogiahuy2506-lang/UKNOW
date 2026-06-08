@@ -259,6 +259,41 @@ class ZaloInboxRepository {
     );
     return result.rows[0] || null;
   }
+
+  /**
+   * Delete a conversation and its messages.
+   *
+   * @param {number} conversationId
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversation(conversationId, userId) {
+    // Delete messages first
+    await db.query(
+      `DELETE FROM zalo_personal_messages WHERE id_conversation = $1`,
+      [conversationId]
+    );
+    // Delete conversation
+    const result = await db.query(
+      `DELETE FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
+      [conversationId, userId]
+    );
+    return result.rowCount > 0;
+  }
+
+  /**
+   * Delete a conversation by externalId.
+   *
+   * @param {number} zaloSettingId
+   * @param {string} externalId
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversationByExternalId(zaloSettingId, externalId, userId) {
+    const conv = await this.findConversation(zaloSettingId, externalId);
+    if (!conv) return false;
+    return this.deleteConversation(conv.id, userId);
+  }
 }
 
 export default new ZaloInboxRepository();

@@ -21,7 +21,7 @@ export async function buildLandingLeadsAdminXlsxBuffer(items) {
     { header: 'Họ và tên', key: 'fullName', width: 28 },
     { header: 'Email', key: 'email', width: 32 },
     { header: 'Điện thoại', key: 'phone', width: 16 },
-    { header: 'Landing / slug', key: 'landingPageSlug', width: 18 },
+    { header: 'Trang nguồn', key: 'landingPageSlug', width: 18 },
     { header: 'Nghề', key: 'occupation', width: 22 },
     { header: 'Lĩnh vực quan tâm', key: 'interestArea', width: 28 },
     { header: 'Đồng ý nhận tin', key: 'marketingConsent', width: 18 },

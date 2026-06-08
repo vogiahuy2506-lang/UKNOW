@@ -1,52 +1,46 @@
-import { HiOutlineRefresh } from 'react-icons/hi';
+import { useState, useEffect } from 'react';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineX } from 'react-icons/hi';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
-import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
 import { useI18n } from '../../i18n';
 
-/**
- * Định dạng ngày giờ hiển thị (ISO → tiếng Việt).
- *
- * @param {string|Date|null|undefined} raw
- * @returns {string}
- */
-function formatDateTimeVi(raw) {
-  if (!raw) return '—';
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-/**
- * Trang danh sách khách đăng ký qua form landing công khai (`/l`) — có bộ lọc và phân trang.
- *
- * Luồng hoạt động:
- * 1. Hook `useLandingLeadsList` gọi GET `/api/leads` khi đổi trang hoặc áp dụng lọc.
- * 2. Bảng hiển thị dữ liệu đã map từ backend (họ tên, liên hệ, slug landing, nghề, lĩnh vực, đồng ý marketing, thời gian).
- */
 const LandingLeadsListPage = () => {
   const { t } = useI18n();
   const {
-    draftFilters,
-    setDraftFilters,
-    appliedFilters,
+    search,
+    setSearch,
+    selectedSlug,
+    setSelectedSlug,
+    availableSlugs,
     page,
     setPage,
     items,
     pagination,
     isLoading,
     errorMessage,
-    applyFilters,
-    resetFilters,
     reload,
-    exportToExcel,
-    isExporting,
   } = useLandingLeadsList();
+
+  const [inputValue, setInputValue] = useState(search);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(inputValue);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearch, setPage]);
+
+  const handleClearSearch = () => {
+    setInputValue('');
+    setSearch('');
+    setPage(1);
+  };
+
+  const handleSlugChange = (e) => {
+    setSelectedSlug(e.target.value);
+    setPage(1);
+  };
 
   const totalPages = pagination.totalPages || 1;
   const total = pagination.total ?? 0;
@@ -73,14 +67,47 @@ const LandingLeadsListPage = () => {
         </button>
       </div>
 
-      <LandingLeadsAdminFilters
-        draftFilters={draftFilters}
-        setDraftFilters={setDraftFilters}
-        onApply={applyFilters}
-        onReset={resetFilters}
-        onExportExcel={exportToExcel}
-        isExporting={isExporting}
-      />
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <HiOutlineSearch className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={t('landingLeads.searchPlaceholder') || 'Tìm kiếm họ tên, email, SĐT...'}
+            className="block w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+          {inputValue && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <HiOutlineX className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            </button>
+          )}
+        </div>
+
+        {/* Slug Filter */}
+        <div className="w-full sm:w-64">
+          <select
+            value={selectedSlug}
+            onChange={handleSlugChange}
+            className="block w-full py-2 px-3 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">{t('landingLeads.allSlugs') || 'Tất cả trang nguồn'}</option>
+            {availableSlugs.map((slug) => (
+              <option key={slug} value={slug}>
+                {slug}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {errorMessage ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -89,18 +116,9 @@ const LandingLeadsListPage = () => {
       ) : null}
 
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <p className="text-sm text-gray-600">
             <span className="font-medium text-gray-900">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
-            {appliedFilters.landingLeadsUseDateRange ? (
-              <span className="text-gray-500">
-                {' '}
-                ({t('landingLeads.dateRange', {
-                  from: appliedFilters.landingLeadsDateFrom || '…',
-                  to: appliedFilters.landingLeadsDateTo || '…',
-                })})
-              </span>
-            ) : null}
           </p>
           <p className="text-sm text-gray-500">
             {t('landingLeads.pageOf', { page, total: totalPages })}
@@ -123,31 +141,19 @@ const LandingLeadsListPage = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('landingLeads.landingSlug')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('landingLeads.occupation')}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('landingLeads.interestArea')}
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('landingLeads.marketingConsent')}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('landingLeads.registrationTime')}
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500">
                     {t('landingLeads.loading')}
                   </td>
                 </tr>
               ) : null}
               {!isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500">
                     {t('landingLeads.noRecords')}
                   </td>
                 </tr>
@@ -157,24 +163,12 @@ const LandingLeadsListPage = () => {
                   <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                     {row.fullName || `${row.lastName || ''} ${row.firstName || ''}`.trim() || '—'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 max-w-[200px] truncate" title={row.email}>
+                  <td className="px-4 py-3 text-sm text-gray-700 max-w-[250px] truncate" title={row.email}>
                     {row.email || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.phone || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 font-mono text-xs whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-gray-700 font-medium whitespace-nowrap">
                     {row.landingPageSlug || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[160px]">
-                    {row.occupation || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px]">
-                    {row.interestArea || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-700">
-                    {row.marketingConsent ? t('landingLeads.yes') : t('landingLeads.no')}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                    {formatDateTimeVi(row.createdAt)}
                   </td>
                 </tr>
               ))}
@@ -182,8 +176,8 @@ const LandingLeadsListPage = () => {
           </table>
         </div>
 
-        {totalPages > 1 ? (
-          <div className="px-5 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        {totalPages > 1 && (
+          <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
             <button
               type="button"
               disabled={page <= 1 || isLoading}
@@ -204,7 +198,7 @@ const LandingLeadsListPage = () => {
               {t('landingLeads.nextPage')}
             </button>
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );

@@ -16,6 +16,8 @@ const api = axios.create({
   timeout: 10000,
   withCredentials: true,
 });
+// Add delete method
+api.delete = (url, config) => api({ method: 'DELETE', url, ...config });
 
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/logout'];
 let isForcingLogout = false;

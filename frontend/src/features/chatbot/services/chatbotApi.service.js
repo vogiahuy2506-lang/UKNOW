@@ -39,6 +39,33 @@ const chatbotApiService = {
     const response = await api.post('/webhooks/oauth/zalo-oa/init', payload);
     return response.data;
   },
+
+  // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────
+
+  // Get chatbot settings for a specific Zalo account
+  getZaloAccountChatbotSettings(zaloSettingId) {
+    return api.get(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot`);
+  },
+
+  // Update chatbot settings for a Zalo account
+  updateZaloAccountChatbotSettings(zaloSettingId, data) {
+    return api.put(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot`, data);
+  },
+
+  // Toggle chatbot for a Zalo account
+  toggleZaloAccountChatbot(zaloSettingId, enabled) {
+    return api.post(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot/toggle`, { enabled });
+  },
+
+  // List all Zalo accounts with chatbot settings
+  listZaloAccountsWithChatbotSettings() {
+    return api.get('/ai/chatbot/zalo-accounts/chatbot');
+  },
+
+  // Delete a conversation
+  deleteConversation(conversationId, type = 'zalo_personal') {
+    return api.delete(`/ai/chatbot/inbox/conversations/${conversationId}?type=${type}`);
+  },
 };
 
 export default chatbotApiService;

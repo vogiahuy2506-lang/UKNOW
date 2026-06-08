@@ -5,6 +5,7 @@ import campaignController from '../controllers/campaign.controller.js';
 import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
 import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
+import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
@@ -526,4 +527,34 @@ export const initScheduler = () => {
   registerZaloPersonalListeners();
 
   console.log('[Scheduler] Đã khởi tạo Zalo Personal Inbox: đăng ký listeners mỗi 5 phút');
+
+  // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
+  // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)
+  const restoreZaloSessions = async () => {
+    try {
+      const campaignZaloSenderService = (await import('../services/campaign/campaignZaloSender.service.js')).default;
+      const result = await campaignZaloSenderService.restoreDisconnectedZaloAccounts();
+      if (result.restored > 0) {
+        console.log(`[Scheduler] Đã khôi phục ${result.restored}/${result.total} tài khoản Zalo`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi khôi phục Zalo sessions:', error.message);
+    }
+  };
+
+  // Chạy mỗi 15 phút
+  cron.schedule('*/15 * * * *', async () => {
+    await restoreZaloSessions();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  // Chạy ngay khi khởi động để phục hồi các session bị mất
+  restoreZaloSessions();
+
+  console.log('[Scheduler] Đã khởi tạo Zalo Session Restoration: kiểm tra và khôi phục mỗi 15 phút');
+
+  // ── Zalo Session Keep-Alive - LUÔN giữ đăng nhập ──────────────────────────────────
+  // Chạy mỗi 5 phút để kiểm tra và restore session nếu cần
+  // Đảm bảo tài khoản Zalo không bị out dù có làm gì
+  startKeepAliveScheduler();
+  console.log('[Scheduler] Đã khởi tạo Zalo Session Keep-Alive: giữ đăng nhập liên tục');
 };

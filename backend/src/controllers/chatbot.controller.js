@@ -2,6 +2,7 @@ import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
 import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
+import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAccount.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
@@ -9,6 +10,54 @@ import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
+
+/**
+ * Extract readable text content from HTML, preserving structure
+ */
+function extractTextFromHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+
+  let text = html;
+
+  // Remove script and style tags with content
+  text = text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  text = text.replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, '');
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+
+  // Remove common non-content elements
+  text = text.replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ');
+  text = text.replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ');
+  text = text.replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ');
+  text = text.replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, ' ');
+  text = text.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, ' ');
+
+  // Replace block elements with newlines
+  text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|hr)>/gi, '\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<p[^>]*>/gi, '\n');
+
+  // Remove remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
+
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'");
+
+  // Clean up whitespace
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/\n\s*\n/g, '\n\n');
+  text = text.replace(/^\s+|\s+$/g, '');
+
+  // Limit to 50000 chars
+  return text.slice(0, 50000);
+}
 
 class ChatbotController {
   // ── Knowledge Base ─────────────────────────────────────────────
@@ -150,28 +199,59 @@ class ChatbotController {
       const { title, url } = req.body;
       if (!url?.trim()) return res.status(400).json({ success: false, message: 'URL is required' });
 
-      // Scrape URL content
+      // Validate URL format
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          return res.status(400).json({ success: false, message: 'Only HTTP/HTTPS URLs are supported' });
+        }
+      } catch {
+        return res.status(400).json({ success: false, message: 'Invalid URL format' });
+      }
+
+      // Scrape URL content with realistic browser headers
       let content = '';
+      let scrapeStatus = 'failed';
       try {
         const axios = (await import('axios')).default;
-        const response = await axios.get(url, { timeout: 15000 });
-        // Simple text extraction - strip HTML tags
-        content = String(response.data || '')
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 50000);
+        const response = await axios.get(url, {
+          timeout: 20000,
+          maxRedirects: 5,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+          },
+          // Handle compressed responses
+          decompress: true,
+        });
+
+        const html = String(response.data || '');
+
+        // Extract content from HTML
+        content = extractTextFromHtml(html);
+
+        if (content.length > 100) {
+          scrapeStatus = 'success';
+        } else if (html.length > 1000) {
+          // HTML is large but extracted text is small - likely a JS-rendered page
+          scrapeStatus = 'partial';
+          content = `⚠️ This page may require JavaScript to render content. Extracted text:\n\n${content}`;
+        }
       } catch (e) {
         console.warn(`[KB] Failed to scrape URL ${url}:`, e.message);
+        scrapeStatus = `error: ${e.message}`;
       }
 
       const doc = await knowledgeBaseService.addDocument(kbId, req.user.id, {
         title: title || url,
         source_type: 'url',
         source_url: url,
-        content_text: content,
+        content_text: content || `⚠️ Failed to extract content from ${url}. Status: ${scrapeStatus}`,
       });
 
       knowledgeBaseService.processDocument(doc.id, kbId, req.user.id, {
@@ -184,7 +264,9 @@ class ChatbotController {
       return res.status(201).json({
         success: true,
         data: doc,
-        message: content ? 'URL content captured and processing started' : 'URL added (content extraction failed)',
+        message: content.length > 100
+          ? 'URL content captured and processing started'
+          : `URL added. ${scrapeStatus === 'partial' ? 'Content may be incomplete (page requires JavaScript).' : 'Content extraction had issues but URL was saved.'}`,
       });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -299,6 +381,95 @@ class ChatbotController {
     try {
       const settings = await chatbotRepository.upsertSettings(req.user.id, req.params.channel, req.body);
       return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────
+
+  /**
+   * Get chatbot settings for a specific Zalo account
+   * GET /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
+   */
+  async getZaloAccountChatbotSettings(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      const settings = await chatbotZaloAccountRepository.getSettings(req.user.id, zaloSettingId);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Update chatbot settings for a specific Zalo account
+   * PUT /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
+   * Note: Only is_enabled is saved per-account; other settings use unified chatbot settings
+   */
+  async updateZaloAccountChatbotSettings(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      // Only save is_enabled - other settings use unified chatbot settings
+      const settings = await chatbotZaloAccountRepository.setEnabled(
+        req.user.id, 
+        zaloSettingId, 
+        req.body.is_enabled
+      );
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Toggle chatbot for a specific Zalo account
+   * POST /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot/toggle
+   */
+  async toggleZaloAccountChatbot(req, res) {
+    try {
+      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      if (!zaloSettingId) {
+        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
+      }
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
+      }
+      const settings = await chatbotZaloAccountRepository.setEnabled(req.user.id, zaloSettingId, enabled);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * List all Zalo accounts with their chatbot settings for current user
+   * GET /api/ai/chatbot/zalo-accounts/chatbot
+   */
+  async listZaloAccountsWithChatbotSettings(req, res) {
+    try {
+      const settings = await chatbotZaloAccountRepository.getAllSettingsForUser(req.user.id);
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Get sub-assistants for dropdown selection
+   * GET /api/ai/chatbot/sub-assistants/chatbot-dropdown
+   */
+  async getSubAssistantsForChatbot(req, res) {
+    try {
+      const subAssistants = await chatbotZaloAccountRepository.getSubAssistants(req.user.id);
+      return res.json({ success: true, data: subAssistants });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

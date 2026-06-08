@@ -1698,13 +1698,7 @@ class ZaloSettingsController {
         });
       }
 
-      if (accountRow.is_active !== true) {
-        return res.status(400).json({
-          success: false,
-          message: 'Tài khoản Zalo đang không hoạt động, không thể khôi phục session',
-        });
-      }
-
+      // Check if account exists and has cookie to restore
       const cookieText = String(accountRow.cookie_text || '').trim();
       if (!cookieText) {
         return res.status(400).json({

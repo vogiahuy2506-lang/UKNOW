@@ -8,12 +8,14 @@
  * 2. Khi có tin nhắn đến → xử lý qua event handler
  * 3. Lưu tin nhắn visitor vào zalo_personal_messages với role='visitor'
  * 4. Tạo conversation nếu chưa có
- * 5. Route đến AI chatbot (nếu có cấu hình)
+ * 5. Route đến AI chatbot (nếu có cấu hình cho tài khoản này)
  * 6. Lưu response của AI (role='bot')
  */
 import zaloInboxRepository from '../../repositories/chatbot/zaloInbox.repository.js';
+import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import chatRouterService from './chatRouter.service.js';
+import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import sseService from '../sse.service.js';
 import {
@@ -278,36 +280,6 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Lưu tin nhắn visitor vào zalo_personal_messages
-   */
-  async saveIncomingMessage(conversationId, zaloSettingId, userId, message, externalId, externalTs, rawData, senderName = null) {
-    const now = new Date().toISOString();
-    
-    // Build metadata with sender info for group messages
-    const metadata = {
-      _raw: rawData,
-    };
-    if (senderName) {
-      metadata.sender_name = senderName;
-    }
-    
-    await zaloInboxRepository.insertVisitorMessage({
-      conversationId, userId, zaloSettingId, message, externalId, externalTs, metadata, now,
-    });
-    // Update conversation last_message_at
-    await zaloInboxRepository.touchConversation(conversationId, now);
-  }
-
-  /**
-   * Lưu response của bot vào zalo_personal_messages
-   */
-  async saveBotResponse(conversationId, zaloSettingId, userId, content) {
-    const now = new Date().toISOString();
-    await zaloInboxRepository.insertBotMessage(conversationId, zaloSettingId, userId, content, now);
-    await zaloInboxRepository.touchConversation(conversationId, now);
-  }
-
-  /**
    * Xử lý một tin nhắn đến từ Zalo cá nhân
    */
   async processIncomingMessage(userId, accountId, zaloSettingId, rawMessage) {
@@ -320,6 +292,8 @@ class ZaloPersonalInboxService {
         content = content?.text || content?.message || JSON.stringify(content) || '';
       }
       const timestamp = rawMessage?.timestamp || rawMessage?.time || rawMessage?.createdAt;
+
+      console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
 
       // Detect message source: personal chat vs group
       const isGroup = rawMessage?.isGroup === true;
@@ -348,8 +322,13 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Xác định externalId dựa trên nguồn: group message dùng groupId, personal dùng senderId
-      const externalId = isGroup ? String(groupId) : String(senderId);
+      // Xác định externalId dựa trên nguồn: 
+      // - Group: dùng senderId để phân biệt từng người trong nhóm
+      // - Personal: dùng senderId
+      // Format group message: "group_{groupId}_{senderId}" để tránh trùng lặp
+      const externalId = isGroup 
+        ? `group_${groupId}_${senderId}` 
+        : String(senderId);
 
       // Lấy tên nhóm nếu là group message và không có sẵn
       let resolvedGroupName = groupName;
@@ -371,9 +350,16 @@ class ZaloPersonalInboxService {
       }
 
       // Xác định tên hiển thị cho conversation
-      const displayName = isGroup 
-        ? (resolvedGroupName || groupName || `Nhóm ${groupId}`)
-        : (resolvedSenderName || senderName || `User ${senderId}`);
+      // - Group: hiển thị tên người gửi + tên nhóm
+      // - Personal: hiển thị tên người gửi
+      let displayName;
+      if (isGroup) {
+        const senderDisplay = resolvedSenderName || senderName || `User ${senderId}`;
+        const groupDisplay = resolvedGroupName || groupName || `Nhóm ${groupId}`;
+        displayName = `${senderDisplay} (${groupDisplay})`;
+      } else {
+        displayName = resolvedSenderName || senderName || `User ${senderId}`;
+      }
 
       // Build visitor info với đầy đủ metadata
       const visitorInfo = {
@@ -396,19 +382,8 @@ class ZaloPersonalInboxService {
       // Tạo hoặc lấy conversation
       const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, displayName, visitorInfo);
 
-      // Lưu tin nhắn visitor (lưu cả raw message để giữ thông tin gốc)
-      await this.saveIncomingMessage(
-        conversation.id,
-        zaloSettingId,
-        userId,
-        content,
-        messageId,
-        timestamp,
-        rawMessage,
-        resolvedSenderName || senderName // Pass sender name for group messages
-      );
-
       // Broadcast SSE event to frontend for real-time update
+      // Note: Message đã được lưu bởi zaloPersonal.adapter.js saveMessageToDatabase()
       sseService.broadcast(String(userId), 'inbox:new_message', {
         conversationId: conversation.id,
         channel: 'zalo_personal',
@@ -421,21 +396,48 @@ class ZaloPersonalInboxService {
       const sourceType = isGroup ? `nhóm ${groupName || groupId}` : `cá nhân ${senderId}`;
       console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
 
-      // Chỉ route đến AI chatbot cho tin nhắn text từ cá nhân
-      // Không tự động reply trong nhóm để tránh spam
+      // Skip AI routing for group messages - only reply personal chats
+      if (isGroup) {
+        console.log(`[ZaloInbox] Skipping AI routing for group message (groupId: ${groupId})`);
+        return;
+      }
 
-      // Route đến AI chatbot
+      // Unified chatbot settings (shared across all channels)
+      const chatbotSettings = await chatbotRepository.getSettings(userId, 'global');
+
+      // Check per-account enable/disable
+      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+
+      // If chatbot is not enabled for this account, skip
+      if (!accountSettings?.is_enabled) {
+        console.log(`[ZaloInbox] Chatbot is disabled for account ${zaloSettingId} - skipping AI routing`);
+        return;
+      }
+
+      // Override is_enabled with account-specific setting
+      const finalSettings = {
+        ...chatbotSettings,
+        is_enabled: accountSettings.is_enabled,
+      };
+
+      console.log(`[ZaloInbox] Final chatbotSettings for userId=${userId}, zaloSettingId=${zaloSettingId}:`, JSON.stringify(finalSettings));
+
+      // Route đến AI chatbot với cấu hình riêng của tài khoản
+      console.log(`[ZaloInbox] ✅ is_enabled=true, calling chatRouterService... content="${String(content).substring(0, 100)}"`);
       try {
-        const result = await chatRouterService.routeMessage({
+        console.log(`[ZaloInbox] >>> Before chatRouterService call`);
+        const result = await chatRouterService.routeMessageWithSettings({
           channel: 'zalo_personal',
           userId,
           message: content,
           conversationId: conversation.id,
+          chatbotSettings: finalSettings,
           visitorInfo: {
             source: 'zalo_personal',
             senderId,
           },
         });
+        console.log(`[ZaloInbox] <<< After chatRouterService call, result=`, JSON.stringify(result));
 
         // Gửi reply nếu AI có response
         if (result.type === 'text' && result.content) {
@@ -446,7 +448,7 @@ class ZaloPersonalInboxService {
           });
 
           if (sendResult.success) {
-            await this.saveBotResponse(conversation.id, zaloSettingId, userId, result.content);
+            // Message đã được lưu bởi zaloPersonalAdapter.sendReply()
             console.log(`[ZaloInbox] Đã gửi reply cho ${senderId}`);
           } else {
             console.warn(`[ZaloInbox] Gửi reply thất bại: ${sendResult.error}`);
@@ -456,7 +458,7 @@ class ZaloPersonalInboxService {
         console.error('[ZaloInbox] Lỗi khi route đến AI:', aiError.message);
       }
     } catch (error) {
-      console.error('[ZaloInbox] Lỗi xử lý tin nhắn:', error.message);
+      console.error('[ZaloInbox] Lỗi xử lý tin nhắn:', error.stack || error.message);
     }
   }
 

@@ -10,7 +10,6 @@ class LandingTemplateRepository {
    * @returns {Promise<object[]>}
    */
   async listAll(scope = {}) {
-    const userId = Number.parseInt(scope?.userId, 10);
     const result = await db.query(
       `SELECT
          id,
@@ -22,11 +21,64 @@ class LandingTemplateRepository {
          css_variables AS "cssVariables",
          default_config AS "defaultConfig",
          is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_page_templates
-       WHERE is_active = TRUE
+       WHERE is_active = TRUE AND (is_public = TRUE OR user_id = $1)
+       ORDER BY id ASC`,
+      [scope?.userId || 0]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Get only public templates.
+   * @returns {Promise<object[]>}
+   */
+  async listPublic() {
+    const result = await db.query(
+      `SELECT
+         id,
+         name,
+         category,
+         description,
+         thumbnail_url AS "thumbnailUrl",
+         is_public AS "isPublic",
+         created_at AS "createdAt"
+       FROM landing_page_templates
+       WHERE is_active = TRUE AND is_public = TRUE
        ORDER BY id ASC`
+    );
+    return result.rows;
+  }
+
+  /**
+   * Get templates created by a specific user.
+   * @param {number} userId
+   * @returns {Promise<object[]>}
+   */
+  async listByUser(userId) {
+    const result = await db.query(
+      `SELECT
+         id,
+         name,
+         category,
+         description,
+         thumbnail_url AS "thumbnailUrl",
+         html_structure AS "htmlStructure",
+         css_variables AS "cssVariables",
+         default_config AS "defaultConfig",
+         is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"
+       FROM landing_page_templates
+       WHERE is_active = TRUE AND user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
     );
     return result.rows;
   }
@@ -47,10 +99,12 @@ class LandingTemplateRepository {
          css_variables AS "cssVariables",
          default_config AS "defaultConfig",
          is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_page_templates
-       WHERE category = $1 AND is_active = TRUE
+       WHERE category = $1 AND is_active = TRUE AND is_public = TRUE
        ORDER BY id ASC`,
       [category]
     );
@@ -73,6 +127,8 @@ class LandingTemplateRepository {
          css_variables AS "cssVariables",
          default_config AS "defaultConfig",
          is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_page_templates
@@ -99,6 +155,8 @@ class LandingTemplateRepository {
          css_variables AS "cssVariables",
          default_config AS "defaultConfig",
          is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_page_templates
@@ -117,11 +175,110 @@ class LandingTemplateRepository {
     const result = await db.query(
       `SELECT category, COUNT(*)::int AS count
        FROM landing_page_templates
-       WHERE is_active = TRUE
+       WHERE is_active = TRUE AND is_public = TRUE
        GROUP BY category
        ORDER BY category ASC`
     );
     return result.rows;
+  }
+
+  /**
+   * Create a new template.
+   * @param {object} data
+   * @returns {Promise<object>}
+   */
+  async create(data) {
+    const {
+      name,
+      description,
+      htmlStructure,
+      category = 'Custom',
+      thumbnailUrl,
+      cssVariables,
+      defaultConfig,
+      isPublic = false,
+      userId,
+    } = data;
+
+    const result = await db.query(
+      `INSERT INTO landing_page_templates 
+       (name, description, html_structure, category, thumbnail_url, css_variables, default_config, is_public, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING 
+         id,
+         name,
+         category,
+         description,
+         thumbnail_url AS "thumbnailUrl",
+         html_structure AS "htmlStructure",
+         css_variables AS "cssVariables",
+         default_config AS "defaultConfig",
+         is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
+      [name, description, htmlStructure, category, thumbnailUrl, cssVariables, defaultConfig, isPublic, userId]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * Soft delete a template (only by owner).
+   * @param {number} id
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteByIdAndUser(id, userId) {
+    const result = await db.query(
+      `UPDATE landing_page_templates
+       SET is_active = FALSE
+       WHERE id = $1 AND user_id = $2 AND is_active = TRUE
+       RETURNING id`,
+      [id, userId]
+    );
+    return result.rowCount > 0;
+  }
+
+  /**
+   * Update a template (only by owner).
+   * @param {number} id
+   * @param {number} userId
+   * @param {object} data
+   * @returns {Promise<object|null>}
+   */
+  async updateByIdAndUser(id, userId, data) {
+    const { name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic } = data;
+
+    const result = await db.query(
+      `UPDATE landing_page_templates
+       SET
+         name = COALESCE($1, name),
+         description = COALESCE($2, description),
+         category = COALESCE($3, category),
+         thumbnail_url = COALESCE($4, thumbnail_url),
+         css_variables = COALESCE($5, css_variables),
+         default_config = COALESCE($6, default_config),
+         is_public = COALESCE($7, is_public),
+         updated_at = NOW()
+       WHERE id = $8 AND user_id = $9 AND is_active = TRUE
+       RETURNING
+         id,
+         name,
+         category,
+         description,
+         thumbnail_url AS "thumbnailUrl",
+         html_structure AS "htmlStructure",
+         css_variables AS "cssVariables",
+         default_config AS "defaultConfig",
+         is_active AS "isActive",
+         is_public AS "isPublic",
+         user_id AS "userId",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
+      [name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic, id, userId]
+    );
+    return result.rows[0] || null;
   }
 }
 

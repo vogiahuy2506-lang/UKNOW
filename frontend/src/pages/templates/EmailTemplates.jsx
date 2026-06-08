@@ -775,6 +775,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
         handleRemoveVariable={handleRemoveVariable}
         handleAddSuggestedVariable={handleAddSuggestedVariable}
         hideHtmlTab={isZaloTemplate}
+        hideSubjectField={isZaloTemplate}
         subjectLabel={subjectLabel}
         templateKindLabel={templateKindLabel}
         labels={labels}

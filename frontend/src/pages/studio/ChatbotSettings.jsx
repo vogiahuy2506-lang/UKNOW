@@ -6,9 +6,12 @@ import {
   HiOutlineUpload,
   HiOutlineDocumentText,
   HiOutlineTrash,
+  HiOutlineCode,
+  HiOutlineCheck,
   HiOutlinePlus,
   HiOutlineX,
   HiOutlineChatAlt2,
+  HiOutlineSparkles,
   HiOutlineGlobeAlt,
   HiOutlineColorSwatch,
   HiOutlineBookOpen,
@@ -31,8 +34,11 @@ import {
   DeployPublicLinkModal,
   ZaloChannelModal,
   FacebookChannelModal,
+  ZaloPersonalChannelModal,
   FacebookConnectModal,
+  FacebookChannelCard,
   FieldRow,
+  PublicLinkCard,
   SectionCard,
   Textarea,
   TextDocumentModal,
@@ -40,6 +46,8 @@ import {
   Toggle,
   UploadDocumentModal,
   ZaloConnectModal,
+  ZaloChannelCard,
+  AIConfig,
 } from '../../features/chatbot/components/ChatbotSettingsComponents';
 
 const TABS = [
@@ -60,15 +68,18 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [showPublicLinkModal, setShowPublicLinkModal] = useState(false);
   const [showZaloChannelModal, setShowZaloChannelModal] = useState(false);
   const [showFacebookChannelModal, setShowFacebookChannelModal] = useState(false);
+  const [showZaloPersonalChannelModal, setShowZaloPersonalChannelModal] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     description: '',
     avatar_url: '',
-    greeting_msg: '',
     system_instruction: '',
+    ai_model: 'gemini-2.5-flash',
     temperature: 0.7,
     max_tokens: 2048,
+    response_style: 'friendly',
+    welcome_message: '',
     is_active: true,
     primary_color: '#6366F1',
     background_color: '#FFFFFF',
@@ -147,10 +158,12 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         name: chatbot.name || '',
         description: chatbot.description || '',
         avatar_url: chatbot.avatar_url || '',
-        greeting_msg: chatbot.greeting_msg || '',
         system_instruction: chatbot.system_instruction || '',
+        ai_model: chatbot.ai_model || 'gemini-2.5-flash',
         temperature: chatbot.temperature || 0.7,
         max_tokens: chatbot.max_tokens || 2048,
+        response_style: chatbot.response_style || 'friendly',
+        welcome_message: chatbot.welcome_message || chatbot.greeting_msg || '',
         is_active: chatbot.is_active !== false,
         primary_color: ws.primary_color || '#8B5CF6',
         background_color: ws.background_color || '#FFFFFF',
@@ -326,10 +339,12 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         name: form.name,
         description: form.description,
         avatar_url: form.avatar_url,
-        greeting_msg: form.greeting_msg,
         system_instruction: form.system_instruction,
+        ai_model: form.ai_model,
         temperature: form.temperature,
         max_tokens: form.max_tokens,
+        response_style: form.response_style,
+        welcome_message: form.welcome_message,
         is_active: form.is_active,
         primary_color: form.primary_color,
         background_color: form.background_color,
@@ -578,6 +593,14 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const zaloWebhookUrl = zaloChannel?.webhook_url || `${productionApiBase}/api/webhooks/zalo-oa`;
   const facebookWebhookUrl = facebookChannel?.webhook_url || `${productionApiBase}/api/webhooks/facebook`;
   const facebookVerifyToken = 'founderai';
+  const publicChatbotUrl = `${productionApiBase}/chat/${chatbot.widget_key || chatbot.id}`;
+
+  const copyPublicUrl = () => {
+    navigator.clipboard.writeText(publicChatbotUrl);
+    setWidgetCopied(true);
+    toast.success(t('common.copied'));
+    setTimeout(() => setWidgetCopied(false), 2000);
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -658,14 +681,6 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                         placeholder="VD: Trợ lý AI"
                       />
                     </FieldRow>
-                    <FieldRow label="Tin nhắn chào mừng">
-                      <Textarea
-                        value={form.greeting_msg}
-                        onChange={e => setForm(p => ({ ...p, greeting_msg: e.target.value }))}
-                        placeholder="VD: Xin chào! Tôi có thể giúp gì cho bạn?"
-                        rows={2}
-                      />
-                    </FieldRow>
                     <div className="flex items-center justify-between py-2">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
@@ -680,31 +695,19 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
 
                   <div className="border-t border-slate-100" />
 
-                  {/* Hành vi AI */}
-                  <div className="space-y-4">
-                    <FieldRow label="System Instructions" hint={`${form.system_instruction?.length || 0} / 2000 ký tự`}>
-                      <Textarea
-                        value={form.system_instruction}
-                        onChange={e => setForm(p => ({ ...p, system_instruction: e.target.value }))}
-                        placeholder="Nhập prompt hướng dẫn chi tiết (Ví dụ: Bạn là một trợ lý ảo thân thiện...)"
-                        rows={5}
-                      />
-                    </FieldRow>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="label mb-0">Độ sáng tạo (Temperature)</label>
-                        <span className="text-xs font-mono text-slate-500">{form.temperature}</span>
-                      </div>
-                      <input type="range" min="0" max="1" step="0.05" value={form.temperature}
-                        onChange={e => setForm(p => ({ ...p, temperature: parseFloat(e.target.value) }))}
-                        className="w-full accent-primary-600"
-                      />
-                      <div className="flex justify-between text-xs text-slate-400 mt-1">
-                        <span>Chính xác</span>
-                        <span>Sáng tạo</span>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Cấu hình AI */}
+                  <AIConfig
+                    config={{
+                      ai_model: form.ai_model,
+                      temperature: form.temperature,
+                      max_tokens: form.max_tokens,
+                      response_style: form.response_style,
+                      welcome_message: form.welcome_message,
+                      system_instruction: form.system_instruction,
+                    }}
+                    onChange={updated => setForm(p => ({ ...p, ...updated }))}
+                    showSystemInstruction={true}
+                  />
 
                   <div className="border-t border-slate-100" />
 
@@ -1014,7 +1017,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                   </div>
 
                   {/* Channel Connection Cards - Now as buttons to open modals */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
                       type="button"
                       onClick={() => setShowZaloChannelModal(true)}
@@ -1042,6 +1045,20 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                       <div className="text-center">
                         <span className="text-xs font-medium text-slate-700">Facebook</span>
                         <p className="text-[10px] text-slate-400 mt-0.5">{facebookChannel ? 'Đã kết nối' : 'Chưa kết nối'}</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowZaloPersonalChannelModal(true)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50 transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-lg font-bold group-hover:bg-orange-200 transition-colors">
+                        ZP
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs font-medium text-slate-700">Zalo Cá nhân</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Bật chatbot</p>
                       </div>
                     </button>
                   </div>
@@ -1096,6 +1113,12 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                 onOpenGuide={() => setShowChannelGuideModal('facebook')}
                 webhookUrl={facebookWebhookUrl}
                 verifyToken={facebookVerifyToken}
+              />
+
+              {/* Zalo Personal Channel Modal */}
+              <ZaloPersonalChannelModal
+                open={showZaloPersonalChannelModal}
+                onClose={() => setShowZaloPersonalChannelModal(false)}
               />
             </div>
           )}

@@ -140,7 +140,19 @@ router.get('/inbox/conversations/:id', unifiedInboxController.getConversation.bi
 router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessages.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMessage.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));
+router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
+
+// ── Zalo Personal Account Chatbot Settings ─────────────────────────
+
+// Get chatbot settings for a Zalo account
+router.get('/zalo-account/:zaloSettingId/chatbot', chatbotController.getZaloAccountChatbotSettings.bind(chatbotController));
+// Update chatbot settings for a Zalo account
+router.put('/zalo-account/:zaloSettingId/chatbot', chatbotController.updateZaloAccountChatbotSettings.bind(chatbotController));
+// Enable/disable chatbot for a Zalo account
+router.post('/zalo-account/:zaloSettingId/chatbot/toggle', chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
+// Get all Zalo accounts with chatbot settings for current user
+router.get('/zalo-accounts/chatbot', chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
 
 // ── Outbox ───────────────────────────────────────────────────────
 

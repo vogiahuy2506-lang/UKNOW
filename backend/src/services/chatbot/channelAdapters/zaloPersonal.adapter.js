@@ -137,8 +137,9 @@ class ZaloPersonalAdapter {
         
         // Call custom handler if registered
         if (stored.handler) {
+          console.log(`[ZaloPersonalAdapter] Calling handler for account ${accountId}...`);
           stored.handler(msgData).catch((err) => {
-            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.message);
+            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
           });
         }
       }
@@ -172,8 +173,29 @@ class ZaloPersonalAdapter {
       return null;
     }
 
+    // Determine externalId based on source:
+    // - Group: use senderId to distinguish each person in the group
+    // - Personal: use senderId
+    // Format: "group_{groupId}_{senderId}" for group messages
+    const isGroup = msgData.isGroup || false;
+    const externalId = isGroup && msgData.groupId
+      ? `group_${msgData.groupId}_${msgData.fromUid}`
+      : String(msgData.fromUid);
+
+    // Determine display name:
+    // - Group: show sender name + group name
+    // - Personal: show sender name
+    let displayName;
+    if (isGroup && msgData.groupId) {
+      const senderDisplay = msgData.senderName || `User ${msgData.fromUid}`;
+      const groupDisplay = msgData.groupName || `Nhóm ${msgData.groupId}`;
+      displayName = `${senderDisplay} (${groupDisplay})`;
+    } else {
+      displayName = msgData.senderName || null;
+    }
+
     // Get or create conversation
-    let conversation = await zaloPersonalRepository.findConversation(zaloSettingId, msgData.fromUid);
+    let conversation = await zaloPersonalRepository.findConversation(zaloSettingId, externalId);
 
     let conversationId;
     if (!conversation) {
@@ -181,12 +203,13 @@ class ZaloPersonalAdapter {
       const newConv = await zaloPersonalRepository.insertConversation({
         userId,
         zaloSettingId,
-        externalId: msgData.fromUid,
-        visitorName: msgData.senderName || null,
+        externalId,
+        visitorName: displayName,
         visitorInfo: JSON.stringify({
           sender_name: msgData.senderName,
           sender_avatar: msgData.senderAvatar,
-          is_group: msgData.isGroup || false,
+          is_group: isGroup,
+          group_id: msgData.groupId || null,
           group_name: msgData.groupName || null,
         }),
         now,
@@ -194,8 +217,34 @@ class ZaloPersonalAdapter {
       conversationId = newConv.id;
     } else {
       conversationId = conversation.id;
-      // Update last_message_at
-      await zaloPersonalRepository.touchConversation(conversationId, now);
+      // Update last_message_at and visitor info if changed
+      const existingInfo = typeof conversation.visitor_info === 'string' 
+        ? JSON.parse(conversation.visitor_info) 
+        : (conversation.visitor_info || {});
+      
+      // Update if is_group status changed or group info is new
+      const needsUpdate = (
+        existingInfo.is_group !== isGroup ||
+        (isGroup && existingInfo.group_id !== msgData.groupId) ||
+        (isGroup && !existingInfo.group_name && msgData.groupName)
+      );
+
+      if (needsUpdate) {
+        await zaloPersonalRepository.touchConversation(
+          conversationId,
+          now,
+          displayName,
+          {
+            sender_name: msgData.senderName,
+            sender_avatar: msgData.senderAvatar,
+            is_group: isGroup,
+            group_id: msgData.groupId || null,
+            group_name: msgData.groupName || null,
+          }
+        );
+      } else {
+        await zaloPersonalRepository.touchConversation(conversationId, now);
+      }
     }
 
     // Save message
@@ -288,6 +337,25 @@ class ZaloPersonalAdapter {
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Delete a conversation and its messages.
+   * @param {number} userId
+   * @param {number|string} conversationId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversation(userId, conversationId) {
+    try {
+      const convId = parseInt(conversationId);
+      if (isNaN(convId)) {
+        throw new Error('Invalid conversation ID');
+      }
+      return await zaloPersonalRepository.deleteConversation(convId, userId);
+    } catch (err) {
+      console.error('[ZaloPersonalAdapter] deleteConversation error:', err);
+      throw err;
     }
   }
 }

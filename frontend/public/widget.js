@@ -330,11 +330,18 @@
         chatHistory.push({ role: 'assistant', content: data.data.content });
         localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
       } else {
-        addMessage('bot', 'Xin lỗi, đã có lỗi xảy ra.');
+        // Show error from server or default message
+        const errorMsg = data.message || data.error?.message || 'Xin lỗi, tôi đang bận. Vui lòng thử lại sau.';
+        addMessage('bot', errorMsg);
       }
     } catch (err) {
       typing.remove();
-      addMessage('bot', 'Không thể kết nối với server.');
+      // Check for timeout/network errors
+      const isNetworkError = err.name === 'TypeError' || err.message.includes('Failed to fetch') || err.message.includes('NetworkError');
+      const errorMsg = isNetworkError
+        ? 'Mất kết nối mạng. Vui lòng kiểm tra internet và thử lại.'
+        : 'Không thể kết nối với server. Vui lòng thử lại sau.';
+      addMessage('bot', errorMsg);
     }
   }
 

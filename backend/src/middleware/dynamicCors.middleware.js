@@ -6,7 +6,7 @@ import db from '../config/database.js';
  * Kịch bản:
  * 1. Custom domain như astrodemy.vn → verify bằng cách thêm CNAME/TXT record
  * 2. Subdomain như senna.founderai.biz → đã có trong landing_page_domains
- * 3. *.lp.founderai.biz → đã resolve qua domainResolver
+ * 3. *.founderai.biz → đã resolve qua domainResolver
  */
 
 const defaultAllowedOrigins = new Set([
@@ -100,7 +100,7 @@ async function isDomainVerified(hostname) {
     const parentDomain = parts.slice(-2).join('.');
     if (verifiedDomains.has(parentDomain)) return true;
 
-    // Check second-level parent for *.lp.founderai.biz pattern
+    // Check second-level parent for *.founderai.biz pattern
     if (parts.length > 3) {
       const grandparentDomain = parts.slice(-3).join('.');
       if (verifiedDomains.has(grandparentDomain)) return true;
@@ -201,11 +201,10 @@ export function createDynamicCorsMiddleware() {
         return next();
       }
 
-      // Check if it's a known domain pattern (*.lp.founderai.biz)
+      // Check if it's a known domain pattern (*.founderai.biz)
       // These should be allowed if they resolve correctly
       // Also allow *.founderai.biz subdomains (e.g., senna.founderai.biz, www.founderai.biz)
-      if (hostname.endsWith('.lp.founderai.biz') ||
-          hostname.endsWith('.founderai.biz') ||
+      if (hostname.endsWith('.founderai.biz') ||
           hostname === 'founderai.biz' ||
           hostname.endsWith('.uknow.vn') ||
           hostname === 'uknow.vn') {

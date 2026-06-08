@@ -80,10 +80,26 @@ class ZaloPersonalRepository {
    * @param {string} now ISO timestamp
    * @returns {Promise<void>}
    */
-  async touchConversation(conversationId, now) {
+  async touchConversation(conversationId, now, visitorName = null, visitorInfo = null) {
+    const updates = ['last_message_at = $2'];
+    const params = [conversationId, now];
+    let paramIndex = 3;
+
+    if (visitorName !== null) {
+      updates.push(`visitor_name = $${paramIndex}`);
+      params.push(visitorName);
+      paramIndex++;
+    }
+
+    if (visitorInfo !== null) {
+      updates.push(`visitor_info = $${paramIndex}`);
+      params.push(JSON.stringify(visitorInfo));
+      paramIndex++;
+    }
+
     await db.query(
-      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-      [conversationId, now]
+      `UPDATE zalo_personal_conversations SET ${updates.join(', ')} WHERE id = $1`,
+      params
     );
   }
 
@@ -131,6 +147,31 @@ class ZaloPersonalRepository {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [conversationId, userId, zaloSettingId, 'agent', content, now]
     );
+  }
+
+  /**
+   * Delete a conversation and its messages.
+   * @param {number} conversationId
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversation(conversationId, userId) {
+    try {
+      // Delete messages first
+      await db.query(
+        `DELETE FROM zalo_personal_messages WHERE id_conversation = $1`,
+        [conversationId]
+      );
+      // Delete conversation (verify ownership)
+      const result = await db.query(
+        `DELETE FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
+        [conversationId, userId]
+      );
+      return result.rowCount > 0;
+    } catch (err) {
+      console.error('[ZaloPersonalRepository] deleteConversation error:', err);
+      throw err;
+    }
   }
 }
 

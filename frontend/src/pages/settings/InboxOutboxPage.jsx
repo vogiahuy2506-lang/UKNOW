@@ -82,6 +82,31 @@ const InboxPage = () => {
     }
   }, [filters, page, conversations, t]);
 
+  // Handle delete conversation
+  const handleDeleteConversation = async (conv) => {
+    try {
+      const response = await chatbotApi.deleteConversation(conv.id, conv.type);
+      // Check for success in response (axios wraps the data)
+      const success = response?.success || response?.data?.success;
+      if (success) {
+        toast.success(t('common.deleted') || 'Đã xóa');
+        // Refresh the conversation list
+        await fetchConversations(true);
+        // If deleted conversation was selected, deselect it
+        if (selectedConversation?.id === conv.id) {
+          setSelectedConversation(null);
+          setMessages([]);
+        }
+      } else {
+        console.error('Delete failed:', response);
+        toast.error(t('errors.deleteFailed') || 'Xóa thất bại');
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      toast.error(t('errors.deleteFailed') || 'Xóa thất bại');
+    }
+  };
+
   // Fetch unread count
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -271,6 +296,7 @@ const InboxPage = () => {
             onSelect={handleSelectConversation}
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
+            onDelete={handleDeleteConversation}
           />
         </div>
       </div>

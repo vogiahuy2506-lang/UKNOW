@@ -54,6 +54,132 @@ class LandingTemplateController {
   }
 
   /**
+   * GET /api/landing-templates/my
+   * Get templates created by current user.
+   */
+  async getMyTemplates(req, res) {
+    try {
+      const userId = req.user.id;
+      const templates = await landingTemplateService.getMyTemplates(userId);
+      res.json({
+        success: true,
+        data: templates,
+      });
+    } catch (error) {
+      console.error('[LandingTemplate] My templates error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch your templates',
+      });
+    }
+  }
+
+  /**
+   * POST /api/landing-templates
+   * Create a new template.
+   */
+  async create(req, res) {
+    try {
+      const { name, description, htmlStructure, category, thumbnailUrl, cssVariables, defaultConfig, isPublic } = req.body;
+
+      if (!name || !htmlStructure) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name and HTML structure are required',
+        });
+      }
+
+      const userId = req.user.id;
+      const template = await landingTemplateService.createTemplate({
+        name,
+        description,
+        htmlStructure,
+        category: category || 'Custom',
+        thumbnailUrl,
+        cssVariables,
+        defaultConfig,
+        isPublic: Boolean(isPublic),
+        userId,
+      });
+
+      res.json({
+        success: true,
+        data: template,
+      });
+    } catch (error) {
+      console.error('[LandingTemplate] Create error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create template',
+      });
+    }
+  }
+
+  /**
+   * PUT /api/landing-templates/:id
+   * Update an existing template (only by owner).
+   */
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { name, description, category, thumbnailUrl, cssVariables, defaultConfig, isPublic } = req.body;
+
+      const template = await landingTemplateService.updateTemplate(Number.parseInt(id, 10), userId, {
+        name,
+        description,
+        category,
+        thumbnailUrl,
+        cssVariables,
+        defaultConfig,
+        isPublic,
+      });
+
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Template not found or you do not have permission to update it',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: template,
+      });
+    } catch (error) {
+      console.error('[LandingTemplate] Update error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to update template',
+      });
+    }
+  }
+
+  /**
+   * DELETE /api/landing-templates/:id
+   * Delete a template.
+   */
+  async delete(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      await landingTemplateService.deleteTemplate(Number.parseInt(id, 10), userId);
+      
+      res.json({
+        success: true,
+        message: 'Template deleted',
+      });
+    } catch (error) {
+      console.error('[LandingTemplate] Delete error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to delete template',
+      });
+    }
+  }
+
+  /**
    * GET /api/landing-templates/:id
    * Get single template details.
    */

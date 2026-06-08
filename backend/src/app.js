@@ -117,7 +117,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '5mb' }));
   app.use(cookieParser());
 
-  // Resolve custom hostname (*.lp.founderai.biz) → landing page slug
+  // Resolve custom hostname (*.founderai.biz) → landing page slug
   app.use(domainResolver);
 
   // TEMPORARILY DISABLED FOR QA: authLimiter blocks repeated Google login tests with 429.
@@ -206,7 +206,7 @@ export function createApp() {
 </html>`);
   });
 
-  // Catch-all: serve landing page HTML khi request đến từ custom domain (*.lp.founderai.biz)
+  // Catch-all: serve landing page HTML khi request đến từ custom domain (*.founderai.biz)
   app.use((req, res, next) => {
     if (req.isCustomDomain && req.landingPage) {
       return landingPagePublicController.getByDomain(req, res);
