@@ -1,4 +1,5 @@
 import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
+import { buildTopRunsQuery, mapTopRunRow } from '../shared/deliveryMonitorTopRuns.query.js';
 
 const clampWindowDays = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -151,68 +152,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        ORDER BY date_trunc('hour', cj.event_at) ASC`,
       params
     ),
-    safeQuery(
-      `WITH run_base AS (
-         SELECT
-           cr.id,
-           cr.run_name,
-           cr.status,
-           cr.started_at,
-           cr.completed_at,
-           cr.total_recipients,
-           0::int AS skipped_sends,
-           cr.error_message,
-           c.campaign_name,
-           c.campaign_type,
-           EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
-         FROM campaign_runs cr
-         JOIN campaigns c ON c.id = cr.id_campaign
-         WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-           AND c.id_user = $2
-       ),
-       sent_by_run AS (
-         SELECT cj.id_run, COUNT(*)::int AS successful_sends
-         FROM customer_journey cj
-         JOIN run_base rb ON rb.id = cj.id_run
-         WHERE cj.event_type IN ('email_sent', 'zalo_sent')
-         GROUP BY cj.id_run
-       ),
-       execution_failures_by_run AS (
-         SELECT ce.id_run, COUNT(*)::int AS failed_sends
-         FROM campaign_executions ce
-         JOIN run_base rb ON rb.id = ce.id_run
-         WHERE LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
-         GROUP BY ce.id_run
-       )
-       SELECT
-         rb.id,
-         rb.run_name,
-         rb.status,
-         rb.started_at::timestamptz AS started_at,
-         rb.completed_at::timestamptz AS completed_at,
-         rb.total_recipients,
-         COALESCE(sbr.successful_sends, 0)::int AS successful_sends,
-         COALESCE(efbr.failed_sends, 0)::int AS failed_sends,
-         rb.skipped_sends,
-         rb.error_message,
-         rb.campaign_name,
-         rb.campaign_type,
-         rb.duration_seconds
-       FROM run_base rb
-       LEFT JOIN sent_by_run sbr ON sbr.id_run = rb.id
-       LEFT JOIN execution_failures_by_run efbr ON efbr.id_run = rb.id
-       ORDER BY (
-                  COALESCE(efbr.failed_sends, 0)::float
-                  / GREATEST(
-                    COALESCE(sbr.successful_sends, 0)
-                    + COALESCE(efbr.failed_sends, 0),
-                    1
-                  )
-                ) DESC,
-                rb.started_at DESC
-       LIMIT 20`,
-      params
-    ),
+    safeQuery(buildTopRunsQuery({ limit: 20, userScoped: true }), params),
     safeQuery(
       `SELECT
          ce.id, ce.id_run, ce.node_name, ce.node_subtype, ce.action_type,
@@ -375,20 +315,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
   summary.attempts = summary.sent + summary.failed;
   summary.successRate = summary.attempts > 0 ? Math.round((summary.sent / summary.attempts) * 1000) / 10 : 0;
 
-  const topRuns = topRunRows.map((row) => {
-    const attempts = toNumber(row.successful_sends) + toNumber(row.failed_sends);
-    const durationSeconds = Math.max(0, toNumber(row.duration_seconds));
-    const minutes = Math.max(durationSeconds / 60, 1 / 60);
-    return {
-      id: row.id, runName: row.run_name, campaignName: row.campaign_name, campaignType: row.campaign_type,
-      status: row.status, startedAt: row.started_at, completedAt: row.completed_at,
-      totalRecipients: toNumber(row.total_recipients), successfulSends: toNumber(row.successful_sends),
-      failedSends: toNumber(row.failed_sends), skippedSends: toNumber(row.skipped_sends), durationSeconds,
-      throughputPerMinute: Math.round((toNumber(row.successful_sends) / minutes) * 10) / 10,
-      failureRate: attempts > 0 ? Math.round((toNumber(row.failed_sends) / attempts) * 1000) / 10 : 0,
-      errorMessage: row.error_message,
-    };
-  });
+  const topRuns = topRunRows.map(mapTopRunRow);
 
   const recentErrors = recentErrorRows.map((row) => ({
     id: row.id, runId: row.id_run, campaignName: row.campaign_name,

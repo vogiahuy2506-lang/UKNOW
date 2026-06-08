@@ -47,6 +47,15 @@ const categoryClass = {
   unknown: 'badge-gray',
 };
 
+const runStatusBadgeClass = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'failed') return 'badge-error';
+  if (normalized === 'running') return 'badge-warning';
+  if (normalized === 'completed') return 'badge-success';
+  if (normalized === 'stopped') return 'badge-gray';
+  return 'badge-gray';
+};
+
 const KpiCard = ({ icon: Icon, label, value, sub, tone = 'orange' }) => {
   const toneMap = {
     orange: 'bg-orange-50 text-orange-600',
@@ -189,9 +198,10 @@ const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
 };
 
 const runRowClass = (run) => {
+  if (run.failedSends > 0) return run.failureRate >= 10 ? 'bg-red-50' : 'bg-orange-50';
+  if (run.hasRunError && String(run.status || '').toLowerCase() === 'failed') return 'bg-orange-50';
   const stuck = run.totalRecipients > 0 && run.successfulSends === 0 && run.status === 'running';
   if (stuck) return 'bg-red-50';
-  if (run.status === 'failed') return 'bg-orange-50';
   if (run.successfulSends > 0) return 'bg-emerald-50/40';
   return '';
 };
@@ -227,16 +237,20 @@ const TopRunsTable = ({ runs, t }) => (
               <td className="px-5 py-3">
                 <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
                 <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
+                {run.hasRunError && run.errorMessage && (
+                  <p className="mt-1 line-clamp-1 text-xs text-orange-600" title={run.errorMessage}>{run.errorMessage}</p>
+                )}
               </td>
               <td className="px-5 py-3">
-                <span className={`badge text-xs ${run.status === 'failed' ? 'badge-error' : run.status === 'running' ? 'badge-warning' : 'badge-success'}`}>
+                <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
                   {run.status}
                 </span>
               </td>
               <td className="px-5 py-3">
                 <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
                 {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
-                <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>
+                <span className={run.failedSends > 0 ? ' text-red-600 font-medium' : ' text-gray-500'}> / {fmt(run.failedSends)} lỗi</span>
+                <span className="text-gray-400"> · {fmt(run.totalRecipients)} người</span>
               </td>
               <td className="px-5 py-3 text-gray-700">
                 <span>{fmtDuration(run.durationSeconds)}</span>
@@ -245,7 +259,9 @@ const TopRunsTable = ({ runs, t }) => (
                 )}
               </td>
               <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
-              <td className="px-5 py-3 text-gray-700">{fmtPct(run.failureRate)}</td>
+              <td className="px-5 py-3 text-gray-700">
+                <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
+              </td>
             </tr>
           ))}
         </tbody>
