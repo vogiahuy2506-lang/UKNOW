@@ -9,6 +9,7 @@ export default {
     cancel: 'Hủy',
     delete: 'Xóa',
     deleting: 'Đang xóa...',
+    deleted: 'Đã xóa',
     edit: 'Sửa',
     create: 'Tạo mới',
     search: 'Tìm kiếm',
