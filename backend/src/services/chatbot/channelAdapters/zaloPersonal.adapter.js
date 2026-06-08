@@ -313,6 +313,25 @@ class ZaloPersonalAdapter {
       return { success: false, error: err.message };
     }
   }
+
+  /**
+   * Delete a conversation and its messages.
+   * @param {number} userId
+   * @param {number|string} conversationId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversation(userId, conversationId) {
+    try {
+      const convId = parseInt(conversationId);
+      if (isNaN(convId)) {
+        throw new Error('Invalid conversation ID');
+      }
+      return await zaloPersonalRepository.deleteConversation(convId, userId);
+    } catch (err) {
+      console.error('[ZaloPersonalAdapter] deleteConversation error:', err);
+      throw err;
+    }
+  }
 }
 
 export default new ZaloPersonalAdapter();

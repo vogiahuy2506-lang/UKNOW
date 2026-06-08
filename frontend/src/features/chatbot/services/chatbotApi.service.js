@@ -61,6 +61,11 @@ const chatbotApiService = {
   listZaloAccountsWithChatbotSettings() {
     return api.get('/ai/chatbot/zalo-accounts/chatbot');
   },
+
+  // Delete a conversation
+  deleteConversation(conversationId, type = 'zalo_personal') {
+    return api.delete(`/ai/chatbot/inbox/conversations/${conversationId}?type=${type}`);
+  },
 };
 
 export default chatbotApiService;

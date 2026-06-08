@@ -1510,6 +1510,7 @@ export default {
     zaloOA: 'Zalo OA',
     facebook: 'Facebook',
     zaloPersonal: 'Zalo Cá nhân',
+    zaloGroup: 'Zalo Nhóm',
     searchConversations: 'Tìm kiếm hội thoại...',
     noConversations: 'Chưa có hội thoại nào',
     noMessages: 'Chưa có tin nhắn nào',
@@ -1529,6 +1530,7 @@ export default {
     unread: 'chưa đọc',
     markAsRead: 'Đánh dấu đã đọc',
     reply: 'Trả lời',
+    confirmDelete: 'Bạn có chắc muốn xóa cuộc trò chuyện này?',
   },
 
   outbox: {

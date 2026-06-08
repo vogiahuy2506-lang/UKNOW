@@ -217,6 +217,34 @@ class UnifiedInboxController {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  /**
+   * Delete a conversation
+   * DELETE /api/ai/chatbot/inbox/conversations/:id
+   */
+  async deleteConversation(req, res) {
+    try {
+      const { id } = req.params;
+      const { type = 'zalo_personal' } = req.query;
+
+      if (!id) {
+        return res.status(400).json({ success: false, message: 'Conversation ID is required' });
+      }
+
+      await unifiedInboxService.deleteConversation(req.user.id, id, type);
+
+      return res.json({
+        success: true,
+        message: 'Conversation deleted',
+      });
+    } catch (err) {
+      console.error('[UnifiedInbox] Delete conversation error:', err);
+      if (err.message === 'Conversation not found') {
+        return res.status(404).json({ success: false, message: err.message });
+      }
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
 
 export default new UnifiedInboxController();

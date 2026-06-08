@@ -1520,6 +1520,7 @@ export default {
     unread: 'unread',
     markAsRead: 'Mark as read',
     reply: 'Reply',
+    confirmDelete: 'Are you sure you want to delete this conversation?',
   },
 
   outbox: {

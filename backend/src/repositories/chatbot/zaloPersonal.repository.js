@@ -132,6 +132,31 @@ class ZaloPersonalRepository {
       [conversationId, userId, zaloSettingId, 'agent', content, now]
     );
   }
+
+  /**
+   * Delete a conversation and its messages.
+   * @param {number} conversationId
+   * @param {number} userId
+   * @returns {Promise<boolean>}
+   */
+  async deleteConversation(conversationId, userId) {
+    try {
+      // Delete messages first
+      await db.query(
+        `DELETE FROM zalo_personal_messages WHERE id_conversation = $1`,
+        [conversationId]
+      );
+      // Delete conversation (verify ownership)
+      const result = await db.query(
+        `DELETE FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
+        [conversationId, userId]
+      );
+      return result.rowCount > 0;
+    } catch (err) {
+      console.error('[ZaloPersonalRepository] deleteConversation error:', err);
+      throw err;
+    }
+  }
 }
 
 export default new ZaloPersonalRepository();

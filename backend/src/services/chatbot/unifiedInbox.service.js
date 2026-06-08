@@ -324,6 +324,24 @@ class UnifiedInboxService {
       lastReply: message.last_reply,
     };
   }
+
+  /**
+   * Delete a conversation by ID
+   */
+  async deleteConversation(userId, conversationId, type = 'zalo_personal') {
+    console.log('[UnifiedInboxService] deleteConversation:', { userId, conversationId, type });
+
+    // Delegate to the appropriate adapter
+    switch (type) {
+      case 'zalo_personal':
+        await zaloPersonalAdapter.deleteConversation(userId, conversationId);
+        break;
+      default:
+        throw new Error('Unsupported conversation type');
+    }
+
+    return { success: true };
+  }
 }
 
 export default new UnifiedInboxService();

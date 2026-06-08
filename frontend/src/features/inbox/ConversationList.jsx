@@ -13,6 +13,10 @@ const getDisplayName = (conv) => {
   const visitorInfo = conv.visitor_info || {};
   
   if (visitorInfo.is_group && visitorInfo.group_name) {
+    // For group messages, show sender name + group name
+    if (visitorInfo.sender_name) {
+      return `${visitorInfo.sender_name} (${visitorInfo.group_name})`;
+    }
     return visitorInfo.group_name;
   }
   
@@ -71,8 +75,15 @@ const truncateMessage = (message, maxLength = 50) => {
   return message.slice(0, maxLength) + '...';
 };
 
-const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLoadMore, hasMore }) => {
+const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLoadMore, hasMore, onDelete }) => {
   const { t } = useI18n();
+
+  const handleDelete = (e, conv) => {
+    e.stopPropagation();
+    if (window.confirm(t('inbox.confirmDelete') || 'Bạn có chắc muốn xóa cuộc trò chuyện này?')) {
+      onDelete(conv);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -138,17 +149,37 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                       <span className="font-medium text-gray-900 truncate">
                         {displayName || t('inbox.anonymousCustomer')}
                       </span>
-                      <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                        {formatTime(conv.lastMessageAt, t)}
-                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        <span className="text-xs text-gray-500">
+                          {formatTime(conv.lastMessageAt, t)}
+                        </span>
+                        {onDelete && (
+                          <button
+                            onClick={(e) => handleDelete(e, conv)}
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                            title={t('common.delete') || 'Xóa'}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
+                      {/* Show channel badge */}
                       <span className={`text-xs px-1.5 py-0.5 rounded ${channel.color} text-white`}>
                         {channel.icon} {channel.label}
                       </span>
-                      {/* Only show source badge if it's different from channel (e.g., group name for personal channel) */}
-                      {messageSource && !messageSource.isGroup && (
+                      {/* Show group badge for group messages */}
+                      {messageSource?.isGroup && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                          {messageSource.icon} {messageSource.label}
+                        </span>
+                      )}
+                      {/* Show sender info for non-group zalo_personal */}
+                      {!messageSource?.isGroup && messageSource && conv.channel === 'zalo_personal' && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                           {messageSource.icon} {messageSource.label}
                         </span>
