@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import { useI18n } from '../i18n';
+import {
+  HiOutlineLightningBolt,
+  HiOutlineUsers,
+  HiOutlineGlobeAlt,
+  HiOutlineTemplate,
+  HiOutlineClipboardList,
+  HiOutlineInbox,
+  HiOutlineMail,
+  HiOutlineCog,
+} from 'react-icons/hi';
 import DashboardHeader from '../features/dashboard/components/DashboardHeader';
 import DashboardFilterPanel from '../features/dashboard/components/DashboardFilterPanel';
 import DashboardKpiCards from '../features/dashboard/components/DashboardKpiCards';
@@ -16,6 +27,7 @@ import LandingPagesAdminStatsCharts from '../features/landing-pages/components/L
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
 import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
+import HeroNavbar from './public/components/HeroNavbar';
 import {
   normalizeDashboardInsightForUi,
   extractInsightFromDashboardInsightsResponse,
@@ -23,6 +35,17 @@ import {
   getChannelEngagementInsightForChannel,
   getOrdersTrendInsightForMode,
 } from '../features/dashboard/utils/dashboardInsightStorage.util';
+
+const quickNavItems = [
+  { name: 'Chiến dịch', path: '/app/campaigns', icon: HiOutlineLightningBolt, iconBg: 'bg-orange-100', iconColor: 'text-orange-600' },
+  { name: 'Khách hàng', path: '/app/customers', icon: HiOutlineUsers, iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
+  { name: 'Landing page', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, iconBg: 'bg-green-100', iconColor: 'text-green-600' },
+  { name: 'Mẫu tin nhắn', path: '/app/settings/templates', icon: HiOutlineTemplate, iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
+  { name: 'Đơn hàng', path: '/app/orders', icon: HiOutlineClipboardList, iconBg: 'bg-red-100', iconColor: 'text-red-600' },
+  { name: 'Hộp thư', path: '/app/settings/inbox', icon: HiOutlineInbox, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-600' },
+  { name: 'Kênh gửi', path: '/app/settings/channels', icon: HiOutlineMail, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600' },
+  { name: 'Cài đặt', path: '/app/settings/ai-profile', icon: HiOutlineCog, iconBg: 'bg-gray-100', iconColor: 'text-gray-600' },
+];
 
 /** Skeleton placeholder block */
 const Skeleton = ({ className = '' }) => (
@@ -317,7 +340,7 @@ const Dashboard = () => {
         onOpenFilter={() => setIsFilterPanelOpen(true)}
         isLoading={isLoading}
         extraActions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <button
               type="button"
               className="btn btn-primary flex items-center gap-2 shadow-sm"
@@ -369,7 +392,7 @@ const Dashboard = () => {
               </svg>
               {t('dashboard.viewSavedInsight')}
             </button>
-          </div>
+          </>
         }
       />
 
@@ -415,6 +438,28 @@ const Dashboard = () => {
           </span>
         </div>
       )}
+
+      {/* Public website navbar */}
+      <HeroNavbar />
+
+      {/* Quick Navigation */}
+      <div className="card p-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Truy cập nhanh</p>
+        <div className="grid grid-cols-4 xl:grid-cols-8 gap-1">
+          {quickNavItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.iconBg}`}>
+                <item.icon className={`w-5 h-5 ${item.iconColor}`} />
+              </div>
+              <span className="text-xs font-medium text-gray-600 group-hover:text-primary-600 text-center leading-tight">{item.name}</span>
+            </NavLink>
+          ))}
+        </div>
+      </div>
 
       {/* KPI Cards — 6 cards, 3 columns */}
       <DashboardKpiCards overview={overview} />

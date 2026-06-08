@@ -36,9 +36,9 @@ const DashboardHeader = ({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
       {/* Title block */}
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">{_title}</h1>
         <p className="text-sm text-gray-500 mt-1">
           {_description}
@@ -46,7 +46,7 @@ const DashboardHeader = ({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Active date range pill */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 shadow-sm">
           <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
