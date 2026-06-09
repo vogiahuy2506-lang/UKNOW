@@ -32,7 +32,7 @@ router.post(
   '/',
   [
     body('templateName').trim().notEmpty().withMessage('Tên mẫu không được để trống'),
-    body('subject').trim().notEmpty().withMessage('Tiêu đề không được để trống'),
+    body('subject').optional({ checkFalsy: true }).trim(),
     body('bodyText')
       .custom((value) => typeof value === 'string' && value.trim().length > 0)
       .withMessage('Nội dung text không được để trống'),
