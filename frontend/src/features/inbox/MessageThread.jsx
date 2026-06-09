@@ -303,11 +303,11 @@ const MessageBubble = ({
         </div>
       )}
 
-      <div className={`flex mb-3 ${isOwn || isAgent ? 'justify-end' : 'justify-start'}`}>
-        <div className={`max-w-[75%] ${isOwn || isAgent ? 'order-2' : 'order-1'}`}>
+      <div className={`flex mb-3 ${isOwn || isAgent || isBot ? 'justify-end' : 'justify-start'}`}>
+        <div className={`max-w-[75%] ${isOwn || isAgent || isBot ? 'order-2' : 'order-1'}`}>
           {/* Sender label - show name for group messages, "Khách hàng" for personal */}
-          <div className={`flex items-center justify-between gap-2 mb-1 ${isOwn || isAgent ? 'flex-row-reverse' : ''}`}>
-            <div className={`text-xs text-gray-500 ${isOwn || isAgent ? 'text-right' : 'text-left'}`}>
+          <div className={`flex items-center justify-between gap-2 mb-1 ${isOwn || isAgent || isBot ? 'flex-row-reverse' : ''}`}>
+            <div className={`text-xs text-gray-500 ${isOwn || isAgent || isBot ? 'text-right' : 'text-left'}`}>
               {isVisitor && (
                 <span className={`inline-flex items-center gap-1 ${
                   (isGroupChannel || isGroupConversation) && senderName 
