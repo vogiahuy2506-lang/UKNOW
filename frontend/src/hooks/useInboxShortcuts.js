@@ -17,7 +17,6 @@ export const useInboxShortcuts = (options = {}) => {
     onSearch,
     onReplyLast,
     hasInputFocused = false,
-    messageInputRef,
   } = options;
 
   const handleKeyDown = useCallback((event) => {

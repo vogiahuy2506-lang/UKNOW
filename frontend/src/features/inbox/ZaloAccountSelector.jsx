@@ -41,6 +41,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
 
   useEffect(() => {
     fetchAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

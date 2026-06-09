@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HiX, HiUser, HiPhone, HiMail, HiLocationMarker, HiClock, HiTag, HiDocumentText, HiInformationCircle } from 'react-icons/hi';
+import { HiX, HiPhone, HiMail, HiLocationMarker, HiClock, HiTag, HiDocumentText, HiInformationCircle } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
 const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => {
@@ -15,8 +15,6 @@ const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => 
     ? JSON.parse(conversation.visitor_info || '{}') 
     : (conversation.visitor_info || {});
 
-  // Parse metadata
-  const metadata = conversation.metadata || {};
 
   // Format date
   const formatDate = (dateString) => {
