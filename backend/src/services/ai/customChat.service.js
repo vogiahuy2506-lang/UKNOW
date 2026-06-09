@@ -41,9 +41,10 @@ function stripMarkdown(text) {
     .replace(/^>\s*/gm, '')
     // Horizontal rules: --- or *** or ___
     .replace(/^[-*_]{3,}\s*$/gm, '')
-    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
-    // Note: Plain text channels like Zalo will display this as literal text
+    // Remove markdown images
     .replace(/!\[.*?\]\(.+?\)/g, '')
+    // Markdown links: convert [text](url) to "text: url" so it becomes plain text
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
     // Plain URLs — keep them visible in the response
     // Clean up multiple blank lines
     .replace(/\n{3,}/g, '\n\n')
