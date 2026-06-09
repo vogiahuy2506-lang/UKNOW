@@ -15,6 +15,8 @@ import { useI18n } from '../../i18n';
 import toast from 'react-hot-toast';
 import useInboxSSE from '../../hooks/useInboxSSE';
 import useDesktopNotifications from '../../hooks/useDesktopNotifications';
+import useIsMobile from '../../hooks/useIsMobile';
+import { useLocalStorageState } from '../../hooks/useLocalStorageState';
 
 const CHANNEL_FILTERS = (t) => [
   { value: '', label: t('inbox.allChannels') },
@@ -56,6 +58,39 @@ const InboxPage = () => {
     channel: '',
     search: '',
   });
+
+  // Resizing state
+  const isMobile = useIsMobile();
+  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_inbox_sidebar_width', 384);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragStartXRef = useRef(0);
+  const dragStartWidthRef = useRef(384);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (event) => {
+      const delta = event.clientX - dragStartXRef.current;
+      const nextWidth = Math.min(600, Math.max(280, dragStartWidthRef.current + delta));
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => setIsResizing(false);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, setSidebarWidth]);
+
+  const handleResizeStart = (event) => {
+    setIsResizing(true);
+    dragStartXRef.current = event.clientX;
+    dragStartWidthRef.current = sidebarWidth;
+  };
 
   const fetchSessionStatus = useCallback(async () => {
     try {
@@ -284,12 +319,13 @@ const InboxPage = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex bg-gray-100">
-      {/* Left panel */}
+    <div className="h-[calc(100vh-64px)] flex overflow-hidden">
+      {/* Left Sidebar */}
       <div
-        className={`w-full md:w-96 lg:w-[400px] bg-white border-r border-gray-200 flex flex-col ${
-          selectedConversation ? 'hidden md:flex' : 'flex'
-        }`}
+        className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 ${
+          !isResizing && 'transition-all duration-300'
+        } ${selectedConversation ? 'hidden md:flex' : 'flex w-full md:w-auto'}`}
+        style={{ width: isMobile && !selectedConversation ? '100%' : `${sidebarWidth}px` }}
       >
         {/* Header */}
         <div className="p-4 border-b border-gray-200 bg-white">
@@ -393,6 +429,17 @@ const InboxPage = () => {
           />
         </div>
       </div>
+
+      {/* Resizer Handle */}
+      {!isMobile && (
+        <div
+          className={`w-1 cursor-col-resize hover:bg-primary-300 transition-colors z-10 flex-shrink-0 ${
+            isResizing ? 'bg-primary-500' : 'bg-transparent'
+          }`}
+          onMouseDown={handleResizeStart}
+          title={t('common.dragToResize')}
+        />
+      )}
 
       {/* Right panel */}
       <div
