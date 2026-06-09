@@ -165,7 +165,26 @@ class UnifiedInboxRepository {
     `;
 
     const { rows } = await db.query(query, params);
-    return rows;
+
+    // Transform snake_case to camelCase for frontend compatibility
+    return rows.map(row => ({
+      id: row.id,
+      type: row.conversation_type,
+      channel: row.channel,
+      channelDisplayName: row.channel_display_name,
+      channelIsActive: row.channel_is_active,
+      idChannel: row.id_channel,
+      idZaloSetting: row.id_zalo_setting,
+      idWidgetConfig: row.id_widget_config,
+      visitorName: row.visitor_name,
+      visitorInfo: row.visitor_info,
+      externalId: row.external_id,
+      status: row.status,
+      startedAt: row.started_at,
+      lastMessageAt: row.last_message_at_override || row.last_message_at,
+      lastMessage: row.last_message,
+      unreadCount: parseInt(row.unread_count || 0),
+    }));
   }
 
   /**
@@ -265,6 +284,24 @@ class UnifiedInboxRepository {
     let beforeFilter = beforeId ? `AND id < $3` : '';
     let params = beforeId ? [conversationId, limit, beforeId] : [conversationId, limit];
 
+    // Helper to convert snake_case DB columns to camelCase for frontend
+    const transformRow = (row) => ({
+      id: row.id,
+      conversationId: row.id_conversation,
+      userId: row.id_user,
+      zaloSettingId: row.id_zalo_setting,
+      role: row.role,
+      content: row.content,
+      attachments: row.attachments ? (typeof row.attachments === 'string' ? JSON.parse(row.attachments) : row.attachments) : null,
+      isRead: row.is_read,
+      readAt: row.read_at,
+      createdAt: row.created_at,
+      messageType: row.message_type,
+      externalId: row.external_id,
+      externalTs: row.external_ts,
+      metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
+    });
+
     if (conversationType === 'channel') {
       const { rows } = await db.query(
         `SELECT * FROM channel_messages
@@ -273,7 +310,7 @@ class UnifiedInboxRepository {
          LIMIT $2`,
         params
       );
-      return rows.reverse();
+      return rows.reverse().map(transformRow);
     } else if (conversationType === 'zalo_personal') {
       const { rows } = await db.query(
         `SELECT * FROM zalo_personal_messages
@@ -282,7 +319,7 @@ class UnifiedInboxRepository {
          LIMIT $2`,
         params
       );
-      return rows.reverse();
+      return rows.reverse().map(transformRow);
     } else {
       const { rows } = await db.query(
         `SELECT * FROM webchat_messages
@@ -291,7 +328,7 @@ class UnifiedInboxRepository {
          LIMIT $2`,
         params
       );
-      return rows.reverse();
+      return rows.reverse().map(transformRow);
     }
   }
 

@@ -30,6 +30,7 @@ router.get('/inbox/stream', (req, res) => {
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
+    console.error('[SSE] JWT verify failed:', err.message, 'token prefix:', token.substring(0, 50));
     res.setHeader('Content-Type', 'application/json');
     res.status(401).json({ success: false, message: 'Invalid token' });
     return;
@@ -174,5 +175,7 @@ router.get('/zalo-personal/sync/status', zaloPersonalSyncController.getSyncStatu
 router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
 // Sync chat history for all groups
 router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
+// Get chat history from DB for AI context
+router.get('/zalo-personal/history', zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
 
 export default router;

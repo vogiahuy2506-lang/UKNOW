@@ -11,6 +11,45 @@ const RETRY_CONFIG = {
   retryableErrors: ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
 };
 
+/**
+ * Strip markdown formatting from AI response text.
+ * The web chat widget displays plain text, so **bold**, *italic*, and other
+ * markdown markers must be removed before sending the response to the client.
+ */
+function stripMarkdown(text) {
+  if (!text || typeof text !== 'string') return text || '';
+  return text
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/gs, '$1')
+    .replace(/__(.+?)__/gs, '$1')
+    // Italic: *text* or _text_
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
+    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
+    // Strikethrough: ~~text~~
+    .replace(/~~(.+?)~~/gs, '$1')
+    // Inline code: `code`
+    .replace(/`(.+?)`/gs, '$1')
+    // Code blocks: ```...``` or ```lang...```
+    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
+    // Headers: # ## ### etc
+    .replace(/^#{1,6}\s+/gm, '')
+    // Unordered lists: - item or * item
+    .replace(/^[\s]*[-*+]\s+/gm, '')
+    // Ordered lists: 1. item
+    .replace(/^[\s]*\d+\.\s+/gm, '')
+    // Blockquotes: > quote
+    .replace(/^>\s*/gm, '')
+    // Horizontal rules: --- or *** or ___
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
+    // Note: Plain text channels like Zalo will display this as literal text
+    .replace(/!\[.*?\]\(.+?\)/g, '')
+    // Plain URLs — keep them visible in the response
+    // Clean up multiple blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 class CustomChatService {
   /**
    * Call Gemini API with timeout and retry logic
@@ -119,22 +158,24 @@ class CustomChatService {
     const defaultSystem = `Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.
 
 QUY TẮC TRẢ LỜI:
-- Sử dụng markdown để format câu trả lời
-- Dùng bullet points (*) cho danh sách
-- Dùng numbered list (1., 2., 3.) cho các bước hướng dẫn
-- Nếu có nhiều ý, chia thành các đoạn rõ ràng với heading nhỏ (##)
-- Dùng backtick đơn \`code\` hoặc backtick kép \`\`code block\`\` cho mã hoặc dữ liệu cần highlight
-- KHÔNG dùng **bold** cho từ khóa - chỉ viết thường hoặc dùng heading
-- Giữ câu trả lời súc tích nhưng đầy đủ thông tin`;
+- LUON tra loi bang VAN BAN THUAN, KHONG dung bat ky dinh dang markdown nao
+- Khong dung **bold**, *italic*, __underline__, ~~strikethrough~~
+- Khong dung \`code\`, \`\`\`code block\`\`\`, # heading, - bullet, 1. numbered list
+- Neu can danh sach, chi dung dau gach ngang hoac so thu tu (1, 2, 3)
+- Neu can nhan manh thong tin quan trọng, chi can VIET HOA hoac THEM DAU HAI CHAM
+- Tra loi ngắn gọn, rõ ràng, dễ đọc
+- Neu co link, HIEN THI LINK URL trong cau tra loi (VD: https://example.com)
+- Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     const systemPrompt = systemInstruction || defaultSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     try {
-      const content = await this.callGeminiWithRetry(prompt, { temperature, maxTokens });
+      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens });
+      const content = stripMarkdown(rawContent || 'Xin lỗi, tôi không có câu trả lời.');
 
       return {
-        content: content || 'Xin lỗi, tôi không có câu trả lời.',
+        content,
         type: 'text',
       };
     } catch (err) {

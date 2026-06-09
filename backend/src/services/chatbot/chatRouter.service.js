@@ -26,17 +26,17 @@ function stripMarkdown(text) {
   if (!text || typeof text !== 'string') return text || '';
   return text
     // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*\*(.+?)\*\*/gs, '$1')
+    .replace(/__(.+?)__/gs, '$1')
     // Italic: *text* or _text_
-    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1')
-    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '$1')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
+    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
     // Strikethrough: ~~text~~
-    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/~~(.+?)~~/gs, '$1')
     // Inline code: `code`
-    .replace(/`(.+?)`/g, '$1')
+    .replace(/`(.+?)`/gs, '$1')
     // Code blocks: ```...``` or ```lang...```
-    .replace(/```[\w]*\n?([\s\S]*?)```/g, '$1')
+    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
     // Headers: # ## ### etc
     .replace(/^#{1,6}\s+/gm, '')
     // Unordered lists: - item or * item
@@ -47,13 +47,10 @@ function stripMarkdown(text) {
     .replace(/^>\s*/gm, '')
     // Horizontal rules: --- or *** or ___
     .replace(/^[-*_]{3,}\s*$/gm, '')
-    // Markdown links: [text](url) — keep text only
-    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
-    // Markdown images: ![alt](url) — keep alt only
+    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
+    // Note: Plain text channels like Zalo will display this as literal text
     .replace(/!\[.*?\]\(.+?\)/g, '')
-    // Plain URLs in text — replace with placeholder
-    .replace(/https?:\/\/[^\s<>"\]]+/g, '[link da duoc an]')
-    .replace(/www\.[^\s<>"\]]+/g, '[link da duoc an]')
+    // Plain URLs — keep them visible in the response
     // Clean up multiple blank lines
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -271,12 +268,15 @@ Khi nguoi dung bat dau cuoc tro chuyen, hay bat dau bang loi chao sau: "${welcom
 
 ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}
 ## QUY TAC QUAN TRONG
-- Tra loi bang tieng Viet, tru khi nguoi dung hoi bang ngon ngu khac
-- Neu thong tin co trong KB: "Theo nhu tai lieu cua chung toi..."
-- Neu thong tin KHONG co trong KB: "Toi khong tim thay thong tin nay trong co so du lieu cua chung toi. Ban vui long lien he [TEN CONG TY] de duoc ho tro."
-- KHONG dung markdown bold hay italic — dung text thuan
-- KHONG bao gom bat ky link/URL nao trong cau tra loi — ke ca khi tai lieu KB co chua link. Neu muon dan nguon, chi dan ten tai lieu.
-- So dien thoai / email: format chuan Viet Nam`;
+- LUON tra loi bang VAN BAN THUAN, KHONG dung bat ky dinh dang markdown nao
+- Khong dung **bold**, *italic*, __underline__, ~~strikethrough~~, \`code\`, \`\`\`code block\`\`\`
+- Khong dung # heading, - bullet list, 1. numbered list
+- Neu can danh sach, chi dung dau gach ngang (-) hoac so thu tu (1, 2, 3)
+- Neu can nhan manh thong tin quan trong, chi CAN VIET HOA hoac THEM DAU HAI CHAM
+- So dien thoai / email: format chuan Viet Nam
+- Tra loi ngắn gọn, rõ ràng, dễ đọc
+- Neu co link, HIEN THI LINK URL trong cau tra loi (VD: https://example.com)
+- Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     // Thêm custom system instruction neu co
     if (settings.system_instruction?.trim()) {
@@ -327,8 +327,33 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       if (channel === 'web') {
         return chatbotRepository.getWebChatMessages(conversationId, { limit });
       }
+      if (channel === 'zalo_personal') {
+        return this._getZaloPersonalHistory(conversationId, limit);
+      }
       return chatbotRepository.getChannelMessages(conversationId, { limit });
     } catch {
+      return [];
+    }
+  }
+
+  async _getZaloPersonalHistory(conversationId, limit = 50) {
+    try {
+      const db = (await import('../../config/database.js')).default;
+      const { rows } = await db.query(
+        `SELECT id, role, content, metadata, created_at as createdAt
+         FROM zalo_personal_messages
+         WHERE id_conversation = $1
+         ORDER BY created_at ASC
+         LIMIT $2`,
+        [conversationId, limit]
+      );
+      
+      return rows.map(row => ({
+        ...row,
+        metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : (row.metadata || {}),
+      }));
+    } catch (e) {
+      console.warn('[ChatRouter] _getZaloPersonalHistory error:', e.message);
       return [];
     }
   }

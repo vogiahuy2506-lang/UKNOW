@@ -351,9 +351,24 @@ class ZaloPersonalAdapter {
       }
     });
 
-    // Start the listener to receive messages
+    // Start the listener to receive messages (only if not already started)
     if (typeof listener.start === 'function') {
-      listener.start();
+      try {
+        // Check if listener is already running by seeing if it has an active state
+        if (listener.isRunning) {
+          console.log(`[ZaloPersonalAdapter] Listener already running for account ${accountId}, skipping start`);
+        } else {
+          listener.start();
+          console.log(`[ZaloPersonalAdapter] Listener started for account ${accountId}`);
+        }
+      } catch (startErr) {
+        // Handle "Already started" error gracefully
+        if (startErr.message?.includes('Already started')) {
+          console.log(`[ZaloPersonalAdapter] Listener already started for account ${accountId}`);
+        } else {
+          throw startErr;
+        }
+      }
     } else {
       console.warn(`[ZaloPersonalAdapter] Listener start() not available for account ${accountId}`);
     }

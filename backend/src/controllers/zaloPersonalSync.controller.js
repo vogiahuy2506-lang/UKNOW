@@ -42,7 +42,8 @@ class ZaloPersonalSyncController {
       if (!api) {
         return res.status(400).json({
           success: false,
-          message: 'Session Zalo đã hết hạn. Vui lòng đăng nhập lại Zalo trong Cài đặt.',
+          message: 'Session Zalo đã hết hạn. Vui lòng quét QR đăng nhập lại trong Cài đặt Zalo.',
+          errorCode: 'SESSION_EXPIRED',
         });
       }
 
@@ -301,6 +302,68 @@ class ZaloPersonalSyncController {
       res.status(500).json({
         success: false,
         message: error.message || 'Sync all group history thất bại',
+      });
+    }
+  }
+
+  /**
+   * GET /api/chatbot/zalo-personal/history
+   * Lấy lịch sử tin nhắn từ DB cho AI đọc ngữ cảnh
+   */
+  async getChatHistory(req, res) {
+    try {
+      const userId = req.user.id;
+      const { conversationId, limit = 50 } = req.query;
+
+      if (!conversationId) {
+        return res.status(400).json({
+          success: false,
+          message: 'conversationId là bắt buộc',
+        });
+      }
+
+      // Import repository to get messages
+      const { ZaloPersonalRepository } = await import('../../repositories/chatbot/zaloPersonal.repository.js');
+      const zaloRepo = ZaloPersonalRepository;
+
+      // Verify conversation belongs to user and get zaloSettingId
+      const conversation = await zaloRepo.findConversationByIdAndUser(
+        parseInt(conversationId),
+        userId
+      );
+
+      if (!conversation) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy cuộc trò chuyện',
+        });
+      }
+
+      // Get messages
+      const messages = await zaloRepo.getMessagesForContext(
+        parseInt(conversationId),
+        parseInt(limit)
+      );
+
+      res.json({
+        success: true,
+        data: {
+          conversationId: parseInt(conversationId),
+          messages: messages.map(msg => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            senderName: msg.metadata?.sender_name || null,
+            createdAt: msg.created_at,
+          })),
+          total: messages.length,
+        },
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] getChatHistory error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Lấy lịch sử thất bại',
       });
     }
   }

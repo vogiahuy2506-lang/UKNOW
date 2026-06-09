@@ -9,6 +9,45 @@ import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapte
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 
+/**
+ * Strip markdown formatting from AI response text.
+ * Zalo Personal cannot render markdown — this prevents asterisks and
+ * other formatting characters from appearing as literal text.
+ */
+function stripMarkdown(text) {
+  if (!text || typeof text !== 'string') return text || '';
+  return text
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/gs, '$1')
+    .replace(/__(.+?)__/gs, '$1')
+    // Italic: *text* or _text_
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
+    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
+    // Strikethrough: ~~text~~
+    .replace(/~~(.+?)~~/gs, '$1')
+    // Inline code: `code`
+    .replace(/`(.+?)`/gs, '$1')
+    // Code blocks: ```...``` or ```lang...```
+    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
+    // Headers: # ## ### etc
+    .replace(/^#{1,6}\s+/gm, '')
+    // Unordered lists: - item or * item
+    .replace(/^[\s]*[-*+]\s+/gm, '')
+    // Ordered lists: 1. item
+    .replace(/^[\s]*\d+\.\s+/gm, '')
+    // Blockquotes: > quote
+    .replace(/^>\s*/gm, '')
+    // Horizontal rules: --- or *** or ___
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
+    // Note: Plain text channels like Zalo will display this as literal text
+    .replace(/!\[.*?\]\(.+?\)/g, '')
+    // Plain URLs — keep them visible in the response
+    // Clean up multiple blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
 /**
@@ -1083,7 +1122,7 @@ class ChatbotController {
       }
 
       // Use chatbot's system instruction or default
-      const systemInstruction = chatbot.system_instruction || 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+      const systemInstruction = chatbot.system_instruction || "Bạn là một trợ lý AI hữu ích, thân thiện và chính xác.\n\nQUY TAC TRA LOI:\n- Tra loi bang van ban thuan, KHONG dung markdown\n- Neu can danh sach, chi dung so thu tu (1, 2, 3) hoac dau gach ngang (-)\n- Tra loi ngan gon, de hieu, de doc\n- Neu co link, hien thi link URL trong cau tra loi (VD: https://example.com hoac [text](https://example.com))";
 
       // Build history
       const fullHistory = [
@@ -1121,7 +1160,8 @@ class ChatbotController {
         return res.status(500).json({ success: false, message: data.error.message });
       }
 
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+      const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+      const content = stripMarkdown(rawContent);
 
       return res.json({
         success: true,
@@ -1217,7 +1257,7 @@ class ChatbotController {
       }
 
       // Use chatbot's system instruction or default
-      const systemInstruction = chatbot.system_instruction || 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+      const systemInstruction = chatbot.system_instruction || "Bạn là một trợ lý AI hữu ích, thân thiện và chính xác.\n\nQUY TAC TRA LOI:\n- Tra loi bang van ban thuan, KHONG dung markdown\n- Neu can danh sach, chi dung so thu tu (1, 2, 3) hoac dau gach ngang (-)\n- Tra loi ngan gon, de hieu, de doc\n- Neu co link, hien thi link URL trong cau tra loi (VD: https://example.com hoac [text](https://example.com))";
 
       // Build history
       const fullHistory = [
@@ -1255,7 +1295,8 @@ class ChatbotController {
         return res.status(500).json({ success: false, message: data.error.message });
       }
 
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+      const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
+      const content = stripMarkdown(rawContent);
 
       // Save assistant response
       if (conversation) {
