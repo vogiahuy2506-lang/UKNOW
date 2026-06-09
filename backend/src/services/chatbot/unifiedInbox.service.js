@@ -105,8 +105,8 @@ class UnifiedInboxService {
       role: msg.role,
       content: msg.content,
       attachments: msg.attachments || [],
-      createdAt: msg.created_at,
-      isRead: msg.is_read || false,
+      createdAt: msg.createdAt,
+      isRead: msg.isRead || false,
     }));
   }
 

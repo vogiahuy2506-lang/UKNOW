@@ -119,6 +119,11 @@ const chatbotApiService = {
   syncZaloAllGroupHistory(limit = 50) {
     return api.post(`/ai/chatbot/zalo-personal/sync/group-history?limit=${limit}`);
   },
+
+  // Get chat history from DB for AI context
+  getZaloChatHistory(conversationId, limit = 50) {
+    return api.get(`/ai/chatbot/zalo-personal/history?conversationId=${conversationId}&limit=${limit}`);
+  },
 };
 
 export default chatbotApiService;

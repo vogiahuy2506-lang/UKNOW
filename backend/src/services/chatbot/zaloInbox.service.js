@@ -761,8 +761,15 @@ class ZaloPersonalInboxService {
 
       return success;
     } catch (error) {
+      // Handle "Already started" error gracefully - don't crash the server
+      if (error.message?.includes('Already started')) {
+        console.warn(`[ZaloInbox] Account ${accountId} listener already started (ignoring)`);
+        markAccountRegistered(accountId);
+        return true;
+      }
       console.error(`[ZaloInbox] Error registering account ${accountId}:`, error.message);
-      throw error;
+      // Don't throw - just log and return false to prevent server crash
+      return false;
     }
   }
 

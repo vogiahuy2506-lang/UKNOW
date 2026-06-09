@@ -209,6 +209,37 @@ class ZaloPersonalRepository {
     );
     return rows[0] || null;
   }
+
+  /**
+   * Find conversation by ID and verify user ownership
+   */
+  async findConversationByIdAndUser(conversationId, userId) {
+    const { rows } = await db.query(
+      `SELECT * FROM zalo_personal_conversations
+       WHERE id = $1 AND id_user = $2`,
+      [conversationId, userId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Get messages for AI context - returns formatted messages
+   */
+  async getMessagesForContext(conversationId, limit = 50) {
+    const { rows } = await db.query(
+      `SELECT id, role, content, metadata, created_at 
+       FROM zalo_personal_messages
+       WHERE id_conversation = $1
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [conversationId, limit]
+    );
+    
+    return rows.map(row => ({
+      ...row,
+      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : (row.metadata || {}),
+    }));
+  }
 }
 
 export default new ZaloPersonalRepository();
