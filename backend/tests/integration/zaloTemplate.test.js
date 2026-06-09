@@ -268,14 +268,14 @@ describe('POST /api/zalo-templates', () => {
     expect(res.status).toBe(400);
   });
 
-  it('thiếu subject → 400', async () => {
+  it('thiếu subject → 201 (vì subject là optional)', async () => {
     const owner = await createUser({ role: 'user', username: 'o1' });
     const t = await loginAs(owner);
     const res = await request(app)
       .post('/api/zalo-templates')
       .set('Authorization', `Bearer ${t}`)
       .send({ templateName: 'x', bodyText: 'y' });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
   });
 
   it('bodyText rỗng → 400 (custom validator)', async () => {
