@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
+import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
@@ -158,5 +159,20 @@ router.get('/zalo-accounts/chatbot', chatbotController.listZaloAccountsWithChatb
 
 router.get('/inbox/outbox', unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));
 router.get('/inbox/outbox/:id', unifiedInboxController.getOutboxMessage.bind(unifiedInboxController));
+
+// ── Zalo Personal Sync ───────────────────────────────────────────
+
+// Sync all (contacts + groups)
+router.get('/zalo-personal/sync', zaloPersonalSyncController.sync.bind(zaloPersonalSyncController));
+// Sync contacts only
+router.get('/zalo-personal/sync/contacts', zaloPersonalSyncController.syncContacts.bind(zaloPersonalSyncController));
+// Sync groups only
+router.get('/zalo-personal/sync/groups', zaloPersonalSyncController.syncGroups.bind(zaloPersonalSyncController));
+// Get sync status
+router.get('/zalo-personal/sync/status', zaloPersonalSyncController.getSyncStatus.bind(zaloPersonalSyncController));
+// Sync chat history for a specific conversation
+router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
+// Sync chat history for all groups
+router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
 
 export default router;

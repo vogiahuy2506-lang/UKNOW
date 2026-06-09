@@ -21,6 +21,8 @@ import {
   HiOutlineLink,
   HiOutlineQrcode,
 } from 'react-icons/hi';
+
+const normalizeFileName = (name) => name.trim().normalize('NFC');
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
@@ -137,6 +139,10 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [deletingDoc, setDeletingDoc] = useState(null);
   const [deletingDocData, setDeletingDocData] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Logo upload
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoFileRef = useRef(null);
 
   // Deploy
   const [widgetCopied, setWidgetCopied] = useState(false);
@@ -363,14 +369,41 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       let updatedBot;
       let saveSuccess = false;
       try {
+        // 1. Save chatbot basic info to custom_chatbots table
         const res = await chatbotApi.updateChatbot(chatbot.id, updateData);
         if (res.success && res.data) {
-          // Always set suggested_questions from form to ensure it's saved correctly
           updatedBot = { ...chatbot, ...res.data, suggested_questions: form.suggested_questions || [] };
-          saveSuccess = true;
         } else {
           throw new Error(res.message || 'Save failed');
         }
+
+        // 2. Save AI settings to chatbot_settings table for ALL channels
+        // This ensures all channels use the shared AI config from ChatbotSettings
+        const aiSettings = {
+          system_instruction: form.system_instruction,
+          ai_model: form.ai_model,
+          temperature: form.temperature,
+          max_tokens: form.max_tokens,
+          response_style: form.response_style,
+          welcome_message: form.welcome_message,
+          is_enabled: form.is_active,
+        };
+
+        // List of all channels that should share the same AI config
+        const ALL_CHANNELS = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
+
+        try {
+          await Promise.all(
+            ALL_CHANNELS.map(channel =>
+              chatbotApi.updateChatbotSettings(channel, aiSettings)
+            )
+          );
+        } catch (aiSaveErr) {
+          console.warn('[ChatbotSettings] Failed to save AI settings:', aiSaveErr.message);
+          // Don't fail the whole save if this fails
+        }
+
+        saveSuccess = true;
       } catch (apiError) {
         console.warn('[ChatbotSettings] API save failed, using localStorage:', apiError.message);
         updatedBot = {
@@ -394,8 +427,10 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           bots[idx] = updatedBot;
           localStorage.setItem('uknow_chatbots', JSON.stringify(bots));
         }
-        saveSuccess = true;
       }
+
+      // If we got here without error, save was successful
+      saveSuccess = true;
 
       if (saveSuccess) {
         onUpdate(updatedBot);
@@ -437,6 +472,41 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     }));
   };
 
+  const handleLogoFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File ảnh vượt quá 2MB. Vui lòng chọn ảnh nhỏ hơn.');
+      e.target.value = '';
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Định dạng ảnh không được hỗ trợ. Vui lòng chọn JPG, PNG, WebP, GIF hoặc SVG.');
+      e.target.value = '';
+      return;
+    }
+    setUploadingLogo(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    chatbotApi.uploadChatbotLogo(fd)
+      .then(res => {
+        if (res.data?.success && res.data.data?.url) {
+          setForm(p => ({ ...p, logo_url: res.data.data.url }));
+          toast.success('Đã tải logo lên thành công');
+        } else {
+          toast.error(res.data?.message || 'Upload thất bại');
+        }
+      })
+      .catch(err => {
+        toast.error(err?.response?.data?.message || 'Upload logo thất bại');
+      })
+      .finally(() => {
+        setUploadingLogo(false);
+        e.target.value = '';
+      });
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -474,25 +544,11 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       fd.append('chatbot_id', chatbot.id.toString());
       const res = await chatbotApi.uploadCustomChatDocument(fd);
       if (res.data?.success) {
-        const newDoc = {
-          id: Date.now(),
-          title: uploadForm.title || uploadForm.file.name,
-          type: 'file',
-          file_name: uploadForm.file.name,
-          status: 'ready',
-          chunk_count: res.data.chunks || 0,
-          created_at: new Date().toISOString(),
-        };
-        setDocuments(prev => [newDoc, ...prev]);
         setShowUploadModal(false);
         setUploadForm({ title: '', file: null });
         toast.success(`Đã huấn luyện thành công: ${res.data.chunks || 0} đoạn`);
-        const bots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
-        const idx = bots.findIndex(b => b.id === chatbot.id);
-        if (idx >= 0) {
-          bots[idx].documents = [newDoc, ...(bots[idx].documents || [])];
-          localStorage.setItem('uknow_chatbots', JSON.stringify(bots));
-        }
+        // Reload documents from backend to ensure sync and correct data
+        await loadDocumentsForChatbot(chatbot.id);
       } else {
         toast.error(res.data?.message || t('errors.uploadFailed'));
       }
@@ -513,27 +569,24 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     }
     setAddingText(true);
     try {
-      const newDoc = {
-        id: Date.now(),
+      // Create text document via backend API to ensure chunks are stored
+      const res = await chatbotApi.addCustomChatTextDocument(chatbot.id, {
         title: textForm.title || 'Text Document',
-        type: 'text',
         content: textForm.content,
-        status: 'ready',
-        chunk_count: Math.ceil(textForm.content.length / 500),
-        created_at: new Date().toISOString(),
-      };
-      setDocuments(prev => [newDoc, ...prev]);
-      setShowTextModal(false);
-      setTextForm({ title: '', content: '' });
-      toast.success(t('chatbot.knowledgeBase.processing'));
-      const bots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
-      const idx = bots.findIndex(b => b.id === chatbot.id);
-      if (idx >= 0) {
-        bots[idx].documents = [newDoc, ...(bots[idx].documents || [])];
-        localStorage.setItem('uknow_chatbots', JSON.stringify(bots));
+      });
+      
+      if (res.data?.success) {
+        setShowTextModal(false);
+        setTextForm({ title: '', content: '' });
+        toast.success(t('chatbot.knowledgeBase.processing'));
+        // Reload documents from backend to ensure sync
+        await loadDocumentsForChatbot(chatbot.id);
+      } else {
+        toast.error(res.data?.message || t('errors.addFailed'));
       }
-    } catch {
-      toast.error(t('errors.addFailed'));
+    } catch (err) {
+      console.error('[AddText] Error:', err);
+      toast.error(err?.response?.data?.message || t('errors.addFailed'));
     } finally {
       setAddingText(false);
     }
@@ -541,12 +594,12 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
 
   const handleDeleteDoc = async () => {
     if (!deletingDocData) return;
-    setDeletingDoc(deletingDocData.id);
+    setDeletingDoc(deletingDocData.title);
     try {
-      await chatbotApi.deleteDocument(chatbot.id, deletingDocData.id);
-      setDocuments(prev => prev.filter(d => d.id !== deletingDocData.id));
+      await chatbotApi.deleteDocument(chatbot.id, deletingDocData.title);
       toast.success(t('common.success'));
       setDeletingDocData(null);
+      loadDocumentsForChatbot(chatbot.id);
     } catch {
       toast.error(t('errors.deleteFailed'));
     } finally {
@@ -810,18 +863,33 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                           </div>
                         )}
                         <input
-                          type="url"
-                          value={form.logo_url}
-                          onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
-                          placeholder="https://example.com/icon.png"
-                          className="flex-1 bg-transparent text-sm outline-none border-none p-0" />
+                          ref={logoFileRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                          className="hidden"
+                          onChange={handleLogoFileSelect}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => logoFileRef.current?.click()}
+                          disabled={uploadingLogo}
+                          className="btn btn-secondary text-xs shrink-0 disabled:opacity-60"
+                        >
+                          {uploadingLogo
+                            ? <><HiOutlineRefresh className="w-3.5 h-3.5 animate-spin inline" /> Đang tải...</>
+                            : <><HiOutlineUpload className="w-3.5 h-3.5 inline" /> Tải ảnh lên</>
+                          }
+                        </button>
                         {form.logo_url && (
                           <button type="button" onClick={() => setForm(p => ({ ...p, logo_url: '' }))}
-                            className="p-1 text-slate-400 hover:text-red-500 transition-colors">
+                            className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0">
                             <HiOutlineX className="w-4 h-4" />
                           </button>
                         )}
                       </div>
+                      {form.logo_url && (
+                        <p className="text-[11px] text-slate-400 mt-1 px-1 truncate">{form.logo_url}</p>
+                      )}
                     </FieldRow>
                   </div>
 
@@ -1025,7 +1093,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                         Z
                       </div>
                       <div className="text-center">
-                        <span className="text-xs font-medium text-slate-700">Zalo OA</span>
+                        <span className="text-xs font-medium text-slate-700">Zalo OA <span className="text-amber-500 font-medium">(Beta)</span></span>
                         <p className="text-[10px] text-slate-400 mt-0.5">{zaloChannel ? 'Đã kết nối' : 'Chưa kết nối'}</p>
                       </div>
                     </button>
@@ -1041,7 +1109,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                         </svg>
                       </div>
                       <div className="text-center">
-                        <span className="text-xs font-medium text-slate-700">Facebook</span>
+                        <span className="text-xs font-medium text-slate-700">Facebook <span className="text-amber-500 font-medium">(Beta)</span></span>
                         <p className="text-[10px] text-slate-400 mt-0.5">{facebookChannel ? 'Đã kết nối' : 'Chưa kết nối'}</p>
                       </div>
                     </button>
@@ -1051,8 +1119,11 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                       onClick={() => setShowZaloPersonalChannelModal(true)}
                       className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50 transition-all group"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-lg font-bold group-hover:bg-orange-200 transition-colors">
-                        ZP
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                        <svg className="w-6 h-6" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="24" cy="24" r="24" fill="#0068FF"/>
+                          <path d="M24 10C15.716 10 9 16.403 9 24.303c0 4.88 2.384 9.197 6.09 12.017V37.5l6.81-3.765C22.56 33.982 23.27 34 24 34c8.284 0 15-6.403 15-14.697S32.284 10 24 10zm1.36 18.57h-.78c-1.19 0-2.16-.965-2.16-2.16 0-1.195.97-2.16 2.16-2.16 1.19 0 2.16.965 2.16 2.16 0 1.195-.97 2.16-2.16 2.16zm-4.5 0h-.78c-1.19 0-2.16-.965-2.16-2.16 0-1.195.97-2.16 2.16-2.16 1.19 0 2.16.965 2.16 2.16 0 1.195-.97 2.16-2.16 2.16zm9 0h-.78c-1.19 0-2.16-.965-2.16-2.16 0-1.195.97-2.16 2.16-2.16 1.19 0 2.16.965 2.16 2.16 0 1.195-.97 2.16-2.16 2.16z" fill="white"/>
+                        </svg>
                       </div>
                       <div className="text-center">
                         <span className="text-xs font-medium text-slate-700">Zalo Cá nhân</span>

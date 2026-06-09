@@ -408,7 +408,7 @@ class ChatbotController {
   /**
    * Update chatbot settings for a specific Zalo account
    * PUT /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
-   * Note: Only is_enabled is saved per-account; other settings use unified chatbot settings
+   * Saves all AI settings including system_instruction
    */
   async updateZaloAccountChatbotSettings(req, res) {
     try {
@@ -416,11 +416,11 @@ class ChatbotController {
       if (!zaloSettingId) {
         return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
       }
-      // Only save is_enabled - other settings use unified chatbot settings
-      const settings = await chatbotZaloAccountRepository.setEnabled(
-        req.user.id, 
-        zaloSettingId, 
-        req.body.is_enabled
+      // Save all AI settings including system_instruction
+      const settings = await chatbotZaloAccountRepository.upsertSettings(
+        req.user.id,
+        zaloSettingId,
+        req.body
       );
       return res.json({ success: true, data: settings });
     } catch (err) {
@@ -982,6 +982,36 @@ class ChatbotController {
 
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      // Sync AI settings to chatbot_settings table for ALL channels
+      // This ensures all channels use shared AI config
+      if (req.body.system_instruction !== undefined ||
+          req.body.ai_model !== undefined ||
+          req.body.temperature !== undefined ||
+          req.body.max_tokens !== undefined ||
+          req.body.response_style !== undefined ||
+          req.body.welcome_message !== undefined ||
+          req.body.is_active !== undefined) {
+        const aiSettings = {
+          system_instruction: req.body.system_instruction,
+          ai_model: req.body.ai_model,
+          temperature: req.body.temperature,
+          max_tokens: req.body.max_tokens,
+          response_style: req.body.response_style,
+          welcome_message: req.body.welcome_message,
+          is_enabled: req.body.is_active,
+        };
+        const channels = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
+        try {
+          await Promise.all(
+            channels.map(channel =>
+              chatbotRepository.upsertSettings(req.user.id, channel, aiSettings)
+            )
+          );
+        } catch (syncErr) {
+          console.warn('[CustomChatbot] Failed to sync AI settings to chatbot_settings:', syncErr.message);
+        }
       }
 
       return res.json({

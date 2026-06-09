@@ -7,6 +7,7 @@ import zaloSettingsApiService from '../../settings/services/zaloSettingsApi.serv
 
 /**
  * Zalo Personal Channel Modal - unified chatbot settings, per-account enable/disable only
+ * AI config is shared with main chatbot settings
  */
 export default function ZaloPersonalChannelModal({ open, onClose }) {
   const { t } = useI18n();

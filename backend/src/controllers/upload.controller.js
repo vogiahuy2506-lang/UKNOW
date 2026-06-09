@@ -330,15 +330,39 @@ class UploadController {
   }
 
   async deleteTempFileById(tempId, originalName) {
-    const ext = path.extname(originalName || '');
-    const tempFileName = `${tempId}${ext}`;
-    const tempFilePath = path.join(this.tempDir, tempFileName);
+    if (!tempId) return true;
     try {
-      await fs.unlink(tempFilePath);
+      // Check if temp dir exists
+      try {
+        await fs.access(this.tempDir);
+      } catch {
+        return true; // Dir doesn't exist, nothing to delete
+      }
+      const files = await fs.readdir(this.tempDir);
+      const prefixes = new Set();
+      if (originalName) {
+        const ext = path.extname(originalName).toLowerCase();
+        prefixes.add(`${tempId}${ext}`);
+      }
+      prefixes.add(tempId);
+
+      const matched = files.filter(f => {
+        for (const prefix of prefixes) {
+          if (f.startsWith(prefix)) return true;
+        }
+        return false;
+      });
+
+      for (const fname of matched) {
+        try {
+          await fs.unlink(path.join(this.tempDir, fname));
+          console.log(`[Upload] Deleted temp file: ${fname}`);
+        } catch { /* ignore individual failures */ }
+      }
       return true;
     } catch (error) {
-      if (error?.code === 'ENOENT') return true;
-      throw error;
+      console.warn(`[Upload] deleteTempFileById failed:`, error?.message);
+      return true;
     }
   }
 

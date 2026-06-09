@@ -134,31 +134,59 @@ class ZaloPersonalSyncController {
 
   /**
    * GET /api/chatbot/zalo-personal/sync/status
-   * Kiểm tra trạng thái sync
+   * Kiểm tra trạng sync + thử restore session nếu chưa active
+   * Returns ALL connected accounts (not just one)
    */
   async getSyncStatus(req, res) {
     try {
       const userId = req.user.id;
 
-      const account = await zaloSettingRepository.findActiveConnectedAccountStatusByUser(userId);
+      const accounts = await zaloSettingRepository.findActiveConnectedAccountsByUser(userId);
 
-      if (!account) {
+      if (!accounts.length) {
         return res.json({
           success: true,
-          data: { connected: false, message: 'Không có tài khoản Zalo nào kết nối' },
+          data: { connected: false, message: 'Không có tài khoản Zalo nào kết nối', accounts: [] },
         });
       }
 
-      const api = zaloAccountSessionService.getAccountApi(account.id);
+      // Thử restore session cho từng account nếu chưa có API active (sau restart server)
+      const { restoreZaloSessionFromCookie } = await import('../utils/zaloSessionRestore.util.js');
+      
+      const accountsWithSession = await Promise.all(accounts.map(async (account) => {
+        let api = zaloAccountSessionService.getAccountApi(account.id);
+        if (!api) {
+          console.log(`[ZaloSyncStatus] Session not in memory for account ${account.id}, attempting restore...`);
+          api = await restoreZaloSessionFromCookie(account.cookie_text || account.cookieText);
+          if (api) {
+            zaloAccountSessionService.setAccountApi(account.id, api);
+            console.log(`[ZaloSyncStatus] ✅ Session restored for account ${account.id}`);
+          } else {
+            // Session restore failed - mark as disconnected in DB
+            console.log(`[ZaloSyncStatus] ❌ Session restore failed for account ${account.id}, marking disconnected`);
+            await zaloSettingRepository.markAccountDisconnected(account.id_user, account.id);
+            zaloAccountSessionService.clearAccountApi(account.id);
+          }
+        }
+        return {
+          id: account.id,
+          displayName: account.display_name,
+          conversationCount: parseInt(account.conversation_count),
+          hasActiveSession: !!api,
+        };
+      }));
+
+      const failedCount = accountsWithSession.filter(a => !a.hasActiveSession).length;
+      const successCount = accountsWithSession.filter(a => a.hasActiveSession).length;
 
       res.json({
         success: true,
         data: {
-          connected: true,
-          accountId: account.id,
-          displayName: account.display_name,
-          conversationCount: parseInt(account.conversation_count),
-          hasActiveSession: !!api,
+          connected: successCount > 0,
+          accounts: accountsWithSession,
+          message: failedCount > 0
+            ? `${successCount}/${accountsWithSession.length} tài khoản kết nối (${failedCount} đã hết hạn)`
+            : `Có ${successCount} tài khoản được kết nối`,
         },
       });
     } catch (error) {
@@ -166,6 +194,113 @@ class ZaloPersonalSyncController {
       res.status(500).json({
         success: false,
         message: error.message || 'Lấy trạng thái thất bại',
+      });
+    }
+  }
+
+  /**
+   * POST /api/chatbot/zalo-personal/sync/chat-history
+   * Sync lịch sử tin nhắn cho một conversation cụ thể
+   */
+  async syncChatHistory(req, res) {
+    try {
+      const userId = req.user.id;
+      const { externalId, isGroup, limit, beforeMsgId } = req.body;
+
+      if (!externalId) {
+        return res.status(400).json({
+          success: false,
+          message: 'externalId là bắt buộc',
+        });
+      }
+
+      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+
+      if (!account) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không có tài khoản Zalo cá nhân nào đang kết nối',
+        });
+      }
+
+      const result = await zaloPersonalSyncService.syncChatHistory(
+        account.id,
+        userId,
+        externalId,
+        isGroup === true,
+        { limit: limit || 50, beforeMsgId }
+      );
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] syncChatHistory error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Sync chat history thất bại',
+      });
+    }
+  }
+
+  /**
+   * POST /api/chatbot/zalo-personal/sync/group-history
+   * Sync lịch sử tin nhắn cho tất cả các nhóm
+   */
+  async syncAllGroupHistory(req, res) {
+    try {
+      const userId = req.user.id;
+      const { limit = 50 } = req.query;
+
+      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+
+      if (!account) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không có tài khoản Zalo cá nhân nào đang kết nối',
+        });
+      }
+
+      // Get all groups first
+      const groupsResult = await zaloPersonalSyncService.syncGroups(account.id, userId);
+      const groups = groupsResult.groups || [];
+
+      const results = {
+        totalGroups: groups.length,
+        synced: 0,
+        errors: [],
+      };
+
+      // Sync chat history for each group
+      for (const group of groups) {
+        try {
+          const result = await zaloPersonalSyncService.syncChatHistory(
+            account.id,
+            userId,
+            group.groupId,
+            true, // isGroup
+            { limit: parseInt(limit) }
+          );
+          results.synced += result.synced || 0;
+        } catch (err) {
+          results.errors.push({
+            groupId: group.groupId,
+            groupName: group.groupName,
+            error: err.message,
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: results,
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] syncAllGroupHistory error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Sync all group history thất bại',
       });
     }
   }

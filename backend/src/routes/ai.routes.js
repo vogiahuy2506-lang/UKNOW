@@ -51,7 +51,12 @@ router.post('/custom-chat', aiLimiter, aiController.customChat.bind(aiController
 // Custom AI - Document upload (extract, chunk, embed)
 router.post('/custom-chat/upload', upload.single('file'), aiController.customChatUpload.bind(aiController));
 
+// Custom AI - Logo image upload (2MB limit)
+router.post('/custom-chat/logo', upload.single('file'), aiController.customChatLogoUpload.bind(aiController));
+
 // Custom AI - Get documents
 router.get('/custom-chat/documents/:chatbotId', aiController.getCustomChatbotDocuments.bind(aiController));
+router.delete('/custom-chat/documents/:chatbotId/:docId', aiController.deleteCustomChatbotDocument.bind(aiController));
+router.post('/custom-chat/text/:chatbotId', aiController.addCustomChatTextDocument.bind(aiController));
 
 export default router;

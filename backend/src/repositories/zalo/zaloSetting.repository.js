@@ -25,7 +25,7 @@ class ZaloSettingRepository {
 
   async findActiveConnectedAccountStatusByUser(userId) {
     const result = await db.query(
-      `SELECT zs.id, zs.display_name, zs.status, zs.is_active,
+      `SELECT zs.id, zs.display_name, zs.status, zs.is_active, zs.cookie_text,
               (SELECT COUNT(*) FROM zalo_personal_conversations WHERE id_zalo_setting = zs.id) as conversation_count
        FROM zalo_settings zs
        WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected'
@@ -33,6 +33,22 @@ class ZaloSettingRepository {
       [userId]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Find ALL active accounts for a user (both connected and disconnected).
+   * Used by inbox to show all accounts with their session status.
+   */
+  async findActiveConnectedAccountsByUser(userId) {
+    const result = await db.query(
+      `SELECT zs.id, zs.display_name, zs.status, zs.is_active,
+              (SELECT COUNT(*) FROM zalo_personal_conversations WHERE id_zalo_setting = zs.id) as conversation_count
+       FROM zalo_settings zs
+       WHERE zs.id_user = $1 AND zs.is_active = true
+       ORDER BY zs.is_default DESC, zs.last_connected_at DESC`,
+      [userId]
+    );
+    return result.rows;
   }
 
   async updateAccountAfterCookieLogin(userId, accountId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, now) {

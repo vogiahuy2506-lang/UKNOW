@@ -2,6 +2,7 @@ import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -58,6 +59,17 @@ class ChatbotChannelWebhookController {
 
       const { message, senderId, messageId } = event;
       const chatbotId = channel.id_chatbot;
+
+      // Guard: chatbot must exist and be active
+      if (!chatbotId) {
+        console.warn('[ChatbotChannel] No chatbot linked to channel', channel.id);
+        return;
+      }
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive — skipping`);
+        return;
+      }
 
       // Create conversation
       const conv = await chatbotChannelRepository.getOrCreateConversation({
@@ -156,6 +168,17 @@ class ChatbotChannelWebhookController {
       if (!messages.length) return;
 
       const chatbotId = channel.id_chatbot;
+
+      // Guard: chatbot must exist and be active
+      if (!chatbotId) {
+        console.warn('[ChatbotChannel] No chatbot linked to channel', channel.id);
+        return;
+      }
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive — skipping`);
+        return;
+      }
 
       for (const msg of messages) {
         // Create conversation

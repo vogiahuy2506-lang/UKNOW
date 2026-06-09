@@ -182,6 +182,12 @@ class UnifiedInboxService {
       channelId = conversation.id_channel;
     }
 
+    // For Zalo Personal, get the zalo_setting.id (accountId) from the conversation
+    let zaloAccountId = null;
+    if (conversationType === 'zalo_personal') {
+      zaloAccountId = conversation.id_zalo_setting;
+    }
+
     // Save message to database
     await unifiedInboxRepository.sendMessage(
       parseInt(conversationId),
@@ -213,21 +219,23 @@ class UnifiedInboxService {
       const adapter = this._getChannelAdapter(conversation.channel);
       if (adapter?.sendReply) {
         // Zalo Personal cần externalId (uid của người nhận), không phải conversationId
+        // Cần pass accountId (zalo_setting.id) cho Zalo Personal adapter
         const params = {
           externalId: conversation.external_id,
           message: content.trim(),
           attachments,
           userId,
+          accountId: zaloAccountId,
           conversationInfo: {
             is_group: conversation.is_group,
             group_id: conversation.group_id,
           },
         };
-        
+
         if (conversationType === 'channel') {
           params.channelId = channelId;
         }
-        
+
         await adapter.sendReply(params);
       }
     } catch (sendError) {

@@ -189,7 +189,7 @@ async function loginWithStrategies(credentials) {
   } catch (error) {
     console.warn('[ZaloRestore] ❌ SDK login failed:', error.message);
     if (isQrSessionTimeoutIssue(error)) {
-      throw error; // Don't retry on session timeout
+      return null; // Don't retry on session timeout
     }
   }
 
@@ -197,7 +197,7 @@ async function loginWithStrategies(credentials) {
   // Serialized cookie thường không hoạt động tốt hơn
   console.log('[ZaloRestore] Strategy 2: Skipping (serialized cookie rarely works better)');
 
-  throw new Error('ALL_LOGIN_STRATEGIES_FAILED');
+  return null;
 }
 
 /**
@@ -214,7 +214,7 @@ export async function restoreZaloSessionFromCookie(cookieText, maxRetries = 3) {
 
   if (!credentialCandidates.length) {
     console.error('[ZaloRestore] No valid credentials found in cookie text');
-    throw new Error('COOKIE_TEXT_EMPTY');
+    return null;
   }
 
   console.log(`[ZaloRestore] Found ${credentialCandidates.length} credential candidates to try`);
@@ -266,5 +266,5 @@ export async function restoreZaloSessionFromCookie(cookieText, maxRetries = 3) {
     console.error('[ZaloRestore] ❌❌❌ All restore attempts failed');
   }
 
-  throw new Error('RESTORE_SESSION_FAILED');
+  return null;
 }

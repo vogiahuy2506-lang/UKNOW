@@ -376,7 +376,7 @@ class ChatbotRepository {
               suggested_questions, widget_key,
               created_at, updated_at
        FROM custom_chatbots
-       WHERE id_user = $1
+       WHERE id_user = $1 AND is_active = true
        ORDER BY created_at DESC`,
       [userId]
     );

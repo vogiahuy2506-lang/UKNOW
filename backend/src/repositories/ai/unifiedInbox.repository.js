@@ -4,10 +4,10 @@ class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
    * @param {number} userId
-   * @param {object} filters - { channel, status, search, limit, offset }
+   * @param {object} filters - { channel, status, search, limit, offset, zaloAccountId }
    */
   async getConversations(userId, filters = {}) {
-    const { channel, status = 'active', search, limit = 20, offset = 0 } = filters;
+    const { channel, status = 'active', search, limit = 20, offset = 0, zaloAccountId } = filters;
 
     // Build channel filter
     let channelFilter = '';
@@ -17,6 +17,14 @@ class UnifiedInboxRepository {
     if (channel) {
       channelFilter = `AND cc.channel = $${paramIndex}`;
       params.push(channel);
+      paramIndex++;
+    }
+
+    // Build zaloAccountId filter (for zalo_personal channel filtering by specific account)
+    let zaloAccountIdFilter = '';
+    if (zaloAccountId) {
+      zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
+      params.push(parseInt(zaloAccountId));
       paramIndex++;
     }
 
@@ -110,7 +118,7 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
-        WHERE zp.id_user = $1 ${searchFilter}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${searchFilter}
         ${status ? `AND zp.status = '${status}'` : ''}
 
         UNION ALL
@@ -164,7 +172,7 @@ class UnifiedInboxRepository {
    * Get total count of conversations
    */
   async getConversationsCount(userId, filters = {}) {
-    const { channel, status = 'active', search } = filters;
+    const { channel, status = 'active', search, zaloAccountId } = filters;
 
     let channelFilter = '';
     const params = [userId];
@@ -187,6 +195,13 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
+    let zaloAccountIdFilter = '';
+    if (zaloAccountId) {
+      zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
+      params.push(parseInt(zaloAccountId));
+      paramIndex++;
+    }
+
     const query = `
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
@@ -196,7 +211,7 @@ class UnifiedInboxRepository {
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${status ? `AND zp.status = '${status}'` : ''} ${searchFilter}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${status ? `AND zp.status = '${status}'` : ''} ${searchFilter}
 
         UNION ALL
 

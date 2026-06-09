@@ -10,35 +10,61 @@ const CHANNEL_LABELS = (t) => ({
   zalo_group: { label: t('inbox.zaloGroup') || 'Zalo Nhóm', icon: '👥', color: 'bg-purple-500' },
 });
 
-const getDisplayName = (conv) => {
-  // Check visitor_info for group/personal details
-  const visitorInfo = conv.visitor_info || {};
-  
-  if (visitorInfo.is_group && visitorInfo.group_name) {
-    // For group messages, show sender name + group name
-    if (visitorInfo.sender_name) {
-      return `${visitorInfo.sender_name} (${visitorInfo.group_name})`;
+/**
+ * Parse visitor_info from various formats (string, object, null)
+ */
+const parseVisitorInfo = (visitorInfo) => {
+  if (!visitorInfo) return {};
+  if (typeof visitorInfo === 'string') {
+    try {
+      return JSON.parse(visitorInfo);
+    } catch {
+      return {};
     }
-    return visitorInfo.group_name;
+  }
+  return visitorInfo || {};
+};
+
+/**
+ * Get display name considering group vs personal context
+ */
+const getDisplayName = (conv) => {
+  const visitorInfo = parseVisitorInfo(conv.visitor_info);
+  
+  // Priority: sender_name > group_name > visitorName
+  if (visitorInfo.is_group && visitorInfo.sender_name) {
+    // For group messages: show "SenderName (GroupName)"
+    const groupName = visitorInfo.group_name || 'Nhóm';
+    return `${visitorInfo.sender_name} (${groupName})`;
   }
   
   if (visitorInfo.sender_name) {
     return visitorInfo.sender_name;
   }
   
+  if (visitorInfo.group_name) {
+    return visitorInfo.group_name;
+  }
+  
   return conv.visitorName || null;
 };
 
+/**
+ * Get message source info with detailed context
+ */
 const getMessageSource = (conv) => {
-  const visitorInfo = conv.visitor_info || {};
+  const visitorInfo = parseVisitorInfo(conv.visitor_info);
   
-  // If it's a group message, always show group info (don't duplicate with channel badge)
-  if (visitorInfo.is_group) {
+  // If it's a group message
+  if (visitorInfo.is_group || visitorInfo.source === 'zalo_group') {
     return {
       type: 'group',
       icon: '👥',
       label: visitorInfo.group_name || 'Nhóm Zalo',
       isGroup: true,
+      senderName: visitorInfo.sender_name,
+      senderId: visitorInfo.sender_id,
+      groupId: visitorInfo.group_id,
     };
   }
   
@@ -49,10 +75,20 @@ const getMessageSource = (conv) => {
       icon: '👤',
       label: visitorInfo.sender_name || conv.visitorName || 'Zalo cá nhân',
       isGroup: false,
+      senderName: visitorInfo.sender_name,
+      senderId: visitorInfo.sender_id,
     };
   }
   
   return null;
+};
+
+/**
+ * Check if conversation is a group
+ */
+const isGroupConversation = (conv) => {
+  const visitorInfo = parseVisitorInfo(conv.visitor_info);
+  return visitorInfo.is_group === true || visitorInfo.source === 'zalo_group';
 };
 
 const formatTime = (dateString, t) => {
@@ -138,6 +174,7 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
             const isSelected = selectedId === `${conv.type}-${conv.id}`;
             const displayName = getDisplayName(conv);
             const messageSource = getMessageSource(conv);
+            const isGroup = isGroupConversation(conv);
 
             return (
               <button
@@ -151,8 +188,8 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
               >
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-full ${channel.color} flex items-center justify-center text-white text-sm font-medium flex-shrink-0`}>
-                    {displayName ? displayName[0].toUpperCase() : '?'}
+                  <div className={`w-10 h-10 rounded-full ${isGroup ? 'bg-purple-500' : channel.color} flex items-center justify-center text-white text-sm font-medium flex-shrink-0`}>
+                    {displayName ? displayName[0]?.toUpperCase() : '?'}
                   </div>
 
                   {/* Content */}
@@ -179,23 +216,35 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                       </div>
                     </div>
 
+                    {/* Badges row */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* Show channel badge */}
                       <span className={`text-xs px-1.5 py-0.5 rounded ${channel.color} text-white`}>
                         {channel.icon} {channel.label}
                       </span>
-                      {/* Show group badge for group messages */}
-                      {messageSource?.isGroup && (
+                      
+                      {/* Show GROUP badge with group name for group messages */}
+                      {isGroup && messageSource?.groupName && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                          {messageSource.icon} {messageSource.label}
+                          👥 {messageSource.groupName}
                         </span>
                       )}
-                      {/* Show sender info for non-group zalo_personal */}
-                      {!messageSource?.isGroup && messageSource && conv.channel === 'zalo_personal' && (
+                      
+                      {/* Show SENDER name for group messages */}
+                      {isGroup && messageSource?.senderName && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-200">
+                          ✉️ {messageSource.senderName}
+                        </span>
+                      )}
+                      
+                      {/* Show personal badge for non-group zalo_personal */}
+                      {!isGroup && messageSource && conv.channel === 'zalo_personal' && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                           {messageSource.icon} {messageSource.label}
                         </span>
                       )}
+                      
+                      {/* Unread badge */}
                       {conv.unreadCount > 0 && (
                         <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                           {conv.unreadCount}
@@ -203,6 +252,7 @@ const ConversationList = ({ conversations, isLoading, selectedId, onSelect, onLo
                       )}
                     </div>
 
+                    {/* Last message preview */}
                     {conv.lastMessage && (
                       <p className="text-sm text-gray-500 mt-1 truncate">
                         {truncateMessage(conv.lastMessage)}
