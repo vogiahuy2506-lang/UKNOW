@@ -226,7 +226,11 @@ export default function PublicChatbotPage() {
                     ? { background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, color: 'white' }
                     : { backgroundColor: '#fff', color: textColor, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
                 }
-                dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>') }}
+                dangerouslySetInnerHTML={{ 
+                  __html: msg.content
+                    .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">$1</a>')
+                    .replace(/\n/g, '<br/>') 
+                }}
               />
             </div>
           ))}

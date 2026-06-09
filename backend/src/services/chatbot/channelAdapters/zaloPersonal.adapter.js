@@ -196,19 +196,9 @@ class ZaloPersonalAdapter {
         // This is the AUTHORITATIVE check - zca-js separates personal vs group messages at the protocol level
         if (isGroupByType) {
           console.log(`[ZaloPersonalAdapter] ⚠️ Group/Page message detected via message.type=${msgTypeValue} - skipping for personal chatbot`);
-          
-          // Still save to DB for history, but don't call handler for AI routing
-          try {
-            await this.saveMessageToDatabase(stored.userId, accountId, {
-              ...rawData,
-              isGroup: true,
-              is_group: true,
-              msgType: rawData.msgType || rawData.type || 1,
-            });
-          } catch (dbErr) {
-            console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
-          }
-          return;
+          // We no longer return early here. 
+          // The message will be handled by the handler which will emit SSE 
+          // and then skip AI routing in zaloInbox.service.js
         }
         
         // Additional fallback checks for explicit group indicators in raw data
@@ -245,23 +235,11 @@ class ZaloPersonalAdapter {
           detectedGroupId = rawData.zaloExt.groupId;
         }
         
-        // Use isGroupFromRaw as fallback detection (only block if explicit group indicators found)
-        const isGroup = isGroupFromRaw;
+        // Use isGroupFromRaw as fallback detection
+        const isGroup = isGroupByType || isGroupFromRaw;
         
         if (isGroup) {
-          console.log(`[ZaloPersonalAdapter] ⚠️ Group message detected via raw data indicators - skipping for personal chatbot`);
-          try {
-            await this.saveMessageToDatabase(stored.userId, accountId, {
-              ...rawData,
-              isGroup: true,
-              is_group: true,
-              groupId: detectedGroupId,
-              msgType: rawData.msgType || rawData.type || 1,
-            });
-          } catch (dbErr) {
-            console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
-          }
-          return;
+          console.log(`[ZaloPersonalAdapter] ⚠️ Group message detected via indicators - will skip AI but send SSE`);
         }
         
         console.log(`[ZaloPersonalAdapter] Message detection: isGroup=${isGroup}, msgTypeValue=${msgTypeValue}, idTo=${rawData?.idTo}, uidFrom=${rawData?.uidFrom}`);
@@ -311,10 +289,10 @@ class ZaloPersonalAdapter {
           type: message?.type,  // ThreadType: 0=personal, 1=group, 2=page
           threadId: rawData.threadId || rawData.idTo,
           // Source context: personal or group
-          isGroup: false, // Explicitly false since we already filtered out group messages
-          is_group: false,
-          groupId: null,
-          groupName: null,
+          isGroup: isGroup,
+          is_group: isGroup,
+          groupId: detectedGroupId,
+          groupName: rawData.groupName || rawData.groupNameStr || null,
           // Full sender info
           senderName: rawData.displayName || rawData.alias || rawData.coinsName || null,
           senderAvatar: rawData.avatarThumb || rawData.avatar || null,

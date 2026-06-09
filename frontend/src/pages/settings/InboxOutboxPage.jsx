@@ -157,10 +157,19 @@ const InboxPage = () => {
   const handleNewMessage = useCallback((data) => {
     console.log('[InboxPage] SSE New message:', data);
     
+    // Nếu app bị ẩn (chạy nền), hiển thị thông báo desktop
     if (document.hidden && data.message) {
       showNotification(t('inbox.newMessage'), {
         body: `${data.senderName || t('inbox.customer')}: ${data.message.substring(0, 100)}`,
         tag: `conv-${data.conversationId}`,
+      });
+    } else if (!document.hidden && data.message && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
+      // Nếu app đang mở nhưng không ở trong đoạn chat hiện tại, hiển thị toast
+      const sender = data.senderName || t('inbox.customer');
+      const msgPreview = data.message.length > 50 ? data.message.substring(0, 50) + '...' : data.message;
+      toast.success(`${sender}: ${msgPreview}`, {
+        icon: '💬',
+        duration: 4000,
       });
     }
     
