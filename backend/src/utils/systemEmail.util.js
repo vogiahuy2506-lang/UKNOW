@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-const SENDER_NAME = process.env.SYSTEM_EMAIL_NAME || 'Founder AI Platform';
+const SENDER_NAME = 'FounderAI';
 const SENDER_ADDRESS = process.env.SYSTEM_EMAIL_FROM || 'noreply@founderai.biz';
 
 /**
@@ -62,7 +62,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
 
     <!-- Header -->
     <div style="background:#f97316;padding:28px 32px">
-      <p style="margin:0;color:#fff;font-size:20px;font-weight:700">Founder AI</p>
+      <p style="margin:0;color:#fff;font-size:20px;font-weight:700">FounderAI</p>
       <p style="margin:4px 0 0;color:rgba(255,255,255,.85);font-size:13px">Thông báo gia hạn gói dịch vụ</p>
     </div>
 
@@ -100,7 +100,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
     <!-- Footer -->
     <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6">
       <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center">
-        © ${new Date().getFullYear()} Founder AI Platform · Email tự động, vui lòng không reply trực tiếp.
+        © ${new Date().getFullYear()} FounderAI · Email tự động, vui lòng không reply trực tiếp.
       </p>
     </div>
   </div>
