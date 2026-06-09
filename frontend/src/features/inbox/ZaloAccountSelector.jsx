@@ -110,7 +110,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
   if (accounts.length === 0) {
     return (
       <button
-        onClick={() => navigate('/settings/channel-connections')}
+        onClick={() => navigate('/app/settings/channels')}
         className="w-full flex items-center gap-2 px-3 py-2.5 bg-orange-50 rounded-lg border border-orange-200 hover:bg-orange-100 hover:border-orange-300 transition-colors group"
       >
         <HiExclamationCircle className="w-4 h-4 text-orange-400 flex-shrink-0" />
