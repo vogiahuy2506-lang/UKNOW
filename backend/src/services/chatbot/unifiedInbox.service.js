@@ -18,19 +18,20 @@ class UnifiedInboxService {
       unifiedInboxRepository.getUnreadCountByChannel(userId),
     ]);
 
-    // Add channel info and format
+    // Repository already transforms snake_case to camelCase,
+    // so we use the camelCase property names here
     const formattedConversations = conversations.map(conv => ({
       id: conv.id,
-      type: conv.conversation_type,
+      type: conv.type,
       channel: conv.channel,
-      channelDisplayName: conv.channel_display_name,
-      externalId: conv.external_id,
-      visitorName: conv.visitor_name,
-      visitorInfo: conv.visitor_info,
-      lastMessage: conv.last_message,
-      unreadCount: parseInt(conv.unread_count || 0),
-      startedAt: conv.started_at,
-      lastMessageAt: conv.last_message_at_override || conv.last_message_at,
+      channelDisplayName: conv.channelDisplayName,
+      externalId: conv.externalId,
+      visitorName: conv.visitorName,
+      visitorInfo: conv.visitorInfo,
+      lastMessage: conv.lastMessage,
+      unreadCount: parseInt(conv.unreadCount || 0),
+      startedAt: conv.startedAt,
+      lastMessageAt: conv.lastMessageAt,
       status: conv.status,
     }));
 
