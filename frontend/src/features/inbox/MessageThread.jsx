@@ -365,7 +365,7 @@ const MessageBubble = ({
             {/* Text content */}
             {message.content && (
               <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                {message.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
+                {String(message.content).split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
                   part.match(/^https?:\/\//) ? (
                     <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline font-medium hover:opacity-80 transition-opacity" onClick={e => e.stopPropagation()}>
                       {part}
