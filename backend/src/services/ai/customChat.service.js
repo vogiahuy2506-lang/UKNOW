@@ -116,7 +116,17 @@ class CustomChatService {
       console.warn('[CustomChat] RAG search failed:', e.message);
     }
 
-    const defaultSystem = 'Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.';
+    const defaultSystem = `Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.
+
+QUY TẮC TRẢ LỜI:
+- Sử dụng markdown để format câu trả lời
+- Dùng bullet points (*) cho danh sách
+- Dùng numbered list (1., 2., 3.) cho các bước hướng dẫn
+- Nếu có nhiều ý, chia thành các đoạn rõ ràng với heading nhỏ (##)
+- Dùng backtick đơn \`code\` hoặc backtick kép \`\`code block\`\` cho mã hoặc dữ liệu cần highlight
+- KHÔNG dùng **bold** cho từ khóa - chỉ viết thường hoặc dùng heading
+- Giữ câu trả lời súc tích nhưng đầy đủ thông tin`;
+
     const systemPrompt = systemInstruction || defaultSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
@@ -196,7 +206,12 @@ class CustomChatService {
       throw error;
     }
 
-    const text = await extractTextFromBuffer(file.buffer, file.originalname);
+    const rawName = file.originalname;
+    const cleanName = rawName
+      .trim()
+      .normalize('NFC');
+
+    const text = await extractTextFromBuffer(file.buffer, cleanName);
 
     if (!text || text.trim().length < 10) {
       const error = new Error('Could not extract text from file');
@@ -212,7 +227,7 @@ class CustomChatService {
       userId,
       chunks,
       embeddings,
-      source: file.originalname,
+      source: cleanName,
     });
 
     return {
@@ -244,6 +259,7 @@ class CustomChatService {
         docsMap[source] = {
           id: row.id,
           title: source,
+          source: source,
           type: 'file',
           status: 'ready',
           chunk_count: 0,
@@ -254,6 +270,55 @@ class CustomChatService {
     }
 
     return Object.values(docsMap);
+  }
+
+  async deleteDocument(chatbotId, docId) {
+    const decodedDocId = decodeURIComponent(docId);
+    const rows = await customChatDocumentRepository.listDocuments(chatbotId);
+    
+    const normalize = (s) => s ? s.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\.docx?$/, '').replace(/\.pdf$/, '').trim() : '';
+    const normDocId = normalize(decodedDocId);
+    
+    const doc = rows.find(r => {
+      if (r.source === decodedDocId || r.id === decodedDocId || r.source === docId) return true;
+      return normalize(r.source) === normDocId;
+    });
+    
+    if (!doc) {
+      console.log('[CustomChat] Delete debug - docId:', docId, 'decoded:', decodedDocId, 'normalized:', normDocId);
+      console.log('[CustomChat] Delete debug - available sources:', rows.map(r => r.source));
+      throw new Error('Document not found');
+    }
+    await customChatDocumentRepository.deleteChunksBySource(chatbotId, doc.source);
+    return true;
+  }
+
+  async addTextDocument({ chatbotId, userId, title, content }) {
+    if (!content || !content.trim()) {
+      const error = new Error('Content is required');
+      error.status = 400;
+      throw error;
+    }
+
+    const cleanTitle = title ? title.trim().normalize('NFC') : 'Text Document';
+    const text = content.trim();
+    const chunks = this.chunkText(text, 500);
+    const embeddings = await this.generateEmbeddings(chunks);
+
+    await customChatDocumentRepository.replaceChunks({
+      chatbotId,
+      userId,
+      chunks,
+      embeddings,
+      source: cleanTitle,
+    });
+
+    return {
+      message: `Đã xử lý ${chunks.length} đoạn từ văn bản`,
+      chunks: chunks.length,
+    };
   }
 
   chunkText(text, chunkSize = 500) {

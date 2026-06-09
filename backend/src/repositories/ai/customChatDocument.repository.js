@@ -54,6 +54,13 @@ class CustomChatDocumentRepository {
 
     return result.rows;
   }
+
+  async deleteChunksBySource(chatbotId, source) {
+    await db.query(
+      `DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1 AND source = $2`,
+      [chatbotId, source]
+    );
+  }
 }
 
 export default new CustomChatDocumentRepository();

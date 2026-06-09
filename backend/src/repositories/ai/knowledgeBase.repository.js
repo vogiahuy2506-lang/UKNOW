@@ -97,7 +97,7 @@ class KnowledgeBaseRepository {
   async findDocumentById(id, userId) {
     const { rows } = await db.query(
       `SELECT d.* FROM kb_documents d
-       INNER JOIN kb_knowledge_bases kb ON d.id_kb = kb.id
+       INNER JOIN knowledge_bases kb ON d.id_kb = kb.id
        WHERE d.id = $1 AND kb.id_user = $2`,
       [id, userId]
     );
@@ -136,22 +136,34 @@ class KnowledgeBaseRepository {
     if (!doc) return null;
 
     // Xóa file đã upload nếu có
-    if (doc.source_type === 'file' && doc.file_name) {
+    if (doc.source_type === 'file') {
       try {
         const { uploadController } = await import('../../controllers/upload.controller.js');
-        await uploadController.deleteTempFileById(`kb_${id}`, doc.file_name);
+        await uploadController.deleteTempFileById(`kb_${id}`, null);
       } catch (e) {
         console.warn(`[KB] Could not delete uploaded file for doc ${id}:`, e.message);
       }
     }
 
-    // Xóa document (đã verified ownership qua KB)
-    const { rows } = await db.query(
-      `DELETE FROM kb_documents WHERE id = $1 AND id_kb IN 
-       (SELECT id FROM kb_knowledge_bases WHERE id_user = $2) RETURNING id`,
-      [id, userId]
-    );
-    return rows[0]?.id || null;
+    // Xóa chunks trước (đảm bảo không có FK conflict)
+    try {
+      await this.deleteChunksByDocId(id);
+    } catch (e) {
+      console.warn(`[KB] Could not delete chunks for doc ${id}:`, e.message);
+    }
+
+    // Xóa document
+    try {
+      const { rows } = await db.query(
+        `DELETE FROM kb_documents WHERE id = $1 AND id_kb IN
+         (SELECT id FROM knowledge_bases WHERE id_user = $2) RETURNING id`,
+        [id, userId]
+      );
+      return rows[0]?.id || null;
+    } catch (dbErr) {
+      console.error(`[KB] deleteDocument DB error for doc ${id}:`, dbErr.message);
+      throw dbErr;
+    }
   }
 
   // ── KB Chunks ──────────────────────────────────────────────────

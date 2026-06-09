@@ -690,6 +690,38 @@ class AiController {
   }
 
   /**
+   * Upload logo image for Custom AI Chatbot (2MB limit)
+   */
+  async customChatLogoUpload(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có file ảnh' });
+      }
+      if (req.file.size > 2 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: 'File ảnh vượt quá 2MB' });
+      }
+      const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+      if (!allowedFormats.includes(req.file.mimetype)) {
+        return res.status(400).json({ success: false, message: 'Định dạng ảnh không được hỗ trợ' });
+      }
+
+      const cloudinary = (await import('../config/cloudinary.js')).default;
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'chatbot_logos', resource_type: 'image', allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'] },
+          (err, data) => (err ? reject(err) : resolve(data))
+        );
+        stream.end(req.file.buffer);
+      });
+
+      return res.json({ success: true, data: { url: result.secure_url } });
+    } catch (error) {
+      console.error('[CustomChatLogoUpload] Error:', error);
+      return res.status(500).json({ success: false, message: 'Upload logo thất bại' });
+    }
+  }
+
+  /**
    * Get documents for Custom AI Chatbot
    */
   async getCustomChatbotDocuments(req, res) {
@@ -703,6 +735,48 @@ class AiController {
     } catch (error) {
       console.error('[CustomChat] Get documents error:', error);
       return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async deleteCustomChatbotDocument(req, res) {
+    try {
+      const docId = decodeURIComponent(req.params.docId);
+      await customChatService.deleteDocument(parseInt(req.params.chatbotId, 10), docId);
+      return res.json({ success: true, message: 'Document deleted' });
+    } catch (error) {
+      console.error('[CustomChat] Delete document error:', error);
+      return res.status(error.message.includes('not found') ? 404 : 500)
+        .json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Add text document for Custom AI Chatbot
+   */
+  async addCustomChatTextDocument(req, res) {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId, 10) || 0;
+      const { title, content } = req.body;
+
+      if (!content || !content.trim()) {
+        return res.status(400).json({ success: false, message: 'Content is required' });
+      }
+
+      const result = await customChatService.addTextDocument({
+        chatbotId,
+        userId: req.user?.id || 1,
+        title: title || 'Text Document',
+        content: content.trim(),
+      });
+
+      return res.json({
+        success: true,
+        message: `Đã thêm tài liệu với ${result.chunks} đoạn`,
+        chunks: result.chunks,
+      });
+    } catch (error) {
+      console.error('[CustomChat] Add text document error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 }

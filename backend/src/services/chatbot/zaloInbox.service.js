@@ -203,6 +203,13 @@ class ZaloPersonalInboxService {
           console.error(`[ZaloInbox] Error restoring session for account ${account.account_id}:`, error.message);
         }
       }
+
+      // Log tổng kết
+      const successCount = accounts.filter(a => zaloAccountSessionService.getAccountApi(a.account_id)).length;
+      if (successCount < accounts.length) {
+        console.log(`[ZaloInbox] ⚠️ ${accounts.length - successCount}/${accounts.length} accounts need QR re-scan (cookie expired)`);
+        console.log(`[ZaloInbox] 💡 Go to Zalo Settings to scan QR code for affected accounts`);
+      }
     } catch (error) {
       console.error('[ZaloInbox] Error in restoreSessionsFromDb:', error.message, error.stack);
     }
@@ -468,14 +475,31 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Skip non-text messages (stickers, images, etc.)
-      if (messageType !== 'text' || !content?.trim()) {
-        console.log(`[ZaloInbox] Skipping non-text message: type=${messageType}, hasContent=${!!content}`);
+      // Build smart content for AI - handle non-text messages intelligently
+      let aiContent = content?.trim() || '';
+
+      // Handle sticker messages - convert to text description for AI
+      if (messageType === 'sticker') {
+        const stickerData = rawMessage.stickerInfo || rawMessage.sticker || {};
+        const stickerId = stickerData.sticker_id || stickerData.id || 'unknown';
+        const stickerPkgId = stickerData.package_id || stickerData.pkgId || '';
+        aiContent = `[Sticker] Người dùng gửi một sticker (package: ${stickerPkgId}, id: ${stickerId})`;
+      }
+
+      // Handle image messages
+      if (messageType === 'image') {
+        aiContent = '[Hình ảnh] Người dùng gửi một hình ảnh';
+      }
+
+      // Skip text messages without content, but allow sticker/image to proceed
+      if (!aiContent && messageType !== 'sticker' && messageType !== 'image') {
+        console.log(`[ZaloInbox] Skipping text message without content`);
         return;
       }
 
       // Unified chatbot settings (shared across all channels)
-      const chatbotSettings = await chatbotRepository.getSettings(userId, 'global');
+      // Use 'zalo_personal' channel to get shared AI config saved from ChatbotSettings
+      const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
 
       // Check per-account enable/disable
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
@@ -513,12 +537,13 @@ class ZaloPersonalInboxService {
         const result = await chatRouterService.routeMessageWithSettings({
           channel: 'zalo_personal',
           userId,
-          message: content,
+          message: aiContent,
           conversationId: conversation.id,
           chatbotSettings: finalSettings,
           visitorInfo: {
             source: 'zalo_personal',
             senderId,
+            accountId: zaloSettingId,
           },
         });
         console.log(`[ZaloInbox] <<< After chatRouterService call, result=`, JSON.stringify(result));
@@ -529,6 +554,7 @@ class ZaloPersonalInboxService {
             externalId: String(senderId),
             message: result.content,
             userId,
+            accountId: zaloSettingId,
             conversationInfo: {
               is_group: false, // Explicitly false - we already filtered out group messages
               group_id: null,
@@ -641,72 +667,13 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Register listener cho một account cụ thể
+   * Register listener cho một account cụ thể (public API — delegates to internal).
+   * No mutex here; callers (start, refreshListeners) manage concurrency.
    * @param {number} accountId
    * @param {object|null} accountRow - pass sẵn để tránh query lại zalo_settings
    */
   async registerAccountListener(accountId, accountRow = null) {
-    // Mutex: tránh race condition khi cron chạy overlap
-    if (this._isRefreshing) {
-      console.log(`[ZaloInbox] Skipping register (isRefreshing=true) for account ${accountId}`);
-      return;
-    }
-    this._isRefreshing = true;
-
-    try {
-      // Lấy account info từ cache hoặc query
-      let account;
-      if (accountRow) {
-        account = accountRow;
-      } else {
-        account = await zaloInboxRepository.findAccountById(accountId);
-        if (!account) {
-          console.log(`[ZaloInbox] Account ${accountId} not found or not connected`);
-          return false;
-        }
-      }
-
-      const { id_user: userId } = account;
-      console.log(`[ZaloInbox] Processing account ${accountId}, user ${userId}`);
-
-      // Skip nếu đã registered (dùng zaloAccountRegistry)
-      if (isAccountRegistered(accountId)) {
-        console.log(`[ZaloInbox] Account ${accountId} already registered (skipping)`);
-        return true;
-      }
-
-      // Verify account is valid
-      const zaloSettingId = await this.getZaloSettingId(userId, accountId);
-      if (!zaloSettingId) {
-        console.warn(`[ZaloInbox] Không tìm thấy zalo_setting cho account ${accountId}`);
-        return false;
-      }
-
-      console.log(`[ZaloInbox] Registering message handler for account ${accountId}`);
-      const handler = this.createMessageHandler(userId, accountId, zaloSettingId);
-      const success = await zaloPersonalAdapter.registerMessageHandler(userId, accountId, handler);
-
-      if (success) {
-        markAccountRegistered(accountId);
-        console.log(`[ZaloInbox] ✅ Successfully registered listener for account ${accountId}`);
-        
-        // Backfill tên cho các conversation cũ
-        setTimeout(() => {
-          this.backfillConversationNames(userId, accountId, zaloSettingId).catch(err => {
-            console.warn('[ZaloInbox] Backfill error:', err.message);
-          });
-        }, 2000);
-      } else {
-        console.warn(`[ZaloInbox] ❌ Failed to register listener for account ${accountId}`);
-      }
-
-      return success;
-    } catch (error) {
-      console.error(`[ZaloInbox] Error registering account ${accountId}:`, error.message);
-      return false;
-    } finally {
-      this._isRefreshing = false;
-    }
+    return this._registerSingleListener(accountId, accountRow);
   }
 
   /**

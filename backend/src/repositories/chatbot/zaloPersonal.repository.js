@@ -194,6 +194,21 @@ class ZaloPersonalRepository {
       throw err;
     }
   }
+
+  /**
+   * Find message by external ID
+   * @param {string} externalId
+   * @param {number} zaloSettingId
+   * @returns {Promise<object|null>}
+   */
+  async findMessageByExternalId(externalId, zaloSettingId) {
+    const { rows } = await db.query(
+      `SELECT * FROM zalo_personal_messages 
+       WHERE external_id = $1 AND id_zalo_setting = $2 LIMIT 1`,
+      [externalId, zaloSettingId]
+    );
+    return rows[0] || null;
+  }
 }
 
 export default new ZaloPersonalRepository();

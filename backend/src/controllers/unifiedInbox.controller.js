@@ -15,6 +15,7 @@ class UnifiedInboxController {
         search,
         limit: parseInt(limit),
         offset: parseInt(offset),
+        zaloAccountId: req.query.zaloAccountId,
       });
 
       return res.json({
