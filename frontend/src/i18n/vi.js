@@ -402,7 +402,7 @@ export default {
 
   landingPagesAdmin: {
     title: 'Quản lý Landing Pages',
-    description: 'Mỗi landing page có URL dạng slug.founderai.biz. Dán HTML vào editor — khi Lưu, server đổi link http(s) sang URL tracking và chèn lp-track.js.',
+    description: 'Mỗi landing page có URL dạng yourname.founderai.biz. Dán HTML vào editor — khi Lưu, server đổi link http(s) sang URL tracking và chèn lp-track.js.',
     loading: 'Đang tải…',
     loadFailed: 'Không thể tải dữ liệu landing',
     loadDetailFailed: 'Không tải được chi tiết',
@@ -3796,7 +3796,7 @@ export default {
     topLandingTitle: 'Top landing (xem, tracking & form)',
     noDataAllTime: 'Chưa có dữ liệu (toàn thời gian).',
     noDataInRange: 'Chưa có dữ liệu trong khoảng thời gian đã chọn.',
-    topLandingDescription: 'Top {{topN}} landing theo tổng (lượt xem + click tracking + gửi form){{scopeAllTime ? " — toàn thời gian" : ""}}. Nhãn trục ngang là tiêu đề trang; gồm /l và landing subdomain /slug.founderai.biz.',
+    topLandingDescription: 'Top {{topN}} landing theo tổng (lượt xem + click tracking + gửi form){{scopeAllTime ? " — toàn thời gian" : ""}}. Nhãn trục ngang là tiêu đề trang; gồm /l và landing subdomain /yourname.founderai.biz.',
     views: 'Lượt xem',
     clicksTracking: 'Click (tracking)',
     formSubmissions: 'Gửi form',

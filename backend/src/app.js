@@ -58,6 +58,7 @@ import templateLabelRoutes from './routes/templateLabel.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
 import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
+import chatbotRepository from './repositories/ai/chatbot.repository.js';
 
 /**
  * Khởi tạo Express app (không listen).
@@ -210,6 +211,22 @@ export function createApp() {
   app.use((req, res, next) => {
     if (req.isCustomDomain && req.landingPage) {
       return landingPagePublicController.getByDomain(req, res);
+    }
+    next();
+  });
+
+  // Short link redirect: founderai.biz/{widgetKey} → frontend /chat/{chatbotId}
+  app.get('/:widgetKey', async (req, res, next) => {
+    try {
+      const { widgetKey } = req.params;
+      if (!widgetKey || widgetKey.includes('.')) return next();
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
+      if (chatbot) {
+        const frontendUrl = process.env.FRONTEND_URL || 'https://app.uknow.vn';
+        return res.redirect(302, `${frontendUrl}/chat/${chatbot.id}`);
+      }
+    } catch (_err) {
+      // non-critical, fall through to 404
     }
     next();
   });

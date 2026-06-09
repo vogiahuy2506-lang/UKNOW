@@ -586,7 +586,7 @@ export default function LandingPageFullEditor({
                                 <li>Chọn loại bản ghi là <strong>TXT</strong></li>
                                 <li>Điền thông tin:
                                   <ul className="ml-6 mt-1 space-y-1">
-                                    <li><strong>Tên/Host:</strong> <code className="bg-gray-100 px-1 rounded">{cdInfo.record.name || '@'}</code></li>
+                                    <li><strong>Tên/Host:</strong> <code className="bg-gray-100 px-1 rounded">{cdInfo.record.name?.split('.')[0] || '_founderai-verify'}</code> (hoặc <code className="bg-gray-100 px-1 rounded">{cdInfo.record.name || '@'}</code> nếu nhà cung cấp yêu cầu nhập đầy đủ)</li>
                                     <li><strong>Loại:</strong> TXT</li>
                                     <li><strong>Giá trị TXT:</strong> <code className="bg-gray-100 px-1 rounded break-all">{cdInfo.record.value}</code></li>
                                   </ul>

@@ -401,7 +401,7 @@ export default {
 
   landingPagesAdmin: {
     title: 'Manage Landing Pages',
-    description: 'Each landing page has URL format slug.founderai.biz. Paste HTML into editor — when Save, server rewrites http(s) links to tracking URLs and inserts lp-track.js.',
+    description: 'Each landing page has URL format yourname.founderai.biz. Paste HTML into editor — when Save, server rewrites http(s) links to tracking URLs and inserts lp-track.js.',
     loading: 'Loading…',
     loadFailed: 'Failed to load landing data',
     loadDetailFailed: 'Failed to load details',
@@ -3795,7 +3795,7 @@ export default {
     topLandingTitle: 'Top landing (views, tracking & form)',
     noDataAllTime: 'No data (all time).',
     noDataInRange: 'No data in selected time range.',
-    topLandingDescription: 'Top {{topN}} landing by total (views + tracking clicks + form submissions){{scopeAllTime ? " — all time" : ""}}. Horizontal axis labels are page titles; includes /l and landing subdomain /slug.founderai.biz.',
+    topLandingDescription: 'Top {{topN}} landing by total (views + tracking clicks + form submissions){{scopeAllTime ? " — all time" : ""}}. Horizontal axis labels are page titles; includes /l and landing subdomain /yourname.founderai.biz.',
     views: 'Views',
     clicksTracking: 'Click (tracking)',
     formSubmissions: 'Form submissions',
