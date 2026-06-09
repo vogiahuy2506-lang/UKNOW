@@ -240,7 +240,6 @@ const MessageBubble = ({
   t, 
   isGroupConversation, 
   isGroupChannel, 
-  conversation,
   onReply,
   replyingTo 
 }) => {
@@ -270,17 +269,14 @@ const MessageBubble = ({
   // Determine display name based on conversation type
   // For GROUP messages: Always show sender name (not "Khách hàng")
   // For PERSONAL messages: Show sender name if available, or "Khách hàng"
-  let displayName;
   let showSenderName = false;
   
   if (isVisitor) {
     if (isGroupChannel || isGroupConversation) {
       // Group: Always show actual sender name
-      displayName = senderName || t('inbox.anonymousUser');
       showSenderName = true;
     } else {
       // Personal: Show sender name if available
-      displayName = senderName || t('inbox.customer');
       showSenderName = !!senderName;
     }
   }

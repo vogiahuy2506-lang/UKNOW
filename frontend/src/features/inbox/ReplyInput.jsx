@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { HiPaperAirplane, HiPaperClip, HiX, HiEmojiHappy, HiPhotograph, HiDocument } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
