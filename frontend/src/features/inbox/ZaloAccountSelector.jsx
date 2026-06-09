@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { HiChevronDown, HiRefresh, HiCheck, HiExclamationCircle, HiUser } from 'react-icons/hi';
+import { HiChevronDown, HiRefresh, HiCheck, HiExclamationCircle, HiUser, HiExternalLink } from 'react-icons/hi';
+import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../i18n';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import toast from 'react-hot-toast';
 
 const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplete }) => {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,10 +109,14 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
 
   if (accounts.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
-        <HiExclamationCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        <p className="text-xs text-gray-500">{t('inbox.noZaloAccount')}</p>
-      </div>
+      <button
+        onClick={() => navigate('/settings/channel-connections')}
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-orange-50 rounded-lg border border-orange-200 hover:bg-orange-100 hover:border-orange-300 transition-colors group"
+      >
+        <HiExclamationCircle className="w-4 h-4 text-orange-400 flex-shrink-0" />
+        <p className="text-xs text-orange-600 flex-1 text-left">{t('inbox.noZaloAccount')}</p>
+        <HiExternalLink className="w-3.5 h-3.5 text-orange-400 group-hover:text-orange-500 flex-shrink-0" />
+      </button>
     );
   }
 
