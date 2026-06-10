@@ -329,10 +329,16 @@ class ZaloPersonalInboxService {
 
       // Detect message source: personal chat vs group
       // Use the isGroup from msgData if available, otherwise fallback to raw flags
-      const isGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true || hasGroupContext;
       const groupId = rawMessage?.groupId || rawMessage?.group_id || clientGroupId || (idTo?.startsWith('g_') || idTo?.startsWith('group_') ? idTo : null);
       const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
       const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
+
+      // A message is only treated as coming from a group if we also have a groupId to
+      // anchor it to. Otherwise (e.g. type/threadType flags set without group context)
+      // it's treated as personal, to avoid producing "(Nhóm null)" display names and
+      // inconsistent externalId/visitorInfo (externalId already required groupId below).
+      const rawIsGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true || hasGroupContext;
+      const isGroup = rawIsGroup && Boolean(groupId);
 
       console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}, hasGroupContext=${hasGroupContext}`);
 
@@ -387,12 +393,12 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Xác định externalId dựa trên nguồn: 
+      // Xác định externalId dựa trên nguồn:
       // - Group: dùng senderId để phân biệt từng người trong nhóm
       // - Personal: dùng senderId
       // Format group message: "group_{groupId}_{senderId}" để tránh trùng lặp
-      const externalId = isGroup && groupId 
-        ? `group_${groupId}_${senderId}` 
+      const externalId = isGroup
+        ? `group_${groupId}_${senderId}`
         : String(senderId);
 
       // Lấy tên nhóm nếu là group message và không có sẵn
@@ -433,8 +439,8 @@ class ZaloPersonalInboxService {
         account_id: accountId,
         is_group: isGroup,
         // Group info
-        group_id: groupId,
-        group_name: resolvedGroupName || groupName,
+        group_id: isGroup ? groupId : null,
+        group_name: isGroup ? (resolvedGroupName || groupName) : null,
         // Sender info
         sender_id: senderId,
         sender_name: resolvedSenderName || senderName,
@@ -462,9 +468,10 @@ class ZaloPersonalInboxService {
       console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
 
       // Skip AI routing for group messages - only reply personal chats
-      // Use hasGroupContext as backup check (catches cases where isGroup=false but group indicators exist)
-      if (isGroup || hasGroupContext) {
-        console.log(`[ZaloInbox] Skipping AI routing for group message (isGroup=${isGroup}, hasGroupContext=${hasGroupContext}, groupId: ${groupId || clientGroupId})`);
+      // Use rawIsGroup (raw type/flag indicators) as the safety net here, even if we
+      // couldn't resolve a groupId to anchor the conversation to (isGroup === false in that case)
+      if (rawIsGroup) {
+        console.log(`[ZaloInbox] Skipping AI routing for group message (isGroup=${isGroup}, rawIsGroup=${rawIsGroup}, hasGroupContext=${hasGroupContext}, groupId: ${groupId || clientGroupId})`);
         return;
       }
 

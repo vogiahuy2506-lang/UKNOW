@@ -378,16 +378,19 @@ class ZaloPersonalAdapter {
       return null;
     }
 
-    // Use the isGroup flag from the normalized msgData
-    const isGroup = msgData.isGroup === true;
+    // Use the isGroup flag from the normalized msgData, but only treat it as a group
+    // conversation if we also have a groupId to anchor it to. Otherwise (e.g. type/threadType
+    // flags set without a resolvable groupId) fall back to personal, to keep externalId,
+    // displayName, and visitorInfo.is_group consistent and avoid "(Nhóm null)" names.
     const groupId = msgData.groupId || null;
     const groupName = msgData.groupName || null;
+    const isGroup = msgData.isGroup === true && Boolean(groupId);
 
     // Determine externalId based on source:
     // - Group: use senderId to distinguish each person in the group
     // - Personal: use senderId
     // Format: "group_{groupId}_{senderId}" for group messages
-    const externalId = isGroup && groupId
+    const externalId = isGroup
       ? `group_${groupId}_${msgData.fromUid}`
       : String(msgData.fromUid);
 
@@ -395,9 +398,9 @@ class ZaloPersonalAdapter {
     // - Group: show sender name + group name
     // - Personal: show sender name
     let displayName;
-    if (isGroup && msgData.groupId) {
+    if (isGroup) {
       const senderDisplay = msgData.senderName || `User ${msgData.fromUid}`;
-      const groupDisplay = msgData.groupName || `Nhóm ${msgData.groupId}`;
+      const groupDisplay = groupName || `Nhóm ${groupId}`;
       displayName = `${senderDisplay} (${groupDisplay})`;
     } else {
       displayName = msgData.senderName || null;
@@ -418,8 +421,8 @@ class ZaloPersonalAdapter {
           sender_name: msgData.senderName,
           sender_avatar: msgData.senderAvatar,
           is_group: isGroup,
-          group_id: msgData.groupId || null,
-          group_name: msgData.groupName || null,
+          group_id: isGroup ? groupId : null,
+          group_name: isGroup ? groupName : null,
         }),
         now,
       });
@@ -427,15 +430,15 @@ class ZaloPersonalAdapter {
     } else {
       conversationId = conversation.id;
       // Update last_message_at and visitor info if changed
-      const existingInfo = typeof conversation.visitor_info === 'string' 
-        ? JSON.parse(conversation.visitor_info) 
+      const existingInfo = typeof conversation.visitor_info === 'string'
+        ? JSON.parse(conversation.visitor_info)
         : (conversation.visitor_info || {});
-      
+
       // Update if is_group status changed or group info is new
       const needsUpdate = (
         existingInfo.is_group !== isGroup ||
-        (isGroup && existingInfo.group_id !== msgData.groupId) ||
-        (isGroup && !existingInfo.group_name && msgData.groupName)
+        (isGroup && existingInfo.group_id !== groupId) ||
+        (isGroup && !existingInfo.group_name && groupName)
       );
 
       if (needsUpdate) {
@@ -447,8 +450,8 @@ class ZaloPersonalAdapter {
             sender_name: msgData.senderName,
             sender_avatar: msgData.senderAvatar,
             is_group: isGroup,
-            group_id: msgData.groupId || null,
-            group_name: msgData.groupName || null,
+            group_id: isGroup ? groupId : null,
+            group_name: isGroup ? groupName : null,
           }
         );
       } else {
@@ -470,9 +473,9 @@ class ZaloPersonalAdapter {
         sender_name: msgData.senderName,
         sender_id: msgData.senderId,
         sender_avatar: msgData.senderAvatar,
-        is_group: msgData.isGroup || false,
-        group_id: msgData.groupId || null,
-        group_name: msgData.groupName || null,
+        is_group: isGroup,
+        group_id: isGroup ? groupId : null,
+        group_name: isGroup ? groupName : null,
         msg_type: msgData.msgType,
         msg_type_raw: msgData.msgTypeRaw,
         attachments: msgData.attachments || [],
