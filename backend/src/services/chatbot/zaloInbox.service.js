@@ -319,8 +319,7 @@ class ZaloPersonalInboxService {
         rawData?.threadType === 1 ||    // 1 = group in zca-js
         rawData?.threadType === 2 ||    // 2 = community in zca-js
         idTo?.startsWith('g_') ||
-        idTo?.startsWith('group_') ||
-        idTo?.startsWith('c_')
+        idTo?.startsWith('group_')
       );
       
       // If threadType is explicitly set and indicates group, log it
@@ -331,7 +330,7 @@ class ZaloPersonalInboxService {
       // Detect message source: personal chat vs group
       // Use the isGroup from msgData if available, otherwise fallback to raw flags
       const isGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true || hasGroupContext;
-      const groupId = rawMessage?.groupId || rawMessage?.group_id || clientGroupId || (idTo?.startsWith('g_') || idTo?.startsWith('group_') || idTo?.startsWith('c_') ? idTo : null);
+      const groupId = rawMessage?.groupId || rawMessage?.group_id || clientGroupId || (idTo?.startsWith('g_') || idTo?.startsWith('group_') ? idTo : null);
       const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
       const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
 
@@ -392,7 +391,7 @@ class ZaloPersonalInboxService {
       // - Group: dùng senderId để phân biệt từng người trong nhóm
       // - Personal: dùng senderId
       // Format group message: "group_{groupId}_{senderId}" để tránh trùng lặp
-      const externalId = isGroup 
+      const externalId = isGroup && groupId 
         ? `group_${groupId}_${senderId}` 
         : String(senderId);
 

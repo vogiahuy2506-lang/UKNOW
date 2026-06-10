@@ -209,7 +209,6 @@ class ZaloPersonalAdapter {
           rawData?.threadType === 2 ||     // 2 = community in zca-js
           rawData?.idTo?.startsWith('g_') ||
           rawData?.idTo?.startsWith('group_') ||
-          rawData?.idTo?.startsWith('c_') ||
           rawData?.isGroup === true ||
           rawData?.isPublicGroup === true ||
           rawData?.isChatRoom === true ||
