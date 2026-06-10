@@ -186,24 +186,8 @@ class ZaloPersonalAdapter {
         // Access raw data from UserMessage/GroupMessage object
         const rawData = message?.data || message;
 
-        // IMPORTANT: Check message.type to distinguish personal vs group messages
-        // ThreadType.User = 0 (personal), ThreadType.Group = 1 (group), ThreadType.Page = 2
-        // Note: message.type is 0 for personal - MUST check with != null, not !== undefined
-        const msgTypeValue = message?.type;
-        const isGroupByType = msgTypeValue != null && msgTypeValue !== 0;
-        
-        // If message.type indicates group (ThreadType.Group = 1, ThreadType.Page = 2), treat as group
-        // This is the AUTHORITATIVE check - zca-js separates personal vs group messages at the protocol level
-        if (isGroupByType) {
-          console.log(`[ZaloPersonalAdapter] ⚠️ Group/Page message detected via message.type=${msgTypeValue} - skipping for personal chatbot`);
-          // We no longer return early here. 
-          // The message will be handled by the handler which will emit SSE 
-          // and then skip AI routing in zaloInbox.service.js
-        }
-        
-        // Additional fallback checks for explicit group indicators in raw data
-        // (for edge cases where zca-js might not set message.type correctly)
-        const isGroupFromRaw = Boolean(
+        // Check for explicit group indicators in raw data
+        const isGroup = Boolean(
           rawData?.clientGroupId || 
           rawData?.threadType === 1 ||     // 1 = group in zca-js
           rawData?.threadType === 2 ||     // 2 = community in zca-js
@@ -233,9 +217,6 @@ class ZaloPersonalAdapter {
         } else if (rawData?.zaloExt?.groupId) {
           detectedGroupId = rawData.zaloExt.groupId;
         }
-        
-        // Use isGroupFromRaw as fallback detection
-        const isGroup = isGroupByType || isGroupFromRaw;
         
         if (isGroup) {
           console.log(`[ZaloPersonalAdapter] ⚠️ Group message detected via indicators - will skip AI but send SSE`);
