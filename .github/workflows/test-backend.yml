@@ -83,7 +83,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres"
+          --health-cmd pg_isready
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -107,6 +107,7 @@ jobs:
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -123,7 +124,7 @@ jobs:
         run: npm run test:coverage -- --ci
 
       - name: Coverage summary trên PR
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           if [ -f coverage/coverage-summary.json ]; then
             echo "### 📊 Coverage backend" >> "$GITHUB_STEP_SUMMARY"
@@ -143,7 +144,7 @@ jobs:
           fi
 
       - name: Upload coverage artifact
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
