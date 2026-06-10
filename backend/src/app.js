@@ -164,8 +164,8 @@ export function createApp() {
   app.use('/api/admin/system', adminSystemRoutes);
   app.use('/api/admin/delivery-monitor', adminDeliveryMonitorRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
-  app.use('/api/ai', aiRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
+  app.use('/api/ai', aiRoutes);
   app.use('/api/chatbot-public', publicCorsMiddleware, chatbotPublicRoutes);
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/custom-domains', customDomainRoutes);
