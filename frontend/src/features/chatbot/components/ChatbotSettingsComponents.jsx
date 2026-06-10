@@ -199,7 +199,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               Hướng dẫn AI
             </label>
             <span className="text-[10px] text-slate-400">
-              {(config.system_instruction || '').length}/2000
+              {(config.system_instruction || '').length} ký tự
             </span>
           </div>
           <textarea
@@ -207,9 +207,9 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             onChange={e => update('system_instruction', e.target.value)}
             placeholder="VD: Bạn là một trợ lý ảo thân thiện của công ty ABC, chuyên tư vấn về sản phẩm..."
             rows={compact ? 3 : 5}
-            maxLength={2000}
             className="input resize-y"
           />
+          <p className="text-[10px] text-slate-400 mt-1">Không giới hạn độ dài. Hướng dẫn chi tiết giúp AI hiểu rõ vai trò và phong cách trả lời.</p>
         </div>
       )}
     </div>
