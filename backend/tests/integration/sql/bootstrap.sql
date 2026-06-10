@@ -138,6 +138,8 @@ CREATE TABLE plans (
   max_email_accounts    INTEGER,
   max_email_templates   INTEGER,
   max_zalo_templates    INTEGER,
+  max_chatbots          INTEGER,
+  ai_credits_per_period INTEGER,
   duration_days         INTEGER,
   price_yearly          BIGINT,
   messages_per_period   INTEGER,
@@ -339,6 +341,7 @@ CREATE TABLE campaign_runs (
   total_recipients  INTEGER      NOT NULL DEFAULT 0,
   successful_sends  INTEGER      NOT NULL DEFAULT 0,
   failed_sends      INTEGER      NOT NULL DEFAULT 0,
+  skipped_sends     INTEGER      NOT NULL DEFAULT 0,
   error_message     TEXT,
   run_metadata      JSONB        NOT NULL DEFAULT '{}',
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
