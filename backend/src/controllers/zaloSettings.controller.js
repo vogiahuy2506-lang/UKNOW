@@ -290,7 +290,7 @@ class ZaloSettingsController {
    * Thử đăng nhập lại Zalo từ cookie_text đã lưu.
    *
    * @param {string} cookieText
-   * @returns {Promise<any>}
+   * @returns {Promise<{ api: any; credentials: { imei: string; userAgent: string; language: string; cookie: unknown } }>}
    */
   async restoreApiFromCookieText(cookieText) {
     const credentialCandidates = this.buildLoginCredentialCandidates(cookieText);
@@ -312,7 +312,7 @@ class ZaloSettingsController {
           throw new Error('UNSUPPORTED_ZALO_LOGIN_METHOD');
         }
         const api = await zalo.login(credentials);
-        if (api) return api;
+        if (api) return { api, credentials };
       } catch (error) {
         lastError = error;
       }
@@ -373,12 +373,19 @@ class ZaloSettingsController {
     let profile = null;
     let userInfoProfile = null;
     let ownId = '';
-    let cookieText = this.serializeCookieSource({
-      imei: String(loginMeta?.imei || '').trim(),
-      userAgent: String(loginMeta?.userAgent || '').trim(),
-      language: String(loginMeta?.language || '').trim() || this.defaultZaloLanguage,
-      cookie: loginMeta?.loginInfoCookie || null,
-    });
+    // Chỉ build cookieText từ loginMeta.loginInfoCookie khi có cookie thật (luồng QR login).
+    // Nếu không có (vd. luồng restore từ cookie cũ), để trống để rơi xuống nhánh
+    // safeApi.getCookie() bên dưới lấy cookie MỚI từ session vừa khôi phục — tránh lưu
+    // chuỗi placeholder '{"imei":"","userAgent":"","language":"vi","cookie":null}' đè lên
+    // cookie_text hợp lệ trong DB (khiến lần restore tiếp theo luôn thất bại).
+    let cookieText = loginMeta?.loginInfoCookie
+      ? this.serializeCookieSource({
+        imei: String(loginMeta?.imei || '').trim(),
+        userAgent: String(loginMeta?.userAgent || '').trim(),
+        language: String(loginMeta?.language || '').trim() || this.defaultZaloLanguage,
+        cookie: loginMeta.loginInfoCookie,
+      })
+      : '';
 
     if (safeApi?.fetchAccountInfo && typeof safeApi.fetchAccountInfo === 'function') {
       try {
@@ -1709,8 +1716,12 @@ class ZaloSettingsController {
 
       try {
         const ownerUserId = accountRow.id_user;
-        const api = await this.restoreApiFromCookieText(cookieText);
-        const accountIdentity = await this.extractAccountIdentityFromApi(api, {});
+        const { api, credentials } = await this.restoreApiFromCookieText(cookieText);
+        const accountIdentity = await this.extractAccountIdentityFromApi(api, {
+          imei: credentials?.imei,
+          userAgent: credentials?.userAgent,
+          language: credentials?.language,
+        });
         const updatedAccount = await this.markAccountConnectedAfterRestore({
           userId: ownerUserId,
           accountId,
