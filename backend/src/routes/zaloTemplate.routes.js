@@ -52,7 +52,7 @@ router.put(
   '/:id',
   [
     body('templateName').optional().trim().notEmpty().withMessage('Tên mẫu không được để trống'),
-    body('subject').optional().trim().notEmpty().withMessage('Tiêu đề không được để trống'),
+    body('subject').optional({ checkFalsy: true }).trim().notEmpty().withMessage('Tiêu đề không được để trống'),
   ],
   handleValidationErrors,
   zaloTemplateController.update.bind(zaloTemplateController)
