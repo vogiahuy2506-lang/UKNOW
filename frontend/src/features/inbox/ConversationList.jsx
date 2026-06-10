@@ -102,9 +102,9 @@ const formatTime = (dateString, t) => {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 1) return t('time.justNow');
-  if (diffMins < 60) return `${diffMins} ${t('time.minutesAgo', { n: diffMins })}`;
-  if (diffHours < 24) return `${diffHours} ${t('time.hoursAgo', { n: diffHours })}`;
-  if (diffDays < 7) return `${diffDays} ${t('time.daysAgo', { n: diffDays })}`;
+  if (diffMins < 60) return t('time.minutesAgo', { n: diffMins });
+  if (diffHours < 24) return t('time.hoursAgo', { n: diffHours });
+  if (diffDays < 7) return t('time.daysAgo', { n: diffDays });
   return date.toLocaleDateString('vi-VN');
 };
 
