@@ -150,19 +150,22 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
     if (!confirm(t('chatbot.studio.confirmDelete', { name: bot.name }))) return;
     setDeletingId(bot.id);
     try {
-      // Try to delete via API first
+      // Must delete via API successfully before removing locally
       await chatbotApi.deleteChatbot(bot.id);
+      
+      const bots = chatbots.filter(b => b.id !== bot.id);
+      setChatbots(bots);
+      saveToStorage(bots);
+      if (selectedBot?.id === bot.id) {
+        onSelectBot(bots[0] || null);
+      }
+      toast.success(t('common.success'));
     } catch (apiError) {
-      console.warn('[ChatListSidebar] API delete failed, using localStorage:', apiError.message);
+      console.warn('[ChatListSidebar] API delete failed:', apiError.message);
+      toast.error('Không thể xóa chatbot: ' + apiError.message);
+    } finally {
+      setDeletingId(null);
     }
-    const bots = chatbots.filter(b => b.id !== bot.id);
-    setChatbots(bots);
-    saveToStorage(bots);
-    setDeletingId(null);
-    if (selectedBot?.id === bot.id) {
-      onSelectBot(bots[0] || null);
-    }
-    toast.success(t('common.success'));
   };
 
   // Filter & sort

@@ -186,4 +186,5 @@ export const emptyForm = () => ({
   maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
   maxZaloAccounts: '', maxEmailAccounts: '',
   maxEmailTemplates: '', maxZaloTemplates: '',
+  maxChatbots: '', aiCreditsPerPeriod: '',
 });

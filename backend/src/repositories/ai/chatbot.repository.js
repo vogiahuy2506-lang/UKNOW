@@ -383,6 +383,15 @@ class ChatbotRepository {
     return rows;
   }
 
+  async countActiveChatbotsByUser(userId) {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS count FROM custom_chatbots
+       WHERE id_user = $1 AND is_active = true`,
+      [userId]
+    );
+    return rows[0]?.count || 0;
+  }
+
   async createChatbot(userId, data) {
     const { rows } = await db.query(
       `INSERT INTO custom_chatbots
@@ -502,6 +511,15 @@ class ChatbotRepository {
       [chatbotId, userId]
     );
     return rows[0] || null;
+  }
+
+  async disableAllSettingsForUser(userId) {
+    await db.query(
+      `UPDATE chatbot_settings
+       SET is_enabled = false, updated_at = NOW()
+       WHERE id_user = $1`,
+      [userId]
+    );
   }
 
   async getCustomChatbotDocuments(chatbotId) {

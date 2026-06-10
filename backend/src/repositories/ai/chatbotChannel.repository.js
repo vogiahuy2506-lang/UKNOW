@@ -11,7 +11,7 @@ class ChatbotChannelRepository {
       `SELECT ccc.*, cc.id_user, cc.name as chatbot_name, cc.widget_key
        FROM chatbot_channel_connections ccc
        JOIN custom_chatbots cc ON cc.id = ccc.id_chatbot
-       WHERE ccc.webhook_token = $1 AND ccc.is_active = true`,
+       WHERE ccc.webhook_token = $1 AND ccc.is_active = true AND cc.is_active = true`,
       [webhookToken]
     );
     return rows[0] || null;
@@ -87,6 +87,15 @@ class ChatbotChannelRepository {
       [chatbotId, channelType]
     );
     return rows[0];
+  }
+
+  async deactivateAllForChatbot(chatbotId) {
+    await db.query(
+      `UPDATE chatbot_channel_connections
+       SET is_active = false, updated_at = NOW()
+       WHERE id_chatbot = $1`,
+      [chatbotId]
+    );
   }
 
   /**

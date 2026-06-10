@@ -74,8 +74,8 @@ export default function ZaloPersonalChannelModal({ open, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-lg font-bold">
-              ZP
+            <div className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center text-sm font-bold">
+              Zalo
             </div>
             <div>
               <h3 className="text-base font-semibold text-slate-800">{t('zaloPersonalChatbot.title')}</h3>

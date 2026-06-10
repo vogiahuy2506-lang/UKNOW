@@ -1,4 +1,4 @@
-import db from '../config/database.js';
+import db from '../../config/database.js';
 
 class UsageTrackingRepository {
   /**
@@ -89,7 +89,9 @@ class UsageTrackingRepository {
          p.daily_zalo_limit,
          p.monthly_zalo_limit,
          p.messages_per_period,
-         p.is_fup_enabled
+         p.is_fup_enabled,
+         p.max_chatbots,
+         p.ai_credits_per_period
        FROM users u
        JOIN plans p ON p.id = u.active_plan_id
        WHERE u.id = $1`,

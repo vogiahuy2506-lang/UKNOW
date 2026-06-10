@@ -6,47 +6,10 @@ import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAcc
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
+import customChatService from '../services/ai/customChat.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
-
-/**
- * Strip markdown formatting from AI response text.
- * Zalo Personal cannot render markdown — this prevents asterisks and
- * other formatting characters from appearing as literal text.
- */
-function stripMarkdown(text) {
-  if (!text || typeof text !== 'string') return text || '';
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/gs, '$1')
-    .replace(/__(.+?)__/gs, '$1')
-    // Italic: *text* or _text_
-    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
-    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
-    // Strikethrough: ~~text~~
-    .replace(/~~(.+?)~~/gs, '$1')
-    // Inline code: `code`
-    .replace(/`(.+?)`/gs, '$1')
-    // Code blocks: ```...``` or ```lang...```
-    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
-    // Headers: # ## ### etc
-    .replace(/^#{1,6}\s+/gm, '')
-    // Unordered lists: - item or * item
-    .replace(/^[\s]*[-*+]\s+/gm, '')
-    // Ordered lists: 1. item
-    .replace(/^[\s]*\d+\.\s+/gm, '')
-    // Blockquotes: > quote
-    .replace(/^>\s*/gm, '')
-    // Horizontal rules: --- or *** or ___
-    .replace(/^[-*_]{3,}\s*$/gm, '')
-    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
-    // Note: Plain text channels like Zalo will display this as literal text
-    .replace(/!\[.*?\]\(.+?\)/g, '')
-    // Plain URLs — keep them visible in the response
-    // Clean up multiple blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
@@ -996,6 +959,22 @@ class ChatbotController {
 
   async createCustomChatbot(req, res) {
     try {
+      const plan = await getPlanByUserId(req.user.id);
+      const maxChatbots = Number(plan?.max_chatbots || 0);
+      if (maxChatbots > 0) {
+        const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(req.user.id);
+        if (currentChatbots >= maxChatbots) {
+          return res.status(403).json({
+            success: false,
+            message: `Bạn đã đạt giới hạn ${maxChatbots} chatbot của gói dịch vụ hiện tại.`,
+            code: 'CHATBOT_LIMIT_EXCEEDED',
+            used: currentChatbots,
+            limit: maxChatbots,
+            upgradeRequired: true,
+          });
+        }
+      }
+
       const crypto = await import('crypto');
       const widgetKey = crypto.randomUUID().split('-')[0];
       const chatbot = await chatbotRepository.createChatbot(req.user.id, {
@@ -1078,6 +1057,14 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
+      await chatbotChannelRepository.deactivateAllForChatbot(id);
+
+      const remainingActive = await chatbotRepository.countActiveChatbotsByUser(req.user.id);
+      if (remainingActive === 0) {
+        await chatbotRepository.disableAllSettingsForUser(req.user.id);
+        await chatbotZaloAccountRepository.disableAllForUser(req.user.id);
+      }
+
       return res.json({
         success: true,
         message: 'Chatbot deleted',
@@ -1121,47 +1108,21 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
-      // Use chatbot's system instruction or default
-      const systemInstruction = chatbot.system_instruction || "Bạn là một trợ lý AI hữu ích, thân thiện và chính xác.\n\nQUY TAC TRA LOI:\n- Tra loi bang van ban thuan, KHONG dung markdown\n- Neu can danh sach, chi dung so thu tu (1, 2, 3) hoac dau gach ngang (-)\n- Tra loi ngan gon, de hieu, de doc\n- Neu co link, hien thi link URL trong cau tra loi (VD: https://example.com hoac [text](https://example.com))";
-
-      // Build history
       const fullHistory = [
         ...(history || []),
         { role: 'user', content: message }
       ];
 
-      // Build prompt
-      const prompt = `Hệ thống: ${systemInstruction}\n\n${fullHistory.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
-
-      // Get Gemini API key từ env
-      const apiKey = process.env.GEMINI_API_KEY;
-      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-      if (!apiKey) {
-        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
-      }
-
-      // Call Gemini
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: chatbot.temperature || 0.7,
-            maxOutputTokens: chatbot.max_tokens || 2048,
-          }
-        })
+      const result = await customChatService.chat({
+        history: fullHistory,
+        chatbotId: chatbot.id,
+        userId: chatbot.id_user,
+        systemInstruction: chatbot.system_instruction,
+        temperature: chatbot.temperature || 0.7,
+        maxTokens: chatbot.max_tokens || 2048,
       });
 
-      const data = await response.json();
-
-      if (data.error) {
-        return res.status(500).json({ success: false, message: data.error.message });
-      }
-
-      const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
-      const content = stripMarkdown(rawContent);
+      const content = result.content;
 
       return res.json({
         success: true,
@@ -1256,47 +1217,21 @@ class ChatbotController {
     });
       }
 
-      // Use chatbot's system instruction or default
-      const systemInstruction = chatbot.system_instruction || "Bạn là một trợ lý AI hữu ích, thân thiện và chính xác.\n\nQUY TAC TRA LOI:\n- Tra loi bang van ban thuan, KHONG dung markdown\n- Neu can danh sach, chi dung so thu tu (1, 2, 3) hoac dau gach ngang (-)\n- Tra loi ngan gon, de hieu, de doc\n- Neu co link, hien thi link URL trong cau tra loi (VD: https://example.com hoac [text](https://example.com))";
-
-      // Build history
       const fullHistory = [
         ...(history || []),
         { role: 'user', content: message }
       ];
 
-      // Build prompt
-      const prompt = `Hệ thống: ${systemInstruction}\n\n${fullHistory.map(m => `${m.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${m.content}`).join('\n')}\n\nTrợ lý:`;
-
-      // Get Gemini API key từ env
-      const apiKey = process.env.GEMINI_API_KEY;
-      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-      if (!apiKey) {
-        return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
-      }
-
-      // Call Gemini
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: chatbot.temperature || 0.7,
-            maxOutputTokens: chatbot.max_tokens || 2048,
-          }
-        })
+      const result = await customChatService.chat({
+        history: fullHistory,
+        chatbotId: chatbot.id,
+        userId: chatbot.id_user,
+        systemInstruction: chatbot.system_instruction,
+        temperature: chatbot.temperature || 0.7,
+        maxTokens: chatbot.max_tokens || 2048,
       });
 
-      const data = await response.json();
-
-      if (data.error) {
-        return res.status(500).json({ success: false, message: data.error.message });
-      }
-
-      const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không có câu trả lời.';
-      const content = stripMarkdown(rawContent);
+      const content = result.content;
 
       // Save assistant response
       if (conversation) {

@@ -21,6 +21,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
     maxZaloAccounts: '', maxEmailAccounts: '',
     maxEmailTemplates: '', maxZaloTemplates: '',
+    maxChatbots: '', aiCreditsPerPeriod: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);

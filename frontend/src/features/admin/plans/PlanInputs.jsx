@@ -557,6 +557,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxEmailAccounts',      t('planInputs.emailAccounts')],
           ['maxEmailTemplates',     t('planInputs.emailTemplates')],
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
+          ['maxChatbots',           'Chatbot AI'],
+          ['aiCreditsPerPeriod',    'AI credits / kỳ'],
         ].map(([key, label]) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>

@@ -1292,7 +1292,7 @@ const deployOptionsConfig = [
   },
   {
     id: 'zalo',
-    label: 'Zalo OA',
+    label: 'Zalo OA (Beta)',
     desc: 'Kết nối với Zalo Official Account để nhận tin nhắn.',
     icon: (
       <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -1303,7 +1303,7 @@ const deployOptionsConfig = [
   },
   {
     id: 'facebook',
-    label: 'Facebook Messenger',
+    label: 'Facebook Messenger (Beta)',
     desc: 'Kết nối với Facebook Page để nhận tin nhắn.',
     icon: (
       <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">

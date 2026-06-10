@@ -7,6 +7,8 @@ import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
+import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
+import usageTrackingService from '../payment/usageTracking.service.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -16,45 +18,6 @@ const ADAPTERS = {
 };
 
 const MAX_HISTORY_MESSAGES = 20;
-
-/**
- * Strip markdown formatting from AI response text.
- * Zalo Personal cannot render markdown — this prevents asterisks and
- * other formatting characters from appearing as literal text.
- */
-function stripMarkdown(text) {
-  if (!text || typeof text !== 'string') return text || '';
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/gs, '$1')
-    .replace(/__(.+?)__/gs, '$1')
-    // Italic: *text* or _text_
-    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
-    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
-    // Strikethrough: ~~text~~
-    .replace(/~~(.+?)~~/gs, '$1')
-    // Inline code: `code`
-    .replace(/`(.+?)`/gs, '$1')
-    // Code blocks: ```...``` or ```lang...```
-    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
-    // Headers: # ## ### etc
-    .replace(/^#{1,6}\s+/gm, '')
-    // Unordered lists: - item or * item
-    .replace(/^[\s]*[-*+]\s+/gm, '')
-    // Ordered lists: 1. item
-    .replace(/^[\s]*\d+\.\s+/gm, '')
-    // Blockquotes: > quote
-    .replace(/^>\s*/gm, '')
-    // Horizontal rules: --- or *** or ___
-    .replace(/^[-*_]{3,}\s*$/gm, '')
-    // Markdown links: [text](url) — keep the full markdown link (for channels that support it)
-    // Note: Plain text channels like Zalo will display this as literal text
-    .replace(/!\[.*?\]\(.+?\)/g, '')
-    // Plain URLs — keep them visible in the response
-    // Clean up multiple blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 class ChatRouterService {
   /**
@@ -113,7 +76,7 @@ class ChatRouterService {
       isFirstMessage,
     });
 
-    // 7. Call AI
+    await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
     const aiResponse = await this._callAI({
       systemPrompt,
       history,
@@ -125,6 +88,7 @@ class ChatRouterService {
 
     // 8. Strip markdown formatting before sending (Zalo cannot render markdown)
     const cleanResponse = stripMarkdown(aiResponse.text);
+    await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
 
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
     await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
@@ -191,10 +155,7 @@ class ChatRouterService {
       isFirstMessage,
     });
 
-    // Call AI with per-account settings
-    console.log(`[ChatRouter] Calling AI: model=${chatbotSettings.ai_model || 'gemini-2.5-flash'}, temp=${chatbotSettings.temperature}`);
-    console.log(`[ChatRouter] GEMINI_MODEL env=`, process.env.GEMINI_MODEL);
-    console.log(`[ChatRouter] GEMINI_API_KEY env=`, process.env.GEMINI_API_KEY ? '***' + process.env.GEMINI_API_KEY.slice(-4) : 'NOT SET');
+    await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
     const aiResponse = await this._callAI({
       systemPrompt,
       history,
@@ -203,26 +164,13 @@ class ChatRouterService {
       temperature: parseFloat(chatbotSettings.temperature || 0.7),
       maxTokens: chatbotSettings.max_tokens || 2048,
     });
-    console.log(`[ChatRouter] AI response:`, JSON.stringify(aiResponse));
-
     // Strip markdown formatting before sending (Zalo cannot render markdown)
     const cleanResponse = stripMarkdown(aiResponse.text);
+    await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
 
     // Log messages
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
     await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
-
-    // Send reply via adapter
-    if (adapter.sendReply) {
-      await adapter.sendReply({
-        conversationId,
-        message: cleanResponse,
-        conversationInfo: visitorInfo,
-        // Zalo personal needs accountId to reply from the correct account
-        accountId: visitorInfo?.accountId,
-        userId,
-      });
-    }
 
     return { type: 'text', content: cleanResponse };
   }
@@ -275,7 +223,8 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 - Neu can nhan manh thong tin quan trong, chi CAN VIET HOA hoac THEM DAU HAI CHAM
 - So dien thoai / email: format chuan Viet Nam
 - Tra loi ngắn gọn, rõ ràng, dễ đọc
-- Neu co link, HIEN THI LINK URL trong cau tra loi (VD: https://example.com)
+- Neu co link, HIEN THI LINK URL day du dang van ban thuan (VD: Ten trang: https://example.com)
+- Khong dung link markdown dang [ten](https://example.com)
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     // Thêm custom system instruction neu co
@@ -430,6 +379,7 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
 - Khong dung markdown bold/italic
 - Neu khong biet, hay noi ro`;
 
+      await usageTrackingService.ensureAvailable(chatbot.id_user, 'ai_credit', 1);
       const response = await this._callAI({
         systemPrompt,
         history: chatHistory,
@@ -438,8 +388,9 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
       });
+      await usageTrackingService.incrementUsage(chatbot.id_user, 'ai_credit', 1);
 
-      return { content: response.text };
+      return { content: stripMarkdown(response.text) };
     } catch (err) {
       console.error('[ChatRouter] routeChatbotMessage error:', err);
       return { content: 'Xin loi, da xay ra loi. Vui long thu lai.' };

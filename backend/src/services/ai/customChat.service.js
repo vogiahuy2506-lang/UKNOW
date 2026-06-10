@@ -1,5 +1,7 @@
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
+import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
+import usageTrackingService from '../payment/usageTracking.service.js';
 
 /** Timeout for Gemini API calls (30 seconds) */
 const GEMINI_TIMEOUT_MS = 30000;
@@ -10,46 +12,6 @@ const RETRY_CONFIG = {
   retryDelayMs: 1000,
   retryableErrors: ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
 };
-
-/**
- * Strip markdown formatting from AI response text.
- * The web chat widget displays plain text, so **bold**, *italic*, and other
- * markdown markers must be removed before sending the response to the client.
- */
-function stripMarkdown(text) {
-  if (!text || typeof text !== 'string') return text || '';
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/gs, '$1')
-    .replace(/__(.+?)__/gs, '$1')
-    // Italic: *text* or _text_
-    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '$1')
-    .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '$1')
-    // Strikethrough: ~~text~~
-    .replace(/~~(.+?)~~/gs, '$1')
-    // Inline code: `code`
-    .replace(/`(.+?)`/gs, '$1')
-    // Code blocks: ```...``` or ```lang...```
-    .replace(/```[\w]*\n?([\s\S]*?)```/gs, '$1')
-    // Headers: # ## ### etc
-    .replace(/^#{1,6}\s+/gm, '')
-    // Unordered lists: - item or * item
-    .replace(/^[\s]*[-*+]\s+/gm, '')
-    // Ordered lists: 1. item
-    .replace(/^[\s]*\d+\.\s+/gm, '')
-    // Blockquotes: > quote
-    .replace(/^>\s*/gm, '')
-    // Horizontal rules: --- or *** or ___
-    .replace(/^[-*_]{3,}\s*$/gm, '')
-    // Remove markdown images
-    .replace(/!\[.*?\]\(.+?\)/g, '')
-    // Markdown links: convert [text](url) to "text: url" so it becomes plain text
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
-    // Plain URLs — keep them visible in the response
-    // Clean up multiple blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 class CustomChatService {
   /**
@@ -165,15 +127,18 @@ QUY TẮC TRẢ LỜI:
 - Neu can danh sach, chi dung dau gach ngang hoac so thu tu (1, 2, 3)
 - Neu can nhan manh thong tin quan trọng, chi can VIET HOA hoac THEM DAU HAI CHAM
 - Tra loi ngắn gọn, rõ ràng, dễ đọc
-- Neu co link, HIEN THI LINK URL trong cau tra loi (VD: https://example.com)
+- Neu co link, HIEN THI LINK URL day du dang van ban thuan (VD: Ten trang: https://example.com)
+- Khong dung link markdown dang [ten](https://example.com)
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     const systemPrompt = systemInstruction || defaultSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     try {
+      await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
       const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens });
       const content = stripMarkdown(rawContent || 'Xin lỗi, tôi không có câu trả lời.');
+      await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
 
       return {
         content,
@@ -317,6 +282,11 @@ QUY TẮC TRẢ LỜI:
   async deleteDocument(chatbotId, docId) {
     const decodedDocId = decodeURIComponent(docId);
     const rows = await customChatDocumentRepository.listDocuments(chatbotId);
+    const numericDocId = Number(decodedDocId);
+    if (Number.isInteger(numericDocId) && numericDocId > 0) {
+      const deletedById = await customChatDocumentRepository.deleteChunksById(chatbotId, numericDocId);
+      if (deletedById > 0) return true;
+    }
     
     const normalize = (s) => s ? s.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -324,7 +294,7 @@ QUY TẮC TRẢ LỜI:
     const normDocId = normalize(decodedDocId);
     
     const doc = rows.find(r => {
-      if (r.source === decodedDocId || r.id === decodedDocId || r.source === docId) return true;
+      if (r.source === decodedDocId || String(r.id) === decodedDocId || r.source === docId) return true;
       return normalize(r.source) === normDocId;
     });
     

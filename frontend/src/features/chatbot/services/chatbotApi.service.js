@@ -49,7 +49,9 @@ const chatbotApiService = {
   // ── Knowledge Base ────────────────────────────────────────────────────────
 
   deleteDocument(chatbotId, docId) {
-    return api.delete(`/ai/custom-chat/documents/${chatbotId}/${encodeURIComponent(docId)}`);
+    // encode twice because the server decodes it once automatically by Express,
+    // and if there are special chars like '/', a double encode prevents routing errors.
+    return api.delete(`/ai/custom-chat/documents/${chatbotId}/${encodeURIComponent(encodeURIComponent(docId))}`);
   },
 
   addCustomChatTextDocument(chatbotId, data) {

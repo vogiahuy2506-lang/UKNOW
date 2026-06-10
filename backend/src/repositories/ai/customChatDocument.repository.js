@@ -24,8 +24,8 @@ class CustomChatDocumentRepository {
 
   async replaceChunks({ chatbotId, userId, chunks, embeddings, source }) {
     await db.query(
-      `DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1`,
-      [chatbotId]
+      `DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1 AND user_id = $2 AND source = $3`,
+      [chatbotId, userId, source]
     );
 
     for (let i = 0; i < chunks.length; i += 1) {
@@ -56,10 +56,21 @@ class CustomChatDocumentRepository {
   }
 
   async deleteChunksBySource(chatbotId, source) {
-    await db.query(
+    const result = await db.query(
       `DELETE FROM custom_chatbot_chunks WHERE chatbot_id = $1 AND source = $2`,
       [chatbotId, source]
     );
+    return result.rowCount;
+  }
+
+  async deleteChunksById(chatbotId, chunkId) {
+    const { rows } = await db.query(
+      `SELECT source FROM custom_chatbot_chunks WHERE chatbot_id = $1 AND id = $2 LIMIT 1`,
+      [chatbotId, chunkId]
+    );
+    const source = rows[0]?.source;
+    if (!source) return 0;
+    return this.deleteChunksBySource(chatbotId, source);
   }
 }
 

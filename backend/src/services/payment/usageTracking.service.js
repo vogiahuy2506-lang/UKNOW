@@ -1,5 +1,5 @@
 import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
-import planRepository from '../../repositories/payment/plan.repository.js';
+import * as planRepository from '../../repositories/payment/plan.repository.js';
 
 class UsageTrackingService {
   /**
@@ -86,6 +86,20 @@ class UsageTrackingService {
     return this.getResourceUsage(userId, resourceType);
   }
 
+  async ensureAvailable(userId, resourceType, delta = 1) {
+    const usage = await this.getResourceUsage(userId, resourceType);
+    if (usage.limit > 0 && usage.used + delta > usage.limit) {
+      const error = new Error(`Đã hết ${resourceType} trong gói dịch vụ hiện tại`);
+      error.status = 403;
+      error.code = 'RESOURCE_LIMIT_EXCEEDED';
+      error.resource = resourceType;
+      error.used = usage.used;
+      error.limit = usage.limit;
+      throw error;
+    }
+    return usage;
+  }
+
   /**
    * Check if user has a feature
    */
@@ -134,6 +148,10 @@ class UsageTrackingService {
       email: 'monthly_email_limit',
       zalo_sent: 'monthly_zalo_limit',
       zalo: 'monthly_zalo_limit',
+      ai_credit: 'ai_credits_per_period',
+      ai_credits: 'ai_credits_per_period',
+      chatbot: 'max_chatbots',
+      chatbots: 'max_chatbots',
     };
 
     const limitKey = mapping[resourceType];

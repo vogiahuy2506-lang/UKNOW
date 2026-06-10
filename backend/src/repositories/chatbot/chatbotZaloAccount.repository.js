@@ -117,6 +117,15 @@ class ChatbotZaloAccountRepository {
     );
   }
 
+  async disableAllForUser(userId) {
+    await db.query(
+      `UPDATE chatbot_zalo_account_settings
+       SET is_enabled = false, updated_at = NOW()
+       WHERE id_user = $1`,
+      [userId]
+    );
+  }
+
   /**
    * Get all enabled chatbot accounts for a user
    * @param {number} userId
