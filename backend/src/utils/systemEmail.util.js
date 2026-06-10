@@ -20,7 +20,7 @@ function createTransporter() {
 }
 
 /**
- * Gửi một email hệ thống.
+ * Gửi một email hệ thống với retry logic.
  *
  * @param {{ to: string, subject: string, html: string }} options
  */
@@ -29,13 +29,37 @@ export async function sendSystemEmail({ to, subject, html }) {
     console.warn('[SystemEmail] SENDGRID_API_KEY chưa được cấu hình — bỏ qua gửi email.');
     return;
   }
+
   const transporter = createTransporter();
-  await transporter.sendMail({
-    from: `"${SENDER_NAME}" <${SENDER_ADDRESS}>`,
-    to,
-    subject,
-    html,
-  });
+  const maxRetries = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const info = await transporter.sendMail({
+        from: `"${SENDER_NAME}" <${SENDER_ADDRESS}>`,
+        to,
+        subject,
+        html,
+      });
+      console.log(`[SystemEmail] ✅ Sent to ${to} (attempt ${attempt}): ${info.messageId}`);
+      return info;
+    } catch (err) {
+      lastError = err;
+      const isRetryable = err.statusCode >= 500 || err.statusCode === 429;
+      console.warn(`[SystemEmail] ⚠️ Attempt ${attempt}/${maxRetries} failed for ${to}: ${err.message} (status: ${err.statusCode})`);
+
+      if (!isRetryable || attempt === maxRetries) {
+        break;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt - 1) * 1000;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError;
 }
 
 /**
