@@ -303,15 +303,6 @@ class ZaloPersonalInboxService {
 
       console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
 
-      // Detect message source: personal chat vs group
-      // Use the isGroup from msgData if available, otherwise fallback to raw flags
-      const isGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true;
-      const groupId = rawMessage?.groupId || rawMessage?.group_id || null;
-      const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
-      const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
-
-      console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}`);
-
       // Check if this is a group message by checking raw flags
       // Zalo sends group messages with additional context in rawMessage
       const rawData = rawMessage?._raw || rawMessage;
@@ -336,12 +327,15 @@ class ZaloPersonalInboxService {
       if (threadType !== undefined) {
         console.log(`[ZaloInbox] threadType=${threadType} detected (0=personal, 1=group, 2=community), hasGroupContext=${hasGroupContext}`);
       }
-      
-      // If message has group context, skip AI routing (someone texting into a group should NOT get personal reply)
-      if (hasGroupContext) {
-        console.log(`[ZaloInbox] Skipping AI routing: message has group context (clientGroupId=${clientGroupId}, idTo=${idTo}, threadType=${threadType})`);
-        return;
-      }
+
+      // Detect message source: personal chat vs group
+      // Use the isGroup from msgData if available, otherwise fallback to raw flags
+      const isGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true || hasGroupContext;
+      const groupId = rawMessage?.groupId || rawMessage?.group_id || clientGroupId || (idTo?.startsWith('g_') || idTo?.startsWith('group_') || idTo?.startsWith('c_') ? idTo : null);
+      const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
+      const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
+
+      console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}, hasGroupContext=${hasGroupContext}`);
 
       // Check if this sender has ever been part of a group conversation
       // If yes, skip AI routing (they might be a group member texting personally)

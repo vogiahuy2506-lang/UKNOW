@@ -325,7 +325,7 @@ const MessageBubble = ({
                   {!showSenderName && t('inbox.customer')}
                   {(isGroupChannel || isGroupConversation) && (
                     <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">
-                      👥 {visitorInfo.group_name || t('inbox.group')}
+                      👥 {metadata.group_name || visitorInfo.group_name || t('inbox.group')}
                     </span>
                   )}
                 </span>

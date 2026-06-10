@@ -65,6 +65,7 @@ const getMessageSource = (conv) => {
       senderName: visitorInfo.sender_name,
       senderId: visitorInfo.sender_id,
       groupId: visitorInfo.group_id,
+      groupName: visitorInfo.group_name,
     };
   }
   
