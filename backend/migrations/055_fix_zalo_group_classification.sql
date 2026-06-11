@@ -16,8 +16,8 @@ BEGIN
         SELECT id, visitor_info
         FROM zalo_personal_conversations
         WHERE visitor_info IS NOT NULL
-          AND visitor_info != ''
-          AND visitor_info ~ '^\\{.*\\}$'
+          AND visitor_info::text != ''
+          AND visitor_info::text ~ '^\\{.*\\}$'
     LOOP
         BEGIN
             -- Check if it's valid JSON by attempting to cast
@@ -46,10 +46,10 @@ BEGIN
         SELECT id, visitor_info
         FROM zalo_personal_conversations
         WHERE visitor_info IS NOT NULL
-          AND visitor_info != ''
+          AND visitor_info::text != ''
           AND (
               -- Not a valid JSON string (doesn't start with {)
-              visitor_info !~ '^\\{'
+              visitor_info::text !~ '^\\{'
           )
     LOOP
         UPDATE zalo_personal_conversations
@@ -71,8 +71,8 @@ BEGIN
         FROM zalo_personal_conversations
         WHERE NOT (external_id LIKE 'group_%')
           AND visitor_info IS NOT NULL
-          AND visitor_info != ''
-          AND visitor_info ~ '^\\{.*\\}$' -- Only valid-looking JSON
+          AND visitor_info::text != ''
+          AND visitor_info::text ~ '^\\{.*\\}$' -- Only valid-looking JSON
     LOOP
         BEGIN
             IF rec.visitor_info::jsonb ? 'source' AND rec.visitor_info::jsonb->>'source' = 'zalo_group' THEN
@@ -97,8 +97,8 @@ BEGIN
         FROM zalo_personal_conversations
         WHERE NOT (external_id LIKE 'group_%')
           AND visitor_info IS NOT NULL
-          AND visitor_info != ''
-          AND visitor_info ~ '^\\{.*\\}$'
+          AND visitor_info::text != ''
+          AND visitor_info::text ~ '^\\{.*\\}$'
     LOOP
         BEGIN
             IF rec.visitor_info::jsonb ? 'is_group' AND (rec.visitor_info::jsonb->>'is_group')::boolean = true THEN
@@ -122,8 +122,8 @@ BEGIN
         FROM zalo_personal_conversations
         WHERE external_id LIKE 'group_%'
           AND visitor_info IS NOT NULL
-          AND visitor_info != ''
-          AND visitor_info ~ '^\\{.*\\}$'
+          AND visitor_info::text != ''
+          AND visitor_info::text ~ '^\\{.*\\}$'
     LOOP
         BEGIN
             UPDATE zalo_personal_conversations
@@ -144,7 +144,7 @@ SET visitor_name = COALESCE(
 WHERE external_id LIKE 'group_%'
   AND visitor_name LIKE '%(%)%'
   AND visitor_info IS NOT NULL
-  AND visitor_info != ''
-  AND visitor_info ~ '^\\{.*\\}$';
+  AND visitor_info::text != ''
+  AND visitor_info::text ~ '^\\{.*\\}$';
 
 COMMIT;
