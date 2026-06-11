@@ -177,5 +177,9 @@ router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncC
 router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
 // Get chat history from DB for AI context
 router.get('/zalo-personal/history', zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
+// Get group members from Zalo API
+router.get('/zalo-personal/group-members', zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
+// Get senders who have messaged in a group from DB
+router.get('/zalo-personal/group-senders', zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
 
 export default router;

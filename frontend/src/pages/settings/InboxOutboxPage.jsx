@@ -53,6 +53,10 @@ const InboxPage = () => {
   const [replyingTo, setReplyingTo] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const searchInputRef = useRef(null);
+  
+  // Buffer for SSE messages when user is not viewing the conversation
+  // This prevents losing messages when user clicks on a conversation that just received a message
+  const [pendingMessages, setPendingMessages] = useState({});
 
   const [filters, setFilters] = useState({
     channel: '',
@@ -173,13 +177,13 @@ const InboxPage = () => {
     }
   }, []);
 
-  const fetchMessages = useCallback(async (conv) => {
-    if (!conv) return;
+  const fetchMessages = useCallback(async () => {
+    if (!selectedConversation) return;
     setIsLoadingMessages(true);
     try {
-      const response = await chatbotApi.getMessages(conv.id, conv.type);
+      const response = await chatbotApi.getMessages(selectedConversation.id, selectedConversation.type);
       if (response.success) {
-        setMessages(response.data);
+        setMessages(response.data || []);
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err);
@@ -187,11 +191,54 @@ const InboxPage = () => {
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [t]);
+  }, [selectedConversation, t]);
 
   const handleNewMessage = useCallback((data) => {
     console.log('[InboxPage] SSE New message:', data);
     
+    // === 1. Update Conversation List (optimistic update) ===
+    // Find existing conversation in state
+    setConversations(prev => {
+      const existingIndex = prev.findIndex(c => c.id === data.conversationId);
+      
+      if (existingIndex !== -1) {
+        // Update existing conversation - move to top and update preview
+        const existing = prev[existingIndex];
+        const updated = {
+          ...existing,
+          lastMessage: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          last_message_at: data.timestamp || new Date().toISOString(),
+          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : (existing.unreadCount || 0) + 1,
+        };
+        
+        // Move to top of list
+        const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
+        console.log('[InboxPage] Updated existing conversation:', data.conversationId);
+        return newList;
+      } else {
+        // Add new conversation at top
+        const newConv = {
+          id: data.conversationId,
+          type: data.type || 'zalo_personal',
+          channel: data.channel || 'zalo_personal',
+          // For groups: use visitorName (which has group name) or groupName
+          // For personal: use senderName or visitorName
+          visitorName: data.isGroup 
+            ? (data.visitorName || data.groupName || data.senderName || 'Nhóm') 
+            : (data.senderName || data.visitorName || 'Khách hàng'),
+          lastMessage: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          last_message_at: data.timestamp || new Date().toISOString(),
+          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : 1,
+          isGroup: data.isGroup || false,
+          groupName: data.groupName || null,
+          senderId: data.senderId,
+        };
+        console.log('[InboxPage] Added new conversation:', data.conversationId);
+        return [newConv, ...prev];
+      }
+    });
+
+    // === 2. Show notification/toast ===
     // Nếu app bị ẩn (chạy nền), hiển thị thông báo desktop
     if (document.hidden && data.message) {
       showNotification(t('inbox.newMessage'), {
@@ -215,11 +262,87 @@ const InboxPage = () => {
       return;
     }
     
-    fetchConversations(true);
-    if (selectedConversation && data.conversationId === selectedConversation.id) {
-      fetchMessages(selectedConversation);
+    // === 3. Append message to thread (if viewing this conversation) ===
+    // Handle both visitor messages and AI agent replies
+    const isThisConversation = selectedConversation && data.conversationId === selectedConversation.id;
+    
+    if (isThisConversation) {
+      // Determine message role: AI sends 'agent' role, visitor messages have no role or 'visitor'
+      const msgRole = data.role || (data.messageType === 'text' && !data.message ? 'visitor' : 'visitor');
+      
+      setMessages(prev => {
+        // Check for duplicate by timestamp and content
+        const isDuplicate = prev.some(m => 
+          m.createdAt === data.timestamp || 
+          (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
+        );
+        
+        if (isDuplicate) {
+          console.log('[InboxPage] Skipping duplicate message');
+          return prev;
+        }
+        
+        const newMsg = {
+          id: data.messageId || `temp-${Date.now()}`,
+          role: msgRole,
+          content: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          createdAt: data.timestamp || new Date().toISOString(),
+          isRead: true,
+          messageType: data.messageType || 'text',
+          attachmentUrl: data.attachmentUrl || null,
+          senderName: data.senderName,
+        };
+        console.log(`[InboxPage] Appended ${msgRole} message to thread:`, newMsg.id);
+        return [...prev, newMsg];
+      });
+      
+      // Auto-scroll to bottom - use messagesEndRef
+      setTimeout(() => {
+        const container = document.querySelector('.flex-1.min-h-0.overflow-y-auto.p-4.bg-gray-50');
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+        // Also try the end ref
+        const endEl = document.querySelector('[data-messages-end]');
+        if (endEl) {
+          endEl.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      // User is NOT viewing this conversation - buffer the message for when they click on it
+      setPendingMessages(prev => {
+        const convMessages = prev[data.conversationId] || [];
+        const msgRole = data.role || 'visitor';
+        
+        // Check for duplicate
+        const isDuplicate = convMessages.some(m => 
+          m.createdAt === data.timestamp || 
+          (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
+        );
+        
+        if (isDuplicate) {
+          return prev;
+        }
+        
+        const newMsg = {
+          id: data.messageId || `temp-${Date.now()}`,
+          role: msgRole,
+          content: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          createdAt: data.timestamp || new Date().toISOString(),
+          isRead: false,
+          messageType: data.messageType || 'text',
+          attachmentUrl: data.attachmentUrl || null,
+          senderName: data.senderName,
+        };
+        
+        console.log(`[InboxPage] Buffered message for conv ${data.conversationId}:`, newMsg.id);
+        return {
+          ...prev,
+          [data.conversationId]: [...convMessages, newMsg],
+        };
+      });
     }
-  }, [fetchConversations, fetchMessages, selectedConversation, showNotification, t]);
+  }, [selectedConversation, showNotification, t]);
 
   const handleUnreadChange = useCallback(() => {
     fetchUnreadCount();
@@ -282,7 +405,32 @@ const InboxPage = () => {
 
   const handleSelectConversation = useCallback(async (conv) => {
     setSelectedConversation(conv);
-    await fetchMessages(conv);
+    await fetchMessages();
+
+    // After fetching, merge any pending messages from SSE buffer
+    const bufferedMessages = pendingMessages[conv.id] || [];
+    if (bufferedMessages.length > 0) {
+      console.log(`[InboxPage] Merging ${bufferedMessages.length} buffered messages for conv ${conv.id}`);
+      setMessages(prev => {
+        const merged = [...prev];
+        for (const bufferedMsg of bufferedMessages) {
+          // Check for duplicates
+          const isDuplicate = merged.some(m => 
+            m.createdAt === bufferedMsg.createdAt || 
+            (m.content === bufferedMsg.content && Math.abs(new Date(m.createdAt) - new Date(bufferedMsg.createdAt)) < 5000)
+          );
+          if (!isDuplicate) {
+            merged.push({ ...bufferedMsg, isRead: true });
+          }
+        }
+        return merged;
+      });
+      // Clear buffered messages
+      setPendingMessages(prev => {
+        const { [conv.id]: _, ...rest } = prev;
+        return rest;
+      });
+    }
 
     if (conv.unreadCount > 0) {
       try {
@@ -299,7 +447,7 @@ const InboxPage = () => {
         console.error('Failed to mark as read:', err);
       }
     }
-  }, [fetchMessages, fetchUnreadCount]);
+  }, [selectedConversation, fetchUnreadCount, pendingMessages]);
 
   useEffect(() => {
     fetchConversations(true);
@@ -307,6 +455,13 @@ const InboxPage = () => {
     fetchSessionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.channel, filters.search]);
+
+  // Fetch messages when selected conversation changes (e.g., re-opening)
+  useEffect(() => {
+    if (selectedConversation) {
+      fetchMessages();
+    }
+  }, [selectedConversation?.id, selectedConversation?.type]);
 
   const handleBack = () => {
     setSelectedConversation(null);

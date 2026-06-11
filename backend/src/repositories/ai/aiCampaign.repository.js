@@ -58,15 +58,20 @@ class AiCampaignRepository {
   }
 
   async getZaloGroupsByAccountId(accountId) {
-    const result = await db.query(
-      `SELECT id, group_id, group_name, member_count
-       FROM zalo_groups
-       WHERE id_zalo_setting = $1
-       ORDER BY member_count DESC
-       LIMIT 10`,
-      [accountId]
-    );
-    return result.rows;
+    try {
+      const result = await db.query(
+        `SELECT id, group_id, group_name, member_count
+         FROM zalo_groups
+         WHERE id_zalo_setting = $1
+         ORDER BY member_count DESC
+         LIMIT 10`,
+        [accountId]
+      );
+      return result.rows;
+    } catch (error) {
+      if (error?.code === '42P01') return []; // Table doesn't exist
+      throw error;
+    }
   }
 
   async getLandingPages(userId) {

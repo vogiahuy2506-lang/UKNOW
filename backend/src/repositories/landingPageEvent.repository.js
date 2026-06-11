@@ -9,26 +9,54 @@ class LandingPageEventRepository {
    * @returns {Promise<void>}
    */
   async insert(row) {
-    await db.query(
-      `INSERT INTO landing_page_events (
-         event_type, landing_page_slug, target_url,
-         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-         visitor_id, referrer, user_agent, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)`,
-      [
-        String(row.eventType || '').trim(),
-        row.landingPageSlug != null ? String(row.landingPageSlug).trim().toLowerCase() : null,
-        row.targetUrl != null ? String(row.targetUrl).trim() : null,
-        row.utmSource != null ? String(row.utmSource).trim() : null,
-        row.utmMedium != null ? String(row.utmMedium).trim() : null,
-        row.utmCampaign != null ? String(row.utmCampaign).trim() : null,
-        row.utmContent != null ? String(row.utmContent).trim() : null,
-        row.utmTerm != null ? String(row.utmTerm).trim() : null,
-        row.visitorId != null ? String(row.visitorId).trim().slice(0, 64) : null,
-        row.referrer != null ? String(row.referrer).trim().slice(0, 2000) : null,
-        row.userAgent != null ? String(row.userAgent).trim().slice(0, 2000) : null,
-      ]
-    );
+    const idUser = row.idUser != null ? row.idUser : null;
+
+    // If idUser is provided, include it; otherwise omit it (column should be nullable)
+    if (idUser != null) {
+      await db.query(
+        `INSERT INTO landing_page_events (
+           event_type, landing_page_slug, target_url,
+           utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+           visitor_id, referrer, user_agent, id_user, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)`,
+        [
+          String(row.eventType || '').trim(),
+          row.landingPageSlug != null ? String(row.landingPageSlug).trim().toLowerCase() : null,
+          row.targetUrl != null ? String(row.targetUrl).trim() : null,
+          row.utmSource != null ? String(row.utmSource).trim() : null,
+          row.utmMedium != null ? String(row.utmMedium).trim() : null,
+          row.utmCampaign != null ? String(row.utmCampaign).trim() : null,
+          row.utmContent != null ? String(row.utmContent).trim() : null,
+          row.utmTerm != null ? String(row.utmTerm).trim() : null,
+          row.visitorId != null ? String(row.visitorId).trim().slice(0, 64) : null,
+          row.referrer != null ? String(row.referrer).trim().slice(0, 2000) : null,
+          row.userAgent != null ? String(row.userAgent).trim().slice(0, 2000) : null,
+          idUser,
+        ]
+      );
+    } else {
+      // Insert without id_user for anonymous visitors
+      await db.query(
+        `INSERT INTO landing_page_events (
+           event_type, landing_page_slug, target_url,
+           utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+           visitor_id, referrer, user_agent, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)`,
+        [
+          String(row.eventType || '').trim(),
+          row.landingPageSlug != null ? String(row.landingPageSlug).trim().toLowerCase() : null,
+          row.targetUrl != null ? String(row.targetUrl).trim() : null,
+          row.utmSource != null ? String(row.utmSource).trim() : null,
+          row.utmMedium != null ? String(row.utmMedium).trim() : null,
+          row.utmCampaign != null ? String(row.utmCampaign).trim() : null,
+          row.utmContent != null ? String(row.utmContent).trim() : null,
+          row.utmTerm != null ? String(row.utmTerm).trim() : null,
+          row.visitorId != null ? String(row.visitorId).trim().slice(0, 64) : null,
+          row.referrer != null ? String(row.referrer).trim().slice(0, 2000) : null,
+          row.userAgent != null ? String(row.userAgent).trim().slice(0, 2000) : null,
+        ]
+      );
+    }
   }
 
   /**

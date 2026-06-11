@@ -117,7 +117,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
-      params
+      params,
+      [{ channel: 'zalo', count: 0 }]
     ),
     safeQuery(
       `SELECT
@@ -181,7 +182,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT COUNT(*)::int AS count
        FROM campaign_run_recipient_steps crrs
-       JOIN campaign_runs cr ON cr.id = crrs.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = crrs.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE c.id_user = $1
          AND crrs.meta ? 'retryCount'
@@ -193,7 +194,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     safeQuery(
       `SELECT COUNT(*)::int AS count
        FROM campaign_run_recipient_steps crrs
-       JOIN campaign_runs cr ON cr.id = crrs.id_campaign_run
+       JOIN campaign_runs cr ON cr.id = crrs.id_run
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE c.id_user = $2
          AND crrs.meta ? 'zaloAbandonReason'
@@ -250,7 +251,8 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
-      params48h
+      params48h,
+      [{ channel: 'zalo', count: 0 }]
     ),
     safeQuery(
       `SELECT

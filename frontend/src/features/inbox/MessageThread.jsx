@@ -564,7 +564,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
             </div>
           );
         })}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} data-messages-end />
       </div>
     </div>
   );

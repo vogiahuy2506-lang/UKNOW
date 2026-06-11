@@ -114,6 +114,8 @@ class ChatRouterService {
     const adapter = ADAPTERS[channel];
     if (!adapter) throw new Error(`Unknown channel: ${channel}`);
 
+    console.log(`[ChatRouter] routeMessageWithSettings: channel=${channel}, userId=${userId}, conversationId=${conversationId}, message="${String(message).substring(0, 50)}"`);
+
     // Skip if chatbot is disabled
     if (!chatbotSettings?.is_enabled) {
       return { type: 'disabled', content: null };
@@ -127,6 +129,7 @@ class ChatRouterService {
 
     // Get conversation history for context
     const history = await this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES);
+    console.log(`[ChatRouter] Got ${history.length} history messages for conversationId=${conversationId}`);
 
     // Build RAG context from KB
     const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
@@ -236,12 +239,17 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
   }
 
   async _callAI({ systemPrompt, history, message, model, temperature, maxTokens }) {
+    // Map DB role to Gemini role:
+    // - 'visitor' (user message) → 'user'
+    // - 'bot' or 'agent' (AI/bot response) → 'model'
     const chatHistory = history.map(m => ({
-      role: m.role === 'bot' ? 'model' : 'user',
+      role: (m.role === 'bot' || m.role === 'agent') ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
 
     chatHistory.push({ role: 'user', parts: [{ text: message }] });
+
+    console.log(`[ChatRouter] _callAI: sending ${chatHistory.length} messages (${chatHistory.filter(m => m.role === 'model').length} from model, ${chatHistory.filter(m => m.role === 'user').length} from user)`);
 
     const modelName = process.env.GEMINI_MODEL || model;
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
@@ -287,6 +295,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 
   async _getZaloPersonalHistory(conversationId, limit = 50) {
     try {
+      console.log(`[ChatRouter] _getZaloPersonalHistory: convId=${conversationId}, limit=${limit}`);
       const db = (await import('../../config/database.js')).default;
       const { rows } = await db.query(
         `SELECT id, role, content, metadata, created_at as createdAt
@@ -297,12 +306,18 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         [conversationId, limit]
       );
       
+      console.log(`[ChatRouter] _getZaloPersonalHistory: found ${rows.length} messages`);
+      if (rows.length > 0) {
+        console.log(`[ChatRouter] First message: role=${rows[0].role}, content="${String(rows[0].content).substring(0, 50)}"`);
+        console.log(`[ChatRouter] Last message: role=${rows[rows.length-1].role}, content="${String(rows[rows.length-1].content).substring(0, 50)}"`);
+      }
+      
       return rows.map(row => ({
         ...row,
         metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : (row.metadata || {}),
       }));
     } catch (e) {
-      console.warn('[ChatRouter] _getZaloPersonalHistory error:', e.message);
+      console.warn('[ChatRouter] _getZaloPersonalHistory error:', e.message, e.stack);
       return [];
     }
   }
@@ -312,7 +327,13 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     try {
       if (channel === 'web') {
         await chatbotRepository.addWebChatMessage(conversationId, userId, { role, content });
+      } else if (channel === 'zalo_personal') {
+        // For Zalo Personal, messages are already logged by zaloInbox.service
+        // and zaloPersonalAdapter.sendReply() -> insertAgentMessage()
+        // So we skip logging here to avoid duplicate entries
+        console.log(`[ChatRouter] Skipping _logMessage for zalo_personal (already logged by zaloInbox)`);
       } else {
+        // For other channels (zalo_oa, facebook), use channel_messages
         const channelId = await chatbotRepository.getChannelIdFromConversation(conversationId);
         if (channelId) {
           await chatbotRepository.addChannelMessage(conversationId, userId, channelId, {

@@ -195,6 +195,7 @@ class LeadService {
         await landingPageEventRepository.insert({
           eventType: 'submit',
           landingPageSlug,
+          idUser,
           targetUrl: null,
           utmSource,
           utmMedium,

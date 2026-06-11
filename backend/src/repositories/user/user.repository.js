@@ -78,7 +78,7 @@ export async function findProfileUsageCounts(userId) {
        COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
          AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS zalo_sent_month
      FROM customer_journey cj
-     JOIN campaigns c ON cj.campaign_id = c.id
+     JOIN campaigns c ON c.id = cj.campaign_id
      WHERE c.id_user = $1`,
     [userId]
   );

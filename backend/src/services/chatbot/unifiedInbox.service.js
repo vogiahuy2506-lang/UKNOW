@@ -18,8 +18,6 @@ class UnifiedInboxService {
       unifiedInboxRepository.getUnreadCountByChannel(userId),
     ]);
 
-    // Repository already transforms snake_case to camelCase,
-    // so we use the camelCase property names here
     const formattedConversations = conversations.map(conv => ({
       id: conv.id,
       type: conv.type,
@@ -28,6 +26,10 @@ class UnifiedInboxService {
       externalId: conv.externalId,
       visitorName: conv.visitorName,
       visitorInfo: conv.visitorInfo,
+      // Add group info for zalo_personal
+      isGroup: conv.isGroup || false,
+      groupId: conv.groupId || null,
+      groupName: conv.groupName || null,
       lastMessage: conv.lastMessage,
       unreadCount: parseInt(conv.unreadCount || 0),
       startedAt: conv.startedAt,
@@ -66,6 +68,17 @@ class UnifiedInboxService {
       throw new Error('Conversation not found');
     }
 
+    // Parse visitor_info for zalo_personal
+    let isGroup = false;
+    let groupId = null;
+    let groupName = null;
+    
+    if (conversationType === 'zalo_personal' && conversation._parsedVisitorInfo) {
+      isGroup = conversation._isGroup || false;
+      groupId = isGroup ? conversation._parsedVisitorInfo.group_id : null;
+      groupName = isGroup ? conversation._parsedVisitorInfo.group_name : null;
+    }
+
     return {
       id: conversation.id,
       type: conversationType,
@@ -73,7 +86,10 @@ class UnifiedInboxService {
       channelDisplayName: conversation.channel_display_name,
       externalId: conversation.external_id,
       visitorName: conversation.visitor_name,
-      visitorInfo: conversation.visitor_info,
+      visitorInfo: conversation._parsedVisitorInfo || conversation.visitor_info,
+      isGroup,
+      groupId,
+      groupName,
       startedAt: conversation.started_at,
       lastMessageAt: conversation.last_message_at,
       status: conversation.status,
@@ -101,15 +117,32 @@ class UnifiedInboxService {
       options
     );
 
-    return messages.map(msg => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      attachments: msg.attachments || [],
-      metadata: msg.metadata || null,
-      createdAt: msg.createdAt,
-      isRead: msg.isRead || false,
-    }));
+    return messages.map(msg => {
+      // Parse metadata to extract sender info
+      const metadata = msg.metadata || {};
+      const senderName = metadata.sender_name || null;
+      const senderId = metadata.sender_id || null;
+      const isGroupMsg = metadata.is_group === true;
+      const groupId = isGroupMsg ? metadata.group_id : null;
+      const groupName = isGroupMsg ? metadata.group_name : null;
+
+      return {
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        senderName,
+        senderId,
+        attachments: msg.attachments || [],
+        metadata: {
+          ...metadata,
+          isGroup: isGroupMsg,
+          groupId,
+          groupName,
+        },
+        createdAt: msg.createdAt,
+        isRead: msg.isRead || false,
+      };
+    });
   }
 
   /**
