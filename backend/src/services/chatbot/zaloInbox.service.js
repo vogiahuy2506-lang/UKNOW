@@ -19,6 +19,7 @@ import chatRouterService from './chatRouter.service.js';
 import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import sseService from '../sse.service.js';
+import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import {
   drainPendingAccounts,
   markAccountRegistered,
@@ -295,7 +296,6 @@ class ZaloPersonalInboxService {
       const messageId = rawMessage?.msgId || rawMessage?.messageId || rawMessage?.id;
       const senderId = rawMessage?.fromUid || rawMessage?.senderId || rawMessage?.uid;
       let content = rawMessage?.content || rawMessage?.message || rawMessage?.msg || '';
-      // Ensure content is always a string (could be object like {text, type, url})
       if (typeof content !== 'string') {
         content = content?.text || content?.message || JSON.stringify(content) || '';
       }
@@ -303,276 +303,262 @@ class ZaloPersonalInboxService {
 
       console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
 
-      // Check if this is a group message by checking raw flags
-      // Zalo sends group messages with additional context in rawMessage
+      const zaloThreadType = rawMessage?.type;
       const rawData = rawMessage?._raw || rawMessage;
-      const clientGroupId = rawData?.clientGroupId || rawData?.gridId || null;
-      const idTo = rawData?.idTo || '';
-      const threadType = rawData?.threadType;
-      
-      // Strong indicators of group message
-      const hasGroupContext = Boolean(
-        clientGroupId || 
-        rawData?.isGroup === true ||
-        rawData?.isPublicGroup === true ||
-        rawData?.isChatRoom === true ||
-        rawData?.threadType === 1 ||    // 1 = group in zca-js
-        rawData?.threadType === 2 ||    // 2 = community in zca-js
-        idTo?.startsWith('g_') ||
-        idTo?.startsWith('group_')
-      );
-      
-      // If threadType is explicitly set and indicates group, log it
-      if (threadType !== undefined) {
-        console.log(`[ZaloInbox] threadType=${threadType} detected (0=personal, 1=group, 2=community), hasGroupContext=${hasGroupContext}`);
-      }
+      const isGroup = zaloThreadType === 1 || zaloThreadType === 2;
 
-      // Detect message source: personal chat vs group
-      // Use the isGroup from msgData if available, otherwise fallback to raw flags
-      const groupId = rawMessage?.groupId || rawMessage?.group_id || clientGroupId || (idTo?.startsWith('g_') || idTo?.startsWith('group_') ? idTo : null);
-      const groupName = rawMessage?.groupName || rawMessage?.group_name || null;
-      const senderName = rawMessage?.senderName || rawMessage?.sender_name || null;
+      console.log(`[ZaloInbox] DEBUG: isGroup=${isGroup}, zaloThreadType=${zaloThreadType}`);
+      console.log(`[ZaloInbox] DEBUG: senderName="${rawMessage?.senderName}", dName="${rawMessage?.dName}"`);
 
-      // A message is only treated as coming from a group if we also have a groupId to
-      // anchor it to. Otherwise (e.g. type/threadType flags set without group context)
-      // it's treated as personal, to avoid producing "(Nhóm null)" display names and
-      // inconsistent externalId/visitorInfo (externalId already required groupId below).
-      const rawIsGroup = rawMessage?.isGroup === true || rawMessage?.is_group === true || hasGroupContext;
-      const isGroup = rawIsGroup && Boolean(groupId);
-
-      console.log(`[ZaloInbox] Source detection: isGroup=${isGroup}, groupId=${groupId}, rawMessage.isGroup=${rawMessage?.isGroup}, rawMessage.is_group=${rawMessage?.is_group}, hasGroupContext=${hasGroupContext}`);
-
-      // Check if this sender has ever been part of a group conversation
-      // If yes, skip AI routing (they might be a group member texting personally)
-      const existingGroupConv = await zaloPersonalRepository.findGroupConversationBySender(
-        zaloSettingId,
-        String(senderId)
-      );
-      if (existingGroupConv) {
-        const visitorInfo = existingGroupConv.visitor_info ? JSON.parse(existingGroupConv.visitor_info) : {};
-        const prevGroupName = visitorInfo?.group_name || existingGroupConv.visitor_name || 'group';
-        console.log(`[ZaloInbox] Skipping AI routing: sender ${senderId} was previously in ${prevGroupName}`);
-        return;
-      }
-      
-      // Additional check: look at conversation history to see if this externalId was ever marked as group
-      const existingConv = await zaloPersonalRepository.findConversation(zaloSettingId, String(senderId));
-      if (existingConv?.visitor_info) {
-        try {
-          const convInfo = typeof existingConv.visitor_info === 'string' 
-            ? JSON.parse(existingConv.visitor_info) 
-            : existingConv.visitor_info;
-          if (convInfo?.is_group === true) {
-            const prevGroupName = convInfo?.group_name || 'group';
-            console.log(`[ZaloInbox] Skipping AI routing: sender ${senderId} was previously in group ${prevGroupName}`);
-            return;
-          }
-        } catch (e) {
-          // Ignore parse errors
+      // Extract groupId for group messages
+      let groupId = null;
+      if (isGroup) {
+        groupId = rawData?.clientGroupId || rawData?.threadId || rawData?.idTo || null;
+        if (groupId && !String(groupId).startsWith('g_') && !String(groupId).startsWith('group_')) {
+          groupId = `group_${groupId}`;
         }
       }
 
-      // Build message type
-      const msgType = rawMessage?.msgType || rawMessage?.type || 1;
-      const messageType = this.getMessageType(msgType);
+      // Lấy tên sender từ raw message
+      const senderName = rawMessage?.senderName || rawMessage?.dName || null;
+      const groupName = rawMessage?.groupName || null;
 
-      // Validate - chỉ bỏ qua nếu không có content text
+      console.log(`[ZaloInbox] DEBUG: resolved senderName="${senderName}", groupName="${groupName}", groupId="${groupId}"`);
+
+      // Validate
       if (!messageId) {
         console.warn('[ZaloInbox] Bỏ qua tin nhắn không hợp lệ (no msgId)');
         return;
       }
 
-      // Bỏ qua tin nhắn tự gửi
       if (rawMessage.isSelf === true) {
         console.log(`[ZaloInbox] Bỏ qua tin nhắn tự gửi`);
         return;
       }
 
-      // Kiểm tra trùng lặp
-      if (await this.isMessageProcessed(messageId, zaloSettingId)) {
-        return;
+      // TEMP: Disable duplicate check to test
+      // if (await this.isMessageProcessed(messageId, zaloSettingId)) {
+      //   console.log(`[ZaloInbox] Tin nhắn đã xử lý trước đó, bỏ qua: ${messageId}`);
+      //   return;
+      // }
+      console.log(`[ZaloInbox] DEBUG: Skipping isMessageProcessed check (temp disable)`);
+
+      // Determine externalId
+      // FIX: groupId already has 'group_' prefix, don't add again
+      const externalId = isGroup 
+        ? groupId  // groupId is already like "group_7445330951687908000"
+        : String(senderId);
+      console.log(`[ZaloInbox] DEBUG: externalId="${externalId}"`);
+
+      // Check existing conversation
+      let existingConv = null;
+      try {
+        console.log(`[ZaloInbox] DEBUG: Finding conversation for ${externalId}...`);
+        existingConv = await zaloPersonalRepository.findConversation(zaloSettingId, externalId);
+        console.log(`[ZaloInbox] DEBUG: existingConv=${existingConv ? 'found' : 'null'}`);
+      } catch (e) {
+        console.error(`[ZaloInbox] findConversation error: ${e.message}`);
       }
 
-      // Xác định externalId dựa trên nguồn:
-      // - Group: dùng senderId để phân biệt từng người trong nhóm
-      // - Personal: dùng senderId
-      // Format group message: "group_{groupId}_{senderId}" để tránh trùng lặp
-      const externalId = isGroup
-        ? `group_${groupId}_${senderId}`
-        : String(senderId);
-
-      // Lấy tên nhóm nếu là group message và không có sẵn
-      let resolvedGroupName = groupName;
-      if (isGroup && !groupName && groupId) {
-        resolvedGroupName = await this.getGroupName(accountId, groupId);
-        if (resolvedGroupName) {
-          console.log(`[ZaloInbox] Lấy được tên nhóm ${groupId}: ${resolvedGroupName}`);
+      // Skip AI for group messages
+      let skipAiRouting = isGroup;
+      
+      // Additional check for personal messages that were previously in a group
+      if (!isGroup && existingConv?.visitor_info) {
+        try {
+          const convInfo = typeof existingConv.visitor_info === 'string' 
+            ? JSON.parse(existingConv.visitor_info) 
+            : existingConv.visitor_info;
+          if (convInfo?.is_group === true) {
+            console.log(`[ZaloInbox] Personal message from sender who was in a group - will still route to AI`);
+            skipAiRouting = false;
+          }
+        } catch (e) {
+          console.log(`[ZaloInbox] visitor_info parse error: ${e.message}`);
         }
       }
 
-      // Lấy tên sender từ API nếu không có sẵn
+      console.log(`[ZaloInbox] DEBUG: skipAiRouting=${skipAiRouting}, will route to AI=${!skipAiRouting}`);
+
+      // Message type
+      const msgType = rawMessage?.msgType || rawMessage?.type || 1;
+      const messageType = this.getMessageType(msgType);
+
+      // Resolve sender name via API if not available
       let resolvedSenderName = senderName;
       if (!senderName && senderId) {
-        const profile = await this.getUserProfile(accountId, senderId);
-        if (profile) {
-          resolvedSenderName = profile.displayName || profile.zaloName;
-          console.log(`[ZaloInbox] Lấy được tên sender ${senderId}: ${resolvedSenderName}`);
+        console.log(`[ZaloInbox] Calling getUserProfile for ${senderId}...`);
+        try {
+          const profile = await this.getUserProfile(accountId, senderId);
+          if (profile) {
+            resolvedSenderName = profile.displayName || profile.zaloName;
+            console.log(`[ZaloInbox] Lấy được tên sender ${senderId}: ${resolvedSenderName}`);
+          }
+        } catch (e) {
+          console.log(`[ZaloInbox] getUserProfile error: ${e.message}`);
         }
       }
 
-      // Xác định tên hiển thị cho conversation
-      // - Group: hiển thị tên người gửi + tên nhóm
-      // - Personal: hiển thị tên người gửi
+      // Resolve group name via API if not available
+      let resolvedGroupName = groupName;
+      if (isGroup && !groupName && groupId) {
+        console.log(`[ZaloInbox] Calling getGroupName for ${groupId}...`);
+        try {
+          resolvedGroupName = await this.getGroupName(accountId, groupId);
+          if (resolvedGroupName) {
+            console.log(`[ZaloInbox] Lấy được tên nhóm ${groupId}: ${resolvedGroupName}`);
+          }
+        } catch (e) {
+          console.log(`[ZaloInbox] getGroupName error: ${e.message}`);
+        }
+      }
+
+      // Display name:
+      // - For groups: use group name (resolved or from message)
+      // - For personal: use sender name (resolved or from message)
+      // IMPORTANT: Don't use "Nhóm group_XXX" format - use "Nhóm" + short ID
       let displayName;
       if (isGroup) {
-        const senderDisplay = resolvedSenderName || senderName || `User ${senderId}`;
-        const groupDisplay = resolvedGroupName || groupName || `Nhóm ${groupId}`;
-        displayName = `${senderDisplay} (${groupDisplay})`;
+        if (resolvedGroupName || groupName) {
+          displayName = resolvedGroupName || groupName;
+        } else {
+          // Format: "Nhóm" + last 8 chars of group ID
+          const shortId = (groupId || '').replace('group_', '').slice(-8);
+          displayName = `Nhóm ${shortId}`;
+        }
       } else {
         displayName = resolvedSenderName || senderName || `User ${senderId}`;
       }
+      console.log(`[ZaloInbox] DEBUG: final displayName="${displayName}"`);
 
-      // Build visitor info với đầy đủ metadata
+      // Build visitor info
       const visitorInfo = {
         source: isGroup ? 'zalo_group' : 'zalo_personal',
         message_id: messageId,
         account_id: accountId,
         is_group: isGroup,
-        // Group info
         group_id: isGroup ? groupId : null,
         group_name: isGroup ? (resolvedGroupName || groupName) : null,
-        // Sender info
         sender_id: senderId,
         sender_name: resolvedSenderName || senderName,
         sender_avatar: rawMessage?.senderAvatar || null,
-        // Message info
         message_type: messageType,
         attachment_url: rawMessage?.attachmentUrl || null,
       };
 
-      // Tạo hoặc lấy conversation
+      // Create or get conversation
       const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, displayName, visitorInfo);
 
-      // Broadcast SSE event to frontend for real-time update
-      // Note: Message đã được lưu bởi zaloPersonal.adapter.js saveMessageToDatabase()
+      // Broadcast SSE
       sseService.broadcast(String(userId), 'inbox:new_message', {
         conversationId: conversation.id,
         channel: 'zalo_personal',
+        type: 'zalo_personal',
         message: content,
+        messageType: messageType,
+        attachments: rawMessage?.attachments || [],
+        attachmentUrl: rawMessage?.attachmentUrl || null,
         senderId: senderId,
         senderName: resolvedSenderName || senderName,
+        senderAvatar: rawMessage?.senderAvatar || null,
+        isGroup: isGroup,
+        groupId: isGroup ? groupId : null,
+        groupName: isGroup ? (resolvedGroupName || groupName) : null,
+        visitorName: displayName,
         timestamp,
       });
 
-      const sourceType = isGroup ? `nhóm ${groupName || groupId}` : `cá nhân ${senderId}`;
-      console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${sourceType}: ${String(content || '').substring(0, 50)}...`);
+      console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${isGroup ? 'nhóm' : 'cá nhân'}: ${String(content || '').substring(0, 50)}...`);
 
-      // Skip AI routing for group messages - only reply personal chats
-      // Use rawIsGroup (raw type/flag indicators) as the safety net here, even if we
-      // couldn't resolve a groupId to anchor the conversation to (isGroup === false in that case)
-      if (rawIsGroup) {
-        console.log(`[ZaloInbox] Skipping AI routing for group message (isGroup=${isGroup}, rawIsGroup=${rawIsGroup}, hasGroupContext=${hasGroupContext}, groupId: ${groupId || clientGroupId})`);
+      // Skip AI for group messages
+      if (skipAiRouting) {
+        console.log(`[ZaloInbox] Skipping AI routing for group message`);
         return;
       }
 
-      // Build smart content for AI - handle non-text messages intelligently
+      // Build AI content
       let aiContent = content?.trim() || '';
-
-      // Handle sticker messages - convert to text description for AI
       if (messageType === 'sticker') {
         const stickerData = rawMessage.stickerInfo || rawMessage.sticker || {};
-        const stickerId = stickerData.sticker_id || stickerData.id || 'unknown';
-        const stickerPkgId = stickerData.package_id || stickerData.pkgId || '';
-        aiContent = `[Sticker] Người dùng gửi một sticker (package: ${stickerPkgId}, id: ${stickerId})`;
+        aiContent = `[Sticker] Người dùng gửi một sticker`;
       }
-
-      // Handle image messages
       if (messageType === 'image') {
         aiContent = '[Hình ảnh] Người dùng gửi một hình ảnh';
       }
 
-      // Skip text messages without content, but allow sticker/image to proceed
       if (!aiContent && messageType !== 'sticker' && messageType !== 'image') {
         console.log(`[ZaloInbox] Skipping text message without content`);
         return;
       }
 
-      // Unified chatbot settings (shared across all channels)
-      // Use 'zalo_personal' channel to get shared AI config saved from ChatbotSettings
+      // Unified chatbot settings
       const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
-
-      // Check per-account enable/disable
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
 
-      // If chatbot is not enabled for this account, skip
-      if (!accountSettings?.is_enabled) {
-        console.log(`[ZaloInbox] Chatbot is disabled for account ${zaloSettingId} - skipping AI routing`);
+      console.log(`[ZaloInbox] DEBUG: chatbotSettings=${JSON.stringify(chatbotSettings)}`);
+      console.log(`[ZaloInbox] DEBUG: accountSettings=${JSON.stringify(accountSettings)}`);
+
+      if (!chatbotSettings?.is_enabled) {
+        console.log(`[ZaloInbox] AI chatbot disabled for user ${userId}`);
+        return;
+      }
+      if (accountSettings?.is_enabled === false) {
+        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId}`);
         return;
       }
 
-      // Override is_enabled with account-specific setting
-      const finalSettings = {
-        ...chatbotSettings,
-        is_enabled: accountSettings.is_enabled,
-      };
-
-      console.log(`[ZaloInbox] Final chatbotSettings for userId=${userId}, zaloSettingId=${zaloSettingId}:`, JSON.stringify(finalSettings));
-
-      // Route đến AI chatbot với cấu hình riêng của tài khoản
-      console.log(`[ZaloInbox] ✅ is_enabled=true, calling chatRouterService... content="${String(content).substring(0, 100)}"`);
+      // Get AI response using chatRouterService
+      console.log(`[ZaloInbox] AI routing message from ${senderId}...`);
+      
+      // Get conversation history using unifiedInboxRepository
+      let conversationHistory = [];
       try {
-        console.log(`[ZaloInbox] >>> Before chatRouterService call`);
-        
-        // Determine if this is truly a group message
-        // Use hasGroupContext as the authoritative check for blocking group AI replies
-        const isGroupMessage = isGroup || hasGroupContext;
-        const effectiveGroupId = groupId || clientGroupId || null;
-        
-        // If it's a group message, do NOT route to AI at all
-        if (isGroupMessage) {
-          console.log(`[ZaloInbox] ❌ Blocking AI route: detected as group message (isGroup=${isGroup}, hasGroupContext=${hasGroupContext}, groupId=${effectiveGroupId})`);
-          return;
-        }
-        
-        const result = await chatRouterService.routeMessageWithSettings({
-          channel: 'zalo_personal',
-          userId,
-          message: aiContent,
-          conversationId: conversation.id,
-          chatbotSettings: finalSettings,
-          visitorInfo: {
-            source: 'zalo_personal',
-            senderId,
-            accountId: zaloSettingId,
-          },
-        });
-        console.log(`[ZaloInbox] <<< After chatRouterService call, result=`, JSON.stringify(result));
-
-        // Gửi reply nếu AI có response
-        if (result.type === 'text' && result.content) {
-          const sendResult = await zaloPersonalAdapter.sendReply({
-            externalId: String(senderId),
-            message: result.content,
-            userId,
-            accountId: zaloSettingId,
-            conversationInfo: {
-              is_group: false, // Explicitly false - we already filtered out group messages
-              group_id: null,
-            },
-          });
-
-          if (sendResult.success) {
-            // Message đã được lưu bởi zaloPersonalAdapter.sendReply()
-            console.log(`[ZaloInbox] Đã gửi reply cho ${senderId}`);
-          } else {
-            console.warn(`[ZaloInbox] Gửi reply thất bại: ${sendResult.error}`);
-          }
-        }
-      } catch (aiError) {
-        console.error('[ZaloInbox] Lỗi khi route đến AI:', aiError.message);
+        const historyResult = await unifiedInboxRepository.getMessages(conversation.id, 'zalo_personal', { limit: 10 });
+        conversationHistory = historyResult || [];
+        console.log(`[ZaloInbox] Got ${conversationHistory.length} history messages`);
+      } catch (e) {
+        console.log(`[ZaloInbox] getMessages error: ${e.message}`);
       }
-    } catch (error) {
-      console.error('[ZaloInbox] Lỗi xử lý tin nhắn:', error.stack || error.message);
+      
+      // Route to AI using chatRouterService
+      const result = await chatRouterService.routeMessageWithSettings({
+        channel: 'zalo_personal',
+        userId,
+        message: aiContent,
+        conversationId: conversation.id,
+        chatbotSettings: chatbotSettings,
+        visitorInfo: {
+          source: 'zalo_personal',
+          senderId,
+          senderName: resolvedSenderName || senderName,
+        },
+      });
+
+      if (result?.content) {
+        console.log(`[ZaloInbox] AI reply: ${String(result.content).substring(0, 100)}...`);
+        await zaloPersonalAdapter.sendReply({
+          externalId: String(senderId),
+          message: result.content,
+          userId,
+          accountId: zaloSettingId,
+        });
+        await unifiedInboxRepository.sendMessage(conversation.id, userId, 'zalo_personal', zaloSettingId, {
+          role: 'agent',
+          content: result.content,
+        });
+        sseService.broadcast(String(userId), 'inbox:new_message', {
+          conversationId: conversation.id,
+          channel: 'zalo_personal',
+          message: result.content,
+          messageType: 'text',
+          role: 'agent',
+          senderName: 'AI',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+    } catch (err) {
+      console.error(`[ZaloInbox] ERROR in processIncomingMessage:`, err.stack || err.message);
     }
   }
 
@@ -580,11 +566,30 @@ class ZaloPersonalInboxService {
    * Get or create conversation for Zalo Personal
    */
   async getOrCreateConversation(zaloSettingId, userId, externalId, visitorName, visitorInfo) {
+    const now = new Date().toISOString();
+    
     // Try to find existing conversation
     const conv = await zaloInboxRepository.findConversation(zaloSettingId, externalId);
 
     if (conv) {
-      const newName = (visitorName && conv.visitor_name !== visitorName) ? visitorName : null;
+      // For groups: update visitor_name if we have a resolved group name (better than "Nhóm X")
+      // For personal: always update visitor_name if changed
+      const isExistingGroup = conv.visitor_info?.is_group === true ||
+        (typeof conv.visitor_info === 'string' && conv.visitor_info.includes('"is_group":true'));
+
+      // For groups: update name if we have a better (resolved) name
+      // For personal: update name if changed
+      let newName = null;
+      if (isExistingGroup) {
+        // For groups: update if current name is just "Nhóm X" (not real name) and we have resolved name
+        if (visitorName && conv.visitor_name !== visitorName && conv.visitor_name?.startsWith('Nhóm ')) {
+          newName = visitorName;
+          console.log(`[ZaloInbox] Updating group conversation name: ${conv.visitor_name} -> ${visitorName}`);
+        }
+      } else {
+        // For personal: always update if changed
+        newName = (visitorName && conv.visitor_name !== visitorName) ? visitorName : null;
+      }
       let newInfo = null;
 
       // Update visitor_info if provided and different
@@ -604,6 +609,10 @@ class ZaloPersonalInboxService {
         await zaloInboxRepository.updateConversationVisitor(conv.id, newName, newInfo);
         console.log(`[ZaloInbox] Updated conversation ${conv.id} with name: ${visitorName}`);
       }
+
+      // IMPORTANT: Always update last_message_at when receiving new message
+      await zaloInboxRepository.touchConversation(conv.id, now);
+      console.log(`[ZaloInbox] Touched conversation ${conv.id} - last_message_at updated`);
 
       return { ...conv, visitor_name: visitorName || conv.visitor_name };
     }
@@ -636,6 +645,11 @@ class ZaloPersonalInboxService {
           if (groupName) {
             displayName = groupName;
             updatedVisitorInfo.group_name = groupName;
+          } else {
+            // Fallback: use "Nhóm" + short ID
+            const shortId = (groupId || '').replace('group_', '').slice(-8);
+            displayName = `Nhóm ${shortId}`;
+            updatedVisitorInfo.group_name = displayName;
           }
         } else {
           // For personal, use getUserProfile

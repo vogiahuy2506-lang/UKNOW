@@ -205,7 +205,7 @@ export async function findTeamOverview(ownerId) {
        um.monthly_zalo_limit  AS "monthlyZaloLimit",
 
        COUNT(DISTINCT c.id) FILTER (
-         WHERE c.status = 'running'
+         WHERE c.status::text IN ('running', 'active', 'processing')
        )::int                                                        AS "runningCampaigns",
 
        COUNT(DISTINCT c.id) FILTER (

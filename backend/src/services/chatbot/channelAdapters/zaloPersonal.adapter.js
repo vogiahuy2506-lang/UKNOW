@@ -183,46 +183,40 @@ class ZaloPersonalAdapter {
     listener.on('message', async (message) => {
       const stored = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
       if (stored?.handler) {
+        // zca-js has TWO separate message types:
+        // - UserMessage (type=0, ThreadType.User) = personal chat
+        // - GroupMessage (type=1, ThreadType.Group) = group chat
+        // This is the DEFINITIVE source of truth from zca-js SDK
+        const zaloThreadType = message?.type; // 0=User, 1=Group
+        
         // Access raw data from UserMessage/GroupMessage object
         const rawData = message?.data || message;
 
-        // Check for explicit group indicators in raw data
-        const isGroup = Boolean(
-          rawData?.clientGroupId || 
-          rawData?.threadType === 1 ||     // 1 = group in zca-js
-          rawData?.threadType === 2 ||     // 2 = community in zca-js
-          rawData?.idTo?.startsWith('g_') ||
-          rawData?.idTo?.startsWith('group_') ||
-          rawData?.isGroup === true ||
-          rawData?.isPublicGroup === true ||
-          rawData?.isChatRoom === true ||
-          (rawData?.zaloExt && rawData.zaloExt.isGroup === true) ||
-          (rawData?.zaloExt && rawData.zaloExt.threadType === 1) ||
-          rawData?.gridId ||
-          rawData?.groupId
-        );
-        
-        // Extract groupId with explicit indicators only
+        // Use zca-js message.type as the DEFINITIVE group indicator
+        // This is set by zca-js when creating UserMessage vs GroupMessage
+        const isGroup = zaloThreadType === 1 || zaloThreadType === 2; // 1=Group, 2=Community
+
+        // Extract groupId from raw data (only valid when isGroup is true)
         let detectedGroupId = null;
-        if (rawData?.clientGroupId) {
-          detectedGroupId = rawData.clientGroupId;
-        } else if (rawData?.groupId) {
-          detectedGroupId = rawData.groupId;
-        } else if (rawData?.gridId) {
-          detectedGroupId = rawData.gridId;
-        } else if (rawData?.idTo?.startsWith('g_')) {
-          detectedGroupId = rawData.idTo;
-        } else if (rawData?.idTo?.startsWith('group_')) {
-          detectedGroupId = rawData.idTo;
-        } else if (rawData?.zaloExt?.groupId) {
-          detectedGroupId = rawData.zaloExt.groupId;
-        }
-        
         if (isGroup) {
-          console.log(`[ZaloPersonalAdapter] ⚠️ Group message detected via indicators - will skip AI but send SSE`);
+          if (rawData?.idTo?.startsWith('g_')) {
+            detectedGroupId = rawData.idTo;
+          } else if (rawData?.idTo?.startsWith('group_')) {
+            detectedGroupId = rawData.idTo;
+          } else if (rawData?.clientGroupId) {
+            detectedGroupId = rawData.clientGroupId;
+          } else if (rawData?.zaloExt?.groupId) {
+            detectedGroupId = rawData.zaloExt.groupId;
+          } else {
+            detectedGroupId = rawData?.threadId || rawData?.idTo || null;
+          }
         }
-        
-        console.log(`[ZaloPersonalAdapter] Message detection: isGroup=${isGroup}, msgTypeValue=${msgTypeValue}, idTo=${rawData?.idTo}, uidFrom=${rawData?.uidFrom}`);
+
+        if (isGroup) {
+          console.log(`[ZaloPersonalAdapter] ✅ GROUP message: zaloThreadType=${zaloThreadType}, idTo=${rawData?.idTo}, detectedGroupId=${detectedGroupId}`);
+        } else {
+          console.log(`[ZaloPersonalAdapter] ✅ PERSONAL message: zaloThreadType=${zaloThreadType}, uidFrom=${rawData?.uidFrom}`);
+        }
         
         // Check if this is a sticker or special message type
         const rawMsgType = rawData.msgType || rawData.type || 1;
@@ -274,7 +268,7 @@ class ZaloPersonalAdapter {
           groupId: detectedGroupId,
           groupName: rawData.groupName || rawData.groupNameStr || null,
           // Full sender info
-          senderName: rawData.displayName || rawData.alias || rawData.coinsName || null,
+          senderName: rawData.displayName || rawData.dName || rawData.alias || rawData.coinsName || null,
           senderAvatar: rawData.avatarThumb || rawData.avatar || null,
           // Message details
           msgType: typeof rawMsgType === 'string' ? rawMsgType : rawMsgType,
@@ -287,16 +281,18 @@ class ZaloPersonalAdapter {
         };
         
         const contentStr = typeof msgData.content === 'string' ? msgData.content : JSON.stringify(msgData.content || '');
-        console.log(`[ZaloPersonalAdapter] Incoming personal message from ${msgData.fromUid}: ${contentStr.substring(0, 100)} [msgType=${msgType}]`);
+        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} message from ${msgData.fromUid}: ${contentStr.substring(0, 100)} [msgType=${msgType}]`);
         
-        // For stickers or media without meaningful content, optionally skip AI processing
-        // but still save to database for history
+        // Add accountId to msgData for saveMessageToDatabase
+        msgData.zaloSettingId = accountId;
         
         // Save to database for unified inbox
+        console.log(`[ZaloPersonalAdapter] >>> Saving message to DB...`);
         try {
-          await this.saveMessageToDatabase(stored.userId, accountId, msgData);
+          const saveResult = await this.saveMessageToDatabase(stored.userId, accountId, msgData);
+          console.log(`[ZaloPersonalAdapter] >>> Save result:`, saveResult ? `saved with id ${saveResult}` : 'skipped/null');
         } catch (dbErr) {
-          console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
+          console.error(`[ZaloPersonalAdapter] >>> DB save error:`, dbErr.message, dbErr.stack);
         }
         
         // Call custom handler if registered
@@ -351,38 +347,58 @@ class ZaloPersonalAdapter {
    * @param {number} zaloSettingId
    * @param {object} msgData - normalized message data
    */
-  async saveMessageToDatabase(userId, zaloSettingId, msgData) {
+  async saveMessageToDatabase(userId, zaloSettingId, msgData, resolvedGroupName = null) {
     const now = new Date().toISOString();
 
-    // Skip self-messages (sent by own account)
-    if (msgData.isSelf || msgData.fromUid === msgData.uid) {
+    // Skip self-messages (sent by own account) - use isSelf flag from wrapper
+    if (msgData.isSelf === true) {
+      console.log(`[ZaloPersonalAdapter] Skipping self-message`);
       return null;
     }
 
-    // Use the isGroup flag from the normalized msgData, but only treat it as a group
-    // conversation if we also have a groupId to anchor it to. Otherwise (e.g. type/threadType
-    // flags set without a resolvable groupId) fall back to personal, to keep externalId,
-    // displayName, and visitorInfo.is_group consistent and avoid "(Nhóm null)" names.
+    // isGroup is determined by zaloThreadType (message.type from zca-js)
+    // detectedGroupId is the actual group ID from raw data
     const groupId = msgData.groupId || null;
-    const groupName = msgData.groupName || null;
-    const isGroup = msgData.isGroup === true && Boolean(groupId);
+    const isGroup = msgData.isGroup === true;
+
+    // For group messages, resolve group name if not provided
+    let groupName = msgData.groupName || null;
+    if (isGroup && !groupName && groupId) {
+      try {
+        // Get session to call API for group name
+        const session = await this.getSessionByAccountId(msgData.zaloSettingId);
+        if (session?.api) {
+          const info = await session.api.getGroupInfo(groupId);
+          if (info?.name) {
+            groupName = info.name;
+            console.log(`[ZaloPersonalAdapter] Resolved group name: ${groupId} -> ${groupName}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[ZaloPersonalAdapter] Failed to resolve group name for ${groupId}:`, err.message);
+      }
+    }
+
+    // Use resolvedGroupName if provided (from API lookup in processIncomingMessage)
+    // Otherwise fall back to raw data group name
+    const finalGroupName = resolvedGroupName || groupName;
 
     // Determine externalId based on source:
-    // - Group: use senderId to distinguish each person in the group
+    // - Group: use groupId only — all members share one conversation
     // - Personal: use senderId
-    // Format: "group_{groupId}_{senderId}" for group messages
+    // IMPORTANT: senderId is NOT included in group externalId
+    // because all messages from all members must go to the SAME conversation.
+    // Sender info is stored in visitorInfo.sender_id and message.metadata.
     const externalId = isGroup
-      ? `group_${groupId}_${msgData.fromUid}`
+      ? `group_${groupId}`
       : String(msgData.fromUid);
 
     // Determine display name:
-    // - Group: show sender name + group name
+    // - Group: always show just the group name (so it doesn't get overwritten by sender)
     // - Personal: show sender name
     let displayName;
     if (isGroup) {
-      const senderDisplay = msgData.senderName || `User ${msgData.fromUid}`;
-      const groupDisplay = groupName || `Nhóm ${groupId}`;
-      displayName = `${senderDisplay} (${groupDisplay})`;
+      displayName = finalGroupName || groupName || `Nhóm ${groupId}`;
     } else {
       displayName = msgData.senderName || null;
     }
@@ -403,7 +419,7 @@ class ZaloPersonalAdapter {
           sender_avatar: msgData.senderAvatar,
           is_group: isGroup,
           group_id: isGroup ? groupId : null,
-          group_name: isGroup ? groupName : null,
+          group_name: isGroup ? finalGroupName : null,
         }),
         now,
       });
@@ -419,7 +435,7 @@ class ZaloPersonalAdapter {
       const needsUpdate = (
         existingInfo.is_group !== isGroup ||
         (isGroup && existingInfo.group_id !== groupId) ||
-        (isGroup && !existingInfo.group_name && groupName)
+        (isGroup && !existingInfo.group_name && finalGroupName)
       );
 
       if (needsUpdate) {
@@ -432,7 +448,7 @@ class ZaloPersonalAdapter {
             sender_avatar: msgData.senderAvatar,
             is_group: isGroup,
             group_id: isGroup ? groupId : null,
-            group_name: isGroup ? groupName : null,
+            group_name: isGroup ? finalGroupName : null,
           }
         );
       } else {
@@ -441,12 +457,13 @@ class ZaloPersonalAdapter {
     }
 
     // Save message with attachments
+    console.log(`[ZaloPersonalAdapter] DEBUG: Saving msg with content="${msgData.content}", msg="${msgData.message}", fromUid=${msgData.fromUid}`);
     const msgRow = await zaloPersonalRepository.insertMessage({
       conversationId,
       userId,
       zaloSettingId,
       role: 'visitor',
-      content: msgData.content || msgData.message || '',
+      content: msgData.content || msgData.message || msgData.msg || '',
       externalId: msgData.messageId || msgData.msgId,
       externalTs: msgData.timestamp ? new Date(msgData.timestamp) : now,
       metadata: JSON.stringify({
@@ -456,7 +473,7 @@ class ZaloPersonalAdapter {
         sender_avatar: msgData.senderAvatar,
         is_group: isGroup,
         group_id: isGroup ? groupId : null,
-        group_name: isGroup ? groupName : null,
+        group_name: isGroup ? finalGroupName : null,
         msg_type: msgData.msgType,
         msg_type_raw: msgData.msgTypeRaw,
         attachments: msgData.attachments || [],

@@ -367,6 +367,94 @@ class ZaloPersonalSyncController {
       });
     }
   }
+
+  /**
+   * GET /api/chatbot/zalo-personal/group-members
+   * Lấy thông tin thành viên nhóm từ Zalo API
+   */
+  async getGroupMembers(req, res) {
+    try {
+      const userId = req.user.id;
+      const { groupId } = req.query;
+
+      if (!groupId) {
+        return res.status(400).json({
+          success: false,
+          message: 'groupId là bắt buộc',
+        });
+      }
+
+      // Get active Zalo account
+      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+
+      if (!account) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không có tài khoản Zalo cá nhân nào đang kết nối',
+        });
+      }
+
+      // Get group members from Zalo API
+      const result = await zaloPersonalSyncService.getGroupMembers(account.id, groupId);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] getGroupMembers error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Lấy thành viên nhóm thất bại',
+      });
+    }
+  }
+
+  /**
+   * GET /api/chatbot/zalo-personal/group-senders
+   * Lấy danh sách người đã nhắn trong nhóm từ DB
+   */
+  async getGroupSenders(req, res) {
+    try {
+      const userId = req.user.id;
+      const { groupId } = req.query;
+
+      if (!groupId) {
+        return res.status(400).json({
+          success: false,
+          message: 'groupId là bắt buộc',
+        });
+      }
+
+      // Get active Zalo account
+      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+
+      if (!account) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không có tài khoản Zalo cá nhân nào đang kết nối',
+        });
+      }
+
+      // Get senders from DB
+      const senders = await zaloPersonalSyncService.getGroupSendersFromDb(account.id, groupId);
+
+      res.json({
+        success: true,
+        data: {
+          groupId,
+          senders,
+          total: senders.length,
+        },
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] getGroupSenders error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Lấy danh sách người nhắn thất bại',
+      });
+    }
+  }
 }
 
 export default new ZaloPersonalSyncController();

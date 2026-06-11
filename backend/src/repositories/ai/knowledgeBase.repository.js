@@ -192,19 +192,35 @@ class KnowledgeBaseRepository {
    * @returns {Promise<Array>}
    */
   async searchChunks(userId, queryEmbedding, { kbId = null, limit = 5, minSimilarity = 0.5 } = {}) {
-    const kbFilter = kbId ? `AND id_kb = $4` : '';
-    const params = [userId, JSON.stringify(queryEmbedding), limit, ...(kbId ? [kbId] : [])];
-    const { rows } = await db.query(
-      `SELECT chunk_text, metadata, chunk_index,
-              1 - (embedding <=> $2::vector) AS similarity
-       FROM kb_chunks
-       WHERE id_user = $1
-         AND 1 - (embedding <=> $2::vector) >= $5
-         ${kbFilter}
-       ORDER BY embedding <=> $2::vector
-       LIMIT $3`,
-      [...params, minSimilarity]
-    );
+    let query;
+    let params;
+
+    if (kbId) {
+      // Params: $1=userId, $2=embedding, $3=limit, $4=kbId, $5=minSimilarity
+      query = `
+        SELECT chunk_text, metadata, chunk_index,
+               1 - (embedding <=> $2::vector) AS similarity
+        FROM kb_chunks
+        WHERE id_user = $1
+          AND 1 - (embedding <=> $2::vector) >= $5
+          AND id_kb = $4
+        ORDER BY embedding <=> $2::vector
+        LIMIT $3`;
+      params = [userId, JSON.stringify(queryEmbedding), limit, kbId, minSimilarity];
+    } else {
+      // Params: $1=userId, $2=embedding, $3=limit, $4=minSimilarity
+      query = `
+        SELECT chunk_text, metadata, chunk_index,
+               1 - (embedding <=> $2::vector) AS similarity
+        FROM kb_chunks
+        WHERE id_user = $1
+          AND 1 - (embedding <=> $2::vector) >= $4
+        ORDER BY embedding <=> $2::vector
+        LIMIT $3`;
+      params = [userId, JSON.stringify(queryEmbedding), limit, minSimilarity];
+    }
+
+    const { rows } = await db.query(query, params);
     return rows;
   }
 

@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
-    allowedHosts: ["v1.haitrn.id.vn"],
+    allowedHosts: ["v1.haitrn.id.vn", "founderai.biz", "www.founderai.biz"],
     proxy: {
       '/api': {
         target: 'http://localhost:5001',

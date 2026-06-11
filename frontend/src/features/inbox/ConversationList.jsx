@@ -31,22 +31,25 @@ const parseVisitorInfo = (visitorInfo) => {
 const getDisplayName = (conv) => {
   const visitorInfo = parseVisitorInfo(conv.visitor_info);
   
-  // Priority: sender_name > group_name > visitorName
-  if (visitorInfo.is_group && visitorInfo.sender_name) {
-    // For group messages: show "SenderName (GroupName)"
-    const groupName = visitorInfo.group_name || 'Nhóm';
-    return `${visitorInfo.sender_name} (${groupName})`;
+  // For groups: show group_name (which should be the group name like "Nhóm XYZ")
+  if (visitorInfo.is_group) {
+    if (visitorInfo.group_name && visitorInfo.group_name !== 'Nhóm') {
+      // Has real group name - show it
+      return visitorInfo.group_name;
+    }
+    // Fallback: show "Nhóm" with truncated ID
+    const groupId = visitorInfo.group_id || '';
+    const shortId = groupId.replace('group_', '').slice(-6);
+    return `Nhóm ${shortId}`;
   }
   
+  // For personal: show sender_name
   if (visitorInfo.sender_name) {
     return visitorInfo.sender_name;
   }
   
-  if (visitorInfo.group_name) {
-    return visitorInfo.group_name;
-  }
-  
-  return conv.visitorName || null;
+  // Final fallback: visitorName from conv object
+  return conv.visitorName || 'Khách hàng';
 };
 
 /**

@@ -205,7 +205,8 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(status::text, '')) IN ('failed', 'error')
        GROUP BY COALESCE(channel, 'zalo')`,
-      params
+      params,
+      [{ channel: 'zalo', count: 0 }]
     ),
     safeQuery(
       `SELECT

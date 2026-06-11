@@ -167,24 +167,39 @@ class UnifiedInboxRepository {
     const { rows } = await db.query(query, params);
 
     // Transform snake_case to camelCase for frontend compatibility
-    return rows.map(row => ({
-      id: row.id,
-      type: row.conversation_type,
-      channel: row.channel,
-      channelDisplayName: row.channel_display_name,
-      channelIsActive: row.channel_is_active,
-      idChannel: row.id_channel,
-      idZaloSetting: row.id_zalo_setting,
-      idWidgetConfig: row.id_widget_config,
-      visitorName: row.visitor_name,
-      visitorInfo: row.visitor_info,
-      externalId: row.external_id,
-      status: row.status,
-      startedAt: row.started_at,
-      lastMessageAt: row.last_message_at_override || row.last_message_at,
-      lastMessage: row.last_message,
-      unreadCount: parseInt(row.unread_count || 0),
-    }));
+    return rows.map(row => {
+      // Parse visitor_info to extract is_group flag
+      const visitorInfo = typeof row.visitor_info === 'string' 
+        ? JSON.parse(row.visitor_info) 
+        : (row.visitor_info || {});
+      
+      // Determine display name - for groups, show group name prominently
+      let displayName = row.visitor_name;
+      const isGroup = visitorInfo.is_group === true;
+      
+      // Transform snake_case to camelCase for frontend compatibility
+      return {
+        id: row.id,
+        type: row.conversation_type,
+        channel: row.channel,
+        channelDisplayName: row.channel_display_name,
+        channelIsActive: row.channel_is_active,
+        idChannel: row.id_channel,
+        idZaloSetting: row.id_zalo_setting,
+        idWidgetConfig: row.id_widget_config,
+        visitorName: displayName,
+        visitorInfo: visitorInfo,
+        isGroup: isGroup,
+        groupId: isGroup ? visitorInfo.group_id : null,
+        groupName: isGroup ? visitorInfo.group_name : null,
+        externalId: row.external_id,
+        status: row.status,
+        startedAt: row.started_at,
+        lastMessageAt: row.last_message_at_override || row.last_message_at,
+        lastMessage: row.last_message,
+        unreadCount: parseInt(row.unread_count || 0),
+      };
+    });
   }
 
   /**
@@ -264,6 +279,14 @@ class UnifiedInboxRepository {
          WHERE zp.id = $1 AND zp.id_user = $2`,
         [conversationId, userId]
       );
+      if (rows[0]) {
+        // Parse visitor_info to extract is_group
+        const visitorInfo = typeof rows[0].visitor_info === 'string'
+          ? JSON.parse(rows[0].visitor_info)
+          : (rows[0].visitor_info || {});
+        rows[0]._parsedVisitorInfo = visitorInfo;
+        rows[0]._isGroup = visitorInfo.is_group === true;
+      }
       return rows[0] || null;
     } else {
       const { rows } = await db.query(
@@ -310,6 +333,7 @@ class UnifiedInboxRepository {
          LIMIT $2`,
         params
       );
+      console.log(`[UnifiedInbox] getMessages channel: conv=${conversationId}, found=${rows.length}`);
       return rows.reverse().map(transformRow);
     } else if (conversationType === 'zalo_personal') {
       const { rows } = await db.query(
@@ -319,6 +343,7 @@ class UnifiedInboxRepository {
          LIMIT $2`,
         params
       );
+      console.log(`[UnifiedInbox] getMessages zalo_personal: conv=${conversationId}, found=${rows.length}`);
       return rows.reverse().map(transformRow);
     } else {
       const { rows } = await db.query(

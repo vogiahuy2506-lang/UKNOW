@@ -35,6 +35,7 @@ import {
   HiOutlineClipboard,
   HiOutlineTag,
   HiOutlinePhone,
+  HiOutlineMailOpen,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -79,6 +80,11 @@ const superAdminMenuItems = (t) => [
     name: t('nav.deliveryMonitoring'),
     path: '/admin/delivery-monitor',
     icon: HiOutlineLightningBolt,
+  },
+  {
+    name: t('nav.bulkNotification'),
+    path: '/admin/bulk-notification',
+    icon: HiOutlineMailOpen,
   },
   {
     name: t('nav.systemAuditLogs'),

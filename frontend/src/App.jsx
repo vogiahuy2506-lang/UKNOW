@@ -54,6 +54,7 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
+import BulkNotificationPage from './pages/admin/BulkNotificationPage';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
 import AuditLogsPage from './pages/settings/AuditLogsPage';
@@ -306,6 +307,7 @@ function App() {
             <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="diagnostic" element={<DiagnosticPage />} />
+            <Route path="bulk-notification" element={<BulkNotificationPage />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}

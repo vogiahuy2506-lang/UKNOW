@@ -165,9 +165,9 @@ class ZaloPersonalSyncService {
         // Extract sender info
         const senderInfo = this.extractSenderInfo(msg);
         
-        // Create externalId format for group: "group_{groupId}_{senderId}"
+        // Create externalId format for group: "group_{groupId}" — all members share ONE conversation
         const senderId = senderInfo.senderId || msg.uidFrom;
-        const externalId = `group_${groupId}_${senderId}`;
+        const externalId = `group_${groupId}`;
 
         // Get or create conversation
         let conversation = await zaloPersonalRepo.findConversation(accountId, externalId);
@@ -186,7 +186,8 @@ class ZaloPersonalSyncService {
             userId,
             zaloSettingId: accountId,
             externalId,
-            visitorName: senderInfo.name || `User ${senderId}`,
+            // Use group name as visitorName so all members land in the same conversation
+            visitorName: `Nhóm ${groupId}`,
             visitorInfo: JSON.stringify(visitorInfo),
             now,
           });
@@ -318,6 +319,78 @@ class ZaloPersonalSyncService {
     }
 
     return results;
+  }
+
+  /**
+   * Get group members info from Zalo API
+   * @param {number} accountId - zalo_setting.id
+   * @param {string} groupId - Zalo group ID
+   */
+  async getGroupMembers(accountId, groupId) {
+    const api = this.getApi(accountId);
+    if (!api) {
+      throw new Error('Zalo session not connected');
+    }
+
+    try {
+      console.log(`[ZaloSync] getGroupMembers: Calling api.getGroupInfo(${groupId})...`);
+      const result = await api.getGroupInfo(groupId);
+      
+      const groupInfo = result?.gridInfoMap?.[groupId] || result;
+      
+      if (!groupInfo) {
+        return {
+          groupId,
+          groupName: null,
+          members: [],
+          memberCount: 0,
+        };
+      }
+
+      const members = (groupInfo.memVerList || []).map(mem => ({
+        uid: mem.uid || mem.userId,
+        displayName: mem.displayName || mem.zaloName || mem.name || `User ${mem.uid}`,
+        avatar: mem.avatarThumb || null,
+        isAdmin: mem.isAdmin || false,
+        role: mem.role || (mem.isAdmin ? 'admin' : 'member'),
+      }));
+
+      return {
+        groupId,
+        groupName: groupInfo.groupName || groupInfo.name || null,
+        members,
+        memberCount: members.length,
+      };
+    } catch (error) {
+      console.error('[ZaloSync] getGroupMembers error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get unique senders from group conversation messages
+   * Returns list of sender IDs with their names from DB
+   * @param {number} accountId
+   * @param {string} groupId
+   */
+  async getGroupSendersFromDb(accountId, groupId) {
+    const { rows } = await db.query(
+      `SELECT DISTINCT 
+         (metadata->>'sender_id') as sender_id,
+         (metadata->>'sender_name') as sender_name
+       FROM zalo_personal_messages
+       WHERE id_zalo_setting = $1 
+         AND metadata->>'is_group' = 'true'
+         AND metadata->>'group_id' = $2
+         AND metadata->>'sender_id' IS NOT NULL
+       ORDER BY sender_name`,
+      [accountId, groupId]
+    );
+    
+    return rows.map(row => ({
+      senderId: row.sender_id,
+      senderName: row.sender_name || `User ${row.sender_id}`,
+    }));
   }
 }
 
