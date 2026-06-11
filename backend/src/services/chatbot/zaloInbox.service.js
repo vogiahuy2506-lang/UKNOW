@@ -534,6 +534,8 @@ class ZaloPersonalInboxService {
         },
       });
 
+      console.log(`[ZaloInbox] AI result: type=${result?.type}, hasContent=${!!result?.content}, conversationId=${conversation.id}`);
+
       if (result?.content) {
         console.log(`[ZaloInbox] AI reply: ${String(result.content).substring(0, 100)}...`);
         await zaloPersonalAdapter.sendReply({
