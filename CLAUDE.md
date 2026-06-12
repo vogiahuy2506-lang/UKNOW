@@ -6,7 +6,44 @@ Do not include "Co-authored-by:..." in commit messages
 
 ## Project Overview
 
-UKNOW Campaign is a multi-channel marketing automation platform for email and Zalo messaging campaigns, with customer segmentation, landing page builder, course management, and payment integration (PayOS). The target deployment is Vietnamese market.
+UKNOW Campaign (customer-facing brand **Founder AI**, custom domains served on `*.founderai.biz`) is a two-sided platform for the Vietnamese market:
+
+1. **Marketing automation** — multi-channel email + Zalo campaigns (node-based visual builder), customer segmentation, landing page builder, course management (WooCommerce sync), and PayOS payments/plans.
+2. **AI Chatbot / Studio** — users build custom AI chatbots (Gemini + knowledge-base RAG) and deploy them to a web widget, Zalo OA, Zalo Personal, or Facebook, with a unified inbox for all conversations.
+
+Both sides share the same codebase, database, auth, and plan/billing system.
+
+## Product Modules (What's Built)
+
+| Module | Key code locations | Notes |
+|---|---|---|
+| Auth & RBAC | `routes/auth.routes.js`, `employee.routes.js`; `features/auth`, `features/users` | JWT access+refresh, owner/employee roles, permission-gated routes |
+| Campaign builder & execution | `services/campaign/`, `services/queue/`; `features/campaigns` (Reactflow nodes), `pages/campaigns` | Node-based builder; email + Zalo (personal/group/friend-request); BullMQ outbound queue; scheduling via `campaignSchedule.routes.js` |
+| Customers & segmentation | `services/customer/`; `features/customers` | Journey/purchases feed campaign "read_*_db" nodes |
+| Templates | `repositories/email`, `repositories/zalo`, `templateLabel.*`; `features/templates`, `pages/templates` | Email/Zalo templates with **per-user dynamic category labels** (`template_labels`, migrations 048/049) |
+| Landing pages | `services/landing*`, `customDomain.service.js`, `utils/landingHtmlInjection.util.js`; `features/landing-pages` | Lead capture + pixel tracking, custom domain (Cloudflare), admin-managed featured courses/testimonials |
+| Courses | `services/courses`, `services/founderai/*` | Admin-only, synced from the `founderai.biz` WordPress/WooCommerce site |
+| Payments & Plans | `services/payment`, `payment.routes.js`, `adminPlans.*` | PayOS checkout, orders, vouchers; plan tiers `trial/starter/basic/professional/enterprise` with per-feature limits + AI quota columns (`max_chatbots`, `ai_credits_per_period`) |
+| AI Chatbot / Studio | `services/chatbot/` (incl. `channelAdapters/`, `ragEngine`, `knowledgeBase`, `unifiedInbox`); `pages/studio/*`, `features/chatbot`, `features/inbox` | Custom chatbots w/ KB-RAG (Gemini), multi-channel adapters (web/Zalo OA/Zalo Personal/Facebook), unified inbox |
+| AI Campaign Assistant | `services/ai/aiCampaign*.service.js`, `aiLandingPage.service.js`, `businessProfile.service.js`; `features/ai/AiChatbot.jsx` | Floating assistant panel (in `MainLayout`) that drafts campaigns, templates, and landing pages |
+| Admin console | `routes/admin*`; `pages/admin/*` | Members, plans, vouchers, orders, system, audit logs, delivery monitor, diagnostic, bulk notification |
+| Diagnostic & delivery monitor | `services/diagnostic/`, `userDeliveryMonitor.routes.js`, `adminDeliveryMonitor.routes.js` | Send-performance testing + monitoring dashboards over `campaign_runs` (migration 047) |
+
+## Roadmap & Planning Context
+
+**Recently shipped** (merged `ai-chatbot` → `main`, June 2026): unified inbox, knowledge-base/RAG for custom chatbots, Zalo bulk notification + delivery monitor, dynamic per-user template labels, Zalo session keep-alive/cookie restore on deploy.
+
+**Active roadmap (discussed, not yet built)** — full detail in Claude's memory, link before starting:
+1. **AI Landing Page Builder (Prompt-to-HTML)** — 4-step plan: vector DB for business profiles → RAG with Gemini → prompt-to-HTML generation module → automated custom-domain provisioning (Cloudflare). Steps are sequential/dependent — don't skip ahead.
+2. **Billing × AI model tiers** — gate Gemini model (1.5/2.5/3.0) and `ai_credits_per_period` by plan tier; verify enforcement of existing `messages_per_period` (anti-spam, migration 035/054) before building new UI on top.
+3. **Products feature** (user-facing, parallel to admin-only `courses`) — 5-step plan: `products` table + CRUD API → `/app/products` UI → replace JSON blob in Business Profile → campaign node `read_products_db` → feed `products` into AI context. Reference implementation: the `courses` module.
+
+**Tech debt / optimization priorities**:
+- `backend/src/ARCHITECTURE_REFACTOR_MAP.md` — `campaign`, `customer`, `uknow`, `emailSettings` services still mix HTTP/business logic/SQL; this is the priority order for layering work.
+- ~20 stale feature branches remain on `origin` from the AI-chatbot effort — worth pruning once confirmed merged.
+- **Ops (pending)**: `uknow-redis` container needs rebuilding with `--maxmemory-policy noeviction` + `--restart unless-stopped` (currently `noeviction` is runtime-only via `CONFIG SET` and will revert on restart) — schedule during low-traffic hours.
+
+**Working mode**: the user does most implementation in Codex; treat Claude Code sessions in this repo as leaning toward architecture review, roadmap/planning discussions, codebase Q&A, and smaller targeted fixes. When proposing new features, check `schema.sql` + `backend/migrations/` for current DB shape and mirror existing patterns (e.g., `courses` → `products`, existing `channelAdapters/`) rather than inventing new conventions.
 
 ## Repository Structure
 
@@ -23,7 +60,7 @@ Two-service monorepo with separate frontend and backend directories:
 cd frontend
 npm run dev      # Vite dev server on port 5174
 npm run build    # Production build
-npm run lint     # ESLint (zero warnings allowed)
+npm run lint     # ESLint (max 5 warnings)
 npm run preview  # Preview production build
 ```
 
@@ -39,9 +76,11 @@ npm start     # Production (node src/index.js)
 
 ```bash
 cd backend
-npx jest                         # Run all tests
-npx jest path/to/test.spec.js    # Run a single test file
-npx jest --testNamePattern "..."  # Run tests matching a name
+npm run test:unit                                              # 147 tests, ~1s, no DB needed
+npm run test:integration                                       # 403 tests, ~30s, needs local Postgres on :5433 (see root README)
+npm run test:all                                               # everything, ~45s
+npx jest path/to/test.spec.js --selectProjects=unit            # single file
+npx jest --testNamePattern "..." --selectProjects=unit         # tests matching a name
 ```
 
 ## Tech Stack

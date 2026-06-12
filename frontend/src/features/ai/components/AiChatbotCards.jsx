@@ -6,6 +6,7 @@ import {
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt,
 } from 'react-icons/hi';
 import api from '../../../services/api';
+import templateLabelApiService from '../../templates/services/templateLabelApi.service';
 
 // Render AI message content — convert basic markdown to JSX
 export function AiContent({ text }) {
@@ -31,29 +32,54 @@ export function AiContent({ text }) {
     </div>
   );
 }
-const getCategories = (t) => [
-  { id: 'marketing', label: '📢 Marketing' },
-  { id: 'notification', label: t('aiChatbot.notificationCategory') },
+// Fallback khi user chưa tạo nhãn nào
+const DEFAULT_CATEGORIES = (t) => [
+  { id: 'marketing', name: '📢 Marketing', color: '#3b82f6' },
+  { id: 'notification', name: t('aiChatbot.notificationCategory'), color: '#f59e0b' },
 ];
 
-// Category picker overlay
-const CategoryPicker = ({ onSelect, onCancel, t }) => (
-  <div className="mt-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
-    <p className="text-xs font-bold text-orange-700 mb-2">📂 {t('aiChatbot.saveToCategory')}</p>
-    <div className="flex gap-2">
-      {getCategories(t).map(cat => (
-        <button
-          key={cat.id}
-          onClick={() => onSelect(cat.id)}
-          className="flex-1 py-2 text-xs font-semibold bg-white border border-orange-200 rounded-lg hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all"
-        >
-          {cat.label}
-        </button>
-      ))}
+// Category picker overlay — lấy danh mục (nhãn template) thực tế của user
+const CategoryPicker = ({ onSelect, onCancel, t }) => {
+  const [labels, setLabels] = useState(null); // null = đang tải
+
+  useEffect(() => {
+    templateLabelApiService.getLabels()
+      .then((res) => setLabels(res.data?.data ?? []))
+      .catch(() => setLabels([]));
+  }, []);
+
+  const categories = labels && labels.length > 0
+    ? labels.map((l) => ({ id: l.name, name: l.name, color: l.color }))
+    : DEFAULT_CATEGORIES(t);
+
+  return (
+    <div className="mt-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+      <p className="text-xs font-bold text-orange-700 mb-2">📂 {t('aiChatbot.saveToCategory')}</p>
+      {labels === null ? (
+        <p className="text-xs text-slate-400">{t('common.loading')}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => onSelect(cat.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all hover:opacity-75"
+              style={{
+                borderColor: cat.color + '60',
+                backgroundColor: cat.color + '18',
+                color: cat.color,
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">{t('aiChatbot.cancel')}</button>
     </div>
-    <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">{t('aiChatbot.cancel')}</button>
-  </div>
-);
+  );
+};
 
 // Template preview card
 export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
