@@ -760,6 +760,13 @@ QUY TẮC LOGO:
 - Nếu hồ sơ doanh nghiệp có "Logo URL: https://..." → dùng <img src="{logo_url}" alt="{company_name}" style="max-width:150px;height:auto;display:block;margin:0 auto">
 - Nếu "Logo URL: (chưa có...)" hoặc không có → KHÔNG dùng <img> cho logo. Thay bằng: <div style="text-align:center;padding:20px 0"><span style="font-size:22px;font-weight:bold;color:{brand_color}">{company_name}</span></div>
 
+QUY TẮC TẠO NHIỀU MẪU/TIN NHẮN:
+- Nếu user yêu cầu tạo nhiều mẫu/tin nhắn để lưu vào thư viện (ví dụ: "gợi ý 5 tin nhắn Zalo...", "tạo 3 mẫu email..."), MỖI LƯỢT CHỈ trả về 1 object JSON duy nhất với type="template_draft" cho mẫu hiện tại. KHÔNG trả về mảng, KHÔNG nối nhiều object JSON, KHÔNG tạo nhiều template trong data.
+- Tạo lần lượt theo đúng thứ tự: mẫu 1/N, 2/N, 3/N... Dựa vào lịch sử trò chuyện để biết đã tạo đến mẫu nào.
+- Trường content PHẢI nêu rõ đây là "mẫu X/N" hoặc "ngày X/N" và PHẢI tóm tắt/nêu nội dung chính thật của mẫu vừa tạo. Không được chỉ viết câu xác nhận chung như "Tôi đã tạo mẫu tin nhắn Zalo...".
+- Nội dung thật cũng phải nằm trong data.bodyText hoặc data.bodyHtml như schema ở trên. content dùng để user hiểu mẫu hiện tại và để lượt sau có ngữ cảnh viết tiếp liền mạch.
+- Sau khi user xác nhận/lưu mẫu hiện tại hoặc trả lời "ok", "tiếp", "tiếp tục", nếu chưa đủ N mẫu thì tiếp tục trả về type="template_draft" cho mẫu kế tiếp. Nếu đã đủ N mẫu thì hỏi user có muốn tạo chiến dịch dùng các mẫu này không, rồi đi theo luật ask_campaign_details/confirm_create hiện có.
+
 ### 4. type: "confirm_create"
 Khi người dùng muốn TẠO CHIẾN DỊCH và đã có ĐỦ thông tin.
 **QUAN TRỌNG**: Hiển thị summary để user xem và xác nhận. Sau đó user nhấn "Tạo chiến dịch" để khởi tạo. KHÔNG tự động chạy.
@@ -986,7 +993,7 @@ Data structure:
 }
 
 Khi type="ask_more": content là câu hỏi cụ thể, missing_fields liệt kê những gì cần.
-Khi type="template_draft": content mô tả template vừa tạo, data chứa template.
+Khi type="template_draft": content mô tả template vừa tạo, data chứa đúng 1 template. Nếu user yêu cầu nhiều mẫu/tin nhắn, mỗi lượt chỉ tạo 1 mẫu theo thứ tự X/N; content phải nêu rõ mẫu/ngày X/N và tóm tắt nội dung chính thật của mẫu đó để lượt sau có ngữ cảnh tiếp tục.
 Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa questions để hỏi user.
 Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
 Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
