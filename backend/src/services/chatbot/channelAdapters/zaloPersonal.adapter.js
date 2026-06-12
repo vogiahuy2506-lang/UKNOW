@@ -456,6 +456,17 @@ class ZaloPersonalAdapter {
       }
     }
 
+    // Skip if this message was already saved (avoid duplicates in unified inbox
+    // from listener re-registration / re-delivered events)
+    const incomingExternalId = msgData.messageId || msgData.msgId;
+    if (incomingExternalId) {
+      const existing = await zaloPersonalRepository.findMessageByExternalId(incomingExternalId, zaloSettingId);
+      if (existing) {
+        console.log(`[ZaloPersonalAdapter] Message ${incomingExternalId} already saved (id=${existing.id}), skipping duplicate`);
+        return { conversationId, messageId: existing.id, isDuplicate: true };
+      }
+    }
+
     // Save message with attachments
     console.log(`[ZaloPersonalAdapter] DEBUG: Saving msg with content="${msgData.content}", msg="${msgData.message}", fromUid=${msgData.fromUid}`);
     const msgRow = await zaloPersonalRepository.insertMessage({
