@@ -185,6 +185,67 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   );
 };
 
+export const ContentPlanCard = ({ data, onGenerateTemplate, generatingDay, t }) => {
+  const days = Array.isArray(data?.days) ? data.days : [];
+  const totalDays = data?.totalDays || days.length;
+  if (!days.length) return null;
+
+  const channelIcon = (channel) => (
+    channel === 'email'
+      ? <HiOutlineMail className="w-4 h-4 text-orange-500" />
+      : <HiOutlineChat className="w-4 h-4 text-blue-500" />
+  );
+
+  const channelLabel = (channel) => (
+    channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate')
+  );
+
+  return (
+    <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-100">
+        <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
+        <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
+          {t('aiChatbot.contentPlanTitle', { count: totalDays })}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {days.map((dayItem) => {
+          const day = Number(dayItem.day) || dayItem.day;
+          const loading = generatingDay === dayItem.day;
+          return (
+            <div key={`${dayItem.day}-${dayItem.channel}-${dayItem.goal}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 border border-slate-200">
+                      {t('aiChatbot.dayLabel', { day })}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 border border-slate-200">
+                      {channelIcon(dayItem.channel)}
+                      {channelLabel(dayItem.channel)}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">{dayItem.goal}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">{dayItem.summary}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onGenerateTemplate?.(dayItem)}
+                  disabled={generatingDay !== null}
+                  className="shrink-0 rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? t('aiChatbot.generatingTemplate') : t('aiChatbot.generateTemplate')}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Ask-more card
 export const AskMoreCard = ({ missingFields, t }) => (
   <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">

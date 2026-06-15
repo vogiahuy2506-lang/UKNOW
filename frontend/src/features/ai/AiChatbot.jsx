@@ -15,7 +15,7 @@ import aiApi from '../../services/aiApi';
 import api from '../../services/api';
 import LandingPageCard from './components/LandingPageCard';
 import {
-  AiContent, TemplateDraftCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
+  AiContent, TemplateDraftCard, ContentPlanCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
   AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
 } from './components/AiChatbotCards';
@@ -46,6 +46,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [pendingLandingData, setPendingLandingData] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
+  const [generatingDay, setGeneratingDay] = useState(null);
   
   // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
@@ -160,7 +161,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'confirm_create', 'landing_page', 'template_draft', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
@@ -436,6 +437,65 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const handleEditTemplate = (draft) => {
     navigate('/app/settings/templates', { state: { aiDraft: draft } });
     onToggle?.();
+  };
+
+  const handleGenerateDayTemplate = async (dayItem) => {
+    if (!dayItem || generatingDay !== null) return;
+
+    setGeneratingDay(dayItem.day);
+    const channelLabel = dayItem.channel === 'email' ? 'Email' : 'Zalo';
+    const briefParts = [
+      `Tạo chi tiết template cho ngày ${dayItem.day} (${channelLabel}): ${dayItem.summary || ''}`,
+    ];
+    if (dayItem.goal) briefParts.push(`Mục tiêu/chủ đề: ${dayItem.goal}`);
+    const userContent = briefParts.join('. ');
+
+    let mySessionId = currentSessionId;
+    const update = makeUpdater(mySessionId, [...messages]);
+    if (mySessionId) markTabPending(mySessionId);
+
+    const userMsg = { role: 'user', content: userContent };
+    update(prev => [...prev, userMsg]);
+    setIsTyping(true);
+
+    try {
+      const enrichedHistory = [...messages, userMsg];
+      const response = await aiApi.chat(enrichedHistory, [], currentSessionId, locale);
+      if (response.success) {
+        const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
+        if (returnedSessionId && !currentSessionId) {
+          mySessionId = returnedSessionId;
+          markTabPending(mySessionId);
+          setCurrentSessionId(returnedSessionId);
+          setSessions(prev => [{
+            id: returnedSessionId,
+            title: sessionTitle || userContent.slice(0, 60),
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          }, ...prev]);
+        } else if (returnedSessionId) {
+          setSessions(prev => prev.map(s => s.id === returnedSessionId ? { ...s, updated_at: new Date().toISOString() } : s));
+        }
+
+        update(prev => [...prev, {
+          role: 'assistant',
+          content: content || t('aiChatbot.templateCreated'),
+          type,
+          data,
+          missing_fields: missing_fields || [],
+        }]);
+      }
+    } catch (err) {
+      toast.error(getAiRequestErrorMessage(err));
+      update(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ Lỗi: ${getAiRequestErrorMessage(err)}`,
+      }]);
+    } finally {
+      setIsTyping(false);
+      setGeneratingDay(null);
+      clearTabPending(mySessionId);
+    }
   };
 
   // Write AI campaign script to sessionStorage draft so CampaignBuilder loads it directly
@@ -1092,6 +1152,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     toast.success('Đã cập nhật draft!');
                   }}
                   onCancel={() => setIsEditingDraft(false)}
+                  t={t}
+                />
+              )}
+
+              {/* Content plan overview */}
+              {msg.type === 'content_plan' && msg.data && (
+                <ContentPlanCard
+                  data={msg.data}
+                  onGenerateTemplate={handleGenerateDayTemplate}
+                  generatingDay={generatingDay}
                   t={t}
                 />
               )}

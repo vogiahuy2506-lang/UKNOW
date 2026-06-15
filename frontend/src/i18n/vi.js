@@ -2458,6 +2458,11 @@ export default {
     edit: 'Chỉnh sửa',
     templateSaved: 'Đã lưu template thành công!',
     saveFailed: 'Lưu thất bại',
+    contentPlanTitle: 'Kế hoạch nội dung {count} ngày',
+    generateTemplate: 'Tạo template',
+    generatingTemplate: 'Đang tạo...',
+    dayLabel: 'Ngày {day}',
+    templateCreated: 'Đã tạo template cho bạn.',
     aiTokenExceeded: 'Bạn đã dùng hết token AI của gói trong kỳ này. Vui lòng nâng cấp gói để tiếp tục.',
     genericError: 'Có lỗi xảy ra, vui lòng thử lại.',
     // Ask more card

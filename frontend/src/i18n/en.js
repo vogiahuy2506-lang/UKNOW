@@ -2399,6 +2399,11 @@ export default {
     edit: 'Edit',
     templateSaved: 'Template saved successfully!',
     saveFailed: 'Save failed',
+    contentPlanTitle: '{count}-day content plan',
+    generateTemplate: 'Generate template',
+    generatingTemplate: 'Generating...',
+    dayLabel: 'Day {day}',
+    templateCreated: 'Template generated.',
     aiTokenExceeded: 'You have used all AI tokens in your plan for this period. Please upgrade your plan to continue.',
     genericError: 'Something went wrong. Please try again.',
     // Ask more card
