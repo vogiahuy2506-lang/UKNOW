@@ -36,7 +36,7 @@ function parseHostnameFromUrl(urlStr) {
 }
 
 function getBlockedHostnames() {
-  const set = new Set(['localhost', '127.0.0.1']);
+  const set = new Set(['localhost', '127.0.0.1', 'founderai.biz', 'www.founderai.biz']);
   const fe = parseHostnameFromUrl(resolveFrontendOriginFromEnv());
   if (fe) {
     set.add(fe);
@@ -79,20 +79,16 @@ function assertValidHostname(hostname) {
   return h;
 }
 
-function txtChallengeName(hostname) {
-  return `_founderai-verify.${hostname}`;
-}
-
-function expectedTxtContent(token) {
-  return `founderai-verify=${token}`;
-}
-
 function cnameTarget() {
   return String(process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
 }
 
 function subdomainBase() {
-  return String(process.env.LP_SUBDOMAIN_BASE || process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
+  return String(process.env.LP_SUBDOMAIN_BASE || 'founderai.biz').trim();
+}
+
+function cnameVerificationTarget() {
+  return String(process.env.LP_VERIFICATION_TARGET || 'verify.founderai.biz').trim();
 }
 
 function buildAutoHostname(slug) {
@@ -101,15 +97,13 @@ function buildAutoHostname(slug) {
 
 /**
  * Build response object for getForLanding.
- * CF-managed domains skip TXT verification — already active on creation.
+ * CF-managed domains skip DNS verification — already active on creation.
  */
 function buildDomainResponse(row) {
   if (!row) {
     return { configured: false, instructions: null, record: null };
   }
 
-  const token = row.verificationToken;
-  const challenge = txtChallengeName(row.hostname);
   const isActive = row.status === 'active';
   const isCfManaged = Boolean(row.cfManaged);
 
@@ -119,13 +113,13 @@ function buildDomainResponse(row) {
   if (isActive) {
     instructions = isCfManaged
       ? `Đã kích hoạt tự động qua Cloudflare. CNAME đã được tạo trỏ về ${cnameTarget()}. SSL được Cloudflare tự cấp trong vài phút.`
-      : `Đã kích hoạt. Trỏ DNS (CNAME) www về ${cnameTarget()} theo hướng dẫn vận hành; apex nên redirect 301 → www.`;
+      : `Đã kích hoạt. Trỏ DNS (CNAME) về ${cnameTarget()} theo hướng dẫn vận hành; apex nên redirect 301 → www.`;
   } else {
-    instructions = `Thêm bản ghi TXT tại DNS của bạn:\n- Tên (host): ${challenge}\n- Giá trị: ${expectedTxtContent(token)}\nSau đó bấm «Xác minh DNS».`;
+    instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Loại: CNAME\n- Tên: ${row.hostname}\n- Trỏ đến: ${cnameVerificationTarget()}\nSau đó bấm «Xác minh DNS».`;
     record = {
-      type: 'TXT',
-      name: challenge,
-      value: expectedTxtContent(token),
+      type: 'CNAME',
+      name: row.hostname,
+      value: cnameVerificationTarget(),
     };
   }
 
@@ -138,6 +132,7 @@ function buildDomainResponse(row) {
     instructions,
     record,
     cnameTarget: cnameTarget(),
+    verificationTarget: cnameVerificationTarget(),
   };
 }
 
@@ -154,10 +149,13 @@ function buildDomainResponse(row) {
 class LandingPageDomainService {
   /**
    * Public: resolve hostname → slug (chỉ active + landing publish).
+   * Skip apex domain founderai.biz vì nó trỏ về WordPress.
    */
   async getPublishedSlugForHost(hostname) {
     const h = String(hostname || '').trim().toLowerCase();
     if (!h) return null;
+    // Skip apex domain - nó phải trỏ về WordPress, không phải landing page
+    if (h === 'founderai.biz' || h === 'www.founderai.biz') return null;
     const row = await landingPageDomainRepository.findActiveByHostname(h);
     if (!row?.landingSlug) return null;
     return String(row.landingSlug).trim().toLowerCase();
@@ -290,7 +288,8 @@ class LandingPageDomainService {
   }
 
   /**
-   * Xác minh DNS bằng TXT record (chỉ dành cho Mode 2 — manual).
+   * Xác minh DNS bằng CNAME record (chỉ dành cho Mode 2 — manual).
+   * Kiểm tra CNAME có trỏ về verify.founderai.biz không.
    * Nếu domain đã được CF quản lý và active → trả về ngay, không cần verify.
    *
    * @param {number} landingPageId
@@ -313,25 +312,30 @@ class LandingPageDomainService {
       return buildDomainResponse(row);
     }
 
-    const name = txtChallengeName(row.hostname);
-    const want = expectedTxtContent(row.verificationToken);
-    let records = [];
+    // Resolve CNAME record để verify
+    let cnameRecords = [];
     try {
-      records = await dns.resolveTxt(name);
+      cnameRecords = await dns.resolve(row.hostname, 'CNAME');
     } catch {
       const err = new Error(
-        `Chưa đọc được TXT tại ${name}. Kiểm tra DNS đã lưu và chờ propagate (có thể vài phút đến vài giờ).`
+        `Chưa đọc được CNAME cho ${row.hostname}. Kiểm tra DNS đã lưu và chờ propagate (có thể vài phút đến vài giờ).`
       );
       err.statusCode = 400;
       throw err;
     }
-    const flat = records.map((arr) => arr.join(''));
-    const ok = flat.some((t) => String(t).trim() === want);
+
+    const expectedTarget = cnameVerificationTarget();
+    const flat = cnameRecords.map((arr) => arr.join(''));
+    const ok = flat.some((cname) => cname.toLowerCase() === expectedTarget.toLowerCase());
+
     if (!ok) {
-      const err = new Error(`Giá trị TXT chưa khớp. Cần đúng: ${want}`);
+      const err = new Error(
+        `CNAME chưa đúng. Cần trỏ về: ${expectedTarget}\nHiện tại: ${flat.join(', ') || 'không có'}`
+      );
       err.statusCode = 400;
       throw err;
     }
+
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
     // Clear CORS cache so verified domain is immediately allowed
     await getClearCacheFn();

@@ -106,6 +106,15 @@ class EmailSettingsCrudService {
     return this.mapDetail(item);
   }
 
+  // Default SMTP settings from environment
+  DEFAULT_SMTP = {
+    host: process.env.SENDGRID_SMTP_HOST || 'smtp.sendgrid.net',
+    port: parseInt(process.env.SENDGRID_SMTP_PORT, 10) || 587,
+    username: process.env.SENDGRID_SMTP_USERNAME || 'apikey',
+    password: process.env.SENDGRID_API_KEY,
+    useTls: true,
+  };
+
   async create({ userId, roleCode, payload }) {
     const emailAccountLimitCheck = await checkUserResourceLimit({
       userId,
@@ -116,14 +125,20 @@ class EmailSettingsCrudService {
       throw createServiceError(emailAccountLimitCheck.message, 400, { limitReached: true });
     }
 
+    // Validate email format (any domain allowed)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(payload.email)) {
+      throw createServiceError('Địa chỉ email không hợp lệ', 400);
+    }
+
     const item = await emailSettingsRepository.create(userId, {
       name: payload.name,
       email: payload.email,
-      smtpHost: payload.smtpHost,
-      smtpPort: payload.smtpPort,
-      smtpUsername: payload.smtpUsername,
-      smtpPassword: payload.smtpPassword,
-      useTls: payload.useTls ?? true,
+      smtpHost: this.DEFAULT_SMTP.host,
+      smtpPort: this.DEFAULT_SMTP.port,
+      smtpUsername: this.DEFAULT_SMTP.username,
+      smtpPassword: this.DEFAULT_SMTP.password,
+      useTls: this.DEFAULT_SMTP.useTls,
       dailyLimit: payload.dailyLimit ?? 1000,
       hourlyLimit: payload.hourlyLimit ?? 100,
     });

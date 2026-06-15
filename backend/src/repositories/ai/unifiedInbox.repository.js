@@ -176,6 +176,11 @@ class UnifiedInboxRepository {
       // Determine display name - for groups, show group name prominently
       let displayName = row.visitor_name;
       const isGroup = visitorInfo.is_group === true;
+
+      // For webchat: show "Chatbot Name - ID" instead of visitor_name
+      if (row.conversation_type === 'webchat') {
+        displayName = `${row.channel_display_name} - ${row.id}`;
+      }
       
       // Transform snake_case to camelCase for frontend compatibility
       return {

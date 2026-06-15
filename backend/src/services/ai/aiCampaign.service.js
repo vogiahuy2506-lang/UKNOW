@@ -1832,7 +1832,7 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
       return this._validateWorkflowNodes(parsed);
     }
   }
-
+  
   /**
    * Validate workflow has DATA nodes. If not, add warning but still return.
    */
@@ -1847,7 +1847,7 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
     } else {
       console.log(`[AI] Workflow validated: ${parsed.nodes.length} nodes with DATA nodes`);
     }
-
+      
     return parsed;
   }
 }

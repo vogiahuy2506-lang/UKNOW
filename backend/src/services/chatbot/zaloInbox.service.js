@@ -507,6 +507,13 @@ class ZaloPersonalInboxService {
         return;
       }
 
+      // Merge settings: account-specific settings override global settings
+      const mergedSettings = {
+        ...chatbotSettings,
+        ...accountSettings,
+        // Preserve is_enabled checks above (don't override)
+      };
+
       // Get AI response using chatRouterService
       console.log(`[ZaloInbox] AI routing message from ${senderId}...`);
       
@@ -526,7 +533,7 @@ class ZaloPersonalInboxService {
         userId,
         message: aiContent,
         conversationId: conversation.id,
-        chatbotSettings: chatbotSettings,
+        chatbotSettings: mergedSettings,
         visitorInfo: {
           source: 'zalo_personal',
           senderId,

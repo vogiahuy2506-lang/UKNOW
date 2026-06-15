@@ -853,7 +853,7 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
         ],
       });
     }
-
+    
     if (requiredInfo.missingProductInfo) {
       questions.push({
         id: 'product_info',
@@ -862,7 +862,7 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
         placeholder: 'VD: Khóa học lập trình Python, Dịch vụ tư vấn...',
       });
     }
-
+      
     if (requiredInfo.missingContent) {
       questions.push({
         id: 'content',

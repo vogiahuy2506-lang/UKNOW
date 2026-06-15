@@ -504,8 +504,9 @@ class ZaloPersonalAdapter {
    * @param {string} params.externalId - Zalo user ID (uid)
    * @param {string} params.message - text reply
    * @param {number} params.userId
+   * @param {boolean} params.forceReply - if true, send even for group messages (for manual inbox replies)
    */
-  async sendReply({ externalId, message, userId, accountId, conversationInfo }) {
+  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false }) {
     const session = await this.getSessionByAccountId(accountId);
     if (!session?.api) {
       return { success: false, error: 'No active Zalo personal session' };
@@ -519,10 +520,11 @@ class ZaloPersonalAdapter {
       const isGroup = conversationInfo?.is_group;
       let sendTarget = externalId;
 
-      // IMPORTANT: For group messages, we should NOT reply automatically!
+      // IMPORTANT: For group messages, we should NOT auto-reply!
       // Group messages should be handled by the group chatbot, not personal chatbot
-      if (isGroup) {
-        console.log(`[ZaloPersonalAdapter] ⚠️ Blocked reply to group message - group chatbots should be handled separately`);
+      // UNLESS forceReply is true (manual inbox reply)
+      if (isGroup && !forceReply) {
+        console.log(`[ZaloPersonalAdapter] ⚠️ Blocked auto-reply to group message - group chatbots should be handled separately`);
         console.log(`[ZaloPersonalAdapter] group_id=${conversationInfo?.group_id}, externalId=${externalId}`);
         return { success: false, error: 'Group messages should not trigger personal chatbot replies' };
       }
@@ -535,6 +537,12 @@ class ZaloPersonalAdapter {
           sendTarget = parts.slice(2).join('_'); // Get sender ID after "group_{groupId}_{senderId}"
           console.log(`[ZaloPersonalAdapter] Extracted personal sender ID from group format: ${sendTarget}`);
         }
+      }
+
+      // For group messages with forceReply, send to the GROUP instead of individual
+      if (isGroup && conversationInfo?.group_id) {
+        sendTarget = conversationInfo.group_id;
+        console.log(`[ZaloPersonalAdapter] Sending group message to group: ${sendTarget}`);
       }
 
       await api.sendMessage(payload, sendTarget);

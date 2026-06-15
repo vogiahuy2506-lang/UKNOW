@@ -205,7 +205,6 @@ export function createDynamicCorsMiddleware() {
       // These should be allowed if they resolve correctly
       // Also allow *.founderai.biz subdomains (e.g., senna.founderai.biz, www.founderai.biz)
       if (hostname.endsWith('.founderai.biz') ||
-          hostname === 'founderai.biz' ||
           hostname.endsWith('.uknow.vn') ||
           hostname === 'uknow.vn') {
         // Allow founderai.biz/uknow.vn subdomains (they use domainResolver middleware)

@@ -362,6 +362,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         logo_url: form.logo_url,
         show_avatar: form.show_avatar,
         border_radius: 16,
+        widget_key: chatbot.widget_key || form.widget_key,
         chat_height: '600px',
         suggested_questions: form.suggested_questions || [],
       };

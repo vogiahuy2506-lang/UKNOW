@@ -564,14 +564,14 @@ export default function LandingPageFullEditor({
                             </div>
                             {/* Record Row */}
                             <div className="grid grid-cols-3 gap-2 items-start">
-                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded truncate" title={cdInfo.record.name || '@'}>
-                                {cdInfo.record.name || '@'}
+                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded truncate" title={cdInfo.hostname}>
+                                {cdInfo.hostname}
                               </code>
                               <span className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded text-center">
-                                {cdInfo.record.type || 'TXT'}
+                                CNAME
                               </span>
-                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded break-all" title={cdInfo.record.value}>
-                                {cdInfo.record.value}
+                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded break-all" title={cdInfo.record?.value || 'verify.founderai.biz'}>
+                                {cdInfo.record?.value || 'verify.founderai.biz'}
                               </code>
                             </div>
                           </div>
@@ -582,7 +582,7 @@ export default function LandingPageFullEditor({
                         {/* Detailed Instructions */}
                         <div className="border border-gray-200 rounded-lg overflow-hidden">
                           <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                            <p className="text-sm font-medium text-gray-700">Hướng dẫn thêm bản ghi TXT</p>
+                            <p className="text-sm font-medium text-gray-700">Hướng dẫn thêm bản ghi CNAME</p>
                           </div>
                           <div className="p-4 space-y-4 text-sm text-gray-600">
                             <div>
@@ -591,12 +591,12 @@ export default function LandingPageFullEditor({
                                 <li>Đăng nhập vào trang quản lý DNS của nhà cung cấp domain của bạn</li>
                                 <li>Tìm mục <strong>Quản lý DNS</strong>, <strong>Zone Records</strong> hoặc <strong>Advanced DNS</strong></li>
                                 <li>Nhấn <strong>Thêm bản ghi</strong> hoặc <strong>Add Record</strong></li>
-                                <li>Chọn loại bản ghi là <strong>TXT</strong></li>
+                                <li>Chọn loại bản ghi là <strong>CNAME</strong></li>
                                 <li>Điền thông tin:
                                   <ul className="ml-6 mt-1 space-y-1">
-                                    <li><strong>Tên/Host:</strong> <code className="bg-gray-100 px-1 rounded">{cdInfo.record.name?.split('.')[0] || '_founderai-verify'}</code> (hoặc <code className="bg-gray-100 px-1 rounded">{cdInfo.record.name || '@'}</code> nếu nhà cung cấp yêu cầu nhập đầy đủ)</li>
-                                    <li><strong>Loại:</strong> TXT</li>
-                                    <li><strong>Giá trị TXT:</strong> <code className="bg-gray-100 px-1 rounded break-all">{cdInfo.record.value}</code></li>
+                                    <li><strong>Tên/Host:</strong> <code className="bg-gray-100 px-1 rounded">{cdInfo.hostname}</code></li>
+                                    <li><strong>Loại:</strong> CNAME</li>
+                                    <li><strong>Giá trị CNAME:</strong> <code className="bg-gray-100 px-1 rounded break-all">{cdInfo.record?.value || 'verify.founderai.biz'}</code></li>
                                   </ul>
                                 </li>
                                 <li>Nhấn <strong>Lưu</strong> hoặc <strong>Save</strong></li>

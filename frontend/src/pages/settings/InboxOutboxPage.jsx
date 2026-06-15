@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  HiArrowLeft, HiOutlineSearch, HiBell, HiOutlineBell, 
-  HiInformationCircle, HiRefresh, HiExclamationCircle,
-  HiMail, HiUserCircle, HiLogout
+  HiArrowLeft, HiOutlineSearch, HiOutlineBell,
+  HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
+  HiOutlineMail, HiOutlineLogout, HiOutlineInbox
 } from 'react-icons/hi';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ConversationList from '../../features/inbox/ConversationList';
+import ConversationFilters from '../../features/inbox/ConversationFilters';
 import MessageThread from '../../features/inbox/MessageThread';
 import ReplyInput from '../../features/inbox/ReplyInput';
 import ZaloAccountSelector from '../../features/inbox/ZaloAccountSelector';
@@ -17,14 +18,6 @@ import useInboxSSE from '../../hooks/useInboxSSE';
 import useDesktopNotifications from '../../hooks/useDesktopNotifications';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useLocalStorageState } from '../../hooks/useLocalStorageState';
-
-const CHANNEL_FILTERS = (t) => [
-  { value: '', label: t('inbox.allChannels') },
-  { value: 'web', label: 'Web Chat' },
-  { value: 'zalo_oa', label: 'Zalo OA' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'zalo_personal', label: 'Zalo Cá nhân' },
-];
 
 const InboxPage = () => {
   const { t } = useI18n();
@@ -54,28 +47,28 @@ const InboxPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const searchInputRef = useRef(null);
   
-  // Buffer for SSE messages when user is not viewing the conversation
-  // This prevents losing messages when user clicks on a conversation that just received a message
   const [pendingMessages, setPendingMessages] = useState({});
 
   const [filters, setFilters] = useState({
     channel: '',
     search: '',
+    sort: 'latest',
+    status: 'all',
+    date: 'all',
   });
 
-  // Resizing state
   const isMobile = useIsMobile();
-  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_inbox_sidebar_width', 384);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_inbox_sidebar_width', 360);
   const [isResizing, setIsResizing] = useState(false);
   const dragStartXRef = useRef(0);
-  const dragStartWidthRef = useRef(384);
+  const dragStartWidthRef = useRef(360);
 
   useEffect(() => {
     if (!isResizing) return;
 
     const handleMouseMove = (event) => {
       const delta = event.clientX - dragStartXRef.current;
-      const nextWidth = Math.min(600, Math.max(280, dragStartWidthRef.current + delta));
+      const nextWidth = Math.min(500, Math.max(280, dragStartWidthRef.current + delta));
       setSidebarWidth(nextWidth);
     };
 
@@ -194,15 +187,10 @@ const InboxPage = () => {
   }, [selectedConversation, t]);
 
   const handleNewMessage = useCallback((data) => {
-    console.log('[InboxPage] SSE New message:', data);
-    
-    // === 1. Update Conversation List (optimistic update) ===
-    // Find existing conversation in state
     setConversations(prev => {
       const existingIndex = prev.findIndex(c => c.id === data.conversationId);
       
       if (existingIndex !== -1) {
-        // Update existing conversation - move to top and update preview
         const existing = prev[existingIndex];
         const updated = {
           ...existing,
@@ -210,19 +198,13 @@ const InboxPage = () => {
           last_message_at: data.timestamp || new Date().toISOString(),
           unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : (existing.unreadCount || 0) + 1,
         };
-        
-        // Move to top of list
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
-        console.log('[InboxPage] Updated existing conversation:', data.conversationId);
         return newList;
       } else {
-        // Add new conversation at top
         const newConv = {
           id: data.conversationId,
           type: data.type || 'zalo_personal',
           channel: data.channel || 'zalo_personal',
-          // For groups: use visitorName (which has group name) or groupName
-          // For personal: use senderName or visitorName
           visitorName: data.isGroup 
             ? (data.visitorName || data.groupName || data.senderName || 'Nhóm') 
             : (data.senderName || data.visitorName || 'Khách hàng'),
@@ -233,20 +215,16 @@ const InboxPage = () => {
           groupName: data.groupName || null,
           senderId: data.senderId,
         };
-        console.log('[InboxPage] Added new conversation:', data.conversationId);
         return [newConv, ...prev];
       }
     });
 
-    // === 2. Show notification/toast ===
-    // Nếu app bị ẩn (chạy nền), hiển thị thông báo desktop
     if (document.hidden && data.message) {
       showNotification(t('inbox.newMessage'), {
         body: `${data.senderName || t('inbox.customer')}: ${data.message.substring(0, 100)}`,
         tag: `conv-${data.conversationId}`,
       });
     } else if (!document.hidden && data.message && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
-      // Nếu app đang mở nhưng không ở trong đoạn chat hiện tại, hiển thị toast
       const sender = data.senderName || t('inbox.customer');
       const msgPreview = data.message.length > 50 ? data.message.substring(0, 50) + '...' : data.message;
       toast.success(`${sender}: ${msgPreview}`, {
@@ -262,25 +240,18 @@ const InboxPage = () => {
       return;
     }
     
-    // === 3. Append message to thread (if viewing this conversation) ===
-    // Handle both visitor messages and AI agent replies
     const isThisConversation = selectedConversation && data.conversationId === selectedConversation.id;
     
     if (isThisConversation) {
-      // Determine message role: AI sends 'agent' role, visitor messages have no role or 'visitor'
-      const msgRole = data.role || (data.messageType === 'text' && !data.message ? 'visitor' : 'visitor');
+      const msgRole = data.role || 'visitor';
       
       setMessages(prev => {
-        // Check for duplicate by timestamp and content
         const isDuplicate = prev.some(m => 
           m.createdAt === data.timestamp || 
           (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
         );
         
-        if (isDuplicate) {
-          console.log('[InboxPage] Skipping duplicate message');
-          return prev;
-        }
+        if (isDuplicate) return prev;
         
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
@@ -292,37 +263,26 @@ const InboxPage = () => {
           attachmentUrl: data.attachmentUrl || null,
           senderName: data.senderName,
         };
-        console.log(`[InboxPage] Appended ${msgRole} message to thread:`, newMsg.id);
         return [...prev, newMsg];
       });
       
-      // Auto-scroll to bottom - use messagesEndRef
       setTimeout(() => {
-        const container = document.querySelector('.flex-1.min-h-0.overflow-y-auto.p-4.bg-gray-50');
-        if (container) {
-          container.scrollTop = container.scrollHeight;
-        }
-        // Also try the end ref
         const endEl = document.querySelector('[data-messages-end]');
         if (endEl) {
           endEl.scrollIntoView({ behavior: 'smooth' });
         }
       }, 100);
     } else {
-      // User is NOT viewing this conversation - buffer the message for when they click on it
       setPendingMessages(prev => {
         const convMessages = prev[data.conversationId] || [];
         const msgRole = data.role || 'visitor';
         
-        // Check for duplicate
         const isDuplicate = convMessages.some(m => 
           m.createdAt === data.timestamp || 
           (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
         );
         
-        if (isDuplicate) {
-          return prev;
-        }
+        if (isDuplicate) return prev;
         
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
@@ -335,7 +295,6 @@ const InboxPage = () => {
           senderName: data.senderName,
         };
         
-        console.log(`[InboxPage] Buffered message for conv ${data.conversationId}:`, newMsg.id);
         return {
           ...prev,
           [data.conversationId]: [...convMessages, newMsg],
@@ -407,14 +366,11 @@ const InboxPage = () => {
     setSelectedConversation(conv);
     await fetchMessages();
 
-    // After fetching, merge any pending messages from SSE buffer
     const bufferedMessages = pendingMessages[conv.id] || [];
     if (bufferedMessages.length > 0) {
-      console.log(`[InboxPage] Merging ${bufferedMessages.length} buffered messages for conv ${conv.id}`);
       setMessages(prev => {
         const merged = [...prev];
         for (const bufferedMsg of bufferedMessages) {
-          // Check for duplicates
           const isDuplicate = merged.some(m => 
             m.createdAt === bufferedMsg.createdAt || 
             (m.content === bufferedMsg.content && Math.abs(new Date(m.createdAt) - new Date(bufferedMsg.createdAt)) < 5000)
@@ -425,7 +381,6 @@ const InboxPage = () => {
         }
         return merged;
       });
-      // Clear buffered messages
       setPendingMessages(prev => {
         const { [conv.id]: _, ...rest } = prev;
         return rest;
@@ -453,10 +408,8 @@ const InboxPage = () => {
     fetchConversations(true);
     fetchUnreadCount();
     fetchSessionStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.channel, filters.search]);
 
-  // Fetch messages when selected conversation changes (e.g., re-opening)
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages();
@@ -469,100 +422,92 @@ const InboxPage = () => {
   };
 
   const getChannelLabel = (channel) => {
-    const filter = CHANNEL_FILTERS(t).find(f => f.value === channel);
-    return filter ? t(filter.label) : channel;
+    const channelMap = {
+      web: 'Web Chat',
+      zalo_oa: 'Zalo OA',
+      facebook: 'Facebook',
+      zalo_personal: 'Zalo Cá nhân',
+    };
+    return channelMap[channel] || channel || '';
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] flex overflow-hidden">
+    <div className="h-[calc(100vh-56px)] flex overflow-hidden bg-gray-100">
       {/* Left Sidebar */}
       <div
-        className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 ${
-          !isResizing && 'transition-all duration-300'
-        } ${selectedConversation ? 'hidden md:flex' : 'flex w-full md:w-auto'}`}
+        className={`bg-white flex flex-col flex-shrink-0 border-r border-gray-200 ${
+          !isResizing && 'transition-all duration-200'
+        } ${selectedConversation ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
         style={{ width: isMobile && !selectedConversation ? '100%' : `${sidebarWidth}px` }}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                <HiMail className="w-5 h-5 text-gray-600" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-md shadow-primary-500/20">
+                <HiOutlineInbox className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-lg font-semibold text-gray-900">{t('inbox.title')}</h1>
-              {unreadCount > 0 && (
-                <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-medium rounded-full">
-                  {unreadCount}
-                </span>
-              )}
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">{t('inbox.title')}</h1>
+                {unreadCount > 0 && (
+                  <span className="text-xs text-primary-600 font-semibold">{unreadCount} chưa đọc</span>
+                )}
+              </div>
             </div>
             <button
               onClick={toggleNotifications}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-2.5 rounded-xl transition-all duration-200 ${
                 notificationsEnabled 
-                  ? 'text-primary-500 bg-primary-50 hover:bg-primary-100' 
-                  : 'text-gray-400 hover:bg-gray-100'
+                  ? 'text-primary-600 bg-primary-50 shadow-sm' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
               }`}
-              title={notificationsEnabled ? t('inbox.notificationsOn') : t('inbox.notificationsOff')}
+              title={notificationsEnabled ? 'Tắt thông báo' : 'Bật thông báo'}
             >
-              {notificationsEnabled ? (
-                <HiBell className="w-5 h-5" />
-              ) : (
-                <HiOutlineBell className="w-5 h-5" />
-              )}
+              <HiOutlineBell className="w-5 h-5" />
             </button>
           </div>
 
           {/* Session warning */}
           {!sessionStatus.connected && sessionStatus.accounts?.length > 0 && (
-            <div className="mb-3 p-2.5 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-              <HiExclamationCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-medium text-yellow-800">{t('inbox.sessionExpired')}</p>
-                <p className="text-xs text-yellow-600">{t('inbox.rescanQR')}</p>
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-start gap-2">
+                <HiOutlineExclamation className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">{t('inbox.sessionExpired')}</p>
+                  <p className="text-xs text-amber-600 mt-0.5">{t('inbox.rescanQR')}</p>
+                </div>
               </div>
             </div>
           )}
 
           {/* Search */}
           <div className="relative">
-            <HiOutlineSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <HiOutlineSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               ref={searchInputRef}
               type="text"
               placeholder={t('inbox.searchConversations')}
               value={filters.search}
               onChange={(e) => handleSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
             />
             {filters.search && (
               <button
                 onClick={() => handleSearch('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
               >
-                <HiLogout className="w-4 h-4" />
+                <HiOutlineLogout className="w-4 h-4" />
               </button>
             )}
           </div>
         </div>
 
         {/* Filters + Zalo selector */}
-        <div className="px-4 py-3 border-b border-gray-100 space-y-3">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
-            {CHANNEL_FILTERS(t).map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => setFilters(prev => ({ ...prev, channel: filter.value }))}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
-                  filters.channel === filter.value
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {t(filter.label)}
-              </button>
-            ))}
-          </div>
+        <div className="px-4 py-3 border-b border-gray-100 space-y-3 bg-gray-50/50">
+          <ConversationFilters
+            filters={filters}
+            onChange={setFilters}
+          />
           
           <ZaloAccountSelector 
             selectedAccountId={selectedAccountId}
@@ -572,7 +517,7 @@ const InboxPage = () => {
         </div>
 
         {/* Conversation list */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden bg-white">
           <ConversationList
             conversations={conversations}
             isLoading={isLoadingConversations}
@@ -581,6 +526,10 @@ const InboxPage = () => {
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
             onDelete={handleDeleteConversation}
+            sortBy={filters.sort}
+            filterStatus={filters.status}
+            filterDate={filters.date}
+            channelFilter={filters.channel}
           />
         </div>
       </div>
@@ -592,34 +541,32 @@ const InboxPage = () => {
             isResizing ? 'bg-primary-500' : 'bg-transparent'
           }`}
           onMouseDown={handleResizeStart}
-          title={t('common.dragToResize')}
         />
       )}
 
       {/* Right panel */}
       <div
-        className={`flex-1 flex bg-white ${
-          selectedConversation ? 'flex' : 'hidden md:flex'
+        className={`flex-1 flex flex-col bg-gray-50 ${
+          selectedConversation ? 'flex' : 'hidden lg:flex'
         }`}
       >
-        <div className="flex-1 flex flex-col">
-          {selectedConversation ? (
+        {selectedConversation ? (
           <>
             {/* Message header */}
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 bg-white">
+            <div className="px-5 py-4 bg-white border-b border-gray-200 flex items-center gap-4 shadow-sm">
               <button
                 onClick={handleBack}
-                className="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
               >
                 <HiArrowLeft className="w-5 h-5" />
               </button>
 
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-semibold">
-                {selectedConversation.visitorName?.[0]?.toUpperCase() || <HiUserCircle className="w-6 h-6" />}
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-primary-600 font-bold text-lg shadow-sm">
+                {selectedConversation.visitorName?.[0]?.toUpperCase() || '?'}
               </div>
 
               <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-gray-900 truncate">
+                <h2 className="font-bold text-gray-900 truncate text-lg">
                   {selectedConversation.visitorName || t('inbox.anonymousCustomer')}
                 </h2>
                 <p className="text-sm text-gray-500">
@@ -632,22 +579,22 @@ const InboxPage = () => {
                   fetchMessages(selectedConversation);
                   fetchConversations(true);
                 }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                title={t('common.refresh')}
+                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                title="Làm mới"
               >
-                <HiRefresh className="w-5 h-5" />
+                <HiOutlineRefresh className="w-5 h-5" />
               </button>
 
               <button
                 onClick={() => setShowDetails(!showDetails)}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-2.5 rounded-xl transition-all ${
                   showDetails 
-                    ? 'text-primary-500 bg-primary-50' 
+                    ? 'text-primary-600 bg-primary-50 shadow-sm' 
                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
-                title={t('inbox.conversationDetails')}
+                title="Chi tiết"
               >
-                <HiInformationCircle className="w-5 h-5" />
+                <HiOutlineInformationCircle className="w-5 h-5" />
               </button>
             </div>
 
@@ -678,24 +625,24 @@ const InboxPage = () => {
             />
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center max-w-xs px-6">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-gray-100 flex items-center justify-center shadow-sm">
-                <HiMail className="w-7 h-7 text-gray-400" />
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+            <div className="text-center max-w-sm px-8">
+              <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center shadow-lg shadow-primary-500/10">
+                <HiOutlineMail className="w-12 h-12 text-primary-500" />
               </div>
-              <h2 className="text-base font-semibold text-gray-700 mb-1">
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
                 {t('inbox.selectConversation')}
               </h2>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <p className="text-gray-500 leading-relaxed">
                 {t('inbox.noConversations')}
               </p>
               {filters.channel === 'zalo_personal' && !sessionStatus.connected && (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                  <div className="flex items-start gap-2 text-left">
-                    <HiExclamationCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+                  <div className="flex items-start gap-3 text-left">
+                    <HiOutlineExclamation className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-xs font-medium text-yellow-800">{t('inbox.zaloNotConnected')}</p>
-                      <p className="text-xs text-yellow-600 mt-0.5">{t('inbox.connectZaloFirst')}</p>
+                      <p className="text-sm font-semibold text-amber-800">{t('inbox.zaloNotConnected')}</p>
+                      <p className="text-sm text-amber-600 mt-1">{t('inbox.connectZaloFirst')}</p>
                     </div>
                   </div>
                 </div>
@@ -703,15 +650,15 @@ const InboxPage = () => {
             </div>
           </div>
         )}
-        </div>
-
-        {showDetails && selectedConversation && (
-          <ConversationDetails
-            conversation={selectedConversation}
-            onClose={() => setShowDetails(false)}
-          />
-        )}
       </div>
+
+      {/* Conversation Details Panel */}
+      {showDetails && selectedConversation && (
+        <ConversationDetails
+          conversation={selectedConversation}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
     </div>
   );
 };

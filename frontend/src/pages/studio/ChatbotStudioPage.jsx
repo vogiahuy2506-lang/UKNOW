@@ -6,6 +6,8 @@ import {
   HiOutlineRefresh,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
+  HiOutlineChatAlt2,
+  HiOutlinePlus,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -83,50 +85,158 @@ function EmptyState({ chatbot, onCreateNew: _onCreateNew }) {
           </div>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3 max-w-sm">
-        {[
-          { icon: '💡', label: 'Hỏi về sản phẩm', color: 'emerald' },
-          { icon: '📖', label: 'Hướng dẫn sử dụng', color: 'blue' },
-          { icon: '🔧', label: 'Hỗ trợ kỹ thuật', color: 'amber' },
-          { icon: '💬', label: 'Trò chuyện tự do', color: 'violet' },
-        ].map((action) => (
-          <button
-            key={action.label}
-            onClick={() => {}}
-            className="p-4 rounded-2xl border transition-all hover:scale-105 text-left"
-            style={{
-              backgroundColor: bgColor,
-              borderColor: `${primaryColor}20`,
-            }}
-          >
-            <span className="text-2xl mb-2 block">{action.icon}</span>
-            <span className="text-sm font-semibold block" style={{ color: textColor }}>{action.label}</span>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
 
-// Chat Message Area with custom branding
+// Conversation List Sidebar
+function ConversationList({ conversations, activeId, onSelect, onNewChat: _onNewChat, onDelete, primaryColor: _primaryColor }) {
+  if (conversations.length === 0) {
+    return (
+      <div className="p-4 text-center text-gray-500">
+        <p className="text-sm">Chưa có cuộc trò chuyện nào</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-gray-100">
+      {conversations.map((conv) => (
+        <div
+          key={conv.id}
+          onClick={() => onSelect(conv)}
+          className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors group relative ${
+            activeId === conv.id ? 'bg-blue-50' : ''
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <HiOutlineChatAlt2 className="w-4 h-4 mt-1 text-gray-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{conv.title || 'Cuộc trò chuyện mới'}</p>
+              <p className="text-xs text-gray-500 truncate mt-0.5">
+                {conv.last_message || 'Bắt đầu trò chuyện...'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('vi-VN', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                }) : ''}
+              </p>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
+              className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 text-red-500 transition-all"
+            >
+              <HiOutlineTrash className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Chat Message Area with conversation saving
 function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
+  const [conversations, setConversations] = useState([]);
+  const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
   const { primaryColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
 
+  // Load conversations when chatbot changes
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (chatbot?.id) {
+      loadConversations();
+    }
+  }, [chatbot?.id]);
+
+  const loadConversations = async () => {
+    try {
+      const res = await chatbotApi.getChatbotStudioConversations({ chatbot_id: chatbot.id });
+      if (res.data?.data?.items) {
+        setConversations(res.data.data.items);
+      }
+    } catch (err) {
+      console.error('Load conversations error:', err);
+    }
+  };
+
+  const loadMessages = async (conversationId) => {
+    setLoadingMessages(true);
+    try {
+      const res = await chatbotApi.getChatbotStudioMessages(conversationId);
+      if (res.data?.data) {
+        setMessages(res.data.data.map(m => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        })));
+      }
+    } catch (err) {
+      console.error('Load messages error:', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const handleSelectConversation = async (conv) => {
+    setActiveConversation(conv);
+    await loadMessages(conv.id);
+  };
+
+  const handleNewChat = async () => {
+    try {
+      const res = await chatbotApi.createChatbotStudioConversation(chatbot.id);
+      if (res.data?.data) {
+        const newConv = res.data.data;
+        setConversations(prev => [newConv, ...prev]);
+        setActiveConversation(newConv);
+        setMessages([]);
+      }
+    } catch (err) {
+      toast.error('Không thể tạo cuộc trò chuyện mới');
+    }
+  };
+
+  const handleDeleteConversation = async (convId) => {
+    if (!confirm('Xóa cuộc trò chuyện này?')) return;
+    try {
+      await chatbotApi.deleteChatbotStudioConversation(convId);
+      setConversations(prev => prev.filter(c => c.id !== convId));
+      if (activeConversation?.id === convId) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+      toast.success('Đã xóa cuộc trò chuyện');
+    } catch (err) {
+      toast.error('Không thể xóa cuộc trò chuyện');
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
+
+    // Create new conversation if none selected
+    let conv = activeConversation;
+    if (!conv) {
+      try {
+        const res = await chatbotApi.createChatbotStudioConversation(chatbot.id);
+        if (res.data?.data) {
+          conv = res.data.data;
+          setConversations(prev => [conv, ...prev]);
+          setActiveConversation(conv);
+        }
+      } catch (err) {
+        toast.error('Không thể tạo cuộc trò chuyện');
+        return;
+      }
+    }
 
     const userMessage = { role: 'user', content: input.trim(), created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMessage]);
@@ -134,7 +244,16 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     setSending(true);
 
     try {
+      // Save user message
+      await chatbotApi.addChatbotStudioMessage(conv.id, {
+        role: 'user',
+        content: input.trim(),
+      });
+
+      // Get chat history for context
       const history = messages.map(m => ({ role: m.role, content: m.content }));
+      
+      // Call AI
       const res = await chatbotApi.sendCustomChat({
         history: [...history, { role: 'user', content: input }],
         chatbot_id: chatbot?.id,
@@ -144,11 +263,24 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       });
 
       if (res.data?.content) {
+        // Save AI response
+        await chatbotApi.addChatbotStudioMessage(conv.id, {
+          role: 'assistant',
+          content: res.data.content,
+        });
+
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: res.data.content,
           created_at: new Date().toISOString(),
         }]);
+
+        // Update conversation in list
+        setConversations(prev => prev.map(c => 
+          c.id === conv.id 
+            ? { ...c, last_message: res.data.content.substring(0, 100), last_message_at: new Date().toISOString() }
+            : c
+        ));
       } else if (res.data?.message) {
         toast.error(res.data.message);
       }
@@ -161,6 +293,10 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     }
   };
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -168,10 +304,16 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     }
   };
 
-  const clearChat = () => {
-    if (!confirm('Xóa tất cả tin nhắn?')) return;
-    setMessages([]);
-    toast.success('Đã xóa');
+  const handleClearChat = async () => {
+    if (!activeConversation) return;
+    if (!confirm('Xóa tất cả tin nhắn trong cuộc trò chuyện này?')) return;
+    try {
+      await chatbotApi.clearChatbotStudioConversation(activeConversation.id);
+      setMessages([]);
+      toast.success('Đã xóa tin nhắn');
+    } catch (err) {
+      toast.error('Không thể xóa tin nhắn');
+    }
   };
 
   const handleSuggestionClick = (q) => {
@@ -204,17 +346,51 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             </div>
           </div>
         </div>
-        <button
-          onClick={clearChat}
-          className="p-2 rounded-lg transition-colors hover:bg-red-50 text-red-400"
-          title="Xóa chat"
-        >
-          <HiOutlineTrash className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleNewChat}
+            className="p-2 rounded-lg transition-colors hover:bg-blue-50 text-blue-500"
+            title="Cuộc trò chuyện mới"
+          >
+            <HiOutlinePlus className="w-5 h-5" />
+          </button>
+          {activeConversation && (
+            <button
+              onClick={handleClearChat}
+              className="p-2 rounded-lg transition-colors hover:bg-red-50 text-red-400"
+              title="Xóa chat"
+            >
+              <HiOutlineTrash className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Conversations list toggle area */}
+        {messages.length === 0 && (
+          <div className="mb-4">
+            {conversations.length > 0 && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Cuộc trò chuyện gần đây</p>
+                  <button onClick={handleNewChat} className="text-xs text-blue-500 hover:underline">
+                    + Mới
+                  </button>
+                </div>
+                <ConversationList
+                  conversations={conversations.slice(0, 5)}
+                  activeId={activeConversation?.id}
+                  onSelect={handleSelectConversation}
+                  onDelete={handleDeleteConversation}
+                  primaryColor={primaryColor}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Suggested Questions - show when no messages */}
         {messages.length === 0 && suggestedQuestions.length > 0 && (
           <div className="mb-4">
@@ -235,6 +411,12 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {loadingMessages && (
+          <div className="flex items-center justify-center py-8">
+            <div className="spinner w-6 h-6"></div>
           </div>
         )}
 
