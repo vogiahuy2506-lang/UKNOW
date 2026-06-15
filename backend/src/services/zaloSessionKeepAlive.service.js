@@ -58,7 +58,8 @@ async function getAccountsWithCookies() {
        FROM zalo_settings zs
        WHERE zs.cookie_text IS NOT NULL
          AND zs.cookie_text <> ''
-         AND zs.is_active = TRUE`
+         AND zs.is_active = TRUE
+         AND zs.status = 'connected'`
     );
     console.log(`[ZaloKeepAlive] Found ${result.rows.length} accounts with cookies`);
     if (result.rows.length > 0) {

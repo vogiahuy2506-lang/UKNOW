@@ -1466,27 +1466,7 @@ class CampaignZaloSenderService {
       return this.mapCampaignZaloAccount(account);
     }
 
-    // Account can be disconnected after server restart; try auto-restore from saved cookie.
-    if (isActive) {
-      const restoredApi = await this.tryAutoRestoreSession({
-        accountId: normalizedId,
-        userId: account.id_user,
-        cookieText: account.cookie_text,
-        fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
-      });
-      if (restoredApi) {
-        return this.mapCampaignZaloAccount({
-          ...account,
-          status: 'connected',
-          is_active: true,
-        });
-      }
-    }
-
-    if (!isConnected || !isActive) {
-      throw new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
-    }
-    return this.mapCampaignZaloAccount(account);
+    throw new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
   }
 
   /**
@@ -1540,7 +1520,10 @@ class CampaignZaloSenderService {
     if (api) return api;
 
     const restoreSource = await this.getAccountRestoreSource({ accountId, userId });
-    if (restoreSource?.is_active === true) {
+    if (
+      restoreSource?.is_active === true
+      && String(restoreSource?.status || '').trim() === 'connected'
+    ) {
       const restoredApi = await this.tryAutoRestoreSession({
         accountId,
         userId,
@@ -1596,7 +1579,10 @@ class CampaignZaloSenderService {
         accountId,
         userId: normalizedUserId,
       });
-      if (restoreSource?.is_active === true) {
+      if (
+        restoreSource?.is_active === true
+        && String(restoreSource?.status || '').trim() === 'connected'
+      ) {
         const restoredApi = await this.tryAutoRestoreSession({
           accountId,
           userId: normalizedUserId,

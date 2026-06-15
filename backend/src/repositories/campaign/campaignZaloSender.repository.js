@@ -62,6 +62,22 @@ class CampaignZaloSenderRepository {
   }
 
   /**
+   * Mark a single account as disconnected when user scope is not available.
+   *
+   * @param {number|string} accountId
+   * @returns {Promise<void>}
+   */
+  async markAccountDisconnectedById(accountId) {
+    await db.query(
+      `UPDATE zalo_settings
+       SET status = 'disconnected',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [accountId]
+    );
+  }
+
+  /**
    * Load one Zalo account row for campaign usage.
    * Admin users can load any account; non-admin users are restricted to their own.
    *

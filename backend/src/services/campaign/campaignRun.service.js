@@ -4458,6 +4458,21 @@ class CampaignRunService {
               if (error?.code === 'RUN_YIELD_SLOT') {
                 throw error;
               }
+              if (!multiEnabled && this.isZaloAccountUnavailableError(error)) {
+                await db.query(
+                  `UPDATE campaigns
+                   SET status = 'paused',
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $1 AND status = 'active'`,
+                  [campaignId]
+                );
+                const pauseNote = new Error(
+                  'Tài khoản Zalo đã mất kết nối (có thể do đăng nhập ở nơi khác). '
+                  + 'Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại tài khoản Zalo rồi kích hoạt lại.'
+                );
+                pauseNote.code = 'CAMPAIGN_PAUSED_BY_ZALO_ACCOUNT_UNAVAILABLE';
+                throw pauseNote;
+              }
               if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
                 const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(workingAccount.id);
                 const waitMs = Math.max(0, untilMs - Date.now());
