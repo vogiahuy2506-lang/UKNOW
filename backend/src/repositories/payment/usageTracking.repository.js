@@ -25,7 +25,7 @@ class UsageTrackingRepository {
        WHERE id_user = $1
          AND resource_type = $2
          AND period_start >= $3
-         AND period_end <= $4`,
+         AND period_start <= $4`,
       [userId, resourceType, periodStart.toISOString(), now.toISOString()]
     );
     return parseInt(rows[0]?.total_usage || 0);
@@ -54,16 +54,24 @@ class UsageTrackingRepository {
   /**
    * Track usage for a resource
    */
-  async trackUsage(userId, resourceType, delta = 1) {
+  async trackUsage(userId, resourceType, delta = 1, metadata = {}) {
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const usageMetadata = metadata && typeof metadata === 'object' ? metadata : {};
 
     const { rows } = await db.query(
-      `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, resourceType, delta, periodStart.toISOString(), periodEnd.toISOString()]
+      [
+        userId,
+        resourceType,
+        delta,
+        periodStart.toISOString(),
+        periodEnd.toISOString(),
+        JSON.stringify(usageMetadata),
+      ]
     );
     return rows[0];
   }
@@ -91,7 +99,7 @@ class UsageTrackingRepository {
          p.messages_per_period,
          p.is_fup_enabled,
          p.max_chatbots,
-         p.ai_credits_per_period
+         p.ai_tokens_per_period
        FROM users u
        JOIN plans p ON p.id = u.active_plan_id
        WHERE u.id = $1`,

@@ -36,7 +36,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     maxEmailTemplates: plan.maxEmailTemplates ?? '',
     maxZaloTemplates: plan.maxZaloTemplates ?? '',
     maxChatbots: plan.maxChatbots ?? '',
-    aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
+    aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));

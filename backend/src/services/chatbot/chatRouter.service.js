@@ -8,7 +8,8 @@ import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import usageTrackingService from '../payment/usageTracking.service.js';
+import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
+import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -76,20 +77,24 @@ class ChatRouterService {
       isFirstMessage,
     });
 
-    await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
-    const aiResponse = await this._callAI({
-      systemPrompt,
-      history,
-      message,
-      model: settings.ai_model || 'gemini-2.5-flash',
-      temperature: parseFloat(settings.temperature || 0.7),
-      maxTokens: settings.max_tokens || 2048,
-    });
+    let aiResponse;
+    try {
+      aiResponse = await this._callAI({
+        userId,
+        systemPrompt,
+        history,
+        message,
+        model: settings.ai_model || 'gemini-2.5-flash',
+        temperature: parseFloat(settings.temperature || 0.7),
+        maxTokens: settings.max_tokens || 2048,
+      });
+    } catch (error) {
+      if (!aiUsageMeter.isLimitError(error)) throw error;
+      aiResponse = { text: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' };
+    }
 
     // 8. Strip markdown formatting before sending (Zalo cannot render markdown)
     const cleanResponse = stripMarkdown(aiResponse.text);
-    await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
-
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
     await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
 
@@ -158,18 +163,23 @@ class ChatRouterService {
       isFirstMessage,
     });
 
-    await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
-    const aiResponse = await this._callAI({
-      systemPrompt,
-      history,
-      message,
-      model: chatbotSettings.ai_model || 'gemini-2.5-flash',
-      temperature: parseFloat(chatbotSettings.temperature || 0.7),
-      maxTokens: chatbotSettings.max_tokens || 2048,
-    });
+    let aiResponse;
+    try {
+      aiResponse = await this._callAI({
+        userId,
+        systemPrompt,
+        history,
+        message,
+        model: chatbotSettings.ai_model || 'gemini-2.5-flash',
+        temperature: parseFloat(chatbotSettings.temperature || 0.7),
+        maxTokens: chatbotSettings.max_tokens || 2048,
+      });
+    } catch (error) {
+      if (!aiUsageMeter.isLimitError(error)) throw error;
+      aiResponse = { text: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' };
+    }
     // Strip markdown formatting before sending (Zalo cannot render markdown)
     const cleanResponse = stripMarkdown(aiResponse.text);
-    await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
 
     // Log messages
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
@@ -238,7 +248,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     return prompt;
   }
 
-  async _callAI({ systemPrompt, history, message, model, temperature, maxTokens }) {
+  async _callAI({ userId, systemPrompt, history, message, model, temperature, maxTokens }) {
     // Map DB role to Gemini role:
     // - 'visitor' (user message) → 'user'
     // - 'bot' or 'agent' (AI/bot response) → 'model'
@@ -255,16 +265,24 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+    const systemInstruction = { parts: [{ text: systemPrompt }] };
+    const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
+      contents: chatHistory,
+      systemInstruction,
+      model: modelName,
+      requestedMaxOutputTokens: maxTokens,
+    });
+
     const response = await Promise.race([
       fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
+          systemInstruction,
           contents: chatHistory,
           generationConfig: {
             temperature,
-            maxOutputTokens: maxTokens,
+            maxOutputTokens,
           },
         }),
       }),
@@ -272,9 +290,16 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     ]);
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
+    }
     const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!textResponse) throw new Error('AI returned empty response');
 
+    await aiUsageMeter.record(userId, extractGeminiUsage(data), {
+      feature: 'chatbot_reply',
+      model: modelName,
+    });
     return { text: textResponse };
   }
 
@@ -400,8 +425,8 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
 - Khong dung markdown bold/italic
 - Neu khong biet, hay noi ro`;
 
-      await usageTrackingService.ensureAvailable(chatbot.id_user, 'ai_credit', 1);
       const response = await this._callAI({
+        userId: chatbot.id_user,
         systemPrompt,
         history: chatHistory,
         message,
@@ -409,7 +434,6 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
       });
-      await usageTrackingService.incrementUsage(chatbot.id_user, 'ai_credit', 1);
 
       return { content: stripMarkdown(response.text) };
     } catch (err) {

@@ -64,7 +64,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates }) {
+  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
   const normalizedCode = code?.trim() || null;
@@ -92,6 +92,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
       maxEmailAccounts:        parseLimitField(maxEmailAccounts),
       maxEmailTemplates:       parseLimitField(maxEmailTemplates),
       maxZaloTemplates:        parseLimitField(maxZaloTemplates),
+      aiTokensPerPeriod:       parseLimitField(aiTokensPerPeriod),
     });
   } catch (err) {
     if (err?.code === '23505' && String(err?.constraint || '').includes('plans_code')) {
@@ -130,6 +131,7 @@ export async function editPlan(id, payload) {
     maxEmailAccounts:      parseLimitField(payload.maxEmailAccounts),
     maxEmailTemplates:     parseLimitField(payload.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(payload.maxZaloTemplates),
+    aiTokensPerPeriod:     parseLimitField(payload.aiTokensPerPeriod),
   });
 }
 
@@ -227,6 +229,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
     maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
+    aiTokensPerPeriod:     parseLimitField(planData.aiTokensPerPeriod),
   });
 
   return { ...result, assignedTo: user };
@@ -276,6 +279,7 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
       maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
       maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
+      aiTokensPerPeriod:     parseLimitField(planData.aiTokensPerPeriod),
     });
 
     orderCode = Date.now();

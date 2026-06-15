@@ -38,7 +38,7 @@ const buildPlanUpdatePayload = (plan, overrides = {}) => ({
   maxEmailTemplates: plan.maxEmailTemplates ?? '',
   maxZaloTemplates: plan.maxZaloTemplates ?? '',
   maxChatbots: plan.maxChatbots ?? '',
-  aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
+  aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
   ...overrides,
 });
 

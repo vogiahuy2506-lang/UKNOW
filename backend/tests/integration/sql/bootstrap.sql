@@ -139,7 +139,7 @@ CREATE TABLE plans (
   max_email_templates   INTEGER,
   max_zalo_templates    INTEGER,
   max_chatbots          INTEGER,
-  ai_credits_per_period INTEGER,
+  ai_tokens_per_period  INTEGER,
   duration_days         INTEGER,
   price_yearly          BIGINT,
   messages_per_period   INTEGER,

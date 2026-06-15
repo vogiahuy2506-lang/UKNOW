@@ -1,4 +1,4 @@
-import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import businessProfileService from './businessProfile.service.js';
 import { buildAdminContext } from './adminContext.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
@@ -7,6 +7,7 @@ import axios from 'axios';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
+import aiUsageMeter from './aiUsageMeter.service.js';
 
 class AiCampaignService {
   /**
@@ -487,10 +488,12 @@ D. ZALO NHÓM:
     }
 
     console.log(`[AI] Sending prompt + ${parts.length - 1} files to Gemini...`);
-    const { text } = await generateGeminiContent({
+    const { text } = await aiUsageMeter.generateWithBudget(userId, {
       parts,
       jsonMode: true,
       temperature: 0.8,
+      maxOutputTokens: 16384,
+      feature: 'campaign_script',
     });
     console.log(`[AI] Gemini response received (${text?.length || 0} chars)`);
 
@@ -1189,10 +1192,17 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {
+      const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
+        contents: geminiHistory,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        model: modelName,
+        requestedMaxOutputTokens: 8192,
+      });
+
       const { data: result } = await axios.post(url, {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: geminiHistory,
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens },
       }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
 
       if (!result.candidates || result.candidates.length === 0) {
@@ -1209,6 +1219,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
         .join('');
       if (!text) throw new Error('AI trả về kết quả rỗng.');
 
+      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
+        feature: 'smart_chat',
+        model: modelName,
+      });
       return this._parseJson(text);
     } catch (err) {
       if (err.response) {
@@ -1526,10 +1540,17 @@ Khi muốn tạo Landing Page.
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {
+      const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
+        contents: geminiHistory,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        model: modelName,
+        requestedMaxOutputTokens: 8192,
+      });
+
       const { data: result } = await axios.post(url, {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: geminiHistory,
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens },
       }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
 
       if (!result.candidates || result.candidates.length === 0) {
@@ -1543,6 +1564,10 @@ Khi muốn tạo Landing Page.
       if (!text) throw new Error('AI trả về kết quả rỗng.');
 
       console.log('[AI Chat] Gemini response (first 500 chars):', text.substring(0, 500));
+      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
+        feature: 'smart_chat',
+        model: modelName,
+      });
       return this._parseJson(text);
     } catch (err) {
       if (err.response) {
@@ -1678,7 +1703,13 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
     }
 
     console.log(`[AI Registry] Sending prompt to Gemini...`);
-    const { text } = await generateGeminiContent({ parts, jsonMode: true, temperature: 0.8 });
+    const { text } = await aiUsageMeter.generateWithBudget(userId, {
+      parts,
+      jsonMode: true,
+      temperature: 0.8,
+      maxOutputTokens: 16384,
+      feature: 'campaign_registry',
+    });
     console.log(`[AI Registry] Response received (${text?.length || 0} chars)`);
 
     return this._parseJson(text);

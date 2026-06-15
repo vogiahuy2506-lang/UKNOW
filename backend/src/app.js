@@ -40,6 +40,7 @@ import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import adminVouchersRoutes from './routes/adminVouchers.routes.js';
 import adminSystemRoutes from './routes/adminSystem.routes.js';
 import adminDeliveryMonitorRoutes from './routes/adminDeliveryMonitor.routes.js';
+import adminAiUsageRoutes from './routes/adminAiUsage.routes.js';
 import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.js';
 import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
@@ -164,6 +165,7 @@ export function createApp() {
   app.use('/api/admin/vouchers', adminVouchersRoutes);
   app.use('/api/admin/system', adminSystemRoutes);
   app.use('/api/admin/delivery-monitor', adminDeliveryMonitorRoutes);
+  app.use('/api/admin/ai-usage', adminAiUsageRoutes);
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);

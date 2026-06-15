@@ -13,6 +13,7 @@ import {
   HiOutlineCheckCircle,
   HiOutlineBan,
   HiOutlineShieldCheck,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getMyOrders } from '../services/authApi.service';
@@ -76,7 +77,8 @@ function PlanSection({ data, t }) {
     data?.dailyEmailLimit !== null ||
     data?.monthlyEmailLimit !== null ||
     data?.dailyZaloLimit !== null ||
-    data?.monthlyZaloLimit !== null;
+    data?.monthlyZaloLimit !== null ||
+    data?.aiTokensPerPeriod !== null;
 
   const features = useMemo(() => {
     if (!data?.activePlanFeatures) return [];
@@ -196,6 +198,13 @@ function PlanSection({ data, t }) {
             label={t('accountProfileModal.zaloThisMonth')}
             used={data.zaloSentMonth}
             limit={data.monthlyZaloLimit}
+            t={t}
+          />
+          <UsageBar
+            icon={HiOutlineSparkles}
+            label={t('accountProfileModal.aiTokens')}
+            used={data.aiTokensUsed || 0}
+            limit={data.aiTokensPerPeriod}
             t={t}
           />
         </div>

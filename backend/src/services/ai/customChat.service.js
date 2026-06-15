@@ -1,7 +1,8 @@
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import usageTrackingService from '../payment/usageTracking.service.js';
+import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
+import aiUsageMeter from './aiUsageMeter.service.js';
 
 /** Timeout for Gemini API calls (30 seconds) */
 const GEMINI_TIMEOUT_MS = 30000;
@@ -74,7 +75,10 @@ class CustomChatService {
           throw error;
         }
 
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        return {
+          text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+          usage: extractGeminiUsage(data),
+        };
       } catch (err) {
         lastError = err;
 
@@ -135,10 +139,19 @@ QUY TẮC TRẢ LỜI:
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     try {
-      await usageTrackingService.ensureAvailable(userId, 'ai_credit', 1);
-      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens });
-      const content = stripMarkdown(rawContent || 'Xin lỗi, tôi không có câu trả lời.');
-      await usageTrackingService.incrementUsage(userId, 'ai_credit', 1);
+      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+      const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+      const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
+        contents,
+        model,
+        requestedMaxOutputTokens: maxTokens,
+      });
+      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens: maxOutputTokens });
+      const content = stripMarkdown(rawContent?.text || 'Xin lỗi, tôi không có câu trả lời.');
+      await aiUsageMeter.record(userId, rawContent?.usage, {
+        feature: 'kb_chat',
+        model,
+      });
 
       return {
         content,

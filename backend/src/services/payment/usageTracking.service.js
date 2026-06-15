@@ -7,9 +7,10 @@ class UsageTrackingService {
    * @param {number} userId
    * @param {string} resourceType - e.g., 'campaign', 'landing_page', 'email_sent', 'zalo_sent'
    * @param {number} delta - Amount to add (default 1)
+   * @param {object} metadata - Optional usage metadata
    */
-  async trackUsage(userId, resourceType, delta = 1) {
-    return usageTrackingRepository.trackUsage(userId, resourceType, delta);
+  async trackUsage(userId, resourceType, delta = 1, metadata = {}) {
+    return usageTrackingRepository.trackUsage(userId, resourceType, delta, metadata);
   }
 
   /**
@@ -148,8 +149,8 @@ class UsageTrackingService {
       email: 'monthly_email_limit',
       zalo_sent: 'monthly_zalo_limit',
       zalo: 'monthly_zalo_limit',
-      ai_credit: 'ai_credits_per_period',
-      ai_credits: 'ai_credits_per_period',
+      ai_token: 'ai_tokens_per_period',
+      ai_tokens: 'ai_tokens_per_period',
       chatbot: 'max_chatbots',
       chatbots: 'max_chatbots',
     };

@@ -9,8 +9,10 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { useI18n } from '../../i18n';
 
 function ChatMessageArea({ chatbot }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -113,7 +115,11 @@ function ChatMessageArea({ chatbot }) {
         toast.error(res.data.message);
       }
     } catch (err) {
-      toast.error(err.message || 'Gửi thất bại');
+      const data = err?.response?.data || {};
+      const message = (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED')
+        ? t('aiChatbot.aiTokenExceeded')
+        : (data.message || err.message || 'Gửi thất bại');
+      toast.error(message);
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setSending(false);

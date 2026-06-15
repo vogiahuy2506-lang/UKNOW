@@ -1,5 +1,5 @@
-import { generateGeminiText } from '../../utils/geminiClient.util.js';
 import businessProfileService from './businessProfile.service.js';
+import aiUsageMeter from './aiUsageMeter.service.js';
 
 /** Marker để frontend (khi đã có slug) thay bằng iframe form embed. */
 const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
@@ -58,12 +58,13 @@ QUY TẮC KỸ THUẬT (bắt buộc):
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
 
-    const { text, blockReason, finishReason } = await generateGeminiText({
-      prompt: fullPrompt,
+    const { text, blockReason, finishReason } = await aiUsageMeter.generateWithBudget(userId, {
+      parts: [{ text: fullPrompt }],
       jsonMode: true,
       maxOutputTokens: 16384,
       timeoutMs: 120000,
       temperature: 0.4,
+      feature: 'landing_page',
     });
 
     if (blockReason) {

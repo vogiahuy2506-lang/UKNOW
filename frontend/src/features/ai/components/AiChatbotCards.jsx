@@ -85,6 +85,12 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSaved(false);
+    setShowCategoryPicker(false);
+  }, [draft?.templateName, draft?.subject, draft?.bodyHtml, draft?.bodyText, draft?.channel]);
 
   const handleSave = async (category) => {
     setSaving(true);
@@ -99,7 +105,8 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
         category,
         variables: [],
       });
-      toast.success('✅ ' + t('aiChatbot.templateSaved'));
+      setSaved(true);
+      toast.success(t('aiChatbot.templateSaved'));
       onSave?.();
     } catch (e) {
       toast.error(e.response?.data?.message || t('aiChatbot.saveFailed'));
@@ -151,12 +158,18 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
         ) : (
           <div className="flex gap-2 pt-1">
             <button
-              onClick={() => setShowCategoryPicker(true)}
-              disabled={saving}
-              className="flex-1 py-2.5 bg-orange-500 text-white text-xs font-black rounded-xl hover:bg-orange-600 flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
+              onClick={() => {
+                if (!saved) setShowCategoryPicker(true);
+              }}
+              disabled={saving || saved}
+              className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
+                saved
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
+              }`}
             >
               <HiOutlineCheck className="w-4 h-4" />
-              {saving ? t('aiChatbot.saving') : t('aiChatbot.saveToLibrary')}
+              {saved ? t('aiChatbot.savedToLibrary') : (saving ? t('aiChatbot.saving') : t('aiChatbot.saveToLibrary'))}
             </button>
             <button
               onClick={() => onEdit?.(draft)}

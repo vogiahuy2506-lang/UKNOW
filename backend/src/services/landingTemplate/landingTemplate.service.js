@@ -1,8 +1,8 @@
 import landingTemplateRepository from '../../repositories/landingTemplate.repository.js';
-import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 
 /**
  * Service for landing page templates and AI generation.
@@ -208,10 +208,12 @@ QUAN TRỌNG:
     }
 
     console.log('[LandingTemplate] Generating landing page...');
-    const { text, finishReason } = await generateGeminiContent({
+    const { text, finishReason } = await aiUsageMeter.generateWithBudget(userId, {
       parts,
       jsonMode: false,
       temperature: 0.7,
+      maxOutputTokens: 16384,
+      feature: 'landing_template',
     });
 
     // 6. Parse response

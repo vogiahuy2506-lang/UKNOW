@@ -3,64 +3,38 @@ import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
 import multer from 'multer';
-import usageTrackingService from '../services/payment/usageTracking.service.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.use(authMiddleware);
 
-const aiCreditMeter = async (req, res, next) => {
-  try {
-    await usageTrackingService.ensureAvailable(req.user.id, 'ai_credit', 1);
-    const originalJson = res.json.bind(res);
-    res.json = (body) => {
-      if (res.statusCode >= 200 && res.statusCode < 300 && body?.success !== false) {
-        usageTrackingService.incrementUsage(req.user.id, 'ai_credit', 1)
-          .catch(err => console.warn('[AI Credit] Failed to track usage:', err.message));
-      }
-      return originalJson(body);
-    };
-    next();
-  } catch (err) {
-    return res.status(err.status || 403).json({
-      success: false,
-      message: err.message || 'Đã hết credit AI trong gói dịch vụ hiện tại',
-      code: err.code || 'AI_CREDIT_LIMIT_EXCEEDED',
-      resource: err.resource || 'ai_credit',
-      used: err.used,
-      limit: err.limit,
-      upgradeRequired: true,
-    });
-  }
-};
-
 // Smart interactive chat
-router.post('/chat', aiLimiter, aiCreditMeter, aiController.chat.bind(aiController));
+router.post('/chat', aiLimiter, aiController.chat.bind(aiController));
 
 // Smart interactive chat V2 - multi-step support
-router.post('/chat-v2', aiLimiter, aiCreditMeter, aiController.chatV2.bind(aiController));
+router.post('/chat-v2', aiLimiter, aiController.chatV2.bind(aiController));
 
 // Generate campaign script from AI (legacy)
-router.post('/generate-campaign', aiLimiter, aiCreditMeter, aiController.generateCampaign.bind(aiController));
+router.post('/generate-campaign', aiLimiter, aiController.generateCampaign.bind(aiController));
 
 // Generate campaign with Registry support (multi-step in 1 node)
-router.post('/generate-campaign-v2', aiLimiter, aiCreditMeter, aiController.generateCampaignV2.bind(aiController));
+router.post('/generate-campaign-v2', aiLimiter, aiController.generateCampaignV2.bind(aiController));
 
 // Generate full landing page HTML (Tailwind CDN + business context)
-router.post('/generate-landing-html', aiLimiter, aiCreditMeter, aiController.generateLandingHtml.bind(aiController));
+router.post('/generate-landing-html', aiLimiter, aiController.generateLandingHtml.bind(aiController));
 
 // Create and optionally run the campaign
-router.post('/execute-campaign', aiLimiter, aiCreditMeter, aiController.executeCampaign.bind(aiController));
+router.post('/execute-campaign', aiLimiter, aiController.executeCampaign.bind(aiController));
 
 // Create campaign from AI draft (NO auto-run)
-router.post('/create-from-draft', aiLimiter, aiCreditMeter, aiController.createCampaignFromDraft.bind(aiController));
+router.post('/create-from-draft', aiLimiter, aiController.createCampaignFromDraft.bind(aiController));
 
 // Push AI script to existing campaign
-router.post('/push-to-campaign/:id', aiLimiter, aiCreditMeter, aiController.pushToCampaign.bind(aiController));
+router.post('/push-to-campaign/:id', aiLimiter, aiController.pushToCampaign.bind(aiController));
 
 // Create AND RUN campaign automatically (no confirmation needed)
-router.post('/create-and-run-campaign', aiLimiter, aiCreditMeter, aiController.createAndRunCampaign.bind(aiController));
+router.post('/create-and-run-campaign', aiLimiter, aiController.createAndRunCampaign.bind(aiController));
 
 // Business profile (RAG context)
 router.get('/business-profile', aiController.getBusinessProfile.bind(aiController));

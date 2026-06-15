@@ -289,9 +289,14 @@ class LandingTemplateController {
       });
     } catch (error) {
       console.error('[LandingTemplate] Generate error:', error);
-      res.status(500).json({
+      res.status(error.status || 500).json({
         success: false,
         message: error.message || 'Failed to generate landing page',
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.resource ? { resource: error.resource } : {}),
+        ...(error.used !== undefined ? { used: error.used } : {}),
+        ...(error.limit !== undefined ? { limit: error.limit } : {}),
+        ...(error.upgradeRequired ? { upgradeRequired: true } : {}),
       });
     }
   }

@@ -75,6 +75,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
 
+  const getAiRequestErrorMessage = (error) => {
+    const data = error?.response?.data || {};
+    if (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED') {
+      return t('aiChatbot.aiTokenExceeded');
+    }
+    return data.message || error?.message || t('aiChatbot.genericError');
+  };
+
   useEffect(() => {
     if (!isResizingPanel) return;
 
@@ -399,7 +407,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             setCreatingCampaign(false);
             update(prev => [...prev, {
               role: 'assistant',
-              content: `⚠️ Lỗi: ${createErr.response?.data?.message || createErr.message}`,
+              content: `⚠️ Lỗi: ${getAiRequestErrorMessage(createErr)}`,
               type: 'error',
             }]);
           }
@@ -416,7 +424,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     } catch (error) {
       update(prev => [...prev, {
         role: 'assistant',
-        content: `⚠️ Lỗi: ${error.response?.data?.message || error.message}`
+        content: `⚠️ Lỗi: ${getAiRequestErrorMessage(error)}`
       }]);
     } finally {
       setIsTyping(false);

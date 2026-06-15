@@ -32,7 +32,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     maxEmailTemplates: plan.maxEmailTemplates ?? '',
     maxZaloTemplates: plan.maxZaloTemplates ?? '',
     maxChatbots: plan.maxChatbots ?? '',
-    aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
+    aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));

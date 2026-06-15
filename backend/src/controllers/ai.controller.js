@@ -7,6 +7,18 @@ import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 
+function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
+  return {
+    success: false,
+    message: error.message || fallbackMessage,
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.resource ? { resource: error.resource } : {}),
+    ...(error.used !== undefined ? { used: error.used } : {}),
+    ...(error.limit !== undefined ? { limit: error.limit } : {}),
+    ...(error.upgradeRequired ? { upgradeRequired: true } : {}),
+  };
+}
+
 class AiController {
   /**
    * Generate campaign script from AI (V2 - Registry-based, multi-step support).
@@ -46,10 +58,7 @@ class AiController {
       });
     } catch (error) {
       console.error('AI generate campaign V2 error:', error);
-      return res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Lỗi khi xử lý yêu cầu AI',
-      });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý yêu cầu AI'));
     }
   }
 
@@ -82,10 +91,7 @@ class AiController {
       });
     } catch (error) {
       console.error('AI generate campaign error:', error);
-      return res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Lỗi khi xử lý yêu cầu AI',
-      });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý yêu cầu AI'));
     }
   }
 
@@ -139,10 +145,7 @@ class AiController {
       });
     } catch (error) {
       console.error('AI chat error:', error);
-      return res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Lỗi khi xử lý trò chuyện AI',
-      });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý trò chuyện AI'));
     }
   }
 
@@ -177,10 +180,7 @@ class AiController {
       });
     } catch (error) {
       console.error('AI chat V2 error:', error);
-      return res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Lỗi khi xử lý trò chuyện AI V2',
-      });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý trò chuyện AI V2'));
     }
   }
 
@@ -611,10 +611,7 @@ class AiController {
       return res.json({ success: true, data });
     } catch (error) {
       console.error('AI generate landing HTML error:', error);
-      return res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Lỗi khi sinh landing HTML',
-      });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi sinh landing HTML'));
     }
   }
 
@@ -664,7 +661,7 @@ class AiController {
       });
     } catch (error) {
       console.error('[CustomChat] Error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý chatbot AI'));
     }
   }
 

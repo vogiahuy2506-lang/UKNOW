@@ -19,7 +19,8 @@ const PLAN_COLUMNS = `
   p.daily_email_limit,
   p.monthly_email_limit,
   p.daily_zalo_limit,
-  p.monthly_zalo_limit
+  p.monthly_zalo_limit,
+  p.ai_tokens_per_period
 `;
 
 export async function findProfileBase(userId) {

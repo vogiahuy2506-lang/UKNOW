@@ -26,6 +26,14 @@ import VisualBlockEditor from './VisualBlockEditor.jsx';
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
 const BASE_DOMAIN = 'founderai.biz';
 
+const getAiErrorMessage = (error, t, fallbackKey) => {
+  const data = error?.response?.data || {};
+  if (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED') {
+    return t('aiChatbot.aiTokenExceeded');
+  }
+  return data.message || error?.message || t(fallbackKey);
+};
+
 // AI Templates for quick generation
 const AI_TEMPLATES = {
   saas: {
@@ -171,7 +179,7 @@ export default function LandingPageFullEditor({
       setAiMode('select');
       setAiTemplate('saas');
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.htmlFailed'));
+      toast.error(getAiErrorMessage(e, t, 'landingPageEditor.htmlFailed'));
     } finally {
       setAiBusy(false);
     }
@@ -211,7 +219,7 @@ export default function LandingPageFullEditor({
       setAiMode('select');
       setAiTemplate('saas');
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.htmlFailed'));
+      toast.error(getAiErrorMessage(e, t, 'landingPageEditor.htmlFailed'));
     } finally {
       setAiBusy(false);
     }

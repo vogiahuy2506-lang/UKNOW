@@ -17,6 +17,7 @@ import {
   updatePasswordHash,
   updateProfile as updateProfileInDb,
 } from '../repositories/user/user.repository.js';
+import usageTrackingService from '../services/payment/usageTracking.service.js';
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 const EMPLOYEE_LIMIT_KEYS = {
@@ -96,6 +97,8 @@ const mapProfileResponse = (userRow) => ({
   monthlyEmailLimit: userRow.monthly_email_limit ?? null,
   dailyZaloLimit: userRow.daily_zalo_limit ?? null,
   monthlyZaloLimit: userRow.monthly_zalo_limit ?? null,
+  aiTokensPerPeriod: userRow.ai_tokens_per_period ?? null,
+  aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
   emailSentMonth: Number(userRow.email_sent_month ?? 0),
@@ -142,9 +145,21 @@ class UserController {
         // ignore
       }
 
+      let aiTokenUsage = { used: 0 };
+      try {
+        aiTokenUsage = await usageTrackingService.getResourceUsage(userId, 'ai_token');
+      } catch {
+        // ignore
+      }
+
       res.json({
         success: true,
-        data: mapProfileResponse({ ...userRow, ...(planRow || {}), ...usageCounts }),
+        data: mapProfileResponse({
+          ...userRow,
+          ...(planRow || {}),
+          ...usageCounts,
+          ai_tokens_used: aiTokenUsage.used,
+        }),
       });
     } catch (error) {
       console.error('Get profile error:', error);

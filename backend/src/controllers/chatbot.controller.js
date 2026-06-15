@@ -12,6 +12,23 @@ import uploadController from './upload.controller.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
+const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
+
+function isAiTokenLimitError(error) {
+  return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
+}
+
+function publicChatbotFallback(extra = {}) {
+  return {
+    success: true,
+    data: {
+      role: 'assistant',
+      content: PUBLIC_CHATBOT_FALLBACK_CONTENT,
+      created_at: new Date().toISOString(),
+      ...extra,
+    },
+  };
+}
 
 /**
  * Extract readable text content from HTML, preserving structure
@@ -1133,6 +1150,10 @@ class ChatbotController {
         },
       });
     } catch (err) {
+      if (isAiTokenLimitError(err)) {
+        console.warn('[CustomChatbot] Public widget AI token quota exhausted');
+        return res.json(publicChatbotFallback());
+      }
       console.error('[CustomChatbot] Chat error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -1140,6 +1161,9 @@ class ChatbotController {
 
   // Chat with chatbot by ID (not widgetKey) - for PublicChatbotPage
   async chatWithCustomChatbotById(req, res) {
+    let visitorSessionId = null;
+    let conversation = null;
+    let chatbotUserId = null;
     try {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
@@ -1160,6 +1184,7 @@ class ChatbotController {
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
+      chatbotUserId = chatbot.id_user;
 
       // Get or create widget config for this chatbot
       let widgetConfigs = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
@@ -1180,8 +1205,7 @@ class ChatbotController {
       }
 
       // Create or find conversation
-      const visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      let conversation;
+      visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       if (widgetConfig) {
         // Find existing conversation by session
@@ -1251,6 +1275,18 @@ class ChatbotController {
         },
       });
     } catch (err) {
+      if (isAiTokenLimitError(err)) {
+        console.warn('[CustomChatbot] Public chatbot AI token quota exhausted');
+        if (conversation && chatbotUserId) {
+          await chatbotRepository.addWebChatMessage(conversation.id, chatbotUserId, {
+            role: 'assistant',
+            content: PUBLIC_CHATBOT_FALLBACK_CONTENT,
+          }).catch(saveErr => {
+            console.warn('[CustomChatbot] Failed to save quota fallback message:', saveErr?.message || saveErr);
+          });
+        }
+        return res.json(publicChatbotFallback({ sessionId: visitorSessionId }));
+      }
       console.error('[CustomChatbot] Chat by ID error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
