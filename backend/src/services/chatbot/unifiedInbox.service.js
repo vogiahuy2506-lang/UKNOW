@@ -72,11 +72,17 @@ class UnifiedInboxService {
     let isGroup = false;
     let groupId = null;
     let groupName = null;
+    let displayName = conversation.visitor_name;
     
     if (conversationType === 'zalo_personal' && conversation._parsedVisitorInfo) {
       isGroup = conversation._isGroup || false;
       groupId = isGroup ? conversation._parsedVisitorInfo.group_id : null;
       groupName = isGroup ? conversation._parsedVisitorInfo.group_name : null;
+    }
+
+    // For webchat: show "Chatbot Name - ID"
+    if (conversationType === 'webchat') {
+      displayName = `${conversation.channel_display_name} - ${conversation.id}`;
     }
 
     return {
@@ -85,7 +91,7 @@ class UnifiedInboxService {
       channel: conversation.channel,
       channelDisplayName: conversation.channel_display_name,
       externalId: conversation.external_id,
-      visitorName: conversation.visitor_name,
+      visitorName: displayName,
       visitorInfo: conversation._parsedVisitorInfo || conversation.visitor_info,
       isGroup,
       groupId,
@@ -232,22 +238,8 @@ class UnifiedInboxService {
       { role: 'agent', content: content.trim(), attachments }
     );
 
-    // Broadcast SSE for real-time update
-    sseService.broadcast(String(userId), 'inbox:new_message', {
-      conversationId: parseInt(conversationId),
-      conversationType,
-      channel: conversation.channel,
-      message: content.trim(),
-      senderName: 'Agent',
-      timestamp: new Date().toISOString(),
-    });
-
-    // Broadcast unread count change
-    sseService.broadcast(String(userId), 'inbox:unread_change', {
-      conversationId: parseInt(conversationId),
-      conversationType,
-      change: -1,
-    });
+    // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.
+    // Broadcasting causes frontend to create duplicate "Agent" conversations.
 
     // Send via channel adapter
     try {
@@ -265,6 +257,7 @@ class UnifiedInboxService {
             is_group: conversation.is_group,
             group_id: conversation.group_id,
           },
+          forceReply: true, // Manual reply from inbox should always send
         };
 
         if (conversationType === 'channel') {
@@ -309,7 +302,9 @@ class UnifiedInboxService {
       conversationType: msg.conversation_type,
       channel: msg.channel,
       channelDisplayName: msg.channel_display_name,
-      visitorName: msg.visitor_name || 'Khách vãng lai',
+      visitorName: msg.conversation_type === 'webchat' 
+        ? `${msg.channel_display_name} - ${msg.id_conversation}` 
+        : (msg.visitor_name || 'Khách vãng lai'),
       visitorInfo: msg.visitor_info,
       externalId: msg.external_id,
       conversationStatus: msg.conversation_status,
@@ -360,7 +355,9 @@ class UnifiedInboxService {
       conversationType: message.conversation_type,
       channel: message.channel,
       channelDisplayName: message.channel_display_name,
-      visitorName: message.visitor_name || 'Khách vãng lai',
+      visitorName: message.conversation_type === 'webchat'
+        ? `${message.channel_display_name} - ${message.id_conversation}`
+        : (message.visitor_name || 'Khách vãng lai'),
       visitorInfo: message.visitor_info,
       externalId: message.external_id,
       conversationStatus: message.conversation_status,

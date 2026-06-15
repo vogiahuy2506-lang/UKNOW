@@ -104,7 +104,7 @@ router.put('/chatbot/settings/:channel', chatbotController.updateChatbotSettings
 
 router.get('/custom-chatbots', chatbotController.listCustomChatbots.bind(chatbotController));
 router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatbotController));
-router.get('/custom-chatbots/:chatbotId', chatbotController.getSubAssistant.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId', chatbotController.getCustomChatbot.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
 

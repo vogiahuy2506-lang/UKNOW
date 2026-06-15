@@ -28,6 +28,29 @@ const chatbotApiService = {
     return api.post('/ai/custom-chat', payload);
   },
 
+  // Chatbot Studio Conversations
+  getChatbotStudioConversations(params = {}) {
+    return api.get('/ai/chatbot-studio/conversations', { params: { ...params } });
+  },
+  getChatbotStudioConversation(conversationId) {
+    return api.get(`/ai/chatbot-studio/conversations/${conversationId}`);
+  },
+  getChatbotStudioMessages(conversationId, params = {}) {
+    return api.get(`/ai/chatbot-studio/conversations/${conversationId}/messages`, { params });
+  },
+  createChatbotStudioConversation(chatbotId) {
+    return api.post('/ai/chatbot-studio/conversations', { chatbot_id: chatbotId });
+  },
+  addChatbotStudioMessage(conversationId, message) {
+    return api.post(`/ai/chatbot-studio/conversations/${conversationId}/messages`, message);
+  },
+  deleteChatbotStudioConversation(conversationId) {
+    return api.delete(`/ai/chatbot-studio/conversations/${conversationId}`);
+  },
+  clearChatbotStudioConversation(conversationId) {
+    return api.delete(`/ai/chatbot-studio/conversations/${conversationId}/messages`);
+  },
+
   getPublicChatbot(chatbotId) {
     return api.get(`/chatbot-public/chatbot/${chatbotId}`);
   },

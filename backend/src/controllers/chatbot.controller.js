@@ -868,11 +868,17 @@ class ChatbotController {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
 
-      if (isNaN(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      let chatbot = null;
+
+      if (!isNaN(id)) {
+        // Try finding by numeric ID first
+        chatbot = await chatbotRepository.findChatbotById(id);
       }
 
-      const chatbot = await chatbotRepository.findChatbotById(id);
+      // If not found by ID, try finding by widget_key (string token)
+      if (!chatbot) {
+        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
+      }
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
@@ -885,6 +891,7 @@ class ChatbotController {
           name: chatbot.name || 'AI Assistant',
           description: chatbot.description || '',
           greeting_msg: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          welcome_message: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
           avatar_url: chatbot.avatar_url || null,
           theme_color: chatbot.theme_color || '#6366f1',
           is_active: chatbot.is_active,
@@ -947,6 +954,19 @@ class ChatbotController {
   }
 
   // ── Custom Chatbots (Studio) ──────────────────────────────────────
+
+  async getCustomChatbot(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+      return res.json({ success: true, data: chatbot });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 
   async listCustomChatbots(req, res) {
     try {
@@ -1144,21 +1164,26 @@ class ChatbotController {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
 
-      if (isNaN(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      let chatbot = null;
+
+      if (!isNaN(id)) {
+        // Try finding by numeric ID first
+        chatbot = await chatbotRepository.findChatbotById(id);
+      }
+
+      // If not found by ID, try finding by widget_key (string token)
+      if (!chatbot) {
+        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
+      }
+
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
       const { message, history, sessionId } = req.body;
 
       if (!message?.trim()) {
         return res.status(400).json({ success: false, message: 'message is required' });
-      }
-
-      // Get chatbot by ID from database
-      const chatbot = await chatbotRepository.findChatbotById(id);
-
-      if (!chatbot) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
       // Get or create widget config for this chatbot
@@ -1263,16 +1288,21 @@ class ChatbotController {
       const { sessionId, lastMessageId } = req.query;
       const id = parseInt(chatbotId);
 
-      if (isNaN(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      let chatbot = null;
+
+      if (!isNaN(id)) {
+        chatbot = await chatbotRepository.findChatbotById(id);
+      }
+
+      // If not found by ID, try finding by widget_key
+      if (!chatbot) {
+        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
       }
 
       if (!sessionId) {
         return res.status(400).json({ success: false, message: 'sessionId is required' });
       }
 
-      // Get chatbot
-      const chatbot = await chatbotRepository.findChatbotById(id);
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }

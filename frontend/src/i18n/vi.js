@@ -1607,6 +1607,23 @@ export default {
     // Search
     searchMessages: 'Tìm kiếm tin nhắn...',
     results: 'kết quả',
+    // Sort & Filters
+    sort: 'Sắp xếp',
+    sortLatest: 'Mới nhất',
+    sortUnread: 'Chưa đọc',
+    sortNameAsc: 'Tên A-Z',
+    sortNameDesc: 'Tên Z-A',
+    status: 'Trạng thái',
+    statusAll: 'Tất cả',
+    statusActive: 'Hoạt động',
+    statusClosed: 'Đã đóng',
+    date: 'Thời gian',
+    dateAll: 'Tất cả',
+    dateToday: 'Hôm nay',
+    dateWeek: '7 ngày',
+    dateMonth: '30 ngày',
+    clearFilters: 'Xóa bộ lọc',
+    clearAll: 'Xóa tất cả',
   },
 
   outbox: {
@@ -2032,12 +2049,15 @@ export default {
 
   emailSettings: {
     title: 'Cài đặt email',
+    subtitle: 'Quản lý email gửi cho chiến dịch',
     noEmails: 'Chưa có email nào',
     addEmailToStart: 'Thêm email để bắt đầu',
     displayName: 'Tên hiển thị',
     displayNamePlaceholder: 'VD: Founder AI',
+    displayNameHint: 'Tên người gửi hiển thị trong hộp thư người nhận',
     fromEmail: 'Email gửi',
     fromEmailPlaceholder: 'noreply@founderai.biz',
+    fromEmailHint: 'Email sẽ được gửi từ địa chỉ này',
     addEmail: 'Thêm email',
     primaryEmail: 'Email chính',
     setAsDefault: 'Đặt làm mặc định',

@@ -86,8 +86,8 @@ class EmailSettingsRepository {
     const encryptedSmtpPassword = encryptSmtpSecret(smtpPassword);
     const result = await db.query(
       `INSERT INTO email_settings
-        (id_user, name, email, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (id_user, name, email, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 'active')
        RETURNING *`,
       [userId, name, email, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit]
     );

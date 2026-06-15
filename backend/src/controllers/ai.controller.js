@@ -3,6 +3,7 @@ import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
+import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
@@ -777,6 +778,140 @@ class AiController {
     } catch (error) {
       console.error('[CustomChat] Add text document error:', error);
       return res.status(error.status || 500).json({ success: false, message: error.message });
+    }
+  }
+
+  // ── Chatbot Studio Conversations ─────────────────────────────────
+
+  /**
+   * Get all conversations for a user
+   */
+  async getChatbotStudioConversations(req, res) {
+    try {
+      const { limit = 20, offset = 0, status = 'active', chatbot_id } = req.query;
+      const result = await chatbotStudioConversationService.getConversations({
+        userId: req.user.id,
+        chatbotId: chatbot_id ? parseInt(chatbot_id, 10) : null,
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        status,
+      });
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('[ChatbotStudio] Get conversations error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get single conversation
+   */
+  async getChatbotStudioConversation(req, res) {
+    try {
+      const conversation = await chatbotStudioConversationService.getConversation({
+        userId: req.user.id,
+        conversationId: req.params.id,
+      });
+      return res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('[ChatbotStudio] Get conversation error:', error);
+      return res.status(404).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get messages for a conversation
+   */
+  async getChatbotStudioMessages(req, res) {
+    try {
+      const { limit = 50, offset = 0 } = req.query;
+      const messages = await chatbotStudioConversationService.getMessages({
+        userId: req.user.id,
+        conversationId: req.params.id,
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+      });
+      return res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('[ChatbotStudio] Get messages error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Create new conversation
+   */
+  async createChatbotStudioConversation(req, res) {
+    try {
+      const { chatbot_id } = req.body;
+      if (!chatbot_id) {
+        return res.status(400).json({ success: false, message: 'chatbot_id is required' });
+      }
+      const conversation = await chatbotStudioConversationService.createOrGetConversation({
+        userId: req.user.id,
+        chatbotId: chatbot_id,
+      });
+      return res.status(201).json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('[ChatbotStudio] Create conversation error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Add message to conversation
+   */
+  async addChatbotStudioMessage(req, res) {
+    try {
+      const { role, content, message_type, ai_model, ai_tokens_used, ai_latency_ms, attachments, metadata } = req.body;
+      const message = await chatbotStudioConversationService.addMessage({
+        userId: req.user.id,
+        conversationId: req.params.id,
+        role,
+        content,
+        messageType: message_type,
+        aiModel: ai_model,
+        aiTokensUsed: ai_tokens_used,
+        aiLatencyMs: ai_latency_ms,
+        attachments,
+        metadata,
+      });
+      return res.status(201).json({ success: true, data: message });
+    } catch (error) {
+      console.error('[ChatbotStudio] Add message error:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Delete conversation
+   */
+  async deleteChatbotStudioConversation(req, res) {
+    try {
+      await chatbotStudioConversationService.deleteConversation({
+        userId: req.user.id,
+        conversationId: req.params.id,
+      });
+      return res.json({ success: true, message: 'Đã xóa cuộc hội thoại' });
+    } catch (error) {
+      console.error('[ChatbotStudio] Delete conversation error:', error);
+      return res.status(404).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Clear all messages in conversation
+   */
+  async clearChatbotStudioConversation(req, res) {
+    try {
+      await chatbotStudioConversationService.clearConversation({
+        userId: req.user.id,
+        conversationId: req.params.id,
+      });
+      return res.json({ success: true, message: 'Đã xóa tin nhắn' });
+    } catch (error) {
+      console.error('[ChatbotStudio] Clear conversation error:', error);
+      return res.status(404).json({ success: false, message: error.message });
     }
   }
 }

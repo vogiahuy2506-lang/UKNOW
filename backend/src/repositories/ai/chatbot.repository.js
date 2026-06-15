@@ -420,7 +420,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions,
+              suggested_questions, widget_key,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id = $1 AND is_active = true`,
@@ -459,6 +459,7 @@ class ChatbotRepository {
          position = COALESCE($16, position),
          border_radius = COALESCE($17, border_radius),
          chat_height = COALESCE($18, chat_height),
+         widget_key = COALESCE($19, widget_key),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -467,7 +468,7 @@ class ChatbotRepository {
        data.avatar_url, data.theme_color, data.welcome_message,
        data.primary_color, data.background_color, data.text_color, data.accent_color,
        data.logo_url, data.show_avatar, data.position, data.border_radius,
-       data.chat_height];
+       data.chat_height, data.widget_key];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -488,6 +489,7 @@ class ChatbotRepository {
          border_radius = COALESCE($17, border_radius),
          chat_height = COALESCE($18, chat_height),
          suggested_questions = $19,
+         widget_key = COALESCE($20, widget_key),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -496,7 +498,7 @@ class ChatbotRepository {
        data.avatar_url, data.theme_color, data.welcome_message,
        data.primary_color, data.background_color, data.text_color, data.accent_color,
        data.logo_url, data.show_avatar, data.position, data.border_radius,
-       data.chat_height, suggestedQuestions];
+       data.chat_height, suggestedQuestions, data.widget_key];
     }
 
     const { rows } = await db.query(query, params);
