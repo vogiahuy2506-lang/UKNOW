@@ -82,6 +82,12 @@ const superAdminMenuItems = (t) => [
     icon: HiOutlineLightningBolt,
   },
   {
+{
+    name: t('nav.aiUsageAnalytics'),
+    path: '/admin/ai-usage',
+    icon: HiOutlineSparkles,
+  },
+  {
     name: t('nav.bulkNotification'),
     path: '/admin/bulk-notification',
     icon: HiOutlineMailOpen,

@@ -22,10 +22,10 @@ router.post('/',
   [
     body('name').trim().notEmpty().withMessage('Tên không được để trống'),
     body('email').isEmail().withMessage('Email không hợp lệ'),
-    body('smtpHost').trim().notEmpty().withMessage('SMTP host không được để trống'),
-    body('smtpPort').isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
-    body('smtpUsername').trim().notEmpty().withMessage('SMTP username không được để trống'),
-    body('smtpPassword').trim().notEmpty().withMessage('SMTP password không được để trống')
+    body('smtpHost').optional().trim(),
+    body('smtpPort').optional({ nullable: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
+    body('smtpUsername').optional().trim(),
+    body('smtpPassword').optional().trim()
   ],
   handleValidationErrors,
   emailSettingsController.create.bind(emailSettingsController)

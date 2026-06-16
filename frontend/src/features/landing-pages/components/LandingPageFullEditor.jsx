@@ -270,6 +270,34 @@ export default function LandingPageFullEditor({
   const [cdBusy, setCdBusy] = useState(false);
   const [cdHostnameDraft, setCdHostnameDraft] = useState('');
   const [cdInfo, setCdInfo] = useState(null);
+  const [cfConnected, setCfConnected] = useState(false);
+  const [cfLoading, setCfLoading] = useState(false);
+  const [cfTokenDraft, setCfTokenDraft] = useState('');
+  const [cfTesting, setCfTesting] = useState(false);
+  const [cfConnecting, setCfConnecting] = useState(false);
+
+  // Check if Cloudflare is connected
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCfLoading(true);
+    api.get('/dns-providers')
+      .then((res) => {
+        if (cancelled) return;
+        const providers = res.data?.providers || [];
+        const hasCf = providers.some(p => p.provider === 'cloudflare' && p.isActive);
+        setCfConnected(hasCf);
+      })
+      .catch(() => {
+        if (!cancelled) setCfConnected(false);
+      })
+      .finally(() => {
+        if (!cancelled) setCfLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !editingId) {
@@ -346,6 +374,75 @@ export default function LandingPageFullEditor({
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.deleteDomainFailed'));
     } finally {
       setCdBusy(false);
+    }
+  };
+
+  // Cloudflare inline connection
+  const testCloudflareConnection = async () => {
+    if (!cfTokenDraft.trim()) {
+      toast.error('Vui lòng nhập Cloudflare API Token');
+      return;
+    }
+    setCfTesting(true);
+    try {
+      const res = await api.post('/dns-providers/test', {
+        provider: 'cloudflare',
+        apiToken: cfTokenDraft.trim()
+      });
+      if (res.data.success) {
+        toast.success('Kết nối thành công!');
+      } else {
+        toast.error(res.data.message || 'Kết nối thất bại');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Lỗi khi kiểm tra kết nối');
+    } finally {
+      setCfTesting(false);
+    }
+  };
+
+  const connectCloudflare = async () => {
+    if (!cfTokenDraft.trim()) {
+      toast.error('Vui lòng nhập Cloudflare API Token');
+      return;
+    }
+    setCfConnecting(true);
+    try {
+      const res = await api.post('/dns-providers/connect', {
+        provider: 'cloudflare',
+        apiToken: cfTokenDraft.trim()
+      });
+      if (res.data.success) {
+        setCfConnected(true);
+        setCfTokenDraft('');
+        toast.success(res.data.message || 'Đã kết nối Cloudflare thành công!');
+        // Auto-add domain if there's a hostname draft
+        if (cdHostnameDraft.trim()) {
+          await saveCustomDomainHostname();
+        }
+      } else {
+        toast.error(res.data.message || 'Kết nối thất bại');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Lỗi khi kết nối Cloudflare');
+    } finally {
+      setCfConnecting(false);
+    }
+  };
+
+  const disconnectCloudflare = async () => {
+    // Find the connected provider ID
+    try {
+      const res = await api.get('/dns-providers');
+      const providers = res.data?.providers || [];
+      const cfProvider = providers.find(p => p.provider === 'cloudflare' && p.isActive);
+      if (cfProvider) {
+        await api.delete(`/dns-providers/${cfProvider.id}`);
+        setCfConnected(false);
+        toast.success('Đã ngắt kết nối Cloudflare');
+      }
+    } catch (e) {
+      toast.error('Lỗi khi ngắt kết nối');
     }
   };
 
@@ -481,13 +578,18 @@ export default function LandingPageFullEditor({
             </label>
 
             {/* Custom Domain Section */}
-            <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={false}>
+            <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={true}>
               <div className="space-y-4">
+                {/* Quick Help */}
                 <div className="flex items-start gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
                   <HiOutlineQuestionMarkCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
                   <p>
-                    Mặc định landing page có URL <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
-                    Dùng custom domain để sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code>.
+                    Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
+                    {cfConnected ? (
+                      <span className="block mt-1 text-green-700">☁️ Cloudflare đã kết nối - DNS sẽ được tạo tự động!</span>
+                    ) : (
+                      <span className="block mt-1">Kết nối Cloudflare để tự động tạo DNS records.</span>
+                    )}
                   </p>
                 </div>
 
@@ -495,139 +597,215 @@ export default function LandingPageFullEditor({
                   <p className="text-sm text-gray-500 text-center py-4">
                     Lưu landing page trước để cấu hình custom domain
                   </p>
-                ) : cdLoading ? (
+                ) : cdLoading || cfLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 ) : (
                   <>
-                    {/* Status */}
+                    {/* Domain Already Active */}
                     {cdInfo?.status === 'active' && (
-                      <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <HiOutlineCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-green-800">{cdInfo.hostname}</p>
-                          <p className="text-sm text-green-600">Domain đã kích hoạt</p>
-                        </div>
-                      </div>
-                    )}
-                    {cdInfo?.configured && cdInfo?.status !== 'active' && (
-                      <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <HiOutlineCheck className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-amber-800">{cdInfo.hostname}</p>
-                          <p className="text-sm text-amber-600">Đang chờ xác minh DNS</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Input */}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        placeholder="yoursite.com"
-                        value={cdHostnameDraft}
-                        onChange={(e) => setCdHostnameDraft(e.target.value)}
-                        disabled={cdBusy || cdInfo?.status === 'active'}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary text-sm"
-                        disabled={cdBusy || cdInfo?.status === 'active' || !cdHostnameDraft.trim()}
-                        onClick={saveCustomDomainHostname}
-                      >
-                        {cdBusy ? '...' : 'Lưu'}
-                      </button>
-                    </div>
-
-                    {/* DNS Records */}
-                    {cdInfo?.record && cdInfo?.status !== 'active' && (
                       <div className="space-y-3">
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
-                          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                            <p className="text-sm font-medium text-gray-700">Thêm DNS Record</p>
+                        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <HiOutlineCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-semibold text-green-800 text-lg">{cdInfo.hostname}</p>
+                            <p className="text-sm text-green-600">Domain đã kích hoạt!</p>
                           </div>
-                          <div className="p-3">
-                            {/* Header */}
-                            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 mb-2 px-1">
-                              <span>Tên bản ghi</span>
-                              <span>Loại</span>
-                              <span>Giá trị</span>
-                            </div>
-                            {/* Record Row */}
-                            <div className="grid grid-cols-3 gap-2 items-start">
-                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded truncate" title={cdInfo.hostname}>
-                                {cdInfo.hostname}
-                              </code>
-                              <span className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded text-center">
-                                CNAME
-                              </span>
-                              <code className="font-mono text-sm text-gray-800 bg-gray-100 px-2 py-1.5 rounded break-all" title={cdInfo.record?.value || 'verify.founderai.biz'}>
-                                {cdInfo.record?.value || 'verify.founderai.biz'}
-                              </code>
-                            </div>
-                          </div>
+                          <a
+                            href={`https://${cdInfo.hostname}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline"
+                          >
+                            Mở domain
+                          </a>
                         </div>
-
-                        
-
-                        {/* Detailed Instructions */}
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
-                          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                            <p className="text-sm font-medium text-gray-700">Hướng dẫn thêm bản ghi CNAME</p>
-                          </div>
-                          <div className="p-4 space-y-4 text-sm text-gray-600">
-                            <div>
-                              <h4 className="font-medium text-gray-800 mb-2">Các bước thực hiện:</h4>
-                              <ol className="list-decimal list-inside space-y-2 ml-2">
-                                <li>Đăng nhập vào trang quản lý DNS của nhà cung cấp domain của bạn</li>
-                                <li>Tìm mục <strong>Quản lý DNS</strong>, <strong>Zone Records</strong> hoặc <strong>Advanced DNS</strong></li>
-                                <li>Nhấn <strong>Thêm bản ghi</strong> hoặc <strong>Add Record</strong></li>
-                                <li>Chọn loại bản ghi là <strong>CNAME</strong></li>
-                                <li>Điền thông tin:
-                                  <ul className="ml-6 mt-1 space-y-1">
-                                    <li><strong>Tên/Host:</strong> <code className="bg-gray-100 px-1 rounded">{cdInfo.hostname}</code></li>
-                                    <li><strong>Loại:</strong> CNAME</li>
-                                    <li><strong>Giá trị CNAME:</strong> <code className="bg-gray-100 px-1 rounded break-all">{cdInfo.record?.value || 'verify.founderai.biz'}</code></li>
-                                  </ul>
-                                </li>
-                                <li>Nhấn <strong>Lưu</strong> hoặc <strong>Save</strong></li>
-                              </ol>
-                            </div>
-
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                              <p className="text-blue-800">
-                                <strong>Lưu ý:</strong> Sau khi thêm bản ghi DNS, có thể mất từ <strong>5 phút đến 24 giờ</strong> để DNS lan truyền toàn cầu. Thường mất khoảng 5-30 phút.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
                         <button
                           type="button"
-                          className="btn btn-primary w-full text-sm"
-                          disabled={cdBusy}
-                          onClick={verifyCustomDomain}
+                          className="text-sm text-red-600 hover:text-red-700 hover:underline"
+                          onClick={removeCustomDomain}
                         >
-                          {cdBusy ? 'Đang xác minh...' : 'Xác minh DNS'}
+                          Xóa domain này
                         </button>
-
-                        <p className="text-xs text-gray-500 text-center">
-                          Nhấn "Xác minh DNS" sau khi đã thêm bản ghi để kiểm tra
-                        </p>
                       </div>
                     )}
 
-                    {/* Remove */}
-                    {cdInfo?.configured && (
-                      <button
-                        type="button"
-                        className="text-sm text-red-600 hover:underline"
-                        disabled={cdBusy}
-                        onClick={removeCustomDomain}
-                      >
-                        Xóa domain đã cấu hình
-                      </button>
+                    {/* No Domain Configured - Main UX */}
+                    {(!cdInfo?.configured || cdInfo?.status !== 'active') && (
+                      <div className="space-y-4">
+                        {/* Domain Input + Add Button */}
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-base font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20"
+                            placeholder="yoursite.com"
+                            value={cdHostnameDraft}
+                            onChange={(e) => setCdHostnameDraft(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary py-3 px-6 text-base font-medium whitespace-nowrap"
+                            disabled={!cdHostnameDraft.trim() || cdBusy}
+                            onClick={saveCustomDomainHostname}
+                          >
+                            {cdBusy ? 'Đang xử lý...' : 'Thêm Domain'}
+                          </button>
+                        </div>
+
+                        {/* Cloudflare Connection Panel */}
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          {/* If Cloudflare is Connected */}
+                          {cfConnected ? (
+                            <div className="p-4 bg-green-50">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center text-xl">
+                                  ☁️
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-green-800">Cloudflare đã kết nối</p>
+                                  <p className="text-sm text-green-600">DNS records sẽ được tạo tự động</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="text-sm text-gray-500 hover:text-gray-700"
+                                  onClick={disconnectCloudflare}
+                                >
+                                  Ngắt kết nối
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* If Cloudflare is NOT Connected - Show Inline Connect Form */
+                            <div className="p-4 bg-gradient-to-r from-orange-50 to-yellow-50">
+                              <div className="flex items-start gap-3 mb-4">
+                                <div className="h-10 w-10 bg-orange-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
+                                  ☁️
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">Kết nối Cloudflare</p>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    Để tự động tạo DNS records cho custom domain của bạn
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Token Input */}
+                              <div className="space-y-3">
+                                <input
+                                  type="password"
+                                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-mono focus:border-orange-500 focus:ring-2 focus:ring-orange-500 focus:ring-opacity-20"
+                                  placeholder="Paste Cloudflare API Token vào đây"
+                                  value={cfTokenDraft}
+                                  onChange={(e) => setCfTokenDraft(e.target.value)}
+                                />
+
+                                {/* How to get token */}
+                                <details className="text-sm">
+                                  <summary className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
+                                    Làm sao lấy Cloudflare API Token?
+                                  </summary>
+                                  <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200 text-gray-600 space-y-2">
+                                    <ol className="list-decimal list-inside space-y-1">
+                                      <li>Đăng nhập <a href="https://dash.cloudflare.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Cloudflare Dashboard</a></li>
+                                      <li>Vào <strong>Profile</strong> → <strong>API Tokens</strong></li>
+                                      <li>Bấm <strong>Create Token</strong> → <strong>Create Custom Token</strong></li>
+                                      <li>Thiết lập quyền:
+                                        <ul className="ml-6 list-disc">
+                                          <li>Zone: <strong>Zone Settings: Read</strong></li>
+                                          <li>Zone: <strong>DNS: Edit</strong></li>
+                                        </ul>
+                                      </li>
+                                      <li>Chọn domain bạn muốn quản lý</li>
+                                      <li>Bấm <strong>Create Token</strong> và copy</li>
+                                    </ol>
+                                  </div>
+                                </details>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="flex-1 btn btn-sm bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    disabled={!cfTokenDraft.trim() || cfTesting}
+                                    onClick={testCloudflareConnection}
+                                  >
+                                    {cfTesting ? 'Đang kiểm tra...' : 'Kiểm tra'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex-1 btn btn-sm bg-orange-500 text-white hover:bg-orange-600"
+                                    disabled={!cfTokenDraft.trim() || cfConnecting}
+                                    onClick={connectCloudflare}
+                                  >
+                                    {cfConnecting ? 'Đang kết nối...' : 'Kết nối & Thêm Domain'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Manual DNS Instructions - Only show if domain is pending */}
+                        {cdInfo?.configured && cdInfo?.status === 'pending_verification' && (
+                          <div className="border border-amber-200 rounded-lg overflow-hidden">
+                            <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
+                              <p className="font-medium text-amber-800">
+                                ⚠️ Domain đang chờ xác minh
+                              </p>
+                            </div>
+                            <div className="p-4 space-y-4">
+                              <p className="text-sm text-gray-600">
+                                Thêm bản ghi CNAME tại nhà cung cấp domain của bạn:
+                              </p>
+                              <div className="bg-gray-50 rounded-lg p-3 font-mono text-sm">
+                                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                                  <span className="text-gray-500">Type:</span><span>CNAME</span>
+                                  <span className="text-gray-500">Name:</span><span>{cdInfo.hostname}</span>
+                                  <span className="text-gray-500">Value:</span>
+                                  <span className="break-all">{cdInfo.record?.value || 'verify.founderai.biz'}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-primary w-full"
+                                disabled={cdBusy}
+                                onClick={verifyCustomDomain}
+                              >
+                                {cdBusy ? 'Đang xác minh...' : 'Đã thêm DNS - Xác minh ngay'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Domain Pending but CF Connected - Offer Retry */}
+                        {cdInfo?.configured && cdInfo?.status === 'pending_verification' && cfConnected && (
+                          <div className="text-center">
+                            <p className="text-sm text-gray-500 mb-2">
+                              Cloudflare đã kết nối. Thử lại để tự động kích hoạt domain.
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={saveCustomDomainHostname}
+                            >
+                              Thử lại tự động kích hoạt
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Remove Domain */}
+                        {cdInfo?.configured && (
+                          <div className="pt-2 border-t border-gray-100">
+                            <button
+                              type="button"
+                              className="text-sm text-gray-500 hover:text-red-600"
+                              onClick={removeCustomDomain}
+                            >
+                              Hủy bỏ cấu hình domain
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </>
                 )}
