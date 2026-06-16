@@ -87,10 +87,6 @@ function subdomainBase() {
   return String(process.env.LP_SUBDOMAIN_BASE || 'founderai.biz').trim();
 }
 
-function cnameVerificationTarget() {
-  return String(process.env.LP_VERIFICATION_TARGET || 'verify.founderai.biz').trim();
-}
-
 function buildAutoHostname(slug) {
   return `${slug}.${subdomainBase()}`;
 }
@@ -109,17 +105,18 @@ function buildDomainResponse(row) {
 
   let instructions;
   let record = null;
+  const target = cnameTarget();
 
   if (isActive) {
     instructions = isCfManaged
-      ? `Đã kích hoạt tự động qua Cloudflare. CNAME đã được tạo trỏ về ${cnameTarget()}. SSL được Cloudflare tự cấp trong vài phút.`
-      : `Đã kích hoạt. Trỏ DNS (CNAME) về ${cnameTarget()} theo hướng dẫn vận hành; apex nên redirect 301 → www.`;
+      ? `Đã kích hoạt tự động qua Cloudflare.`
+      : `Đã kích hoạt. Domain đã trỏ về ${target}.`;
   } else {
-    instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Loại: CNAME\n- Tên: ${row.hostname}\n- Trỏ đến: ${cnameVerificationTarget()}\nSau đó bấm «Xác minh DNS».`;
+    instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Type: CNAME\n- Name: ${row.hostname}\n- Value: ${target}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
     record = {
       type: 'CNAME',
       name: row.hostname,
-      value: cnameVerificationTarget(),
+      value: target,
     };
   }
 
@@ -131,8 +128,7 @@ function buildDomainResponse(row) {
     verifiedAt: row.verifiedAt,
     instructions,
     record,
-    cnameTarget: cnameTarget(),
-    verificationTarget: cnameVerificationTarget(),
+    cnameTarget: target,
   };
 }
 
@@ -143,8 +139,9 @@ function buildDomainResponse(row) {
  * base domain của hostname có trong tài khoản CF của platform →
  * backend tự tạo CNAME record, domain active ngay, không cần user verify DNS.
  *
- * Mode 2 (Manual TXT verify): nếu CF không cấu hình hoặc zone không tìm thấy →
- * user phải thêm TXT record rồi bấm «Xác minh DNS».
+ * Mode 2 (Manual CNAME): nếu CF không cấu hình hoặc zone không tìm thấy →
+ * CNAME target = LP_CNAME_TARGET (founderai.biz). Nếu user đã thêm CNAME →
+ * tự động active. Nếu chưa → pending với hướng dẫn.
  */
 class LandingPageDomainService {
   /**
@@ -181,7 +178,7 @@ class LandingPageDomainService {
    *
    * Nếu Cloudflare được cấu hình và base domain nằm trong tài khoản CF →
    * tự động tạo CNAME và kích hoạt ngay (cfManaged = true).
-   * Ngược lại → pending_verification với hướng dẫn TXT record.
+   * Ngược lại → tự động verify CNAME record và kích hoạt nếu đúng.
    *
    * @param {number} landingPageId
    * @param {string} hostname
@@ -260,16 +257,29 @@ class LandingPageDomainService {
         }
       }
       // Zone không thuộc CF account của platform → fall through sang Mode 2
-      console.log(`[LandingPageDomainService] CF zone not found for ${h}, falling back to manual TXT verify. Reason: ${cfResult.message}`);
+      console.log(`[LandingPageDomainService] CF zone not found for ${h}, falling back to manual CNAME verify. Reason: ${cfResult.message}`);
     }
 
-    // --- Mode 2: TXT verification thủ công ---
+    // --- Mode 2: Manual CNAME verification tự động ---
+    // CNAME target là founderai.biz (không phải verify.founderai.biz)
+    const target = cnameTarget();
+    let isVerified = false;
+
+    try {
+      const cnameRecords = await dns.resolve(h, 'CNAME');
+      const flat = cnameRecords.map((arr) => arr.join('')).map((c) => c.toLowerCase());
+      isVerified = flat.some((cname) => cname === target.toLowerCase());
+    } catch {
+      // DNS chưa propagate hoặc chưa có CNAME → sẽ pending
+    }
+
+    const status = isVerified ? 'active' : 'pending_verification';
     try {
       await landingPageDomainRepository.upsertForLanding({
         landingPageId,
         hostname: h,
         verificationToken: token,
-        status: 'pending_verification',
+        status,
         cfManaged: false,
         cfZoneId: null,
         cfRecordId: null,
@@ -288,8 +298,8 @@ class LandingPageDomainService {
   }
 
   /**
-   * Xác minh DNS bằng CNAME record (chỉ dành cho Mode 2 — manual).
-   * Kiểm tra CNAME có trỏ về verify.founderai.biz không.
+   * Xác minh DNS bằng CNAME record.
+   * Kiểm tra CNAME có trỏ về founderai.biz không.
    * Nếu domain đã được CF quản lý và active → trả về ngay, không cần verify.
    *
    * @param {number} landingPageId
@@ -324,7 +334,7 @@ class LandingPageDomainService {
       throw err;
     }
 
-    const expectedTarget = cnameVerificationTarget();
+    const expectedTarget = cnameTarget();
     const flat = cnameRecords.map((arr) => arr.join(''));
     const ok = flat.some((cname) => cname.toLowerCase() === expectedTarget.toLowerCase());
 
@@ -438,6 +448,59 @@ class LandingPageDomainService {
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
     // Clear CORS cache so removed subdomain is no longer allowed
     await getClearCacheFn();
+  }
+
+  /**
+   * Auto-verify pending domains - được gọi bởi scheduler mỗi 5 phút.
+   * Tìm các domain đang pending, kiểm tra CNAME và activate nếu đúng.
+   * @returns {{total: number, verified: number, failed: number}}
+   */
+  async autoVerifyPendingDomains() {
+    const pendingDomains = await landingPageDomainRepository.findPendingDomains();
+    if (!pendingDomains?.length) {
+      return { total: 0, verified: 0, failed: 0 };
+    }
+
+    let verified = 0;
+    let failed = 0;
+    const target = cnameTarget();
+
+    for (const domain of pendingDomains) {
+      try {
+        // Skip CF-managed domains
+        if (domain.cfManaged) continue;
+
+        let cnameRecords = [];
+        try {
+          cnameRecords = await dns.resolve(domain.hostname, 'CNAME');
+        } catch {
+          // DNS chưa propagate - bỏ qua, sẽ thử lại lần sau
+          failed++;
+          continue;
+        }
+
+        const flat = cnameRecords.map((arr) => arr.join('')).map((c) => c.toLowerCase());
+        const ok = flat.some((cname) => cname === target.toLowerCase());
+
+        if (ok) {
+          await landingPageDomainRepository.updateStatusById(domain.id, 'active');
+          await getClearCacheFn();
+          console.log(`[LandingPageDomainService] Auto-verified: ${domain.hostname}`);
+          verified++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        console.warn(`[LandingPageDomainService] Auto-verify failed for ${domain.hostname}: ${e.message}`);
+        failed++;
+      }
+    }
+
+    if (verified > 0) {
+      console.log(`[LandingPageDomainService] Auto-verify done: ${verified}/${pendingDomains.length} domains activated`);
+    }
+
+    return { total: pendingDomains.length, verified, failed };
   }
 }
 

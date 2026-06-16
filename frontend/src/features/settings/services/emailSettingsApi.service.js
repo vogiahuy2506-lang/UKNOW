@@ -20,6 +20,15 @@ const emailSettingsApiService = {
   deleteEmailSetting(emailSettingId) {
     return api.delete(`/email-settings/${emailSettingId}`);
   },
+
+  // Domain verification (Hướng 2)
+  initiateDomainVerification(emailSettingId) {
+    return api.post(`/email-settings/${emailSettingId}/domain-verification/initiate`);
+  },
+
+  getDomainVerificationStatus(emailSettingId) {
+    return api.get(`/email-settings/${emailSettingId}/domain-verification/status`);
+  },
 };
 
 export default emailSettingsApiService;

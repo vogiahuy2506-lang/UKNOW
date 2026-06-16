@@ -584,6 +584,45 @@ ${linkItems}
     }
   }
 
+  // ─── Domain verification (Hướng 2) ─────────────────────────────────────────
+
+  async initiateDomainVerification(req, res) {
+    try {
+      const { default: emailDomainVerificationService } = await import('../services/email/emailDomainVerification.service.js');
+      const result = await emailDomainVerificationService.initiate({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        settingId: req.params.id,
+      });
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Initiate domain verification error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
+  }
+
+  async getDomainVerificationStatus(req, res) {
+    try {
+      const { default: emailDomainVerificationService } = await import('../services/email/emailDomainVerification.service.js');
+      const result = await emailDomainVerificationService.checkStatus({
+        userId: req.user.id,
+        roleCode: req.user?.role,
+        settingId: req.params.id,
+      });
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Get domain verification status error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.statusCode ? error.message : 'Lỗi server',
+      });
+    }
+  }
 }
 
 export default new EmailSettingsController();

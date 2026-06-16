@@ -557,4 +557,28 @@ export const initScheduler = () => {
   // Đảm bảo tài khoản Zalo không bị out dù có làm gì
   startKeepAliveScheduler();
   console.log('[Scheduler] Đã khởi tạo Zalo Session Keep-Alive: giữ đăng nhập liên tục');
+
+  // ── Custom Domain Auto-Verify - Tự động verify pending domains ─────────────────
+  // Chạy mỗi 5 phút để tự động kích hoạt domain khi DNS đã propagate
+  const autoVerifyDomains = async () => {
+    try {
+      const landingPageDomainService = (await import('../services/landingPage/landingPageDomain.service.js')).default;
+      const result = await landingPageDomainService.autoVerifyPendingDomains();
+      if (result.verified > 0) {
+        console.log(`[Scheduler] Auto-verify domains: ${result.verified}/${result.total} activated`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi auto-verify domains:', error.message);
+    }
+  };
+
+  // Chạy mỗi 5 phút
+  cron.schedule('*/5 * * * *', async () => {
+    await autoVerifyDomains();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  // Chạy ngay khi khởi động để verify các domain có thể đã sẵn sàng
+  autoVerifyDomains();
+
+  console.log('[Scheduler] Đã khởi tạo Custom Domain Auto-Verify: kiểm tra pending domains mỗi 5 phút');
 };

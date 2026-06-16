@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
+import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
 
 function createServiceError(message, statusCode, extra = {}) {
   const error = new Error(message);
@@ -102,6 +103,10 @@ class EmailSettingsSmtpService {
         sentAt: payload.sentAt,
         idNode: payload.nodeId ?? null,
         emailStep: payload.emailStep ?? null,
+        // Track actual from + reply-to used at send time
+        fromAddress: payload.fromAddress || null,
+        replyTo: payload.setting.reply_to || payload.setting.email || null,
+        brandDomain: payload.brandDomain || null,
       });
 
       if (resolvedCustomerId) {
@@ -172,6 +177,8 @@ class EmailSettingsSmtpService {
     });
 
     const info = await transporter.sendMail({
+      from: resolveFromAddress(setting),
+      replyTo: setting.reply_to || undefined,
       text: content || 'Đây là email test từ hệ thống Founder AI',
       html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
     });
@@ -276,10 +283,15 @@ class EmailSettingsSmtpService {
       ? await deps.buildMailAttachments(attachments)
       : [];
 
+    // Resolve actual from address before sending (so we can log it)
+    const fromAddress = resolveFromAddress(setting);
+    const brandDomain = setting.brand_domain || extractBrandDomain(setting.email);
+
     let info;
     try {
       info = await transporter.sendMail({
-        from: `"${setting.name}" <${setting.email}>`,
+        from: fromAddress,
+        replyTo: setting.reply_to || undefined,
         to,
         cc: ccList.length ? ccList : undefined,
         bcc: bccList.length ? bccList : undefined,
@@ -354,6 +366,8 @@ class EmailSettingsSmtpService {
           sentAt,
           setting,
           runId: normalizedRunId,
+          fromAddress,
+          brandDomain,
         });
       } catch (logError) {
         console.error('Log email message error:', logError);
@@ -362,7 +376,9 @@ class EmailSettingsSmtpService {
 
     return {
       messageId: info.messageId,
-      from: setting.email,
+      from: fromAddress,
+      fromDomain: brandDomain,
+      replyTo: setting.reply_to || null,
       to,
       cc: ccList,
       bcc: bccList,

@@ -7,8 +7,9 @@ class EmailSettingsRepository {
     const offset = (page - 1) * limit;
     const isAdmin = isAdminRole(roleCode);
     let query = `
-      SELECT es.id, es.name, es.email, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
+      SELECT es.id, es.name, es.email, es.reply_to, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
              es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
+             es.brand_domain, es.domain_verification_status, es.domain_verified_at,
              COALESCE(u.full_name, u.username) AS creator_name
       FROM email_settings es
       LEFT JOIN users u ON es.id_user = u.id
@@ -80,45 +81,80 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
+  /** Returns brand_domain + domain_verification_status for a setting id. */
+  async getDomainVerificationStatus(userId, id, { roleCode } = {}) {
+    const isAdmin = isAdminRole(roleCode);
+    const result = await db.query(
+      isAdmin
+        ? 'SELECT brand_domain, domain_verification_status, domain_dns_records, domain_verified_at FROM email_settings WHERE id = $1'
+        : 'SELECT brand_domain, domain_verification_status, domain_dns_records, domain_verified_at FROM email_settings WHERE id = $1 AND id_user = $2',
+      isAdmin ? [id] : [id, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /** Update domain verification fields. */
+  async updateDomainVerification(id, payload) {
+    const { status, dnsRecords, verifiedAt } = payload;
+    const result = await db.query(
+      `UPDATE email_settings SET
+         domain_verification_status = COALESCE($1, domain_verification_status),
+         domain_dns_records         = COALESCE($2, domain_dns_records),
+         domain_verified_at        = COALESCE($3, domain_verified_at),
+         updated_at                = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING brand_domain, domain_verification_status, domain_dns_records, domain_verified_at`,
+      [status, dnsRecords ? JSON.stringify(dnsRecords) : null, verifiedAt || null, id]
+    );
+    return result.rows[0] || null;
+  }
+
   async create(userId, payload) {
-    const { name, email, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit } =
+    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit } =
       payload;
     const encryptedSmtpPassword = encryptSmtpSecret(smtpPassword);
+    const brandDomain = String(email || '').split('@')[1]?.toLowerCase() || null;
+    // reply_to defaults to the email address for backward compatibility.
+    const resolvedReplyTo = replyTo || email;
     const result = await db.query(
       `INSERT INTO email_settings
-        (id_user, name, email, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 'active')
+        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12)
        RETURNING *`,
-      [userId, name, email, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit]
+      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain]
     );
     return result.rows[0];
   }
 
   async update(userId, id, payload, { roleCode } = {}) {
-    const { name, email, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
+    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
       payload;
     const encryptedSmtpPassword = smtpPassword === undefined ? undefined : encryptSmtpSecret(smtpPassword);
     const isAdmin = isAdminRole(roleCode);
+    const brandDomain = email ? String(email).split('@')[1]?.toLowerCase() : undefined;
     const result = await db.query(
       `UPDATE email_settings SET
         name = COALESCE($1, name),
         email = COALESCE($2, email),
-        smtp_host = COALESCE($3, smtp_host),
-        smtp_port = COALESCE($4, smtp_port),
-        smtp_username = COALESCE($5, smtp_username),
-        smtp_password = COALESCE($6, smtp_password),
-        use_tls = COALESCE($7, use_tls),
-        daily_limit = COALESCE($8, daily_limit),
-        hourly_limit = COALESCE($9, hourly_limit),
-        status = COALESCE($10, status),
+        reply_to = COALESCE($3, reply_to),
+        smtp_host = COALESCE($4, smtp_host),
+        smtp_port = COALESCE($5, smtp_port),
+        smtp_username = COALESCE($6, smtp_username),
+        smtp_password = COALESCE($7, smtp_password),
+        use_tls = COALESCE($8, use_tls),
+        daily_limit = COALESCE($9, daily_limit),
+        hourly_limit = COALESCE($10, hourly_limit),
+        status = COALESCE($11, status),
+        brand_domain = COALESCE($12, brand_domain),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11
-         ${isAdmin ? '' : 'AND id_user = $12'}
+       WHERE id = $13
+         ${isAdmin ? '' : 'AND id_user = $14'}
        RETURNING *`,
       isAdmin
         ? [
             name,
             email,
+            replyTo,
             smtpHost,
             smtpPort,
             smtpUsername,
@@ -127,11 +163,13 @@ class EmailSettingsRepository {
             dailyLimit,
             hourlyLimit,
             status,
+            brandDomain,
             id,
           ]
         : [
             name,
             email,
+            replyTo,
             smtpHost,
             smtpPort,
             smtpUsername,
@@ -140,6 +178,7 @@ class EmailSettingsRepository {
             dailyLimit,
             hourlyLimit,
             status,
+            brandDomain,
             id,
             userId,
           ]
@@ -161,7 +200,7 @@ class EmailSettingsRepository {
   async getActiveByUser(userId, { roleCode } = {}) {
     const isAdmin = isAdminRole(roleCode);
     const result = await db.query(
-      `SELECT id, name, email, smtp_host, smtp_port, is_verified, status
+      `SELECT id, name, email, reply_to, smtp_host, smtp_port, is_verified, status, brand_domain
        FROM email_settings
        WHERE status = 'active'
        ${isAdmin ? '' : 'AND id_user = $1'}
@@ -244,8 +283,9 @@ class EmailSettingsRepository {
       `INSERT INTO email_messages
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
-         body_html, body_text, status, sent_at, id_node, email_step)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17)
+         body_html, body_text, status, sent_at, id_node, email_step,
+         from_address, reply_to, brand_domain)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17, $18, $19, $20)
        RETURNING id`,
       [
         payload.campaignId,
@@ -265,6 +305,9 @@ class EmailSettingsRepository {
         payload.sentAt,
         Number.isFinite(Number.parseInt(payload.idNode, 10)) ? Number.parseInt(payload.idNode, 10) : null,
         Number.isFinite(Number.parseInt(payload.emailStep, 10)) ? Number.parseInt(payload.emailStep, 10) : null,
+        payload.fromAddress || null,
+        payload.replyTo || null,
+        payload.brandDomain || null,
       ]
     );
     return result.rows[0]?.id || null;
