@@ -39,6 +39,9 @@ jest.unstable_mockModule('nodemailer', () => ({
   createTransport: mockCreateTransport,
 }));
 
+const originalSendGridKey = process.env.SENDGRID_API_KEY;
+process.env.SENDGRID_API_KEY = 'SG.test-key-for-integration-only';
+
 const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
@@ -48,14 +51,9 @@ const { isEncryptedSmtpSecret, decryptSmtpSecret } = await import(
 );
 
 let app;
-let originalSendGridKey;
 
 beforeAll(() => {
   app = createApp();
-  // normalizeSmtpConfig yêu cầu password bắt đầu với "SG." HOẶC SENDGRID_API_KEY env.
-  // Set test-only API key + save giá trị cũ để afterAll restore.
-  originalSendGridKey = process.env.SENDGRID_API_KEY;
-  process.env.SENDGRID_API_KEY = 'SG.test-key-for-integration-only';
 });
 
 afterAll(() => {
@@ -134,7 +132,7 @@ describe('POST /api/email-settings (create)', () => {
       email: 'sender@example.com',
       smtpHost: 'smtp.sendgrid.net',
       smtpPort: 587,
-      isVerified: false,
+      isVerified: true,
     });
 
     const { rows } = await db.query(
@@ -144,6 +142,41 @@ describe('POST /api/email-settings (create)', () => {
     expect(isEncryptedSmtpSecret(rows[0].smtp_password)).toBe(true);
     expect(decryptSmtpSecret(rows[0].smtp_password)).toBe('SG.my-real-api-key');
     expect(Number(rows[0].id_user)).toBe(Number(user.id));
+  });
+
+  it('chỉ gửi tên/email → dùng SMTP mặc định của hệ thống', async () => {
+    const user = await createUser({ username: 'defaultsmtp' });
+    const token = await loginAs(user);
+
+    const res = await request(app)
+      .post('/api/email-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Default SMTP',
+        email: 'default@example.com',
+        smtpHost: '',
+        smtpPort: '',
+        smtpUsername: '',
+        smtpPassword: '',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toMatchObject({
+      name: 'Default SMTP',
+      email: 'default@example.com',
+      smtpHost: 'smtp.sendgrid.net',
+      smtpPort: 587,
+      isVerified: true,
+    });
+
+    const { rows } = await db.query(
+      `SELECT smtp_username, smtp_password FROM email_settings WHERE id = $1`,
+      [res.body.data.id]
+    );
+    expect(rows[0].smtp_username).toBe('apikey');
+    expect(isEncryptedSmtpSecret(rows[0].smtp_password)).toBe(true);
+    expect(decryptSmtpSecret(rows[0].smtp_password)).toBe('SG.test-key-for-integration-only');
   });
 
   it('vượt max_email_accounts → 400 EMPLOYEE LIMIT (resource limit)', async () => {
