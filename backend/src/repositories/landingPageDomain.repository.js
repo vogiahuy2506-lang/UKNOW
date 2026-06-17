@@ -213,6 +213,29 @@ class LandingPageDomainRepository {
     );
     return result.rows[0] || null;
   }
+
+  /**
+   * Tìm tất cả domain đang chờ verify (pending_verification) và không phải CF-managed.
+   * @returns {Promise<object[]>}
+   */
+  async findPendingDomains() {
+    const result = await db.query(
+      `SELECT
+         d.id,
+         d.landing_page_id AS "landingPageId",
+         d.hostname,
+         d.status,
+         d.cf_managed   AS "cfManaged",
+         lp.slug AS "landingSlug"
+       FROM landing_page_domains d
+       INNER JOIN landing_pages lp ON lp.id = d.landing_page_id
+       WHERE d.status = 'pending_verification'
+         AND d.cf_managed = FALSE
+         AND lp.is_published = TRUE
+       ORDER BY d.created_at ASC`
+    );
+    return result.rows || [];
+  }
 }
 
 export default new LandingPageDomainRepository();

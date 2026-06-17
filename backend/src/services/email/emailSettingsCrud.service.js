@@ -14,6 +14,7 @@ class EmailSettingsCrudService {
       id: item.id,
       name: item.name,
       email: item.email,
+      replyTo: item.reply_to || null,
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       useTls: item.use_tls,
@@ -23,6 +24,9 @@ class EmailSettingsCrudService {
       totalSentCount: item.total_sent_count,
       isVerified: item.is_verified,
       status: item.status,
+      brandDomain: item.brand_domain || null,
+      domainVerificationStatus: item.domain_verification_status || null,
+      domainVerifiedAt: item.domain_verified_at || null,
       creatorName: item.creator_name || null,
       createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,
@@ -35,6 +39,7 @@ class EmailSettingsCrudService {
       id: item.id,
       name: item.name,
       email: item.email,
+      replyTo: item.reply_to || null,
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       smtpUsername: item.smtp_username,
@@ -45,6 +50,10 @@ class EmailSettingsCrudService {
       totalSentCount: item.total_sent_count,
       isVerified: item.is_verified,
       status: item.status,
+      brandDomain: item.brand_domain || null,
+      domainVerificationStatus: item.domain_verification_status || null,
+      domainDnsRecords: item.domain_dns_records || null,
+      domainVerifiedAt: item.domain_verified_at || null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     };
@@ -55,6 +64,7 @@ class EmailSettingsCrudService {
       id: item.id,
       name: item.name,
       email: item.email,
+      replyTo: item.reply_to || null,
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       useTls: item.use_tls,
@@ -62,6 +72,8 @@ class EmailSettingsCrudService {
       hourlyLimit: item.hourly_limit,
       isVerified: item.is_verified,
       status: item.status,
+      brandDomain: item.brand_domain || null,
+      domainVerificationStatus: item.domain_verification_status || null,
     };
   }
 
@@ -70,10 +82,12 @@ class EmailSettingsCrudService {
       id: item.id,
       name: item.name,
       email: item.email,
+      replyTo: item.reply_to || null,
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       isVerified: item.is_verified,
       status: item.status,
+      brandDomain: item.brand_domain || null,
     };
   }
 
@@ -145,6 +159,7 @@ class EmailSettingsCrudService {
     const item = await emailSettingsRepository.create(userId, {
       name: payload.name,
       email: payload.email,
+      replyTo: payload.replyTo || null,
       smtpHost,
       smtpPort,
       smtpUsername,
@@ -165,6 +180,34 @@ class EmailSettingsCrudService {
 
     const item = await emailSettingsRepository.update(userId, id, payload, { roleCode });
     return this.mapMutationResult(item);
+  }
+
+  /**
+   * Get domain verification status for an email setting.
+   */
+  async getDomainVerificationStatus({ userId, roleCode, id }) {
+    const item = await emailSettingsRepository.getDomainVerificationStatus(userId, id, { roleCode });
+    if (!item) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
+    }
+    return {
+      brandDomain: item.brand_domain,
+      status: item.domain_verification_status,
+      dnsRecords: item.domain_dns_records,
+      verifiedAt: item.domain_verified_at,
+    };
+  }
+
+  /**
+   * Update domain verification status (called after DNS records are set up or verified).
+   */
+  async updateDomainVerificationStatus({ userId, roleCode, id, payload }) {
+    const current = await emailSettingsRepository.getById(userId, id, { roleCode });
+    if (!current) {
+      throw createServiceError('Không tìm thấy cấu hình email', 404);
+    }
+    const item = await emailSettingsRepository.updateDomainVerification(id, payload);
+    return item;
   }
 
   async delete({ userId, roleCode, id }) {

@@ -10,6 +10,7 @@ import {
   isSmtpProviderRateLimitError,
 } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
+import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -607,6 +608,10 @@ class CampaignEmailSenderService {
     // Tái sử dụng transporter đã cache để tránh mở TCP connection mới mỗi email.
     const transporter = this.getOrCreateTransporter(settings);
 
+    // Resolve actual from address + brand domain before sending (for logging)
+    const fromAddress = resolveFromAddress(settings);
+    const brandDomain = settings.brand_domain || extractBrandDomain(settings.email);
+
     let info;
     try {
       // Áp rate-limit cứng theo SMTP account để tránh bị provider chặn khi gửi dồn dập.
@@ -614,7 +619,8 @@ class CampaignEmailSenderService {
         settings,
       });
       info = await transporter.sendMail({
-        from: `"${settings.name}" <${settings.email}>`,
+        from: fromAddress,
+        replyTo: settings.reply_to || undefined,
         to: customer.email,
         subject: subject || 'Email từ Founder AI',
         text: textBody,
@@ -710,6 +716,8 @@ class CampaignEmailSenderService {
             runId,
             nodeId: logNodeIdForDb,
             emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -746,6 +754,8 @@ class CampaignEmailSenderService {
             runId,
             nodeId: logNodeIdForDb,
             emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -788,6 +798,8 @@ class CampaignEmailSenderService {
           runId,
           nodeId: logNodeIdForDb,
           emailStep: logEmailStepForDb,
+          fromAddress,
+          brandDomain,
         });
         // Cập nhật email_message vừa insert sang status bounced
         await campaignEmailSenderRepository.markEmailMessageBounced(bounceTrackingToken, bouncedAt, bounceReason);
@@ -829,6 +841,8 @@ class CampaignEmailSenderService {
           runId,
           nodeId: logNodeIdForDb,
           emailStep: logEmailStepForDb,
+          fromAddress,
+          brandDomain,
         });
       } catch (logError) {
         console.error('[sendEmailToCustomer] Lỗi lưu log:', logError.message);
@@ -839,7 +853,9 @@ class CampaignEmailSenderService {
       to: customer.email,
       status: 'success',
       messageId: info?.messageId || null,
-      from: settings.email || null,
+      from: fromAddress,
+      fromDomain: brandDomain,
+      replyTo: settings.reply_to || null,
       sentAt,
       subject: subject || 'Email từ Founder AI',
       tracking: {

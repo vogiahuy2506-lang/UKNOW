@@ -316,7 +316,11 @@ export default function LandingPageFullEditor({
       const res = await putLandingCustomDomain(editingId, h);
       if (!res?.success) throw new Error(res?.message || t('landingPageEditor.saveFailed'));
       setCdInfo(res.data);
-      toast.success(t('landingPageEditor.dnsSaved'));
+      if (res.data.status === 'active') {
+        toast.success(t('landingPageEditor.dnsSaved'));
+      } else {
+        toast.success('Đã thêm domain. Vui lòng thêm bản ghi DNS và bấm "Kiểm tra lại".');
+      }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.saveDomainFailed'));
     } finally {
@@ -331,7 +335,11 @@ export default function LandingPageFullEditor({
       const res = await postLandingCustomDomainVerify(editingId);
       if (!res?.success) throw new Error(res?.message || t('landingPageEditor.verifyFailed'));
       setCdInfo(res.data);
-      toast.success(t('landingPageEditor.domainVerified'));
+      if (res.data.status === 'active') {
+        toast.success(t('landingPageEditor.domainVerified'));
+      } else {
+        toast.error('CNAME chưa đúng hoặc DNS chưa propagate. Hãy thử lại sau vài phút.');
+      }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.verifyFailed'));
     } finally {
@@ -565,19 +573,19 @@ export default function LandingPageFullEditor({
                           <div className="border border-amber-200 rounded-lg overflow-hidden">
                             <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
                               <p className="font-medium text-amber-800">
-                                Domain đang chờ xác minh
+                                Cần thêm bản ghi DNS
                               </p>
                             </div>
                             <div className="p-4 space-y-4">
                               <p className="text-sm text-gray-600">
-                                Thêm bản ghi CNAME tại nhà cung cấp domain của bạn:
+                                Thêm bản ghi CNAME tại nhà cung cấp domain của bạn. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
                               </p>
-                              <div className="bg-gray-50 rounded-lg p-3 font-mono text-sm">
+                              <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
                                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                                   <span className="text-gray-500">Type:</span><span>CNAME</span>
                                   <span className="text-gray-500">Name:</span><span>{cdInfo.hostname}</span>
                                   <span className="text-gray-500">Value:</span>
-                                  <span className="break-all">{cdInfo.record?.value || 'verify.founderai.biz'}</span>
+                                  <span className="break-all text-yellow-300">{cdInfo.cnameTarget || 'founderai.biz'}</span>
                                 </div>
                               </div>
                               <button
@@ -586,8 +594,11 @@ export default function LandingPageFullEditor({
                                 disabled={cdBusy}
                                 onClick={verifyCustomDomain}
                               >
-                                {cdBusy ? 'Đang xác minh...' : 'Đã thêm DNS - Xác minh ngay'}
+                                {cdBusy ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
                               </button>
+                              <p className="text-xs text-gray-500 text-center">
+                                Hoặc đợi 5 phút, hệ thống sẽ tự động kích hoạt khi DNS propagate xong.
+                              </p>
                             </div>
                           </div>
                         )}

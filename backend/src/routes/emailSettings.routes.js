@@ -22,13 +22,11 @@ router.post('/',
   [
     body('name').trim().notEmpty().withMessage('Tên không được để trống'),
     body('email').isEmail().withMessage('Email không hợp lệ'),
-    body('smtpHost').optional({ nullable: true, checkFalsy: true }).trim(),
-    body('smtpPort')
-      .optional({ nullable: true, checkFalsy: true })
-      .isInt({ min: 1, max: 65535 })
-      .withMessage('SMTP port không hợp lệ'),
-    body('smtpUsername').optional({ nullable: true, checkFalsy: true }).trim(),
-    body('smtpPassword').optional({ nullable: true, checkFalsy: true }).trim()
+    body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
+    body('smtpHost').optional().trim(),
+    body('smtpPort').optional({ nullable: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
+    body('smtpUsername').optional().trim(),
+    body('smtpPassword').optional().trim()
   ],
   handleValidationErrors,
   emailSettingsController.create.bind(emailSettingsController)
@@ -39,6 +37,7 @@ router.put('/:id',
   [
     body('name').optional().trim().notEmpty().withMessage('Tên không được để trống'),
     body('email').optional().isEmail().withMessage('Email không hợp lệ'),
+    body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
     body('smtpPort').optional().isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ')
   ],
   handleValidationErrors,
@@ -71,10 +70,22 @@ router.post('/:id/send-test',
   emailSettingsController.sendTestEmail.bind(emailSettingsController)
 );
 
+// Domain verification flow (Hướng 2)
+// Initiate domain verification: get DNS records to set up
+router.post('/:id/domain-verification/initiate',
+  emailSettingsController.initiateDomainVerification.bind(emailSettingsController)
+);
+
+// Poll SendGrid to check if domain is verified
+router.get('/:id/domain-verification/status',
+  emailSettingsController.getDomainVerificationStatus.bind(emailSettingsController)
+);
+
 router.post('/send-email',
   [
     body('fromEmailId').isInt().withMessage('Email gửi không hợp lệ'),
     body('to').isEmail().withMessage('Email người nhận không hợp lệ'),
+    body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
     body('cc').optional().custom((value) => {
       const list = Array.isArray(value) ? value : String(value || '').split(/[,;\n]/g).map((v) => v.trim()).filter(Boolean);
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
