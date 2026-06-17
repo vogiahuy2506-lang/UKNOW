@@ -7,7 +7,7 @@ import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
-import ZaloRateLimiter from './zaloRateLimiter.js';
+import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
 import {
   isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
@@ -86,30 +86,8 @@ class CampaignRunService {
       this.CONTINUOUS_ZALO_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
     }
 
-    // --- Zalo rate-limit state & policy (extracted to ZaloRateLimiter) ---
-    const quietStartRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START, 10);
-    const quietEndRaw = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END, 10);
-    this.zaloRateLimiter = new ZaloRateLimiter({
-      ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_PER_HOUR_LIMIT_DEFAULT, 100),
-      ZALO_OUTBOUND_RATE_WINDOW_MS: parsePositiveInt(process.env.ZALO_OUTBOUND_RATE_WINDOW_MS, 60 * 60 * 1000),
-      ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 20_000),
-      ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT: parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 50_000),
-      ZALO_OUTBOUND_QUIET_HOURS_START_SAFE: Number.isFinite(quietStartRaw) ? quietStartRaw : 23,
-      ZALO_OUTBOUND_QUIET_HOURS_END_SAFE: Number.isFinite(quietEndRaw) ? quietEndRaw : 6,
-      ZALO_PERSONAL_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_PERSONAL_PER_HOUR_LIMIT, 0),
-      ZALO_PERSONAL_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0),
-      ZALO_PERSONAL_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0),
-      ZALO_PERSONAL_BLOCK_SEND_LIMIT: parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_SEND_LIMIT, 0),
-      ZALO_PERSONAL_BLOCK_COOLDOWN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_BLOCK_COOLDOWN_MS, 0),
-      ZALO_GROUP_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_GROUP_PER_HOUR_LIMIT, 0),
-      ZALO_GROUP_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0),
-      ZALO_GROUP_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0),
-      ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_PER_HOUR_LIMIT, 0),
-      ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0),
-      ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS: parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0),
-      ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS: parsePositiveInt(process.env.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS, 3 * 60 * 60 * 1000),
-      ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS: parsePositiveInt(process.env.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS, 60_000),
-    });
+    // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
+    this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
   }
   
   async runWithZaloAccountMutex(accountId, task) {

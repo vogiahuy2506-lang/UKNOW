@@ -1,4 +1,5 @@
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
+import { isZaloPhoneLookupRateLimitError } from '../../utils/zaloSendErrorClassifier.util.js';
 
 /**
  * ZaloRateLimiter — Manages per-account Zalo outbound rate limiting state and policy.
@@ -94,11 +95,7 @@ class ZaloRateLimiter {
    * @returns {boolean}
    */
   isZaloPersonalPhoneLookupRateLimitError(error) {
-    const msg = String(error?.message ?? error ?? '').trim().toLowerCase();
-    if (!msg) return false;
-    return msg.includes('tìm số điện thoại quá nhiều')
-      || (msg.includes('quá nhiều lần trong 1 giờ') && msg.includes('bất thường'))
-      || msg.includes('vượt quá số request cho phép');
+    return isZaloPhoneLookupRateLimitError(error);
   }
 
   /**

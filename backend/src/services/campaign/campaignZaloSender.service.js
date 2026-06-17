@@ -1749,18 +1749,61 @@ class CampaignZaloSenderService {
       recipient: normalizedRecipient,
       recipientType: normalizedRecipientType,
     });
+    return this.sendResolvedPersonalMessage({
+      api,
+      uid,
+      recipient: normalizedRecipient,
+      recipientType: normalizedRecipientType,
+      zaloName,
+      message,
+      attachments,
+    });
+  }
+
+  /**
+   * Send personal message when UID has been resolved already.
+   * This keeps send path behavior identical while allowing diagnostic tools
+   * to measure lookup/send stages separately without double lookup.
+   *
+   * @param {object} input
+   * @param {any} input.api
+   * @param {string} input.uid
+   * @param {string} input.recipient
+   * @param {'phone'|'uid'} input.recipientType
+   * @param {string|null} [input.zaloName]
+   * @param {string} input.message
+   * @param {Array<any>} [input.attachments]
+   * @returns {Promise<object>}
+   */
+  async sendResolvedPersonalMessage({
+    api,
+    uid,
+    recipient,
+    recipientType = 'phone',
+    zaloName = null,
+    message,
+    attachments = [],
+  }) {
+    const normalizedRecipientType = String(recipientType || 'phone').trim().toLowerCase() === 'uid'
+      ? 'uid'
+      : 'phone';
+    const normalizedRecipient = String(recipient || '').trim();
+    const normalizedUid = String(uid || '').trim();
+    if (!normalizedUid) {
+      throw new Error('Thiếu UID người nhận');
+    }
     const sendResult = await this.sendMessageWithAttachmentDispatch({
       operationName: 'send_personal_message',
       message,
       attachments,
-      sendOperation: (payload) => api.sendMessage(payload, uid),
+      sendOperation: (payload) => api.sendMessage(payload, normalizedUid),
       logIdentity: normalizedRecipient,
     });
     return {
       recipient: normalizedRecipient,
       recipientType: normalizedRecipientType,
       phone: normalizedRecipientType === 'phone' ? normalizedRecipient : '',
-      uid,
+      uid: normalizedUid,
       zaloName,
       zalo_display: zaloName,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,

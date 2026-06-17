@@ -1,13 +1,47 @@
 import db from '../config/database.js';
 
+const MESSAGE_PATCH_COLUMNS = {
+  status: 'status',
+  sentAt: 'sent_at',
+  delayMs: 'delay_ms',
+  errorCode: 'error_code',
+  errorMessage: 'error_message',
+  waitMs: 'wait_ms',
+  waitReason: 'wait_reason',
+  lookupMs: 'lookup_ms',
+  sendMs: 'send_ms',
+  attempts: 'attempts',
+  errorCategory: 'error_category',
+  resolvedUid: 'resolved_uid',
+  zaloName: 'zalo_name',
+};
+
 class DiagnosticRepository {
-  async createRun({ channel, accountId, messageText, interMessageDelayMs, recipients, createdBy }) {
+  async createRun({
+    channel,
+    accountId,
+    messageText,
+    interMessageDelayMs,
+    recipients,
+    createdBy,
+    mode = 'fast',
+    policySnapshot = null,
+  }) {
     const { rows } = await db.query(
       `INSERT INTO diagnostic_runs
-         (channel, account_id, message_text, inter_message_delay_ms, total_count, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (channel, account_id, message_text, inter_message_delay_ms, total_count, created_by, mode, policy_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [channel, accountId || null, messageText, interMessageDelayMs, recipients.length, createdBy]
+      [
+        channel,
+        accountId || null,
+        messageText,
+        interMessageDelayMs,
+        recipients.length,
+        createdBy,
+        mode,
+        policySnapshot ? JSON.stringify(policySnapshot) : null,
+      ]
     );
     return rows[0];
   }
@@ -44,12 +78,18 @@ class DiagnosticRepository {
     return rows;
   }
 
-  async updateMessage(runId, seq, { status, sentAt, delayMs, errorCode, errorMessage }) {
+  async updateMessage(runId, seq, patch = {}) {
+    const entries = Object.entries(patch).filter(([key]) => MESSAGE_PATCH_COLUMNS[key]);
+    if (!entries.length) return;
+
+    const setClauses = entries.map(([key], index) => `${MESSAGE_PATCH_COLUMNS[key]} = $${index + 1}`);
+    const values = entries.map(([, value]) => value ?? null);
+
     await db.query(
       `UPDATE diagnostic_messages
-       SET status = $1, sent_at = $2, delay_ms = $3, error_code = $4, error_message = $5
-       WHERE run_id = $6 AND seq = $7`,
-      [status, sentAt || null, delayMs ?? null, errorCode || null, errorMessage || null, runId, seq]
+       SET ${setClauses.join(', ')}
+       WHERE run_id = $${values.length + 1} AND seq = $${values.length + 2}`,
+      [...values, runId, seq]
     );
   }
 
@@ -63,6 +103,13 @@ class DiagnosticRepository {
   async incrementFailedCount(runId) {
     await db.query(
       `UPDATE diagnostic_runs SET failed_count = failed_count + 1 WHERE id = $1`,
+      [runId]
+    );
+  }
+
+  async incrementSkippedCount(runId) {
+    await db.query(
+      `UPDATE diagnostic_runs SET skipped_count = skipped_count + 1 WHERE id = $1`,
       [runId]
     );
   }
@@ -112,7 +159,6 @@ class DiagnosticRepository {
       [campaignId]
     );
 
-    // Lấy phones từ zalo_messages (campaign đã chạy) — đáng tin nhất
     const { rows: sentRows } = await db.query(
       `SELECT DISTINCT recipient_value AS phone
        FROM zalo_messages
@@ -125,7 +171,6 @@ class DiagnosticRepository {
       [campaignId]
     );
 
-    // Lấy message_text từ zalo_messages nếu node config không có
     const { rows: msgRows } = await db.query(
       `SELECT message_text
        FROM zalo_messages
@@ -138,7 +183,6 @@ class DiagnosticRepository {
 
     const node = nodeRows[0] || null;
 
-    // Ưu tiên phones từ zalo_messages; fallback về config node
     let phones = sentRows.map((r) => r.phone);
     if (phones.length === 0 && node?.recipient_phones_raw) {
       phones = node.recipient_phones_raw
@@ -148,7 +192,6 @@ class DiagnosticRepository {
         .slice(0, 20);
     }
 
-    // Ưu tiên message từ node config (đã có template join); fallback về zalo_messages
     const messageText = node?.message_text || msgRows[0]?.message_text || '';
 
     return { node, phones, messageText };
@@ -157,7 +200,7 @@ class DiagnosticRepository {
   async listRecentRuns(limit = 10) {
     const { rows } = await db.query(
       `SELECT dr.id, dr.channel, dr.status, dr.total_count, dr.sent_count, dr.failed_count,
-              dr.inter_message_delay_ms, dr.created_at, dr.completed_at,
+              dr.skipped_count, dr.inter_message_delay_ms, dr.mode, dr.created_at, dr.completed_at,
               u.username AS created_by_username,
               zs.display_name AS account_display_name
        FROM diagnostic_runs dr

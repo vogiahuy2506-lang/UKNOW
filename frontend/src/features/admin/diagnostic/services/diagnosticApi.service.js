@@ -1,12 +1,25 @@
 import api from '../../../../services/api';
 
 const diagnosticApiService = {
+  getConfig() {
+    return api.get('/admin/diagnostic/config');
+  },
+  getPolicy({ channel, accountId }) {
+    return api.get('/admin/diagnostic/policy', {
+      params: { channel, accountId: accountId || undefined },
+    });
+  },
   getSupportedChannels() {
     return api.get('/admin/diagnostic/channels');
   },
-  createRun({ channel, accountId, messageText, interMessageDelayMs, recipients }) {
+  createRun({ channel, accountId, messageText, interMessageDelayMs, recipients, mode }) {
     return api.post('/admin/diagnostic/runs', {
-      channel, accountId, messageText, interMessageDelayMs, recipients,
+      channel,
+      accountId,
+      messageText,
+      interMessageDelayMs,
+      recipients,
+      mode,
     });
   },
   getRun(runId) {
