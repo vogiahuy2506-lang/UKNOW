@@ -143,11 +143,23 @@ class EmailSettingsCrudService {
       throw createServiceError(emailAccountLimitCheck.message, 400, { limitReached: true });
     }
 
-    // Validate email format (any domain allowed)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(payload.email)) {
-      throw createServiceError('Địa chỉ email không hợp lệ', 400);
+    // Validate required fields
+    if (!payload.name?.trim()) {
+      throw createServiceError('Tên người gửi là bắt buộc', 400);
     }
+    if (!payload.replyTo?.trim()) {
+      throw createServiceError('Email Reply-To là bắt buộc', 400);
+    }
+
+    // Validate replyTo email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(payload.replyTo)) {
+      throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
+    }
+
+    // Email gửi đi luôn là no-reply@{platform_domain}
+    const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
+    const fromEmail = `no-reply@${platformDomain}`;
 
     // Nếu có SMTP settings từ form, dùng chúng; nếu không, dùng default SendGrid
     const smtpHost = payload.smtpHost?.trim() || this.DEFAULT_SMTP.host;
@@ -158,8 +170,8 @@ class EmailSettingsCrudService {
 
     const item = await emailSettingsRepository.create(userId, {
       name: payload.name,
-      email: payload.email,
-      replyTo: payload.replyTo || null,
+      email: fromEmail,
+      replyTo: payload.replyTo,
       smtpHost,
       smtpPort,
       smtpUsername,
@@ -178,7 +190,24 @@ class EmailSettingsCrudService {
       throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
 
-    const item = await emailSettingsRepository.update(userId, id, payload, { roleCode });
+    // Validate required fields
+    if (!payload.name?.trim()) {
+      throw createServiceError('Tên người gửi là bắt buộc', 400);
+    }
+    if (!payload.replyTo?.trim()) {
+      throw createServiceError('Email Reply-To là bắt buộc', 400);
+    }
+
+    // Validate replyTo email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(payload.replyTo)) {
+      throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
+    }
+
+    const item = await emailSettingsRepository.update(userId, id, {
+      name: payload.name,
+      replyTo: payload.replyTo,
+    }, { roleCode });
     return this.mapMutationResult(item);
   }
 

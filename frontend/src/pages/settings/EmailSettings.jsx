@@ -7,13 +7,15 @@ import {
   HiOutlineMail,
   HiOutlineTrash,
   HiOutlineCheckCircle,
-  HiOutlineXCircle,
   HiOutlineClock,
   HiOutlineRefresh,
-  HiOutlineExternalLink,
+  HiOutlineUser,
+  HiOutlineReply,
+  HiOutlinePaperAirplane,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 
-const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'founderai.biz';
+const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'digiso.vn';
 
 const EmailSettings = () => {
   const { t } = useI18n();
@@ -24,25 +26,17 @@ const EmailSettings = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     replyTo: '',
   });
 
-  // Domain verification state
-  const [verificationStatus, setVerificationStatus] = useState(null);
-  const [verificationLoading, setVerificationLoading] = useState(false);
-  const [dnsRecords, setDnsRecords] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(null);
 
   useEffect(() => {
-    if (selectedEmail) {
-      loadVerificationStatus(selectedEmail.id);
-    } else {
-      setVerificationStatus(null);
-      setDnsRecords(null);
-    }
-  }, [selectedEmail?.id]);
+    fetchEmailSettings();
+  }, []);
 
-  const fetchEmailSettings = useCallback(async () => {
+  const fetchEmailSettings = async () => {
     try {
       const response = await emailSettingsApiService.listEmailSettings();
       const items = response.data?.data?.items;
@@ -53,22 +47,29 @@ const EmailSettings = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
-
-  useEffect(() => {
-    fetchEmailSettings();
-  }, [fetchEmailSettings]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Block @gmail.com as from address
-    const emailDomain = formData.email.split('@')[1]?.toLowerCase();
-    if (emailDomain === 'gmail.com') {
-      toast.error('Không thể sử dụng @gmail.com làm địa chỉ gửi. Vui lòng dùng email riêng (VD: hello@' + PLATFORM_DOMAIN + ')');
+    // Validate required fields
+    if (!formData.name?.trim()) {
+      toast.error('Vui lòng nhập tên người gửi');
+      return;
+    }
+    if (!formData.replyTo?.trim()) {
+      toast.error('Vui lòng nhập email Reply-To');
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.replyTo)) {
+      toast.error('Email Reply-To không hợp lệ');
+      return;
+    }
+
+    setIsSaving(true);
     try {
       if (selectedEmail && !isAddingNew) {
         await emailSettingsApiService.updateEmailSetting(selectedEmail.id, formData);
@@ -83,6 +84,8 @@ const EmailSettings = () => {
       resetForm();
     } catch (error) {
       toast.error(error.response?.data?.message || t('emailSettings.error'));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -94,14 +97,8 @@ const EmailSettings = () => {
       setSelectedEmail(email);
       setFormData({
         name: item?.name || email.name,
-        email: item?.email || email.email,
         replyTo: item?.replyTo || '',
       });
-      // Load detail to get verification info
-      if (item?.domainVerificationStatus) {
-        setVerificationStatus(item.domainVerificationStatus);
-        setDnsRecords(item?.domainDnsRecords || null);
-      }
     } catch (error) {
       toast.error(t('emailSettings.loadDetailFailed'));
     }
@@ -111,106 +108,43 @@ const EmailSettings = () => {
     setIsAddingNew(true);
     setSelectedEmail(null);
     resetForm();
-    setVerificationStatus(null);
-    setDnsRecords(null);
   };
 
   const handleDelete = async (id) => {
     if (!confirm(t('emailSettings.confirmDelete'))) return;
+    setIsDeleting(id);
     try {
       await emailSettingsApiService.deleteEmailSetting(id);
       toast.success(t('emailSettings.deleted'));
+      if (selectedEmail?.id === id) {
+        setSelectedEmail(null);
+        resetForm();
+      }
       fetchEmailSettings();
     } catch (error) {
       toast.error(t('emailSettings.deleteFailed'));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const resetForm = () => {
     setFormData({
       name: '',
-      email: '',
       replyTo: '',
     });
-    setVerificationStatus(null);
-    setDnsRecords(null);
   };
-
-  // Domain verification helpers
-  const loadVerificationStatus = async (id) => {
-    try {
-      const response = await emailSettingsApiService.getDomainVerificationStatus(id);
-      const data = response.data?.data;
-      if (data) {
-        setVerificationStatus(data.status);
-        if (data.dnsRecords) setDnsRecords(data.dnsRecords);
-      }
-    } catch {
-      // Silently fail — status check is optional
-    }
-  };
-
-  const handleInitiateVerification = async () => {
-    if (!selectedEmail?.id) return;
-    setVerificationLoading(true);
-    try {
-      const response = await emailSettingsApiService.initiateDomainVerification(selectedEmail.id);
-      const data = response.data?.data;
-      if (data?.success) {
-        setDnsRecords(data.dnsRecords || null);
-        setVerificationStatus(data.step === 'already_verified' ? 'verified' : 'pending');
-        if (data.step === 'manual' || data.step === 'cf_dns_setup') {
-          toast.success(data.message);
-        } else {
-          toast.success(data.message || 'Đã khởi tạo xác thực domain');
-        }
-        // Refresh to get updated status
-        await loadVerificationStatus(selectedEmail.id);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Khởi tạo xác thực thất bại');
-    } finally {
-      setVerificationLoading(false);
-    }
-  };
-
-  const handleCheckStatus = async () => {
-    if (!selectedEmail?.id) return;
-    setVerificationLoading(true);
-    try {
-      const response = await emailSettingsApiService.getDomainVerificationStatus(selectedEmail.id);
-      const data = response.data?.data;
-      if (data) {
-        setVerificationStatus(data.status);
-        if (data.status === 'verified') {
-          toast.success('Domain đã được xác thực thành công!');
-        }
-      }
-    } catch (error) {
-      toast.error('Kiểm tra trạng thái thất bại');
-    } finally {
-      setVerificationLoading(false);
-    }
-  };
-
-  const emailDomain = formData.email.split('@')[1]?.toLowerCase();
-  const isPlatformDomain = emailDomain === PLATFORM_DOMAIN;
-  const isGmailDomain = emailDomain === 'gmail.com';
-  const needsVerification = emailDomain && !isPlatformDomain && !isGmailDomain;
 
   const statusBadge = (status) => {
     const configs = {
       verified: { label: 'Đã xác thực', icon: HiOutlineCheckCircle, color: 'text-green-600 bg-green-50 border-green-200' },
       verifying: { label: 'Đang xác thực', icon: HiOutlineClock, color: 'text-yellow-600 bg-yellow-50 border-yellow-200' },
-      dns_records_created: { label: 'DNS đã tạo', icon: HiOutlineClock, color: 'text-blue-600 bg-blue-50 border-blue-200' },
       pending: { label: 'Chờ xác thực', icon: HiOutlineClock, color: 'text-gray-600 bg-gray-50 border-gray-200' },
-      failed: { label: 'Thất bại', icon: HiOutlineXCircle, color: 'text-red-600 bg-red-50 border-red-200' },
-      not_required: { label: 'Không cần xác thực', icon: HiOutlineCheckCircle, color: 'text-green-600 bg-green-50 border-green-200' },
     };
-    const config = configs[status] || { label: status || 'Không rõ', icon: HiOutlineClock, color: 'text-gray-600 bg-gray-50 border-gray-200' };
+    const config = configs[status] || { label: 'Đã xác thực', icon: HiOutlineCheckCircle, color: 'text-green-600 bg-green-50 border-green-200' };
     const Icon = config.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${config.color}`}>
         <Icon className="w-3 h-3" />
         {config.label}
       </span>
@@ -219,67 +153,123 @@ const EmailSettings = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('emailSettings.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('emailSettings.subtitle')}</p>
         </div>
+        <button
+          onClick={handleAddNew}
+          className="btn btn-primary flex items-center gap-2"
+        >
+          <HiOutlinePlus className="w-4 h-4" />
+          {t('emailSettings.addNewEmail')}
+        </button>
       </div>
 
-      <div className="card">
-        <div className="flex flex-col md:flex-row min-h-[500px] md:min-h-[600px]">
-          {/* Left sidebar - Email list */}
-          <div className="w-full md:w-80 shrink-0 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <button
-                onClick={handleAddNew}
-                className="btn btn-primary w-full"
-              >
-                <HiOutlinePlus className="w-4 h-4 mr-2" />
-                {t('emailSettings.addNewEmail')}
-              </button>
+      {/* Info Banner */}
+      <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-xl p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <HiOutlinePaperAirplane className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Email gửi đi từ nền tảng</h3>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p>
+                <span className="font-medium text-violet-700">From:</span>{' '}
+                <code className="bg-white/70 px-1.5 py-0.5 rounded text-violet-800 font-mono text-xs">
+                  no-reply@{PLATFORM_DOMAIN}
+                </code>
+              </p>
+              <p className="text-xs text-gray-500">
+                Email gửi đi cố định. Bạn có thể tùy chỉnh <strong>tên người gửi</strong> và <strong>email Reply-To</strong> bên dưới.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left - Email List */}
+        <div className="lg:col-span-1">
+          <div className="card">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <HiOutlineMail className="w-4 h-4 text-gray-400" />
+                Danh sách email
+              </h3>
             </div>
             
-            <div className="flex-1 overflow-y-auto">
+            <div className="max-h-[500px] overflow-y-auto">
               {isLoading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-12">
                   <div className="spinner w-8 h-8"></div>
                 </div>
               ) : emailSettings.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  <HiOutlineMail className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-sm">{t('emailSettings.noEmails')}</p>
-                  <p className="text-xs mt-1">{t('emailSettings.addEmailToStart')}</p>
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <HiOutlineMail className="w-8 h-8 text-gray-300" />
+                  </div>
+                  <p className="text-sm text-gray-500 font-medium">{t('emailSettings.noEmails')}</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('emailSettings.addEmailToStart')}</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-50">
                   {emailSettings.map((email) => (
                     <div
                       key={email.id}
                       onClick={() => handleSelectEmail(email)}
-                      className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
+                      className={`p-4 cursor-pointer hover:bg-gray-50 transition-all ${
                         selectedEmail?.id === email.id && !isAddingNew
-                          ? 'bg-primary-50 border-l-4 border-primary-600'
-                          : ''
+                          ? 'bg-primary-50/50 border-l-4 border-primary-600'
+                          : 'border-l-4 border-transparent'
                       }`}
                     >
-                      <div className="flex items-start">
-                        <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center mr-3 flex-shrink-0">
-                          <HiOutlineMail className="w-5 h-5 text-primary-600" />
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            selectedEmail?.id === email.id && !isAddingNew
+                              ? 'bg-primary-100'
+                              : 'bg-gray-100'
+                          }`}>
+                            <HiOutlineUser className={`w-4 h-4 ${
+                              selectedEmail?.id === email.id && !isAddingNew
+                                ? 'text-primary-600'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-900 truncate">
+                              {email.name || 'Chưa có tên'}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                              <HiOutlineReply className="w-3 h-3" />
+                              {email.replyTo || 'Chưa có Reply-To'}
+                            </p>
+                            {email.domainVerificationStatus && (
+                              <div className="mt-1.5">
+                                {statusBadge(email.domainVerificationStatus)}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 truncate">
-                            {email.name}
-                          </p>
-                          <p className="text-sm text-gray-600 truncate">
-                            {email.email}
-                          </p>
-                          {email.domainVerificationStatus && (
-                            <div className="mt-1">
-                              {statusBadge(email.domainVerificationStatus)}
-                            </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(email.id);
+                          }}
+                          disabled={isDeleting === email.id}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                          title={t('emailSettings.delete')}
+                        >
+                          {isDeleting === email.id ? (
+                            <span className="w-4 h-4 border border-red-300 border-t-transparent rounded-full animate-spin"></span>
+                          ) : (
+                            <HiOutlineTrash className="w-4 h-4" />
                           )}
-                        </div>
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -287,209 +277,152 @@ const EmailSettings = () => {
               )}
             </div>
           </div>
+        </div>
 
-          {/* Right panel - Email details/form */}
-          <div className="flex-1 overflow-y-auto">
+        {/* Right - Email Form */}
+        <div className="lg:col-span-2">
+          <div className="card">
             {!selectedEmail && !isAddingNew ? (
-              <div className="flex items-center justify-center h-full p-8">
-                <div className="text-center">
-                  <HiOutlineMail className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {t('emailSettings.selectEmailToView')}
-                  </h3>
-                  <p className="text-sm text-gray-500 max-w-md">
-                    {t('emailSettings.selectEmailToEditTip')}
-                  </p>
+              <div className="flex flex-col items-center justify-center py-20 px-8">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center mb-6">
+                  <HiOutlineSparkles className="w-10 h-10 text-violet-400" />
                 </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">
+                  {t('emailSettings.selectEmailToView')}
+                </h3>
+                <p className="text-sm text-gray-500 text-center max-w-md">
+                  {t('emailSettings.selectEmailToEditTip')}
+                </p>
               </div>
             ) : (
-              <div className="p-8">
-                <div className="max-w-xl mx-auto">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {isAddingNew ? t('emailSettings.addNewEmail') : t('emailSettings.editEmail')}
-                    </h3>
-                    {selectedEmail && !isAddingNew && (
-                      <button
-                        onClick={() => handleDelete(selectedEmail.id)}
-                        className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600"
-                        title={t('emailSettings.delete')}
-                      >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
+                      {isAddingNew ? (
+                        <HiOutlinePlus className="w-4 h-4 text-primary-600" />
+                      ) : (
+                        <HiOutlineUser className="w-4 h-4 text-primary-600" />
+                      )}
+                    </span>
+                    {isAddingNew ? t('emailSettings.addNewEmail') : t('emailSettings.editEmail')}
+                  </h3>
+                  {selectedEmail && !isAddingNew && (
+                    <button
+                      onClick={() => handleDelete(selectedEmail.id)}
+                      disabled={isDeleting === selectedEmail.id}
+                      className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                      title={t('emailSettings.delete')}
+                    >
+                      {isDeleting === selectedEmail.id ? (
+                        <span className="w-5 h-5 border-2 border-red-300 border-t-transparent rounded-full animate-spin"></span>
+                      ) : (
                         <HiOutlineTrash className="w-5 h-5" />
-                      </button>
-                    )}
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Sender Name */}
+                  <div className="space-y-2">
+                    <label className="label flex items-center gap-2">
+                      <HiOutlineUser className="w-4 h-4 text-gray-400" />
+                      {t('emailSettings.displayName')}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                      className="input"
+                      placeholder="Ví dụ: UEF University, Support Team"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
+                      Tên này sẽ hiển thị trong hộp thư người nhận
+                    </p>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                      <label className="label">{t('emailSettings.displayName')}</label>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                        className="input"
-                        placeholder="Ví dụ: Support Team"
-                        required
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        {t('emailSettings.displayNameHint')}
+                  {/* Reply-To Email */}
+                  <div className="space-y-2">
+                    <label className="label flex items-center gap-2">
+                      <HiOutlineReply className="w-4 h-4 text-gray-400" />
+                      Email Reply-To
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.replyTo}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, replyTo: e.target.value }))}
+                      className="input"
+                      placeholder="Ví dụ: hello@uef.edu.vn, support@gmail.com"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                      Khi khách hàng nhấn Reply, email sẽ gửi đến địa chỉ này
+                    </p>
+                  </div>
+
+                  {/* Preview Card */}
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+                      Xem trước email
+                    </p>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white font-semibold text-sm">
+                          {(formData.name || 'A').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 text-sm">
+                            {formData.name || 'Tên người gửi'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            no-reply@{PLATFORM_DOMAIN}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Reply-To: <span className="text-violet-600">{formData.replyTo || 'email@domain.com'}</span>
                       </p>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="label">{t('emailSettings.fromEmail')}</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                        className={`input ${isGmailDomain ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
-                        placeholder={`Ví dụ: hello@${PLATFORM_DOMAIN}`}
-                        required
-                      />
-                      {isGmailDomain ? (
-                        <p className="text-xs text-red-600 mt-1">
-                          Không thể sử dụng @gmail.com làm địa chỉ gửi.
-                        </p>
-                      ) : needsVerification ? (
-                        <p className="text-xs text-yellow-600 mt-1">
-                          Email sẽ được gửi từ no-reply@{PLATFORM_DOMAIN}.
-                          Nhấn "Xác thực domain" để dùng email riêng.
-                        </p>
+                  {/* Actions */}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmail(null);
+                        setIsAddingNew(false);
+                        resetForm();
+                      }}
+                      className="btn btn-secondary"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="btn btn-primary flex items-center gap-2"
+                    >
+                      {isSaving ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                          Đang lưu...
+                        </>
                       ) : (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {t('emailSettings.fromEmailHint')}
-                        </p>
+                        <>
+                          <HiOutlineCheckCircle className="w-4 h-4" />
+                          {isAddingNew ? t('emailSettings.addEmail') : t('common.save')}
+                        </>
                       )}
-                    </div>
-
-                    <div>
-                      <label className="label">Reply-To (tuỳ chọn)</label>
-                      <input
-                        type="email"
-                        value={formData.replyTo}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, replyTo: e.target.value }))}
-                        className="input"
-                        placeholder="Email nhận phản hồi (mặc định = địa chỉ gửi)"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Khi khách hàng nhấn Reply, email sẽ gửi đến địa chỉ này.
-                      </p>
-                    </div>
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-blue-800">
-                        <strong>Thông báo:</strong> Hệ thống sử dụng SMTP mặc định (SendGrid) để gửi email.
-                        Email gửi đi sẽ luôn từ <strong>no-reply@{PLATFORM_DOMAIN}</strong>.
-                        Reply-To mặc định là email bạn nhập ở trên.
-                      </p>
-                    </div>
-
-                    {/* Domain verification section */}
-                    {selectedEmail && !isAddingNew && needsVerification && (
-                      <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-sm font-semibold text-gray-900">Xác thực Domain</h4>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Dùng domain riêng để email gửi từ @{emailDomain}
-                            </p>
-                          </div>
-                          {verificationStatus && statusBadge(verificationStatus)}
-                        </div>
-
-                        {dnsRecords && (
-                          <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-xs">
-                            <p className="font-medium text-gray-700">DNS Records cần thêm:</p>
-                            {dnsRecords.spf && (
-                              <div>
-                                <span className="font-mono text-gray-500">SPF (TXT): </span>
-                                <code className="font-mono text-gray-800 break-all">{dnsRecords.spf}</code>
-                              </div>
-                            )}
-                            {dnsRecords.dkim_cname && (
-                              <div>
-                                <span className="font-mono text-gray-500">DKIM (CNAME): </span>
-                                <code className="font-mono text-gray-800 break-all">{dnsRecords.dkim_cname}</code>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={handleInitiateVerification}
-                            disabled={verificationLoading || verificationStatus === 'verifying' || verificationStatus === 'verified'}
-                            className="btn btn-primary btn-sm"
-                          >
-                            {verificationLoading && verificationStatus !== 'verified' ? (
-                              <span className="flex items-center gap-1">
-                                <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></span>
-                                Đang xử lý...
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1">
-                                <HiOutlineCheckCircle className="w-4 h-4" />
-                                Xác thực domain
-                              </span>
-                            )}
-                          </button>
-                          {(verificationStatus === 'pending' || verificationStatus === 'dns_records_created' || verificationStatus === 'verifying') && (
-                            <button
-                              type="button"
-                              onClick={handleCheckStatus}
-                              disabled={verificationLoading}
-                              className="btn btn-secondary btn-sm"
-                            >
-                              <HiOutlineRefresh className="w-4 h-4 mr-1" />
-                              Kiểm tra
-                            </button>
-                          )}
-                          {dnsRecords && dnsRecords.dns_setup_method === 'manual' && (
-                            <a
-                              href={`https://app.sendgrid.com/settings/whitelabel`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-secondary btn-sm"
-                            >
-                              <HiOutlineExternalLink className="w-4 h-4 mr-1" />
-                              SendGrid
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Verified domain info */}
-                    {selectedEmail && !isAddingNew && isPlatformDomain && (
-                      <div className="border border-green-200 bg-green-50 rounded-lg p-4">
-                        <div className="flex items-center gap-2">
-                          <HiOutlineCheckCircle className="w-5 h-5 text-green-600" />
-                          <span className="text-sm font-medium text-green-800">
-                            Email từ @{PLATFORM_DOMAIN} — không cần xác thực thêm
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmail(null);
-                          setIsAddingNew(false);
-                          resetForm();
-                        }}
-                        className="btn btn-secondary"
-                      >
-                        {t('common.cancel')}
-                      </button>
-                      <button type="submit" className="btn btn-primary">
-                        {isAddingNew ? t('emailSettings.addEmail') : t('common.save')}
-                      </button>
-                    </div>
-                  </form>
-                </div>
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
           </div>
