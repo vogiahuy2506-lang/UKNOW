@@ -21,8 +21,7 @@ router.get('/:id', emailSettingsController.getById.bind(emailSettingsController)
 router.post('/',
   [
     body('name').trim().notEmpty().withMessage('Tên không được để trống'),
-    body('email').isEmail().withMessage('Email không hợp lệ'),
-    body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
+    body('replyTo').isEmail().withMessage('Reply-To email không hợp lệ'),
     body('smtpHost').optional().trim(),
     body('smtpPort').optional({ nullable: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
     body('smtpUsername').optional().trim(),
@@ -36,7 +35,6 @@ router.post('/',
 router.put('/:id',
   [
     body('name').optional().trim().notEmpty().withMessage('Tên không được để trống'),
-    body('email').optional().isEmail().withMessage('Email không hợp lệ'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
     body('smtpPort').optional().isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ')
   ],
@@ -51,7 +49,13 @@ router.delete('/:id', emailSettingsController.delete.bind(emailSettingsControlle
 router.post('/test-connection',
   [
     body('smtpHost').trim().notEmpty().withMessage('SMTP host không được để trống'),
-    body('smtpPort').isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
+    body('smtpPort').custom((value) => {
+      const port = parseInt(value, 10);
+      if (isNaN(port) || port < 1 || port > 65535) {
+        throw new Error('SMTP port không hợp lệ');
+      }
+      return true;
+    }),
     body('smtpUsername').trim().notEmpty().withMessage('SMTP username không được để trống'),
     body('smtpPassword').trim().notEmpty().withMessage('SMTP password không được để trống')
   ],

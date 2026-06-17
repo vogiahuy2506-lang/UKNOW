@@ -31,6 +31,7 @@ class EmailSettingsCrudService {
       createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
+      emailMode: item.email_mode || 'platform',
     };
   }
 
@@ -56,6 +57,7 @@ class EmailSettingsCrudService {
       domainVerifiedAt: item.domain_verified_at || null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
+      emailMode: item.email_mode || 'platform',
     };
   }
 
@@ -151,22 +153,27 @@ class EmailSettingsCrudService {
       throw createServiceError('Email Reply-To là bắt buộc', 400);
     }
 
-    // Validate replyTo email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(payload.replyTo)) {
       throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
     }
 
-    // Email gửi đi luôn là no-reply@{platform_domain}
+    const emailMode = payload.emailMode || 'platform';
     const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
-    const fromEmail = `no-reply@${platformDomain}`;
+    const useSmtp = emailMode === 'smtp';
 
-    // Nếu có SMTP settings từ form, dùng chúng; nếu không, dùng default SendGrid
+    const fromEmail =
+      emailMode === 'platform'
+        ? `no-reply@${platformDomain}`
+        : payload.replyTo;
+
     const smtpHost = payload.smtpHost?.trim() || this.DEFAULT_SMTP.host;
     const smtpPort = payload.smtpPort || this.DEFAULT_SMTP.port;
     const smtpUsername = payload.smtpUsername?.trim() || this.DEFAULT_SMTP.username;
     const smtpPassword = payload.smtpPassword?.trim() || this.DEFAULT_SMTP.password;
     const useTls = payload.useTls !== undefined ? payload.useTls : this.DEFAULT_SMTP.useTls;
+
+    const brandDomain = fromEmail.split('@')[1]?.toLowerCase() || null;
 
     const item = await emailSettingsRepository.create(userId, {
       name: payload.name,
@@ -177,8 +184,9 @@ class EmailSettingsCrudService {
       smtpUsername,
       smtpPassword,
       useTls,
-      dailyLimit: payload.dailyLimit ?? 1000,
-      hourlyLimit: payload.hourlyLimit ?? 100,
+      emailMode,
+      brandDomain,
+      isVerified: useSmtp ? true : true, // platform and smtp both verified, only custom_domain needs DNS verification
     });
 
     return this.mapMutationResult(item);
@@ -190,7 +198,6 @@ class EmailSettingsCrudService {
       throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
 
-    // Validate required fields
     if (!payload.name?.trim()) {
       throw createServiceError('Tên người gửi là bắt buộc', 400);
     }
@@ -198,15 +205,35 @@ class EmailSettingsCrudService {
       throw createServiceError('Email Reply-To là bắt buộc', 400);
     }
 
-    // Validate replyTo email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(payload.replyTo)) {
       throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
     }
 
+    const emailMode = payload.emailMode || current.email_mode || 'platform';
+    const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
+    const useSmtp = emailMode === 'smtp';
+
+    const email =
+      emailMode === 'platform'
+        ? `no-reply@${platformDomain}`
+        : payload.replyTo || current.reply_to || current.email;
+
+    const brandDomain = email.split('@')[1]?.toLowerCase() || null;
+
     const item = await emailSettingsRepository.update(userId, id, {
       name: payload.name,
       replyTo: payload.replyTo,
+      email,
+      emailMode,
+      smtpHost: payload.smtpHost,
+      smtpPort: payload.smtpPort,
+      smtpUsername: payload.smtpUsername,
+      smtpPassword: payload.smtpPassword,
+      useTls: payload.useTls,
+      status: payload.status,
+      brandDomain,
+      isVerified: useSmtp ? true : true, // platform and smtp both verified
     }, { roleCode });
     return this.mapMutationResult(item);
   }

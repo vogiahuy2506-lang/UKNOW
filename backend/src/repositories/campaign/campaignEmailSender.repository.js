@@ -112,7 +112,10 @@ class CampaignEmailSenderRepository {
    */
   async findDefaultEmailSettings(userId) {
     const result = await db.query(
-      "SELECT * FROM email_settings WHERE id_user = $1 AND status = 'active' LIMIT 1",
+      `SELECT * FROM email_settings
+       WHERE id_user = $1
+         AND status = 'active'
+       LIMIT 1`,
       [userId]
     );
     return result.rows[0] || null;

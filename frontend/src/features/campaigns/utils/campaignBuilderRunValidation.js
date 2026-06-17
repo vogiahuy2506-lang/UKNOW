@@ -90,16 +90,23 @@ export const validateNodeForRun = (node) => {
     return { status: 'failed', message: 'Chưa chọn email gửi (SMTP)' };
   }
 
-  if (nodeType === 'send_email' && config.recipientSource === 'manual' && !String(config.recipientEmails || '').trim()) {
-    return { status: 'failed', message: 'Thiếu danh sách email người nhận' };
-  }
-
-  if (nodeType === 'send_email' && config.recipientSource === 'node') {
-    if (!String(config.recipientNodeId || '').trim()) {
-      return { status: 'failed', message: 'Chưa chọn node dữ liệu' };
+  if (nodeType === 'send_email') {
+    const recipientSource = String(config.recipientSource || '').trim();
+    if (!recipientSource || (recipientSource !== 'node' && recipientSource !== 'manual')) {
+      return { status: 'failed', message: 'Chưa chọn nguồn người nhận' };
     }
-    if (!String(config.recipientField || '').trim()) {
-      return { status: 'failed', message: 'Chưa chọn cột email' };
+
+    if (recipientSource === 'manual' && !String(config.recipientEmails || '').trim()) {
+      return { status: 'failed', message: 'Thiếu danh sách email người nhận' };
+    }
+
+    if (recipientSource === 'node') {
+      if (!String(config.recipientNodeId || '').trim()) {
+        return { status: 'failed', message: 'Chưa chọn node dữ liệu' };
+      }
+      if (!String(config.recipientField || '').trim()) {
+        return { status: 'failed', message: 'Chưa chọn cột email' };
+      }
     }
   }
 

@@ -9,7 +9,7 @@ class EmailSettingsRepository {
     let query = `
       SELECT es.id, es.name, es.email, es.reply_to, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
              es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
-             es.brand_domain, es.domain_verification_status, es.domain_verified_at,
+             es.brand_domain, es.domain_verification_status, es.domain_verified_at, es.email_mode,
              COALESCE(u.full_name, u.username) AS creator_name
       FROM email_settings es
       LEFT JOIN users u ON es.id_user = u.id
@@ -110,7 +110,7 @@ class EmailSettingsRepository {
   }
 
   async create(userId, payload) {
-    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit } =
+    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, emailMode } =
       payload;
     const encryptedSmtpPassword = encryptSmtpSecret(smtpPassword);
     const brandDomain = String(email || '').split('@')[1]?.toLowerCase() || null;
@@ -118,16 +118,16 @@ class EmailSettingsRepository {
     const resolvedReplyTo = replyTo || email;
     const result = await db.query(
       `INSERT INTO email_settings
-        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12)
+        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain, email_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12, $13)
        RETURNING *`,
-      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain]
+      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain, emailMode || 'platform']
     );
     return result.rows[0];
   }
 
   async update(userId, id, payload, { roleCode } = {}) {
-    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
+    const { name, email, replyTo, emailMode, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
       payload;
     const encryptedSmtpPassword = smtpPassword === undefined ? undefined : encryptSmtpSecret(smtpPassword);
     const isAdmin = isAdminRole(roleCode);
@@ -137,24 +137,26 @@ class EmailSettingsRepository {
         name = COALESCE($1, name),
         email = COALESCE($2, email),
         reply_to = COALESCE($3, reply_to),
-        smtp_host = COALESCE($4, smtp_host),
-        smtp_port = COALESCE($5, smtp_port),
-        smtp_username = COALESCE($6, smtp_username),
-        smtp_password = COALESCE($7, smtp_password),
-        use_tls = COALESCE($8, use_tls),
-        daily_limit = COALESCE($9, daily_limit),
-        hourly_limit = COALESCE($10, hourly_limit),
-        status = COALESCE($11, status),
-        brand_domain = COALESCE($12, brand_domain),
+        email_mode = COALESCE($4, email_mode),
+        smtp_host = COALESCE($5, smtp_host),
+        smtp_port = COALESCE($6, smtp_port),
+        smtp_username = COALESCE($7, smtp_username),
+        smtp_password = COALESCE($8, smtp_password),
+        use_tls = COALESCE($9, use_tls),
+        daily_limit = COALESCE($10, daily_limit),
+        hourly_limit = COALESCE($11, hourly_limit),
+        status = COALESCE($12, status),
+        brand_domain = COALESCE($13, brand_domain),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $13
-         ${isAdmin ? '' : 'AND id_user = $14'}
+       WHERE id = $14
+         ${isAdmin ? '' : 'AND id_user = $15'}
        RETURNING *`,
       isAdmin
         ? [
             name,
             email,
             replyTo,
+            emailMode,
             smtpHost,
             smtpPort,
             smtpUsername,
@@ -170,6 +172,7 @@ class EmailSettingsRepository {
             name,
             email,
             replyTo,
+            emailMode,
             smtpHost,
             smtpPort,
             smtpUsername,

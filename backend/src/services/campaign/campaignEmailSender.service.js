@@ -524,6 +524,9 @@ class CampaignEmailSenderService {
       throw new Error('Email settings không có địa chỉ email (source)');
     }
 
+    // Note: smtp mode doesn't require domain verification, it's handled by SMTP credentials
+    const emailMode = settings.email_mode || 'platform';
+
     let subject;
     let htmlBody;
     let textBody;
