@@ -1,4 +1,5 @@
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
+import { isZaloPhoneLookupRateLimitError } from '../../utils/zaloSendErrorClassifier.util.js';
 
 /**
  * ZaloRateLimiter — Manages per-account Zalo outbound rate limiting state and policy.
@@ -94,11 +95,7 @@ class ZaloRateLimiter {
    * @returns {boolean}
    */
   isZaloPersonalPhoneLookupRateLimitError(error) {
-    const msg = String(error?.message ?? error ?? '').trim().toLowerCase();
-    if (!msg) return false;
-    return msg.includes('tìm số điện thoại quá nhiều')
-      || (msg.includes('quá nhiều lần trong 1 giờ') && msg.includes('bất thường'))
-      || msg.includes('vượt quá số request cho phép');
+    return isZaloPhoneLookupRateLimitError(error);
   }
 
   /**
@@ -239,6 +236,46 @@ class ZaloRateLimiter {
       policy = { ...policy, minDelayMs: nextMin, maxDelayMs: nextMax };
     }
     return policy;
+  }
+
+  /**
+   * Đọc quota outbound hiện tại cho account/channel, không mutate state.
+   *
+   * @param {string|number} accountId
+   * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} channel
+   * @param {object|null} [accountHint]
+   * @returns {{successCount: number, limitPerWindow: number, windowStartMs: number|null, windowResetInMs: number|null, windowMs: number, lastAttemptAtMs: number|null}}
+   */
+  getOutboundQuotaStatus(accountId, channel, accountHint = null) {
+    const safeAccountId = String(accountId || '').trim();
+    const safeChannel = String(channel || '').trim() || 'zalo_personal';
+    const policy = this.resolveOutboundPolicy(safeChannel, accountHint);
+    const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
+    const limitPerWindow = Math.max(1, Number.parseInt(policy.limitPerWindow, 10) || 1);
+    const current = safeAccountId
+      ? this.zaloOutboundRateLimitState.get(`${safeAccountId}:${safeChannel}`)
+      : null;
+    const nowMs = Date.now();
+    if (!current || !Number.isFinite(Number(current.windowStartMs))) {
+      return {
+        successCount: 0,
+        limitPerWindow,
+        windowStartMs: null,
+        windowResetInMs: null,
+        windowMs,
+        lastAttemptAtMs: null,
+      };
+    }
+    const windowStartMs = Number(current.windowStartMs);
+    const expired = nowMs - windowStartMs >= windowMs;
+    return {
+      successCount: expired ? 0 : Math.max(0, Number.parseInt(current.successCount, 10) || 0),
+      limitPerWindow,
+      windowStartMs,
+      windowResetInMs: expired ? 0 : Math.max(0, windowStartMs + windowMs - nowMs),
+      windowMs,
+      lastAttemptAtMs: Number.isFinite(Number(current.lastAttemptAtMs)) ? Number(current.lastAttemptAtMs) : null,
+    };
   }
 
   // ---------------------------------------------------------------------------

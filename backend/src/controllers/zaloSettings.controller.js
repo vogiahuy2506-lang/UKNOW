@@ -2126,13 +2126,14 @@ class ZaloSettingsController {
             attachmentsCount: preparedAttachments.length,
           });
         } catch (error) {
+          const cleanErrorMessage = campaignZaloSenderService.extractZaloSendObservability(error).message;
           if (isZaloSenderBlockedError(error)) {
             items.push({
               recipient,
               recipientType,
               status: 'skipped',
               skipReason: 'zalo_sender_blocked',
-              skipDetail: error?.message || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
+              skipDetail: cleanErrorMessage || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
               attachments: templateAttachments,
               attachmentsCount: preparedAttachments.length,
             });
@@ -2142,7 +2143,7 @@ class ZaloSettingsController {
             recipient,
             recipientType,
             status: 'failed',
-            error: error?.message || 'Không thể gửi tin nhắn',
+            error: cleanErrorMessage || 'Không thể gửi tin nhắn',
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });
