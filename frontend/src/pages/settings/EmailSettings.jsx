@@ -34,10 +34,6 @@ const EmailSettings = () => {
   const [dnsRecords, setDnsRecords] = useState(null);
 
   useEffect(() => {
-    fetchEmailSettings();
-  }, []);
-
-  useEffect(() => {
     if (selectedEmail) {
       loadVerificationStatus(selectedEmail.id);
     } else {
@@ -46,7 +42,7 @@ const EmailSettings = () => {
     }
   }, [selectedEmail?.id]);
 
-  const fetchEmailSettings = async () => {
+  const fetchEmailSettings = useCallback(async () => {
     try {
       const response = await emailSettingsApiService.listEmailSettings();
       const items = response.data?.data?.items;
