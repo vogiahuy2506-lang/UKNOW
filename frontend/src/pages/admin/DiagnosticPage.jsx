@@ -12,6 +12,7 @@ import {
 } from 'react-icons/hi';
 import diagnosticApiService from '../../features/admin/diagnostic/services/diagnosticApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
+import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 
 const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString('vi-VN') : '—');
 const fmtDelay = (ms) => {
@@ -20,6 +21,15 @@ const fmtDelay = (ms) => {
   if (!Number.isFinite(n)) return '—';
   if (n >= 1000) return `${(n / 1000).toFixed(1)}s`;
   return `${n}ms`;
+};
+const fmtDuration = (ms) => {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return '0 phút';
+  const totalMinutes = Math.ceil(n / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} giờ ${minutes} phút`;
+  return `${minutes} phút`;
 };
 
 const STATUS_ICON = {
@@ -53,10 +63,40 @@ const ERROR_CATEGORY_LABELS = {
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
   NOT_FRIEND_OR_BLOCKED: 'Người nhận chặn / chưa là bạn / hạn chế',
+  ZALO_GROUP_UNREACHABLE: 'Không gửi được tới nhóm Zalo',
+  EMAIL_HARD_BOUNCE: 'Email hard bounce / địa chỉ không tồn tại',
+  EMAIL_SOFT_BOUNCE: 'Email soft bounce / lỗi tạm thời',
+  EMAIL_SMTP_AUTH_ERROR: 'Lỗi cấu hình SMTP / xác thực email gửi',
+  EMAIL_RATE_LIMIT_PAUSE: 'SMTP provider đang giới hạn gửi',
   QUIET_HOURS: 'Đang trong khung giờ im lặng Zalo',
   RATE_LIMITED: 'Đã đạt giới hạn gửi theo giờ',
 };
 const POLL_INTERVAL_MS = 1500;
+
+const RECIPIENT_CONFIG = {
+  zalo_personal: {
+    label: 'Số điện thoại',
+    shortLabel: 'số điện thoại',
+    placeholder: '0901234567\n0907654321\n0912345678',
+    note: 'mỗi số một dòng',
+  },
+  zalo_group: {
+    label: 'Group ID',
+    shortLabel: 'group ID',
+    placeholder: '1234567890123456789\n9876543210987654321',
+    note: 'mỗi group ID một dòng',
+  },
+  email: {
+    label: 'Địa chỉ email',
+    shortLabel: 'email',
+    placeholder: 'customer@example.com\nlead@example.com',
+    note: 'mỗi email một dòng',
+  },
+};
+
+function getRecipientConfig(channel) {
+  return RECIPIENT_CONFIG[channel] || RECIPIENT_CONFIG.zalo_personal;
+}
 
 function avg(values) {
   if (!values.length) return null;
@@ -218,6 +258,66 @@ function AnalysisPanel({ messages }) {
   );
 }
 
+function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
+  const quota = status?.quota;
+  const policy = status?.policy;
+  const cooldown = status?.phoneLookupCooldown;
+  const quiet = status?.quietHours;
+  const quotaText = quota
+    ? `${quota.successCount}/${quota.limitPerWindow}`
+    : '—';
+  const resetText = quota?.windowResetInMs == null
+    ? 'chưa có window'
+    : `reset sau ${fmtDuration(quota.windowResetInMs)}`;
+  const cooldownText = cooldown?.remainingMs > 0
+    ? `còn ${fmtDuration(cooldown.remainingMs)}`
+    : 'không';
+  const quietText = quiet?.inQuietHours
+    ? `đang tắt · mở lại sau ${fmtDuration(quiet.remainingMs)}`
+    : `đang gửi (tắt lúc ${quiet?.start ?? 23}:00)`;
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-blue-900">Trạng thái account LIVE</p>
+          <p className="text-xs text-blue-700/80">{status?.accountName || 'Đọc từ campaign worker hiện tại'}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          disabled={loading}
+        >
+          <HiOutlineRefresh className={`inline h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Làm mới
+        </button>
+      </div>
+      {error ? (
+        <p className="text-xs text-red-600">{error}</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 text-xs text-blue-900 md:grid-cols-4">
+          <div>
+            <p className="text-blue-500">Quota giờ này</p>
+            <p className="font-semibold">{quotaText} · {resetText}</p>
+          </div>
+          <div>
+            <p className="text-blue-500">Cooldown tra số</p>
+            <p className="font-semibold">{cooldownText}</p>
+          </div>
+          <div>
+            <p className="text-blue-500">Quiet-hours</p>
+            <p className="font-semibold">{quietText}</p>
+          </div>
+          <div>
+            <p className="text-blue-500">Delay policy</p>
+            <p className="font-semibold">{fmtDelay(policy?.minDelayMs)}–{fmtDelay(policy?.maxDelayMs)}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RunLog({ run, messages }) {
   const sent = run.sent_count ?? 0;
   const failed = run.failed_count ?? 0;
@@ -225,6 +325,7 @@ function RunLog({ run, messages }) {
   const total = run.total_count ?? 0;
   const done = sent + failed + skipped;
   const isProduction = run.mode === 'production';
+  const recipientConfig = getRecipientConfig(run.channel);
 
   return (
     <div className="space-y-5">
@@ -282,7 +383,7 @@ function RunLog({ run, messages }) {
           <thead>
             <tr className="border-b border-gray-100">
               <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Số điện thoại</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{recipientConfig.label}</th>
               <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Trạng thái</th>
               <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Chờ</th>
               <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tra số</th>
@@ -306,8 +407,13 @@ function RunLog({ run, messages }) {
                   <td className="py-2.5 pr-3">
                     <span className="flex items-center gap-1.5">
                       {STATUS_ICON[m.status] ?? STATUS_ICON.pending}
-                      <span className="text-gray-700">{STATUS_LABEL[m.status] ?? m.status}</span>
+                      <span className="text-gray-700">
+                        {m.dry_run && m.status === 'sent' ? 'Đã tra số' : (STATUS_LABEL[m.status] ?? m.status)}
+                      </span>
                     </span>
+                    {m.dry_run && (
+                      <div className="text-[11px] text-sky-600 mt-0.5">Chưa gửi tin thật</div>
+                    )}
                     <div className="text-[11px] text-gray-400 mt-0.5">{fmtTime(m.sent_at)}</div>
                   </td>
                   <td className="py-2.5 pr-3 text-xs">
@@ -344,15 +450,21 @@ function RunLog({ run, messages }) {
 }
 
 export default function DiagnosticPage() {
-  const [zaloAccounts, setZaloAccounts] = useState([]);
+  const [accountOptions, setAccountOptions] = useState([]);
   const [channel, setChannel] = useState('zalo_personal');
   const [accountId, setAccountId] = useState('');
   const [runMode, setRunMode] = useState('fast');
+  const [dryRun, setDryRun] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [recipientsRaw, setRecipientsRaw] = useState('');
   const [delaySeconds, setDelaySeconds] = useState(10);
   const [maxRecipients, setMaxRecipients] = useState(20);
+  const [productionMaxRecipients, setProductionMaxRecipients] = useState(5);
   const [policySummary, setPolicySummary] = useState('');
+  const [policyData, setPolicyData] = useState(null);
+  const [accountStatus, setAccountStatus] = useState(null);
+  const [accountStatusLoading, setAccountStatusLoading] = useState(false);
+  const [accountStatusError, setAccountStatusError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [campaigns, setCampaigns] = useState([]);
@@ -368,6 +480,7 @@ export default function DiagnosticPage() {
   const loadPolicy = useCallback(async () => {
     if (runMode !== 'production') {
       setPolicySummary('');
+      setPolicyData(null);
       return;
     }
     try {
@@ -377,24 +490,21 @@ export default function DiagnosticPage() {
       });
       const { policy, quietHours } = res.data?.data ?? {};
       setPolicySummary(formatPolicySummary(policy, quietHours) || '');
+      setPolicyData({ policy, quietHours });
     } catch {
       setPolicySummary('');
+      setPolicyData(null);
     }
   }, [runMode, channel, accountId]);
 
   useEffect(() => {
-    zaloSettingsApiService.listAccounts()
-      .then((res) => {
-        const accounts = res.data?.data?.items ?? [];
-        setZaloAccounts(accounts);
-        if (accounts.length > 0) setAccountId(String(accounts[0].id));
-      })
-      .catch(() => {});
-
     diagnosticApiService.getConfig()
       .then((res) => {
-        const max = res.data?.data?.maxRecipients;
+        const config = res.data?.data ?? {};
+        const max = config.maxRecipients;
+        const productionMax = config.productionMaxRecipients;
         if (Number.isFinite(max) && max > 0) setMaxRecipients(max);
+        if (Number.isFinite(productionMax) && productionMax > 0) setProductionMaxRecipients(productionMax);
       })
       .catch(() => {});
 
@@ -408,8 +518,70 @@ export default function DiagnosticPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setAccountOptions([]);
+    setAccountId('');
+
+    const loadAccounts = channel === 'email'
+      ? emailSettingsApiService.listEmailSettings()
+      : zaloSettingsApiService.listAccounts();
+
+    loadAccounts
+      .then((res) => {
+        if (cancelled) return;
+        const items = res.data?.data?.items ?? [];
+        setAccountOptions(items);
+        if (items.length > 0) setAccountId(String(items[0].id));
+      })
+      .catch(() => {
+        if (!cancelled) setAccountOptions([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [channel]);
+
+  useEffect(() => {
+    if (channel === 'email' && runMode === 'production') {
+      setRunMode('fast');
+    }
+    if (channel !== 'zalo_personal' && dryRun) {
+      setDryRun(false);
+    }
+  }, [channel, runMode, dryRun]);
+
+  useEffect(() => {
     loadPolicy();
   }, [loadPolicy]);
+
+  const loadAccountStatus = useCallback(async () => {
+    if (!accountId || !(channel === 'zalo_personal' || channel === 'zalo_group')) {
+      setAccountStatus(null);
+      setAccountStatusError('');
+      return;
+    }
+    setAccountStatusLoading(true);
+    setAccountStatusError('');
+    try {
+      const res = await diagnosticApiService.getAccountStatus({
+        channel,
+        accountId: Number(accountId),
+      });
+      setAccountStatus(res.data?.data ?? null);
+    } catch (err) {
+      setAccountStatus(null);
+      setAccountStatusError(err.response?.data?.message || 'Không đọc được trạng thái live');
+    } finally {
+      setAccountStatusLoading(false);
+    }
+  }, [accountId, channel]);
+
+  useEffect(() => {
+    loadAccountStatus();
+    const timer = setInterval(loadAccountStatus, 10000);
+    return () => clearInterval(timer);
+  }, [loadAccountStatus]);
 
   const fetchActiveRun = useCallback(async (runId) => {
     try {
@@ -442,10 +614,13 @@ export default function DiagnosticPage() {
     e.preventDefault();
     setFormError('');
     const recipients = recipientsRaw.split('\n').map((s) => s.trim()).filter(Boolean);
+    const recipientConfig = getRecipientConfig(channel);
+    const effectiveMaxRecipients = runMode === 'production' ? productionMaxRecipients : maxRecipients;
     if (!messageText.trim()) return setFormError('Vui lòng nhập nội dung tin nhắn');
-    if (recipients.length === 0) return setFormError('Vui lòng nhập ít nhất 1 số điện thoại');
-    if (recipients.length > maxRecipients) {
-      return setFormError(`Tối đa ${maxRecipients} số điện thoại mỗi lần test`);
+    if (needsAccount && !accountId) return setFormError('Vui lòng chọn tài khoản/cấu hình gửi');
+    if (recipients.length === 0) return setFormError(`Vui lòng nhập ít nhất 1 ${recipientConfig.shortLabel}`);
+    if (recipients.length > effectiveMaxRecipients) {
+      return setFormError(`Tối đa ${effectiveMaxRecipients} ${recipientConfig.shortLabel} mỗi lần test`);
     }
     try {
       setSubmitting(true);
@@ -456,6 +631,7 @@ export default function DiagnosticPage() {
         interMessageDelayMs: delaySeconds * 1000,
         recipients,
         mode: runMode,
+        dryRun,
       });
       const runId = res.data?.data?.runId;
       setActiveRunId(runId);
@@ -492,9 +668,18 @@ export default function DiagnosticPage() {
     setActiveRunId(runId);
   };
 
-  const needsAccount = channel === 'zalo_personal' || channel === 'zalo_group';
+  const needsAccount = channel === 'zalo_personal' || channel === 'zalo_group' || channel === 'email';
+  const needsLiveStatus = channel === 'zalo_personal' || channel === 'zalo_group';
+  const recipientConfig = getRecipientConfig(channel);
   const inputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white';
-  const phoneCount = recipientsRaw.split('\n').filter((s) => s.trim()).length;
+  const recipientCount = recipientsRaw.split('\n').filter((s) => s.trim()).length;
+  const effectiveMaxRecipients = runMode === 'production' ? productionMaxRecipients : maxRecipients;
+  const avgProductionDelayMs = policyData?.policy
+    ? Math.round(((Number(policyData.policy.minDelayMs) || 0) + (Number(policyData.policy.maxDelayMs) || 0)) / 2)
+    : null;
+  const estimatedProductionMs = runMode === 'production' && avgProductionDelayMs != null
+    ? recipientCount * avgProductionDelayMs
+    : null;
 
   return (
     <div className="space-y-6">
@@ -522,7 +707,14 @@ export default function DiagnosticPage() {
             <button
               type="button"
               onClick={() => setRunMode('production')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${runMode === 'production' ? 'bg-white shadow-sm text-gray-900 font-medium' : 'text-gray-500'}`}
+              disabled={channel === 'email'}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                channel === 'email'
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : runMode === 'production'
+                    ? 'bg-white shadow-sm text-gray-900 font-medium'
+                    : 'text-gray-500'
+              }`}
             >
               Production
             </button>
@@ -567,12 +759,26 @@ export default function DiagnosticPage() {
                 {policySummary
                   ? <p className="text-xs mt-1 text-amber-800">{policySummary}</p>
                   : <p className="text-xs mt-1 text-amber-700">Đang tải policy...</p>}
+                {estimatedProductionMs != null && recipientCount > 0 && (
+                  <p className="text-xs mt-1 text-amber-800">
+                    Ước tính tối thiểu khoảng {fmtDuration(estimatedProductionMs)} cho {recipientCount} người nhận.
+                  </p>
+                )}
                 <p className="text-xs mt-1 text-amber-700/80">
-                  Chế độ này mô phỏng policy gửi production (quiet-hours, rate-limit, delay random).
-                  Dùng tài khoản Zalo rảnh — không chạy song song với campaign thật trên cùng account.
+                  Production mode sẽ chờ thời gian thật giữa mỗi tin — đừng đóng tab.
+                  Dùng tài khoản rảnh — không chạy song song với campaign thật trên cùng account.
                 </p>
               </div>
             </div>
+          )}
+
+          {needsLiveStatus && (
+            <AccountLiveStatusPanel
+              status={accountStatus}
+              loading={accountStatusLoading}
+              error={accountStatusError}
+              onRefresh={loadAccountStatus}
+            />
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -580,22 +786,30 @@ export default function DiagnosticPage() {
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Kênh gửi</label>
               <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
                 <option value="zalo_personal">Zalo Cá nhân</option>
-                <option value="zalo_group" disabled>Zalo Nhóm (sắp ra mắt)</option>
-                <option value="email" disabled>Email (sắp ra mắt)</option>
+                <option value="zalo_group">Zalo Nhóm</option>
+                <option value="email">Email</option>
               </select>
             </div>
 
             <div>
               {needsAccount && (
                 <>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Tài khoản Zalo</label>
-                  {zaloAccounts.length === 0 ? (
-                    <p className="text-xs text-red-500 mt-2">Không tìm thấy tài khoản Zalo nào đang kết nối</p>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                    {channel === 'email' ? 'Cấu hình Email' : 'Tài khoản Zalo'}
+                  </label>
+                  {accountOptions.length === 0 ? (
+                    <p className="text-xs text-red-500 mt-2">
+                      {channel === 'email'
+                        ? 'Không tìm thấy cấu hình email nào'
+                        : 'Không tìm thấy tài khoản Zalo nào đang kết nối'}
+                    </p>
                   ) : (
                     <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputCls}>
-                      {zaloAccounts.map((a) => (
+                      {accountOptions.map((a) => (
                         <option key={a.id} value={a.id}>
-                          {a.displayName}{a.status !== 'connected' ? ' (chưa kết nối)' : ''}
+                          {channel === 'email'
+                            ? `${a.name || a.email}${a.email ? ` · ${a.email}` : ''}`
+                            : `${a.displayName}${a.status !== 'connected' ? ' (chưa kết nối)' : ''}`}
                         </option>
                       ))}
                     </select>
@@ -611,7 +825,7 @@ export default function DiagnosticPage() {
                     <label className="text-xs font-medium text-gray-600">Delay giữa tin</label>
                     <div className="flex items-baseline gap-1">
                       <span className="text-sm font-semibold text-primary-600">{delaySeconds}s</span>
-                      <span className="text-xs text-gray-400">(production: 20–50s)</span>
+                      <span className="text-xs text-gray-400">(production: theo policy)</span>
                     </div>
                   </div>
                   <input
@@ -639,18 +853,34 @@ export default function DiagnosticPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-baseline justify-between mb-1.5">
-                <label className="text-xs font-medium text-gray-600">Số điện thoại</label>
-                <span className={`text-xs tabular-nums ${phoneCount > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
-                  {phoneCount} / {maxRecipients} · mỗi số một dòng
+                <label className="text-xs font-medium text-gray-600">{recipientConfig.label}</label>
+                <span className={`text-xs tabular-nums ${recipientCount > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
+                  {recipientCount} / {effectiveMaxRecipients} · {recipientConfig.note}
                 </span>
               </div>
               <textarea
                 value={recipientsRaw}
                 onChange={(e) => setRecipientsRaw(e.target.value)}
                 rows={5}
-                placeholder={'0901234567\n0907654321\n0912345678'}
+                placeholder={recipientConfig.placeholder}
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
               />
+              {channel === 'zalo_personal' && (
+                <label className="mt-3 flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                  <input
+                    type="checkbox"
+                    checked={dryRun}
+                    onChange={(e) => setDryRun(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span>
+                    <span className="font-medium">Chỉ tra số, không gửi tin thật.</span>
+                    <span className="block text-sky-700/80">
+                      Vẫn tốn quota tra số thật, nhưng không gửi tin đến người nhận.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
 
             <div>
@@ -707,7 +937,7 @@ export default function DiagnosticPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Kết quả test sẽ hiển thị ở đây</p>
-              <p className="text-xs text-gray-400 mt-1">Nhập số điện thoại, tin nhắn rồi bấm &quot;Chạy test&quot;</p>
+              <p className="text-xs text-gray-400 mt-1">Nhập người nhận, nội dung rồi bấm &quot;Chạy test&quot;</p>
             </div>
           </div>
         )}

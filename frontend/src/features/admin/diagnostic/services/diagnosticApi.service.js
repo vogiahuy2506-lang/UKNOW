@@ -9,10 +9,15 @@ const diagnosticApiService = {
       params: { channel, accountId: accountId || undefined },
     });
   },
+  getAccountStatus({ channel, accountId }) {
+    return api.get('/admin/diagnostic/account-status', {
+      params: { channel, accountId: accountId || undefined },
+    });
+  },
   getSupportedChannels() {
     return api.get('/admin/diagnostic/channels');
   },
-  createRun({ channel, accountId, messageText, interMessageDelayMs, recipients, mode }) {
+  createRun({ channel, accountId, messageText, interMessageDelayMs, recipients, mode, dryRun }) {
     return api.post('/admin/diagnostic/runs', {
       channel,
       accountId,
@@ -20,6 +25,7 @@ const diagnosticApiService = {
       interMessageDelayMs,
       recipients,
       mode,
+      dryRun,
     });
   },
   getRun(runId) {

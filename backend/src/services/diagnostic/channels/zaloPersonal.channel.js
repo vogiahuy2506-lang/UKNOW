@@ -13,7 +13,7 @@ class ZaloPersonalChannel {
     return campaignZaloSenderService.getConnectedApiOrSyncStatus({ accountId, userId });
   }
 
-  async sendStaged({ api, recipient, recipientType = 'phone', message }) {
+  async sendStaged({ api, recipient, recipientType = 'phone', message, dryRun = false }) {
     const normalizedRecipientType = String(recipientType || 'phone').trim().toLowerCase() === 'uid'
       ? 'uid'
       : 'phone';
@@ -35,6 +35,16 @@ class ZaloPersonalChannel {
     }
 
     const lookupMs = Date.now() - lookupStartedAt;
+    if (dryRun === true) {
+      return {
+        uid: resolved.uid,
+        zaloName: resolved.zaloName || null,
+        lookupMs,
+        sendMs: null,
+        dryRun: true,
+      };
+    }
+
     const sendStartedAt = Date.now();
     try {
       await campaignZaloSenderService.sendResolvedPersonalMessage({

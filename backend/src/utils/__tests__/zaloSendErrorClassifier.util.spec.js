@@ -54,6 +54,32 @@ describe('zaloSendErrorClassifier.util', () => {
       expect(result.category).toBe('NOT_FRIEND_OR_BLOCKED');
     });
 
+    it('map nhóm Zalo không reachable → ZALO_GROUP_UNREACHABLE', () => {
+      const result = classifyZaloSendError(new Error('Không tìm thấy nhóm với tài khoản hiện tại'));
+      expect(result.category).toBe('ZALO_GROUP_UNREACHABLE');
+    });
+
+    it('map SMTP auth error → EMAIL_SMTP_AUTH_ERROR', () => {
+      const err = new Error('Authentication credentials invalid');
+      err.responseCode = 535;
+      const result = classifyZaloSendError(err);
+      expect(result.category).toBe('EMAIL_SMTP_AUTH_ERROR');
+    });
+
+    it('map SMTP rate limit → EMAIL_RATE_LIMIT_PAUSE', () => {
+      const err = new Error('You have exceeded your messaging limits');
+      err.responseCode = 451;
+      const result = classifyZaloSendError(err);
+      expect(result.category).toBe('EMAIL_RATE_LIMIT_PAUSE');
+    });
+
+    it('map recipient hard bounce → EMAIL_HARD_BOUNCE', () => {
+      const err = new Error('Recipient address rejected: User unknown');
+      err.responseCode = 550;
+      const result = classifyZaloSendError(err);
+      expect(result.category).toBe('EMAIL_HARD_BOUNCE');
+    });
+
     it('fallback UNKNOWN giữ message thô', () => {
       const result = classifyZaloSendError(new Error('Lỗi SDK lạ XYZ'));
       expect(result.category).toBe('UNKNOWN');

@@ -15,6 +15,7 @@ import {
 } from '../../utils/zaloPhoneCampaign.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
+import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
@@ -92,6 +93,57 @@ class CampaignRunService {
   
   async runWithZaloAccountMutex(accountId, task) {
     return this.zaloRateLimiter.runWithZaloAccountMutex(accountId, task);
+  }
+
+  /**
+   * Đọc trạng thái outbound live của account trong process campaign worker hiện tại.
+   * Read-only: không gọi mark/enforce/reset state.
+   *
+   * @param {object} input
+   * @param {string|number} input.accountId
+   * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
+   * @param {number|string|null} [input.userId]
+   * @param {string|null} [input.roleCode]
+   * @returns {Promise<object>}
+   */
+  async getOutboundAccountStatus({
+    accountId,
+    channel = 'zalo_personal',
+    userId = null,
+    roleCode = null,
+  } = {}) {
+    const safeChannel = String(channel || 'zalo_personal').trim() || 'zalo_personal';
+    const account = await campaignZaloSenderService.getCampaignZaloAccount({
+      userId,
+      accountId,
+      roleCode,
+    });
+    const nowMs = Date.now();
+    const policy = this.zaloRateLimiter.resolveOutboundPolicy(safeChannel, account);
+    const quota = this.zaloRateLimiter.getOutboundQuotaStatus(account.id, safeChannel, account);
+    const phoneLookupCooldownUntilMs = safeChannel === 'zalo_personal'
+      ? this.zaloRateLimiter.getPhoneLookupCooldownUntil(account.id)
+      : 0;
+    const quietUntilMs = this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(nowMs);
+    return {
+      accountId: account.id,
+      accountName: account.displayName,
+      channel: safeChannel,
+      generatedAt: new Date(nowMs).toISOString(),
+      policy,
+      quota,
+      phoneLookupCooldown: {
+        untilMs: phoneLookupCooldownUntilMs > nowMs ? phoneLookupCooldownUntilMs : null,
+        remainingMs: phoneLookupCooldownUntilMs > nowMs ? phoneLookupCooldownUntilMs - nowMs : 0,
+      },
+      quietHours: {
+        inQuietHours: Boolean(quietUntilMs),
+        untilMs: quietUntilMs || null,
+        remainingMs: quietUntilMs ? Math.max(0, quietUntilMs - nowMs) : 0,
+        start: this.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE,
+        end: this.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE,
+      },
+    };
   }
 
   /**
@@ -4025,6 +4077,41 @@ class CampaignRunService {
               },
             };
           };
+          const buildZaloPersonalErrorObservation = (error) => {
+            const observed = campaignZaloSenderService.extractZaloSendObservability(error);
+            const classificationError = error && typeof error === 'object'
+              ? {
+                ...error,
+                message: observed.message || error.message,
+                code: error.code,
+                cause: error.cause,
+                response: error.response,
+                failedReason: error.failedReason,
+                zaloRetry: error.zaloRetry,
+              }
+              : observed.message || error;
+            const classified = classifyZaloSendError(classificationError, {
+              stage: observed.stage || error?.stage || 'send',
+            });
+            return {
+              errorStage: observed.stage || error?.stage || null,
+              errorCategory: classified.category,
+              errorLabel: classified.label,
+              lookupMs: observed.lookupMs,
+              sendMs: observed.sendMs,
+              attempts: observed.attempts,
+              cleanMessage: observed.message || String(error?.message || '').trim(),
+            };
+          };
+          const withZaloPersonalObservation = (payload, observation) => ({
+            ...payload,
+            errorStage: observation?.errorStage || null,
+            errorCategory: observation?.errorCategory || null,
+            errorLabel: observation?.errorLabel || null,
+            lookupMs: observation?.lookupMs ?? null,
+            sendMs: observation?.sendMs ?? null,
+            attempts: observation?.attempts ?? null,
+          });
 
           /**
            * Xáo trộn mảng (Fisher–Yates) để chọn tài khoản gửi ngẫu nhiên trong pool.
@@ -4361,11 +4448,27 @@ class CampaignRunService {
                * Resolve UID trước khi tạo tracking để tránh lưu tracking "mồ côi"
                * trong các trường hợp Zalo trả về lỗi tra số/quota và cần defer.
                */
-              const { uid: resolvedRecipientUid, zaloName: lookupZaloName } = await campaignZaloSenderService.resolveUidFromRecipient({
-                api: workingApi,
-                recipient,
-                recipientType,
-              });
+              const lookupStartedAt = Date.now();
+              let lookupMs = null;
+              let resolvedRecipientUid = null;
+              let lookupZaloName = null;
+              try {
+                const lookupResult = await campaignZaloSenderService.resolveUidFromRecipient({
+                  api: workingApi,
+                  recipient,
+                  recipientType,
+                });
+                lookupMs = Date.now() - lookupStartedAt;
+                resolvedRecipientUid = lookupResult.uid;
+                lookupZaloName = lookupResult.zaloName;
+              } catch (error) {
+                campaignZaloSenderService.annotateZaloSendError(error, {
+                  stage: 'lookup',
+                  lookupMs: Date.now() - lookupStartedAt,
+                  attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
+                });
+                throw error;
+              }
               resolvedRecipientZaloName = String(lookupZaloName || '').trim() || null;
               trackingToken = campaignZaloSenderService.createTrackingToken();
               zaloMessageId = await createZaloMessageTrackingRecord({
@@ -4404,14 +4507,30 @@ class CampaignRunService {
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 linkTargets: trackedLinkTargets,
               });
-              const sendResult = await campaignZaloSenderService.sendPersonalMessageQueued({
-                userId,
-                accountId: workingAccount.id,
-                recipient: resolvedRecipientUid,
-                recipientType: 'uid',
-                message: trackedMessage,
-                attachments,
-              });
+              const sendStartedAt = Date.now();
+              let sendResult;
+              try {
+                sendResult = await campaignZaloSenderService.sendPersonalMessageQueued({
+                  userId,
+                  accountId: workingAccount.id,
+                  recipient: resolvedRecipientUid,
+                  recipientType: 'uid',
+                  message: trackedMessage,
+                  attachments,
+                });
+              } catch (error) {
+                campaignZaloSenderService.annotateZaloSendError(error, {
+                  stage: error?.stage || 'send',
+                  lookupMs,
+                  sendMs: Date.now() - sendStartedAt,
+                  attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
+                });
+                throw error;
+              }
+              sendResult.lookupMs = lookupMs;
+              sendResult.sendMs = Number.isFinite(Number(sendResult.sendMs))
+                ? Number(sendResult.sendMs)
+                : Date.now() - sendStartedAt;
               if (resolvedRecipientZaloName && !sendResult.zaloName && !sendResult.zalo_display) {
                 sendResult.zaloName = resolvedRecipientZaloName;
                 sendResult.zalo_display = resolvedRecipientZaloName;
@@ -4455,6 +4574,9 @@ class CampaignRunService {
                 message: trackedMessage,
                 status: 'success',
                 uid: resolvedUid || null,
+                resolvedUid: resolvedUid || null,
+                lookupMs: Number.isFinite(Number(sendResult.lookupMs)) ? Number(sendResult.lookupMs) : null,
+                sendMs: Number.isFinite(Number(sendResult.sendMs)) ? Number(sendResult.sendMs) : null,
                 response: sendResult.response || null,
                 messageText: progressMessage,
                 sentAt,
@@ -4537,10 +4659,12 @@ class CampaignRunService {
               if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
                 const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(workingAccount.id);
                 const waitMs = Math.max(0, untilMs - Date.now());
+                const observation = buildZaloPersonalErrorObservation(error);
                 console.log(
                   `[CampaignRun][ZaloPersonal] run=${runId} account=${workingAccount.id} `
                   + `lỗi_giới_hạn_zalo (tra_số / vượt_request) → cooldown `
-                  + `${Math.round(this.zaloRateLimiter.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs}`
+                  + `${Math.round(this.zaloRateLimiter.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs} `
+                  + `category=${observation.errorCategory} stage=${observation.errorStage || 'lookup'} lookup_ms=${observation.lookupMs ?? '-'}`
                 );
                 if (waitMs > 0) {
                   await this.persistZaloDeferYieldSlot({
@@ -4563,7 +4687,8 @@ class CampaignRunService {
                   sendResult: null,
                   fallbackRecipient: recipient,
                 });
-                const senderBlockedPayload = {
+                const observation = buildZaloPersonalErrorObservation(error);
+                const senderBlockedPayload = withZaloPersonalObservation({
                   channel: 'zalo_personal',
                   accountId: workingAccount.id,
                   accountName: workingAccount.displayName,
@@ -4578,7 +4703,7 @@ class CampaignRunService {
                   message,
                   status: 'skipped',
                   skipReason: 'zalo_sender_blocked',
-                  skipDetail: String(error?.message || '').trim()
+                  skipDetail: observation.cleanMessage
                     || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
                   messageText: progressMessage,
                   sentAt,
@@ -4587,7 +4712,7 @@ class CampaignRunService {
                   attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
                   trackingToken,
                   variables,
-                };
+                }, observation);
                 sendResults.push(senderBlockedPayload);
                 {
                   const zpLog = getZaloPersonalProgressForLog();
@@ -4622,7 +4747,8 @@ class CampaignRunService {
                   sendResult: null,
                   fallbackRecipient: recipient,
                 });
-                const skipPayload = {
+                const observation = buildZaloPersonalErrorObservation(error);
+                const skipPayload = withZaloPersonalObservation({
                   channel: 'zalo_personal',
                   accountId: workingAccount.id,
                   accountName: workingAccount.displayName,
@@ -4637,7 +4763,7 @@ class CampaignRunService {
                   message,
                   status: 'skipped',
                   skipReason: 'zalo_unreachable',
-                  skipDetail: String(error?.message || '').trim()
+                  skipDetail: observation.cleanMessage
                     || 'SĐT không hợp lệ hoặc không tìm thấy trên Zalo — đã ghi nhận, không tốn slot gửi.',
                   messageText: progressMessage,
                   sentAt,
@@ -4646,7 +4772,7 @@ class CampaignRunService {
                   attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
                   trackingToken,
                   variables,
-                };
+                }, observation);
                 sendResults.push(skipPayload);
                 {
                   const zpLog = getZaloPersonalProgressForLog();
@@ -4678,6 +4804,7 @@ class CampaignRunService {
                 const nextFail = prevFail + 1;
                 if (nextFail >= this.CONTINUOUS_ZALO_MAX_SEND_FAILURES) {
                   failedSends += 1;
+                  const observation = buildZaloPersonalErrorObservation(error);
                   const abandonNote = (
                     ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
                   );
@@ -4689,7 +4816,7 @@ class CampaignRunService {
                     sendResult: null,
                     fallbackRecipient: recipient,
                   });
-                  const failedPayload = {
+                  const failedPayload = withZaloPersonalObservation({
                     channel: 'zalo_personal',
                     accountId: workingAccount.id,
                     accountName: workingAccount.displayName,
@@ -4703,7 +4830,7 @@ class CampaignRunService {
                     zaloMessageId,
                     message,
                     status: 'failed',
-                    error: `${String(error?.message || '').trim()}${abandonNote}`,
+                    error: `${observation.cleanMessage}${abandonNote}`,
                     skipReason: 'max_zalo_send_failures',
                     messageText: progressMessage,
                     sentAt,
@@ -4712,7 +4839,7 @@ class CampaignRunService {
                     attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
                     trackingToken,
                     variables,
-                  };
+                  }, observation);
                   // eslint-disable-next-line no-await-in-loop
                   await upsertRecipientProgress({
                     nodeId: node.id,
@@ -4764,6 +4891,7 @@ class CampaignRunService {
                 });
               }
               failedSends += 1;
+              const observation = buildZaloPersonalErrorObservation(error);
               const progressMessage = buildZaloPersonalProgressMessage();
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(workingAccount);
@@ -4772,7 +4900,7 @@ class CampaignRunService {
                 sendResult: null,
                 fallbackRecipient: recipient,
               });
-              const failedPayload = {
+              const failedPayload = withZaloPersonalObservation({
                 channel: 'zalo_personal',
                 accountId: workingAccount.id,
                 accountName: workingAccount.displayName,
@@ -4785,7 +4913,7 @@ class CampaignRunService {
                 zaloMessageId,
                 message,
                 status: 'failed',
-                error: error.message,
+                error: observation.cleanMessage,
                 messageText: progressMessage,
                 sentAt,
                 templateId: stepMeta?.templateId || null,
@@ -4793,10 +4921,10 @@ class CampaignRunService {
                 attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
                 trackingToken,
                 variables,
-              };
+              }, observation);
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 status: 'failed',
-                error: error.message,
+                error: failedPayload.error,
               });
               sendResults.push(failedPayload);
               {
@@ -4808,7 +4936,7 @@ class CampaignRunService {
                   status: 'failed',
                   progressCurrent: zpLog.current,
                   progressTotal: zpLog.total,
-                  errorMessage: error.message,
+                  errorMessage: failedPayload.error,
                   executionData: buildSendZaloPersonalExecutionData(failedPayload),
                 });
               }

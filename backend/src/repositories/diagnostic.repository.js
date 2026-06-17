@@ -14,6 +14,7 @@ const MESSAGE_PATCH_COLUMNS = {
   errorCategory: 'error_category',
   resolvedUid: 'resolved_uid',
   zaloName: 'zalo_name',
+  dryRun: 'dry_run',
 };
 
 class DiagnosticRepository {
@@ -60,10 +61,15 @@ class DiagnosticRepository {
   async findRun(runId) {
     const { rows } = await db.query(
       `SELECT dr.*, u.username AS created_by_username,
-              zs.display_name AS account_display_name
+              COALESCE(zs.display_name, es.name, es.email) AS account_display_name
        FROM diagnostic_runs dr
        LEFT JOIN users u ON u.id = dr.created_by
-       LEFT JOIN zalo_settings zs ON zs.id = dr.account_id
+       LEFT JOIN zalo_settings zs
+              ON zs.id = dr.account_id
+             AND dr.channel IN ('zalo_personal', 'zalo_group')
+       LEFT JOIN email_settings es
+              ON es.id = dr.account_id
+             AND dr.channel = 'email'
        WHERE dr.id = $1`,
       [runId]
     );
@@ -202,10 +208,15 @@ class DiagnosticRepository {
       `SELECT dr.id, dr.channel, dr.status, dr.total_count, dr.sent_count, dr.failed_count,
               dr.skipped_count, dr.inter_message_delay_ms, dr.mode, dr.created_at, dr.completed_at,
               u.username AS created_by_username,
-              zs.display_name AS account_display_name
+              COALESCE(zs.display_name, es.name, es.email) AS account_display_name
        FROM diagnostic_runs dr
        LEFT JOIN users u ON u.id = dr.created_by
-       LEFT JOIN zalo_settings zs ON zs.id = dr.account_id
+       LEFT JOIN zalo_settings zs
+              ON zs.id = dr.account_id
+             AND dr.channel IN ('zalo_personal', 'zalo_group')
+       LEFT JOIN email_settings es
+              ON es.id = dr.account_id
+             AND dr.channel = 'email'
        ORDER BY dr.created_at DESC
        LIMIT $1`,
       [limit]

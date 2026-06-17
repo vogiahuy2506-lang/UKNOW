@@ -55,6 +55,51 @@ class CampaignEmailSenderService {
   }
 
   /**
+   * Gửi email raw qua SMTP settings, không ghi email_messages/campaign stats/customer journey.
+   *
+   * @param {object} input
+   * @param {object} input.settings email_settings row
+   * @param {string} input.to email người nhận
+   * @param {string} input.subject tiêu đề email
+   * @param {string} input.html nội dung HTML
+   * @param {string} [input.text] nội dung text
+   * @param {Array<object>} [input.attachments]
+   * @param {string} [input.from]
+   * @param {string} [input.replyTo]
+   * @returns {Promise<{info: object, messageId: string|null, sendMs: number}>}
+   */
+  async sendRawEmail({
+    settings,
+    to,
+    subject,
+    html,
+    text = '',
+    attachments = [],
+    from = null,
+    replyTo = null,
+  }) {
+    const transporter = this.getOrCreateTransporter(settings);
+    const sendStartedAt = Date.now();
+
+    await this.applyEmailSendRateLimit({ settings });
+    const info = await transporter.sendMail({
+      from: from || resolveFromAddress(settings),
+      replyTo: replyTo || settings.reply_to || undefined,
+      to,
+      subject: subject || 'Email từ Founder AI',
+      text: text || String(html || '').replace(/<[^>]*>/g, ''),
+      html: html || `<p>${text || ''}</p>`,
+      attachments: Array.isArray(attachments) && attachments.length ? attachments : undefined,
+    });
+
+    return {
+      info,
+      messageId: info?.messageId || null,
+      sendMs: Date.now() - sendStartedAt,
+    };
+  }
+
+  /**
    * Xóa transporter khỏi cache khi settings thay đổi hoặc kết nối lỗi auth.
    *
    * @param {string|number} settingsId
@@ -605,28 +650,23 @@ class CampaignEmailSenderService {
       ? await emailSettingsController.buildMailAttachments(attachments)
       : [];
 
-    // Tái sử dụng transporter đã cache để tránh mở TCP connection mới mỗi email.
-    const transporter = this.getOrCreateTransporter(settings);
-
     // Resolve actual from address + brand domain before sending (for logging)
     const fromAddress = resolveFromAddress(settings);
     const brandDomain = settings.brand_domain || extractBrandDomain(settings.email);
 
     let info;
     try {
-      // Áp rate-limit cứng theo SMTP account để tránh bị provider chặn khi gửi dồn dập.
-      await this.applyEmailSendRateLimit({
+      const rawResult = await this.sendRawEmail({
         settings,
-      });
-      info = await transporter.sendMail({
         from: fromAddress,
         replyTo: settings.reply_to || undefined,
         to: customer.email,
         subject: subject || 'Email từ Founder AI',
         text: textBody,
         html: trackedHtmlContent || `<p>${textBody}</p>`,
-        attachments: realMailAttachments.length ? realMailAttachments : undefined,
+        attachments: realMailAttachments,
       });
+      info = rawResult.info;
     } catch (smtpError) {
       const providerRateLimitError = isSmtpProviderRateLimitError(smtpError);
       const smtpConfigError = !providerRateLimitError && isSmtpAuthConfigError(smtpError);

@@ -2,9 +2,13 @@ import diagnosticRepository from '../../repositories/diagnostic.repository.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { buildZaloRateLimiterFromEnv } from '../campaign/buildZaloRateLimiterFromEnv.js';
 import zaloPersonalChannel from './channels/zaloPersonal.channel.js';
+import zaloGroupChannel from './channels/zaloGroup.channel.js';
+import emailChannel from './channels/email.channel.js';
 
 const CHANNEL_ADAPTERS = {
   zalo_personal: zaloPersonalChannel,
+  zalo_group: zaloGroupChannel,
+  email: emailChannel,
 };
 
 const SUPPORTED_CHANNELS = Object.keys(CHANNEL_ADAPTERS);
@@ -38,8 +42,6 @@ function mapPolicyWaitReasonToErrorCategory(waitReason) {
 
 class DiagnosticRunnerService {
   constructor() {
-    // Isolated limiter instance: policy parity with production, but no shared state with campaign runs.
-    this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
     this.DIAGNOSTIC_MAX_WAIT_MS = readMaxPolicyWaitMs();
   }
 
@@ -55,17 +57,22 @@ class DiagnosticRunnerService {
     recipients,
     createdBy,
     userId,
+    roleCode = null,
     mode = 'fast',
+    dryRun = false,
   }) {
     const adapter = CHANNEL_ADAPTERS[channel];
     if (!adapter) {
       throw new Error(`Channel '${channel}' chưa được hỗ trợ. Các channel hợp lệ: ${SUPPORTED_CHANNELS.join(', ')}`);
     }
 
-    await adapter.validate({ accountId, userId });
+    await adapter.validate({ accountId, userId, roleCode });
 
+    const runLimiter = mode === 'production'
+      ? buildZaloRateLimiterFromEnv()
+      : null;
     const policySnapshot = mode === 'production'
-      ? buildPolicySnapshot(this.zaloRateLimiter, channel)
+      ? buildPolicySnapshot(runLimiter, channel)
       : null;
 
     const run = await diagnosticRepository.createRun({
@@ -86,16 +93,19 @@ class DiagnosticRunnerService {
         adapter,
         accountId,
         userId,
+        roleCode,
         messageText,
         delayMs: interMessageDelayMs,
         mode,
+        dryRun,
+        runLimiter,
       }).catch(() => diagnosticRepository.completeRun(run.id, 'failed'))
     );
 
     return run;
   }
 
-  async enforceProductionPolicy({ runId, accountId, channel }) {
+  async enforceProductionPolicy({ runId, accountId, channel, limiter }) {
     const safeAccountId = String(accountId || '').trim();
     if (!safeAccountId) {
       return { waitMs: null, waitReason: null };
@@ -115,7 +125,7 @@ class DiagnosticRunnerService {
     };
 
     try {
-      await this.zaloRateLimiter.enforceOutboundPolicyBeforeSend({
+      await limiter.enforceOutboundPolicyBeforeSend({
         accountId: safeAccountId,
         channel,
         yieldOrSleep: async (waitMs, reason) => {
@@ -156,10 +166,10 @@ class DiagnosticRunnerService {
     }
   }
 
-  async _executeRun({ runId, adapter, accountId, userId, messageText, delayMs, mode }) {
+  async _executeRun({ runId, adapter, accountId, userId, roleCode, messageText, delayMs, mode, dryRun, runLimiter }) {
     let api;
     try {
-      api = await adapter.getApi({ accountId, userId });
+      api = await adapter.getApi({ accountId, userId, roleCode });
     } catch (err) {
       const classified = classifyZaloSendError(err);
       await diagnosticRepository.updateMessage(runId, 1, {
@@ -197,6 +207,7 @@ class DiagnosticRunnerService {
           runId,
           accountId,
           channel: channelKey,
+          limiter: runLimiter,
         });
         preSendWaitMs = policyOutcome.waitMs ?? null;
         preSendWaitReason = policyOutcome.waitReason ?? null;
@@ -230,11 +241,11 @@ class DiagnosticRunnerService {
       const actualDelayMs = prevProcessedAt !== null ? sentAt - prevProcessedAt : null;
 
       try {
-        const staged = await adapter.sendStaged?.({ api, recipient: msg.recipient, message: messageText })
+        const staged = await adapter.sendStaged?.({ api, recipient: msg.recipient, message: messageText, dryRun })
           ?? { lookupMs: null, sendMs: null, ...(await adapter.send({ api, recipient: msg.recipient, message: messageText })) };
 
-        if (mode === 'production') {
-          this.zaloRateLimiter.markOutboundSuccess({
+        if (mode === 'production' && staged.dryRun !== true) {
+          runLimiter.markOutboundSuccess({
             accountId,
             channel: channelKey,
           });
@@ -251,6 +262,7 @@ class DiagnosticRunnerService {
           resolvedUid: staged.uid ?? null,
           zaloName: staged.zaloName ?? null,
           attempts: staged.attempts ?? null,
+          dryRun: staged.dryRun === true,
         });
         await diagnosticRepository.incrementSentCount(runId);
       } catch (err) {

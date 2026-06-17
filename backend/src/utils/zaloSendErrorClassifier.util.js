@@ -1,5 +1,12 @@
 import { isZaloTimeoutError } from './zaloTimeoutRetry.util.js';
 import {
+  classifyBounceType,
+  isRecipientAddressNotFoundError,
+  isSmtpAuthConfigError,
+  isSmtpProviderRateLimitError,
+} from './emailBounce.utils.js';
+import {
+  isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from './zaloPhoneCampaign.util.js';
@@ -10,6 +17,11 @@ const CATEGORY_LABELS = {
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
   NOT_FRIEND_OR_BLOCKED: 'Người nhận chặn / chưa là bạn / hạn chế',
+  ZALO_GROUP_UNREACHABLE: 'Không gửi được tới nhóm Zalo',
+  EMAIL_HARD_BOUNCE: 'Email hard bounce / địa chỉ không tồn tại',
+  EMAIL_SOFT_BOUNCE: 'Email soft bounce / lỗi tạm thời',
+  EMAIL_SMTP_AUTH_ERROR: 'Lỗi cấu hình SMTP / xác thực email gửi',
+  EMAIL_RATE_LIMIT_PAUSE: 'SMTP provider đang giới hạn gửi',
   QUIET_HOURS: 'Đang trong khung giờ im lặng Zalo',
   RATE_LIMITED: 'Đã đạt giới hạn gửi theo giờ',
   UNKNOWN: null,
@@ -80,6 +92,42 @@ function isRecipientNotFoundError(error) {
   return msg.includes('không tìm thấy') && (msg.includes('số') || msg.includes('user'));
 }
 
+function classifyEmailError(error) {
+  if (isSmtpProviderRateLimitError(error)) {
+    return {
+      category: 'EMAIL_RATE_LIMIT_PAUSE',
+      label: CATEGORY_LABELS.EMAIL_RATE_LIMIT_PAUSE,
+      hint: 'Dừng test và thử lại sau khi SMTP provider hết giới hạn.',
+    };
+  }
+
+  if (isSmtpAuthConfigError(error)) {
+    return {
+      category: 'EMAIL_SMTP_AUTH_ERROR',
+      label: CATEGORY_LABELS.EMAIL_SMTP_AUTH_ERROR,
+      hint: 'Kiểm tra SMTP API key, sender identity hoặc domain gửi.',
+    };
+  }
+
+  const hasSmtpSignal = error && typeof error === 'object'
+    && (error.responseCode != null || error.smtpCode != null || error.response != null);
+  if (!hasSmtpSignal) return null;
+
+  if (isRecipientAddressNotFoundError(error) || classifyBounceType(error) === 'hard') {
+    return {
+      category: 'EMAIL_HARD_BOUNCE',
+      label: CATEGORY_LABELS.EMAIL_HARD_BOUNCE,
+      hint: 'Kiểm tra lại địa chỉ email người nhận.',
+    };
+  }
+
+  return {
+    category: 'EMAIL_SOFT_BOUNCE',
+    label: CATEGORY_LABELS.EMAIL_SOFT_BOUNCE,
+    hint: 'Lỗi tạm thời từ mailbox/provider, có thể thử lại sau.',
+  };
+}
+
 function formatTimeoutLabel(error) {
   const attempts = Number.parseInt(error?.zaloRetry?.attempt, 10);
   const base = CATEGORY_LABELS.TIMEOUT;
@@ -135,6 +183,14 @@ export function classifyZaloSendError(error, { stage } = {}) {
     };
   }
 
+  if (isZaloGroupUnreachableError(error)) {
+    return {
+      category: 'ZALO_GROUP_UNREACHABLE',
+      label: CATEGORY_LABELS.ZALO_GROUP_UNREACHABLE,
+      hint: 'Kiểm tra group ID và quyền thành viên của tài khoản Zalo gửi.',
+    };
+  }
+
   if (isRecipientNotFoundError(error)) {
     return {
       category: 'RECIPIENT_NOT_FOUND',
@@ -142,6 +198,9 @@ export function classifyZaloSendError(error, { stage } = {}) {
       hint: null,
     };
   }
+
+  const emailClassified = classifyEmailError(error);
+  if (emailClassified) return emailClassified;
 
   return {
     category: 'UNKNOWN',

@@ -48,6 +48,59 @@ class CampaignZaloSenderService {
   }
 
   /**
+   * Gắn metadata quan sát lỗi Zalo vào Error. Marker trong message giúp BullMQ failedReason
+   * vẫn mang được stage/timing khi custom properties bị serialize rơi mất.
+   *
+   * @param {Error} error
+   * @param {{stage?: string, lookupMs?: number|null, sendMs?: number|null, attempts?: number|null}} fields
+   * @returns {Error}
+   */
+  annotateZaloSendError(error, fields = {}) {
+    if (!error || typeof error !== 'object') return error;
+    const clean = {
+      ...(fields.stage ? { stage: String(fields.stage) } : {}),
+      ...(fields.lookupMs != null && Number.isFinite(Number(fields.lookupMs)) ? { lookupMs: Math.max(0, Number(fields.lookupMs)) } : {}),
+      ...(fields.sendMs != null && Number.isFinite(Number(fields.sendMs)) ? { sendMs: Math.max(0, Number(fields.sendMs)) } : {}),
+      ...(fields.attempts != null && Number.isFinite(Number(fields.attempts)) ? { attempts: Math.max(0, Number(fields.attempts)) } : {}),
+    };
+    Object.assign(error, clean);
+    if (Object.keys(clean).length > 0 && typeof error.message === 'string' && !error.message.includes('[zalo_observability=')) {
+      error.message = `${error.message} [zalo_observability=${JSON.stringify(clean)}]`;
+    }
+    return error;
+  }
+
+  /**
+   * Đọc metadata quan sát lỗi Zalo từ custom properties hoặc marker trong message.
+   *
+   * @param {unknown} error
+   * @returns {{stage: string|null, lookupMs: number|null, sendMs: number|null, attempts: number|null, message: string}}
+   */
+  extractZaloSendObservability(error) {
+    const rawMessage = String(error?.message || error || '');
+    let parsed = {};
+    const markerMatch = rawMessage.match(/\s*\[zalo_observability=(\{[^\]]+\})\]\s*$/);
+    if (markerMatch) {
+      try {
+        parsed = JSON.parse(markerMatch[1]);
+      } catch {
+        parsed = {};
+      }
+    }
+    const readNumber = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.max(0, n) : null;
+    };
+    return {
+      stage: String(error?.stage || parsed.stage || '').trim() || null,
+      lookupMs: readNumber(error?.lookupMs ?? parsed.lookupMs),
+      sendMs: readNumber(error?.sendMs ?? parsed.sendMs),
+      attempts: readNumber(error?.attempts ?? error?.zaloRetry?.attempt ?? parsed.attempts),
+      message: markerMatch ? rawMessage.slice(0, markerMatch.index).trim() : rawMessage.trim(),
+    };
+  }
+
+  /**
    * Restore all disconnected Zalo accounts by trying to reconnect from saved cookies.
    * Called periodically by scheduler to fix accounts that "out" due to server restart.
    *
@@ -1744,20 +1797,49 @@ class CampaignZaloSenderService {
       ? 'uid'
       : 'phone';
     const normalizedRecipient = String(recipient || '').trim();
-    const { uid, zaloName } = await this.resolveUidFromRecipient({
-      api,
-      recipient: normalizedRecipient,
-      recipientType: normalizedRecipientType,
-    });
-    return this.sendResolvedPersonalMessage({
-      api,
-      uid,
-      recipient: normalizedRecipient,
-      recipientType: normalizedRecipientType,
-      zaloName,
-      message,
-      attachments,
-    });
+    const lookupStartedAt = Date.now();
+    let resolved;
+    try {
+      resolved = await this.resolveUidFromRecipient({
+        api,
+        recipient: normalizedRecipient,
+        recipientType: normalizedRecipientType,
+      });
+    } catch (error) {
+      this.annotateZaloSendError(error, {
+        stage: 'lookup',
+        lookupMs: Date.now() - lookupStartedAt,
+        attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
+      });
+      throw error;
+    }
+
+    const lookupMs = Date.now() - lookupStartedAt;
+    const sendStartedAt = Date.now();
+    try {
+      const result = await this.sendResolvedPersonalMessage({
+        api,
+        uid: resolved.uid,
+        recipient: normalizedRecipient,
+        recipientType: normalizedRecipientType,
+        zaloName: resolved.zaloName,
+        message,
+        attachments,
+      });
+      return {
+        ...result,
+        lookupMs,
+        sendMs: Date.now() - sendStartedAt,
+      };
+    } catch (error) {
+      this.annotateZaloSendError(error, {
+        stage: 'send',
+        lookupMs,
+        sendMs: Date.now() - sendStartedAt,
+        attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
+      });
+      throw error;
+    }
   }
 
   /**
