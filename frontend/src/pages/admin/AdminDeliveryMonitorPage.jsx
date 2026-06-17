@@ -22,6 +22,15 @@ const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
 const fmtPct = (value) => `${Number(value || 0).toFixed(1)}%`;
 const fmtDateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN') : '-');
 const fmtRate = (value) => `${Number(value || 0).toFixed(1)}/min`;
+const fmtDrift = (value) => {
+  const ms = Math.max(0, Number(value || 0));
+  if (!ms) return '0s';
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+};
 
 const windowOptions = [7, 30, 90];
 
@@ -234,12 +243,13 @@ const TopRunsTable = ({ runs, t }) => (
             <th className="px-5 py-3">{t('adminDeliveryMonitor.status')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.sentFailed')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.speed')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.scheduleDrift')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.failRate')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {runs.length === 0 ? (
-            <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.noData')}</td></tr>
+            <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.noData')}</td></tr>
           ) : runs.map((run) => (
             <tr key={run.id} className={runRowClass(run)}>
               <td className="px-5 py-3">
@@ -287,6 +297,30 @@ const TopRunsTable = ({ runs, t }) => (
                 })()}
               </td>
               <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
+              <td className="px-5 py-3 text-gray-700">
+                {run.lastResumeDriftMs !== null && run.lastResumeDriftMs !== undefined ? (
+                  <div className="space-y-1">
+                    <span className={`badge text-xs ${run.lastResumeDriftMs >= 60000 ? 'badge-warning' : 'badge-success'}`}>
+                      +{fmtDrift(run.lastResumeDriftMs)}
+                    </span>
+                    <p className="text-xs text-gray-400">
+                      {run.lastResumeResumedBy || '-'}
+                      {run.lastResumeReason ? ` · ${run.lastResumeReason}` : ''}
+                    </p>
+                    {run.lastResumeExpectedAt && (
+                      <p className="text-[11px] text-gray-400">{t('adminDeliveryMonitor.expectedAt', { time: fmtDateTime(run.lastResumeExpectedAt) })}</p>
+                    )}
+                  </div>
+                ) : run.deferredUntil ? (
+                  <div className="space-y-1">
+                    <span className="badge badge-gray text-xs">{t('adminDeliveryMonitor.deferred')}</span>
+                    <p className="text-xs text-gray-400">{fmtDateTime(run.deferredUntil)}</p>
+                    {run.deferredReason && <p className="text-[11px] text-gray-400">{run.deferredReason}</p>}
+                  </div>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </td>
               <td className="px-5 py-3 text-gray-700">
                 <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
               </td>

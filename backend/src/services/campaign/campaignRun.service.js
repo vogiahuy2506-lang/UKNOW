@@ -129,7 +129,7 @@ class CampaignRunService {
    * @param {number} runId id lượt chạy
    * @returns {Promise<boolean>} true nếu nên thoát sớm khỏi `_doExecuteCampaign`
    */
-  async _exitIfRunDeferredUntilFuture(runId) {
+  async _exitIfRunDeferredUntilFuture(runId, resumeContext = {}) {
     const meta = (await campaignRunRepository.getRunMetadata(runId)) || {};
     const deferredConfigs = [
       {
@@ -166,9 +166,61 @@ class CampaignRunService {
         );
         return true;
       }
+      await this.recordScheduleDrift({
+        runId,
+        expectedAt: raw,
+        actualAt: new Date(),
+        reason: meta?.[deferConfig.reasonKey] || deferConfig.label,
+        resumedBy: resumeContext?.resumedBy || 'campaign_run',
+        step: null,
+      });
       await campaignRunRepository.clearDeferMetadataKeys(runId, [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]);
     }
     return false;
+  }
+
+  /**
+   * Ghi mốc lệch lịch gần nhất vào run_metadata và log chuẩn hóa để theo dõi drift scheduler.
+   *
+   * @param {object} input
+   * @param {number} input.runId
+   * @param {string|Date|number} input.expectedAt
+   * @param {string|Date|number} [input.actualAt]
+   * @param {string} [input.reason]
+   * @param {string} [input.resumedBy]
+   * @param {number|string|null} [input.step]
+   * @returns {Promise<void>}
+   */
+  async recordScheduleDrift({
+    runId,
+    expectedAt,
+    actualAt = new Date(),
+    reason = 'schedule',
+    resumedBy = 'campaign_run',
+    step = null,
+  }) {
+    const expectedMs = Date.parse(String(expectedAt || ''));
+    const actualDate = actualAt instanceof Date ? actualAt : new Date(actualAt);
+    const actualMs = actualDate.getTime();
+    if (!Number.isFinite(expectedMs) || !Number.isFinite(actualMs)) return;
+
+    const driftMs = Math.max(0, actualMs - expectedMs);
+    const expectedIso = new Date(expectedMs).toISOString();
+    const actualIso = actualDate.toISOString();
+    const patch = {
+      lastResumeExpectedAt: expectedIso,
+      lastResumeActualAt: actualIso,
+      lastResumeDriftMs: driftMs,
+      lastResumeReason: String(reason || 'schedule'),
+      lastResumeResumedBy: String(resumedBy || 'campaign_run'),
+      ...(step !== null && step !== undefined ? { lastResumeStep: Number.parseInt(step, 10) || 0 } : {}),
+    };
+
+    await campaignRunRepository.patchRunMetadata(runId, patch);
+    console.log(
+      `[CampaignRun][Drift] run=${runId} step=${step ?? '-'} expected=${expectedIso} `
+      + `actual=${actualIso} drift_ms=${driftMs} resumed_by=${patch.lastResumeResumedBy} reason=${patch.lastResumeReason}`
+    );
   }
 
   /**
@@ -623,9 +675,10 @@ class CampaignRunService {
    * @param {number} runId
    * @param {number} userId
    * @param {string|null} roleCode
+   * @param {{resumedBy?: string}} executionOptions
    * @returns {Promise<void>}
    */
-  async executeCampaign(campaignId, runId, userId, roleCode = null) {
+  async executeCampaign(campaignId, runId, userId, roleCode = null, executionOptions = {}) {
     const normalizedRunId = Number.parseInt(runId, 10);
     const runKey = Number.isFinite(normalizedRunId) ? String(normalizedRunId) : String(runId || '').trim();
     if (!runKey) {
@@ -646,6 +699,7 @@ class CampaignRunService {
           runId,
           userId,
           roleCode,
+          executionOptions,
           runKey,
           resolve,
           reject,
@@ -655,7 +709,7 @@ class CampaignRunService {
         );
       });
     }
-    await this._doExecuteCampaign(campaignId, runId, userId, runKey, roleCode);
+    await this._doExecuteCampaign(campaignId, runId, userId, runKey, roleCode, executionOptions);
   }
 
   /**
@@ -670,7 +724,7 @@ class CampaignRunService {
     console.log(
       `[CampaignRun] Dequeued run=${next.runKey} (remaining=${this.pendingRunQueue.length}, active=${this.activeRunIds.size}/${this.MAX_CONCURRENT_CAMPAIGNS})`
     );
-    this._doExecuteCampaign(next.campaignId, next.runId, next.userId, next.runKey, next.roleCode)
+    this._doExecuteCampaign(next.campaignId, next.runId, next.userId, next.runKey, next.roleCode, next.executionOptions)
       .then(next.resolve)
       .catch(next.reject);
   }
@@ -738,13 +792,18 @@ class CampaignRunService {
    * @param {number} userId
    * @param {string} runKey
    * @param {string|null} roleCode
+   * @param {{resumedBy?: string}} executionOptions
    * @returns {Promise<void>}
    */
-  async _doExecuteCampaign(campaignId, runId, userId, runKey, roleCode = null) {
+  async _doExecuteCampaign(campaignId, runId, userId, runKey, roleCode = null, executionOptions = {}) {
     this.activeRunIds.add(runKey);
+    const resumeContext = {
+      resumedBy: String(executionOptions?.resumedBy || 'manual_or_internal'),
+    };
+    const recordedScheduleDriftStepKeys = new Set();
     try {
-      // Đã yield slot trước đó do chờ Zalo dài; nếu mốc resume chưa tới thì thoát ngay (scheduler gọi lại sau).
-      if (await this._exitIfRunDeferredUntilFuture(runId)) {
+      // Đã yield slot trước đó do chờ dài; nếu mốc resume chưa tới thì thoát ngay (scheduler gọi lại sau).
+      if (await this._exitIfRunDeferredUntilFuture(runId, resumeContext)) {
         return;
       }
       console.log(`[Campaign ${campaignId}] Bắt đầu thực thi...`);
@@ -1464,6 +1523,30 @@ class CampaignRunService {
       }) => {
         const completedAtIso = toHoChiMinhIso();
         const firstSentAt = progress?.firstSentAt || completedAtIso;
+        const dueStatus = resolveNextDueAtStatus(progress?.nextDueAt);
+        if (
+          String(sendMode || '').trim() === 'schedule'
+          && dueStatus.hasDueAt
+          && dueStatus.nextDueAtMs !== null
+          && dueStatus.nextDueAtMs <= Date.now()
+        ) {
+          const driftStepKey = [
+            String(nodeId || ''),
+            String(channel || ''),
+            String(Number.parseInt(completedStep, 10) || 0),
+          ].join('::');
+          if (!recordedScheduleDriftStepKeys.has(driftStepKey)) {
+            recordedScheduleDriftStepKeys.add(driftStepKey);
+            await this.recordScheduleDrift({
+              runId,
+              expectedAt: progress.nextDueAt,
+              actualAt: new Date(),
+              reason: `recipient_step_${String(channel || 'unknown')}`,
+              resumedBy: resumeContext?.resumedBy || 'campaign_run',
+              step: completedStep,
+            });
+          }
+        }
         const nextDueAt = computeStepDueAt({
           steps,
           completedStep,
@@ -6830,7 +6913,7 @@ class CampaignRunService {
       }
       if (error?.code === 'RUN_YIELD_SLOT') {
         console.log(
-          `[Campaign ${campaignId}] Run ${runId} nhả slot chờ Zalo (metadata zaloOutboundDeferredUntil): `
+          `[Campaign ${campaignId}] Run ${runId} nhả slot chờ resume: `
           + String(error?.message || 'RUN_YIELD_SLOT')
         );
         return;

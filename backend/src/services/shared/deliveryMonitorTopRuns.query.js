@@ -21,6 +21,7 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
         COALESCE(cr.failed_sends, 0)::int AS run_failed_sends,
         COALESCE(cr.skipped_sends, 0)::int AS skipped_sends,
         cr.error_message,
+        cr.run_metadata,
         c.campaign_name,
         c.campaign_type,
         EXTRACT(EPOCH FROM (COALESCE(cr.completed_at, NOW()) - cr.started_at))::float AS duration_seconds
@@ -87,6 +88,14 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       rm.error_message,
       rm.campaign_name,
       rm.campaign_type,
+      rm.run_metadata->>'lastResumeExpectedAt' AS last_resume_expected_at,
+      rm.run_metadata->>'lastResumeActualAt' AS last_resume_actual_at,
+      rm.run_metadata->>'lastResumeDriftMs' AS last_resume_drift_ms,
+      rm.run_metadata->>'lastResumeReason' AS last_resume_reason,
+      rm.run_metadata->>'lastResumeResumedBy' AS last_resume_resumed_by,
+      rm.run_metadata->>'lastResumeStep' AS last_resume_step,
+      COALESCE(rm.run_metadata->>'nonContinuousDeferredUntil', rm.run_metadata->>'zaloOutboundDeferredUntil') AS deferred_until,
+      COALESCE(rm.run_metadata->>'nonContinuousDeferredReason', rm.run_metadata->>'zaloDeferredReason') AS deferred_reason,
       rm.duration_seconds
     FROM run_metrics rm
     ORDER BY
@@ -105,6 +114,10 @@ export function mapTopRunRow(row) {
   const attempts = successfulSends + failedSends;
   const durationSeconds = Math.max(0, toNumber(row.duration_seconds));
   const minutes = Math.max(durationSeconds / 60, 1 / 60);
+  const rawDriftMs = row.last_resume_drift_ms === null || row.last_resume_drift_ms === undefined
+    ? null
+    : Number(row.last_resume_drift_ms);
+  const lastResumeDriftMs = Number.isFinite(rawDriftMs) ? Math.max(0, rawDriftMs) : null;
 
   return {
     id: row.id,
@@ -123,5 +136,13 @@ export function mapTopRunRow(row) {
     failureRate: attempts > 0 ? Math.round((failedSends / attempts) * 1000) / 10 : 0,
     errorMessage: row.error_message,
     hasRunError: Boolean(String(row.error_message || '').trim()),
+    lastResumeExpectedAt: row.last_resume_expected_at || null,
+    lastResumeActualAt: row.last_resume_actual_at || null,
+    lastResumeDriftMs,
+    lastResumeReason: row.last_resume_reason || null,
+    lastResumeResumedBy: row.last_resume_resumed_by || null,
+    lastResumeStep: row.last_resume_step === null || row.last_resume_step === undefined ? null : toNumber(row.last_resume_step),
+    deferredUntil: row.deferred_until || null,
+    deferredReason: row.deferred_reason || null,
   };
 }

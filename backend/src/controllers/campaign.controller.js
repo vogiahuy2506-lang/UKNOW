@@ -964,12 +964,13 @@ class CampaignController {
   /**
    * Thực thi chiến dịch trong background
    * @param {number} campaignId 
-   * @param {number} runId 
-   * @param {number} userId 
+   * @param {number} runId
+   * @param {number} userId
    * @param {string|null} roleCode
+   * @param {{resumedBy?: string}} executionOptions
    */
-  async executeCampaign(campaignId, runId, userId, roleCode = null) {
-    await campaignRunService.executeCampaign(campaignId, runId, userId, roleCode);
+  async executeCampaign(campaignId, runId, userId, roleCode = null, executionOptions = {}) {
+    await campaignRunService.executeCampaign(campaignId, runId, userId, roleCode, executionOptions);
   }
 
   /**

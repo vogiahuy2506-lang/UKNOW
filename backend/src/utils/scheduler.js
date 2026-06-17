@@ -10,8 +10,7 @@ import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.servic
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
-const activeNonContinuousRunIds = new Set();
-const activeOverdueNonContinuousRunIds = new Set();
+const activeNonContinuousResumeRunIds = new Set();
 const HANOI_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 /**
@@ -280,6 +279,23 @@ const recoverContinuousCampaignRuns = async () => {
   }
 };
 
+const triggerNonContinuousResume = ({ runId, campaignId, userId, resumedBy }) => {
+  const runKey = String(runId);
+  if (activeNonContinuousResumeRunIds.has(runKey)) {
+    return false;
+  }
+
+  activeNonContinuousResumeRunIds.add(runKey);
+  campaignController.executeCampaign(campaignId, runId, userId, null, { resumedBy })
+    .catch((error) => {
+      console.error(`[Scheduler] Lỗi phục hồi non-continuous run #${runId}:`, error.message);
+    })
+    .finally(() => {
+      activeNonContinuousResumeRunIds.delete(runKey);
+    });
+  return true;
+};
+
 /**
  * Khởi chạy lại các campaign run không continuous đang ở trạng thái running.
  *
@@ -307,20 +323,9 @@ const recoverNonContinuousCampaignRuns = async () => {
     if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
       continue;
     }
-    const runKey = String(runId);
-    if (activeNonContinuousRunIds.has(runKey)) {
-      continue;
+    if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'per_minute' })) {
+      console.log(`[Scheduler] Phục hồi campaign run non-continuous #${runId} (campaign #${campaignId})`);
     }
-
-    activeNonContinuousRunIds.add(runKey);
-    console.log(`[Scheduler] Phục hồi campaign run non-continuous #${runId} (campaign #${campaignId})`);
-    campaignController.executeCampaign(campaignId, runId, userId)
-      .catch((error) => {
-        console.error(`[Scheduler] Lỗi phục hồi non-continuous run #${runId}:`, error.message);
-      })
-      .finally(() => {
-        activeNonContinuousRunIds.delete(runKey);
-      });
   }
 };
 
@@ -355,22 +360,11 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
     if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
       continue;
     }
-    const runKey = String(runId);
-    if (activeOverdueNonContinuousRunIds.has(runKey)) {
-      continue;
+    if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'overdue_scan' })) {
+      console.log(
+        `[Scheduler] Quét retry non-continuous quá hạn cho run #${runId} (campaign #${campaignId})`
+      );
     }
-
-    activeOverdueNonContinuousRunIds.add(runKey);
-    console.log(
-      `[Scheduler] Quét retry non-continuous quá hạn cho run #${runId} (campaign #${campaignId})`
-    );
-    campaignController.executeCampaign(campaignId, runId, userId)
-      .catch((error) => {
-        console.error(`[Scheduler] Lỗi retry non-continuous run #${runId}:`, error.message);
-      })
-      .finally(() => {
-        activeOverdueNonContinuousRunIds.delete(runKey);
-      });
   }
 };
 
@@ -428,9 +422,9 @@ export const initScheduler = () => {
     timezone: 'Asia/Ho_Chi_Minh'
   });
 
-  // Cứ 2 tiếng quét các run non-continuous còn treo step quá hạn để gửi tiếp.
-  // Dùng cron có giây: "0 0 */2 * * *" = phút 0, giây 0, mỗi 2 giờ.
-  cron.schedule('0 0 */2 * * *', async () => {
+  // Mỗi phút quét các run non-continuous còn treo step quá hạn để gửi tiếp.
+  // Lệch giây với refresh/recover chính ở :20 để giảm chồng trigger trong cùng tick.
+  cron.schedule('40 * * * * *', async () => {
     try {
       await recoverOverdueNonContinuousCampaignRuns();
     } catch (error) {
