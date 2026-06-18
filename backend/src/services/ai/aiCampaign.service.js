@@ -765,14 +765,16 @@ QUY TẮC LOGO:
 
 QUY TẮC TẠO TEMPLATE TỪ KẾ HOẠCH NỘI DUNG:
 - Nếu user yêu cầu 1 template đơn lẻ, trả type="template_draft" trực tiếp như schema trên.
-- Nếu lịch sử hội thoại đã có type="content_plan" và tin nhắn hiện tại yêu cầu "Tạo chi tiết template cho ngày X (...): ..." thì trả type="template_draft" cho ĐÚNG ngày X đó. Dùng summary/goal/kênh trong tin nhắn hiện tại làm brief chính; KHÔNG tự chuyển sang ngày khác, KHÔNG tạo nhiều template một lúc.
+- Nếu lịch sử hội thoại đã có type="content_plan" và tin nhắn hiện tại yêu cầu "Tạo chi tiết template cho ngày X, slot Y (...)" thì trả type="template_draft" cho ĐÚNG slot đó.
+- KHÔNG tự chuyển sang ngày khác, KHÔNG tạo nhiều template trong một lần trả lời.
 - content của template_draft phải tóm tắt nội dung chính thật của template vừa tạo để user hiểu nhanh. Nội dung đầy đủ vẫn nằm trong data.bodyText hoặc data.bodyHtml.
 
 ### 3b. type: "content_plan"
 Khi user yêu cầu tạo nhiều tin nhắn/template cho chiến dịch nhiều ngày (ví dụ: "tạo 5 tin nhắn Zalo cho 5 ngày chăm sóc khách hàng mới", "lên 7 email trong 7 ngày") và CHƯA có content_plan nào trong lịch sử cho yêu cầu này:
 - Trả type="content_plan" để đưa tổng quan trước, KHÔNG sinh bodyHtml/bodyText đầy đủ.
-- Data.days phải có đủ N ngày user yêu cầu.
-- Mỗi summary phải đủ cụ thể: chủ đề, thông điệp chính, ưu đãi/CTA nếu có, và ngữ cảnh đủ để viết template chi tiết sau.
+- Wizard v1 chỉ hỗ trợ 1 kênh duy nhất cho toàn bộ plan: "email" hoặc "zalo" (zalo cá nhân). Nếu user yêu cầu mixed channel hoặc zalo_group thì KHÔNG trả content_plan, hãy chuyển về ask_campaign_details/flow campaign thường.
+- Data.days phải có đủ N ngày user yêu cầu và dùng cấu trúc days[].slots[].
+- Mỗi day và mỗi slot cần summary đủ cụ thể: chủ đề, thông điệp chính, ưu đãi/CTA nếu có, và ngữ cảnh đủ để viết template chi tiết sau.
 - content chỉ là câu dẫn ngắn, không nhắc lại toàn bộ từng ngày vì frontend sẽ hiển thị bằng card.
 
 Data structure:
@@ -783,7 +785,29 @@ Data structure:
       "day": 1,
       "channel": "email" | "zalo",
       "goal": "Chào mừng & xây dựng niềm tin",
-      "summary": "Tóm tắt nội dung chính ngày 1 trong 1-2 câu, đủ chi tiết để viết template sau."
+      "summary": "Tóm tắt nội dung chính ngày 1 trong 1-2 câu, đủ chi tiết để viết template sau.",
+      "slots": [
+        {
+          "slotId": "d1s1",
+          "slotIndex": 1,
+          "channel": "email" | "zalo",
+          "sendTime": "08:00",
+          "goal": "Mục tiêu cụ thể của slot",
+          "summary": "Tóm tắt nội dung cụ thể của slot để tạo template chi tiết.",
+          "delayValue": 0,
+          "delayUnit": "hours"
+        },
+        {
+          "slotId": "d1s2",
+          "slotIndex": 2,
+          "channel": "email" | "zalo",
+          "sendTime": "19:00",
+          "goal": "Mục tiêu cụ thể của slot 2",
+          "summary": "Nội dung slot 2",
+          "delayValue": 11,
+          "delayUnit": "hours"
+        }
+      ]
     }
   ]
 }
@@ -1014,8 +1038,8 @@ Data structure:
 }
 
 Khi type="ask_more": content là câu hỏi cụ thể, missing_fields liệt kê những gì cần.
-Khi type="template_draft": content mô tả template vừa tạo, data chứa đúng 1 template. Với yêu cầu tạo chi tiết cho một ngày trong content_plan, chỉ tạo template cho đúng ngày được yêu cầu.
-Khi type="content_plan": content là câu dẫn ngắn, data.days chứa kế hoạch từng ngày để user bấm tạo template chi tiết khi cần.
+Khi type="template_draft": content mô tả template vừa tạo, data chứa đúng 1 template. Với yêu cầu tạo chi tiết theo content_plan, chỉ tạo đúng slot (ngày + slotIndex) được yêu cầu.
+Khi type="content_plan": content là câu dẫn ngắn, data.days chứa kế hoạch theo ngày, mỗi ngày có mảng slots[] để frontend tạo template tuần tự.
 Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa questions để hỏi user.
 Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
 Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.

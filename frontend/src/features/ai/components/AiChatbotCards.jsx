@@ -185,7 +185,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   );
 };
 
-export const ContentPlanCard = ({ data, onGenerateTemplate, generatingDay, t }) => {
+export const ContentPlanCard = ({ data, workflow, onGenerateTemplate, t }) => {
   const days = Array.isArray(data?.days) ? data.days : [];
   const totalDays = data?.totalDays || days.length;
   if (!days.length) return null;
@@ -200,6 +200,12 @@ export const ContentPlanCard = ({ data, onGenerateTemplate, generatingDay, t }) 
     channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate')
   );
 
+  const isDayCompleted = (day) => workflow?.completedDays?.includes(day);
+  const getSavedCount = (day) => Number(workflow?.savedCountByDay?.[String(day)] || 0);
+  const pendingDay = workflow?.pendingDay ?? null;
+  const failedDay = workflow?.failedDay ?? null;
+  const generatingDay = workflow?.generatingDay ?? null;
+
   return (
     <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-100">
@@ -212,7 +218,12 @@ export const ContentPlanCard = ({ data, onGenerateTemplate, generatingDay, t }) 
       <div className="p-4 space-y-3">
         {days.map((dayItem) => {
           const day = Number(dayItem.day) || dayItem.day;
-          const loading = generatingDay === dayItem.day;
+          const loading = generatingDay === day;
+          const completed = isDayCompleted(day);
+          const actionable = pendingDay === day && !loading;
+          const waiting = !completed && !actionable && !loading;
+          const isRetry = failedDay === day;
+          const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
           return (
             <div key={`${dayItem.day}-${dayItem.channel}-${dayItem.goal}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -228,16 +239,46 @@ export const ContentPlanCard = ({ data, onGenerateTemplate, generatingDay, t }) 
                   </div>
                   <p className="text-sm font-bold text-slate-800">{dayItem.goal}</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500">{dayItem.summary}</p>
+                  {slots.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {slots.map((slot, idx) => (
+                        <p key={`${day}-slot-${slot.slotId || idx}`} className="text-[11px] text-slate-500">
+                          #{slot.slotIndex || idx + 1}
+                          {slot.sendTime ? ` • ${slot.sendTime}` : ''}
+                          {slot.summary ? ` • ${slot.summary}` : ''}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onGenerateTemplate?.(dayItem)}
-                  disabled={generatingDay !== null}
-                  className="shrink-0 rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading ? t('aiChatbot.generatingTemplate') : t('aiChatbot.generateTemplate')}
-                </button>
+                {completed ? (
+                  <span className="shrink-0 inline-flex items-center rounded-xl bg-emerald-100 text-emerald-700 px-3 py-2 text-xs font-black">
+                    Đã lưu {getSavedCount(day)} template
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onGenerateTemplate?.(dayItem)}
+                    disabled={!actionable && !loading}
+                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black text-white transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isRetry ? 'bg-rose-500 hover:bg-rose-600' : 'bg-orange-500 hover:bg-orange-600'
+                    }`}
+                  >
+                    {loading
+                      ? t('aiChatbot.generatingTemplate')
+                      : isRetry
+                        ? `Thử lại Ngày ${day}`
+                        : actionable
+                          ? `Tạo template Ngày ${day}`
+                          : 'Chờ ngày trước hoàn tất'}
+                  </button>
+                )}
               </div>
+              {waiting && (
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Hãy hoàn tất Ngày {pendingDay} trước.
+                </p>
+              )}
             </div>
           );
         })}
