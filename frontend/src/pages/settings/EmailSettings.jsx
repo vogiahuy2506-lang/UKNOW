@@ -326,6 +326,7 @@ function normalizeItem(raw) {
     name: item.name || '',
     email: item.email || '',
     replyTo: item.replyTo || item.reply_to || '',
+    platformPrefix: item.platformPrefix || item.platform_prefix || 'no-reply',
     dailySentCount: item.dailySentCount ?? item.daily_sent_count ?? 0,
     totalSentCount: item.totalSentCount ?? item.total_sent_count ?? 0,
     isVerified: item.isVerified ?? item.is_verified ?? false,
@@ -361,6 +362,7 @@ const EmailSettings = () => {
     name: '',
     replyTo: '',
     emailMode: 'platform',
+    platformPrefix: '',
     smtpHost: '',
     smtpPort: '',
     smtpUsername: '',
@@ -443,6 +445,7 @@ const EmailSettings = () => {
         name: normalized.name || '',
         replyTo: normalized.replyTo || normalized.reply_to || '',
         emailMode: normalized.emailMode || 'platform',
+        platformPrefix: normalized.platformPrefix || '',
         smtpHost: normalized.smtpHost || '',
         smtpPort: normalized.smtpPort || '',
         smtpUsername: normalized.smtpUsername || '',
@@ -473,6 +476,18 @@ const EmailSettings = () => {
     if (!name) errors.name = t('emailSettings.nameRequired');
     if (!replyTo) errors.replyTo = t('emailSettings.replyToRequired');
     else if (!EMAIL_REGEX.test(replyTo)) errors.replyTo = t('emailSettings.invalidReplyTo');
+
+    if (!isSmtpMode) {
+      const prefix = String(formData.platformPrefix || '').trim();
+      if (!prefix) {
+        errors.platformPrefix = t('emailSettings.platformPrefixRequired') || 'Email prefix là bắt buộc';
+      } else if (!/^[a-zA-Z0-9._-]+$/.test(prefix)) {
+        errors.platformPrefix = t('emailSettings.platformPrefixInvalid') || 'Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang';
+      } else if (prefix.length > 50) {
+        errors.platformPrefix = t('emailSettings.platformPrefixTooLong') || 'Tối đa 50 ký tự';
+      }
+    }
+
     if (isSmtpMode) {
       if (!String(formData.smtpHost || '').trim()) errors.smtpHost = t('emailSettings.smtpHostRequired');
       if (!String(formData.smtpPort || '').trim()) errors.smtpPort = t('emailSettings.smtpPortRequired');
@@ -657,7 +672,7 @@ const EmailSettings = () => {
     const Icon = modeCfg.Icon;
     const previewEmail =
       formData.emailMode === 'platform'
-        ? `no-reply@${PLATFORM_DOMAIN}`
+        ? `${formData.platformPrefix || 'no-reply'}@${PLATFORM_DOMAIN}`
         : String(formData.replyTo || '').trim();
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
@@ -767,6 +782,31 @@ const EmailSettings = () => {
               />
               {formErrors.replyTo && <p className="text-xs text-red-600">{formErrors.replyTo}</p>}
             </div>
+            {!isSmtpMode && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">
+                  {t('emailSettings.platformPrefix') || 'Email prefix'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={formData.platformPrefix}
+                    onChange={(event) => setFormData((prev) => ({ ...prev, platformPrefix: event.target.value.replace(/[^a-zA-Z0-9._-]/g, '') }))}
+                    className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
+                      formErrors.platformPrefix ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                    }`}
+                    placeholder="no-reply"
+                    maxLength={50}
+                  />
+                  <span className="text-sm text-slate-500 shrink-0">@{PLATFORM_DOMAIN}</span>
+                </div>
+                {formErrors.platformPrefix ? (
+                  <p className="text-xs text-red-600">{formErrors.platformPrefix}</p>
+                ) : (
+                  <p className="text-xs text-slate-400">{t('emailSettings.platformPrefixHint') || 'Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang'}</p>
+                )}
+              </div>
+            )}
           </div>
         </SectionCard>
 

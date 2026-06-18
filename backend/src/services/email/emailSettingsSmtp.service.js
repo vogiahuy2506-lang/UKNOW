@@ -178,6 +178,7 @@ class EmailSettingsSmtpService {
 
     const info = await transporter.sendMail({
       from: resolveFromAddress(setting),
+      to,
       replyTo: setting.reply_to || undefined,
       text: content || 'Đây là email test từ hệ thống Founder AI',
       html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
