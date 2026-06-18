@@ -21,6 +21,7 @@ api.delete = (url, config) => api({ method: 'DELETE', url, ...config });
 
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/logout'];
 let isForcingLogout = false;
+let refreshPromise = null;
 
 /**
  * Đọc token từ storage — ưu tiên localStorage, fallback sessionStorage.
@@ -42,6 +43,23 @@ const updateStoredToken = (key, value) => {
   } else {
     sessionStorage.setItem(key, value);
   }
+};
+
+const refreshAccessToken = () => {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post(`${API_URL}/auth/refresh-token`, {}, { withCredentials: true })
+      .then((response) => {
+        const { accessToken } = response.data.data;
+        updateStoredToken('accessToken', accessToken);
+        return accessToken;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 };
 
 /**
@@ -168,13 +186,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
-          withCredentials: true,
-        });
-
-        const { accessToken } = response.data.data;
-        updateStoredToken('accessToken', accessToken);
-
+        const accessToken = await refreshAccessToken();
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);

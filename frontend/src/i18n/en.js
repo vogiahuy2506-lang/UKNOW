@@ -2467,6 +2467,8 @@ export default {
     // Session tabs
     newChat: 'New',
     newConversation: 'New conversation',
+    confirmDeleteSessionTitle: 'Delete chat',
+    confirmDeleteSessionMessage: 'Are you sure you want to delete this chat?',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',

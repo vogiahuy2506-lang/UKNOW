@@ -82,7 +82,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 };
 
 // Template preview card
-export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
+export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory = null }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -90,14 +90,14 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   useEffect(() => {
     setSaved(false);
     setShowCategoryPicker(false);
-  }, [draft?.templateName, draft?.subject, draft?.bodyHtml, draft?.bodyText, draft?.channel]);
+  }, [draft?.templateName, draft?.subject, draft?.bodyHtml, draft?.bodyText, draft?.channel, draft?._planSlotKey]);
 
   const handleSave = async (category) => {
     setSaving(true);
     setShowCategoryPicker(false);
     try {
       const endpoint = draft.channel === 'zalo' ? '/zalo-templates' : '/email-templates';
-      await api.post(endpoint, {
+      const response = await api.post(endpoint, {
         templateName: draft.templateName,
         subject: draft.subject || '',
         bodyHtml: draft.bodyHtml || '',
@@ -105,9 +105,10 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
         category,
         variables: [],
       });
+      const savedTemplate = response?.data?.data || null;
       setSaved(true);
       toast.success(t('aiChatbot.templateSaved'));
-      onSave?.();
+      onSave?.(savedTemplate);
     } catch (e) {
       toast.error(e.response?.data?.message || t('aiChatbot.saveFailed'));
     } finally {
@@ -159,7 +160,12 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => {
-                if (!saved) setShowCategoryPicker(true);
+                if (saved) return;
+                if (autoSaveCategory) {
+                  handleSave(autoSaveCategory);
+                } else {
+                  setShowCategoryPicker(true);
+                }
               }}
               disabled={saving || saved}
               className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
@@ -185,7 +191,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t }) => {
   );
 };
 
-export const ContentPlanCard = ({ data, workflow, onGenerateTemplate, t }) => {
+export const ContentPlanCard = ({ data, workflow, t }) => {
   const days = Array.isArray(data?.days) ? data.days : [];
   const totalDays = data?.totalDays || days.length;
   if (!days.length) return null;
@@ -202,6 +208,9 @@ export const ContentPlanCard = ({ data, workflow, onGenerateTemplate, t }) => {
 
   const isDayCompleted = (day) => workflow?.completedDays?.includes(day);
   const getSavedCount = (day) => Number(workflow?.savedCountByDay?.[String(day)] || 0);
+  const getDraftCount = (day) => (
+    (workflow?.draftTemplates || []).filter((item) => Number(item._planDay) === Number(day)).length
+  );
   const pendingDay = workflow?.pendingDay ?? null;
   const failedDay = workflow?.failedDay ?? null;
   const generatingDay = workflow?.generatingDay ?? null;
@@ -220,7 +229,10 @@ export const ContentPlanCard = ({ data, workflow, onGenerateTemplate, t }) => {
           const day = Number(dayItem.day) || dayItem.day;
           const loading = generatingDay === day;
           const completed = isDayCompleted(day);
-          const actionable = pendingDay === day && !loading;
+          const draftCount = getDraftCount(day);
+          const savedCount = getSavedCount(day);
+          const waitingForSave = draftCount > savedCount && !completed;
+          const actionable = pendingDay === day && !loading && !waitingForSave;
           const waiting = !completed && !actionable && !loading;
           const isRetry = failedDay === day;
           const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
@@ -251,28 +263,30 @@ export const ContentPlanCard = ({ data, workflow, onGenerateTemplate, t }) => {
                     </div>
                   )}
                 </div>
-                {completed ? (
-                  <span className="shrink-0 inline-flex items-center rounded-xl bg-emerald-100 text-emerald-700 px-3 py-2 text-xs font-black">
-                    Đã lưu {getSavedCount(day)} template
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onGenerateTemplate?.(dayItem)}
-                    disabled={!actionable && !loading}
-                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black text-white transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
-                      isRetry ? 'bg-rose-500 hover:bg-rose-600' : 'bg-orange-500 hover:bg-orange-600'
-                    }`}
-                  >
-                    {loading
+                <span className={`shrink-0 inline-flex items-center rounded-xl px-3 py-2 text-xs font-black ${
+                  completed
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : loading
+                      ? 'bg-blue-100 text-blue-700'
+                      : isRetry
+                        ? 'bg-rose-100 text-rose-700'
+                        : actionable
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-slate-200 text-slate-500'
+                }`}
+                >
+                  {completed
+                    ? `Đã lưu ${savedCount} template`
+                    : loading
                       ? t('aiChatbot.generatingTemplate')
                       : isRetry
-                        ? `Thử lại Ngày ${day}`
+                        ? 'Cần thử lại'
+                        : waitingForSave
+                          ? `Chờ lưu ${draftCount - savedCount} template`
                         : actionable
-                          ? `Tạo template Ngày ${day}`
-                          : 'Chờ ngày trước hoàn tất'}
-                  </button>
-                )}
+                          ? 'Sẵn sàng'
+                          : 'Chờ'}
+                </span>
               </div>
               {waiting && (
                 <p className="mt-2 text-[11px] text-slate-400">

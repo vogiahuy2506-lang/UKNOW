@@ -2528,6 +2528,8 @@ export default {
     // Session tabs
     newChat: 'Mới',
     newConversation: 'Cuộc trò chuyện mới',
+    confirmDeleteSessionTitle: 'Xóa đoạn chat',
+    confirmDeleteSessionMessage: 'Bạn có chắc muốn xoá đoạn chat này không?',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',

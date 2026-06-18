@@ -19,6 +19,7 @@ import {
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
   AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
 } from './components/AiChatbotCards';
+import ConfirmModal from '../inbox/ConfirmModal';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -166,6 +167,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [sessionToDelete, setSessionToDelete] = useState(null);
 
   const isMobile = useIsMobile();
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -319,10 +321,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setGeneratingDay(null);
   };
 
-  const handleDeleteSession = async (sessionId, e) => {
+  const requestDeleteSession = (sessionId, e) => {
     e.stopPropagation();
+    setSessionToDelete(sessionId);
+  };
+
+  const confirmDeleteSession = async () => {
+    const sessionId = sessionToDelete;
+    if (!sessionId) return;
+    setSessionToDelete(null);
     try {
       await aiApi.deleteSession(sessionId);
+      sessionMessagesCache.current.delete(sessionId);
+      clearTabPending(sessionId);
       const updated = sessions.filter(s => s.id !== sessionId);
       setSessions(updated);
       if (currentSessionId === sessionId) {
@@ -430,19 +441,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     return next?.day ?? null;
   };
 
-  const saveDraftTemplate = async (draft, fallbackCategory = 'AI Generated') => {
-    const isEmail = draft?.channel === 'email';
-    const endpoint = isEmail ? '/email-templates' : '/zalo-templates';
-    const payload = {
-      templateName: draft.templateName,
-      subject: draft.subject || '',
-      bodyHtml: draft.bodyHtml || '',
-      bodyText: draft.bodyText || '',
-      category: fallbackCategory,
-      variables: [],
-    };
-    const res = await api.post(endpoint, payload);
-    return res?.data?.data || null;
+  const getPlanSlotKey = (day, slot, index = 0) => (
+    String(slot?.slotId || `d${day}-s${Number(slot?.slotIndex) || index + 1}`)
+  );
+
+  const getCompletedDaysFromSaved = (planDays, savedTemplates) => {
+    const savedKeys = new Set((savedTemplates || []).map((item) => String(item.slotId)));
+    return (planDays || [])
+      .filter((dayItem) => {
+        const day = Number(dayItem.day);
+        const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
+        return slots.length > 0 && slots.every((slot, index) => savedKeys.has(getPlanSlotKey(day, slot, index)));
+      })
+      .map((dayItem) => dayItem.day);
   };
 
   const getSlotDelayHours = (slot, day, slotIndex, baseHour) => {
@@ -733,12 +744,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             pendingDay: normalizedPlan.days[0]?.day || null,
             completedDays: [],
             savedTemplates: [],
+            draftTemplates: [],
             savedCountByDay: {},
             generatingDay: null,
             failedDay: null,
             awaitingDayConfirm: true,
             awaitingCampaignConfirm: false,
             isCreatingCampaign: false,
+            isGeneratingAll: false,
+            allDraftsRequested: false,
             status: 'waiting_day_confirm',
           });
           setPendingCampaignPrompt(null);
@@ -749,6 +763,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             content: content || `Mình đã lên kế hoạch ${normalizedPlan.totalDays} ngày.`,
             type,
             data: normalizedPlan,
+          }, {
+            role: 'assistant',
+            type: 'content_plan_actions',
+            data: { firstDay: normalizedPlan.days[0]?.day || null },
+            content: 'Bạn muốn bắt đầu tạo nháp Ngày 1, hay tạo nháp tất cả các ngày để xem một lượt?',
           }]);
           return;
         }
@@ -824,53 +843,113 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     onToggle?.();
   };
 
-  const handleGenerateDayTemplate = async (dayItem) => {
+  const handlePlanTemplateSaved = (draft, savedTemplate) => {
+    if (!draft?._planTemplate || !savedTemplate?.id) return;
+
+    const day = Number(draft._planDay);
+    const slotIndex = Number(draft._planSlotIndex) || 1;
+    const slotId = draft._planSlotId || `d${day}-s${slotIndex}`;
+    if (!Number.isFinite(day)) return;
+
+    const record = {
+      day,
+      slotIndex,
+      slotId,
+      channel: normalizeChannel(draft.channel || 'zalo'),
+      sendTime: draft._planSendTime || null,
+      summary: draft._planSummary || '',
+      templateId: Number(savedTemplate.id),
+      templateName: savedTemplate.templateName || draft.templateName,
+      subject: draft.subject || '',
+      bodyHtml: draft.bodyHtml || '',
+      bodyText: draft.bodyText || '',
+    };
+
+    setContentPlanWorkflow((prev) => {
+      if (!prev) return prev;
+      if (prev.savedTemplates.some((item) => String(item.slotId) === String(slotId))) return prev;
+
+      const mergedSaved = [...prev.savedTemplates, record];
+      const completedDays = getCompletedDaysFromSaved(prev.plan.days, mergedSaved);
+      const dayJustCompleted = completedDays.includes(day) && !prev.completedDays.includes(day);
+      const nextPendingDay = getNextPendingDay(prev.plan.days, completedDays);
+      const allDone = !nextPendingDay;
+      const savedCountByDay = buildSavedCountByDay(mergedSaved);
+
+      if (dayJustCompleted) {
+        setMessages((current) => {
+          const next = [...current, {
+            role: 'assistant',
+            content: `✅ Đã lưu đủ ${savedCountByDay[String(day)] || 0} template cho Ngày ${day}.`,
+          }];
+
+          if (allDone) {
+            next.push({
+              role: 'assistant',
+              type: 'confirm_plan_campaign',
+              content: 'Đã hoàn tất toàn bộ kế hoạch. Bạn muốn tạo campaign draft từ các template này không?',
+            });
+          } else if (!prev.allDraftsRequested) {
+            next.push({
+              role: 'assistant',
+              type: 'confirm_next_day',
+              data: { day: nextPendingDay },
+              content: `Tiếp tục tạo template cho Ngày ${nextPendingDay} nhé?`,
+            });
+          }
+
+          return next;
+        });
+      }
+
+      return {
+        ...prev,
+        savedTemplates: mergedSaved,
+        completedDays,
+        savedCountByDay,
+        pendingDay: nextPendingDay,
+        failedDay: null,
+        awaitingDayConfirm: Boolean(nextPendingDay) && !prev.allDraftsRequested,
+        awaitingCampaignConfirm: allDone,
+        status: allDone ? 'waiting_campaign_confirm' : 'waiting_template_save',
+      };
+    });
+  };
+
+  const handleGenerateDayTemplate = async (dayItem, options = {}) => {
+    const { allMode = false, silentDone = false } = options;
     if (!dayItem || generatingDay !== null || !contentPlanWorkflow?.plan) return;
 
     const day = Number(dayItem.day);
-    if (!Number.isFinite(day) || contentPlanWorkflow.pendingDay !== day) return;
+    if (!Number.isFinite(day)) return;
+    if (!allMode && contentPlanWorkflow.pendingDay !== day) return;
 
     const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
     if (!slots.length) {
       toast.error(`Ngày ${day} không có slot để tạo template.`);
-      return;
+      return false;
     }
 
-    const alreadySavedKeys = new Set(
-      (contentPlanWorkflow.savedTemplates || [])
-        .filter((item) => Number(item.day) === day)
-        .map((item) => String(item.slotId || `${item.day}-${item.slotIndex}`))
-    );
-    const slotsToProcess = slots.filter((slot, index) => {
-      const slotKey = String(slot.slotId || `d${day}-s${Number(slot.slotIndex) || index + 1}`);
-      return !alreadySavedKeys.has(slotKey);
+    const savedKeys = new Set((contentPlanWorkflow.savedTemplates || []).map((item) => String(item.slotId)));
+    const draftedKeys = new Set((contentPlanWorkflow.draftTemplates || []).map((item) => String(item._planSlotKey)));
+    const slotItems = slots.map((slot, index) => {
+      const slotOrder = Number(slot.slotIndex) || index + 1;
+      const slotKey = getPlanSlotKey(day, slot, index);
+      return { slot, index, slotOrder, slotKey };
     });
+    const slotsToProcess = slotItems.filter(({ slotKey }) => !savedKeys.has(slotKey) && !draftedKeys.has(slotKey));
+    const hasUnsavedDrafts = slotItems.some(({ slotKey }) => draftedKeys.has(slotKey) && !savedKeys.has(slotKey));
 
     if (!slotsToProcess.length) {
-      const nextPendingDay = getNextPendingDay(
-        contentPlanWorkflow.plan.days,
-        contentPlanWorkflow.completedDays.includes(day)
-          ? contentPlanWorkflow.completedDays
-          : [...contentPlanWorkflow.completedDays, day]
-      );
-      setContentPlanWorkflow((prev) => {
-        if (!prev) return prev;
-        const completedDays = prev.completedDays.includes(day) ? prev.completedDays : [...prev.completedDays, day];
-        return {
-          ...prev,
-          completedDays,
-          pendingDay: nextPendingDay,
-          failedDay: null,
-          awaitingDayConfirm: Boolean(nextPendingDay),
-          awaitingCampaignConfirm: !nextPendingDay,
-          status: nextPendingDay ? 'waiting_day_confirm' : 'waiting_campaign_confirm',
-        };
-      });
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        content: `Ngày ${day} đã có đủ template lưu trước đó.`,
-      }]);
-      return;
+      if (!silentDone) {
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: hasUnsavedDrafts
+            ? `Template nháp Ngày ${day} đã được tạo bên dưới. Bạn xem nội dung rồi bấm Lưu từng template để tiếp tục.`
+            : `Ngày ${day} đã có đủ template lưu trước đó.`,
+        }]);
+      }
+      return true;
     }
 
     setGeneratingDay(day);
@@ -880,18 +959,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       generatingDay: day,
       failedDay: null,
       awaitingDayConfirm: false,
-      status: 'generating_day',
+      isGeneratingAll: allMode ? true : prev.isGeneratingAll,
+      allDraftsRequested: allMode ? true : prev.allDraftsRequested,
+      status: allMode ? 'generating_all' : 'generating_day',
     } : prev));
 
     let mySessionId = currentSessionId;
     if (mySessionId) markTabPending(mySessionId);
     let workingHistory = [...messages];
-    const generatedRecords = [];
+    const generatedDrafts = [];
 
     try {
       for (let index = 0; index < slotsToProcess.length; index += 1) {
-        const slot = slotsToProcess[index];
-        const slotOrder = Number(slot.slotIndex) || index + 1;
+        const { slot, slotOrder, slotKey } = slotsToProcess[index];
         const channelLabel = slot.channel === 'email' ? 'Email' : 'Zalo cá nhân';
         const slotPromptParts = [
           `Tạo chi tiết template cho ngày ${day}, slot ${slotOrder} (${channelLabel}).`,
@@ -927,115 +1007,73 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type !== 'template_draft' || !data) {
           throw new Error(content || 'AI không trả về template_draft cho slot này.');
         }
-        if (!PLAN_SUPPORTED_CHANNELS.has(normalizeChannel(data.channel))) {
+        const draftChannel = normalizeChannel(data.channel || dayItem.channel || slot.channel);
+        if (!PLAN_SUPPORTED_CHANNELS.has(draftChannel)) {
           throw new Error('Wizard theo ngày hiện chỉ hỗ trợ Email và Zalo cá nhân.');
         }
 
-        const savedTemplate = await saveDraftTemplate(data, 'AI Generated');
-        if (!savedTemplate?.id) {
-          throw new Error('Không lưu được template vào thư viện.');
-        }
+        const draftData = {
+          ...data,
+          channel: draftChannel,
+          _planTemplate: true,
+          _planDay: day,
+          _planSlotId: slotKey,
+          _planSlotKey: slotKey,
+          _planSlotIndex: slotOrder,
+          _planSendTime: slot.sendTime || null,
+          _planSummary: slot.summary || dayItem.summary || '',
+        };
 
         const assistantMsg = {
           role: 'assistant',
           content: content || t('aiChatbot.templateCreated'),
           type,
-          data,
+          data: draftData,
         };
         workingHistory = [...workingHistory, assistantMsg];
-        generatedRecords.push({
-          day,
-          slotIndex: slotOrder,
-          slotId: slot.slotId || `d${day}-s${slotOrder}`,
-          channel: normalizeChannel(data.channel || dayItem.channel || slot.channel),
-          sendTime: slot.sendTime || null,
-          summary: slot.summary || dayItem.summary || '',
-          templateId: Number(savedTemplate.id),
-          templateName: savedTemplate.templateName || data.templateName,
-          subject: data.subject || '',
-          bodyHtml: data.bodyHtml || '',
-          bodyText: data.bodyText || '',
-        });
-        const latestRecord = generatedRecords[generatedRecords.length - 1];
+        generatedDrafts.push(draftData);
+        setMessages((current) => [...current, assistantMsg]);
         setContentPlanWorkflow((prev) => {
           if (!prev) return prev;
-          const exists = prev.savedTemplates.some((item) => String(item.slotId) === String(latestRecord.slotId));
+          const exists = prev.draftTemplates.some((item) => String(item._planSlotKey) === String(draftData._planSlotKey));
           if (exists) return prev;
-          const mergedSaved = [...prev.savedTemplates, latestRecord];
           return {
             ...prev,
-            savedTemplates: mergedSaved,
-            savedCountByDay: buildSavedCountByDay(mergedSaved),
+            draftTemplates: [...prev.draftTemplates, draftData],
           };
         });
       }
 
-      setContentPlanWorkflow((prev) => {
-        if (!prev) return prev;
-        const mergedSaved = [...prev.savedTemplates];
-        generatedRecords.forEach((record) => {
-          if (!mergedSaved.some((item) => String(item.slotId) === String(record.slotId))) {
-            mergedSaved.push(record);
-          }
-        });
-        const completedDays = prev.completedDays.includes(day)
-          ? prev.completedDays
-          : [...prev.completedDays, day];
-        const nextPendingDay = getNextPendingDay(prev.plan.days, completedDays);
-        const doneCount = generatedRecords.length;
-        const savedCountByDay = buildSavedCountByDay(mergedSaved);
+      if (!silentDone) {
+        setMessages((current) => [...current, {
+          role: 'assistant',
+          content: `✅ Đã tạo ${generatedDrafts.length} template nháp cho Ngày ${day}. Bạn xem nội dung rồi bấm Lưu từng template để tiếp tục.`,
+        }]);
+      }
 
-        setMessages((current) => {
-          const next = [...current, {
-            role: 'assistant',
-            content: `✅ Đã tạo và lưu ${doneCount} template cho Ngày ${day}.`,
-          }];
-          if (nextPendingDay) {
-            next.push({
-              role: 'assistant',
-              type: 'confirm_next_day',
-              data: { day: nextPendingDay },
-              content: `Tiếp tục tạo template cho Ngày ${nextPendingDay} nhé?`,
-            });
-          } else {
-            next.push({
-              role: 'assistant',
-              type: 'confirm_plan_campaign',
-              content: 'Đã hoàn tất toàn bộ kế hoạch. Bạn muốn tạo campaign draft từ các template này không?',
-            });
-          }
-          return next;
-        });
-
-        return {
-          ...prev,
-          savedTemplates: mergedSaved,
-          completedDays,
-          savedCountByDay,
-          pendingDay: nextPendingDay,
-          generatingDay: null,
-          failedDay: null,
-          awaitingDayConfirm: Boolean(nextPendingDay),
-          awaitingCampaignConfirm: !nextPendingDay,
-          status: nextPendingDay ? 'waiting_day_confirm' : 'waiting_campaign_confirm',
-        };
-      });
+      setContentPlanWorkflow((prev) => (prev ? {
+        ...prev,
+        generatingDay: null,
+        failedDay: null,
+        awaitingDayConfirm: false,
+        status: 'waiting_template_save',
+      } : prev));
+      return true;
     } catch (err) {
       const message = getAiRequestErrorMessage(err);
       toast.error(message);
-      if (generatedRecords.length > 0) {
+      if (generatedDrafts.length > 0) {
         setContentPlanWorkflow((prev) => {
           if (!prev) return prev;
-          const mergedSaved = [...prev.savedTemplates];
-          generatedRecords.forEach((record) => {
-            if (!mergedSaved.some((item) => String(item.slotId) === String(record.slotId))) {
-              mergedSaved.push(record);
+          const mergedDrafts = [...prev.draftTemplates];
+          generatedDrafts.forEach((draft) => {
+            if (!mergedDrafts.some((item) => String(item._planSlotKey) === String(draft._planSlotKey))) {
+              mergedDrafts.push(draft);
             }
           });
           return {
             ...prev,
-            savedTemplates: mergedSaved,
-            savedCountByDay: buildSavedCountByDay(mergedSaved),
+            draftTemplates: mergedDrafts,
           };
         });
       }
@@ -1052,10 +1090,47 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         data: { day, retry: true },
         content: `⚠️ Tạo template Ngày ${day} bị lỗi: ${message}. Bạn bấm "Thử lại Ngày ${day}" hoặc gõ "có" để thử lại.`,
       }]);
+      return false;
     } finally {
       setIsTyping(false);
       setGeneratingDay(null);
       if (mySessionId) clearTabPending(mySessionId);
+    }
+  };
+
+  const handleGenerateAllPlanTemplates = async () => {
+    if (!contentPlanWorkflow?.plan || generatingDay !== null || contentPlanWorkflow?.isGeneratingAll) return;
+
+    setContentPlanWorkflow((prev) => (prev ? {
+      ...prev,
+      awaitingDayConfirm: false,
+      isGeneratingAll: true,
+      allDraftsRequested: true,
+      status: 'generating_all',
+    } : prev));
+
+    const days = contentPlanWorkflow.plan.days || [];
+    let generatedAll = true;
+    for (const dayItem of days) {
+      const ok = await handleGenerateDayTemplate(dayItem, { allMode: true, silentDone: true });
+      if (!ok) {
+        generatedAll = false;
+        break;
+      }
+    }
+
+    setContentPlanWorkflow((prev) => (prev ? {
+      ...prev,
+      isGeneratingAll: false,
+      generatingDay: null,
+      status: generatedAll ? 'waiting_template_save' : prev.status,
+    } : prev));
+
+    if (generatedAll) {
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: '✅ Đã tạo nháp tất cả template trong kế hoạch. Bạn xem nội dung từng template và bấm Lưu; khi lưu đủ mình sẽ tạo campaign draft cho bạn.',
+      }]);
     }
   };
 
@@ -1513,7 +1588,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               </span>
               <span
                 onMouseDown={(e) => e.stopPropagation()}
-                onMouseUp={(e) => { if (!tabsDragRef.current.moved) handleDeleteSession(session.id, e); }}
+                onMouseUp={(e) => { if (!tabsDragRef.current.moved) requestDeleteSession(session.id, e); }}
                 className={`shrink-0 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${
                   currentSessionId === session.id ? 'hover:bg-orange-400' : 'hover:bg-slate-200'
                 }`}
@@ -1721,10 +1796,35 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'content_plan' && msg.data && (
                 <ContentPlanCard
                   data={msg.data}
-                  onGenerateTemplate={handleGenerateDayTemplate}
                   workflow={contentPlanWorkflow}
                   t={t}
                 />
+              )}
+
+              {msg.type === 'content_plan_actions' && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const day = Number(msg.data?.firstDay || contentPlanWorkflow?.pendingDay);
+                      if (!day) return;
+                      const dayItem = contentPlanWorkflow?.plan?.days?.find((d) => Number(d.day) === day);
+                      if (dayItem) handleGenerateDayTemplate(dayItem);
+                    }}
+                    disabled={generatingDay !== null || Boolean(contentPlanWorkflow?.isGeneratingAll)}
+                    className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Bắt đầu tạo Ngày 1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateAllPlanTemplates}
+                    disabled={generatingDay !== null || Boolean(contentPlanWorkflow?.isGeneratingAll)}
+                    className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {contentPlanWorkflow?.isGeneratingAll ? 'Đang tạo tất cả...' : 'Tạo 1 lúc tất cả các ngày'}
+                  </button>
+                </div>
               )}
 
               {msg.type === 'confirm_next_day' && (
@@ -1762,8 +1862,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'template_draft' && msg.data && (
                 <TemplateDraftCard
                   draft={msg.data}
-                  onSave={() => {}}
+                  onSave={(savedTemplate) => handlePlanTemplateSaved(msg.data, savedTemplate)}
                   onEdit={handleEditTemplate}
+                  autoSaveCategory={msg.data?._planTemplate ? 'AI Generated' : null}
                   t={t}
                 />
               )}
@@ -1877,6 +1978,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }}
         onSelect={handleSelectCampaign}
         t={t}
+      />
+
+      <ConfirmModal
+        isOpen={sessionToDelete !== null}
+        title={t('aiChatbot.confirmDeleteSessionTitle')}
+        message={t('aiChatbot.confirmDeleteSessionMessage')}
+        onConfirm={confirmDeleteSession}
+        onCancel={() => setSessionToDelete(null)}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        danger
       />
 
     </div>
