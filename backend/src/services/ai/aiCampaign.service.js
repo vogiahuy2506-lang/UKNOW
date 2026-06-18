@@ -608,7 +608,7 @@ QUY TẮC:
   "data": null
 }`;
 
-      return this._runChat(adminSystemPrompt, history, files);
+      return this._runChat(adminSystemPrompt, history, files, userId);
     }
 
     // Thu thập existing resources cho non-admin users
@@ -1151,7 +1151,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
-    const response = await this._runChat(systemPrompt, history, files);
+    const response = await this._runChat(systemPrompt, history, files, userId);
     return this._guardCampaignDataSourceResponse(response, history, locale);
   }
 
@@ -1161,7 +1161,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
    * @param {Array}  history  — [{role, content}]
    * @param {Array}  files    — [{tempId, originalName, contentType}]
    */
-  async _runChat(systemPrompt, history, files) {
+  async _runChat(systemPrompt, history, files, userId = null) {
     // Hàm đọc và đính kèm một file vào parts array
     const attachFileToParts = async (parts, file) => {
       try {
@@ -1495,7 +1495,7 @@ Khi muốn tạo Landing Page.
 - Nếu thiếu thông tin cơ bản → vẫn tạo nhưng dùng placeholder có ý nghĩa
 `;
 
-    return this._runChat(systemPrompt, history, files);
+    return this._runChat(systemPrompt, history, files, userId);
   }
 
   /**
@@ -1504,7 +1504,7 @@ Khi muốn tạo Landing Page.
    * @param {Array}  history  — [{role, content}]
    * @param {Array}  files    — [{tempId, originalName, contentType}]
    */
-  async _runChat(systemPrompt, history, files) {
+  async _runChat(systemPrompt, history, files, userId = null) {
     const googleUrlCache = new Map();
 
     // Hàm đọc và đính kèm một file vào parts array
