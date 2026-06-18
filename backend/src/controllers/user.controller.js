@@ -6,6 +6,7 @@ import {
   findProfileBase,
   findProfileBaseFallback,
   findProfilePlan,
+  findProfilePlanFallback,
   findProfileUsageCounts,
   findRoleAndLimits,
   findRoleAndLimitsFallback,
@@ -87,7 +88,7 @@ const mapProfileResponse = (userRow) => ({
   lastLoginAt: userRow.last_login_at,
   subscriptionExpiresAt: userRow.subscription_expires_at ?? null,
   // Plan info (user_admin only)
-  activePlanId: userRow.plan_id ?? null,
+  activePlanId: userRow.plan_id ?? userRow.active_plan_id ?? null,
   activePlanName: userRow.plan_name ?? null,
   activePlanCode: userRow.plan_code ?? null,
   activePlanPrice: userRow.plan_price ?? null,
@@ -133,23 +134,28 @@ class UserController {
       let planRow = null;
       try {
         planRow = await findProfilePlan({ activePlanId: userRow.active_plan_id, userId, email: userRow.email });
-      } catch {
-        // plan info is optional
+      } catch (err) {
+        console.error('[Profile] findProfilePlan failed', { userId, message: err.message });
+        try {
+          planRow = await findProfilePlanFallback({ activePlanId: userRow.active_plan_id, userId, email: userRow.email });
+        } catch (fallbackErr) {
+          console.error('[Profile] findProfilePlanFallback failed', { userId, message: fallbackErr.message });
+        }
       }
 
       // 3. Usage counts (best-effort)
       let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
       try {
         usageCounts = await findProfileUsageCounts(userId) || usageCounts;
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }
 
       let aiTokenUsage = { used: 0 };
       try {
         aiTokenUsage = await usageTrackingService.getResourceUsage(userId, 'ai_token');
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('[Profile] getResourceUsage(ai_token) failed', { userId, message: err.message });
       }
 
       res.json({

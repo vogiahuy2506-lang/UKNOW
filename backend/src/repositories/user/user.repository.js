@@ -23,6 +23,30 @@ const PLAN_COLUMNS = `
   p.ai_tokens_per_period
 `;
 
+/** Core plan columns only — safe when limit/AI token columns are missing from schema. */
+const PLAN_COLUMNS_FALLBACK = `
+  p.id          AS plan_id,
+  p.name        AS plan_name,
+  p.code        AS plan_code,
+  p.price       AS plan_price,
+  p.features    AS plan_features,
+  p.max_employees AS plan_max_employees,
+  NULL::int AS daily_email_limit,
+  NULL::int AS monthly_email_limit,
+  NULL::int AS daily_zalo_limit,
+  NULL::int AS monthly_zalo_limit,
+  NULL::int AS ai_tokens_per_period
+`;
+
+const PROFILE_PLAN_WHERE = `
+  WHERE p.id = COALESCE(
+    $1::int,
+    (SELECT o.plan_id FROM orders o
+     WHERE o.user_id = $2 OR o.user_email = $3
+     ORDER BY o.created_at DESC LIMIT 1)
+  )
+`;
+
 export async function findProfileBase(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
@@ -56,12 +80,17 @@ export async function findProfilePlan({ activePlanId, userId, email }) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS}
      FROM plans p
-     WHERE p.id = COALESCE(
-       $1::int,
-       (SELECT o.plan_id FROM orders o
-        WHERE o.user_id = $2 OR o.user_email = $3
-        ORDER BY o.created_at DESC LIMIT 1)
-     )`,
+     ${PROFILE_PLAN_WHERE}`,
+    [activePlanId || null, userId, email]
+  );
+  return rows[0] || null;
+}
+
+export async function findProfilePlanFallback({ activePlanId, userId, email }) {
+  const { rows } = await db.query(
+    `SELECT ${PLAN_COLUMNS_FALLBACK}
+     FROM plans p
+     ${PROFILE_PLAN_WHERE}`,
     [activePlanId || null, userId, email]
   );
   return rows[0] || null;
