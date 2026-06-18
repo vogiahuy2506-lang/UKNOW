@@ -20,6 +20,9 @@ ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 ARG VITE_PRIMARY_APP_HOSTS=localhost,127.0.0.1,founderai.biz,www.founderai.biz
 ENV VITE_PRIMARY_APP_HOSTS=${VITE_PRIMARY_APP_HOSTS}
 
+ARG VITE_DEFAULT_FROM_DOMAIN=founderai.biz
+ENV VITE_DEFAULT_FROM_DOMAIN=${VITE_DEFAULT_FROM_DOMAIN}
+
 RUN yarn build
 RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 
