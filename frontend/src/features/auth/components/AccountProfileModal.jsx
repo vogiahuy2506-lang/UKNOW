@@ -41,7 +41,11 @@ function UsageBar({ icon: Icon, label, used, limit, t }) {
           {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
           {label}
         </span>
-        <span className="text-xs font-medium text-gray-400">{t('accountProfileModal.unlimited')}</span>
+        <span className="text-xs font-medium text-gray-400">
+          {used > 0
+            ? `${used.toLocaleString()} · ${t('accountProfileModal.unlimited')}`
+            : t('accountProfileModal.unlimited')}
+        </span>
       </div>
     );
   }
@@ -73,12 +77,7 @@ function UsageBar({ icon: Icon, label, used, limit, t }) {
 /** Plan + usage section shown for user_admin. */
 function PlanSection({ data, t }) {
   const hasPlan = !!data?.activePlanId;
-  const hasLimits =
-    data?.dailyEmailLimit !== null ||
-    data?.monthlyEmailLimit !== null ||
-    data?.dailyZaloLimit !== null ||
-    data?.monthlyZaloLimit !== null ||
-    data?.aiTokensPerPeriod !== null;
+  const planLabel = data?.activePlanName || data?.activePlanCode || (hasPlan ? `#${data.activePlanId}` : '');
 
   const features = useMemo(() => {
     if (!data?.activePlanFeatures) return [];
@@ -108,7 +107,7 @@ function PlanSection({ data, t }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 text-xs font-bold bg-primary-500 text-white rounded-full">
-              {data.activePlanName}
+              {planLabel}
             </span>
             {data.activePlanCode && (
               <span className="text-xs text-primary-600 font-mono">{data.activePlanCode}</span>
@@ -168,47 +167,45 @@ function PlanSection({ data, t }) {
         </div>
       )}
 
-      {/* Usage bars */}
-      {hasLimits && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.sendLimits')}</p>
-          <UsageBar
-            icon={HiOutlineMail}
-            label={t('accountProfileModal.emailToday')}
-            used={data.emailSentToday}
-            limit={data.dailyEmailLimit}
-            t={t}
-          />
-          <UsageBar
-            icon={HiOutlineMail}
-            label={t('accountProfileModal.emailThisMonth')}
-            used={data.emailSentMonth}
-            limit={data.monthlyEmailLimit}
-            t={t}
-          />
-          <UsageBar
-            icon={HiOutlineChatAlt2}
-            label={t('accountProfileModal.zaloToday')}
-            used={data.zaloSentToday}
-            limit={data.dailyZaloLimit}
-            t={t}
-          />
-          <UsageBar
-            icon={HiOutlineChatAlt2}
-            label={t('accountProfileModal.zaloThisMonth')}
-            used={data.zaloSentMonth}
-            limit={data.monthlyZaloLimit}
-            t={t}
-          />
-          <UsageBar
-            icon={HiOutlineSparkles}
-            label={t('accountProfileModal.aiTokens')}
-            used={data.aiTokensUsed || 0}
-            limit={data.aiTokensPerPeriod}
-            t={t}
-          />
-        </div>
-      )}
+      {/* Usage bars — always show when user has a plan; each row handles null limit as unlimited */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.sendLimits')}</p>
+        <UsageBar
+          icon={HiOutlineMail}
+          label={t('accountProfileModal.emailToday')}
+          used={data.emailSentToday}
+          limit={data.dailyEmailLimit}
+          t={t}
+        />
+        <UsageBar
+          icon={HiOutlineMail}
+          label={t('accountProfileModal.emailThisMonth')}
+          used={data.emailSentMonth}
+          limit={data.monthlyEmailLimit}
+          t={t}
+        />
+        <UsageBar
+          icon={HiOutlineChatAlt2}
+          label={t('accountProfileModal.zaloToday')}
+          used={data.zaloSentToday}
+          limit={data.dailyZaloLimit}
+          t={t}
+        />
+        <UsageBar
+          icon={HiOutlineChatAlt2}
+          label={t('accountProfileModal.zaloThisMonth')}
+          used={data.zaloSentMonth}
+          limit={data.monthlyZaloLimit}
+          t={t}
+        />
+        <UsageBar
+          icon={HiOutlineSparkles}
+          label={t('accountProfileModal.aiTokens')}
+          used={data.aiTokensUsed || 0}
+          limit={data.aiTokensPerPeriod}
+          t={t}
+        />
+      </div>
     </div>
   );
 }
