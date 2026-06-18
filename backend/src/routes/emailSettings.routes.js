@@ -21,9 +21,10 @@ router.get('/:id', emailSettingsController.getById.bind(emailSettingsController)
 router.post('/',
   [
     body('name').trim().notEmpty().withMessage('Tên không được để trống'),
-    body('replyTo').isEmail().withMessage('Reply-To email không hợp lệ'),
+    body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
+    body('email').optional().isEmail().withMessage('Email không hợp lệ'),
     body('smtpHost').optional().trim(),
-    body('smtpPort').optional({ nullable: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
+    body('smtpPort').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
     body('smtpUsername').optional().trim(),
     body('smtpPassword').optional().trim()
   ],
@@ -36,7 +37,7 @@ router.put('/:id',
   [
     body('name').optional().trim().notEmpty().withMessage('Tên không được để trống'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
-    body('smtpPort').optional().isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ')
+    body('smtpPort').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ')
   ],
   handleValidationErrors,
   emailSettingsController.update.bind(emailSettingsController)

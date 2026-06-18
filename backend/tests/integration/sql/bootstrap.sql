@@ -227,22 +227,31 @@ CREATE TABLE email_settings (
   id_user          BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name             VARCHAR(255) NOT NULL,
   email            VARCHAR(255) NOT NULL,
+  reply_to         VARCHAR(255),
   smtp_host        VARCHAR(255),
   smtp_port        INTEGER,
   smtp_username    VARCHAR(255),
   smtp_password    TEXT,
+  email_mode       TEXT         NOT NULL DEFAULT 'platform',
   use_tls          BOOLEAN      NOT NULL DEFAULT TRUE,
   daily_limit      INTEGER      NOT NULL DEFAULT 1000,
   hourly_limit     INTEGER      NOT NULL DEFAULT 100,
   daily_sent_count INTEGER      NOT NULL DEFAULT 0,
   total_sent_count INTEGER      NOT NULL DEFAULT 0,
   is_verified      BOOLEAN      NOT NULL DEFAULT FALSE,
+  domain_verification_status VARCHAR(30) NOT NULL DEFAULT 'not_required',
+  brand_domain     VARCHAR(255),
+  domain_dns_records JSONB,
+  domain_verified_at TIMESTAMPTZ,
   status           VARCHAR(20)  NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'inactive')),
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_email_settings_user ON email_settings(id_user);
+CREATE INDEX idx_email_settings_brand_domain
+  ON email_settings(brand_domain)
+  WHERE brand_domain IS NOT NULL;
 
 CREATE TABLE email_templates (
   id            BIGSERIAL PRIMARY KEY,
@@ -596,6 +605,9 @@ CREATE TABLE email_messages (
   recipient_name          VARCHAR(255),
   sender_email            VARCHAR(255),
   sender_name             VARCHAR(255),
+  from_address            VARCHAR(255),
+  reply_to                VARCHAR(255),
+  brand_domain            VARCHAR(255),
   subject                 TEXT,
   body_html               TEXT,
   body_text               TEXT,
@@ -616,6 +628,9 @@ CREATE TABLE email_messages (
 CREATE INDEX idx_email_messages_customer ON email_messages(id_customer);
 CREATE INDEX idx_email_messages_token    ON email_messages(tracking_token);
 CREATE INDEX idx_email_messages_run      ON email_messages(id_run);
+CREATE INDEX idx_email_messages_brand_domain
+  ON email_messages(brand_domain)
+  WHERE brand_domain IS NOT NULL;
 
 -- ─── Zalo messages — outbound (group/person) ───────────────────────────
 CREATE TABLE zalo_messages (

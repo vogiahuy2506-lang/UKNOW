@@ -12,8 +12,6 @@ import {
   HiOutlineSparkles,
   HiOutlineGlobe,
   HiOutlineLockClosed,
-  HiOutlineDocumentDuplicate,
-  HiOutlineCheck,
   HiOutlineQuestionMarkCircle,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
@@ -344,18 +342,6 @@ function normalizeItem(raw) {
   };
 }
 
-function copyToClipboard(text, t) {
-  if (typeof navigator?.clipboard?.writeText === 'function') {
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success(t('emailSettings.copied'));
-    }).catch(() => {
-      toast.error(t('emailSettings.copyFailed'));
-    });
-  } else {
-    toast.error(t('emailSettings.copyNotSupported'));
-  }
-}
-
 const EmailSettings = () => {
   const { t } = useI18n();
   const initializedRef = useRef(false);
@@ -387,7 +373,6 @@ const EmailSettings = () => {
   const [isDeletingId, setIsDeletingId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const selectedEmail = emailSettings.find((item) => item.id === selectedEmailId) || null;
   const isSmtpMode = formData.emailMode === 'smtp';
 
   const isValidForm = useMemo(() => {

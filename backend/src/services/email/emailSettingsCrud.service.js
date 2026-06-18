@@ -145,27 +145,29 @@ class EmailSettingsCrudService {
       throw createServiceError(emailAccountLimitCheck.message, 400, { limitReached: true });
     }
 
+    const replyTo = payload.replyTo?.trim() || payload.email?.trim();
+
     // Validate required fields
     if (!payload.name?.trim()) {
       throw createServiceError('Tên người gửi là bắt buộc', 400);
     }
-    if (!payload.replyTo?.trim()) {
+    if (!replyTo) {
       throw createServiceError('Email Reply-To là bắt buộc', 400);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(payload.replyTo)) {
+    if (!emailRegex.test(replyTo)) {
       throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
     }
 
-    const emailMode = payload.emailMode || 'platform';
+    const emailMode = payload.emailMode || (payload.email ? 'smtp' : 'platform');
     const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
     const useSmtp = emailMode === 'smtp';
 
     const fromEmail =
       emailMode === 'platform'
         ? `no-reply@${platformDomain}`
-        : payload.replyTo;
+        : replyTo;
 
     const smtpHost = payload.smtpHost?.trim() || this.DEFAULT_SMTP.host;
     const smtpPort = payload.smtpPort || this.DEFAULT_SMTP.port;
@@ -178,12 +180,14 @@ class EmailSettingsCrudService {
     const item = await emailSettingsRepository.create(userId, {
       name: payload.name,
       email: fromEmail,
-      replyTo: payload.replyTo,
+      replyTo,
       smtpHost,
       smtpPort,
       smtpUsername,
       smtpPassword,
       useTls,
+      dailyLimit: payload.dailyLimit ?? 1000,
+      hourlyLimit: payload.hourlyLimit ?? 100,
       emailMode,
       brandDomain,
       isVerified: useSmtp ? true : true, // platform and smtp both verified, only custom_domain needs DNS verification
@@ -198,15 +202,18 @@ class EmailSettingsCrudService {
       throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
 
-    if (!payload.name?.trim()) {
+    const name = payload.name?.trim() || current.name;
+    const replyTo = payload.replyTo?.trim() || current.reply_to || current.email;
+
+    if (!name) {
       throw createServiceError('Tên người gửi là bắt buộc', 400);
     }
-    if (!payload.replyTo?.trim()) {
+    if (!replyTo) {
       throw createServiceError('Email Reply-To là bắt buộc', 400);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(payload.replyTo)) {
+    if (!emailRegex.test(replyTo)) {
       throw createServiceError('Địa chỉ Reply-To không hợp lệ', 400);
     }
 
@@ -217,13 +224,13 @@ class EmailSettingsCrudService {
     const email =
       emailMode === 'platform'
         ? `no-reply@${platformDomain}`
-        : payload.replyTo || current.reply_to || current.email;
+        : replyTo;
 
     const brandDomain = email.split('@')[1]?.toLowerCase() || null;
 
     const item = await emailSettingsRepository.update(userId, id, {
-      name: payload.name,
-      replyTo: payload.replyTo,
+      name,
+      replyTo,
       email,
       emailMode,
       smtpHost: payload.smtpHost,

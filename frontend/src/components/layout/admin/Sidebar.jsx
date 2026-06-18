@@ -47,57 +47,68 @@ import ContextSwitcher from '../../ContextSwitcher';
 const superAdminMenuItems = (t) => [
   {
     name: t('nav.dashboard'),
+    section: t('nav.adminNavOverview'),
     path: '/admin',
     icon: HiOutlineHome,
     end: true,
   },
   {
     name: t('nav.memberManagement'),
+    section: t('nav.adminNavBusiness'),
     path: '/admin/members',
     icon: HiOutlineShieldCheck,
   },
   {
     name: t('nav.planManagement'),
+    section: t('nav.adminNavBusiness'),
     path: '/admin/plans',
     icon: HiOutlineCurrencyDollar,
   },
   {
     name: t('nav.voucherManagement'),
+    section: t('nav.adminNavBusiness'),
     path: '/admin/vouchers',
     icon: HiOutlineTicket,
   },
   {
     name: t('nav.orders'),
+    section: t('nav.adminNavBusiness'),
     path: '/admin/orders',
     icon: HiOutlineClipboardList,
   },
   {
     name: t('nav.serverMonitoring'),
+    section: t('nav.adminNavMonitoring'),
     path: '/admin/system',
     icon: HiOutlineServer,
   },
   {
     name: t('nav.deliveryMonitoring'),
+    section: t('nav.adminNavMonitoring'),
     path: '/admin/delivery-monitor',
     icon: HiOutlineLightningBolt,
   },
   {
     name: t('nav.aiUsageAnalytics'),
+    section: t('nav.adminNavMessaging'),
     path: '/admin/ai-usage',
     icon: HiOutlineSparkles,
   },
   {
     name: t('nav.bulkNotification'),
+    section: t('nav.adminNavMessaging'),
     path: '/admin/bulk-notification',
     icon: HiOutlineMailOpen,
   },
   {
     name: t('nav.systemAuditLogs'),
+    section: t('nav.adminNavMonitoring'),
     path: '/admin/audit-logs',
     icon: HiOutlineClipboard,
   },
   {
     name: t('nav.diagnosticTool'),
+    section: t('nav.adminNavMonitoring'),
     path: '/admin/diagnostic',
     icon: HiOutlinePhone,
   },
@@ -287,6 +298,13 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
     })
     .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
 
+  const shouldShowSectionHeader = (item, index) => (
+    showLabels &&
+    isSuperAdmin &&
+    item.section &&
+    visibleMenuItems[index - 1]?.section !== item.section
+  );
+
   return (
     <aside
       className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-40 sidebar-transition flex flex-col transition-transform duration-300 ease-in-out ${sidebarTransformClass}`}
@@ -331,8 +349,16 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
 
       {/* Navigation */}
       <nav ref={navRef} className={`p-2 space-y-1 overflow-y-auto flex-1 min-h-0 ${!showLabels ? 'px-2' : ''}`}>
-        {visibleMenuItems.map((item) => (
-          <div key={item.name}>
+        {visibleMenuItems.map((item, index) => (
+          <div
+            key={item.name}
+            className={shouldShowSectionHeader(item, index) && index > 0 ? 'pt-3' : ''}
+          >
+            {shouldShowSectionHeader(item, index) && (
+              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                {item.section}
+              </p>
+            )}
             {item.children ? (
               <div>
                 <button
