@@ -9,6 +9,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
+import { useDebouncedCallback } from '../../../hooks/useDebounce.js';
 import {
   deleteLandingCustomDomain,
   fetchLandingCustomDomain,
@@ -328,7 +329,7 @@ export default function LandingPageFullEditor({
     }
   };
 
-  const verifyCustomDomain = async () => {
+  const _verifyCustomDomain = async () => {
     if (!editingId) return;
     setCdBusy(true);
     try {
@@ -346,6 +347,8 @@ export default function LandingPageFullEditor({
       setCdBusy(false);
     }
   };
+
+  const verifyCustomDomain = useDebouncedCallback(_verifyCustomDomain, 1000);
 
   const removeCustomDomain = async () => {
     if (!editingId) return;

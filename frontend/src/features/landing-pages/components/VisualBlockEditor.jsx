@@ -734,7 +734,7 @@ ${blocksHtml}
   })()}
 </body>
 </html>`}
-                          sandbox="allow-scripts"
+                          sandbox="allow-scripts allow-forms"
                         />
                       </div>
 

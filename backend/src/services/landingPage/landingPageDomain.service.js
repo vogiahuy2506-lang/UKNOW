@@ -306,12 +306,14 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async verifyDns(landingPageId, authUser) {
-    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, normalizeAuthScope(authUser));
+    const scope = normalizeAuthScope(authUser);
+    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, scope);
     if (!row) {
       const err = new Error('Chưa cấu hình tên miền cho landing này');
       err.statusCode = 404;
       throw err;
     }
+    console.log(`[LandingPageDomainService.verifyDns] landingPageId=${landingPageId}, hostname=${row.hostname}, status=${row.status}, cfManaged=${row.cfManaged}, userId=${authUser?.id}`);
 
     // CF-managed domain đã active ngay từ lúc tạo
     if (row.cfManaged && row.status === 'active') {
@@ -326,7 +328,9 @@ class LandingPageDomainService {
     let cnameRecords = [];
     try {
       cnameRecords = await dns.resolve(row.hostname, 'CNAME');
-    } catch {
+      console.log(`[LandingPageDomainService.verifyDns] CNAME resolved for ${row.hostname}:`, cnameRecords);
+    } catch (dnsErr) {
+      console.warn(`[LandingPageDomainService.verifyDns] DNS resolve failed for ${row.hostname}:`, dnsErr.message);
       const err = new Error(
         `Chưa đọc được CNAME cho ${row.hostname}. Kiểm tra DNS đã lưu và chờ propagate (có thể vài phút đến vài giờ).`
       );
@@ -337,6 +341,7 @@ class LandingPageDomainService {
     const expectedTarget = cnameTarget();
     const flat = cnameRecords.map((arr) => arr.join(''));
     const ok = flat.some((cname) => cname.toLowerCase() === expectedTarget.toLowerCase());
+    console.log(`[LandingPageDomainService.verifyDns] expectedTarget=${expectedTarget}, resolved=${flat.join(',')}, ok=${ok}`);
 
     if (!ok) {
       const err = new Error(

@@ -67,6 +67,7 @@ class EmailSettingsCrudService {
       name: item.name,
       email: item.email,
       replyTo: item.reply_to || null,
+      platformPrefix: item.platform_prefix || 'no-reply',
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       useTls: item.use_tls,
@@ -85,6 +86,7 @@ class EmailSettingsCrudService {
       name: item.name,
       email: item.email,
       replyTo: item.reply_to || null,
+      platformPrefix: item.platform_prefix || 'no-reply',
       smtpHost: item.smtp_host,
       smtpPort: item.smtp_port,
       isVerified: item.is_verified,
@@ -164,9 +166,22 @@ class EmailSettingsCrudService {
     const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
     const useSmtp = emailMode === 'smtp';
 
+    // Validate and sanitize platform prefix for platform mode
+    const platformPrefix = useSmtp ? null : (() => {
+      const prefix = String(payload.platformPrefix || 'no-reply').trim().toLowerCase();
+      if (!prefix) throw createServiceError('Email prefix là bắt buộc', 400);
+      if (!/^[a-zA-Z0-9._-]+$/.test(prefix)) {
+        throw createServiceError('Email prefix chỉ được chứa chữ, số, dấu chấm, gạch dưới và gạch ngang', 400);
+      }
+      if (prefix.length > 50) {
+        throw createServiceError('Email prefix tối đa 50 ký tự', 400);
+      }
+      return prefix;
+    })();
+
     const fromEmail =
       emailMode === 'platform'
-        ? `no-reply@${platformDomain}`
+        ? `${platformPrefix}@${platformDomain}`
         : replyTo;
 
     const smtpHost = payload.smtpHost?.trim() || this.DEFAULT_SMTP.host;
@@ -181,6 +196,7 @@ class EmailSettingsCrudService {
       name: payload.name,
       email: fromEmail,
       replyTo,
+      platformPrefix,
       smtpHost,
       smtpPort,
       smtpUsername,
@@ -221,9 +237,22 @@ class EmailSettingsCrudService {
     const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
     const useSmtp = emailMode === 'smtp';
 
+    // Validate and sanitize platform prefix for platform mode
+    const platformPrefix = useSmtp ? null : (() => {
+      const prefix = String(payload.platformPrefix || current.platform_prefix || 'no-reply').trim().toLowerCase();
+      if (!prefix) throw createServiceError('Email prefix là bắt buộc', 400);
+      if (!/^[a-zA-Z0-9._-]+$/.test(prefix)) {
+        throw createServiceError('Email prefix chỉ được chứa chữ, số, dấu chấm, gạch dưới và gạch ngang', 400);
+      }
+      if (prefix.length > 50) {
+        throw createServiceError('Email prefix tối đa 50 ký tự', 400);
+      }
+      return prefix;
+    })();
+
     const email =
       emailMode === 'platform'
-        ? `no-reply@${platformDomain}`
+        ? `${platformPrefix}@${platformDomain}`
         : replyTo;
 
     const brandDomain = email.split('@')[1]?.toLowerCase() || null;
@@ -232,6 +261,7 @@ class EmailSettingsCrudService {
       name,
       replyTo,
       email,
+      platformPrefix,
       emailMode,
       smtpHost: payload.smtpHost,
       smtpPort: payload.smtpPort,

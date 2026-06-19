@@ -2133,6 +2133,12 @@ export default {
     senderInfoSubtitle: 'Display name and reply-to email',
     smtpConfig: 'SMTP Configuration',
     smtpConfigSubtitle: 'Custom SMTP server information',
+    platformPrefix: 'Email prefix',
+    platformPrefixPlaceholder: 'e.g., no-reply',
+    platformPrefixHint: 'Prefix before domain (e.g., no-reply becomes no-reply@domain.com). Only letters, numbers, dots, underscores, and hyphens.',
+    platformPrefixRequired: 'Email prefix is required',
+    platformPrefixInvalid: 'Only letters, numbers, dots, underscores, and hyphens',
+    platformPrefixTooLong: 'Maximum 50 characters',
 
   },
 

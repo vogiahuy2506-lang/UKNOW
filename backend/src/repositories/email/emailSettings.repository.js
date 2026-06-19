@@ -9,7 +9,7 @@ class EmailSettingsRepository {
     let query = `
       SELECT es.id, es.name, es.email, es.reply_to, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
              es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
-             es.brand_domain, es.domain_verification_status, es.domain_verified_at, es.email_mode,
+             es.brand_domain, es.domain_verification_status, es.domain_verified_at, es.email_mode, es.platform_prefix,
              COALESCE(u.full_name, u.username) AS creator_name
       FROM email_settings es
       LEFT JOIN users u ON es.id_user = u.id
@@ -110,7 +110,7 @@ class EmailSettingsRepository {
   }
 
   async create(userId, payload) {
-    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, emailMode } =
+    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, emailMode, platformPrefix } =
       payload;
     const encryptedSmtpPassword = encryptSmtpSecret(smtpPassword);
     const brandDomain = String(email || '').split('@')[1]?.toLowerCase() || null;
@@ -118,16 +118,16 @@ class EmailSettingsRepository {
     const resolvedReplyTo = replyTo || email;
     const result = await db.query(
       `INSERT INTO email_settings
-        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain, email_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12, $13)
+        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain, email_mode, platform_prefix)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12, $13, $14)
        RETURNING *`,
-      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain, emailMode || 'platform']
+      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain, emailMode || 'platform', platformPrefix || 'no-reply']
     );
     return result.rows[0];
   }
 
   async update(userId, id, payload, { roleCode } = {}) {
-    const { name, email, replyTo, emailMode, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status } =
+    const { name, email, replyTo, emailMode, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status, platformPrefix } =
       payload;
     const encryptedSmtpPassword = smtpPassword === undefined ? undefined : encryptSmtpSecret(smtpPassword);
     const isAdmin = isAdminRole(roleCode);
@@ -147,9 +147,10 @@ class EmailSettingsRepository {
         hourly_limit = COALESCE($11, hourly_limit),
         status = COALESCE($12, status),
         brand_domain = COALESCE($13, brand_domain),
+        platform_prefix = COALESCE($14, platform_prefix),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $14
-         ${isAdmin ? '' : 'AND id_user = $15'}
+       WHERE id = $15
+         ${isAdmin ? '' : 'AND id_user = $16'}
        RETURNING *`,
       isAdmin
         ? [
@@ -166,6 +167,7 @@ class EmailSettingsRepository {
             hourlyLimit,
             status,
             brandDomain,
+            platformPrefix,
             id,
           ]
         : [
@@ -182,6 +184,7 @@ class EmailSettingsRepository {
             hourlyLimit,
             status,
             brandDomain,
+            platformPrefix,
             id,
             userId,
           ]
