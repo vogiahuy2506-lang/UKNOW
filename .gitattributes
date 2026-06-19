@@ -9,6 +9,7 @@ backend/src/services/campaign/campaignRun.service.js whitespace=cr-at-eol
 backend/src/services/campaign/campaignZaloSender.service.js whitespace=cr-at-eol
 backend/src/services/campaign/campaignEmailSender.service.js whitespace=cr-at-eol
 backend/src/controllers/zaloSettings.controller.js whitespace=cr-at-eol
+backend/src/utils/zaloTimeoutRetry.util.js whitespace=cr-at-eol
 
 # Binary
 *.png       binary

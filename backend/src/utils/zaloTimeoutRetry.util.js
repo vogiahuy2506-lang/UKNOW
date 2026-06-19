@@ -13,17 +13,22 @@ const RETRYABLE_TIMEOUT_CODES = new Set([
   'ETIMEDOUT',
   'ECONNABORTED',
   'ECONNRESET',
+  'EAI_AGAIN',
+  'EAI_FAIL',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'UND_ERR_SOCKET',
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Kiểm tra lỗi timeout kết nối từ lớp fetch/undici của Node.js.
+ * Kiểm tra lỗi mạng tạm thời từ lớp fetch/undici của Node.js.
  *
  * Luồng hoạt động:
  * 1. Đọc mã lỗi từ error và error.cause.
- * 2. Nếu có mã `UND_ERR_CONNECT_TIMEOUT` thì coi là timeout kết nối.
- * 3. Fallback theo message để bắt các trường hợp timeout không gắn code.
+ * 2. Nếu có mã timeout/DNS/socket tạm thời thì coi là retry được.
+ * 3. Fallback theo message để bắt các trường hợp fetch/timeout không gắn code.
  *
  * @param {any} error lỗi phát sinh từ API call
  * @returns {boolean} true nếu là lỗi timeout cần retry
@@ -37,7 +42,11 @@ export function isZaloTimeoutError(error) {
 
   const message = String(error?.message || '').trim().toLowerCase();
   const causeMessage = String(error?.cause?.message || '').trim().toLowerCase();
-  return message.includes('timeout') || causeMessage.includes('timeout');
+  const combinedMessage = `${message} ${causeMessage}`;
+  return combinedMessage.includes('timeout')
+    || combinedMessage.includes('fetch failed')
+    || combinedMessage.includes('getaddrinfo')
+    || combinedMessage.includes('socket hang up');
 }
 
 /**

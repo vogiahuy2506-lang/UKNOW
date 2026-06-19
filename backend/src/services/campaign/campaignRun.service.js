@@ -7024,6 +7024,13 @@ class CampaignRunService {
         );
         return;
       }
+      if (isNetworkTimeoutError(error)) {
+        console.warn(
+          `[Campaign ${campaignId}] Run ${runId} gặp lỗi mạng tạm thời, `
+          + `giữ 'running' để scheduler resume: ${String(error?.message || 'network timeout')}`
+        );
+        return;
+      }
       console.error(`[Campaign ${campaignId}] Lỗi thực thi:`, error);
       await campaignRunRepository.failRun(runId, error.message);
     } finally {
