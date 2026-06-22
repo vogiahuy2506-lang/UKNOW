@@ -81,3 +81,28 @@ backend/sql/
 backend/.tmp_zca/
 backend/curl/
 uknow_campaign_schema.sql
+
+####################
+# AI AGENT INSTRUCTIONS (local-only, không đẩy lên repo)
+####################
+CLAUDE.md
+AGENTS.md
+.claude/
+
+####################
+# LOCAL DOCS / PLANNING / DELIVERABLES
+####################
+TODO.md
+deliverables/
+backend/src/ARCHITECTURE_REFACTOR_MAP.md
+
+####################
+# DEV/SCRATCH SCRIPTS (chạy tay 1 lần, chứa cấu hình local)
+####################
+backend/scratch/
+backend/check_users.js
+backend/create_email_campaign.js
+backend/create_sample_campaign.js
+backend/create_test_user.js
+backend/create_zalo_group_campaign.js
+backend/create_zalo_personal_campaign.js
