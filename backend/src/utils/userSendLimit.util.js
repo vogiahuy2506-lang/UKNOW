@@ -21,10 +21,11 @@ async function getUserPlanSendLimits(userId) {
 async function countEmailSentToday(userId) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS total
-     FROM email_messages
-     WHERE id_user = $1
-       AND status IN ('sent', 'delivered', 'bounced')
-       AND sent_at >= CURRENT_DATE`,
+     FROM email_messages em
+     INNER JOIN campaigns c ON c.id = em.id_campaign
+     WHERE c.id_user = $1
+       AND em.status IN ('sent', 'delivered', 'bounced')
+       AND em.sent_at >= CURRENT_DATE`,
     [userId]
   );
   return toCount(rows[0]?.total);
@@ -33,10 +34,11 @@ async function countEmailSentToday(userId) {
 async function countEmailSentThisMonth(userId) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS total
-     FROM email_messages
-     WHERE id_user = $1
-       AND status IN ('sent', 'delivered', 'bounced')
-       AND sent_at >= DATE_TRUNC('month', NOW())`,
+     FROM email_messages em
+     INNER JOIN campaigns c ON c.id = em.id_campaign
+     WHERE c.id_user = $1
+       AND em.status IN ('sent', 'delivered', 'bounced')
+       AND em.sent_at >= DATE_TRUNC('month', NOW())`,
     [userId]
   );
   return toCount(rows[0]?.total);

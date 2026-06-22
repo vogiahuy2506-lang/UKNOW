@@ -220,7 +220,7 @@ export default {
     chatbotChannels: 'Kênh Chatbot',
     channelManagement: 'Quản lý kênh gửi',
     messageTemplates: 'Mẫu tin nhắn',
-    myProducts: 'Sản phẩm',
+    myProducts: 'Quản lý sản phẩm',
     courseManagement: 'Quản lý khóa học',
     productManagement: 'Quản lý sản phẩm',
     landingPage: 'Landing page',

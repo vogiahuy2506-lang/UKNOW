@@ -219,7 +219,7 @@ export default {
     chatbotChannels: 'Chatbot Channels',
     channelManagement: 'Channel Management',
     messageTemplates: 'Message Templates',
-    myProducts: 'Products',
+    myProducts: 'Product Management',
     courseManagement: 'Course Management',
     productManagement: 'Product Management',
     landingPage: 'Landing page',
