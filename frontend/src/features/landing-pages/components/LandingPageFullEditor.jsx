@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HiOutlineTemplate,
@@ -129,6 +129,43 @@ export default function LandingPageFullEditor({
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [visualEditorOpen, setVisualEditorOpen] = useState(false);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
+
+  const [editorSplit, setEditorSplit] = useState(50);
+  const [isResizing, setIsResizing] = useState(false);
+  const editorContainerRef = useRef(null);
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 1024
+  );
+
+  useEffect(() => {
+    const handleViewportResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, []);
+
+  const startResize = (event) => {
+    event.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const handleMove = (event) => {
+      const container = editorContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const offsetX = event.clientX - rect.left;
+      const percent = (offsetX / rect.width) * 100;
+      setEditorSplit(Math.min(75, Math.max(25, percent)));
+    };
+    const handleUp = () => setIsResizing(false);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     if (!open) {
@@ -370,7 +407,10 @@ export default function LandingPageFullEditor({
   const publicUrl = slug ? `https://${slug}.${BASE_DOMAIN}` : '';
 
   const overlay = (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-white">
+    <div
+      className="fixed z-[200] flex flex-col bg-white"
+      style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
+    >
       <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
           <HiOutlineGlobeAlt className="w-5 h-5 text-gray-600" />
@@ -454,8 +494,11 @@ export default function LandingPageFullEditor({
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-        <section className="flex flex-col min-h-[40vh] lg:min-h-0 lg:w-1/2 lg:border-r border-gray-200 overflow-hidden">
+      <div ref={editorContainerRef} className="flex flex-1 min-h-0 flex-col lg:flex-row">
+        <section
+          className="flex flex-col min-h-[40vh] lg:min-h-0 lg:min-w-[280px] lg:border-r border-gray-200 overflow-hidden"
+          style={isDesktop ? { width: `${editorSplit}%` } : undefined}
+        >
           <div className="shrink-0 p-4 space-y-3 border-b border-gray-100 bg-white overflow-y-auto max-h-[55vh] lg:max-h-[55%]">
 
             {/* Basic Info */}
@@ -755,7 +798,15 @@ export default function LandingPageFullEditor({
           </div>
         </section>
 
-        <section className="flex flex-col min-h-[40vh] lg:min-h-0 lg:w-1/2 bg-gray-50 border-t lg:border-t-0 border-gray-200">
+        <div
+          onMouseDown={startResize}
+          className="hidden lg:block w-2 cursor-col-resize bg-gray-100 hover:bg-gray-200 border-l border-r border-gray-200"
+        />
+
+        <section
+          className="flex flex-col min-h-[40vh] lg:min-h-0 lg:min-w-[280px] bg-gray-50 border-t lg:border-t-0 border-gray-200"
+          style={isDesktop ? { width: `${100 - editorSplit}%` } : undefined}
+        >
           <div className="shrink-0 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 bg-gray-100 flex items-center justify-between">
             <span>{t('landingPageEditor.preview')}</span>
             <div className="flex items-center gap-2">
