@@ -25,6 +25,19 @@ export async function toggleStatus(req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
+/** PATCH /api/admin/members/:id/role — cập nhật role (user ↔ admin) */
+export async function updateRole(req, res) {
+  try {
+    const { role } = req.body;
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role không hợp lệ' });
+    }
+    const result = await adminMembersService.updateMemberRole(Number(req.params.id), role);
+    if (!result) return res.status(404).json({ success: false, message: 'Không tìm thấy thành viên' });
+    return res.json({ success: true, message: `�ã cập nhật role thành ${role}`, data: result });
+  } catch (err) { return handleError(res, err); }
+}
+
 /** PATCH /api/admin/members/:id/promote — nâng lên super_admin */
 export async function promote(req, res) {
   try {

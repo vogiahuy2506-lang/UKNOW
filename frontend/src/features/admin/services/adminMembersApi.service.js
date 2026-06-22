@@ -7,6 +7,9 @@ const adminMembersApiService = {
   toggleStatus(id) {
     return api.patch(`/admin/members/${id}/status`);
   },
+  updateRole(id, role) {
+    return api.patch(`/admin/members/${id}/role`, { role });
+  },
   promote(id) {
     return api.patch(`/admin/members/${id}/promote`);
   },

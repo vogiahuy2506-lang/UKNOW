@@ -392,6 +392,23 @@ class ChatbotRepository {
     return rows[0]?.count || 0;
   }
 
+  async findFirstActiveByUser(userId) {
+    const { rows } = await db.query(
+      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+              avatar_url, is_active, theme_color, position, welcome_message,
+              primary_color, background_color, text_color, accent_color,
+              logo_url, show_avatar, border_radius, chat_height,
+              suggested_questions, widget_key,
+              created_at, updated_at
+       FROM custom_chatbots
+       WHERE id_user = $1 AND is_active = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+    return rows[0] || null;
+  }
+
   async createChatbot(userId, data) {
     const { rows } = await db.query(
       `INSERT INTO custom_chatbots

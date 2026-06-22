@@ -508,11 +508,18 @@ class ZaloPersonalInboxService {
       }
 
       // Merge settings: account-specific settings override global settings
-      const mergedSettings = {
+      // Priority: per-account system_instruction > linked chatbot's system_instruction > main chatbot settings
+      let mergedSettings = {
         ...chatbotSettings,
         ...accountSettings,
         // Preserve is_enabled checks above (don't override)
       };
+
+      // If per-account system_instruction is empty, try to get from linked chatbot (id_chatbot)
+      if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
+        mergedSettings.system_instruction = accountSettings.chatbot_system_instruction;
+        console.log(`[ZaloInbox] Using system_instruction from linked chatbot ${accountSettings.id_chatbot}`);
+      }
 
       // Get AI response using chatRouterService
       console.log(`[ZaloInbox] AI routing message from ${senderId}...`);

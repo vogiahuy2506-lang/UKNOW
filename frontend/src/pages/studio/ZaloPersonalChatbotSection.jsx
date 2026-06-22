@@ -239,6 +239,7 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSa
     ai_model: settings?.ai_model || 'gemini-2.5-flash',
     temperature: settings?.temperature || 0.7,
     response_style: settings?.response_style || 'friendly',
+    system_instruction: settings?.system_instruction || '',
   });
 
   useEffect(() => {
@@ -249,6 +250,7 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSa
       ai_model: settings?.ai_model || 'gemini-2.5-flash',
       temperature: settings?.temperature || 0.7,
       response_style: settings?.response_style || 'friendly',
+      system_instruction: settings?.system_instruction || '',
     });
   }, [settings]);
 
@@ -389,6 +391,21 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSa
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* System Instruction */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Hướng dẫn AI tùy chỉnh
+            </label>
+            <textarea
+              value={form.system_instruction || ''}
+              onChange={(e) => setForm(f => ({ ...f, system_instruction: e.target.value }))}
+              rows={4}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 resize-none"
+              placeholder="VD: Bạn là trợ lý ảo thân thiện của công ty ABC, chuyên tư vấn về sản phẩm..."
+            />
+            <p className="text-xs text-gray-400 mt-1">Dùng chung với system prompt của AI Chatbot chính. Để trống để sử dụng prompt mặc định.</p>
           </div>
 
           {/* Actions */}

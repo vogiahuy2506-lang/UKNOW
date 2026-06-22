@@ -1,5 +1,5 @@
 import express from 'express';
-import { param } from 'express-validator';
+import { param, body } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/authorization.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
@@ -16,6 +16,15 @@ router.patch('/:id/status',
   [param('id').isInt({ min: 1 })],
   handleValidationErrors,
   ctrl.toggleStatus
+);
+
+router.patch('/:id/role',
+  [
+    param('id').isInt({ min: 1 }),
+    body('role').isIn(['user', 'admin']),
+  ],
+  handleValidationErrors,
+  ctrl.updateRole
 );
 
 router.patch('/:id/promote',

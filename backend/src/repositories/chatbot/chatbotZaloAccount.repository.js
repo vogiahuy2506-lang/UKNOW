@@ -9,9 +9,11 @@ class ChatbotZaloAccountRepository {
    */
   async getSettings(userId, zaloSettingId) {
     const { rows } = await db.query(
-      `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg
+      `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg,
+              cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction
        FROM chatbot_zalo_account_settings czs
        LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
+       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
        WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2`,
       [userId, zaloSettingId]
     );
@@ -25,14 +27,17 @@ class ChatbotZaloAccountRepository {
    */
   async getAllSettingsForUser(userId) {
     const { rows } = await db.query(
-      `SELECT czs.*, 
+      `SELECT czs.*,
               zs.display_name AS zalo_display_name,
               zs.status AS zalo_status,
               zs.is_active AS zalo_is_active,
-              sa.name AS sub_assistant_name
+              sa.name AS sub_assistant_name,
+              cb.name AS chatbot_name,
+              cb.system_instruction AS chatbot_system_instruction
        FROM chatbot_zalo_account_settings czs
        JOIN zalo_settings zs ON zs.id = czs.id_zalo_setting
        LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
+       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
        WHERE czs.id_user = $1
        ORDER BY czs.created_at DESC`,
       [userId]
@@ -51,8 +56,9 @@ class ChatbotZaloAccountRepository {
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, is_enabled, id_sub_assistant, welcome_message,
-          ai_model, temperature, max_tokens, response_style, system_instruction, settings)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ai_model, temperature, max_tokens, response_style, system_instruction, settings,
+          id_chatbot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (id_user, id_zalo_setting) DO UPDATE SET
          is_enabled = EXCLUDED.is_enabled,
          id_sub_assistant = EXCLUDED.id_sub_assistant,
@@ -63,6 +69,7 @@ class ChatbotZaloAccountRepository {
          response_style = EXCLUDED.response_style,
          system_instruction = EXCLUDED.system_instruction,
          settings = EXCLUDED.settings,
+         id_chatbot = EXCLUDED.id_chatbot,
          updated_at = NOW()
        RETURNING *`,
       [
@@ -77,6 +84,7 @@ class ChatbotZaloAccountRepository {
         data.response_style || 'friendly',
         data.system_instruction || null,
         JSON.stringify(data.settings || {}),
+        data.id_chatbot || null,
       ]
     );
     return rows[0];
