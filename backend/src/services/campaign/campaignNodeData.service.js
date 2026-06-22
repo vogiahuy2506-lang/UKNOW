@@ -204,6 +204,35 @@ class CampaignNodeDataService {
         return applyDataColumnSelectionToItems(courseRows, config.dataSelectedColumns, 'courses_db');
       }
 
+      case 'read_products_db': {
+        const selectedProductIds = Array.isArray(config.productsDbSelectedIds)
+          ? config.productsDbSelectedIds.map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id))
+          : [];
+
+        if (selectedProductIds.length === 0) {
+          return emptyResult('products_db');
+        }
+
+        const rawLimit = Number.isFinite(parseInt(config.productsDbLimit, 10))
+          ? parseInt(config.productsDbLimit, 10)
+          : 1000;
+        const limit = Math.max(1, Math.min(rawLimit, 5000));
+        const searchTerm = String(config.productsDbSearchTerm || '').trim();
+        const selectedStatuses = (Array.isArray(config.productsDbStatuses) ? config.productsDbStatuses : [])
+          .map((item) => String(item || '').trim().toLowerCase())
+          .filter((item, idx, arr) => item && arr.indexOf(item) === idx);
+
+        const productRows = await campaignNodeDataRepository.findProductsById(
+          selectedProductIds,
+          searchTerm,
+          selectedStatuses,
+          limit,
+          userId
+        );
+
+        return applyDataColumnSelectionToItems(productRows, config.dataSelectedColumns, 'products_db');
+      }
+
       case 'manual_upload':
         return emptyResult('sheet');
 

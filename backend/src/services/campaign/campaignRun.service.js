@@ -945,6 +945,10 @@ class CampaignRunService {
           const courseId = row.id ?? row.courseId ?? row.course_code ?? row.courseCode;
           if (courseId != null && String(courseId).trim()) return `course:${String(courseId).trim()}`;
         }
+        if (subtype === 'read_products_db') {
+          const productId = row.id ?? row.productId ?? row.product_code ?? row.productCode;
+          if (productId != null && String(productId).trim()) return `product:${String(productId).trim()}`;
+        }
         if (subtype === 'get_all_friends') {
           const uid = row.uid ?? row.zalo_id ?? row.zaloId ?? row.id;
           if (uid != null && String(uid).trim()) return `friend_uid:${String(uid).trim()}`;
@@ -2626,6 +2630,7 @@ class CampaignRunService {
           'read_interested_customers',
           'interested_customers',
           'read_courses_db',
+          'read_products_db',
           'read_landing_leads',
           'save_customer',
           'customer_segment',
@@ -2787,7 +2792,7 @@ class CampaignRunService {
               continue;
             }
 
-        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_landing_leads'].includes(nodeSubtype)) {
+        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_products_db', 'read_landing_leads'].includes(nodeSubtype)) {
           const nodeDataPack = await executeWithTimeoutRetry({
             operationName: `data_node_${nodeSubtype || 'read_data'}`,
             operation: () => campaignNodeDataService.getCustomersFromDataNode(node, userId, nodes),

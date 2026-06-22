@@ -103,7 +103,7 @@ class AiCampaignDraftService {
                  ['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
         nodeType = 'condition';
       } else if (['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet',
-                  'read_landing_leads', 'read_courses_db'].includes(nodeSubtype)) {
+                  'read_landing_leads', 'read_courses_db', 'read_products_db'].includes(nodeSubtype)) {
         nodeType = nodeSubtype;
       } else if (nodeType === 'data') {
         if (['interested_customers', 'read_interested_customers'].includes(nodeSubtype)) {

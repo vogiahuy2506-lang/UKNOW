@@ -189,6 +189,10 @@ export const createNodeConfigFormData = ({
   coursesDbLimit: config.coursesDbLimit || 1000,
   coursesDbStatuses: Array.isArray(config.coursesDbStatuses) ? config.coursesDbStatuses : [],
   coursesDbSelectedIds: Array.isArray(config.coursesDbSelectedIds) ? config.coursesDbSelectedIds : [],
+  productsDbSearchTerm: config.productsDbSearchTerm || '',
+  productsDbLimit: config.productsDbLimit || 1000,
+  productsDbStatuses: Array.isArray(config.productsDbStatuses) ? config.productsDbStatuses : [],
+  productsDbSelectedIds: Array.isArray(config.productsDbSelectedIds) ? config.productsDbSelectedIds : [],
   mappingTemplateId: config.mappingTemplateId || '',
   mappings: config.mappings || [{ variableName: '', sourceType: 'column', columnName: '', formula: '' }],
   saveCustomerNodeId: config.saveCustomerNodeId || '',
@@ -427,6 +431,45 @@ export const handleNodeCoursesPreviewLoad = async ({
 };
 
 /**
+ * Load product preview list for `read_products_db` node configuration.
+ */
+export const handleNodeProductsPreviewLoad = async ({
+  formData,
+  setIsLoadingProductsPreview,
+  setProductsPreviewItems,
+  toastNotifier,
+}) => {
+  try {
+    setIsLoadingProductsPreview(true);
+    const selectedStatuses = (Array.isArray(formData?.productsDbStatuses) ? formData.productsDbStatuses : [])
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter((item, idx, arr) => item && arr.indexOf(item) === idx);
+    const params = {
+      limit: Math.min(formData?.productsDbLimit || 1000, 100),
+      page: 1,
+    };
+    if (formData?.productsDbSearchTerm) {
+      params.search = formData.productsDbSearchTerm;
+    }
+    if (selectedStatuses.length > 0) {
+      params.status = selectedStatuses.join(',');
+    }
+
+    const response = await campaignBuilderApiService.getProducts(params);
+    const products = response.data?.data?.products || [];
+    setProductsPreviewItems(products);
+    toastNotifier.success(`Đã tải ${products.length} sản phẩm`);
+  } catch (error) {
+    console.error('Load products preview error:', error);
+    const msg = error.response?.data?.message || error.message || 'Không thể tải danh sách sản phẩm';
+    toastNotifier.error(typeof msg === 'string' ? msg : 'Không thể tải danh sách sản phẩm');
+    setProductsPreviewItems([]);
+  } finally {
+    setIsLoadingProductsPreview(false);
+  }
+};
+
+/**
  * Select a mapping template and build variable mappings.
  *
  * @param {Object} params action params
@@ -521,6 +564,11 @@ export const handleNodeConfigSaveClick = async ({
   }
 
   if (nodeType === 'read_courses_db') {
+    onSave(formData);
+    return;
+  }
+
+  if (nodeType === 'read_products_db') {
     onSave(formData);
     return;
   }

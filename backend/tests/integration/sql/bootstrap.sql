@@ -590,6 +590,24 @@ CREATE INDEX idx_courses_user       ON courses(id_user);
 CREATE INDEX idx_courses_code       ON courses(course_code);
 CREATE INDEX idx_courses_product_id ON courses(product_id);
 
+-- ─── Products (user-managed) ─────────────────────────────────────────
+CREATE TABLE products (
+  id              SERIAL PRIMARY KEY,
+  id_user         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  product_code    VARCHAR(100),
+  product_name    VARCHAR(255) NOT NULL,
+  price           VARCHAR(100),
+  original_price  VARCHAR(100),
+  description     TEXT,
+  usp             TEXT,
+  category        VARCHAR(255),
+  thumbnail_url   TEXT,
+  status          VARCHAR(50) DEFAULT 'active',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_products_id_user ON products(id_user);
+
 -- ─── Email messages — outbound emails (tracking ready) ─────────────────
 CREATE TABLE email_messages (
   id                      BIGSERIAL PRIMARY KEY,

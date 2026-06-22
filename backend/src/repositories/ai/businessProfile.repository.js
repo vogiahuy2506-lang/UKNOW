@@ -30,7 +30,6 @@ class BusinessProfileRepository {
        ON CONFLICT (user_id) DO UPDATE SET
          company_name    = EXCLUDED.company_name,
          industry        = EXCLUDED.industry,
-         products        = EXCLUDED.products,
          target_audience = EXCLUDED.target_audience,
          tone            = EXCLUDED.tone,
          brand_color     = EXCLUDED.brand_color,
@@ -38,7 +37,7 @@ class BusinessProfileRepository {
          extra_context   = EXCLUDED.extra_context,
          updated_at      = NOW()
        RETURNING *`,
-      [userId, company_name, industry, products, target_audience, tone, brand_color, logo_url || null, extra_context]
+      [userId, company_name, industry, products ?? '[]', target_audience, tone, brand_color, logo_url || null, extra_context]
     );
     return rows[0];
   }

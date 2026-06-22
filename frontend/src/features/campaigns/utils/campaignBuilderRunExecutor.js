@@ -406,6 +406,13 @@ const buildNodeSuccessValidation = (nodeType, result) => {
       message: `Lấy khóa học đã chọn thành công (${fetched} khóa học)`,
     };
   }
+  if (nodeType === 'read_products_db') {
+    const fetched = result?.output?.meta?.fetched || 0;
+    return {
+      status: 'success',
+      message: `Lấy sản phẩm đã chọn thành công (${fetched} sản phẩm)`,
+    };
+  }
   if (nodeType === 'read_landing_leads') {
     const fetched = result?.output?.meta?.fetched || 0;
     const total = result?.output?.meta?.totalItems ?? fetched;
@@ -499,7 +506,9 @@ const getNodeFailureMessage = (nodeType, error) => (
       ? 'Không thể lấy dữ liệu khách'
       : nodeType === 'read_courses_db'
         ? 'Không thể lấy dữ liệu khóa học'
-        : nodeType === 'read_landing_leads'
+        : nodeType === 'read_products_db'
+          ? 'Không thể lấy dữ liệu sản phẩm'
+          : nodeType === 'read_landing_leads'
           ? 'Không thể lấy dữ liệu landing page'
           : nodeType === 'get_all_friends'
             ? 'Không thể lấy danh sách bạn bè Zalo'

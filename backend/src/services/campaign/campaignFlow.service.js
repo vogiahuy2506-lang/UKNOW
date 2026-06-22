@@ -46,6 +46,7 @@ class CampaignFlowService {
       return `Lấy khách để lại thông tin thành công (${fetched}/${total})`;
     }
     if (nodeSubtype === 'read_courses_db') return `Lấy khóa học đã chọn thành công (${fetched} khóa học)`;
+    if (nodeSubtype === 'read_products_db') return `Lấy sản phẩm đã chọn thành công (${fetched} sản phẩm)`;
     if (nodeSubtype === 'read_landing_leads') {
       return `Lấy dữ liệu landing page thành công (${fetched} lead)`;
     }

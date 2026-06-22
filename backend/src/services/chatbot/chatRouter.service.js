@@ -59,10 +59,7 @@ class ChatRouterService {
     // 5. Get business profile as fallback context
     let profileContext = '';
     try {
-      const profile = await businessProfileService.getProfile(userId);
-      if (profile) {
-        profileContext = businessProfileService.formatProfileForPrompt(profile);
-      }
+      profileContext = await businessProfileService.getFormattedProfileForPrompt(userId);
     } catch (e) {
       console.warn('[ChatRouter] No business profile context:', e.message);
     }
@@ -145,10 +142,7 @@ class ChatRouterService {
     // Get business profile as fallback context
     let profileContext = '';
     try {
-      const profile = await businessProfileService.getProfile(userId);
-      if (profile) {
-        profileContext = businessProfileService.formatProfileForPrompt(profile);
-      }
+      profileContext = await businessProfileService.getFormattedProfileForPrompt(userId);
     } catch (e) {
       console.warn('[ChatRouter] No business profile context:', e.message);
     }

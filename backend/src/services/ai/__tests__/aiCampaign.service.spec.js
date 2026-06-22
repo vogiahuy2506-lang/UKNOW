@@ -21,7 +21,9 @@ jest.unstable_mockModule('../businessProfile.service.js', () => ({
     getProfile: jest.fn(),
     getContextForPrompt: jest.fn(),
     formatProfileForPrompt: jest.fn(() => ''),
+    getFormattedProfileForPrompt: jest.fn(() => Promise.resolve('')),
   },
+  serializeProductList: jest.fn(() => ''),
 }));
 
 jest.unstable_mockModule('../adminContext.service.js', () => ({

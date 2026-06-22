@@ -25,6 +25,7 @@ import trackingShortLinkRoutes from './routes/trackingShortLink.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
+import productsRoutes from './routes/products.routes.js';
 import zaloSettingsRoutes from './routes/zaloSettings.routes.js';
 import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 import publicRoutes from './routes/public.routes.js';
@@ -145,6 +146,7 @@ export function createApp() {
   app.use('/t', trackingShortLinkRoutes);
   app.use('/api/webhooks', webhookLimiter, webhookRoutes);
   app.use('/api/courses', coursesRoutes);
+  app.use('/api/products', productsRoutes);
   app.use('/api/zalo', zaloSettingsRoutes);
   app.use('/api/zalo-templates', zaloTemplateRoutes);
   app.use('/api/public', publicRoutes);

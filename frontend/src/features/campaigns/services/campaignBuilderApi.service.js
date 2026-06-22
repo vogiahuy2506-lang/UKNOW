@@ -47,6 +47,10 @@ const campaignBuilderApiService = {
     return api.get('/courses', { params, ...options });
   },
 
+  getProducts(params = {}, options = {}) {
+    return api.get('/products', { params, ...options });
+  },
+
   /**
    * Preview lead landing (GET /api/leads/preview) — dùng cho node read_landing_leads trong Builder.
    *

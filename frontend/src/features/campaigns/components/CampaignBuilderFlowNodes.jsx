@@ -1,7 +1,7 @@
 import { useState } from 'react';
 /* eslint-disable react-refresh/only-export-components -- nodeConfigs registry exported alongside node UI */
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
-import { HiOutlineAdjustments, HiOutlineChat, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineAdjustments, HiOutlineChat, HiOutlineCube, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 const NODE_CARD_CONTAINER_CLASS =
@@ -100,6 +100,14 @@ export function getNodeConfigs(t) {
         bgColor: '#FFF3E0',
         iconColor: '#E65100',
         description: t('campaignNodes.readCoursesDesc'),
+      },
+      {
+        type: 'read_products_db',
+        name: t('campaignNodes.readProducts'),
+        icon: HiOutlineCube,
+        bgColor: '#F3E5F5',
+        iconColor: '#7B1FA2',
+        description: t('campaignNodes.readProductsDesc'),
       },
       {
         type: 'read_interested_customers',
@@ -261,6 +269,16 @@ export const nodeConfigs = {
       iconColor: '#E65100',
       description: 'Get courses data from database',
       descriptionVi: 'Lấy dữ liệu khóa học từ database',
+    },
+    {
+      type: 'read_products_db',
+      name: 'Read Products Data',
+      nameVi: 'Đọc dữ liệu sản phẩm',
+      icon: HiOutlineCube,
+      bgColor: '#F3E5F5',
+      iconColor: '#7B1FA2',
+      description: 'Get products data from database',
+      descriptionVi: 'Lấy dữ liệu sản phẩm từ database',
     },
     {
       type: 'read_interested_customers',

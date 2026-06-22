@@ -13,6 +13,7 @@ import {
   handleNodeConfigSaveClick,
   handleMappingTemplateSelect as handleMappingTemplateSelectHelper,
   handleNodeCoursesPreviewLoad,
+  handleNodeProductsPreviewLoad,
   handleNodeSheetConnectionCheck,
   normalizeTemplateVariables,
 } from '../utils/nodeConfigModal.helpers';
@@ -37,6 +38,7 @@ import {
 } from './NodeConfigModalSendZaloSection';
 import {
   NodeConfigReadCoursesDbSection,
+  NodeConfigReadProductsDbSection,
   NodeConfigReadInterestedCustomersSection,
   NodeConfigReadSheetSection,
 } from './NodeConfigModalReadSections';
@@ -80,6 +82,7 @@ const NodeConfigModal = ({
   const [selectedReadSheetSection, setSelectedReadSheetSection] = useState('basic');
   const [selectedReadInterestedCustomersSection, setSelectedReadInterestedCustomersSection] = useState('basic');
   const [selectedReadCoursesDbSection, setSelectedReadCoursesDbSection] = useState('basic');
+  const [selectedReadProductsDbSection, setSelectedReadProductsDbSection] = useState('basic');
   const [selectedZaloPersonalSection, setSelectedZaloPersonalSection] = useState('basic');
   const [selectedZaloGroupSection, setSelectedZaloGroupSection] = useState('basic');
   const [testPreviewItems, setTestPreviewItems] = useState([]);
@@ -87,6 +90,8 @@ const NodeConfigModal = ({
   const [testPreviewSearchQuery, setTestPreviewSearchQuery] = useState('');
   const [coursesPreviewItems, setCoursesPreviewItems] = useState([]);
   const [isLoadingCoursesPreview, setIsLoadingCoursesPreview] = useState(false);
+  const [productsPreviewItems, setProductsPreviewItems] = useState([]);
+  const [isLoadingProductsPreview, setIsLoadingProductsPreview] = useState(false);
   const [zaloAccounts, setZaloAccounts] = useState([]);
   const [zaloFriendTemplate, setZaloFriendTemplate] = useState(null);
 
@@ -105,6 +110,15 @@ const NodeConfigModal = ({
       formData,
       setIsLoadingCoursesPreview,
       setCoursesPreviewItems,
+      toastNotifier: toast,
+    });
+  };
+
+  const handleLoadProductsPreview = async () => {
+    await handleNodeProductsPreviewLoad({
+      formData,
+      setIsLoadingProductsPreview,
+      setProductsPreviewItems,
       toastNotifier: toast,
     });
   };
@@ -509,6 +523,18 @@ const NodeConfigModal = ({
             handleLoadCoursesPreview={handleLoadCoursesPreview}
             isLoadingCoursesPreview={isLoadingCoursesPreview}
             coursesPreviewItems={coursesPreviewItems}
+          />
+        );
+      case 'read_products_db':
+        return (
+          <NodeConfigReadProductsDbSection
+            formData={formData}
+            setFormData={setFormData}
+            selectedReadProductsDbSection={selectedReadProductsDbSection}
+            setSelectedReadProductsDbSection={setSelectedReadProductsDbSection}
+            handleLoadProductsPreview={handleLoadProductsPreview}
+            isLoadingProductsPreview={isLoadingProductsPreview}
+            productsPreviewItems={productsPreviewItems}
           />
         );
       case 'read_landing_leads':

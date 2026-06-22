@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { isSuperAdmin } from '../../utils/roleScope.util.js';
 
 class CampaignNodeDataRepository {
   /**
@@ -42,6 +43,59 @@ class CampaignNodeDataRepository {
        FROM courses c
        ${whereClause}
        ORDER BY c.id DESC
+       LIMIT $${paramIdx}`,
+      queryParams
+    );
+    return result.rows;
+  }
+
+  /**
+   * Fetch products matching the given IDs, with optional search/status filters.
+   *
+   * @param {number[]} selectedProductIds
+   * @param {string} searchTerm
+   * @param {string[]} selectedStatuses
+   * @param {number} limit
+   * @returns {Promise<object[]>}
+   */
+  async findProductsById(selectedProductIds, searchTerm, selectedStatuses, limit, userId, role = null) {
+    const queryParams = [selectedProductIds];
+    let paramIdx = 2;
+    let whereClause = 'WHERE p.id = ANY($1)';
+    if (!isSuperAdmin(role) && userId != null) {
+      whereClause += ` AND p.id_user = $${paramIdx}`;
+      queryParams.push(userId);
+      paramIdx += 1;
+    }
+    if (searchTerm) {
+      whereClause += ` AND (p.product_name ILIKE $${paramIdx} OR p.product_code ILIKE $${paramIdx})`;
+      queryParams.push(`%${searchTerm}%`);
+      paramIdx += 1;
+    }
+    if (selectedStatuses.length > 0) {
+      whereClause += ` AND p.status = ANY($${paramIdx})`;
+      queryParams.push(selectedStatuses);
+      paramIdx += 1;
+    }
+    queryParams.push(limit);
+
+    const result = await db.query(
+      `SELECT
+         p.id,
+         p.product_code AS "productCode",
+         p.product_name AS "productName",
+         p.price,
+         p.original_price AS "originalPrice",
+         p.status,
+         p.description,
+         p.usp,
+         p.category,
+         p.thumbnail_url AS "thumbnailUrl",
+         p.created_at AS "createdAt",
+         p.updated_at AS "updatedAt"
+       FROM products p
+       ${whereClause}
+       ORDER BY p.id DESC
        LIMIT $${paramIdx}`,
       queryParams
     );

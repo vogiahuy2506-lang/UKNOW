@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import {
   HiOutlineSparkles, HiOutlineSave, HiOutlineRefresh,
   HiOutlinePlus, HiOutlineTrash, HiOutlineChevronDown, HiOutlineChevronUp,
-  HiOutlineOfficeBuilding, HiOutlineCube, HiOutlineUserGroup, HiOutlineColorSwatch,
+  HiOutlineOfficeBuilding, HiOutlineUserGroup, HiOutlineColorSwatch,
   HiOutlineDocumentText, HiOutlinePhotograph, HiOutlineUpload,
+  HiOutlineArrowRight,
 } from 'react-icons/hi';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import businessProfileApiService from '../../features/settings/services/businessProfileApi.service';
@@ -17,13 +19,11 @@ import businessProfileApiService from '../../features/settings/services/business
   { value: 'inspiring',    label: t('businessProfile.inspiring') },
 ];
 
-const EMPTY_PRODUCT = () => ({ name: '', price: '', description: '', usp: '' });
 const EMPTY_SEGMENT = () => ({ name: '', description: '', painPoint: '' });
 
 const EMPTY_FORM = {
   company_name:    '',
   industry:        '',
-  products:        [],
   target_audience: [],
   tone:            'professional',
   brand_color:     '#FF6B35',
@@ -59,77 +59,6 @@ const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' 
       <div className="p-5">
         {children}
       </div>
-    </div>
-  );
-};
-
-// ── ProductList ───────────────────────────────────────────────────────────────
-const ProductList = ({ products, onChange }) => {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState({});
-
-  const add = () => {
-    const next = [...products, EMPTY_PRODUCT()];
-    onChange(next);
-    setExpanded(prev => ({ ...prev, [next.length - 1]: true }));
-  };
-  const remove = (i) => onChange(products.filter((_, idx) => idx !== i));
-  const update = (i, field, val) => onChange(products.map((p, idx) => idx === i ? { ...p, [field]: val } : p));
-  const toggle = (i) => setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
-
-  return (
-    <div className="space-y-2">
-      {products.map((p, i) => (
-        <div key={i} className="border border-slate-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 cursor-pointer select-none" onClick={() => toggle(i)}>
-            <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold flex items-center justify-center shrink-0">
-              {i + 1}
-            </span>
-            <span className="flex-1 text-sm font-medium text-slate-700 truncate">
-              {p.name || `${t('businessProfile.productName')} ${i + 1}`}
-              {p.price && <span className="ml-2 text-xs text-slate-400 font-normal">{p.price}</span>}
-            </span>
-            <button type="button" onClick={(e) => { e.stopPropagation(); remove(i); }}
-              className="p-1 text-slate-400 hover:text-red-500 transition-colors">
-              <HiOutlineTrash className="w-3.5 h-3.5" />
-            </button>
-            {expanded[i] ? <HiOutlineChevronUp className="w-4 h-4 text-slate-400" /> : <HiOutlineChevronDown className="w-4 h-4 text-slate-400" />}
-          </div>
-          {expanded[i] && (
-            <div className="p-3 grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.productName')} *</label>
-                <input type="text" value={p.name} onChange={e => update(i, 'name', e.target.value)}
-                  placeholder={t('businessProfile.productNamePlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.price')}</label>
-                <input type="text" value={p.price} onChange={e => update(i, 'price', e.target.value)}
-                  placeholder={t('businessProfile.pricePlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.shortDescription')}</label>
-                <input type="text" value={p.description} onChange={e => update(i, 'description', e.target.value)}
-                  placeholder={t('businessProfile.shortDescriptionPlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.usp')}</label>
-                <input type="text" value={p.usp} onChange={e => update(i, 'usp', e.target.value)}
-                  placeholder={t('businessProfile.uspPlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-      <button type="button" onClick={add}
-        className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-orange-400 hover:text-orange-500 transition-all">
-        <HiOutlinePlus className="w-4 h-4" />
-        {t('businessProfile.addProduct')}
-      </button>
     </div>
   );
 };
@@ -222,7 +151,6 @@ const BusinessProfilePage = () => {
         setForm({
           company_name:    res.data.company_name    || '',
           industry:        res.data.industry        || '',
-          products:        parseArrayField(res.data.products),
           target_audience: parseArrayField(res.data.target_audience),
           tone:            res.data.tone            || 'professional',
           brand_color:     res.data.brand_color     || '#FF6B35',
@@ -397,15 +325,17 @@ const BusinessProfilePage = () => {
             onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }} />
         </SectionCard>
 
-        {/* Sản phẩm / dịch vụ */}
-        <SectionCard
-          icon={HiOutlineCube}
-          title={t('businessProfile.products')}
-          subtitle={t('businessProfile.productsSubtitle')}
-          accent="orange"
-        >
-          <ProductList products={form.products} onChange={v => set('products', v)} />
-        </SectionCard>
+        {/* Sản phẩm / dịch vụ — quản lý tại trang Sản phẩm */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <p className="text-sm text-slate-600">{t('businessProfile.productsMovedHint')}</p>
+          <Link
+            to="/app/products"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700"
+          >
+            {t('businessProfile.manageProductsLink')}
+            <HiOutlineArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
 
         {/* Khách hàng mục tiêu */}
         <SectionCard

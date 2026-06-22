@@ -19,6 +19,7 @@ import {
   HiOutlineLockClosed,
   HiOutlineUserCircle,
   HiOutlineAcademicCap,
+  HiOutlineCube,
   HiOutlineX,
   HiOutlineClipboardList,
   HiOutlineUserGroup,
@@ -129,10 +130,11 @@ const userMenuItems = (t) => [
     icon: HiOutlineCog,
     children: [
       { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
+      { name: t('nav.myProducts'), path: '/app/products', icon: HiOutlineCube, ownerOnly: true },
       { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlineSparkles, ownerOnly: true },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.productManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
+      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
     ],
   },
   {

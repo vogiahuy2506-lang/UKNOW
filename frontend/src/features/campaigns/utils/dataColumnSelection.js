@@ -8,6 +8,7 @@ const ALWAYS_KEEP_BY_KIND = {
   interested: ['customerId', 'id'],
   landing: ['leadId', 'id'],
   courses_db: [],
+  products_db: [],
 };
 
 /**

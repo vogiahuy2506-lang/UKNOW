@@ -1,5 +1,6 @@
 import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
-import businessProfileService from './businessProfile.service.js';
+import businessProfileService, { serializeProductList } from './businessProfile.service.js';
+import productRepository from '../../repositories/products/product.repository.js';
 import { buildAdminContext } from './adminContext.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
@@ -147,7 +148,8 @@ class AiCampaignService {
       if (!profile) return 'mixed';
 
       const industry = String(profile.industry || '').toLowerCase();
-      const products = String(profile.products || '').toLowerCase();
+      const productRows = await productRepository.findAllByUser(userId);
+      const products = serializeProductList(productRows).toLowerCase();
       const targetAudience = String(profile.target_audience || '').toLowerCase();
 
       // Heuristics để gợi ý campaign type phù hợp
@@ -696,8 +698,7 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
     // Luôn dùng full profile để AI thấy tất cả sản phẩm/thông tin mới nhất
     if (userId) {
       try {
-        const profile = await businessProfileService.getProfile(userId);
-        contextBlock = businessProfileService.formatProfileForPrompt(profile);
+        contextBlock = await businessProfileService.getFormattedProfileForPrompt(userId);
       } catch (e) {
         console.warn('[AI] Không lấy được business profile:', e.message);
       }
@@ -1454,8 +1455,7 @@ ${templateSelectionPrompt}
         }
         if (!contextBlock) {
           try {
-            const profile = await businessProfileService.getProfile(userId);
-            contextBlock = businessProfileService.formatProfileForPrompt(profile);
+            contextBlock = await businessProfileService.getFormattedProfileForPrompt(userId);
           } catch (e) {
             console.warn('[AI V2] Không lấy được business profile:', e.message);
           }

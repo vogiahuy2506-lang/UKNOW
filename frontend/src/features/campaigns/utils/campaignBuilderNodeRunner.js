@@ -786,6 +786,63 @@ export const createCampaignNodeRunner = (deps) => {
       };
     }
 
+    if (nodeType === 'read_products_db') {
+      const selectedProductIds = Array.isArray(config.productsDbSelectedIds)
+        ? config.productsDbSelectedIds.map((itemId) => parseInt(itemId, 10)).filter((itemId) => Number.isFinite(itemId))
+        : [];
+      const selectedStatuses = (Array.isArray(config.productsDbStatuses) ? config.productsDbStatuses : [])
+        .map((item) => String(item || '').trim().toLowerCase())
+        .filter((item, idx, arr) => item && arr.indexOf(item) === idx);
+
+      if (selectedProductIds.length === 0) {
+        throw new Error('Chưa chọn sản phẩm');
+      }
+
+      const params = {
+        limit: Math.min(config.productsDbLimit || 1000, 100),
+        page: 1,
+      };
+
+      if (config.productsDbSearchTerm) {
+        params.search = config.productsDbSearchTerm;
+      }
+      if (selectedStatuses.length > 0) {
+        params.status = selectedStatuses.join(',');
+      }
+
+      const response = await apiService.getProducts(params, { signal });
+      let products = response.data?.data?.products || [];
+
+      products = products.filter((product) => {
+        const productId = parseInt(product.id, 10);
+        return selectedProductIds.includes(productId);
+      });
+
+      ctx.productsRows = products;
+
+      return {
+        input: {
+          operation: 'Get Products from Database',
+          searchTerm: config.productsDbSearchTerm || '',
+          limit: config.productsDbLimit || 1000,
+          statuses: selectedStatuses,
+          selectedProductIds,
+        },
+        output: {
+          ok: true,
+          items: products,
+          schema: buildSchemaFromRows(products),
+          meta: {
+            totalItems: response.data?.data?.pagination?.total || products.length,
+            fetched: products.length,
+            limit: config.productsDbLimit || 1000,
+            statuses: selectedStatuses,
+            filtered: selectedProductIds.length > 0,
+          },
+        },
+      };
+    }
+
     if (nodeType === 'read_landing_leads') {
       const limit = clampLandingLeadsLimitUi(config.landingLeadsLimit, 1000);
       const occ = normalizeLandingLeadsConfigArray(config.landingLeadsOccupations);

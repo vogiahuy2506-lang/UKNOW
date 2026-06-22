@@ -34,6 +34,7 @@ import InboxOutboxPage from './pages/settings/InboxOutboxPage';
 import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
+import Products from './pages/products/Products';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
@@ -289,6 +290,7 @@ function App() {
 
             {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
             <Route path="courses" element={<Courses />} />
+            <Route path="products" element={<OwnerRoute><Products /></OwnerRoute>} />
             <Route path="orders" element={<OwnerRoute><Orders /></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
           </Route>

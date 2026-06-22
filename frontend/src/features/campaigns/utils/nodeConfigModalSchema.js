@@ -64,6 +64,23 @@ export const getSchemaForNodeId = ({ nodeId, runLogMap = {}, nodes = [], buildSc
     ];
   }
 
+  if (nodeType === 'read_products_db') {
+    return [
+      { key: 'id', type: 'number' },
+      { key: 'productCode', type: 'string' },
+      { key: 'productName', type: 'string' },
+      { key: 'price', type: 'string' },
+      { key: 'originalPrice', type: 'string' },
+      { key: 'status', type: 'string' },
+      { key: 'description', type: 'string' },
+      { key: 'usp', type: 'string' },
+      { key: 'category', type: 'string' },
+      { key: 'thumbnailUrl', type: 'string' },
+      { key: 'createdAt', type: 'string' },
+      { key: 'updatedAt', type: 'string' },
+    ];
+  }
+
   if (nodeType === 'read_landing_leads') {
     return [
       { key: 'leadId', type: 'number' },

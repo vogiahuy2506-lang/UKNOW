@@ -184,6 +184,17 @@ export const validateNodeForRun = (node) => {
     }
   }
 
+  if (nodeType === 'read_products_db') {
+    const limit = parseInt(config.productsDbLimit, 10);
+    if (Number.isFinite(limit) && limit < 1) {
+      return { status: 'failed', message: 'Số bản ghi tối đa không hợp lệ' };
+    }
+    const selectedIds = Array.isArray(config.productsDbSelectedIds) ? config.productsDbSelectedIds : [];
+    if (selectedIds.length === 0) {
+      return { status: 'failed', message: 'Chưa chọn sản phẩm' };
+    }
+  }
+
   if (nodeType === 'read_landing_leads') {
     const limit = parseInt(config.landingLeadsLimit, 10);
     if (Number.isFinite(limit) && limit < 1) {
