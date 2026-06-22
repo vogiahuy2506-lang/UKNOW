@@ -368,6 +368,7 @@ const AdminMembersPage = () => {
               <thead>
                 <tr>
                   <th>{t('adminMembers.table.member')}</th>
+                  <th>{t('adminMembers.table.role')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
                   <th>{t('adminMembers.table.employees')}</th>
                   <th>{t('adminMembers.table.status')}</th>
@@ -389,17 +390,13 @@ const AdminMembersPage = () => {
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
-                              {isAdminView && (
-                                <span className="inline-flex shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                                  {t('adminMembers.roleBadgeAdmin')}
-                                </span>
-                              )}
-                            </div>
+                            <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
                             <p className="text-xs text-gray-400 truncate">{m.email}</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="text-sm text-gray-600">
+                        {isAdminView ? t('adminMembers.roleBadgeAdmin') : t('adminMembers.roleFilterUser')}
                       </td>
                       <td>
                         {m.planName

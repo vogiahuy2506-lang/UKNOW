@@ -1274,6 +1274,7 @@ export default {
     },
     table: {
       member: 'Member',
+      role: 'Role',
       servicePlan: 'Service Plan',
       employees: 'Employees',
       status: 'Status',
