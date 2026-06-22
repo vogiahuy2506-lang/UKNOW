@@ -2204,6 +2204,12 @@ export default {
     senderInfoSubtitle: 'Tên hiển thị và email reply-to',
     smtpConfig: 'Cấu hình SMTP',
     smtpConfigSubtitle: 'Thông tin server SMTP riêng',
+    platformPrefix: 'Email prefix',
+    platformPrefixPlaceholder: 'VD: no-reply',
+    platformPrefixHint: 'Tiền tố trước domain (VD: no-reply sẽ thành no-reply@domain.com). Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang.',
+    platformPrefixRequired: 'Email prefix là bắt buộc',
+    platformPrefixInvalid: 'Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang',
+    platformPrefixTooLong: 'Tối đa 50 ký tự',
 
   },
 

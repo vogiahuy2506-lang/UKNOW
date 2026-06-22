@@ -233,6 +233,7 @@ CREATE TABLE email_settings (
   smtp_username    VARCHAR(255),
   smtp_password    TEXT,
   email_mode       TEXT         NOT NULL DEFAULT 'platform',
+  platform_prefix  VARCHAR(50)  NOT NULL DEFAULT 'no-reply',
   use_tls          BOOLEAN      NOT NULL DEFAULT TRUE,
   daily_limit      INTEGER      NOT NULL DEFAULT 1000,
   hourly_limit     INTEGER      NOT NULL DEFAULT 100,

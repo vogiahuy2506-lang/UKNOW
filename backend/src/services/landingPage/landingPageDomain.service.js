@@ -386,12 +386,14 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async verifyDns(landingPageId, authUser) {
-    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, normalizeAuthScope(authUser));
+    const scope = normalizeAuthScope(authUser);
+    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, scope);
     if (!row) {
       const err = new Error('Chưa cấu hình tên miền cho landing này');
       err.statusCode = 404;
       throw err;
     }
+    console.log(`[LandingPageDomainService.verifyDns] landingPageId=${landingPageId}, hostname=${row.hostname}, status=${row.status}, cfManaged=${row.cfManaged}, userId=${authUser?.id}`);
 
     // CF-managed domain đã active ngay từ lúc tạo
     if (row.cfManaged && row.status === 'active') {
@@ -405,6 +407,7 @@ class LandingPageDomainService {
     const expectedTarget = cnameTarget();
     const dnsStatus = await checkCnameStatus(row.hostname, expectedTarget);
     const ok = dnsStatus.verified;
+    console.log(`[LandingPageDomainService.verifyDns] expectedTarget=${expectedTarget}, reason=${dnsStatus.reason}, found=${(dnsStatus.found || []).join(',')}, ok=${ok}`);
 
     if (!ok) {
       const err = new Error(buildDnsVerificationErrorMessage(dnsStatus, row.hostname, expectedTarget));

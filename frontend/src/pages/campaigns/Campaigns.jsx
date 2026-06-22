@@ -250,7 +250,7 @@ const Campaigns = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('campaigns.searchPlaceholder')}
-                className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
+                className="flex-1 min-w-0 py-2 pr-3 border-0 bg-white focus:ring-0 focus:outline-none"
               />
             </div>
           </form>
