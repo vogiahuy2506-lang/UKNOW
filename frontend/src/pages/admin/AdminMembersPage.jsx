@@ -184,7 +184,6 @@ const AdminMembersPage = () => {
   const [isPromoting, setIsPromoting]     = useState(false);
   const [isDemoting, setIsDemoting]       = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
-  const [roleUpdatingId, setRoleUpdatingId]   = useState(null);
 
   const fetchMembers = async (overrides = {}) => {
     setIsLoading(true);
@@ -262,24 +261,6 @@ const AdminMembersPage = () => {
       toast.error(err?.response?.data?.message || t('adminMembers.demoteFailed'));
     } finally {
       setIsDemoting(false);
-    }
-  };
-
-  const handleRoleChange = async (member, newRole) => {
-    if (member.role === 'super_admin') {
-      toast.error('Không thể thay đổi role của Super Admin');
-      return;
-    }
-    if (member.role === newRole) return;
-    try {
-      setRoleUpdatingId(member.id);
-      const res = await adminMembersApiService.updateRole(member.id, newRole);
-      toast.success(res.data.message);
-      fetchMembers();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Cập nhật role thất bại');
-    } finally {
-      setRoleUpdatingId(null);
     }
   };
 
@@ -387,7 +368,7 @@ const AdminMembersPage = () => {
               <thead>
                 <tr>
                   <th>{t('adminMembers.table.member')}</th>
-                  <th>{t('adminMembers.table.role') || 'Role'}</th>
+                  <th>{t('adminMembers.table.role')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
                   <th>{t('adminMembers.table.employees')}</th>
                   <th>{t('adminMembers.table.status')}</th>
@@ -409,36 +390,13 @@ const AdminMembersPage = () => {
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
-                              {isAdminView && (
-                                <span className="inline-flex shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                                  {t('adminMembers.roleBadgeAdmin')}
-                                </span>
-                              )}
-                            </div>
+                            <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
                             <p className="text-xs text-gray-400 truncate">{m.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td>
-                        {m.role === 'super_admin' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 border border-purple-200">
-                            <HiOutlineShieldCheck className="w-3 h-3" />
-                            Super Admin
-                          </span>
-                        ) : roleUpdatingId === m.id ? (
-                          <div className="spinner w-5 h-5" />
-                        ) : (
-                          <select
-                            value={m.role}
-                            onChange={(e) => handleRoleChange(m, e.target.value)}
-                            className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer"
-                          >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        )}
+                      <td className="text-sm text-gray-600">
+                        {isAdminView ? t('adminMembers.roleBadgeAdmin') : t('adminMembers.roleFilterUser')}
                       </td>
                       <td>
                         {m.planName

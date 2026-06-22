@@ -1283,6 +1283,7 @@ export default {
     },
     table: {
       member: 'Thành viên',
+      role: 'Vai trò',
       servicePlan: 'Gói dịch vụ',
       employees: 'Nhân viên',
       status: 'Trạng thái',
