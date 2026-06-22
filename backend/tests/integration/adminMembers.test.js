@@ -383,3 +383,98 @@ describe('PATCH /api/admin/members/:id/promote — promote to super_admin', () =
     expect(res.status).toBe(400);
   });
 });
+
+describe('PATCH /api/admin/members/:id/demote — demote super_admin to user', () => {
+  it('admin → user thành công (verify DB role=user)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'admin', username: 'sa2', email: 'sa2@test.local' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/demote`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.role).toBe('user');
+    expect(res.body.message).toContain('sa2@test.local');
+
+    const { rows } = await db.query('SELECT role FROM users WHERE id = $1', [target.id]);
+    expect(rows[0].role).toBe('user');
+  });
+
+  it('400 khi target không phải admin (role=user)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const user = await createUser({ role: 'user', username: 'regular' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${user.id}/demote`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('super admin');
+  });
+
+  it('400 khi tự hạ chính mình', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${admin.id}/demote`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('chính mình');
+  });
+
+  it('400 khi chỉ còn 1 admin (guardrail admin cuối cùng)', async () => {
+    const soleAdmin = await createUser({ role: 'admin', username: 'sole' });
+    const { demoteFromSuperAdmin } = await import('../../src/services/admin/adminMembers.service.js');
+
+    await expect(
+      demoteFromSuperAdmin(soleAdmin.id, 999999)
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('cuối cùng'),
+    });
+  });
+
+  it('403 khi caller không phải admin', async () => {
+    const target = await createUser({ role: 'admin', username: 'sa2' });
+    const regular = await createUser({ role: 'user', username: 'caller' });
+    const callerToken = await loginAs(regular);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/demote`)
+      .set('Authorization', `Bearer ${callerToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('404 khi không tìm thấy', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch('/api/admin/members/999999/demote')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/admin/members?role=admin — admin listing', () => {
+  it('role=admin trả về đúng danh sách admin', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    await createUser({ role: 'admin', username: 'sa2', email: 'sa2@test.local' });
+    await createUser({ role: 'user', username: 'cust1', email: 'cust1@test.local' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/members?role=admin')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(2);
+    const usernames = res.body.data.map((m) => m.username).sort();
+    expect(usernames).toContain('sa');
+    expect(usernames).toContain('sa2');
+    expect(usernames).not.toContain('cust1');
+  });
+});

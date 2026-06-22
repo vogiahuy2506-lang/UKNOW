@@ -15,11 +15,12 @@ const Tooltip = ({ label, children }) => (
 );
 import {
   HiOutlineRefresh, HiOutlineSearch,
-  HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck,
+  HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
   HiOutlineCurrencyDollar,
 } from 'react-icons/hi';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
+import { useAuthStore } from '../../stores/authStore';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
@@ -163,6 +164,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AdminMembersPage = () => {
   const { t } = useI18n();
+  const { user: currentUser } = useAuthStore();
   const [members, setMembers]     = useState([]);
   const [plans, setPlans]         = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -172,18 +174,23 @@ const AdminMembersPage = () => {
   const [planFilter, setPlanFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [expiryFilter, setExpiryFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('user');
 
 
   // Modals
   const [assignMember, setAssignMember]   = useState(null);
   const [promoteConfirm, setPromoteConfirm] = useState(null);
+  const [demoteConfirm, setDemoteConfirm] = useState(null);
   const [isPromoting, setIsPromoting]     = useState(false);
+  const [isDemoting, setIsDemoting]       = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
-  const fetchMembers = async () => {
+  const fetchMembers = async (overrides = {}) => {
     setIsLoading(true);
     try {
       const params = {};
+      const role = overrides.role ?? roleFilter;
+      if (role) params.role = role;
       if (search)       params.search = search;
       if (planFilter)   params.planId = planFilter;
       if (statusFilter) params.status = statusFilter;
@@ -243,6 +250,26 @@ const AdminMembersPage = () => {
     }
   };
 
+  const handleDemote = async () => {
+    try {
+      setIsDemoting(true);
+      const res = await adminMembersApiService.demote(demoteConfirm.id);
+      toast.success(res.data.message);
+      setDemoteConfirm(null);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminMembers.demoteFailed'));
+    } finally {
+      setIsDemoting(false);
+    }
+  };
+
+  const handleRoleFilterChange = (role) => {
+    setRoleFilter(role);
+    fetchMembers({ role });
+  };
+
+  const isAdminView = roleFilter === 'admin';
 
   return (
     <div className="space-y-6">
@@ -261,6 +288,30 @@ const AdminMembersPage = () => {
       {/* Filters — 1 hàng */}
       <div className="card p-3">
         <form onSubmit={handleSearch} className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={() => handleRoleFilterChange('user')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                roleFilter === 'user'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {t('adminMembers.roleFilterUser')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRoleFilterChange('admin')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-300 ${
+                roleFilter === 'admin'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {t('adminMembers.roleFilterAdmin')}
+            </button>
+          </div>
           <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 bg-white px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
             <HiOutlineSearch className="w-4 h-4 text-gray-400 shrink-0" />
             <input
@@ -338,7 +389,14 @@ const AdminMembersPage = () => {
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
+                              {isAdminView && (
+                                <span className="inline-flex shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                  {t('adminMembers.roleBadgeAdmin')}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400 truncate">{m.email}</p>
                           </div>
                         </div>
@@ -387,15 +445,29 @@ const AdminMembersPage = () => {
                             </button>
                           </Tooltip>
 
-                          {/* Nâng Super Admin */}
-                          <Tooltip label={t('adminMembers.promoteToAdmin')}>
-                            <button
-                              onClick={() => setPromoteConfirm(m)}
-                              className="p-2 rounded hover:bg-purple-50 transition-colors text-gray-400 hover:text-purple-600"
-                            >
-                              <HiOutlineShieldCheck className="w-5 h-5" />
-                            </button>
-                          </Tooltip>
+                          {/* Nâng Super Admin — chỉ hiện ở tab Người dùng */}
+                          {!isAdminView && (
+                            <Tooltip label={t('adminMembers.promoteToAdmin')}>
+                              <button
+                                onClick={() => setPromoteConfirm(m)}
+                                className="p-2 rounded hover:bg-purple-50 transition-colors text-gray-400 hover:text-purple-600"
+                              >
+                                <HiOutlineShieldCheck className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
+
+                          {/* Hạ quyền — chỉ hiện ở tab Admin, ẩn với chính mình */}
+                          {isAdminView && m.id !== currentUser?.id && (
+                            <Tooltip label={t('adminMembers.demote')}>
+                              <button
+                                onClick={() => setDemoteConfirm(m)}
+                                className="p-2 rounded hover:bg-orange-50 transition-colors text-gray-400 hover:text-orange-600"
+                              >
+                                <HiOutlineShieldExclamation className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -449,6 +521,33 @@ const AdminMembersPage = () => {
           </div>
         </div>,
         () => { if (!isPromoting) setPromoteConfirm(null); }
+      )}
+
+      {/* Modal confirm hạ super_admin */}
+      {demoteConfirm && renderModal(
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+              <HiOutlineShieldExclamation className="w-5 h-5 text-orange-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.demoteTitle')}</h2>
+          </div>
+          <p className="text-sm text-gray-600">
+            {t('adminMembers.demoteWarning')} <strong>{demoteConfirm.fullName || demoteConfirm.username}</strong> ({demoteConfirm.email}) {t('adminMembers.demoteToUserLevel')}
+          </p>
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" className="btn btn-secondary" onClick={() => setDemoteConfirm(null)} disabled={isDemoting}>{t('common.cancel')}</button>
+            <button
+              type="button"
+              className="btn btn-primary bg-orange-600 hover:bg-orange-700 border-orange-600"
+              onClick={handleDemote}
+              disabled={isDemoting}
+            >
+              {isDemoting ? t('adminMembers.demoting') : t('adminMembers.demoteConfirmBtn')}
+            </button>
+          </div>
+        </div>,
+        () => { if (!isDemoting) setDemoteConfirm(null); }
       )}
     </div>
   );

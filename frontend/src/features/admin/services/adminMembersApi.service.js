@@ -10,6 +10,9 @@ const adminMembersApiService = {
   promote(id) {
     return api.patch(`/admin/members/${id}/promote`);
   },
+  demote(id) {
+    return api.patch(`/admin/members/${id}/demote`);
+  },
 };
 
 export default adminMembersApiService;

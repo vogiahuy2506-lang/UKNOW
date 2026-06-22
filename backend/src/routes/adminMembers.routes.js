@@ -24,4 +24,10 @@ router.patch('/:id/promote',
   ctrl.promote
 );
 
+router.patch('/:id/demote',
+  [param('id').isInt({ min: 1 })],
+  handleValidationErrors,
+  ctrl.demote
+);
+
 export default router;

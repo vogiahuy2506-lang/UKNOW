@@ -4,8 +4,9 @@ import db from '../../config/database.js';
  * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
-export async function findAllMembers({ search, planId, status, expiry } = {}) {
-  const conditions = [`u.role = 'user'`];
+export async function findAllMembers({ search, planId, status, expiry, role = 'user' } = {}) {
+  const safeRole = role === 'admin' ? 'admin' : 'user';
+  const conditions = [`u.role = '${safeRole}'`];
   const params = [];
 
   if (search) {
@@ -96,4 +97,20 @@ export async function promoteMemberToSuperAdmin(id) {
     [id]
   );
   return rows[0] || null;
+}
+
+export async function demoteMemberFromSuperAdmin(id) {
+  const { rows } = await db.query(
+    `UPDATE users SET role = 'user', updated_at = NOW() WHERE id = $1 AND role = 'admin'
+     RETURNING id, username, email, role`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+export async function countAdmins() {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS total FROM users WHERE role = 'admin'`
+  );
+  return rows[0]?.total ?? 0;
 }
