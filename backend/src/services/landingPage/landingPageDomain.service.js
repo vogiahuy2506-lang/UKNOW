@@ -83,6 +83,93 @@ function cnameTarget() {
   return String(process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
 }
 
+function flattenDnsRecords(records = []) {
+  return (Array.isArray(records) ? records : [])
+    .flatMap((record) => (Array.isArray(record) ? record : [record]))
+    .map((record) => String(record || '').trim().replace(/\.$/, '').toLowerCase())
+    .filter(Boolean);
+}
+
+function getNsLookupHintDomain(hostname) {
+  const labels = String(hostname || '').trim().toLowerCase().split('.').filter(Boolean);
+  if (labels.length <= 2) return labels.join('.');
+  return labels.slice(1).join('.');
+}
+
+async function hasMatchingARecord(hostname, target) {
+  try {
+    const [hostnameIps, targetIps] = await Promise.all([
+      dns.resolve4(hostname),
+      dns.resolve4(target),
+    ]);
+    const targetSet = new Set(flattenDnsRecords(targetIps));
+    return flattenDnsRecords(hostnameIps).some((ip) => targetSet.has(ip));
+  } catch {
+    return false;
+  }
+}
+
+export async function checkCnameStatus(hostname, target) {
+  const h = String(hostname || '').trim().toLowerCase();
+  const expected = String(target || '').trim().replace(/\.$/, '').toLowerCase();
+
+  try {
+    const cnameRecords = await dns.resolve(h, 'CNAME');
+    const found = flattenDnsRecords(cnameRecords);
+    const verified = found.some((cname) => cname === expected);
+    return {
+      verified,
+      reason: verified ? 'ok' : 'wrong_target',
+      found,
+    };
+  } catch (error) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    if (code === 'ENOTFOUND') {
+      return { verified: false, reason: 'not_found', found: [] };
+    }
+
+    if (code === 'ENODATA') {
+      const verifiedByARecord = await hasMatchingARecord(h, expected);
+      return {
+        verified: verifiedByARecord,
+        reason: verifiedByARecord ? 'ok' : 'no_cname',
+        found: [],
+      };
+    }
+
+    return {
+      verified: false,
+      reason: 'transient',
+      found: [],
+    };
+  }
+}
+
+export function buildDnsVerificationErrorMessage(status, hostname, target) {
+  const reason = status?.reason || 'transient';
+  const found = Array.isArray(status?.found) ? status.found : [];
+
+  if (reason === 'not_found') {
+    const nsHint = getNsLookupHintDomain(hostname);
+    return `${hostname} chưa tồn tại trong DNS công khai. Kiểm tra: `
+      + `(1) bản ghi đã thêm đúng nhà cung cấp đang giữ nameserver của domain chưa? `
+      + `(Tra bằng: dig NS ${nsHint}) `
+      + `(2) trường Name chỉ điền phần subdomain, ví dụ "giahuy", không điền full domain.`;
+  }
+
+  if (reason === 'no_cname') {
+    return `${hostname} có tồn tại nhưng không có bản ghi CNAME. `
+      + `Nếu đây là domain gốc (apex) thì không thể dùng CNAME theo chuẩn DNS; `
+      + `hãy dùng subdomain như www/lp trỏ CNAME về ${target}, hoặc trỏ A record về cùng IP với ${target}.`;
+  }
+
+  if (reason === 'wrong_target') {
+    return `CNAME chưa đúng. Cần trỏ về: ${target}\nHiện tại: ${found.join(', ') || 'không có'}`;
+  }
+
+  return `Đang chờ DNS propagate cho ${hostname}, vui lòng thử lại sau vài phút.`;
+}
+
 function subdomainBase() {
   return String(process.env.LP_SUBDOMAIN_BASE || 'founderai.biz').trim();
 }
@@ -263,15 +350,8 @@ class LandingPageDomainService {
     // --- Mode 2: Manual CNAME verification tự động ---
     // CNAME target là founderai.biz (không phải verify.founderai.biz)
     const target = cnameTarget();
-    let isVerified = false;
-
-    try {
-      const cnameRecords = await dns.resolve(h, 'CNAME');
-      const flat = cnameRecords.map((arr) => arr.join('')).map((c) => c.toLowerCase());
-      isVerified = flat.some((cname) => cname === target.toLowerCase());
-    } catch {
-      // DNS chưa propagate hoặc chưa có CNAME → sẽ pending
-    }
+    const dnsStatus = await checkCnameStatus(h, target);
+    const isVerified = dnsStatus.verified;
 
     const status = isVerified ? 'active' : 'pending_verification';
     try {
@@ -322,26 +402,12 @@ class LandingPageDomainService {
       return buildDomainResponse(row);
     }
 
-    // Resolve CNAME record để verify
-    let cnameRecords = [];
-    try {
-      cnameRecords = await dns.resolve(row.hostname, 'CNAME');
-    } catch {
-      const err = new Error(
-        `Chưa đọc được CNAME cho ${row.hostname}. Kiểm tra DNS đã lưu và chờ propagate (có thể vài phút đến vài giờ).`
-      );
-      err.statusCode = 400;
-      throw err;
-    }
-
     const expectedTarget = cnameTarget();
-    const flat = cnameRecords.map((arr) => arr.join(''));
-    const ok = flat.some((cname) => cname.toLowerCase() === expectedTarget.toLowerCase());
+    const dnsStatus = await checkCnameStatus(row.hostname, expectedTarget);
+    const ok = dnsStatus.verified;
 
     if (!ok) {
-      const err = new Error(
-        `CNAME chưa đúng. Cần trỏ về: ${expectedTarget}\nHiện tại: ${flat.join(', ') || 'không có'}`
-      );
+      const err = new Error(buildDnsVerificationErrorMessage(dnsStatus, row.hostname, expectedTarget));
       err.statusCode = 400;
       throw err;
     }
@@ -470,19 +536,8 @@ class LandingPageDomainService {
         // Skip CF-managed domains
         if (domain.cfManaged) continue;
 
-        let cnameRecords = [];
-        try {
-          cnameRecords = await dns.resolve(domain.hostname, 'CNAME');
-        } catch {
-          // DNS chưa propagate - bỏ qua, sẽ thử lại lần sau
-          failed++;
-          continue;
-        }
-
-        const flat = cnameRecords.map((arr) => arr.join('')).map((c) => c.toLowerCase());
-        const ok = flat.some((cname) => cname === target.toLowerCase());
-
-        if (ok) {
+        const dnsStatus = await checkCnameStatus(domain.hostname, target);
+        if (dnsStatus.verified) {
           await landingPageDomainRepository.updateStatusById(domain.id, 'active');
           await getClearCacheFn();
           console.log(`[LandingPageDomainService] Auto-verified: ${domain.hostname}`);
