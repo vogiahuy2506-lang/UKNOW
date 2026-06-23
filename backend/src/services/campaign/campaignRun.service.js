@@ -19,6 +19,10 @@ import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import zaloMessageRepository from '../../repositories/campaign/zaloMessage.repository.js';
+import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
+import customerMutationRepository from '../../repositories/customer/customerMutation.repository.js';
+import customerZaloTrackingRepository from '../../repositories/customer/customerZaloTracking.repository.js';
+import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.repository.js';
 import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
 
 class CampaignRunService {
@@ -417,38 +421,25 @@ class CampaignRunService {
       await client.query('BEGIN');
       const isAdmin = isAdminRole(roleCode);
 
-      const campaignParams = [campaignId];
-      let campaignQuery = `SELECT id, id_user, status, campaign_name
-       FROM campaigns
-       WHERE id = $1`;
-      if (!isAdmin) {
-        campaignParams.push(userId);
-        campaignQuery += ` AND id_user = $${campaignParams.length}`;
-      }
-      campaignQuery += ' FOR UPDATE';
-      const campaign = await client.query(campaignQuery, campaignParams);
+      const campaignData = await campaignRunRepository.findCampaignForRunTx(client, {
+        campaignId,
+        isAdmin,
+        userId,
+      });
 
-      if (campaign.rows.length === 0) {
+      if (!campaignData) {
         const error = new Error('Không tìm thấy chiến dịch');
         error.statusCode = 404;
         throw error;
       }
 
-      const campaignData = campaign.rows[0];
       if (campaignData.status !== 'active') {
         const error = new Error('Chỉ có thể chạy chiến dịch đang hoạt động');
         error.statusCode = 400;
         throw error;
       }
 
-      const runningCheck = await client.query(
-        `SELECT id
-         FROM campaign_runs
-         WHERE id_campaign = $1 AND status = 'running'
-         LIMIT 1`,
-        [campaignId]
-      );
-      if (runningCheck.rows.length > 0) {
+      if (await campaignRunRepository.hasActiveRunForCampaignTx(client, campaignId)) {
         const error = new Error('Chiến dịch này đã có lượt chạy đang hoạt động');
         error.statusCode = 409;
         throw error;
@@ -470,18 +461,13 @@ class CampaignRunService {
         ? rawResumeFromRunId
         : null;
       if (continuousMode && resumeFromRunId !== null) {
-        const resumeRunCheck = await client.query(
-          `SELECT cr.id
-           FROM campaign_runs cr
-           JOIN campaigns c ON c.id = cr.id_campaign
-           WHERE cr.id = $1
-             AND cr.id_campaign = $2
-             AND ($3::boolean = TRUE OR c.id_user = $4)
-             AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
-           LIMIT 1`,
-          [resumeFromRunId, campaignId, isAdmin, userId]
-        );
-        if (resumeRunCheck.rows.length === 0) {
+        const resumeRunCheck = await campaignRunRepository.findResumeSourceRunTx(client, {
+          resumeFromRunId,
+          campaignId,
+          isAdmin,
+          userId,
+        });
+        if (!resumeRunCheck) {
           const error = new Error('Lượt continuous cũ để chạy tiếp không hợp lệ');
           error.statusCode = 400;
           throw error;
@@ -500,16 +486,15 @@ class CampaignRunService {
         ...(continuousMode && resumeFromRunId !== null ? { resumeFromRunId } : {}),
       };
 
-      const runResult = await client.query(
-        `INSERT INTO campaign_runs
-         (id_campaign, id_schedule, run_type, status, started_at, run_metadata)
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
-         RETURNING *`,
-        [campaignId, scheduleId, runType, 'running', JSON.stringify(runMetadata)]
-      );
+      const runResult = await campaignRunRepository.insertRunTx(client, {
+        campaignId,
+        scheduleId,
+        runType,
+        runMetadata,
+      });
 
       runRecord = {
-        ...runResult.rows[0],
+        ...runResult,
         campaign_owner_id: campaignData.id_user,
       };
       await client.query('COMMIT');
@@ -584,23 +569,17 @@ class CampaignRunService {
       await client.query('BEGIN');
       const isAdmin = isAdminRole(roleCode);
 
-      const runResult = await client.query(
-        `SELECT cr.*, c.id_user
-         FROM campaign_runs cr
-         JOIN campaigns c ON c.id = cr.id_campaign
-         WHERE cr.id = $1
-           AND cr.id_campaign = $2
-           AND ($3::boolean = TRUE OR c.id_user = $4)
-         FOR UPDATE`,
-        [runId, campaignId, isAdmin, userId]
-      );
-      if (runResult.rows.length === 0) {
+      const currentRun = await campaignRunRepository.findRunForContinuousResumeTx(client, {
+        runId,
+        campaignId,
+        isAdmin,
+        userId,
+      });
+      if (!currentRun) {
         const error = new Error('Không tìm thấy lượt continuous cũ để chạy tiếp');
         error.statusCode = 404;
         throw error;
       }
-
-      const currentRun = runResult.rows[0];
       const isContinuousRun = String(currentRun?.run_metadata?.continuousMode || '').trim().toLowerCase() === 'true'
         || currentRun?.run_metadata?.continuousMode === true;
       if (!isContinuousRun) {
@@ -614,16 +593,7 @@ class CampaignRunService {
         throw error;
       }
 
-      const runningOtherRun = await client.query(
-        `SELECT id
-         FROM campaign_runs
-         WHERE id_campaign = $1
-           AND status = 'running'
-           AND id <> $2
-         LIMIT 1`,
-        [campaignId, runId]
-      );
-      if (runningOtherRun.rows.length > 0) {
+      if (await campaignRunRepository.hasOtherActiveRunForCampaignTx(client, campaignId, runId)) {
         const error = new Error('Chiến dịch này đã có lượt chạy khác đang hoạt động');
         error.statusCode = 409;
         throw error;
@@ -654,21 +624,14 @@ class CampaignRunService {
       // Resume chính run cũ nên không cần fallback sang run khác.
       delete mergedMetadata.resumeFromRunId;
 
-      const updatedRunResult = await client.query(
-        `UPDATE campaign_runs
-         SET status = 'running',
-             started_at = CURRENT_TIMESTAMP,
-             completed_at = NULL,
-             error_message = NULL,
-             run_metadata = $1::jsonb
-         WHERE id = $2
-         RETURNING *`,
-        [JSON.stringify(mergedMetadata), runId]
-      );
+      const updatedRun = await campaignRunRepository.resumeContinuousRunTx(client, {
+        runId,
+        runMetadata: mergedMetadata,
+      });
 
       await client.query('COMMIT');
       return {
-        ...updatedRunResult.rows[0],
+        ...updatedRun,
         campaign_owner_id: currentRun.id_user || null,
       };
     } catch (error) {
@@ -1746,8 +1709,11 @@ class CampaignRunService {
         return variables;
       };
 
-      const campaignResult = await db.query('SELECT * FROM campaigns WHERE id = $1', [campaignId]);
-      const campaign = campaignResult.rows[0];
+      const campaign = await campaignCrudRepository.findCampaignById({
+        campaignId,
+        isAdmin: true,
+        userId: null,
+      });
       /** Có node gửi Zalo cá nhân đa tài khoản → runtime bỏ qua lấy danh sách bạn bè. */
       const flowJsonHasZaloPersonalMulti = campaignFlowService.flowJsonHasZaloPersonalMultiAccount(
         campaign?.flow_json
@@ -2035,68 +2001,36 @@ class CampaignRunService {
         const normalizedUid = String(uid || '').trim();
         const rowEmail = extractEmailFromEntryRow(entryRow);
         const rowFullName = extractFullNameFromEntryRow(entryRow);
-        const existingCustomerResult = await db.query(
-          `SELECT id
-           FROM customers
-           WHERE id_user = $1
-             AND (phone = $2 OR zalo_phone = $2)
-           ORDER BY id ASC
-           LIMIT 1`,
-          [userId, normalizedPhone]
+        const existingCustomerIdRaw = await customerMutationRepository.findZaloFriendCustomerByPhone(
+          userId,
+          normalizedPhone
         );
-        const existingCustomerId = Number.parseInt(existingCustomerResult.rows[0]?.id, 10);
+        const existingCustomerId = Number.parseInt(existingCustomerIdRaw, 10);
 
         if (Number.isFinite(existingCustomerId)) {
-          await db.query(
-            `UPDATE customers
-             SET
-               phone = COALESCE(NULLIF($1, ''), phone),
-               zalo_phone = COALESCE(NULLIF($2, ''), zalo_phone),
-               zalo_id = COALESCE(NULLIF($3, ''), zalo_id),
-               full_name = COALESCE(NULLIF($4, ''), full_name),
-               email = COALESCE(NULLIF($5, ''), email),
-               customer_source = COALESCE(customer_source, 'uknow_campaign'),
-               zalo_is_friend = TRUE,
-               zalo_friend_added_at = COALESCE(zalo_friend_added_at, CURRENT_TIMESTAMP),
-               updated_at = CURRENT_TIMESTAMP
-             WHERE id = $6
-               AND id_user = $7`,
-            [
-              normalizedPhone,
-              normalizedPhone,
-              normalizedUid,
-              rowFullName,
-              rowEmail,
-              existingCustomerId,
-              userId,
-            ]
-          );
+          await customerMutationRepository.updateZaloFriendCustomerByPhone({
+            userId,
+            customerId: existingCustomerId,
+            phone: normalizedPhone,
+            uid: normalizedUid,
+            fullName: rowFullName,
+            email: rowEmail,
+          });
           return {
             customerId: existingCustomerId,
             action: 'updated',
           };
         }
 
-        const insertedCustomerResult = await db.query(
-          `INSERT INTO customers
-             (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source,
-              zalo_is_friend, zalo_friend_added_at, created_at, updated_at)
-           VALUES
-             ($1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7,
-              TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-           RETURNING id`,
-          [
-            userId,
-            rowEmail,
-            normalizedPhone,
-            normalizedUid,
-            normalizedPhone,
-            rowFullName,
-            'uknow_campaign',
-          ]
-        );
+        const insertedCustomerId = await customerMutationRepository.insertZaloFriendCustomer({
+          userId,
+          email: rowEmail,
+          phone: normalizedPhone,
+          uid: normalizedUid,
+          fullName: rowFullName,
+        });
         return {
-          customerId: Number.parseInt(insertedCustomerResult.rows[0]?.id, 10) || null,
+          customerId: Number.parseInt(insertedCustomerId, 10) || null,
           action: 'created',
         };
       };
@@ -2125,48 +2059,30 @@ class CampaignRunService {
 
         // Fast path: customer is known – update zalo_id if missing
         if (Number.isFinite(parsedCustomerId)) {
-          await db.query(
-            `UPDATE customers
-             SET zalo_id = COALESCE(NULLIF(zalo_id, ''), $1),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
-               AND id_user = $3
-               AND (zalo_id IS NULL OR zalo_id = '')`,
-            [normalizedUid, parsedCustomerId, targetUserId]
+          await customerMutationRepository.updateCustomerZaloUidIfEmpty(
+            targetUserId,
+            parsedCustomerId,
+            normalizedUid
           );
           return;
         }
 
-        // Slow path: look up customer by UID or phone
-        const findResult = await db.query(
-          `SELECT id FROM customers
-           WHERE id_user = $1
-             AND (zalo_id = $2 OR (phone = $3 AND $3 <> '') OR (zalo_phone = $3 AND $3 <> ''))
-           ORDER BY id ASC
-           LIMIT 1`,
-          [targetUserId, normalizedUid, normalizedPhone || '__no_phone__']
+        const foundId = await customerMutationRepository.findCustomerByUidOrPhone(
+          targetUserId,
+          normalizedUid,
+          normalizedPhone || '__no_phone__'
         );
 
-        if (findResult.rows.length > 0) {
-          const foundId = findResult.rows[0].id;
-          await db.query(
-            `UPDATE customers
-             SET zalo_id = COALESCE(NULLIF(zalo_id, ''), $1),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2`,
-            [normalizedUid, foundId]
-          );
+        if (foundId) {
+          await customerMutationRepository.updateCustomerZaloUid(foundId, normalizedUid);
           return;
         }
 
-        // No customer found – create minimal record using phone + uid
         if (normalizedPhone) {
-          await db.query(
-            `INSERT INTO customers
-               (id_user, phone, zalo_id, zalo_phone, customer_source, created_at, updated_at)
-             VALUES ($1, $2, $3, $2, 'uknow_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT DO NOTHING`,
-            [targetUserId, normalizedPhone, normalizedUid]
+          await customerMutationRepository.insertMinimalCustomerByPhoneUid(
+            targetUserId,
+            normalizedPhone,
+            normalizedUid
           );
         }
       };
@@ -2215,111 +2131,56 @@ class CampaignRunService {
            * Điều này chặn trường hợp upstream truyền nhầm id của bảng trung gian
            * (vd: customer_purchases.id) khiến journey/execution bị gắn sai khách.
            */
-          const verifiedCustomerResult = await db.query(
-            `SELECT id
-             FROM customers
-             WHERE id = $1
-               AND id_user = $2
-             LIMIT 1`,
-            [parsedCustomerId, targetUserId]
+          const verifiedCustomerIdRaw = await customerMutationRepository.findOwnedCustomerId(
+            targetUserId,
+            parsedCustomerId
           );
-          const verifiedCustomerId = Number.parseInt(verifiedCustomerResult.rows[0]?.id, 10);
+          const verifiedCustomerId = Number.parseInt(verifiedCustomerIdRaw, 10);
           if (!Number.isFinite(verifiedCustomerId)) {
             // Không return sớm: tiếp tục fallback theo UID/phone/email để tìm đúng customer.
           } else {
-            await db.query(
-            `UPDATE customers
-             SET
-               full_name = COALESCE(NULLIF($1, ''), full_name),
-               email = COALESCE(NULLIF($2, ''), email),
-               phone = COALESCE(NULLIF($3, ''), phone),
-               zalo_phone = COALESCE(NULLIF($4, ''), zalo_phone),
-               zalo_id = COALESCE(NULLIF($5, ''), zalo_id),
-               customer_source = COALESCE(customer_source, 'uknow_campaign'),
-               utm_source = COALESCE(utm_source, $6),
-               updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
-               AND id_user = $8`,
-              [
-                rowFullName,
-                rowEmail,
-                normalizedPhone,
-                normalizedPhone,
-                normalizedUid,
-                UTM_SOURCE_BY_ZALO_CHANNEL.personal,
-                verifiedCustomerId,
-                targetUserId,
-              ]
-            );
+            await customerMutationRepository.updateZaloPersonalEnsuredCustomer({
+              userId: targetUserId,
+              customerId: verifiedCustomerId,
+              fullName: rowFullName,
+              email: rowEmail,
+              phone: normalizedPhone,
+              uid: normalizedUid,
+              utmSource: UTM_SOURCE_BY_ZALO_CHANNEL.personal,
+            });
             return verifiedCustomerId;
           }
         }
 
-        const existingCustomerResult = await db.query(
-          `SELECT id
-           FROM customers
-           WHERE id_user = $1
-             AND (
-               ($2 <> '' AND zalo_id = $2)
-               OR ($3 <> '' AND (phone = $3 OR zalo_phone = $3))
-               OR ($4 <> '' AND LOWER(email) = LOWER($4))
-             )
-           ORDER BY id ASC
-           LIMIT 1`,
-          [
-            targetUserId,
-            normalizedUid,
-            normalizedPhone,
-            rowEmail,
-          ]
+        const existingCustomerIdRaw = await customerMutationRepository.findZaloPersonalCustomerByIdentifiers(
+          targetUserId,
+          normalizedUid,
+          normalizedPhone,
+          rowEmail
         );
-        const existingCustomerId = Number.parseInt(existingCustomerResult.rows[0]?.id, 10);
+        const existingCustomerId = Number.parseInt(existingCustomerIdRaw, 10);
         if (Number.isFinite(existingCustomerId)) {
-          await db.query(
-            `UPDATE customers
-             SET
-               full_name = COALESCE(NULLIF($1, ''), full_name),
-               email = COALESCE(NULLIF($2, ''), email),
-               phone = COALESCE(NULLIF($3, ''), phone),
-               zalo_phone = COALESCE(NULLIF($4, ''), zalo_phone),
-               zalo_id = COALESCE(NULLIF($5, ''), zalo_id),
-               customer_source = COALESCE(customer_source, 'uknow_campaign'),
-               utm_source = COALESCE(utm_source, $6),
-               updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
-               AND id_user = $8`,
-            [
-              rowFullName,
-              rowEmail,
-              normalizedPhone,
-              normalizedPhone,
-              normalizedUid,
-              UTM_SOURCE_BY_ZALO_CHANNEL.personal,
-              existingCustomerId,
-              targetUserId,
-            ]
-          );
+          await customerMutationRepository.updateZaloPersonalEnsuredCustomer({
+            userId: targetUserId,
+            customerId: existingCustomerId,
+            fullName: rowFullName,
+            email: rowEmail,
+            phone: normalizedPhone,
+            uid: normalizedUid,
+            utmSource: UTM_SOURCE_BY_ZALO_CHANNEL.personal,
+          });
           return existingCustomerId;
         }
 
-        const insertedCustomerResult = await db.query(
-          `INSERT INTO customers
-             (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source, created_at, updated_at)
-           VALUES
-             ($1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-           RETURNING id`,
-          [
-            targetUserId,
-            rowEmail,
-            normalizedPhone,
-            normalizedUid,
-            normalizedPhone,
-            rowFullName,
-            'uknow_campaign',
-            UTM_SOURCE_BY_ZALO_CHANNEL.personal,
-          ]
-        );
-        return Number.parseInt(insertedCustomerResult.rows[0]?.id, 10) || null;
+        const insertedCustomerId = await customerMutationRepository.insertZaloPersonalCustomer({
+          userId: targetUserId,
+          email: rowEmail,
+          phone: normalizedPhone,
+          uid: normalizedUid,
+          fullName: rowFullName,
+          utmSource: UTM_SOURCE_BY_ZALO_CHANNEL.personal,
+        });
+        return Number.parseInt(insertedCustomerId, 10) || null;
       };
 
       const createZaloMessageTrackingRecord = async ({
@@ -2336,48 +2197,33 @@ class CampaignRunService {
         trackingToken = '',
         trackingMetadata = {},
       }) => {
-        const insertResult = await db.query(
-          `INSERT INTO zalo_messages
-             (id_campaign, id_run, id_customer, id_node, channel, recipient_type, recipient_value, uid, group_id,
-              account_id, account_name, message_text, tracking_token, tracking_base_url, tracking_metadata, sent_at, created_at, updated_at)
-           VALUES
-             ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-              $10, $11, $12, $13, $14, $15::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-           RETURNING id`,
-          [
-            campaignId,
-            runId,
-            customerId,
-            nodeId,
-            channel,
-            recipientType,
-            recipientValue,
-            uid,
-            groupId,
-            accountId,
-            accountName,
-            messageText,
-            trackingToken,
-            trackingBaseUrl,
-            JSON.stringify({
-              source: runSource,
-              status: 'queued',
-              ...(trackingMetadata && typeof trackingMetadata === 'object' ? trackingMetadata : {}),
-            }),
-          ]
-        );
-        return insertResult.rows[0]?.id || null;
+        const insertResultId = await zaloMessageRepository.insertCampaignZaloMessage({
+          campaignId,
+          runId,
+          customerId,
+          nodeId,
+          channel,
+          recipientType,
+          recipientValue,
+          uid,
+          groupId,
+          accountId,
+          accountName,
+          messageText,
+          trackingToken,
+          trackingBaseUrl,
+          trackingMetadata: {
+            source: runSource,
+            status: 'queued',
+            ...(trackingMetadata && typeof trackingMetadata === 'object' ? trackingMetadata : {}),
+          },
+        });
+        return insertResultId || null;
       };
 
       const updateZaloMessageTrackingMeta = async (zaloMessageId, metadata = {}) => {
         if (!Number.isFinite(Number.parseInt(zaloMessageId, 10))) return;
-        await db.query(
-          `UPDATE zalo_messages
-           SET tracking_metadata = COALESCE(tracking_metadata, '{}'::jsonb) || $2::jsonb,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1`,
-          [zaloMessageId, JSON.stringify(metadata || {})]
-        );
+        await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata);
       };
 
       const logZaloSentJourneyEvent = async ({
@@ -2398,43 +2244,26 @@ class CampaignRunService {
         if (!Number.isFinite(parsedZaloMessageId)) return;
         // Zalo cá nhân cần id_customer; Zalo group được phép lưu journey không gắn khách.
         if (!isZaloGroupChannel && !canTrackPersonalJourney) return;
-        await db.query(
-          `INSERT INTO customer_journey
-             (id_customer, id_campaign, id_run, id_node, event_type, event_channel, id_zalo_message, event_data, event_at)
-           VALUES
-             ($1, $2, $3, $4, 'zalo_sent', $5, $6, $7::jsonb, CURRENT_TIMESTAMP)`,
-          [
-            canTrackPersonalJourney ? parsedCustomerId : null,
-            campaignId,
-            runId,
-            nodeId,
-            eventChannel,
-            parsedZaloMessageId,
-            JSON.stringify({
-              description: isZaloGroupChannel
-                ? 'Đã gửi tin nhắn Zalo nhóm'
-                : 'Đã gửi tin nhắn Zalo',
-              channel: eventChannel,
-              message: String(messageText || '').slice(0, 500),
-              trackingToken: String(trackingToken || '').trim() || null,
-            }),
-          ]
-        );
+        await customerZaloTrackingRepository.insertZaloSentJourney({
+          customerId: canTrackPersonalJourney ? parsedCustomerId : null,
+          campaignId,
+          runId,
+          nodeId,
+          eventChannel,
+          zaloMessageId: parsedZaloMessageId,
+          eventData: {
+            description: isZaloGroupChannel
+              ? 'Đã gửi tin nhắn Zalo nhóm'
+              : 'Đã gửi tin nhắn Zalo',
+            channel: eventChannel,
+            message: String(messageText || '').slice(0, 500),
+            trackingToken: String(trackingToken || '').trim() || null,
+          },
+        });
       };
 
-      const nodesResult = await db.query(
-        `SELECT * FROM campaign_nodes
-         WHERE id_campaign = $1
-         ORDER BY execution_order ASC`,
-        [campaignId]
-      );
-      const nodes = nodesResult.rows;
-      const connectionsResult = await db.query(
-        `SELECT * FROM campaign_connections
-         WHERE id_campaign = $1`,
-        [campaignId]
-      );
-      const connections = connectionsResult.rows;
+      const nodes = await campaignCrudRepository.findNodesByCampaignId(campaignId);
+      const connections = await campaignCrudRepository.findConnectionsByCampaignId(campaignId);
 
       if (nodes.length === 0) throw new Error('Chiến dịch không có node nào');
 
@@ -2463,12 +2292,7 @@ class CampaignRunService {
         const nextOrder = idx + 1;
         node.execution_order = nextOrder;
         node.config = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId);
-        await db.query(
-          `UPDATE campaign_nodes
-           SET execution_order = $1, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $2`,
-          [nextOrder, node.id]
-        );
+        await campaignCrudRepository.updateNodeExecutionOrder(node.id, nextOrder);
       }
 
       const nodeOutputs = {};
@@ -2632,24 +2456,18 @@ class CampaignRunService {
           throw new Error('Template Zalo không hợp lệ');
         }
         if (!zaloTemplateContentCache.has(templateIdNum)) {
-          const templateResult = await db.query(
-            `SELECT body_text, body_html, attachments
-             FROM zalo_templates
-             WHERE id = $1 AND id_user = $2
-             LIMIT 1`,
-            [templateIdNum, userId]
-          );
-          if (templateResult.rows.length === 0) {
+          const templateRow = await zaloTemplateRepository.findContentByIdForUser(templateIdNum, userId);
+          if (!templateRow) {
             throw new Error('Không tìm thấy template Zalo đã chọn');
           }
           const content = String(
-            templateResult.rows[0]?.body_text || templateResult.rows[0]?.body_html || ''
+            templateRow?.body_text || templateRow?.body_html || ''
           ).trim();
           if (!content) {
             throw new Error('Template Zalo không có nội dung để gửi');
           }
-          const attachments = Array.isArray(templateResult.rows[0]?.attachments)
-            ? templateResult.rows[0].attachments
+          const attachments = Array.isArray(templateRow?.attachments)
+            ? templateRow.attachments
             : [];
           zaloTemplateContentCache.set(templateIdNum, {
             message: content,
@@ -4687,13 +4505,7 @@ class CampaignRunService {
                 throw error;
               }
               if (error?.code === 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE') {
-                await db.query(
-                  `UPDATE campaigns
-                   SET status = 'paused',
-                       updated_at = CURRENT_TIMESTAMP
-                   WHERE id = $1 AND status = 'active'`,
-                  [campaignId]
-                );
+                await campaignCrudRepository.pauseCampaignIfActive(campaignId);
                 const pauseNote = new Error(
                   'Tất cả tài khoản Zalo trong pool đều mất đăng nhập hoặc không sẵn sàng. '
                   + 'Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại ít nhất một tài khoản rồi kích hoạt lại.'
@@ -4706,13 +4518,7 @@ class CampaignRunService {
                 throw error;
               }
               if (!multiEnabled && this.isZaloAccountUnavailableError(error)) {
-                await db.query(
-                  `UPDATE campaigns
-                   SET status = 'paused',
-                       updated_at = CURRENT_TIMESTAMP
-                   WHERE id = $1 AND status = 'active'`,
-                  [campaignId]
-                );
+                await campaignCrudRepository.pauseCampaignIfActive(campaignId);
                 const pauseNote = new Error(
                   'Tài khoản Zalo đã mất kết nối (có thể do đăng nhập ở nơi khác). '
                   + 'Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại tài khoản Zalo rồi kích hoạt lại.'
@@ -7142,13 +6948,7 @@ class CampaignRunService {
 
       await campaignRunRepository.finalizeRun(runId, hasPendingRecipientDue && !isContinuousMode, { totalRecipients, successfulSends, failedSends, skippedSends });
 
-      await db.query(
-        `UPDATE campaigns SET
-         last_run_at = CURRENT_TIMESTAMP,
-         total_sent = total_sent + $1
-         WHERE id = $2`,
-        [successfulSends, campaignId]
-      );
+      await campaignCrudRepository.updateCampaignLastRunStats(campaignId, successfulSends);
 
       if (hasPendingRecipientDue && !isContinuousMode) {
         const ledgerRetryHint = pendingRecipientWithRetryMetaInLedger !== null

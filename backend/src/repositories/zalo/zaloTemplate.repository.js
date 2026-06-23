@@ -212,6 +212,17 @@ class ZaloTemplateRepository {
       isAdmin ? [id] : [id, userId]
     );
   }
+
+  async findContentByIdForUser(templateId, userId) {
+    const result = await db.query(
+      `SELECT body_text, body_html, attachments
+       FROM zalo_templates
+       WHERE id = $1 AND id_user = $2
+       LIMIT 1`,
+      [templateId, userId]
+    );
+    return result.rows[0] || null;
+  }
 }
 
 export default new ZaloTemplateRepository();

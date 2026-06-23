@@ -284,6 +284,36 @@ class CampaignCrudRepository {
     );
   }
 
+  async pauseCampaignIfActive(campaignId, queryClient = null) {
+    const queryable = queryClient || db;
+    await queryable.query(
+      `UPDATE campaigns
+       SET status = 'paused',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'active'`,
+      [campaignId]
+    );
+  }
+
+  async updateCampaignLastRunStats(campaignId, successfulSends) {
+    await db.query(
+      `UPDATE campaigns SET
+         last_run_at = CURRENT_TIMESTAMP,
+         total_sent = total_sent + $1
+         WHERE id = $2`,
+      [successfulSends, campaignId]
+    );
+  }
+
+  async updateNodeExecutionOrder(client, nodeId, executionOrder) {
+    await db.query(
+      `UPDATE campaign_nodes
+       SET execution_order = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [executionOrder, nodeId]
+    );
+  }
+
   /**
    * @param {object} client
    * @param {number|string} campaignId

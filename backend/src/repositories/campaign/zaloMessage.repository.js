@@ -54,6 +54,62 @@ class ZaloMessageRepository {
     );
     return result.rows[0] || null;
   }
+
+  async insertCampaignZaloMessage({
+    campaignId,
+    runId,
+    customerId,
+    nodeId,
+    channel,
+    recipientType,
+    recipientValue,
+    uid,
+    groupId,
+    accountId,
+    accountName,
+    messageText,
+    trackingToken,
+    trackingBaseUrl,
+    trackingMetadata,
+  }) {
+    const result = await db.query(
+      `INSERT INTO zalo_messages
+         (id_campaign, id_run, id_customer, id_node, channel, recipient_type, recipient_value, uid, group_id,
+          account_id, account_name, message_text, tracking_token, tracking_base_url, tracking_metadata, sent_at, created_at, updated_at)
+       VALUES
+         ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+          $10, $11, $12, $13, $14, $15::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id`,
+      [
+        campaignId,
+        runId,
+        customerId,
+        nodeId,
+        channel,
+        recipientType,
+        recipientValue,
+        uid,
+        groupId,
+        accountId,
+        accountName,
+        messageText,
+        trackingToken,
+        trackingBaseUrl,
+        JSON.stringify(trackingMetadata),
+      ]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async mergeZaloMessageTrackingMetadata(zaloMessageId, metadata) {
+    await db.query(
+      `UPDATE zalo_messages
+       SET tracking_metadata = COALESCE(tracking_metadata, '{}'::jsonb) || $2::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [zaloMessageId, JSON.stringify(metadata || {})]
+    );
+  }
 }
 
 export default new ZaloMessageRepository();
