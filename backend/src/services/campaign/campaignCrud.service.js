@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
+import campaignFlowService from './campaignFlow.service.js';
 
 class CampaignCrudService {
   /**
@@ -107,6 +108,143 @@ class CampaignCrudService {
         conditionConfig: conn.condition_config,
       })),
     };
+  }
+
+  /**
+   * Tạo campaign mới kèm nodes/connections trong một transaction.
+   *
+   * @param {object} input
+   * @returns {Promise<object>}
+   */
+  async createCampaign({
+    userId,
+    roleCode,
+    campaignName,
+    description,
+    campaignType,
+    landingPageUrl,
+    startDate,
+    endDate,
+    timezone = 'Asia/Ho_Chi_Minh',
+    flowJson,
+    nodes,
+    connections,
+  }) {
+    const typeResourceKey = campaignType === 'email'
+      ? 'emailCampaigns'
+      : campaignType === 'zalo_group'
+        ? 'zaloGroupCampaigns'
+        : campaignType === 'zalo'
+          ? 'zaloCampaigns'
+          : null;
+
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+
+      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'campaigns' });
+      if (typeResourceKey) {
+        await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: typeResourceKey });
+      }
+
+      const campaign = await campaignCrudRepository.insertCampaignTx(client, {
+        userId,
+        campaignName,
+        description,
+        campaignType,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson: flowJson ? JSON.stringify(flowJson) : null,
+      });
+
+      const nodeIdMap = {};
+      const orderMap = campaignFlowService.buildExecutionOrderMap(nodes || [], connections || [], {
+        nodeIdKey: 'tempId',
+        fallbackKey: 'id',
+        sourceKey: 'sourceNodeId',
+        targetKey: 'targetNodeId',
+      });
+
+      if (nodes && nodes.length > 0) {
+        for (let idx = 0; idx < nodes.length; idx += 1) {
+          const node = nodes[idx];
+          const nodeKey = String(node.tempId ?? node.id ?? '');
+          const executionOrder = orderMap.get(nodeKey) || idx + 1;
+          const nodeType = node.nodeType ?? node.node_type ?? 'unknown';
+          const nodeSubtype = node.nodeSubtype ?? node.node_subtype ?? '';
+          const nodeName = node.nodeName ?? node.node_name ?? 'Node';
+          const nodeDescription = node.nodeDescription ?? node.node_description ?? '';
+          const positionX = node.positionX ?? node.position_x ?? 0;
+          const positionY = node.positionY ?? node.position_y ?? 0;
+          const newNodeId = await campaignCrudRepository.insertNodeTx(client, {
+            campaignId: campaign.id,
+            nodeType,
+            nodeSubtype,
+            nodeName,
+            nodeDescription,
+            positionX,
+            positionY,
+            config: JSON.stringify(node.config || {}),
+            executionOrder,
+          });
+          nodeIdMap[node.tempId || node.id] = newNodeId;
+        }
+
+        const resolveId = (id) => {
+          if (id == null || String(id).trim() === '') return id;
+          const mapped = nodeIdMap[String(id)];
+          return mapped != null ? String(mapped) : String(id);
+        };
+        for (const node of nodes) {
+          const tempKey = String(node.tempId ?? node.id ?? '');
+          const dbId = nodeIdMap[tempKey];
+          if (dbId == null) continue;
+          const updatedConfig = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveId);
+          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
+            await campaignCrudRepository.updateNodeConfigTx(client, dbId, updatedConfig);
+          }
+        }
+      }
+
+      if (connections && connections.length > 0) {
+        const sortedConnections = [...connections].sort((a, b) => {
+          const sourceA = orderMap.get(String(a?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+          const sourceB = orderMap.get(String(b?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+          if (sourceA !== sourceB) return sourceA - sourceB;
+          const targetA = orderMap.get(String(a?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+          const targetB = orderMap.get(String(b?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+          return targetA - targetB;
+        });
+        for (const conn of sortedConnections) {
+          const sourceId = nodeIdMap[conn.sourceNodeId];
+          const targetId = nodeIdMap[conn.targetNodeId];
+          if (sourceId == null || targetId == null) continue;
+          await campaignCrudRepository.insertConnectionTx(client, {
+            campaignId: campaign.id,
+            sourceNodeId: sourceId,
+            targetNodeId: targetId,
+            connectionType: conn.connectionType || 'default',
+            connectionLabel: conn.connectionLabel,
+            conditionConfig: conn.conditionConfig ? JSON.stringify(conn.conditionConfig) : null,
+          });
+        }
+      }
+
+      await client.query('COMMIT');
+      return {
+        id: campaign.id,
+        campaignName: campaign.campaign_name,
+        campaignType: campaign.campaign_type,
+        status: campaign.status,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

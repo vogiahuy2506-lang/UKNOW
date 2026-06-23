@@ -273,6 +273,18 @@ class CampaignCrudRepository {
   }
 
   /**
+   * @param {object} client
+   * @param {number} nodeId
+   * @param {object} config
+   */
+  async updateNodeConfigTx(client, nodeId, config) {
+    await client.query(
+      'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+      [JSON.stringify(config || {}), nodeId]
+    );
+  }
+
+  /**
    * Set campaign status to active (publish).
    *
    * @param {object} params

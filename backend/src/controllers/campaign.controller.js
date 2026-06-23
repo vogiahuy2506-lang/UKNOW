@@ -9,7 +9,7 @@ import campaignExecutionLogService from '../services/campaign/campaignExecutionL
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
-import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
@@ -262,8 +262,6 @@ class CampaignController {
    * @param {import('express').Response} res
    */
   async create(req, res) {
-    const client = await db.getClient();
-
     try {
       const userId = req.user.id;
       const roleCode = req.user?.role;
@@ -307,110 +305,28 @@ class CampaignController {
         }
       }
 
-      await client.query('BEGIN');
-
-      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'campaigns' });
-      if (typeResourceKey) {
-        await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: typeResourceKey });
-      }
-
-      // Create campaign
-      const campaignResult = await client.query(
-        `INSERT INTO campaigns (id_user, campaign_name, description, campaign_type, landing_page_url, start_date, end_date, timezone, flow_json)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING *`,
-        [userId, campaignName, description, campaignType, landingPageUrl, startDate, endDate, timezone, flowJson ? JSON.stringify(flowJson) : null]
-      );
-
-      const campaign = campaignResult.rows[0];
-
-      // Create nodes if provided
-      const nodeIdMap = {};
-      const orderMap = this.buildExecutionOrderMap(nodes || [], connections || [], {
-        nodeIdKey: 'tempId',
-        fallbackKey: 'id',
-        sourceKey: 'sourceNodeId',
-        targetKey: 'targetNodeId',
+      const campaign = await campaignCrudService.createCampaign({
+        userId,
+        roleCode,
+        campaignName,
+        description,
+        campaignType,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson,
+        nodes,
+        connections,
       });
-      if (nodes && nodes.length > 0) {
-        for (let idx = 0; idx < nodes.length; idx += 1) {
-          const node = nodes[idx];
-          const nodeKey = String(node.tempId ?? node.id ?? '');
-          const executionOrder = orderMap.get(nodeKey) || idx + 1;
-          // Support both camelCase (AI output) and snake_case (normalized)
-          const nodeType = node.nodeType ?? node.node_type ?? 'unknown';
-          const nodeSubtype = node.nodeSubtype ?? node.node_subtype ?? '';
-          const nodeName = node.nodeName ?? node.node_name ?? 'Node';
-          const nodeDescription = node.nodeDescription ?? node.node_description ?? '';
-          const positionX = node.positionX ?? node.position_x ?? 0;
-          const positionY = node.positionY ?? node.position_y ?? 0;
-          const nodeResult = await client.query(
-            `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING id`,
-            [campaign.id, nodeType, nodeSubtype, nodeName, nodeDescription, positionX, positionY, JSON.stringify(node.config || {}), executionOrder]
-          );
-          nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
-        }
 
-        // Remap tempId references inside node configs to real DB IDs
-        const resolveId = (id) => {
-          if (id == null || String(id).trim() === '') return id;
-          const mapped = nodeIdMap[String(id)];
-          return mapped != null ? String(mapped) : String(id);
-        };
-        for (const node of nodes) {
-          const tempKey = String(node.tempId ?? node.id ?? '');
-          const dbId = nodeIdMap[tempKey];
-          if (dbId == null) continue;
-          const updatedConfig = this.normalizeNodeReferenceConfig(node.config || {}, resolveId);
-          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
-            await client.query(
-              'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
-              [JSON.stringify(updatedConfig), dbId]
-            );
-          }
-        }
-      }
-
-      // Create connections (chỉ những connection có cả source và target nằm trong nodes)
-      if (connections && connections.length > 0) {
-        const sortedConnections = [...connections].sort((a, b) => {
-          const sourceA = orderMap.get(String(a?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          const sourceB = orderMap.get(String(b?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          if (sourceA !== sourceB) return sourceA - sourceB;
-          const targetA = orderMap.get(String(a?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          const targetB = orderMap.get(String(b?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          return targetA - targetB;
-        });
-        for (const conn of sortedConnections) {
-          const sourceId = nodeIdMap[conn.sourceNodeId];
-          const targetId = nodeIdMap[conn.targetNodeId];
-          if (sourceId == null || targetId == null) continue;
-
-          await client.query(
-            `INSERT INTO campaign_connections (id_campaign, source_node_id, target_node_id, connection_type, connection_label, condition_config)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [campaign.id, sourceId, targetId, conn.connectionType || 'default', conn.connectionLabel, conn.conditionConfig ? JSON.stringify(conn.conditionConfig) : null]
-          );
-        }
-      }
-
-      await client.query('COMMIT');
-
-      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaign_name, type: campaign.campaign_type });
+      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType });
       res.status(201).json({
         success: true,
         message: 'Tạo chiến dịch thành công',
-        data: {
-          id: campaign.id,
-          campaignName: campaign.campaign_name,
-          campaignType: campaign.campaign_type,
-          status: campaign.status
-        }
+        data: campaign,
       });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Create campaign error:', error);
       if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
         return res.status(error.statusCode || 403).json({
@@ -426,8 +342,6 @@ class CampaignController {
         success: false,
         message: 'Lỗi server'
       });
-    } finally {
-      client.release();
     }
   }
 
