@@ -1,5 +1,6 @@
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
-import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import db from '../../config/database.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 
 function createServiceError(message, statusCode, extra = {}) {
   const error = new Error(message);
@@ -192,24 +193,34 @@ class EmailSettingsCrudService {
 
     const brandDomain = fromEmail.split('@')[1]?.toLowerCase() || null;
 
-    const item = await emailSettingsRepository.create(userId, {
-      name: payload.name,
-      email: fromEmail,
-      replyTo,
-      platformPrefix,
-      smtpHost,
-      smtpPort,
-      smtpUsername,
-      smtpPassword,
-      useTls,
-      dailyLimit: payload.dailyLimit ?? 1000,
-      hourlyLimit: payload.hourlyLimit ?? 100,
-      emailMode,
-      brandDomain,
-      isVerified: useSmtp ? true : true, // platform and smtp both verified, only custom_domain needs DNS verification
-    });
-
-    return this.mapMutationResult(item);
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'emailAccounts' });
+      const item = await emailSettingsRepository.create(userId, {
+        name: payload.name,
+        email: fromEmail,
+        replyTo,
+        platformPrefix,
+        smtpHost,
+        smtpPort,
+        smtpUsername,
+        smtpPassword,
+        useTls,
+        dailyLimit: payload.dailyLimit ?? 1000,
+        hourlyLimit: payload.hourlyLimit ?? 100,
+        emailMode,
+        brandDomain,
+        isVerified: useSmtp ? true : true,
+      }, client);
+      await client.query('COMMIT');
+      return this.mapMutationResult(item);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async update({ userId, roleCode, id, payload }) {

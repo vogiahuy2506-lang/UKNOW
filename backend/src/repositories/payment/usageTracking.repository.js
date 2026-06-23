@@ -15,11 +15,12 @@ class UsageTrackingRepository {
   /**
    * Get current period usage for a specific resource
    */
-  async getCurrentUsage(userId, resourceType) {
+  async getCurrentUsage(userId, resourceType, client = null) {
+    const queryable = client || db;
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `SELECT COALESCE(SUM(delta), 0) as total_usage
        FROM usage_logs
        WHERE id_user = $1
@@ -54,13 +55,14 @@ class UsageTrackingRepository {
   /**
    * Track usage for a resource
    */
-  async trackUsage(userId, resourceType, delta = 1, metadata = {}) {
+  async trackUsage(userId, resourceType, delta = 1, metadata = {}, client = null) {
+    const queryable = client || db;
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     const usageMetadata = metadata && typeof metadata === 'object' ? metadata : {};
 
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
@@ -79,8 +81,9 @@ class UsageTrackingRepository {
   /**
    * Get plan limits for a user
    */
-  async getUserPlanLimits(userId) {
-    const { rows } = await db.query(
+  async getUserPlanLimits(userId, client = null) {
+    const queryable = client || db;
+    const { rows } = await queryable.query(
       `SELECT
          p.max_employees,
          p.max_landing_pages,

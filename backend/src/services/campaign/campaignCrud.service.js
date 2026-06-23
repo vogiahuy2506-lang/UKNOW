@@ -1,6 +1,6 @@
 import db from '../../config/database.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
-import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 
 class CampaignCrudService {
@@ -127,18 +127,11 @@ class CampaignCrudService {
         return null;
       }
 
-      const campaignLimitCheck = await checkUserResourceLimit({
+      await enforceResourceLimitTx(client, {
         userId,
         roleCode,
         resourceKey: 'campaigns',
       });
-      if (!campaignLimitCheck.allowed) {
-        await client.query('ROLLBACK');
-        const limitError = new Error(campaignLimitCheck.message);
-        limitError.statusCode = 400;
-        limitError.limitReached = true;
-        throw limitError;
-      }
 
       const newCampaign = await campaignCrudRepository.insertCampaignTx(client, {
         userId,

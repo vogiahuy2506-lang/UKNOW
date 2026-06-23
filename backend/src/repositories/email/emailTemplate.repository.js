@@ -116,8 +116,9 @@ class EmailTemplateRepository {
     return result.rows[0] || null;
   }
 
-  async create({ userId, templateName, templateCode, subject, bodyHtml, bodyText, attachments, variables, category }) {
-    const result = await db.query(
+  async create({ userId, templateName, templateCode, subject, bodyHtml, bodyText, attachments, variables, category }, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `INSERT INTO email_templates (id_user, template_name, template_code, subject, body_html, body_text, attachments, variables, category)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
@@ -136,8 +137,9 @@ class EmailTemplateRepository {
     return result.rows[0];
   }
 
-  async syncTemplateFile(templateId, attachment) {
-    await db.query(
+  async syncTemplateFile(templateId, attachment, client = null) {
+    const queryable = client || db;
+    await queryable.query(
       `INSERT INTO template_files (template_id, original_name, display_name, storage_key, file_size, mime_type)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (storage_key) DO UPDATE SET

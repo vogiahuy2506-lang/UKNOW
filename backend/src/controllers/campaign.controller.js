@@ -9,7 +9,7 @@ import campaignExecutionLogService from '../services/campaign/campaignExecutionL
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
-import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
@@ -293,7 +293,6 @@ class CampaignController {
         });
       }
 
-      // Kiểm tra giới hạn theo loại campaign (zalo / zalo_group / email)
       const typeResourceKey = campaignType === 'email'
         ? 'emailCampaigns'
         : campaignType === 'zalo_group'
@@ -309,6 +308,11 @@ class CampaignController {
       }
 
       await client.query('BEGIN');
+
+      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'campaigns' });
+      if (typeResourceKey) {
+        await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: typeResourceKey });
+      }
 
       // Create campaign
       const campaignResult = await client.query(
@@ -408,6 +412,13 @@ class CampaignController {
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Create campaign error:', error);
+      if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
+        return res.status(error.statusCode || 403).json({
+          success: false,
+          message: error.message,
+          limitReached: true,
+        });
+      }
       if (this.isUnsupportedZaloGroupCampaignTypeError(error)) {
         return this.sendZaloGroupMigrationRequired(res);
       }

@@ -6,7 +6,7 @@ jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockQuery },
 }));
 
-const { checkUserResourceLimit } = await import('../userResourceLimit.util.js');
+const { checkUserResourceLimit, enforceResourceLimitTx } = await import('../userResourceLimit.util.js');
 
 describe('userResourceLimit.util', () => {
   beforeEach(() => {
@@ -223,6 +223,72 @@ describe('userResourceLimit.util', () => {
       expect(result1.allowed).toBe(true);
       expect(result2.allowed).toBe(true);
       expect(mockQuery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enforceResourceLimitTx', () => {
+    const mockClient = { query: jest.fn() };
+
+    beforeEach(() => {
+      mockClient.query.mockReset();
+    });
+
+    it('admin bypass — không gọi lock/count', async () => {
+      await enforceResourceLimitTx(mockClient, {
+        userId: 1,
+        roleCode: 'admin',
+        resourceKey: 'campaigns',
+      });
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+
+    it('limit null → no-op sau lock', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_campaigns: null }] });
+
+      await enforceResourceLimitTx(mockClient, {
+        userId: 10,
+        roleCode: 'user',
+        resourceKey: 'campaigns',
+      });
+
+      expect(mockClient.query).toHaveBeenCalledTimes(2);
+      expect(String(mockClient.query.mock.calls[0][0])).toMatch(/pg_advisory_xact_lock/);
+    });
+
+    it('count >= limit → throw RESOURCE_LIMIT_EXCEEDED', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_email_templates: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ total: 2 }] });
+
+      await expect(
+        enforceResourceLimitTx(mockClient, {
+          userId: 10,
+          roleCode: 'user',
+          resourceKey: 'emailTemplates',
+        })
+      ).rejects.toMatchObject({
+        code: 'RESOURCE_LIMIT_EXCEEDED',
+        statusCode: 403,
+        resource: 'emailTemplates',
+      });
+    });
+
+    it('limit 0 → throw ngay (feature disabled)', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_landing_pages: 0 }] });
+
+      await expect(
+        enforceResourceLimitTx(mockClient, {
+          userId: 10,
+          roleCode: 'user',
+          resourceKey: 'landingPages',
+        })
+      ).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED' });
+      expect(mockClient.query).toHaveBeenCalledTimes(2);
     });
   });
 });
