@@ -411,6 +411,34 @@ describe('POST /api/campaigns', () => {
     expect(res.body.message).toMatch(/giới hạn|tối đa|đã đạt/i);
   });
 
+  it('race đồng thời vượt max_campaigns → chỉ 1 thành công, còn lại limitReached', async () => {
+    const o = await createUser({ role: 'user', username: 'race_o1' });
+    const plan = await createPlan({ code: 'starter' });
+    await assignPlanToUser(o.id, plan.id);
+    await db.query('UPDATE users SET max_campaigns = 1 WHERE id = $1', [o.id]);
+
+    const t = await loginAs(o);
+    const requests = Array.from({ length: 5 }, (_, i) =>
+      request(app)
+        .post('/api/campaigns')
+        .set('Authorization', `Bearer ${t}`)
+        .send({ campaignName: `race-${i}-${Date.now()}`, campaignType: 'email' })
+    );
+
+    const results = await Promise.all(requests);
+    const created = results.filter((r) => r.status === 201);
+    const limited = results.filter((r) => r.status === 400 && r.body.limitReached);
+
+    expect(created).toHaveLength(1);
+    expect(limited.length).toBeGreaterThanOrEqual(4);
+
+    const { rows } = await db.query(
+      'SELECT COUNT(*)::int AS c FROM campaigns WHERE id_user = $1',
+      [o.id]
+    );
+    expect(rows[0].c).toBe(1);
+  });
+
   it('connection có sourceNodeId/targetNodeId không khớp tempId → bị skip (không tạo)', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const t = await loginAs(o);
