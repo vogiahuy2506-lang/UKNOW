@@ -13,11 +13,11 @@ router.get('/categories', landingTemplateController.getCategories.bind(landingTe
 // GET /api/landing-templates/my - Get current user's templates (requires auth)
 router.get('/my', authMiddleware, landingTemplateController.getMyTemplates.bind(landingTemplateController));
 
-// GET /api/landing-templates/:id - Get single template
-router.get('/:id', landingTemplateController.getById.bind(landingTemplateController));
+// GET /api/landing-templates/:id - Get single template (requires auth)
+router.get('/:id', authMiddleware, landingTemplateController.getById.bind(landingTemplateController));
 
-// GET /api/landing-templates/:id/html - Get template HTML structure only
-router.get('/:id/html', landingTemplateController.getHtml.bind(landingTemplateController));
+// GET /api/landing-templates/:id/html - Get template HTML structure only (requires auth)
+router.get('/:id/html', authMiddleware, landingTemplateController.getHtml.bind(landingTemplateController));
 
 // POST /api/landing-templates - Create new template (requires auth)
 router.post('/', authMiddleware, landingTemplateController.create.bind(landingTemplateController));

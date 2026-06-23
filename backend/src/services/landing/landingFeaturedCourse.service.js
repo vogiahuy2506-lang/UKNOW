@@ -1,4 +1,5 @@
 import landingFeaturedCourseRepository from '../../repositories/landingFeaturedCourse.repository.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 import {
   deleteUploadedFileIfAny,
   extractStorageKeyFromImageUrl,
@@ -26,6 +27,14 @@ function assertHttpUrl(raw, fieldLabel = 'linkUrl') {
     throw err;
   }
   return s;
+}
+
+function assertRecordOwnership(existing, userId, roleCode, notFoundMessage) {
+  if (Number(existing.idUser) !== Number(userId) && !isAdminRole(roleCode)) {
+    const err = new Error(notFoundMessage);
+    err.statusCode = 404;
+    throw err;
+  }
 }
 
 class LandingFeaturedCourseService {
@@ -103,13 +112,14 @@ class LandingFeaturedCourseService {
    * @param {object} body
    * @param {number} userId
    */
-  async update(id, body, userId) {
+  async update(id, body, userId, roleCode = null) {
     const existing = await landingFeaturedCourseRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy khóa học nổi bật');
       err.statusCode = 404;
       throw err;
     }
+    assertRecordOwnership(existing, userId, roleCode, 'Không tìm thấy khóa học nổi bật');
     const b = body && typeof body === 'object' ? body : {};
     const titleVi = b.titleVi !== undefined ? String(b.titleVi).trim() : existing.titleVi;
     const titleEn = b.titleEn !== undefined ? String(b.titleEn).trim() : existing.titleEn;
@@ -142,7 +152,6 @@ class LandingFeaturedCourseService {
       imageUrl,
       linkUrl,
       isActive: b.isActive !== undefined ? b.isActive : existing.isActive,
-      idUser: userId,
     });
 
     if (hasTemp) {
@@ -180,13 +189,14 @@ class LandingFeaturedCourseService {
    * @param {number|string} id
    * @param {number} userId
    */
-  async remove(id, userId) {
+  async remove(id, userId, roleCode = null) {
     const existing = await landingFeaturedCourseRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy khóa học nổi bật');
       err.statusCode = 404;
       throw err;
     }
+    assertRecordOwnership(existing, userId, roleCode, 'Không tìm thấy khóa học nổi bật');
     const fileKey = extractStorageKeyFromImageUrl(existing.imageUrl);
     const ok = await landingFeaturedCourseRepository.deleteById(id);
     if (!ok) {

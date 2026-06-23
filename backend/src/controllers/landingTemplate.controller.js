@@ -186,7 +186,14 @@ class LandingTemplateController {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const template = await landingTemplateService.getTemplateById(Number.parseInt(id, 10));
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user?.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+      const template = await landingTemplateService.getTemplateById(Number.parseInt(id, 10), {
+        userId: effectiveOwnerId,
+        roleCode: req.user?.role,
+      });
 
       if (!template) {
         return res.status(404).json({
@@ -215,7 +222,14 @@ class LandingTemplateController {
   async getHtml(req, res) {
     try {
       const { id } = req.params;
-      const template = await landingTemplateService.getTemplateById(Number.parseInt(id, 10));
+      const userId = req.user?.id;
+      const effectiveOwnerId = req.user?.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : userId;
+      const template = await landingTemplateService.getTemplateById(Number.parseInt(id, 10), {
+        userId: effectiveOwnerId,
+        roleCode: req.user?.role,
+      });
 
       if (!template) {
         return res.status(404).json({

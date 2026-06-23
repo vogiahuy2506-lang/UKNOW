@@ -23,8 +23,8 @@
  *   - `landingPageAdminService.list/getById/remove` truyền `roleCode:` cho
  *     scope nhưng repository đọc `scope.role` → role admin không được bypass
  *     ở 3 endpoint này (chỉ thấy workspace).
- *   - `featuredCourse.remove` KHÔNG check owner (xóa cross-user vẫn 200);
- *     `testimonial.remove` CÓ check owner (cross-user → 403).
+ *   - `featuredCourse` / `testimonial` update+remove check owner (cross-user → 404);
+ *     superadmin bypass qua `isAdminRole`.
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -407,6 +407,18 @@ describe('PUT /api/admin/landing-featured-courses/:id', () => {
       linkUrl: 'https://uknow.vn/new',
     });
   });
+
+  it('update của user khác → 404', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'fc-u3' } });
+    const other = await createUserWithPlan({ userOverrides: { username: 'fc-u3-other' } });
+    const row = await insertFeaturedCourse({ idUser: other.id });
+    const token = await loginAs(me);
+    const res = await request(app)
+      .put(`/api/admin/landing-featured-courses/${row.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ titleVi: 'Hacked', linkUrl: 'https://evil.test' });
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('DELETE /api/admin/landing-featured-courses/:id', () => {
@@ -431,7 +443,7 @@ describe('DELETE /api/admin/landing-featured-courses/:id', () => {
     expect(after.rows).toHaveLength(0);
   });
 
-  it('quirk: xóa của user khác vẫn 200 (service không check owner)', async () => {
+  it('xóa của user khác → 404 (IDOR guard)', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'fc-d3' } });
     const other = await createUserWithPlan({ userOverrides: { username: 'fc-d3-other' } });
     const row = await insertFeaturedCourse({ idUser: other.id });
@@ -439,7 +451,9 @@ describe('DELETE /api/admin/landing-featured-courses/:id', () => {
     const res = await request(app)
       .delete(`/api/admin/landing-featured-courses/${row.id}`)
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
+    const after = await db.query(`SELECT 1 FROM landing_featured_courses WHERE id = $1`, [row.id]);
+    expect(after.rows).toHaveLength(1);
   });
 });
 
@@ -566,7 +580,7 @@ describe('DELETE /api/admin/landing-testimonials/:id', () => {
     expect(after.rows).toHaveLength(0);
   });
 
-  it('quirk: xóa của user khác → 403 (testimonial CHECK owner, khác với featuredCourse)', async () => {
+  it('xóa của user khác → 404 (IDOR guard)', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'ts-d3' } });
     const other = await createUserWithPlan({ userOverrides: { username: 'ts-d3-other' } });
     const row = await insertTestimonial({ idUser: other.id });
@@ -574,7 +588,9 @@ describe('DELETE /api/admin/landing-testimonials/:id', () => {
     const res = await request(app)
       .delete(`/api/admin/landing-testimonials/${row.id}`)
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    const after = await db.query(`SELECT 1 FROM landing_testimonials WHERE id = $1`, [row.id]);
+    expect(after.rows).toHaveLength(1);
   });
 });
 

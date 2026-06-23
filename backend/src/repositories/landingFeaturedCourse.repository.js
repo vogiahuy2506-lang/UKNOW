@@ -98,6 +98,7 @@ class LandingFeaturedCourseRepository {
          image_url,
          link_url,
          is_active,
+         id_user,
          created_at,
          updated_at
        FROM landing_featured_courses
