@@ -18,6 +18,7 @@ const PLAN_COLS = `
   max_zalo_accounts AS "maxZaloAccounts", max_email_accounts AS "maxEmailAccounts",
   max_email_templates AS "maxEmailTemplates", max_zalo_templates AS "maxZaloTemplates",
   max_chatbots AS "maxChatbots", ai_tokens_per_period AS "aiTokensPerPeriod",
+  ai_model AS "aiModel",
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function findAllPlans() {
@@ -45,6 +46,7 @@ export async function findCustomPlans({ showHidden = false } = {}) {
             p.max_zalo_accounts AS "maxZaloAccounts", p.max_email_accounts AS "maxEmailAccounts",
             p.max_email_templates AS "maxEmailTemplates", p.max_zalo_templates AS "maxZaloTemplates",
             p.max_chatbots AS "maxChatbots", p.ai_tokens_per_period AS "aiTokensPerPeriod",
+            p.ai_model AS "aiModel",
             p.created_at AS "createdAt",
             COALESCE(u.email,     o_user.email)     AS "assignedEmail",
             COALESCE(u.full_name, o_user.full_name) AS "assignedName",
@@ -76,7 +78,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod }) {
+  maxChatbots, aiTokensPerPeriod, aiModel }) {
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, price_yearly, description, features, max_employees, is_active, is_custom,
                         duration_days,
@@ -86,9 +88,9 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         max_zalo_campaigns, max_zalo_group_campaigns, max_email_campaigns,
                         max_zalo_accounts, max_email_accounts,
                         max_email_templates, max_zalo_templates,
-                        max_chatbots, ai_tokens_per_period,
+                        max_chatbots, ai_tokens_per_period, ai_model,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,NOW(),NOW())
      RETURNING *`,
     [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
@@ -98,7 +100,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
      maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
-     maxChatbots ?? null, aiTokensPerPeriod ?? null]
+     maxChatbots ?? null, aiTokensPerPeriod ?? null, aiModel || 'gemini-2.5-flash']
   );
   return rows[0];
 }
@@ -108,7 +110,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod }) {
+  maxChatbots, aiTokensPerPeriod, aiModel }) {
   const { rows } = await db.query(
     `UPDATE plans
      SET name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
@@ -121,9 +123,9 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
          max_zalo_campaigns = $17, max_zalo_group_campaigns = $18, max_email_campaigns = $19,
          max_zalo_accounts = $20, max_email_accounts = $21,
          max_email_templates = $22, max_zalo_templates = $23,
-         max_chatbots = $24, ai_tokens_per_period = $25,
+         max_chatbots = $24, ai_tokens_per_period = $25, ai_model = $26,
          updated_at = NOW()
-     WHERE id = $26
+     WHERE id = $27
      RETURNING *`,
     [name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
@@ -133,7 +135,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
      maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
-     maxChatbots ?? null, aiTokensPerPeriod ?? null, id]
+     maxChatbots ?? null, aiTokensPerPeriod ?? null, aiModel || 'gemini-2.5-flash', id]
   );
   return rows[0] || null;
 }
@@ -243,7 +245,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod }) {
+  maxChatbots, aiTokensPerPeriod, aiModel }) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -257,9 +259,9 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           max_zalo_campaigns, max_zalo_group_campaigns, max_email_campaigns,
                           max_zalo_accounts, max_email_accounts,
                           max_email_templates, max_zalo_templates,
-                          max_chatbots, ai_tokens_per_period,
+                          max_chatbots, ai_tokens_per_period, ai_model,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
@@ -269,7 +271,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
        maxZaloCampaigns ?? null, maxZaloGroupCampaigns ?? null, maxEmailCampaigns ?? null,
        maxZaloAccounts ?? null, maxEmailAccounts ?? null,
        maxEmailTemplates ?? null, maxZaloTemplates ?? null,
-       maxChatbots ?? null, aiTokensPerPeriod ?? null]
+       maxChatbots ?? null, aiTokensPerPeriod ?? null, aiModel || 'gemini-2.5-flash']
     );
     const plan = planResult.rows[0];
 

@@ -7,6 +7,7 @@ import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import customChatService from '../services/ai/customChat.service.js';
+import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
@@ -1048,9 +1049,12 @@ class ChatbotController {
           req.body.response_style !== undefined ||
           req.body.welcome_message !== undefined ||
           req.body.is_active !== undefined) {
+        const clampedModel = req.body.ai_model !== undefined
+          ? await resolveAllowedModel(req.user.id, req.body.ai_model)
+          : undefined;
         const aiSettings = {
           system_instruction: req.body.system_instruction,
-          ai_model: req.body.ai_model,
+          ai_model: clampedModel ?? req.body.ai_model,
           temperature: req.body.temperature,
           max_tokens: req.body.max_tokens,
           response_style: req.body.response_style,

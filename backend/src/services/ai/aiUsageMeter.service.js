@@ -3,6 +3,8 @@ import {
   countGeminiTokens,
   generateGeminiContent,
 } from '../../utils/geminiClient.util.js';
+import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import { normalizeModelId } from '../../utils/aiModelTier.util.js';
 
 export const AI_TOKEN_RESOURCE = 'ai_token';
 
@@ -11,12 +13,20 @@ const MIN_OUTPUT_TOKENS = Number.parseInt(process.env.AI_MIN_OUTPUT_TOKENS || ''
 const HARD_CAP = Number.parseInt(process.env.AI_MAX_TOKENS_PER_REQUEST || '', 10) || 0;
 
 class AiUsageMeterService {
+  async _resolveModel(userId, model) {
+    if (!userId) {
+      return normalizeModelId(model) || normalizeModelId(process.env.GEMINI_MODEL) || 'gemini-2.0-flash';
+    }
+    return resolveAllowedModel(userId, model);
+  }
+
   async reserve(userId, {
     contents,
     systemInstruction = null,
     model = null,
     requestedMaxOutputTokens = 2048,
   } = {}) {
+    const resolvedModel = await this._resolveModel(userId, model);
     const requested = Number.parseInt(requestedMaxOutputTokens, 10);
     let maxOutputTokens = Number.isFinite(requested) && requested > 0 ? requested : 2048;
     if (HARD_CAP > 0) {
@@ -24,13 +34,13 @@ class AiUsageMeterService {
     }
 
     if (!userId) {
-      return { maxOutputTokens, inputTokens: 0, remaining: null, limit: null, used: 0 };
+      return { maxOutputTokens, inputTokens: 0, remaining: null, limit: null, used: 0, model: resolvedModel };
     }
 
     const currentUsage = await usageTrackingService.getResourceUsage(userId, AI_TOKEN_RESOURCE);
     const limit = Number(currentUsage.limit) || 0;
     if (limit <= 0) {
-      return { maxOutputTokens, inputTokens: 0, remaining: null, limit, used: currentUsage.used };
+      return { maxOutputTokens, inputTokens: 0, remaining: null, limit, used: currentUsage.used, model: resolvedModel };
     }
 
     const used = Number(currentUsage.used) || 0;
@@ -39,7 +49,7 @@ class AiUsageMeterService {
       throw this._exhausted(currentUsage);
     }
 
-    let inputTokens = await countGeminiTokens({ model, contents, systemInstruction });
+    let inputTokens = await countGeminiTokens({ model: resolvedModel, contents, systemInstruction });
     if (inputTokens === null || inputTokens === undefined) {
       inputTokens = this._estimateLocalTokens(contents, systemInstruction);
     }
@@ -59,6 +69,7 @@ class AiUsageMeterService {
       remaining,
       limit,
       used,
+      model: resolvedModel,
     };
   }
 
@@ -97,10 +108,11 @@ class AiUsageMeterService {
       model,
       requestedMaxOutputTokens: maxOutputTokens,
     });
+    const resolvedModel = reserved.model;
 
     const result = await generateGeminiContent({
       parts,
-      model,
+      model: resolvedModel,
       systemInstruction,
       maxOutputTokens: reserved.maxOutputTokens,
       ...options,
@@ -108,7 +120,7 @@ class AiUsageMeterService {
     await this.record(userId, result.usage, {
       ...(metadata && typeof metadata === 'object' ? metadata : {}),
       feature,
-      model: model || process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+      model: resolvedModel,
     });
     return result;
   }

@@ -37,6 +37,7 @@ router.post('/push-to-campaign/:id', aiLimiter, aiController.pushToCampaign.bind
 router.post('/create-and-run-campaign', aiLimiter, aiController.createAndRunCampaign.bind(aiController));
 
 // Business profile (RAG context)
+router.get('/allowed-models', aiController.getAllowedModels.bind(aiController));
 router.get('/business-profile', aiController.getBusinessProfile.bind(aiController));
 router.put('/business-profile', aiController.saveBusinessProfile.bind(aiController));
 

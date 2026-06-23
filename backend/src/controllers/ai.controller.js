@@ -4,6 +4,7 @@ import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
+import { getAllowedModelsForUser } from '../services/ai/aiModelPolicy.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
@@ -562,6 +563,19 @@ class AiController {
         success: false,
         message: error.message || 'Lỗi khi tạo và chạy chiến dịch AI',
       });
+    }
+  }
+
+  /**
+   * GET /ai/allowed-models — model Gemini user được chọn theo gói.
+   */
+  async getAllowedModels(req, res) {
+    try {
+      const data = await getAllowedModelsForUser(req.user.id);
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get allowed AI models error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message || 'Lỗi server' });
     }
   }
 

@@ -3,6 +3,7 @@ import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
+import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
 /** Timeout for Gemini API calls (30 seconds) */
 const GEMINI_TIMEOUT_MS = 30000;
@@ -19,9 +20,9 @@ class CustomChatService {
    * Call Gemini API with timeout and retry logic
    */
   async callGeminiWithRetry(prompt, options = {}) {
-    const { temperature = 0.7, maxTokens = 2048 } = options;
+    const { temperature = 0.7, maxTokens = 2048, userId = null } = options;
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
 
     if (!apiKey) {
       const error = new Error('GEMINI_API_KEY not configured');
@@ -139,14 +140,14 @@ QUY TẮC TRẢ LỜI:
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     try {
-      const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+      const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
       const contents = [{ role: 'user', parts: [{ text: prompt }] }];
       const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
         contents,
         model,
         requestedMaxOutputTokens: maxTokens,
       });
-      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens: maxOutputTokens });
+      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens: maxOutputTokens, userId });
       const content = stripMarkdown(rawContent?.text || 'Xin lỗi, tôi không có câu trả lời.');
       await aiUsageMeter.record(userId, rawContent?.usage, {
         feature: 'kb_chat',
