@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaCheckCircle, FaStar } from 'react-icons/fa';
+import { FaCheckCircle } from 'react-icons/fa';
 import founderaiLogo from '../assets/icons/founderai-logo.png';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';

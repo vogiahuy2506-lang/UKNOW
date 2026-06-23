@@ -408,12 +408,14 @@ const InboxPage = () => {
     fetchConversations(true);
     fetchUnreadCount();
     fetchSessionStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.channel, filters.search]);
 
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation?.id, selectedConversation?.type]);
 
   const handleBack = () => {

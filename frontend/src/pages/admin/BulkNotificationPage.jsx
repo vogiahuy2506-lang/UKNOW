@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { HiOutlineMail, HiOutlineClock, HiOutlinePaperAirplane, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
+import { HiOutlineMail, HiOutlinePaperAirplane, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import adminBulkNotificationApiService from '../../features/admin/services/adminBulkNotificationApi.service';
 import { useI18n } from '../../i18n';

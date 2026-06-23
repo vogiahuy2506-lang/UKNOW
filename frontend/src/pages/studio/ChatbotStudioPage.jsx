@@ -154,6 +154,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     if (chatbot?.id) {
       loadConversations();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatbot?.id]);
 
   const loadConversations = async () => {
