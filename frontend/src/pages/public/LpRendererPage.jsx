@@ -12,7 +12,7 @@ function ensureTailwindCdn(html) {
 }
 
 /**
- * Render HTML do admin upload — hiển thị trong iframe sandbox (tách origin khỏi app cha).
+ * Render HTML do admin upload — iframe sandbox opaque origin (allow-scripts, không allow-same-origin).
  * Route: `/lp/:slug`
  */
 export default function LpRendererPage() {
@@ -76,7 +76,7 @@ export default function LpRendererPage() {
     <iframe
       title={title || slug}
       className="w-full min-h-screen border-0 block"
-      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-same-origin"
+      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
       srcDoc={ensureTailwindCdn(html)}
     />
   );
