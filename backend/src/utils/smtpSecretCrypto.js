@@ -4,22 +4,22 @@ const SMTP_SECRET_PREFIX = 'enc:v1:';
 const SMTP_CIPHER = 'aes-256-gcm';
 const IV_LENGTH = 12;
 
+const SMTP_CRYPTO_KEY_ENV = 'SMTP_SECRET_KEY';
+
 /**
- * Tạo khóa mã hóa cố định 32 bytes từ biến môi trường.
- *
- * Luồng hoạt động:
- * 1. Ưu tiên lấy `SMTP_SECRET_KEY` để tách biệt với các secret khác.
- * 2. Fallback qua `JWT_SECRET` hoặc `TOKEN_SECRET` để giữ tương thích môi trường cũ.
- * 3. Dùng SHA-256 để chuẩn hóa thành độ dài khóa hợp lệ cho AES-256-GCM.
+ * Tạo khóa mã hóa cố định 32 bytes từ SMTP_SECRET_KEY (bắt buộc, tách khỏi JWT_SECRET).
  *
  * @returns {Buffer} khóa mã hóa 32 bytes
  */
 function getSmtpCryptoKey() {
-  const rawSecret =
-    String(process.env.SMTP_SECRET_KEY || '').trim() ||
-    String(process.env.JWT_SECRET || '').trim() ||
-    String(process.env.TOKEN_SECRET || '').trim() ||
-    'Founder AI-default-smtp-secret-change-me';
+  const rawSecret = String(process.env[SMTP_CRYPTO_KEY_ENV] || '').trim();
+  if (!rawSecret) {
+    throw new Error(
+      'Thiếu biến môi trường SMTP_SECRET_KEY (bắt buộc để mã hóa/giải mã mật khẩu SMTP). '
+      + 'Nếu trước đây hệ thống dùng JWT_SECRET làm key ngầm, đặt SMTP_SECRET_KEY bằng giá trị đó; '
+      + 'nếu decrypt lỗi sau khi đổi key, cần lưu lại mật khẩu SMTP trên từng tài khoản email.'
+    );
+  }
 
   return crypto.createHash('sha256').update(rawSecret, 'utf8').digest();
 }

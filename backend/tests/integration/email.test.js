@@ -42,6 +42,11 @@ jest.unstable_mockModule('nodemailer', () => ({
 const originalSendGridKey = process.env.SENDGRID_API_KEY;
 process.env.SENDGRID_API_KEY = 'SG.test-key-for-integration-only';
 
+const originalSmtpSecretKey = process.env.SMTP_SECRET_KEY;
+process.env.SMTP_SECRET_KEY = process.env.SMTP_SECRET_KEY
+  || process.env.JWT_SECRET
+  || 'integration-test-smtp-secret-key';
+
 const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
@@ -59,6 +64,8 @@ beforeAll(() => {
 afterAll(() => {
   if (originalSendGridKey === undefined) delete process.env.SENDGRID_API_KEY;
   else process.env.SENDGRID_API_KEY = originalSendGridKey;
+  if (originalSmtpSecretKey === undefined) delete process.env.SMTP_SECRET_KEY;
+  else process.env.SMTP_SECRET_KEY = originalSmtpSecretKey;
 });
 
 beforeEach(async () => {

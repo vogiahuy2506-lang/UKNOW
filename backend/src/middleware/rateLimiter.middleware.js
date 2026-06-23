@@ -153,3 +153,33 @@ export const campaignRunLimiter = rateLimit({
     return `campaign:${ipKeyGenerator(req)}`;
   },
 });
+
+// Public lead capture — chống flood/spam form (không auth)
+export const publicLeadLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  message: {
+    success: false,
+    message: 'Quá nhiều lần gửi form. Vui lòng thử lại sau 15 phút.',
+    code: 'PUBLIC_LEAD_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `public-lead:${ipKeyGenerator(req)}`,
+});
+
+// Public landing analytics view — giới hạn nhẹ hơn lead nhưng vẫn chống flood
+export const publicLandingAnalyticsLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: {
+    success: false,
+    message: 'Quá nhiều yêu cầu theo dõi. Vui lòng thử lại sau.',
+    code: 'PUBLIC_ANALYTICS_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `public-analytics:${ipKeyGenerator(req)}`,
+});
