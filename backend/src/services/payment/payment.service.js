@@ -1,13 +1,13 @@
 import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
+import db from '../../config/database.js';
 import { validateVoucherForCheckout } from '../voucher.service.js';
 import {
     createOrder,
     findOrderStatusByCode,
-    updateOrderStatus,
-    findOrderByCode,
-    activateUserPlan,
+    claimOrderSuccess,
     findUserIdByEmail,
+    activateUserPlan,
     hasSuccessfulOrderForPlanByUser,
 } from '../../repositories/payment/payment.repository.js';
 import { redeemVoucherForOrder } from '../../repositories/voucher.repository.js';
@@ -129,21 +129,29 @@ export const handleWebhook = async (body) => {
     console.log('Webhook data:', JSON.stringify(webhookData, null, 2));
 
     if (webhookData.code === '00') {
-        const order = await findOrderByCode(webhookData.orderCode);
+        const client = await db.getClient();
+        try {
+            await client.query('BEGIN');
+            const order = await claimOrderSuccess(webhookData.orderCode, client);
+            if (!order) {
+                await client.query('COMMIT');
+                console.log(`[Webhook] Đơn ${webhookData.orderCode} đã xử lý hoặc đã hủy — bỏ qua`);
+                return webhookData;
+            }
 
-        if (order?.status === 'cancelled') {
-            console.warn(`[Webhook] Đơn ${webhookData.orderCode} đã bị huỷ — bỏ qua kích hoạt plan`);
-            return webhookData;
-        }
-
-        await updateOrderStatus(webhookData.orderCode, 'success');
-        await redeemVoucherForOrder(order);
-
-        const userId = order?.user_id || (order?.user_email ? await findUserIdByEmail(order.user_email) : null);
-        if (userId && order?.plan_id) {
-            await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly');
-        } else {
-            console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
+            const userId = order.user_id || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
+            if (userId && order.plan_id) {
+                await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
+            } else {
+                console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
+            }
+            await client.query('COMMIT');
+            await redeemVoucherForOrder(order);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
         }
     }
 

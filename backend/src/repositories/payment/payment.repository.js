@@ -51,6 +51,25 @@ export const updateOrderStatus = async (orderCode, status) => {
     );
 };
 
+/**
+ * Atomically mark order success — only if not already success/cancelled.
+ * @param {number|string} orderCode
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<object|null>}
+ */
+export const claimOrderSuccess = async (orderCode, queryable = db) => {
+    const { rows } = await queryable.query(
+        `UPDATE orders
+         SET status = 'success', updated_at = NOW()
+         WHERE order_code = $1
+           AND status NOT IN ('success', 'cancelled')
+         RETURNING id, user_id, plan_id, user_email, billing_period,
+                   voucher_id, voucher_code, discount_amount`,
+        [orderCode]
+    );
+    return rows[0] || null;
+};
+
 export const findOrderStatusByCode = async (orderCode) => {
     const { rows } = await db.query(
         'SELECT status FROM orders WHERE order_code = $1',
@@ -94,8 +113,8 @@ export const hasSuccessfulOrderForPlanByUser = async ({ planId, userId = null, u
 };
 
 // billingPeriod: 'monthly' → theo duration_days của plan, 'yearly' → +12 tháng
-export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly') => {
-    await db.query(
+export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly', queryable = db) => {
+    await queryable.query(
         `UPDATE users u
          SET active_plan_id = p.id,
              subscription_expires_at = CASE
