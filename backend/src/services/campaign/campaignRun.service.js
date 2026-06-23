@@ -18,6 +18,7 @@ import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zalo
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
+import zaloMessageRepository from '../../repositories/campaign/zaloMessage.repository.js';
 import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
 
 class CampaignRunService {
@@ -1655,6 +1656,60 @@ class CampaignRunService {
         console.info(
           `[CampaignRun][EmailDedupe] run=${runId} node=${nid} email=${emailKey} step=${step} `
           + `id_email_message=${existing.id} — đồng bộ ledger, bỏ qua gửi lại`
+        );
+        return true;
+      };
+      /**
+       * Nếu zalo_messages đã ghi gửi thành công nhưng ledger chưa cập nhật: đồng bộ ledger, không gửi Zalo lại.
+       *
+       * @param {object} input
+       * @param {number|string} input.nodeId
+       * @param {string} input.channel zalo_personal | zalo_group | zalo_friend_request
+       * @param {string} input.recipientKey
+       * @param {number} input.zaloStepOneBased thứ tự bước 1-based
+       * @param {number} input.totalSteps
+       * @param {object|null} input.progress
+       * @param {Array<object>} input.scheduleSteps
+       * @param {string} input.sendMode
+       * @returns {Promise<boolean>}
+       */
+      const trySyncLedgerFromExistingZaloMessage = async ({
+        nodeId,
+        channel,
+        recipientKey,
+        zaloStepOneBased,
+        totalSteps,
+        progress,
+        scheduleSteps,
+        sendMode,
+      }) => {
+        const nid = Number.parseInt(nodeId, 10);
+        const step = Math.max(1, Number.parseInt(zaloStepOneBased, 10) || 1);
+        const safeTotal = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
+        const safeChannel = String(channel || '').trim();
+        const recipient = String(recipientKey || '').trim();
+        if (!Number.isFinite(nid) || !safeChannel || !recipient || !runId || !campaignId) return false;
+        const existing = await zaloMessageRepository.findExistingSentCampaignZaloMessage({
+          runId,
+          campaignId,
+          channel: safeChannel,
+          recipientKey: recipient,
+          zaloStep: step,
+        });
+        if (!existing) return false;
+        await markRecipientStepCompleted({
+          nodeId: nid,
+          channel: safeChannel,
+          recipientKey: recipient,
+          completedStep: step,
+          totalSteps: safeTotal,
+          progress,
+          steps: Array.isArray(scheduleSteps) ? scheduleSteps : [],
+          sendMode: String(sendMode || 'all').trim(),
+        });
+        console.info(
+          `[CampaignRun][ZaloDedupe] run=${runId} node=${nid} channel=${safeChannel} `
+          + `recipient=${recipient} step=${step} id_zalo_message=${existing.id} — đồng bộ ledger, bỏ qua gửi lại`
         );
         return true;
       };
@@ -4486,6 +4541,9 @@ class CampaignRunService {
                 messageText: message,
                 customerId,
                 trackingToken,
+                trackingMetadata: {
+                  stepIndex: stepMeta?.stepIndex ?? null,
+                },
               });
               const shouldTrackClickLink = stepMeta?.enableLinkTracking !== false;
               const trackedPayload = shouldTrackClickLink
@@ -4593,6 +4651,7 @@ class CampaignRunService {
               };
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 status: 'sent',
+                stepIndex: stepMeta?.stepIndex ?? null,
                 uid: resolvedUid || null,
                 response: sendResult.response || null,
               });
@@ -5041,6 +5100,17 @@ class CampaignRunService {
                       ? renderTemplateText(step.message, variables).trim()
                       : String(step.message || '').trim();
                     if (!renderedMessage) return;
+                    const dedupedZaloLedger = await trySyncLedgerFromExistingZaloMessage({
+                      nodeId: node.id,
+                      channel: 'zalo_personal',
+                      recipientKey: normalizedRecipient,
+                      zaloStepOneBased: nextStepIndex + 1,
+                      totalSteps: stepsWithMessage.length,
+                      progress,
+                      scheduleSteps: stepsWithMessage,
+                      sendMode,
+                    });
+                    if (dedupedZaloLedger) return;
                     totalRecipients += 1;
                     const sendOutcome = await sendSingleRecipient({
                       recipient: normalizedRecipient,
@@ -5087,6 +5157,17 @@ class CampaignRunService {
                   }
                   const message = String(config.zaloMessage || config.message || '').trim();
                   if (!message) return;
+                  const dedupedZaloSingle = await trySyncLedgerFromExistingZaloMessage({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: normalizedRecipient,
+                    zaloStepOneBased: 1,
+                    totalSteps: 1,
+                    progress,
+                    scheduleSteps: [{ message }],
+                    sendMode: 'all',
+                  });
+                  if (dedupedZaloSingle) return;
                   totalRecipients += 1;
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
@@ -5182,6 +5263,17 @@ class CampaignRunService {
               if (!renderedMessage) {
                 throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
               }
+              const dedupedZaloLedger = await trySyncLedgerFromExistingZaloMessage({
+                nodeId: node.id,
+                channel: 'zalo_personal',
+                recipientKey: normalizedRecipient,
+                zaloStepOneBased: stepIndex + 1,
+                totalSteps: stepsWithMessage.length,
+                progress,
+                scheduleSteps: stepsWithMessage,
+                sendMode,
+              });
+              if (dedupedZaloLedger) return;
               const sendOutcome = await sendSingleRecipient({
                 recipient: normalizedRecipient,
                 message: renderedMessage,
@@ -5333,6 +5425,17 @@ class CampaignRunService {
               })) {
                 return;
               }
+              const dedupedZaloSingle = await trySyncLedgerFromExistingZaloMessage({
+                nodeId: node.id,
+                channel: 'zalo_personal',
+                recipientKey: normalizedRecipient,
+                zaloStepOneBased: 1,
+                totalSteps: 1,
+                progress,
+                scheduleSteps: [{ message }],
+                sendMode: 'all',
+              });
+              if (dedupedZaloSingle) return;
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
               const sendOutcome = await sendSingleRecipient({
                 recipient: normalizedRecipient,
@@ -5579,6 +5682,17 @@ class CampaignRunService {
                 registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
                 continue;
               }
+              const dedupedFriend = await trySyncLedgerFromExistingZaloMessage({
+                nodeId: node.id,
+                channel: 'zalo_friend_request',
+                recipientKey: phone,
+                zaloStepOneBased: 1,
+                totalSteps: 1,
+                progress,
+                scheduleSteps: [],
+                sendMode: 'all',
+              });
+              if (dedupedFriend) continue;
               totalRecipients += 1;
             }
             let message = String(config.zaloFriendRequestMessage || '').trim();
@@ -5704,6 +5818,7 @@ class CampaignRunService {
               trackingMetadata: {
                 contentMode,
                 status: 'queued',
+                stepIndex: 1,
               },
             });
             try {
@@ -5737,6 +5852,7 @@ class CampaignRunService {
               };
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 status: 'sent',
+                stepIndex: 1,
                 uid: sendResult.uid || null,
                 response: sendResult.response || null,
               });
@@ -6230,6 +6346,7 @@ class CampaignRunService {
                   groupName,
                   attachments: attachmentList,
                   attachmentsCount: attachmentList.length,
+                  stepIndex: stepMeta?.stepIndex ?? null,
                 },
               });
               const shouldTrackClickLink = stepMeta?.enableLinkTracking !== false;
@@ -6291,6 +6408,7 @@ class CampaignRunService {
               };
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 status: 'sent',
+                stepIndex: stepMeta?.stepIndex ?? null,
                 response: sendResult.response || null,
                 groupName,
                 attachments: attachmentList,
@@ -6622,6 +6740,17 @@ class CampaignRunService {
                       ? renderTemplateText(step.message, variables).trim()
                       : String(step.message || '').trim();
                     if (!renderedMessage) return;
+                    const dedupedZaloGroup = await trySyncLedgerFromExistingZaloMessage({
+                      nodeId: node.id,
+                      channel: 'zalo_group',
+                      recipientKey: normalizedGroupId,
+                      zaloStepOneBased: nextStepIndex + 1,
+                      totalSteps: stepsWithMessage.length,
+                      progress,
+                      scheduleSteps: stepsWithMessage,
+                      sendMode,
+                    });
+                    if (dedupedZaloGroup) return;
                     totalRecipients += 1;
                     const sendOutcome = await sendSingleGroup({
                       groupId: normalizedGroupId,
@@ -6670,6 +6799,17 @@ class CampaignRunService {
                   }
                   const message = String(config.zaloGroupMessage || '').trim();
                   if (!message) return;
+                  const dedupedZaloGroupSingle = await trySyncLedgerFromExistingZaloMessage({
+                    nodeId: node.id,
+                    channel: 'zalo_group',
+                    recipientKey: normalizedGroupId,
+                    zaloStepOneBased: 1,
+                    totalSteps: 1,
+                    progress,
+                    scheduleSteps: [{ message }],
+                    sendMode: 'all',
+                  });
+                  if (dedupedZaloGroupSingle) return;
                   totalRecipients += 1;
                   const sendOutcome = await sendSingleGroup({
                     groupId: normalizedGroupId,
@@ -6774,6 +6914,17 @@ class CampaignRunService {
                 if (!renderedMessage) {
                   throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${normalizedGroupId}`);
                 }
+                const dedupedZaloGroup = await trySyncLedgerFromExistingZaloMessage({
+                  nodeId: node.id,
+                  channel: 'zalo_group',
+                  recipientKey: normalizedGroupId,
+                  zaloStepOneBased: stepIndex + 1,
+                  totalSteps: stepsWithMessage.length,
+                  progress,
+                  scheduleSteps: stepsWithMessage,
+                  sendMode,
+                });
+                if (dedupedZaloGroup) continue;
                 // eslint-disable-next-line no-await-in-loop
                 const sendOutcome = await sendSingleGroup({
                   groupId: normalizedGroupId,
