@@ -78,7 +78,10 @@ function buildLimitExceededMessage(resourceConfig, normalizedLimit) {
 
 export function createResourceLimitExceededError(message, resourceKey) {
   const err = new Error(message);
-  err.statusCode = 403;
+  // 400 + limitReached để nhất quán với contract cũ (checkUserResourceLimit) và
+  // các flow tạo tài nguyên khác (campaign/email setting...). Tránh đổi status (403)
+  // làm vỡ test/contract khi atomic-enforce thay cho check-then-act.
+  err.statusCode = 400;
   err.code = 'RESOURCE_LIMIT_EXCEEDED';
   err.resource = resourceKey;
   err.limitReached = true;

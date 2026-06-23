@@ -271,7 +271,7 @@ describe('userResourceLimit.util', () => {
         })
       ).rejects.toMatchObject({
         code: 'RESOURCE_LIMIT_EXCEEDED',
-        statusCode: 403,
+        statusCode: 400,
         resource: 'emailTemplates',
       });
     });
