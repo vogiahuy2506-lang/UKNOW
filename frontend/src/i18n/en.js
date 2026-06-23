@@ -4762,9 +4762,9 @@ export default {
 
   // Auth Layout
   authLayout: {
-    badge: 'Vietnam\'s #1 Platform',
-    headline: 'Start your journey to',
-    subheadline: 'Breakthrough Growth',
+    badge: '',
+    headline: 'CO-FOUND YOUR BUSINESS',
+    subheadline: 'SOLO ENTREPRENEUR',
     description: 'Marketing automation ecosystem for lead collection and multi-channel customer care for Vietnamese businesses.',
     features: [
       'Deploy automation in 5 minutes',
@@ -4817,9 +4817,9 @@ export default {
   // Hero Page
   heroPage: {
     tagline: 'Founder AI',
-    heroTitleLine1: 'Automate',
-    heroTitleAccent: 'Marketing',
-    heroTitleLine2: 'across channels',
+    heroTitleLine1: 'Co-found your',
+    heroTitleAccent: 'business',
+    heroTitleLine2: 'solo entrepreneur',
     heroSubtitle: 'Build landing pages, manage leads, and automate Email/Zalo customer journeys from one platform.',
     getStarted: 'Get started free',
     statsBusinesses: 'Businesses Trust Us',

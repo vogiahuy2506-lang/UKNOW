@@ -4814,9 +4814,9 @@ export default {
 
   // Auth Layout
   authLayout: {
-    badge: 'Nền tảng số 1 Việt Nam',
-    headline: 'Khởi tạo hành trình',
-    subheadline: 'Tăng trưởng đột phá',
+    badge: '',
+    headline: 'ĐỒNG SÁNG LẬP CHO DOANH NGHIỆP',
+    subheadline: 'MỘT NGƯỜI',
     description: 'Hệ sinh thái tự động hóa Marketing, thu thập Lead và chăm sóc khách hàng đa kênh dành cho doanh nghiệp Việt.',
     features: [
       'Triển khai tự động hóa trong 5 phút',
@@ -4869,9 +4869,9 @@ export default {
   // Hero Page
   heroPage: {
     tagline: 'Founder AI',
-    heroTitleLine1: 'Tự động hóa',
-    heroTitleAccent: 'Marketing',
-    heroTitleLine2: 'đa kênh',
+    heroTitleLine1: 'Đồng sáng lập cho',
+    heroTitleAccent: 'doanh nghiệp',
+    heroTitleLine2: 'một người',
     heroSubtitle: 'Tạo trang đích, quản lý khách hàng tiềm năng và chăm sóc khách hàng tự động qua Email/Zalo trong một nền tảng.',
     getStarted: 'Bắt đầu miễn phí',
     statsBusinesses: 'Doanh nghiệp tin dùng',

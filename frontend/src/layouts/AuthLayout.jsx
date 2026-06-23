@@ -56,10 +56,7 @@ const AuthLayout = ({ children }) => {
 
             {/* Headline */}
             <div className="my-auto py-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/12 bg-white/5 mb-8">
-                <FaStar className="text-yellow-400 w-3.5 h-3.5" />
-                <span className="text-[11px] font-bold text-orange-200 uppercase tracking-widest">{t('authLayout.badge')}</span>
-              </div>
+                
 
               <h2 className="text-3xl xl:text-4xl font-black text-white leading-[1.2] tracking-tight mb-5">
                 {t('authLayout.headline')}<br />

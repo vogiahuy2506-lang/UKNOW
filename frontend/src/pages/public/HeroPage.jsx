@@ -67,10 +67,10 @@ export default function HeroPage() {
 
           <h1
             className="mt-5 sm:mt-6 max-w-4xl text-white"
-            style={{ fontSize: 'clamp(32px, 7vw, 68px)', lineHeight: 1.05, fontWeight: 500, letterSpacing: 0 }}
+            style={{ fontSize: 'clamp(32px, 7vw, 80px)', lineHeight: 1.05, fontWeight: 500, letterSpacing: 0 }}
           >
             {t('heroPage.heroTitleLine1')}{' '}
-            <span style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', fontWeight: 400 }}>
+            <span style={{ fontFamily: "'', serif", fontStyle: 'italic', fontWeight: 400 }}>
               {t('heroPage.heroTitleAccent')}
             </span>
             <br />{t('heroPage.heroTitleLine2')}
