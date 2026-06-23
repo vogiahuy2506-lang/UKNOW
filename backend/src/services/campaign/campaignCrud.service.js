@@ -3,6 +3,19 @@ import { isAdminRole } from '../../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
+import uploadController from '../../controllers/upload.controller.js';
+
+function createNotFoundError(message = 'Không tìm thấy chiến dịch') {
+  const err = new Error(message);
+  err.statusCode = 404;
+  return err;
+}
+
+function createConflictError(message) {
+  const err = new Error(message);
+  err.statusCode = 409;
+  return err;
+}
 
 class CampaignCrudService {
   /**
@@ -239,6 +252,213 @@ class CampaignCrudService {
         campaignType: campaign.campaign_type,
         status: campaign.status,
       };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Cập nhật campaign; thay nodes/connections nếu `nodes` được gửi trong body.
+   *
+   * @param {object} input
+   * @returns {Promise<{ id: number, campaignName: string, status: string }>}
+   */
+  async updateCampaign({
+    campaignId,
+    userId,
+    roleCode,
+    isContentUpdate,
+    campaignName,
+    description,
+    campaignType,
+    status,
+    landingPageUrl,
+    startDate,
+    endDate,
+    timezone,
+    flowJson,
+    nodes,
+    connections,
+  }) {
+    const isAdmin = isAdminRole(roleCode);
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+
+      const existing = await campaignCrudRepository.findCampaignByIdTx(client, {
+        campaignId,
+        isAdmin,
+        userId,
+      });
+      if (!existing) {
+        throw createNotFoundError();
+      }
+
+      if (isContentUpdate) {
+        const hasRunning = await campaignCrudRepository.hasRunningRunTx(client, campaignId);
+        if (hasRunning) {
+          throw createConflictError(
+            'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi lưu thay đổi.'
+          );
+        }
+      }
+
+      const updated = await campaignCrudRepository.updateCampaignFieldsTx(client, {
+        campaignId,
+        isAdmin,
+        userId,
+        campaignName,
+        description,
+        campaignType,
+        status,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson,
+      });
+
+      if (nodes !== undefined) {
+        await campaignCrudRepository.deleteConnectionsByCampaignTx(client, campaignId);
+        await campaignCrudRepository.deleteNodesByCampaignTx(client, campaignId);
+
+        const nodeIdMap = {};
+        const orderMap = campaignFlowService.buildExecutionOrderMap(nodes || [], connections || [], {
+          nodeIdKey: 'tempId',
+          fallbackKey: 'id',
+          sourceKey: 'sourceNodeId',
+          targetKey: 'targetNodeId',
+        });
+        for (let idx = 0; idx < nodes.length; idx += 1) {
+          const node = nodes[idx];
+          const nodeKey = String(node.tempId ?? node.id ?? '');
+          const executionOrder = orderMap.get(nodeKey) || idx + 1;
+          const newNodeId = await campaignCrudRepository.insertNodeTx(client, {
+            campaignId,
+            nodeType: node.nodeType,
+            nodeSubtype: node.nodeSubtype,
+            nodeName: node.nodeName,
+            nodeDescription: node.nodeDescription,
+            positionX: node.positionX || 0,
+            positionY: node.positionY || 0,
+            config: JSON.stringify(node.config || {}),
+            executionOrder,
+          });
+          nodeIdMap[node.tempId || node.id] = newNodeId;
+        }
+
+        const resolveIdUpd = (nodeRefId) => {
+          if (nodeRefId == null || String(nodeRefId).trim() === '') return nodeRefId;
+          const mapped = nodeIdMap[String(nodeRefId)];
+          return mapped != null ? String(mapped) : String(nodeRefId);
+        };
+        for (const node of nodes) {
+          const tempKey = String(node.tempId ?? node.id ?? '');
+          const dbId = nodeIdMap[tempKey];
+          if (dbId == null) continue;
+          const updatedConfig = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveIdUpd);
+          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
+            await campaignCrudRepository.updateNodeConfigTx(client, dbId, updatedConfig);
+          }
+        }
+
+        if (connections) {
+          const sortedConnections = [...connections].sort((a, b) => {
+            const sourceA = orderMap.get(String(a?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+            const sourceB = orderMap.get(String(b?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+            if (sourceA !== sourceB) return sourceA - sourceB;
+            const targetA = orderMap.get(String(a?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+            const targetB = orderMap.get(String(b?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
+            return targetA - targetB;
+          });
+          for (const conn of sortedConnections) {
+            const sourceId = nodeIdMap[conn.sourceNodeId];
+            const targetId = nodeIdMap[conn.targetNodeId];
+            if (sourceId == null || targetId == null) continue;
+            await campaignCrudRepository.insertConnectionTx(client, {
+              campaignId,
+              sourceNodeId: sourceId,
+              targetNodeId: targetId,
+              connectionType: conn.connectionType || 'default',
+              connectionLabel: conn.connectionLabel,
+              conditionConfig: conn.conditionConfig ? JSON.stringify(conn.conditionConfig) : null,
+            });
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+      return {
+        id: updated.id,
+        campaignName: updated.campaign_name,
+        status: updated.status,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Xóa campaign (CASCADE nodes/connections) và thu thập file keys cần dọn S3.
+   *
+   * @param {object} input
+   * @returns {Promise<{ fileKeysToDelete: string[] }>}
+   */
+  async deleteCampaign({ campaignId, userId, roleCode }) {
+    const isAdmin = isAdminRole(roleCode);
+    const client = await db.getClient();
+    const allFileKeysToDelete = [];
+
+    try {
+      await client.query('BEGIN');
+
+      const existing = await campaignCrudRepository.findCampaignByIdTx(client, {
+        campaignId,
+        isAdmin,
+        userId,
+      });
+      if (!existing) {
+        throw createNotFoundError();
+      }
+
+      const nodesRows = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
+      for (const node of nodesRows) {
+        try {
+          const config = node.config;
+          if (config && config.emailTemplateId) {
+            const attachments = await campaignCrudRepository.findEmailTemplateAttachmentsTx(client, {
+              templateId: config.emailTemplateId,
+              isAdmin,
+              userId,
+            });
+            if (attachments && attachments.length > 0) {
+              const fileKeys = attachments
+                .map((att) => uploadController.normalizeStorageKey(att))
+                .filter(Boolean);
+              allFileKeysToDelete.push(...fileKeys);
+            }
+          }
+          if (config && config.attachments && Array.isArray(config.attachments)) {
+            const fileKeys = config.attachments
+              .map((att) => uploadController.normalizeStorageKey(att))
+              .filter(Boolean);
+            allFileKeysToDelete.push(...fileKeys);
+          }
+        } catch (nodeError) {
+          console.warn('Error processing node attachments:', nodeError);
+        }
+      }
+
+      await campaignCrudRepository.deleteCampaignTx(client, { campaignId, isAdmin, userId });
+      await client.query('COMMIT');
+
+      return { fileKeysToDelete: allFileKeysToDelete };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

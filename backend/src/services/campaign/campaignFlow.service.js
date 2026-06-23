@@ -448,6 +448,26 @@ class CampaignFlowService {
     }
     return false;
   }
+
+  /**
+   * @param {object} payload
+   * @returns {boolean}
+   */
+  isCampaignContentUpdateRequest(payload = {}) {
+    const editableContentFields = [
+      'campaignName',
+      'description',
+      'campaignType',
+      'landingPageUrl',
+      'startDate',
+      'endDate',
+      'timezone',
+      'flowJson',
+      'nodes',
+      'connections',
+    ];
+    return editableContentFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field));
+  }
 }
 
 export default new CampaignFlowService();
