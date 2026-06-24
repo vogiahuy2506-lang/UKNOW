@@ -10,7 +10,17 @@ export const domainResolver = async (req, res, next) => {
     const host = (req.headers.host || '').split(':')[0].toLowerCase();
     if (!host) return next();
 
-    const slug = await landingPageDomainService.getPublishedSlugForHost(host);
+    let slug;
+    try {
+      slug = await landingPageDomainService.getPublishedSlugForHost(host);
+    } catch (err) {
+      if (err?.message?.includes('is_apex_domain') || err?.message?.includes('does not exist')) {
+        console.warn(`[DomainResolver] Migration missing for is_apex_domain column, skipping: ${err.message}`);
+        return next();
+      }
+      throw err;
+    }
+
     if (slug) {
       const payload = await landingPagePublicService.getPublishedPayload(slug);
       if (payload) {
