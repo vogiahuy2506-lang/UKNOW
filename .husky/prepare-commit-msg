@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# UKNOW policy: không dùng Co-authored-by trong commit message (CLAUDE.md / AGENTS.md).
+# Cursor/IDE có thể tự chèn trailer — hook này gỡ trước khi commit hoàn tất.
+
+COMMIT_MSG_FILE="$1"
+[ -f "$COMMIT_MSG_FILE" ] || exit 0
+
+tmp=$(mktemp)
+grep -Ev '^[Cc][Oo]-[Aa]uthored-[Bb][Yy]:' "$COMMIT_MSG_FILE" > "$tmp" || true
+mv "$tmp" "$COMMIT_MSG_FILE"

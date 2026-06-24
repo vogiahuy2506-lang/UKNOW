@@ -1,14 +1,33 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const mockQuery = jest.fn();
+const mockGetSubscriptionStatus = jest.fn();
+
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockQuery },
 }));
 
+jest.unstable_mockModule('../subscriptionStatus.util.js', () => ({
+  getSubscriptionStatus: mockGetSubscriptionStatus,
+}));
+
 const { checkUserEmailSendLimit, checkUserZaloSendLimit } = await import('../userSendLimit.util.js');
 
+const activeSubscription = {
+  hasPlan: true,
+  expiresAt: new Date(Date.now() + 86400000),
+  graceDays: 0,
+  graceUntil: null,
+  isExpired: false,
+  isInGracePeriod: false,
+};
+
 describe('userSendLimit.util', () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockGetSubscriptionStatus.mockReset();
+    mockGetSubscriptionStatus.mockResolvedValue(activeSubscription);
+  });
 
   // ── checkUserEmailSendLimit ────────────────────────────────────────────────
 
@@ -115,6 +134,21 @@ describe('userSendLimit.util', () => {
       expect(result.period).toBe('monthly');
       expect(result.message).toContain('không được hỗ trợ');
       expect(mockQuery).toHaveBeenCalledTimes(2); // plan + daily count, không count monthly
+    });
+
+    it('gói hết hạn (qua ân hạn) → chặn trước khi check limit', async () => {
+      mockGetSubscriptionStatus.mockResolvedValueOnce({
+        hasPlan: true,
+        isExpired: true,
+        expiresAt: new Date(Date.now() - 86400000),
+        graceDays: 0,
+        graceUntil: new Date(Date.now() - 86400000),
+        isInGracePeriod: false,
+      });
+      const result = await checkUserEmailSendLimit({ userId: 10 });
+      expect(result.allowed).toBe(false);
+      expect(result.message).toContain('hết hạn');
+      expect(mockQuery).not.toHaveBeenCalled();
     });
   });
 

@@ -425,7 +425,7 @@ export const DurationInput = ({ value, onChange }) => {
 
 // ── LimitInput — input số với toggle "Không hỗ trợ" (-1) ─────────────────────
 /** value: '' = unlimited, -1 = not supported, number = limit */
-const LimitInput = ({ value, onChange, placeholder }) => {
+export const LimitInput = ({ value, onChange, placeholder }) => {
   const { t } = useI18n();
   const isNotSupported = value === -1 || value === '-1';
 
@@ -557,8 +557,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxEmailAccounts',      t('planInputs.emailAccounts')],
           ['maxEmailTemplates',     t('planInputs.emailTemplates')],
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
-          ['maxChatbots',           'Chatbot AI'],
-          ['aiTokensPerPeriod',    'Token AI / kỳ'],
+          ['maxChatbots',           'Số chatbot tối đa'],
+          ['aiTokensPerPeriod',    'Token AI / kỳ (hạn mức token tiêu thụ)'],
         ].map(([key, label]) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
@@ -566,7 +566,7 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           </div>
         ))}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI cao nhất (gói)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI tối đa (bao gồm mọi model thấp hơn)</label>
           <select className="input w-full" value={form.aiModel || 'gemini-2.5-flash'} onChange={(e) => set('aiModel', e.target.value)}>
             <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
             <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
@@ -574,6 +574,10 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
             <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
           </select>
+          <p className="mt-1.5 text-xs text-slate-500">
+            Thứ tự tier thấp → cao: 2.0 Flash Lite → 1.5 Flash → 2.0 Flash → 2.5 Flash → 2.5 Pro.
+            Chọn mức nào sẽ mở model đó và mọi model thấp hơn.
+          </p>
         </div>
       </div>
     </div>

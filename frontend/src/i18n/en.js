@@ -4221,6 +4221,8 @@ export default {
     // Plan expiry
     expiresOn: 'Expires on {date}',
     daysLeft: '— {days} days left',
+    inGracePeriod: 'Expired — {days} grace days remaining, please renew',
+    fullyExpired: 'Plan expired — sending & AI paused until renewal',
     // Status
     success: 'Success',
     pending: 'Pending payment',

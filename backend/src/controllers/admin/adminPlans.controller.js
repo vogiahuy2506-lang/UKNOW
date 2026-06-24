@@ -55,13 +55,15 @@ export async function create(req, res) {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel } = req.body;
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      gracePeriodDays } = req.body;
     const plan = await adminPlansService.createNewPlan({
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      gracePeriodDays,
     });
     logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
     return res.status(201).json({ success: true, message: 'Tạo gói thành công', data: plan });
@@ -74,13 +76,15 @@ export async function update(req, res) {
     const { name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel } = req.body;
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      gracePeriodDays } = req.body;
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
       name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      gracePeriodDays,
     });
     logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
     return res.json({ success: true, message: 'Cập nhật gói thành công', data: plan });

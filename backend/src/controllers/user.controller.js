@@ -100,6 +100,7 @@ const mapProfileResponse = (userRow) => ({
   monthlyZaloLimit: userRow.monthly_zalo_limit ?? null,
   aiTokensPerPeriod: userRow.ai_tokens_per_period ?? null,
   aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
+  planGracePeriodDays: userRow.grace_period_days ?? 0,
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
   emailSentMonth: Number(userRow.email_sent_month ?? 0),

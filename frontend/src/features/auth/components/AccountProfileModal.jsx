@@ -131,9 +131,40 @@ function PlanSection({ data, t }) {
       {/* Expiry date */}
       {data.subscriptionExpiresAt && (() => {
         const expiresAt = new Date(data.subscriptionExpiresAt);
-        const daysLeft = Math.ceil((expiresAt - Date.now()) / 86400000);
-        const isWarning = daysLeft <= 7;
-        const isDanger = daysLeft <= 3;
+        const graceDays = Number(data.planGracePeriodDays) || 0;
+        const graceUntil = new Date(expiresAt);
+        graceUntil.setUTCDate(graceUntil.getUTCDate() + graceDays);
+        const now = Date.now();
+        const isPastExpiry = now > expiresAt.getTime();
+        const isFullyExpired = isPastExpiry && now > graceUntil.getTime();
+        const isInGrace = isPastExpiry && !isFullyExpired;
+        const daysLeft = Math.ceil((expiresAt - now) / 86400000);
+        const graceDaysLeft = Math.ceil((graceUntil - now) / 86400000);
+        const isWarning = !isPastExpiry && daysLeft <= 7;
+        const isDanger = !isPastExpiry && daysLeft <= 3;
+
+        if (isFullyExpired) {
+          return (
+            <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-700">
+              <HiOutlineExclamation className="w-4 h-4 shrink-0" />
+              <span className="font-semibold">
+                {t('accountProfileModal.fullyExpired')}
+              </span>
+            </div>
+          );
+        }
+
+        if (isInGrace) {
+          return (
+            <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-amber-50 border border-amber-200 text-amber-800">
+              <HiOutlineExclamation className="w-4 h-4 shrink-0" />
+              <span>
+                {t('accountProfileModal.inGracePeriod', { days: graceDaysLeft })}
+              </span>
+            </div>
+          );
+        }
+
         return (
           <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
             isDanger ? 'bg-red-50 border border-red-200 text-red-700'
@@ -146,7 +177,9 @@ function PlanSection({ data, t }) {
             }
             <span>
               {t('accountProfileModal.expiresOn', { date: expiresAt.toLocaleDateString('vi-VN') })}
-              {isWarning && <span className="ml-1 font-semibold">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>}
+              {isWarning && daysLeft > 0 && (
+                <span className="ml-1 font-semibold">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>
+              )}
             </span>
           </div>
         );

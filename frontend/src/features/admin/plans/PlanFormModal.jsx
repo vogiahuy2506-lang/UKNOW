@@ -2,7 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_FORM } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField } from './PlanInputs';
+import { PriceInput, FeatureEditor, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField, LimitInput } from './PlanInputs';
 import { Field, FormSection, ModalShell, normalizePlanPayload, PLAN_PRESETS } from './PlanModalsShared.jsx';
 import { useI18n } from '../../../i18n';
 
@@ -38,6 +38,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     maxChatbots: plan.maxChatbots ?? '',
     aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
     aiModel: plan.aiModel || 'gemini-2.5-flash',
+    gracePeriodDays: plan.gracePeriodDays ?? '',
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -137,6 +138,9 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
           </Field>
           <Field label={t('planInputs.durationLabel')}>
             <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
+          </Field>
+          <Field label="Số ngày ân hạn sau hết hạn" note="0 = chặn ngay khi hết hạn gói">
+            <LimitInput value={form.gracePeriodDays ?? ''} onChange={(v) => set('gracePeriodDays', v)} />
           </Field>
           <Field label={t('planInputs.descriptionLabel')} className="md:col-span-2">
             <textarea rows={3} className="input w-full resize-none" value={form.description}

@@ -1,5 +1,9 @@
 import db from '../config/database.js';
 import { isAdminRole } from './roleScope.util.js';
+import { getSubscriptionStatus } from './subscriptionStatus.util.js';
+
+const SUBSCRIPTION_EXPIRED_MSG =
+  'Gói đã hết hạn (đã qua thời gian ân hạn). Vui lòng gia hạn để tiếp tục gửi.';
 
 /**
  * Lấy giới hạn gửi tin từ plan hiện tại của user.
@@ -94,6 +98,11 @@ const deny = (limit, count, period, msg) => ({ allowed: false, limit, currentCou
 export async function checkUserEmailSendLimit({ userId, roleCode } = {}) {
   if (isAdminRole(roleCode)) return ok();
 
+  const subscription = await getSubscriptionStatus(userId);
+  if (subscription.hasPlan && subscription.isExpired) {
+    return deny(null, 0, null, SUBSCRIPTION_EXPIRED_MSG);
+  }
+
   const limits = await getUserPlanSendLimits(userId);
   if (!limits) return ok(); // Không có plan → không enforce
 
@@ -131,6 +140,11 @@ export async function checkUserEmailSendLimit({ userId, roleCode } = {}) {
  */
 export async function checkUserZaloSendLimit({ userId, roleCode } = {}) {
   if (isAdminRole(roleCode)) return ok();
+
+  const subscription = await getSubscriptionStatus(userId);
+  if (subscription.hasPlan && subscription.isExpired) {
+    return deny(null, 0, null, SUBSCRIPTION_EXPIRED_MSG);
+  }
 
   const limits = await getUserPlanSendLimits(userId);
   if (!limits) return ok();

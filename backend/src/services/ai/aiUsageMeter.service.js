@@ -1,8 +1,11 @@
+import db from '../../config/database.js';
 import usageTrackingService from '../payment/usageTracking.service.js';
 import {
   countGeminiTokens,
   generateGeminiContent,
 } from '../../utils/geminiClient.util.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
+import { getSubscriptionStatus } from '../../utils/subscriptionStatus.util.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { normalizeModelId } from '../../utils/aiModelTier.util.js';
 
@@ -35,6 +38,14 @@ class AiUsageMeterService {
 
     if (!userId) {
       return { maxOutputTokens, inputTokens: 0, remaining: null, limit: null, used: 0, model: resolvedModel };
+    }
+
+    const subscription = await getSubscriptionStatus(userId);
+    if (subscription.hasPlan && subscription.isExpired) {
+      const roleRow = await this._getUserRole(userId);
+      if (!isAdminRole(roleRow)) {
+        throw this._subscriptionExpired();
+      }
     }
 
     const currentUsage = await usageTrackingService.getResourceUsage(userId, AI_TOKEN_RESOURCE);
@@ -138,6 +149,20 @@ class AiUsageMeterService {
     error.limit = usage.limit;
     error.upgradeRequired = true;
     return error;
+  }
+
+  _subscriptionExpired() {
+    const error = new Error('Gói đã hết hạn — vui lòng gia hạn để dùng AI');
+    error.status = 403;
+    error.code = 'RESOURCE_LIMIT_EXCEEDED';
+    error.resource = AI_TOKEN_RESOURCE;
+    error.upgradeRequired = true;
+    return error;
+  }
+
+  async _getUserRole(userId) {
+    const { rows } = await db.query(`SELECT role FROM users WHERE id = $1 LIMIT 1`, [userId]);
+    return rows[0]?.role ?? null;
   }
 
   _estimateLocalTokens(contents, systemInstruction) {

@@ -4273,6 +4273,8 @@ export default {
     // Plan expiry
     expiresOn: 'Hết hạn ngày {date}',
     daysLeft: '— còn {days} ngày',
+    inGracePeriod: 'Đã hết hạn — còn {days} ngày ân hạn, vui lòng gia hạn',
+    fullyExpired: 'Gói đã hết hạn — tạm ngưng gửi tin & AI cho tới khi gia hạn',
     // Status
     success: 'Thành công',
     pending: 'Chờ thanh toán',

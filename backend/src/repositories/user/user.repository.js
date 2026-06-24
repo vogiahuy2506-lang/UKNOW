@@ -20,7 +20,8 @@ const PLAN_COLUMNS = `
   p.monthly_email_limit,
   p.daily_zalo_limit,
   p.monthly_zalo_limit,
-  p.ai_tokens_per_period
+  p.ai_tokens_per_period,
+  p.grace_period_days
 `;
 
 /** Core plan columns only — safe when limit/AI token columns are missing from schema. */
@@ -35,7 +36,8 @@ const PLAN_COLUMNS_FALLBACK = `
   NULL::int AS monthly_email_limit,
   NULL::int AS daily_zalo_limit,
   NULL::int AS monthly_zalo_limit,
-  NULL::int AS ai_tokens_per_period
+  NULL::int AS ai_tokens_per_period,
+  NULL::int AS grace_period_days
 `;
 
 const PROFILE_PLAN_WHERE = `
