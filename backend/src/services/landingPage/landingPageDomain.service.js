@@ -104,7 +104,7 @@ function flattenDnsRecords(records = []) {
 }
 
 function getNsLookupHintDomain(hostname) {
-  // Always return the full hostname for NS lookup - this tells users their nameservers
+  // Always return the full hostname for NS lookup - users need to check nameservers for their own domain
   return String(hostname || '').trim().toLowerCase();
 }
 
