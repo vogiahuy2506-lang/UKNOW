@@ -604,9 +604,10 @@ class CustomerReadRepository {
       const placeholders = normalizedNotPurchasedCourseIds.map((_, idx) => `$${params.length + idx + 1}`).join(',');
       params.push(...normalizedNotPurchasedCourseIds);
       whereNotPurchased = ` AND cp.id_customer NOT IN (
-        SELECT id_customer FROM customer_purchases
-        WHERE id_user = $1 AND id_course IN (${placeholders})
-          AND LOWER(COALESCE(product_type, '')) != 'interested'
+        SELECT pur.id_customer FROM customer_purchases pur
+        JOIN customers cu ON cu.id = pur.id_customer AND cu.id_user = $1
+        WHERE pur.id_course IN (${placeholders})
+          AND LOWER(COALESCE(pur.product_type, '')) != 'interested'
       )`;
     }
 
