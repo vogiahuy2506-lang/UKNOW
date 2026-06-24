@@ -114,7 +114,7 @@ class LandingPageRepository {
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
-         ld.domain_type AS "domainType",
+         lp.domain_type AS "domainType",
          ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
          ld.status AS "customDomainStatus"
@@ -214,7 +214,7 @@ class LandingPageRepository {
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
-         ld.domain_type AS "domainType",
+         lp.domain_type AS "domainType",
          ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
          ld.status AS "customDomainStatus"
