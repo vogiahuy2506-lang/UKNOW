@@ -101,37 +101,35 @@ describe('landingPageDomain.service DNS verification', () => {
       });
     });
 
-    it('phân loại ENODATA thành no_cname khi A-record không khớp', async () => {
-      dnsResolve.mockRejectedValue(dnsError('ENODATA'));
+    it('phân loại ENODATA thành wrong_target khi A-record không khớp', async () => {
       dnsResolve4.mockResolvedValueOnce(['203.0.113.10']);
-      dnsResolve4.mockResolvedValueOnce(['203.0.113.20']);
 
       await expect(checkCnameStatus('example.com', 'founderai.biz')).resolves.toMatchObject({
         verified: false,
-        reason: 'no_cname',
+        reason: 'wrong_target',
       });
     });
 
     it('trả no_cname khi apex domain không có CNAME và A-record không khớp', async () => {
-      dnsResolve.mockRejectedValue(dnsError('ENODATA'));
+      // Apex domain skips CNAME lookup entirely
       dnsResolve4.mockResolvedValueOnce(['203.0.113.10']);
-      dnsResolve4.mockResolvedValueOnce(['203.0.113.20']);
 
       await expect(checkCnameStatus('example.com', 'founderai.biz')).resolves.toMatchObject({
         verified: false,
-        reason: 'no_cname',
+        reason: 'wrong_target',
         isApexDomain: true,
+        currentIp: '203.0.113.10',
       });
     });
 
     it('chấp nhận apex domain khi A-record trỏ đúng platform IP', async () => {
-      dnsResolve.mockRejectedValue(dnsError('ENODATA'));
-      dnsResolve4.mockResolvedValue(['103.110.87.210']);
+      dnsResolve4.mockResolvedValueOnce(['103.110.87.210']);
 
       await expect(checkCnameStatus('apexdomain.com', 'founderai.biz')).resolves.toMatchObject({
         verified: true,
         reason: 'ok',
         isApexDomain: true,
+        currentIp: '103.110.87.210',
       });
     });
 
@@ -181,7 +179,10 @@ describe('landingPageDomain.service DNS verification', () => {
     };
 
     it('trả message not_found cụ thể thay vì bảo chờ propagate', async () => {
-      findByLandingPageIdInScope.mockResolvedValue(row);
+      findByLandingPageIdInScope.mockResolvedValueOnce({
+        ...row,
+        hostname: 'digibook.com.vn',
+      });
       dnsResolve.mockRejectedValue(dnsError('ENOTFOUND'));
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
@@ -190,21 +191,39 @@ describe('landingPageDomain.service DNS verification', () => {
       });
     });
 
-    it('trả message no_cname khi hostname tồn tại nhưng thiếu CNAME', async () => {
-      findByLandingPageIdInScope.mockResolvedValue(row);
-      dnsResolve.mockRejectedValue(dnsError('ENODATA'));
+    it('trả message wrong_target khi A-record không khớp platform IP', async () => {
+      findByLandingPageIdInScope.mockResolvedValueOnce({
+        ...row,
+        hostname: 'digibook.com.vn',
+      });
       dnsResolve4.mockResolvedValueOnce(['203.0.113.10']);
-      dnsResolve4.mockResolvedValueOnce(['203.0.113.20']);
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
         statusCode: 400,
-        message: expect.stringContaining('không có bản ghi CNAME'),
+        message: expect.stringContaining('A record chưa đúng'),
+      });
+    });
+
+    it('verify thành công apex domain khi A-record khớp platform IP', async () => {
+      findByLandingPageIdInScope.mockResolvedValueOnce({
+        ...row,
+        hostname: 'digibook.com.vn',
+      });
+      updateStatusById.mockResolvedValueOnce(row);
+      dnsResolve4.mockResolvedValueOnce(['103.110.87.210']);
+
+      await expect(landingPageDomainService.verifyDns(99, authUser)).resolves.toMatchObject({
+        hostname: 'digibook.com.vn',
+        status: 'active',
       });
     });
 
     it('trả message transient riêng cho lỗi DNS tạm thời', async () => {
-      findByLandingPageIdInScope.mockResolvedValue(row);
-      dnsResolve.mockRejectedValue(dnsError('ETIMEOUT'));
+      findByLandingPageIdInScope.mockResolvedValueOnce({
+        ...row,
+        hostname: 'digibook.com.vn',
+      });
+      dnsResolve4.mockRejectedValue(dnsError('ETIMEOUT'));
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
         statusCode: 400,

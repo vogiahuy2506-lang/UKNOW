@@ -21,7 +21,7 @@ const APEX_SUBDOMAIN_PREFIXES = new Set(['www', 'lp', 'm', 'blog', 'app', 'admin
 
 function isApexDomain(hostname) {
   const h = String(hostname || '').trim().toLowerCase();
-  const parts = h.split('.');
+  const parts = h.split('.').filter(Boolean);
   if (parts.length > 3) return false;
   if (parts.length >= 2 && APEX_SUBDOMAIN_PREFIXES.has(parts[0])) return false;
   return true;
@@ -133,7 +133,28 @@ export async function checkCnameStatus(hostname, target, forceApex = null) {
   const expected = String(target || '').trim().replace(/\.$/, '').toLowerCase();
   // Use user-chosen flag if provided, otherwise auto-detect
   const isApex = forceApex !== null ? Boolean(forceApex) : isApexDomain(h);
+  const platformIp = apexFixedIp();
 
+  // Apex domain: skip CNAME lookup, go straight to A record check
+  if (isApex) {
+    let currentIp = null;
+    try {
+      currentIp = (await dns.resolve4(h))[0] || null;
+    } catch {
+      // ignore
+    }
+
+    const verified = platformIp ? currentIp === platformIp : false;
+    return {
+      verified,
+      reason: verified ? 'ok' : (currentIp ? 'wrong_target' : 'not_found'),
+      found: [],
+      isApexDomain: isApex,
+      currentIp,
+    };
+  }
+
+  // Subdomain: try CNAME first
   try {
     const cnameRecords = await dns.resolve(h, 'CNAME');
     const found = flattenDnsRecords(cnameRecords);
@@ -158,7 +179,7 @@ export async function checkCnameStatus(hostname, target, forceApex = null) {
         currentIp = ips[0] || null;
       } catch { /* ignore */ }
 
-      const verifiedByARecord = await hasMatchingARecord(h, expected);
+      const verifiedByARecord = platformIp ? currentIp === platformIp : false;
       const reason = verifiedByARecord ? 'ok' : 'no_cname';
       return {
         verified: verifiedByARecord,
@@ -169,6 +190,7 @@ export async function checkCnameStatus(hostname, target, forceApex = null) {
       };
     }
 
+    // Transient/other DNS error → mark as transient for retry
     return {
       verified: false,
       reason: 'transient',
@@ -225,6 +247,16 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
   }
 
   if (reason === 'wrong_target') {
+    if (isApex && currentIp && platformIp) {
+      return `${hostname} có tồn tại nhưng bản ghi A chưa đúng.\n`
+        + `- Domain hiện tại trỏ về IP: ${currentIp}\n`
+        + `- IP cần trỏ về: ${platformIp}\n`
+        + `Vui lòng đổi bản ghi A tại nhà cung cấp domain:\n`
+        + `- Type: A\n`
+        + `- Name: @\n`
+        + `- Value: ${platformIp}`;
+    }
+
     return `CNAME chưa đúng.\n`
       + `- Cần trỏ về: ${target}\n`
       + `- Hiện tại: ${found.join(', ') || 'không có'}`;
