@@ -94,6 +94,7 @@ export default function LandingPagesAdminPage() {
         submitCount: Number(st.submitCount || 0),
         displayDomain: domain,
         isCustomDomain: Boolean(r.customDomainHostname),
+        isApexDomain: Boolean(r.customDomainIsApex),
       };
     });
   }, [rows, statsBySlug]);
@@ -302,7 +303,7 @@ export default function LandingPagesAdminPage() {
                       </code>
                       {r.isCustomDomain && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600">
-                          {r.domainSubtype === 'apex' ? 'Apex' : 'Sub'}
+                          {r.isApexDomain ? 'Apex' : 'Sub'}
                         </span>
                       )}
                       <button

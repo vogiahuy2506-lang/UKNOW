@@ -379,7 +379,9 @@ export default function LandingPageFullEditor({
       if (res.data.status === 'active') {
         toast.success(t('landingPageEditor.domainVerified'));
       } else {
-        toast.error('CNAME chưa đúng hoặc DNS chưa propagate. Hãy thử lại sau vài phút.');
+        const isApex = res.data?.isApexDomain;
+        const recordType = isApex ? 'A record' : 'CNAME record';
+        toast.error(`${recordType} chưa đúng hoặc DNS chưa propagate. Hãy thử lại sau vài phút.`);
       }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.verifyFailed'));

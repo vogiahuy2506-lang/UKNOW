@@ -59,7 +59,7 @@ else
         -d "$DOMAIN" \
         --non-interactive \
         --agree-tos \
-        --email admin@founderai.biz \
+        --email support@digiso.vn \
         --keep-until-expiring \
         2>&1 | tee -a "$LOG_FILE"; then
         log "Certificate obtained successfully!"
