@@ -208,7 +208,7 @@ describe('landingPageDomain.service DNS verification', () => {
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
         statusCode: 400,
-        message: expect.stringContaining('Đang chờ DNS propagate'),
+        message: expect.stringContaining('Lỗi DNS tạm thời'),
       });
     });
   });

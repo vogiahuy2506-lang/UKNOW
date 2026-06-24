@@ -210,16 +210,12 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
           + `- Name: @\n`
           + `- Value: ${platformIp}`;
       }
-      if (platformIp) {
-        return `${hostname} có tồn tại nhưng chưa có bản ghi DNS đúng.\n`
-          + `Vui lòng thêm bản ghi A tại nhà cung cấp domain:\n`
-          + `- Type: A\n`
-          + `- Name: @\n`
-          + `- Value: ${platformIp}`;
+      if (currentIp && platformIp && currentIp === platformIp) {
+        return `${hostname} đã trỏ đúng IP ${platformIp}, nhưng hệ thống chưa nhận diện được.\n`
+          + `Vui lòng thử lại sau vài phút, hoặc liên hệ hỗ trợ.`;
       }
-      return `${hostname} có tồn tại nhưng chưa có bản ghi DNS đúng.\n`
-        + `Vui lòng dùng subdomain (ví dụ: www.${hostname} hoặc lp.${hostname}) `
-        + `với bản ghi CNAME trỏ về ${target}, hoặc liên hệ hỗ trợ để cấu hình domain gốc.`;
+      return `${hostname} đang được đặt là domain gốc (apex), nhưng hệ thống chưa cấu hình IP mặc định cho apex domain.\n`
+        + `Vui lòng liên hệ hỗ trợ để cấu hình, hoặc chuyển sang dùng subdomain (ví dụ: www.${hostname}) với bản ghi CNAME trỏ về ${target}.`;
     }
     return `${hostname} có tồn tại nhưng không có bản ghi CNAME. `
       + `Vui lòng thêm bản ghi CNAME tại nhà cung cấp domain:\n`
@@ -234,7 +230,13 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
       + `- Hiện tại: ${found.join(', ') || 'không có'}`;
   }
 
-  return `Đang chờ DNS propagate cho ${hostname}, vui lòng thử lại sau vài phút.`;
+  const detail = currentIp
+    ? `\nIP hiện tại của ${hostname}: ${currentIp}`
+    : '';
+  const note = reason === 'transient'
+    ? 'Lỗi DNS tạm thời (timeout/network), vui lòng thử lại sau vài phút.'
+    : 'Vui lòng kiểm tra lại bản ghi DNS hoặc thử lại sau vài phút.';
+  return `Đang chờ xác minh DNS cho ${hostname}. ${note}${detail}`;
 }
 
 function subdomainBase() {
@@ -481,7 +483,6 @@ class LandingPageDomainService {
     }
     console.log(`[LandingPageDomainService.verifyDns] landingPageId=${landingPageId}, hostname=${row.hostname}, status=${row.status}, cfManaged=${row.cfManaged}, userId=${authUser?.id}`);
 
-    // CF-managed domain đã active ngay từ lúc tạo
     if (row.cfManaged && row.status === 'active') {
       return buildDomainResponse(row);
     }
@@ -491,9 +492,12 @@ class LandingPageDomainService {
     }
 
     const expectedTarget = cnameTarget();
-    const dnsStatus = await checkCnameStatus(row.hostname, expectedTarget);
+    const storedIsApex = row.isApexDomain !== undefined && row.isApexDomain !== null
+      ? Boolean(row.isApexDomain)
+      : null;
+    const dnsStatus = await checkCnameStatus(row.hostname, expectedTarget, storedIsApex);
     const ok = dnsStatus.verified;
-    console.log(`[LandingPageDomainService.verifyDns] expectedTarget=${expectedTarget}, reason=${dnsStatus.reason}, found=${(dnsStatus.found || []).join(',')}, ok=${ok}`);
+    console.log(`[LandingPageDomainService.verifyDns] expectedTarget=${expectedTarget}, reason=${dnsStatus.reason}, found=${(dnsStatus.found || []).join(',')}, ok=${ok}, isApex=${dnsStatus.isApexDomain}, currentIp=${dnsStatus.currentIp}`);
 
     if (!ok) {
       const err = new Error(buildDnsVerificationErrorMessage(dnsStatus, row.hostname, expectedTarget));
@@ -502,7 +506,6 @@ class LandingPageDomainService {
     }
 
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
-    // Clear CORS cache so verified domain is immediately allowed
     await getClearCacheFn();
     return this.getForLanding(landingPageId, authUser);
   }
