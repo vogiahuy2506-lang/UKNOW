@@ -46,6 +46,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
           build-args: |
             BUILD_SHA=${{ github.sha }}
+            LP_APEX_FIXED_IP=${{ secrets.LP_APEX_FIXED_IP }}
+            LP_CNAME_TARGET=${{ secrets.LP_CNAME_TARGET }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

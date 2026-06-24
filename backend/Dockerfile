@@ -7,7 +7,12 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 ARG BUILD_SHA=dev
+ARG LP_APEX_FIXED_IP
+ARG LP_CNAME_TARGET
 RUN echo "Build SHA: $BUILD_SHA"
+
+ENV LP_APEX_FIXED_IP=${LP_APEX_FIXED_IP}
+ENV LP_CNAME_TARGET=${LP_CNAME_TARGET}
 
 # Copy toàn bộ source sau khi đã cài dependency
 COPY . .
