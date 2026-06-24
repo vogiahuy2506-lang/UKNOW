@@ -5,6 +5,7 @@ const dnsResolve4 = jest.fn();
 const findByLandingPageIdInScope = jest.fn();
 const updateStatusById = jest.fn();
 const findByIdInScope = jest.fn();
+const findByLandingPageId = jest.fn();
 
 jest.unstable_mockModule('dns/promises', () => ({
   default: {
@@ -18,7 +19,7 @@ jest.unstable_mockModule('../../../repositories/landingPageDomain.repository.js'
   default: {
     findByLandingPageIdInScope,
     updateStatusById,
-    findByLandingPageId: jest.fn(),
+    findByLandingPageId,
     findActiveByHostname: jest.fn(),
     findByHostnameLower: jest.fn(),
     countPendingOrActiveInScope: jest.fn(),
@@ -65,6 +66,7 @@ describe('landingPageDomain.service DNS verification', () => {
     findByLandingPageIdInScope.mockReset();
     updateStatusById.mockReset();
     findByIdInScope.mockReset();
+    findByLandingPageId.mockReset();
     process.env.LP_CNAME_TARGET = 'founderai.biz';
     process.env.LP_APEX_FIXED_IP = '103.110.87.210';
   });
@@ -221,7 +223,7 @@ describe('landingPageDomain.service DNS verification', () => {
       updateStatusById.mockResolvedValueOnce(updatedRow);
       // Mock for getForLanding call after successful update
       findByIdInScope.mockResolvedValueOnce(lp);
-      findByLandingPageIdInScope.mockResolvedValueOnce(updatedRow);
+      findByLandingPageId.mockResolvedValueOnce(updatedRow);
       dnsResolve4.mockResolvedValueOnce(['103.110.87.210']);
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).resolves.toMatchObject({
