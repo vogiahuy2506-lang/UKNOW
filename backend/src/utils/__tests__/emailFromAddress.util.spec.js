@@ -16,13 +16,13 @@ describe('emailFromAddress.util', () => {
 
   describe('resolveFromAddress', () => {
     it('formats name + email like legacy SMTP header', () => {
-      expect(resolveFromAddress({ name: 'Founder AI', email: 'hello@founderai.biz' }))
-        .toBe('"Founder AI" <hello@founderai.biz>');
+      expect(resolveFromAddress({ name: 'Founder AI', email: 'hello@digiso.vn' }))
+        .toBe('"Founder AI" <hello@digiso.vn>');
     });
 
     it('returns bare email when name is empty', () => {
-      expect(resolveFromAddress({ name: '   ', email: 'hello@founderai.biz' }))
-        .toBe('hello@founderai.biz');
+      expect(resolveFromAddress({ name: '   ', email: 'hello@digiso.vn' }))
+        .toBe('hello@digiso.vn');
     });
 
     it('sanitizes user-controlled display name', () => {

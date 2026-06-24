@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 const SENDER_NAME = 'FounderAI';
-const SENDER_ADDRESS = process.env.SYSTEM_EMAIL_FROM || 'noreply@founderai.biz';
+const SENDER_ADDRESS = process.env.SYSTEM_EMAIL_FROM || 'noreply@digiso.vn';
 
 /**
  * Nodemailer transporter dùng SendGrid SMTP cho email hệ thống (nhắc hạn, thông báo).
@@ -117,7 +117,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
 
       <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6">
         Nếu bạn đã gia hạn hoặc không muốn nhận thông báo này, vui lòng liên hệ
-        <a href="mailto:support@founderai.biz" style="color:#f97316">support@founderai.biz</a>.
+        <a href="mailto:support@digiso.vn" style="color:#f97316">support@digiso.vn</a>.
       </p>
     </div>
 

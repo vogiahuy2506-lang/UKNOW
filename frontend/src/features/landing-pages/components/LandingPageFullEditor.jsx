@@ -314,12 +314,14 @@ export default function LandingPageFullEditor({
   const [cdLoading, setCdLoading] = useState(false);
   const [cdBusy, setCdBusy] = useState(false);
   const [cdHostnameDraft, setCdHostnameDraft] = useState('');
+  const [cdIsApexDomain, setCdIsApexDomain] = useState(false);
   const [cdInfo, setCdInfo] = useState(null);
 
   useEffect(() => {
     if (!open || !editingId) {
       setCdInfo(null);
       setCdHostnameDraft('');
+      setCdIsApexDomain(false);
       return;
     }
     let cancelled = false;
@@ -329,6 +331,7 @@ export default function LandingPageFullEditor({
         if (cancelled || !res?.success) return;
         setCdInfo(res.data);
         setCdHostnameDraft(res.data?.hostname ? String(res.data.hostname) : '');
+        setCdIsApexDomain(res.data?.isApexDomain === true);
       })
       .catch(() => {
         if (!cancelled) toast.error(t('landingPageEditor.loadDomainFailed'));
@@ -351,7 +354,7 @@ export default function LandingPageFullEditor({
     }
     setCdBusy(true);
     try {
-      const res = await putLandingCustomDomain(editingId, h);
+      const res = await putLandingCustomDomain(editingId, h, cdIsApexDomain);
       if (!res?.success) throw new Error(res?.message || t('landingPageEditor.saveFailed'));
       setCdInfo(res.data);
       if (res.data.status === 'active') {
@@ -625,6 +628,56 @@ export default function LandingPageFullEditor({
                             {cdBusy ? 'Đang xử lý...' : 'Thêm Domain'}
                           </button>
                         </div>
+
+                        {/* Apex vs Subdomain Selection */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <span className="text-sm font-medium text-gray-700 shrink-0">Loại domain:</span>
+                          <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="apexType"
+                                value="subdomain"
+                                checked={!cdIsApexDomain}
+                                onChange={() => setCdIsApexDomain(false)}
+                                className="accent-blue-600 w-4 h-4"
+                              />
+                              <span className="text-sm text-gray-700">
+                                <span className="font-medium">Subdomain</span>
+                                <span className="text-gray-500 ml-1">(ví dụ: www.yoursite.com, lp.yoursite.com)</span>
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="apexType"
+                                value="apex"
+                                checked={cdIsApexDomain}
+                                onChange={() => setCdIsApexDomain(true)}
+                                className="accent-blue-600 w-4 h-4"
+                              />
+                              <span className="text-sm text-gray-700">
+                                <span className="font-medium">Domain gốc (Apex)</span>
+                                <span className="text-gray-500 ml-1">(ví dụ: yoursite.com)</span>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* DNS Instructions based on selection */}
+                        {!cdInfo?.configured && cdHostnameDraft.trim() && (
+                          <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded p-2">
+                            {cdIsApexDomain ? (
+                              <span>
+                                <span className="font-semibold text-blue-700">Domain gốc:</span> Cần thêm bản ghi <strong>A</strong> trỏ về IP của máy chủ.
+                              </span>
+                            ) : (
+                              <span>
+                                <span className="font-semibold text-blue-700">Subdomain:</span> Cần thêm bản ghi <strong>CNAME</strong> trỏ về founderai.biz.
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Manual DNS Instructions - Only show if domain is pending */}
                         {cdInfo?.configured && cdInfo?.status === 'pending_verification' && (

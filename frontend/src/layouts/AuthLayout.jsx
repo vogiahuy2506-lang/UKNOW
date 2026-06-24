@@ -84,7 +84,7 @@ const AuthLayout = ({ children }) => {
             <div className="flex items-center gap-5 text-xs font-medium text-white/25">
               <span>© 2026 Founder AI Marketing</span>
               <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors">{t('authLayout.footer.privacy')}</Link>
-              <a href="mailto:support@founderai.biz" className="hover:text-orange-400 transition-colors">{t('authLayout.footer.support')}</a>
+              <a href="mailto:support@digiso.vn" className="hover:text-orange-400 transition-colors">{t('authLayout.footer.support')}</a>
             </div>
           </div>
 

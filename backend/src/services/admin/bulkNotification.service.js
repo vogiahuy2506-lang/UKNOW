@@ -85,7 +85,7 @@ function buildMaintenanceEmail({ title, message, durationMinutes, startTime }) {
 
       <p style="margin:0;font-size:14px;color:#374151;line-height:1.6">
         Nếu Quý khách có bất kỳ thắc mắc nào, vui lòng liên hệ:
-        <a href="mailto:support@founderai.biz" style="color:#f97316">support@founderai.biz</a>
+        <a href="mailto:support@digiso.vn" style="color:#f97316">support@digiso.vn</a>
       </p>
     </div>
 

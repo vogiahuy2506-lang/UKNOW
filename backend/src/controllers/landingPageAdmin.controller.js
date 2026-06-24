@@ -143,7 +143,7 @@ class LandingPageAdminController {
 
   /**
    * PUT /api/admin/landing-pages/:id/custom-domain
-   * Body: { hostname: "www.example.com" }
+   * Body: { hostname: "www.example.com", isApexDomain: false }
    */
   async putCustomDomain(req, res) {
     try {
@@ -152,7 +152,8 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const hostname = String(req.body?.hostname || '').trim();
-      const data = await landingPageDomainService.setHostname(id, hostname, req.user);
+      const isApexDomain = Boolean(req.body?.isApexDomain);
+      const data = await landingPageDomainService.setHostname(id, hostname, isApexDomain, req.user);
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;

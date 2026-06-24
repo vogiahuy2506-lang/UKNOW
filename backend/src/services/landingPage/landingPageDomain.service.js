@@ -128,10 +128,11 @@ async function hasMatchingARecord(hostname, target) {
   }
 }
 
-export async function checkCnameStatus(hostname, target) {
+export async function checkCnameStatus(hostname, target, forceApex = null) {
   const h = String(hostname || '').trim().toLowerCase();
   const expected = String(target || '').trim().replace(/\.$/, '').toLowerCase();
-  const isApex = isApexDomain(h);
+  // Use user-chosen flag if provided, otherwise auto-detect
+  const isApex = forceApex !== null ? Boolean(forceApex) : isApexDomain(h);
 
   try {
     const cnameRecords = await dns.resolve(h, 'CNAME');
@@ -255,7 +256,10 @@ function buildDomainResponse(row) {
 
   const isActive = row.status === 'active';
   const isCfManaged = Boolean(row.cfManaged);
-  const isApex = isApexDomain(row.hostname);
+  // Use stored user-chosen flag, fall back to auto-detect for existing rows
+  const isApex = row.isApexDomain !== undefined && row.isApexDomain !== null
+    ? Boolean(row.isApexDomain)
+    : isApexDomain(row.hostname);
   const platformIp = apexFixedIp();
   const target = cnameTarget();
 
@@ -348,9 +352,10 @@ class LandingPageDomainService {
    *
    * @param {number} landingPageId
    * @param {string} hostname
+   * @param {boolean} isApexDomain - user-chosen apex vs subdomain flag
    * @param {object} authUser
    */
-  async setHostname(landingPageId, hostname, authUser) {
+  async setHostname(landingPageId, hostname, isApexDomain, authUser) {
     const h = assertValidHostname(hostname);
     const lp = await landingPageRepository.findByIdInScope(landingPageId, normalizeAuthScope(authUser));
     if (!lp) {
@@ -406,6 +411,7 @@ class LandingPageDomainService {
             hostname: h,
             verificationToken: token,
             status: 'active',
+            isApexDomain,
             cfManaged: true,
             cfZoneId: cfResult.zoneId,
             cfRecordId: cfResult.recordId,
@@ -429,7 +435,7 @@ class LandingPageDomainService {
     // --- Mode 2: Manual CNAME verification tự động ---
     // CNAME target là founderai.biz (không phải verify.founderai.biz)
     const target = cnameTarget();
-    const dnsStatus = await checkCnameStatus(h, target);
+    const dnsStatus = await checkCnameStatus(h, target, isApexDomain);
     const isVerified = dnsStatus.verified;
 
     const status = isVerified ? 'active' : 'pending_verification';
@@ -439,6 +445,7 @@ class LandingPageDomainService {
         hostname: h,
         verificationToken: token,
         status,
+        isApexDomain,
         cfManaged: false,
         cfZoneId: null,
         cfRecordId: null,
@@ -560,6 +567,7 @@ class LandingPageDomainService {
         hostname,
         verificationToken: token,
         status: 'active',
+        isApexDomain: false,
         cfManaged: true,
         cfZoneId: cfResult.zoneId,
         cfRecordId: cfResult.recordId,

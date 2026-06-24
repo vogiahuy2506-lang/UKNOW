@@ -152,10 +152,11 @@ export async function fetchLandingCustomDomain(landingPageId) {
 /**
  * @param {number} landingPageId
  * @param {string} hostname
+ * @param {boolean} [isApexDomain]
  * @returns {Promise<object>}
  */
-export async function putLandingCustomDomain(landingPageId, hostname) {
-  const { data } = await api.put(`/admin/landing-pages/${landingPageId}/custom-domain`, { hostname });
+export async function putLandingCustomDomain(landingPageId, hostname, isApexDomain = false) {
+  const { data } = await api.put(`/admin/landing-pages/${landingPageId}/custom-domain`, { hostname, isApexDomain });
   return data;
 }
 

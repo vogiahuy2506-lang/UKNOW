@@ -269,7 +269,7 @@ function getBlockDefaultData(blockType, t) {
       faq_1_q: 'Dịch vụ này có miễn phí không?',
       faq_1_a: 'Chúng tôi cung cấp gói miễn phí với các tính năng cơ bản. Bạn có thể nâng cấp lên gói trả phí để sử dụng thêm nhiều tính năng nâng cao.',
       faq_2_q: 'Làm sao để liên hệ hỗ trợ?',
-      faq_2_a: 'Bạn có thể liên hệ qua email support@founderai.biz hoặc gọi hotline 0901 234 567 vào giờ hành chính.',
+      faq_2_a: 'Bạn có thể liên hệ qua email support@digiso.vn hoặc gọi hotline 0901 234 567 vào giờ hành chính.',
       primary_color: '#f97316',
       accent_color: '#ea580c',
       bg_color: '#ffffff',
