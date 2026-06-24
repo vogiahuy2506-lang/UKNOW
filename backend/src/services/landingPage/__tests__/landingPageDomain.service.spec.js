@@ -156,7 +156,7 @@ describe('landingPageDomain.service DNS verification', () => {
       );
 
       expect(message).toContain('chưa tồn tại trong DNS công khai');
-      expect(message).toContain('dig NS digibook.com.vn');
+      expect(message).toContain('dig NS giahuy.digibook.com.vn');
       expect(message).toContain('nhà cung cấp');
     });
 

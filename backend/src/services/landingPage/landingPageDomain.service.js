@@ -104,9 +104,8 @@ function flattenDnsRecords(records = []) {
 }
 
 function getNsLookupHintDomain(hostname) {
-  const labels = String(hostname || '').trim().toLowerCase().split('.').filter(Boolean);
-  if (labels.length <= 2) return labels.join('.');
-  return labels.slice(1).join('.');
+  // Always return the full hostname for NS lookup - this tells users their nameservers
+  return String(hostname || '').trim().toLowerCase();
 }
 
 async function hasMatchingARecord(hostname, target) {
