@@ -392,26 +392,15 @@ const Products = () => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
-                  <input
-                    type="text"
-                    value={formData.price}
-                    onChange={(e) => setField('price', e.target.value)}
-                    placeholder={t('products.pricePlaceholder')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.originalPrice')}</label>
-                  <input
-                    type="text"
-                    value={formData.originalPrice}
-                    onChange={(e) => setField('originalPrice', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
+                <input
+                  type="text"
+                  value={formData.price}
+                  onChange={(e) => setField('price', e.target.value)}
+                  placeholder={t('products.pricePlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.category')}</label>
