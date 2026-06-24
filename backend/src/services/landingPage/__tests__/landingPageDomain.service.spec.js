@@ -196,20 +196,28 @@ describe('landingPageDomain.service DNS verification', () => {
         ...row,
         hostname: 'digibook.com.vn',
       });
+      // Apex domain uses dns.resolve4, not dns.resolve
       dnsResolve4.mockResolvedValueOnce(['203.0.113.10']);
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
         statusCode: 400,
-        message: expect.stringContaining('A record chưa đúng'),
+        message: expect.stringContaining('bản ghi A chưa đúng'),
       });
     });
 
     it('verify thành công apex domain khi A-record khớp platform IP', async () => {
+      const updatedRow = {
+        ...row,
+        hostname: 'digibook.com.vn',
+        status: 'active',
+      };
       findByLandingPageIdInScope.mockResolvedValueOnce({
         ...row,
         hostname: 'digibook.com.vn',
       });
-      updateStatusById.mockResolvedValueOnce(row);
+      updateStatusById.mockResolvedValueOnce(updatedRow);
+      // Mock for getForLanding call after successful update
+      findByLandingPageIdInScope.mockResolvedValueOnce(updatedRow);
       dnsResolve4.mockResolvedValueOnce(['103.110.87.210']);
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).resolves.toMatchObject({
@@ -223,6 +231,7 @@ describe('landingPageDomain.service DNS verification', () => {
         ...row,
         hostname: 'digibook.com.vn',
       });
+      // Apex domain uses dns.resolve4, which throws ETIMEOUT for transient errors
       dnsResolve4.mockRejectedValue(dnsError('ETIMEOUT'));
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
