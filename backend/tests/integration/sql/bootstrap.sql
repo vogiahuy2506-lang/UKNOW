@@ -819,6 +819,10 @@ CREATE TABLE landing_pages (
   status        VARCHAR(20)  NOT NULL DEFAULT 'draft',
   is_published  BOOLEAN      NOT NULL DEFAULT FALSE,
   published_at  TIMESTAMPTZ,
+  domain_type   VARCHAR(20)  NOT NULL DEFAULT 'system'
+    CHECK (domain_type IN ('system', 'custom')),
+  domain_subtype VARCHAR(20) DEFAULT NULL
+    CHECK (domain_subtype IS NULL OR domain_subtype IN ('subdomain', 'apex')),
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
