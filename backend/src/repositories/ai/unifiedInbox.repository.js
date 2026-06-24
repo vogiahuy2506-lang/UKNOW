@@ -51,6 +51,24 @@ function withTableAlias(sql, tableAlias) {
   return sql.replaceAll('__TABLE__', tableAlias);
 }
 
+/** @returns {{ sql: string, nextIndex: number, params: string[] }} */
+function buildSearchFilter(search, startIndex) {
+  if (!search) {
+    return { sql: '', nextIndex: startIndex, params: [] };
+  }
+
+  const sql = `AND (
+        __TABLE__.visitor_name ILIKE $${startIndex} OR
+        __TABLE__.visitor_info::text ILIKE $${startIndex}
+      )`;
+
+  return {
+    sql,
+    nextIndex: startIndex + 1,
+    params: [`%${search}%`],
+  };
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -80,16 +98,14 @@ class UnifiedInboxRepository {
     }
 
     // Build search filter
-    let searchFilter = '';
-    if (search) {
-      searchFilter = `AND (
-        cc.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_email ILIKE $${paramIndex}
-      )`;
-      params.push(`%${search}%`);
-      paramIndex++;
+    const searchBuilt = buildSearchFilter(search, paramIndex);
+    if (searchBuilt.params.length) {
+      params.push(...searchBuilt.params);
+      paramIndex = searchBuilt.nextIndex;
     }
+    const ccSearch = withTableAlias(searchBuilt.sql, 'cc');
+    const zpSearch = withTableAlias(searchBuilt.sql, 'zp');
+    const wcSearch = withTableAlias(searchBuilt.sql, 'wc');
 
     const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
     paramIndex = sharedFilters.nextIndex;
@@ -133,7 +149,7 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${searchFilter}
+        WHERE cc.id_user = $1 ${channelFilter} ${ccSearch}
         ${ccStatusDate}
 
         UNION ALL
@@ -171,7 +187,7 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${searchFilter}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
         ${zpStatusDate}
 
         UNION ALL
@@ -209,7 +225,7 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM webchat_conversations wc
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
-        WHERE wc.id_user = $1 ${searchFilter}
+        WHERE wc.id_user = $1 ${wcSearch}
         ${wcStatusDate}
       )
       SELECT * FROM all_conversations
@@ -276,16 +292,14 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
-    let searchFilter = '';
-    if (search) {
-      searchFilter = `AND (
-        cc.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_email ILIKE $${paramIndex}
-      )`;
-      params.push(`%${search}%`);
-      paramIndex++;
+    const searchBuilt = buildSearchFilter(search, paramIndex);
+    if (searchBuilt.params.length) {
+      params.push(...searchBuilt.params);
+      paramIndex = searchBuilt.nextIndex;
     }
+    const ccSearch = withTableAlias(searchBuilt.sql, 'cc');
+    const zpSearch = withTableAlias(searchBuilt.sql, 'zp');
+    const wcSearch = withTableAlias(searchBuilt.sql, 'wc');
 
     let zaloAccountIdFilter = '';
     if (zaloAccountId) {
@@ -303,17 +317,17 @@ class UnifiedInboxRepository {
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${ccStatusDate} ${searchFilter}
+        WHERE cc.id_user = $1 ${channelFilter} ${ccStatusDate} ${ccSearch}
 
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${searchFilter}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch}
 
         UNION ALL
 
         SELECT wc.id FROM webchat_conversations wc
-        WHERE wc.id_user = $1 ${wcStatusDate} ${searchFilter}
+        WHERE wc.id_user = $1 ${wcStatusDate} ${wcSearch}
       ) as combined
     `;
 

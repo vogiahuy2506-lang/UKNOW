@@ -459,7 +459,7 @@ class LandingPageDomainService {
 
       // If verified, trigger SSL provisioning via Certbot
       if (isVerified) {
-        provisionSsl(h).catch((err) => {
+        this.provisionSsl(h).catch((err) => {
           console.error(`[LandingPageDomainService] SSL provisioning failed for ${h}:`, err.message);
         });
       }
@@ -515,7 +515,7 @@ class LandingPageDomainService {
     await getClearCacheFn();
 
     // Trigger SSL provisioning via Certbot
-    provisionSsl(row.hostname).catch((err) => {
+    this.provisionSsl(row.hostname).catch((err) => {
       console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
     });
 
@@ -672,7 +672,7 @@ class LandingPageDomainService {
           console.log(`[LandingPageDomainService] Auto-verified (DNS): ${domain.hostname}`);
           
           // Trigger SSL provisioning
-          provisionSsl(domain.hostname).catch((err) => {
+          this.provisionSsl(domain.hostname).catch((err) => {
             console.error(`[LandingPageDomainService] SSL provision failed for ${domain.hostname}:`, err.message);
           });
           
