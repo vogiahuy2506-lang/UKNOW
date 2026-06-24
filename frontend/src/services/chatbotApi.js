@@ -256,9 +256,9 @@ const chatbotApi = {
 
   // ── Unified Inbox ────────────────────────────────────────────────
 
-  getConversations: async ({ channel, status, search, limit = 20, offset = 0 } = {}) => {
+  getConversations: async ({ channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = {}) => {
     const response = await api.get('/ai/chatbot/inbox/conversations', {
-      params: { channel, status, search, limit, offset },
+      params: { channel, status, date, search, limit, offset, zaloAccountId },
     });
     return response.data;
   },

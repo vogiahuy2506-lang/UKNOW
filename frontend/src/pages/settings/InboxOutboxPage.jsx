@@ -110,8 +110,10 @@ const InboxPage = () => {
 
       const currentPage = reset ? 0 : page;
       const requestParams = {
-        channel: filters.channel,
-        search: filters.search,
+        channel: filters.channel || undefined,
+        search: filters.search || undefined,
+        status: filters.status === 'all' ? undefined : filters.status,
+        date: filters.date === 'all' ? undefined : filters.date,
         offset: currentPage * 20,
         limit: 20,
       };
@@ -138,6 +140,11 @@ const InboxPage = () => {
       setIsLoadingConversations(false);
     }
   }, [filters, page, conversations, selectedAccountId, t]);
+
+  const handleFilterChange = useCallback((nextFilters) => {
+    setFilters(nextFilters);
+    setPage(0);
+  }, []);
 
   const handleDeleteConversation = async (conv) => {
     try {
@@ -409,7 +416,7 @@ const InboxPage = () => {
     fetchUnreadCount();
     fetchSessionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.channel, filters.search]);
+  }, [filters.channel, filters.search, filters.status, filters.date, selectedAccountId]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -508,7 +515,7 @@ const InboxPage = () => {
         <div className="px-4 py-3 border-b border-gray-100 space-y-3 bg-gray-50/50">
           <ConversationFilters
             filters={filters}
-            onChange={setFilters}
+            onChange={handleFilterChange}
           />
           
           <ZaloAccountSelector 
@@ -529,9 +536,6 @@ const InboxPage = () => {
             hasMore={hasMore}
             onDelete={handleDeleteConversation}
             sortBy={filters.sort}
-            filterStatus={filters.status}
-            filterDate={filters.date}
-            channelFilter={filters.channel}
           />
         </div>
       </div>

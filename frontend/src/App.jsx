@@ -112,6 +112,12 @@ const OwnerRoute = ({ children }) => {
   return children;
 };
 
+// Ẩn route đang hoàn thiện trên bản production (dev/preview vẫn truy cập được)
+const ProductionHiddenRoute = ({ children }) => {
+  if (import.meta.env.MODE === 'production') return <UnauthorizedScreen />;
+  return children;
+};
+
 // Self context luôn vào được; employee context chỉ vào được nếu có ít nhất 1 trong các permission
 const PermissionRoute = ({ permission, children }) => {
   const { activeContext } = useAuthStore();
@@ -290,7 +296,7 @@ function App() {
 
             {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
             <Route path="courses" element={<Courses />} />
-            <Route path="products" element={<OwnerRoute><Products /></OwnerRoute>} />
+            <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
             <Route path="orders" element={<OwnerRoute><Orders /></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
           </Route>

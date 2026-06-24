@@ -126,15 +126,11 @@ const userMenuItems = (t) => [
     end: true,
   },
   {
-    name: t('nav.settings'),
-    icon: HiOutlineCog,
+    name: t('nav.aiChatbot'),
+    icon: HiOutlineSparkles,
     children: [
-      { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
-      { name: t('nav.myProducts'), path: '/app/products', icon: HiOutlineCube, ownerOnly: true },
       { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlineSparkles, ownerOnly: true },
-      { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
-      { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
+      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
     ],
   },
   {
@@ -150,43 +146,33 @@ const userMenuItems = (t) => [
   {
     name: t('nav.campaigns'),
     icon: HiOutlineLightningBolt,
-    permission: ['campaigns_view', 'campaigns_create', 'campaigns_run'],
+    permission: ['campaigns_view', 'campaigns_create', 'campaigns_run', 'customers', 'email_settings', 'zalo_settings', 'email_templates', 'zalo_templates'],
     children: [
-      { name: t('nav.campaignManagement'), path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
+      { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
+      { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
       { name: t('nav.createCampaign'), path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
+      { name: t('nav.campaignManagement'), path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
       { name: t('nav.runCampaign'), path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
       { name: t('nav.deliveryMonitor'), path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
+      { name: t('nav.customers'), path: '/app/customers', icon: HiOutlineUsers, permission: ['customers'] },
     ],
   },
   {
-    name: t('nav.customers'),
-    path: '/app/customers',
-    icon: HiOutlineUsers,
-    permission: ['customers'],
-  },
-  {
-    name: t('nav.inbox'),
-    path: '/app/settings/inbox',
-    icon: HiOutlineInbox,
-    ownerOnly: true,
+    name: t('nav.settings'),
+    icon: HiOutlineCog,
+    children: [
+      { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
+      { name: t('nav.employees'), path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
+      { name: t('nav.auditLogs'), path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
+      { name: t('nav.myProducts'), path: '/app/products', icon: HiOutlineCube, ownerOnly: true, hideInProd: true },
+      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
+    ],
   },
   {
     name: t('nav.orders'),
     path: '/app/orders',
     icon: HiOutlineClipboardList,
     adminUsernameOnly: true,
-  },
-  {
-    name: t('nav.employees'),
-    path: '/app/settings/employees',
-    icon: HiOutlineUserGroup,
-    ownerOnly: true,
-  },
-  {
-    name: t('nav.auditLogs'),
-    path: '/app/settings/audit-logs',
-    icon: HiOutlineClipboard,
-    ownerOnly: true,
   },
 ];
 
@@ -205,7 +191,7 @@ const userMenuItems = (t) => [
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const { t, locale, changeLocale } = useI18n();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.settings'), t('nav.campaigns')]);
+  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.aiChatbot'), t('nav.campaigns'), t('nav.settings')]);
   const { user, logout, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const isAdminUsername = user?.username?.toLowerCase() === 'admin';
@@ -280,6 +266,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   // - permission: trong employee context phải có ít nhất 1 quyền tương ứng.
   // - adminUsernameOnly: chỉ hiện cho tài khoản có username = "admin" hoặc nhân viên của account đó.
   const filterItem = (item) => {
+    if (item.hideInProd && import.meta.env.MODE === 'production') return false;
     if (item.ownerOnly && isEmployeeCtx) return false;
     if (item.adminUsernameOnly) {
       // Chỉ hiện cho username = "admin" hoặc nhân viên của account admin

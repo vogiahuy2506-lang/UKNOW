@@ -1,5 +1,56 @@
 import db from '../../config/database.js';
 
+const VALID_STATUSES = new Set(['active', 'closed']);
+const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
+
+function normalizeConversationStatus(status) {
+  if (!status || status === 'all') return null;
+  return VALID_STATUSES.has(status) ? status : null;
+}
+
+function dateRangeStart(date) {
+  const now = new Date();
+  if (date === 'today') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  if (date === 'week') {
+    return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  }
+  if (date === 'month') {
+    return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+  return null;
+}
+
+/** @returns {{ statusSql: string, dateSql: string, nextIndex: number }} */
+function buildStatusDateFilters({ status, date, params, startIndex }) {
+  let idx = startIndex;
+  let statusSql = '';
+  let dateSql = '';
+
+  const normalizedStatus = normalizeConversationStatus(status);
+  if (normalizedStatus) {
+    statusSql = `AND __TABLE__.status = $${idx}`;
+    params.push(normalizedStatus);
+    idx += 1;
+  }
+
+  if (date && VALID_DATE_RANGES.has(date)) {
+    const since = dateRangeStart(date);
+    if (since) {
+      dateSql = `AND COALESCE(__TABLE__.last_message_at, __TABLE__.started_at) >= $${idx}`;
+      params.push(since);
+      idx += 1;
+    }
+  }
+
+  return { statusSql, dateSql, nextIndex: idx };
+}
+
+function withTableAlias(sql, tableAlias) {
+  return sql.replaceAll('__TABLE__', tableAlias);
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -7,7 +58,7 @@ class UnifiedInboxRepository {
    * @param {object} filters - { channel, status, search, limit, offset, zaloAccountId }
    */
   async getConversations(userId, filters = {}) {
-    const { channel, status = 'active', search, limit = 20, offset = 0, zaloAccountId } = filters;
+    const { channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = filters;
 
     // Build channel filter
     let channelFilter = '';
@@ -24,7 +75,7 @@ class UnifiedInboxRepository {
     let zaloAccountIdFilter = '';
     if (zaloAccountId) {
       zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
-      params.push(parseInt(zaloAccountId));
+      params.push(parseInt(zaloAccountId, 10));
       paramIndex++;
     }
 
@@ -40,9 +91,11 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
-    // Build status filter - removed because it incorrectly references non-existent 'conv' alias
-    // Status is already handled in the individual WHERE clauses below
-    const statusFilter = '';
+    const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
+    paramIndex = sharedFilters.nextIndex;
+    const ccStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'cc');
+    const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
+    const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
 
     // Unified query for all conversations
     const query = `
@@ -81,7 +134,7 @@ class UnifiedInboxRepository {
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
         WHERE cc.id_user = $1 ${channelFilter} ${searchFilter}
-        ${status ? `AND cc.status = '${status}'` : ''}
+        ${ccStatusDate}
 
         UNION ALL
 
@@ -119,7 +172,7 @@ class UnifiedInboxRepository {
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
         WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${searchFilter}
-        ${status ? `AND zp.status = '${status}'` : ''}
+        ${zpStatusDate}
 
         UNION ALL
 
@@ -157,7 +210,7 @@ class UnifiedInboxRepository {
         FROM webchat_conversations wc
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
         WHERE wc.id_user = $1 ${searchFilter}
-        ${status ? `AND wc.status = '${status}'` : ''}
+        ${wcStatusDate}
       )
       SELECT * FROM all_conversations
       ORDER BY COALESCE(last_message_at_override, last_message_at) DESC
@@ -211,7 +264,7 @@ class UnifiedInboxRepository {
    * Get total count of conversations
    */
   async getConversationsCount(userId, filters = {}) {
-    const { channel, status = 'active', search, zaloAccountId } = filters;
+    const { channel, status, date, search, zaloAccountId } = filters;
 
     let channelFilter = '';
     const params = [userId];
@@ -237,25 +290,30 @@ class UnifiedInboxRepository {
     let zaloAccountIdFilter = '';
     if (zaloAccountId) {
       zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
-      params.push(parseInt(zaloAccountId));
+      params.push(parseInt(zaloAccountId, 10));
       paramIndex++;
     }
+
+    const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
+    const ccStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'cc');
+    const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
+    const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
 
     const query = `
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${status ? `AND cc.status = '${status}'` : ''} ${searchFilter}
+        WHERE cc.id_user = $1 ${channelFilter} ${ccStatusDate} ${searchFilter}
 
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${status ? `AND zp.status = '${status}'` : ''} ${searchFilter}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${searchFilter}
 
         UNION ALL
 
         SELECT wc.id FROM webchat_conversations wc
-        WHERE wc.id_user = $1 ${status ? `AND wc.status = '${status}'` : ''} ${searchFilter}
+        WHERE wc.id_user = $1 ${wcStatusDate} ${searchFilter}
       ) as combined
     `;
 

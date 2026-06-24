@@ -208,44 +208,12 @@ const ConversationList = ({
   hasMore, 
   onDelete,
   sortBy = 'latest',
-  filterStatus = 'all',
-  filterDate = 'all',
-  channelFilter = '',
 }) => {
   const { t } = useI18n();
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const filteredConversations = useMemo(() => {
-    let result = [...conversations];
-
-    if (channelFilter) {
-      result = result.filter(conv => conv.channel === channelFilter);
-    }
-
-    if (filterStatus === 'active') {
-      result = result.filter(conv => conv.status === 'active');
-    } else if (filterStatus === 'closed') {
-      result = result.filter(conv => conv.status !== 'active');
-    }
-
-    if (filterDate !== 'all') {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
-      result = result.filter(conv => {
-        const msgDate = new Date(conv.lastMessageAt);
-        if (filterDate === 'today') {
-          return msgDate >= today;
-        } else if (filterDate === 'week') {
-          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-          return msgDate >= weekAgo;
-        } else if (filterDate === 'month') {
-          const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-          return msgDate >= monthAgo;
-        }
-        return true;
-      });
-    }
+    const result = [...conversations];
 
     switch (sortBy) {
       case 'latest':
@@ -260,13 +228,15 @@ const ConversationList = ({
       case 'name_desc':
         result.sort((a, b) => getDisplayName(b).localeCompare(getDisplayName(a), 'vi'));
         break;
+      default:
+        break;
     }
 
-    const unread = result.filter(c => c.unreadCount > 0);
-    const read = result.filter(c => !c.unreadCount || c.unreadCount === 0);
-    
+    const unread = result.filter((c) => c.unreadCount > 0);
+    const read = result.filter((c) => !c.unreadCount || c.unreadCount === 0);
+
     return [...unread, ...read];
-  }, [conversations, sortBy, filterStatus, filterDate, channelFilter]);
+  }, [conversations, sortBy]);
 
   const handleDeleteClick = (e, conv) => {
     e.stopPropagation();

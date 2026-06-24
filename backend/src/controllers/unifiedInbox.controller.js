@@ -1,5 +1,27 @@
 import unifiedInboxService from '../services/chatbot/unifiedInbox.service.js';
 
+function normalizeInboxQueryFilters(query = {}) {
+  const rawStatus = String(query.status || '').trim().toLowerCase();
+  const status = rawStatus === 'all' || !rawStatus
+    ? undefined
+    : (rawStatus === 'active' || rawStatus === 'closed' ? rawStatus : undefined);
+
+  const rawDate = String(query.date || '').trim().toLowerCase();
+  const date = rawDate === 'all' || !rawDate
+    ? undefined
+    : (['today', 'week', 'month'].includes(rawDate) ? rawDate : undefined);
+
+  return {
+    channel: query.channel || undefined,
+    status,
+    date,
+    search: query.search || undefined,
+    limit: parseInt(query.limit, 10) || 20,
+    offset: parseInt(query.offset, 10) || 0,
+    zaloAccountId: query.zaloAccountId || undefined,
+  };
+}
+
 class UnifiedInboxController {
   /**
    * Get all conversations
@@ -7,16 +29,7 @@ class UnifiedInboxController {
    */
   async getConversations(req, res) {
     try {
-      const { channel, status, search, limit = 20, offset = 0 } = req.query;
-
-      const result = await unifiedInboxService.getConversations(req.user.id, {
-        channel,
-        status,
-        search,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        zaloAccountId: req.query.zaloAccountId,
-      });
+      const result = await unifiedInboxService.getConversations(req.user.id, normalizeInboxQueryFilters(req.query));
 
       return res.json({
         success: true,
