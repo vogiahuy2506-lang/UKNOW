@@ -4,6 +4,7 @@ const dnsResolve = jest.fn();
 const dnsResolve4 = jest.fn();
 const findByLandingPageIdInScope = jest.fn();
 const updateStatusById = jest.fn();
+const findByIdInScope = jest.fn();
 
 jest.unstable_mockModule('dns/promises', () => ({
   default: {
@@ -29,7 +30,7 @@ jest.unstable_mockModule('../../../repositories/landingPageDomain.repository.js'
 
 jest.unstable_mockModule('../../../repositories/landingPage.repository.js', () => ({
   default: {
-    findByIdInScope: jest.fn(),
+    findByIdInScope,
   },
 }));
 
@@ -63,6 +64,7 @@ describe('landingPageDomain.service DNS verification', () => {
     dnsResolve4.mockReset();
     findByLandingPageIdInScope.mockReset();
     updateStatusById.mockReset();
+    findByIdInScope.mockReset();
     process.env.LP_CNAME_TARGET = 'founderai.biz';
     process.env.LP_APEX_FIXED_IP = '103.110.87.210';
   });
@@ -211,12 +213,14 @@ describe('landingPageDomain.service DNS verification', () => {
         hostname: 'digibook.com.vn',
         status: 'active',
       };
+      const lp = { id: 99, isPublished: true };
       findByLandingPageIdInScope.mockResolvedValueOnce({
         ...row,
         hostname: 'digibook.com.vn',
       });
       updateStatusById.mockResolvedValueOnce(updatedRow);
       // Mock for getForLanding call after successful update
+      findByIdInScope.mockResolvedValueOnce(lp);
       findByLandingPageIdInScope.mockResolvedValueOnce(updatedRow);
       dnsResolve4.mockResolvedValueOnce(['103.110.87.210']);
 
@@ -226,17 +230,17 @@ describe('landingPageDomain.service DNS verification', () => {
       });
     });
 
-    it('trả message transient riêng cho lỗi DNS tạm thời', async () => {
+    it('trả message not_found cho apex domain khi DNS timeout (không tìm thấy IP)', async () => {
       findByLandingPageIdInScope.mockResolvedValueOnce({
         ...row,
         hostname: 'digibook.com.vn',
       });
-      // Apex domain uses dns.resolve4, which throws ETIMEOUT for transient errors
+      // Apex domain: dns.resolve4 throws ETIMEOUT → currentIp=null → reason='not_found'
       dnsResolve4.mockRejectedValue(dnsError('ETIMEOUT'));
 
       await expect(landingPageDomainService.verifyDns(99, authUser)).rejects.toMatchObject({
         statusCode: 400,
-        message: expect.stringContaining('Lỗi DNS tạm thời'),
+        message: expect.stringContaining('chưa tồn tại trong DNS công khai'),
       });
     });
   });
