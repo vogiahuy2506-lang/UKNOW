@@ -9,6 +9,7 @@ jest.unstable_mockModule('dns/promises', () => ({
   default: {
     resolve: dnsResolve,
     resolve4: dnsResolve4,
+    resolveCname: dnsResolve,
   },
 }));
 
@@ -63,6 +64,7 @@ describe('landingPageDomain.service DNS verification', () => {
     findByLandingPageIdInScope.mockReset();
     updateStatusById.mockReset();
     process.env.LP_CNAME_TARGET = 'founderai.biz';
+    process.env.LP_APEX_FIXED_IP = '103.110.87.210';
   });
 
   describe('checkCnameStatus', () => {
@@ -73,6 +75,8 @@ describe('landingPageDomain.service DNS verification', () => {
         verified: true,
         reason: 'ok',
         found: ['founderai.biz'],
+        isApexDomain: false,
+        currentIp: null,
       });
     });
 
@@ -83,6 +87,8 @@ describe('landingPageDomain.service DNS verification', () => {
         verified: false,
         reason: 'wrong_target',
         found: ['wrong.example.com'],
+        isApexDomain: false,
+        currentIp: null,
       });
     });
 
@@ -106,14 +112,26 @@ describe('landingPageDomain.service DNS verification', () => {
       });
     });
 
-    it('chấp nhận apex/CNAME-flattening khi A-record trùng IP target', async () => {
+    it('trả no_cname khi apex domain không có CNAME và A-record không khớp', async () => {
       dnsResolve.mockRejectedValue(dnsError('ENODATA'));
       dnsResolve4.mockResolvedValueOnce(['203.0.113.10']);
-      dnsResolve4.mockResolvedValueOnce(['203.0.113.10', '203.0.113.20']);
+      dnsResolve4.mockResolvedValueOnce(['203.0.113.20']);
 
       await expect(checkCnameStatus('example.com', 'founderai.biz')).resolves.toMatchObject({
+        verified: false,
+        reason: 'no_cname',
+        isApexDomain: true,
+      });
+    });
+
+    it('chấp nhận apex domain khi A-record trỏ đúng platform IP', async () => {
+      dnsResolve.mockRejectedValue(dnsError('ENODATA'));
+      dnsResolve4.mockResolvedValue(['103.110.87.210']);
+
+      await expect(checkCnameStatus('apexdomain.com', 'founderai.biz')).resolves.toMatchObject({
         verified: true,
         reason: 'ok',
+        isApexDomain: true,
       });
     });
 
