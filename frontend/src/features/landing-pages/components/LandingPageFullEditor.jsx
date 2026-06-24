@@ -547,10 +547,18 @@ export default function LandingPageFullEditor({
                 {/* Quick Help */}
                 <div className="flex items-start gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
                   <HiOutlineQuestionMarkCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
-                  <p>
-                    Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
-                    <span className="block mt-1">Nếu domain thuộc Cloudflare đã được hệ thống cấu hình, DNS sẽ được tạo tự động; nếu không, hãy thêm CNAME theo hướng dẫn bên dưới.</span>
-                  </p>
+                  <div className="space-y-1">
+                    <p>
+                      Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> hoặc subdomain <code className="bg-blue-100 px-1 rounded">lp.yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
+                    </p>
+                    <p className="text-blue-700 font-medium">
+                      {cdInfo?.apexFixedIp ? (
+                        <>Apex domain (yoursite.com): cần thêm bản ghi A, Name=@, Value={cdInfo.apexFixedIp}. Subdomain: cần thêm bản ghi CNAME trỏ về {BASE_DOMAIN}.</>
+                      ) : (
+                        <>Cần thêm bản ghi CNAME trỏ về {BASE_DOMAIN}. Nếu domain thuộc Cloudflare đã được hệ thống cấu hình, DNS sẽ được tạo tự động.</>
+                      )}
+                    </p>
+                  </div>
                 </div>
 
                 {!editingId ? (
@@ -571,7 +579,11 @@ export default function LandingPageFullEditor({
                           <div className="flex-1">
                             <p className="font-semibold text-green-800 text-lg">{cdInfo.hostname}</p>
                             <p className="text-sm text-green-600">
-                              {cdInfo.cfManaged ? 'Domain đã kích hoạt tự động qua Cloudflare.' : 'Domain đã kích hoạt.'}
+                              {cdInfo.cfManaged
+                                ? 'Domain đã kích hoạt tự động qua Cloudflare.'
+                                : cdInfo.isApexDomain
+                                  ? 'Domain đã kích hoạt qua bản ghi A.'
+                                  : 'Domain đã kích hoạt qua bản ghi CNAME.'}
                             </p>
                           </div>
                           <a
@@ -623,17 +635,35 @@ export default function LandingPageFullEditor({
                               </p>
                             </div>
                             <div className="p-4 space-y-4">
-                              <p className="text-sm text-gray-600">
-                                Thêm bản ghi CNAME tại nhà cung cấp domain của bạn. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
-                              </p>
-                              <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
-                                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                                  <span className="text-gray-500">Type:</span><span>CNAME</span>
-                                  <span className="text-gray-500">Name:</span><span>{cdInfo.hostname}</span>
-                                  <span className="text-gray-500">Value:</span>
-                                  <span className="break-all text-yellow-300">{cdInfo.cnameTarget || 'founderai.biz'}</span>
-                                </div>
-                              </div>
+                              {cdInfo?.isApexDomain ? (
+                                <>
+                                  <p className="text-sm text-gray-600">
+                                    Đây là domain gốc (apex). Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
+                                  </p>
+                                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
+                                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                                      <span className="text-gray-500">Type:</span><span>A</span>
+                                      <span className="text-gray-500">Name:</span><span>@</span>
+                                      <span className="text-gray-500">Value:</span>
+                                      <span className="break-all text-yellow-300">{cdInfo.apexFixedIp || cdInfo.cnameTarget}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-sm text-gray-600">
+                                    Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
+                                  </p>
+                                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
+                                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                                      <span className="text-gray-500">Type:</span><span>CNAME</span>
+                                      <span className="text-gray-500">Name:</span><span>{(() => { const p = cdInfo.hostname.split('.'); return p.length > 2 ? p.slice(0, -2).join('.') || '@' : 'www'; })()}</span>
+                                      <span className="text-gray-500">Value:</span>
+                                      <span className="break-all text-yellow-300">{cdInfo.cnameTarget || 'founderai.biz'}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                               <button
                                 type="button"
                                 className="btn btn-primary w-full"

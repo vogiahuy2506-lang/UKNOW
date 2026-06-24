@@ -17,6 +17,15 @@ async function getClearCacheFn() {
 }
 
 const WWW_HOST_RE = /^www\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+const APEX_SUBDOMAIN_PREFIXES = new Set(['www', 'lp', 'm', 'blog', 'app', 'admin', 'crm', 'api', 'dev', 'staging', 'test']);
+
+function isApexDomain(hostname) {
+  const h = String(hostname || '').trim().toLowerCase();
+  const parts = h.split('.');
+  if (parts.length > 3) return false;
+  if (parts.length >= 2 && APEX_SUBDOMAIN_PREFIXES.has(parts[0])) return false;
+  return true;
+}
 
 function normalizeAuthScope(authUser) {
   return {
@@ -83,6 +92,10 @@ function cnameTarget() {
   return String(process.env.LP_CNAME_TARGET || 'founderai.biz').trim();
 }
 
+function apexFixedIp() {
+  return String(process.env.LP_APEX_FIXED_IP || '').trim() || null;
+}
+
 function flattenDnsRecords(records = []) {
   return (Array.isArray(records) ? records : [])
     .flatMap((record) => (Array.isArray(record) ? record : [record]))
@@ -97,11 +110,17 @@ function getNsLookupHintDomain(hostname) {
 }
 
 async function hasMatchingARecord(hostname, target) {
+  const platformIp = apexFixedIp();
+  const h = String(hostname || '').trim().toLowerCase();
   try {
-    const [hostnameIps, targetIps] = await Promise.all([
-      dns.resolve4(hostname),
-      dns.resolve4(target),
-    ]);
+    const hostnameIps = await dns.resolve4(h);
+    // For apex domains: check if the apex IP matches the platform's fixed IP
+    if (platformIp) {
+      const apexIp = hostnameIps[0];
+      if (apexIp === platformIp) return true;
+    }
+    // Fallback: check if IP matches target's A record
+    const targetIps = await dns.resolve4(target);
     const targetSet = new Set(flattenDnsRecords(targetIps));
     return flattenDnsRecords(hostnameIps).some((ip) => targetSet.has(ip));
   } catch {
@@ -112,6 +131,7 @@ async function hasMatchingARecord(hostname, target) {
 export async function checkCnameStatus(hostname, target) {
   const h = String(hostname || '').trim().toLowerCase();
   const expected = String(target || '').trim().replace(/\.$/, '').toLowerCase();
+  const isApex = isApexDomain(h);
 
   try {
     const cnameRecords = await dns.resolve(h, 'CNAME');
@@ -121,19 +141,30 @@ export async function checkCnameStatus(hostname, target) {
       verified,
       reason: verified ? 'ok' : 'wrong_target',
       found,
+      isApexDomain: isApex,
+      currentIp: null,
     };
   } catch (error) {
     const code = String(error?.code || '').trim().toUpperCase();
     if (code === 'ENOTFOUND') {
-      return { verified: false, reason: 'not_found', found: [] };
+      return { verified: false, reason: 'not_found', found: [], isApexDomain: isApex, currentIp: null };
     }
 
     if (code === 'ENODATA') {
+      let currentIp = null;
+      try {
+        const ips = await dns.resolve4(h);
+        currentIp = ips[0] || null;
+      } catch { /* ignore */ }
+
       const verifiedByARecord = await hasMatchingARecord(h, expected);
+      const reason = verifiedByARecord ? 'ok' : 'no_cname';
       return {
         verified: verifiedByARecord,
-        reason: verifiedByARecord ? 'ok' : 'no_cname',
+        reason,
         found: [],
+        isApexDomain: isApex,
+        currentIp,
       };
     }
 
@@ -141,6 +172,8 @@ export async function checkCnameStatus(hostname, target) {
       verified: false,
       reason: 'transient',
       found: [],
+      isApexDomain: isApex,
+      currentIp: null,
     };
   }
 }
@@ -148,9 +181,17 @@ export async function checkCnameStatus(hostname, target) {
 export function buildDnsVerificationErrorMessage(status, hostname, target) {
   const reason = status?.reason || 'transient';
   const found = Array.isArray(status?.found) ? status.found : [];
+  const isApex = status?.isApexDomain;
+  const currentIp = status?.currentIp;
+  const platformIp = apexFixedIp();
 
   if (reason === 'not_found') {
     const nsHint = getNsLookupHintDomain(hostname);
+    if (isApex) {
+      return `${hostname} chưa tồn tại trong DNS công khai. Kiểm tra: `
+        + `(1) bản ghi A đã được thêm tại nhà cung cấp domain chưa?\n`
+        + `(2) Nameserver của domain đã trỏ đúng nhà cung cấp chưa? (Tra bằng: dig NS ${nsHint})`;
+    }
     return `${hostname} chưa tồn tại trong DNS công khai. Kiểm tra: `
       + `(1) bản ghi đã thêm đúng nhà cung cấp đang giữ nameserver của domain chưa? `
       + `(Tra bằng: dig NS ${nsHint}) `
@@ -158,13 +199,38 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
   }
 
   if (reason === 'no_cname') {
+    if (isApex) {
+      if (currentIp && platformIp && currentIp !== platformIp) {
+        return `${hostname} có tồn tại nhưng bản ghi A chưa đúng.\n`
+          + `- Domain hiện tại trỏ về IP: ${currentIp}\n`
+          + `- IP cần trỏ về: ${platformIp}\n`
+          + `Vui lòng đổi bản ghi A tại nhà cung cấp domain:\n`
+          + `- Type: A\n`
+          + `- Name: @\n`
+          + `- Value: ${platformIp}`;
+      }
+      if (platformIp) {
+        return `${hostname} có tồn tại nhưng chưa có bản ghi DNS đúng.\n`
+          + `Vui lòng thêm bản ghi A tại nhà cung cấp domain:\n`
+          + `- Type: A\n`
+          + `- Name: @\n`
+          + `- Value: ${platformIp}`;
+      }
+      return `${hostname} có tồn tại nhưng chưa có bản ghi DNS đúng.\n`
+        + `Vui lòng dùng subdomain (ví dụ: www.${hostname} hoặc lp.${hostname}) `
+        + `với bản ghi CNAME trỏ về ${target}, hoặc liên hệ hỗ trợ để cấu hình domain gốc.`;
+    }
     return `${hostname} có tồn tại nhưng không có bản ghi CNAME. `
-      + `Nếu đây là domain gốc (apex) thì không thể dùng CNAME theo chuẩn DNS; `
-      + `hãy dùng subdomain như www/lp trỏ CNAME về ${target}, hoặc trỏ A record về cùng IP với ${target}.`;
+      + `Vui lòng thêm bản ghi CNAME tại nhà cung cấp domain:\n`
+      + `- Type: CNAME\n`
+      + `- Name: phần trước dấu chấm (ví dụ "www" hoặc "lp")\n`
+      + `- Value: ${target}`;
   }
 
   if (reason === 'wrong_target') {
-    return `CNAME chưa đúng. Cần trỏ về: ${target}\nHiện tại: ${found.join(', ') || 'không có'}`;
+    return `CNAME chưa đúng.\n`
+      + `- Cần trỏ về: ${target}\n`
+      + `- Hiện tại: ${found.join(', ') || 'không có'}`;
   }
 
   return `Đang chờ DNS propagate cho ${hostname}, vui lòng thử lại sau vài phút.`;
@@ -189,22 +255,33 @@ function buildDomainResponse(row) {
 
   const isActive = row.status === 'active';
   const isCfManaged = Boolean(row.cfManaged);
+  const isApex = isApexDomain(row.hostname);
+  const platformIp = apexFixedIp();
+  const target = cnameTarget();
 
   let instructions;
   let record = null;
-  const target = cnameTarget();
 
   if (isActive) {
     instructions = isCfManaged
       ? `Đã kích hoạt tự động qua Cloudflare.`
-      : `Đã kích hoạt. Domain đã trỏ về ${target}.`;
+      : `Đã kích hoạt. Domain đã trỏ về ${isApex ? 'địa chỉ IP của máy chủ.' : target}.`;
   } else {
-    instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Type: CNAME\n- Name: ${row.hostname}\n- Value: ${target}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
-    record = {
-      type: 'CNAME',
-      name: row.hostname,
-      value: target,
-    };
+    if (isApex && platformIp) {
+      instructions = `Thêm bản ghi A tại DNS của bạn:\n- Type: A\n- Name: @\n- Value: ${platformIp}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
+      record = {
+        type: 'A',
+        name: '@',
+        value: platformIp,
+      };
+    } else {
+      instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Type: CNAME\n- Name: phần trước dấu chấm (ví dụ "www" hoặc "lp")\n- Value: ${target}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
+      record = {
+        type: 'CNAME',
+        name: row.hostname,
+        value: target,
+      };
+    }
   }
 
   return {
@@ -216,6 +293,8 @@ function buildDomainResponse(row) {
     instructions,
     record,
     cnameTarget: target,
+    apexFixedIp: platformIp,
+    isApexDomain: isApex,
   };
 }
 
