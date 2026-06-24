@@ -5,6 +5,8 @@ ALTER TABLE template_labels DROP CONSTRAINT IF EXISTS template_labels_name_key;
 
 -- 2. Thêm constraint unique theo (name, created_by) để mỗi user không tạo trùng tên nhãn,
 --    nhưng các user khác nhau có thể dùng cùng tên.
+--    Drop trước (IF EXISTS) để migration chạy lại được trên DB đã có constraint (idempotent).
+ALTER TABLE template_labels DROP CONSTRAINT IF EXISTS template_labels_name_created_by_key;
 ALTER TABLE template_labels
   ADD CONSTRAINT template_labels_name_created_by_key UNIQUE (name, created_by);
 

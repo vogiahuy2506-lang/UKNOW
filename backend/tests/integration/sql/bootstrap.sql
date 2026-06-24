@@ -603,6 +603,8 @@ CREATE TABLE products (
   usp             TEXT,
   category        VARCHAR(255),
   thumbnail_url   TEXT,
+  product_url     TEXT,
+  target_audience TEXT,
   status          VARCHAR(50) DEFAULT 'active',
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()

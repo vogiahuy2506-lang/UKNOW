@@ -68,6 +68,15 @@ class ProductsController {
     }
   }
 
+  async getCategories(req, res) {
+    try {
+      const categories = await productService.getCategories({ user: req.user });
+      return res.json({ success: true, data: { categories } });
+    } catch (error) {
+      return serverError(res, 'getCategories products', error);
+    }
+  }
+
   async remove(req, res) {
     try {
       await productService.remove({
