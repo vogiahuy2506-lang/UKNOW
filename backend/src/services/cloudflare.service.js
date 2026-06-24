@@ -267,6 +267,8 @@ class CloudflareService {
     }
   }
 
+  // ==================== End Cloudflare for SaaS ====================
+
   /**
    * Setup CNAME for landing page (proxied through Cloudflare).
    * Returns zoneId and recordId so they can be stored for future cleanup.

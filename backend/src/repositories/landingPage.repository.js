@@ -113,8 +113,14 @@ class LandingPageRepository {
          lp.is_published AS "isPublished",
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
-         lp.updated_at AS "updatedAt"
+         lp.updated_at AS "updatedAt",
+         lp.domain_type AS "domainType",
+         lp.domain_subtype AS "domainSubtype",
+         ld.hostname AS "customDomainHostname",
+         ld.status AS "customDomainStatus",
+         ld.is_apex_domain AS "customDomainIsApex"
        FROM landing_pages lp
+       LEFT JOIN landing_page_domains ld ON ld.landing_page_id = lp.id
        WHERE ${clause}
        ORDER BY lp.updated_at DESC`,
       params
@@ -208,8 +214,14 @@ class LandingPageRepository {
          lp.is_published AS "isPublished",
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
-         lp.updated_at AS "updatedAt"
+         lp.updated_at AS "updatedAt",
+         lp.domain_type AS "domainType",
+         lp.domain_subtype AS "domainSubtype",
+         ld.hostname AS "customDomainHostname",
+         ld.status AS "customDomainStatus",
+         ld.is_apex_domain AS "customDomainIsApex"
        FROM landing_pages lp
+       LEFT JOIN landing_page_domains ld ON ld.landing_page_id = lp.id
        WHERE lp.id = $${params.length + 1}
          AND ${clause}
        LIMIT 1`,

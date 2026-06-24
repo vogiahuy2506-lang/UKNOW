@@ -427,6 +427,7 @@ export default {
     noDynamicYet: 'Chưa có landing page nào. Nhấn "Tạo mới" để bắt đầu.',
     slug: 'Tên rút gọn',
     titleCol: 'Tiêu đề',
+    domainCol: 'Domain',
     published: 'Công bố',
     views: 'Xem',
     clicks: 'Click',

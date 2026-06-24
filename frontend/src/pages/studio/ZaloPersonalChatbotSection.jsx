@@ -18,6 +18,7 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
   const [loading, setLoading] = useState(true);
   const [configModal, setConfigModal] = useState({ isOpen: false, account: null, settings: null });
   const [subAssistants, setSubAssistants] = useState([]);
+  const [chatbots, setChatbots] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -68,14 +69,16 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
   const handleOpenConfig = async (account) => {
     setConfigModal({ isOpen: true, account, settings: null });
 
-    // Fetch settings and sub-assistants
+    // Fetch settings, sub-assistants, and chatbots
     try {
-      const [settingsRes, saRes] = await Promise.all([
+      const [settingsRes, saRes, chatbotsRes] = await Promise.all([
         chatbotApi.getZaloAccountChatbotSettings(account.id),
         chatbotApi.listSubAssistants(),
+        chatbotApi.listChatbots(),
       ]);
       setChatbotSettings(prev => ({ ...prev, [account.id]: settingsRes.data?.data }));
       setSubAssistants(saRes.data?.data || []);
+      setChatbots(chatbotsRes.data?.data || []);
     } catch (error) {
       console.error('[ZaloPersonalChatbotSection] Failed to fetch config:', error);
     }
@@ -172,7 +175,10 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
                       {isEnabled
                         ? t('zaloPersonalChatbot.chatbotEnabled')
                         : t('zaloPersonalChatbot.chatbotDisabled')}
-                      {settings.sub_assistant_name && (
+                      {settings.chatbot_name && (
+                        <span className="ml-1">• {settings.chatbot_name}</span>
+                      )}
+                      {settings.sub_assistant_name && !settings.chatbot_name && (
                         <span className="ml-1">• {settings.sub_assistant_name}</span>
                       )}
                     </p>
@@ -219,6 +225,7 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
           account={configModal.account}
           settings={chatbotSettings[configModal.account.id] || {}}
           subAssistants={subAssistants}
+          chatbots={chatbots}
           onSave={(formData) => handleSaveConfig(configModal.account, formData)}
           onClose={() => setConfigModal({ isOpen: false, account: null, settings: null })}
         />
@@ -230,10 +237,11 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
 /**
  * Configuration Modal for Zalo Personal Chatbot
  */
-function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSave, onClose }) {
+function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, chatbots, onSave, onClose }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
     is_enabled: settings?.is_enabled || false,
+    id_chatbot: settings?.id_chatbot || '',
     id_sub_assistant: settings?.id_sub_assistant || '',
     welcome_message: settings?.welcome_message || '',
     ai_model: settings?.ai_model || 'gemini-2.5-flash',
@@ -245,6 +253,7 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSa
   useEffect(() => {
     setForm({
       is_enabled: settings?.is_enabled || false,
+      id_chatbot: settings?.id_chatbot || '',
       id_sub_assistant: settings?.id_sub_assistant || '',
       welcome_message: settings?.welcome_message || '',
       ai_model: settings?.ai_model || 'gemini-2.5-flash',
@@ -320,6 +329,24 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, onSa
                 <option key={sa.id} value={sa.id}>{sa.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Custom Chatbot */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Chatbot
+            </label>
+            <select
+              value={form.id_chatbot}
+              onChange={(e) => setForm(f => ({ ...f, id_chatbot: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            >
+              <option value="">Mặc định (dùng chatbot chính)</option>
+              {chatbots.map(cb => (
+                <option key={cb.id} value={cb.id}>{cb.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Chọn chatbot để sử dụng cho tài khoản Zalo này. Để trống để dùng chatbot chính.</p>
           </div>
 
           {/* Welcome Message */}

@@ -555,11 +555,7 @@ export default function LandingPageFullEditor({
                       Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> hoặc subdomain <code className="bg-blue-100 px-1 rounded">lp.yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
                     </p>
                     <p className="text-blue-700 font-medium">
-                      {cdInfo?.apexFixedIp ? (
-                        <>Apex domain (yoursite.com): cần thêm bản ghi A, Name=@, Value={cdInfo.apexFixedIp}. Subdomain: cần thêm bản ghi CNAME trỏ về {BASE_DOMAIN}.</>
-                      ) : (
-                        <>Cần thêm bản ghi CNAME trỏ về {BASE_DOMAIN}. Nếu domain thuộc Cloudflare đã được hệ thống cấu hình, DNS sẽ được tạo tự động.</>
-                      )}
+                      Thêm bản ghi CNAME trỏ về {BASE_DOMAIN}.
                     </p>
                   </div>
                 </div>
@@ -582,11 +578,7 @@ export default function LandingPageFullEditor({
                           <div className="flex-1">
                             <p className="font-semibold text-green-800 text-lg">{cdInfo.hostname}</p>
                             <p className="text-sm text-green-600">
-                              {cdInfo.cfManaged
-                                ? 'Domain đã kích hoạt tự động qua Cloudflare.'
-                                : cdInfo.isApexDomain
-                                  ? 'Domain đã kích hoạt qua bản ghi A.'
-                                  : 'Domain đã kích hoạt qua bản ghi CNAME.'}
+                              Domain đã kích hoạt. SSL sẽ được cấp tự động qua Let's Encrypt.
                             </p>
                           </div>
                           <a
@@ -666,15 +658,21 @@ export default function LandingPageFullEditor({
 
                         {/* DNS Instructions based on selection */}
                         {!cdInfo?.configured && cdHostnameDraft.trim() && (
-                          <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded p-2">
+                          <div className={`text-xs rounded p-2 border ${
+                            cdIsApexDomain 
+                              ? 'bg-purple-50 border-purple-100 text-purple-700' 
+                              : 'bg-blue-50 border-blue-100 text-blue-700'
+                          }`}>
                             {cdIsApexDomain ? (
-                              <span>
-                                <span className="font-semibold text-blue-700">Domain gốc:</span> Cần thêm bản ghi <strong>A</strong> trỏ về IP của máy chủ.
-                              </span>
+                              <>
+                                Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain, trỏ về IP <strong>{cdInfo?.apexFixedIp || '103.110.87.210'}</strong>.
+                                SSL sẽ được cấp tự động qua Let's Encrypt.
+                              </>
                             ) : (
-                              <span>
-                                <span className="font-semibold text-blue-700">Subdomain:</span> Cần thêm bản ghi <strong>CNAME</strong> trỏ về founderai.biz.
-                              </span>
+                              <>
+                                Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain, trỏ về <strong>{BASE_DOMAIN}</strong>.
+                                SSL sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
+                              </>
                             )}
                           </div>
                         )}
@@ -688,35 +686,38 @@ export default function LandingPageFullEditor({
                               </p>
                             </div>
                             <div className="p-4 space-y-4">
-                              {cdInfo?.isApexDomain ? (
-                                <>
-                                  <p className="text-sm text-gray-600">
-                                    Đây là domain gốc (apex). Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
-                                  </p>
-                                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
-                                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                                      <span className="text-gray-500">Type:</span><span>A</span>
+                              <p className="text-sm text-gray-600">
+                                Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} tại nhà cung cấp domain của bạn:
+                              </p>
+                              <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
+                                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                                  <span className="text-gray-500">Type:</span><span>{cdInfo?.isApexDomain ? 'A' : 'CNAME'}</span>
+                                  {cdInfo?.isApexDomain ? (
+                                    <>
                                       <span className="text-gray-500">Name:</span><span>@</span>
-                                      <span className="text-gray-500">Value:</span>
-                                      <span className="break-all text-yellow-300">{cdInfo.apexFixedIp || cdInfo.cnameTarget}</span>
-                                    </div>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="text-sm text-gray-600">
-                                    Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain. Hệ thống sẽ tự động kiểm tra và kích hoạt trong vài phút.
-                                  </p>
-                                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
-                                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                                      <span className="text-gray-500">Type:</span><span>CNAME</span>
+                                      <span className="text-gray-500">Value:</span><span className="text-yellow-300">{cdInfo.apexFixedIp || '103.110.87.210'}</span>
+                                    </>
+                                  ) : (
+                                    <>
                                       <span className="text-gray-500">Name:</span><span>{(() => { const p = cdInfo.hostname.split('.'); return p.length > 2 ? p.slice(0, -2).join('.') || '@' : 'www'; })()}</span>
-                                      <span className="text-gray-500">Value:</span>
-                                      <span className="break-all text-yellow-300">{cdInfo.cnameTarget || 'founderai.biz'}</span>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
+                                      <span className="text-gray-500">Value:</span><span className="break-all text-yellow-300">{cdInfo.cnameTarget || BASE_DOMAIN}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                                <p className="text-sm text-blue-800">
+                                  <strong>Hướng dẫn:</strong>
+                                </p>
+                                <ol className="text-sm text-blue-700 mt-2 space-y-1 list-decimal list-inside">
+                                  <li>Đăng nhập trang quản lý DNS của domain <strong>{cdInfo.hostname}</strong></li>
+                                  <li>Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} như bảng trên</li>
+                                  <li>Bấm "Kiểm tra lại" hoặc đợi 5 phút để hệ thống tự động kích hoạt</li>
+                                </ol>
+                              </div>
+                              <div className="bg-purple-50 border border-purple-200 rounded p-3 text-sm text-purple-700">
+                                <strong>SSL tự động:</strong> SSL certificate sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
+                              </div>
                               <button
                                 type="button"
                                 className="btn btn-primary w-full"
@@ -725,9 +726,6 @@ export default function LandingPageFullEditor({
                               >
                                 {cdBusy ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
                               </button>
-                              <p className="text-xs text-gray-500 text-center">
-                                Hoặc đợi 5 phút, hệ thống sẽ tự động kích hoạt khi DNS propagate xong.
-                              </p>
                             </div>
                           </div>
                         )}

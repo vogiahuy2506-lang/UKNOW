@@ -426,6 +426,7 @@ export default {
     noDynamicYet: 'No landing pages yet. Click "Create New" to get started.',
     slug: 'Subdomain',
     titleCol: 'Title',
+    domainCol: 'Domain',
     published: 'Published',
     views: 'Views',
     clicks: 'Clicks',

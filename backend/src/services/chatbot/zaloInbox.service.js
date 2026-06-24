@@ -492,18 +492,28 @@ class ZaloPersonalInboxService {
       }
 
       // Unified chatbot settings
+      // Priority: per-account is_enabled > main chatbot is_enabled
       const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
 
       console.log(`[ZaloInbox] DEBUG: chatbotSettings=${JSON.stringify(chatbotSettings)}`);
       console.log(`[ZaloInbox] DEBUG: accountSettings=${JSON.stringify(accountSettings)}`);
 
-      if (!chatbotSettings?.is_enabled) {
-        console.log(`[ZaloInbox] AI chatbot disabled for user ${userId}`);
+      // Check per-account setting first - if account has explicit setting, use it
+      // Otherwise, fallback to main chatbot setting
+      const isAccountEnabled = accountSettings?.is_enabled;
+      const isMainEnabled = chatbotSettings?.is_enabled;
+      
+      // If per-account explicitly disabled, skip
+      if (isAccountEnabled === false) {
+        console.log(`[ZaloInbox] AI chatbot explicitly disabled for account ${zaloSettingId}`);
         return;
       }
-      if (accountSettings?.is_enabled === false) {
-        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId}`);
+      
+      // If per-account explicitly enabled, proceed
+      // If no per-account setting, check main chatbot setting
+      if (isAccountEnabled !== true && isMainEnabled !== true) {
+        console.log(`[ZaloInbox] AI chatbot disabled - main: ${isMainEnabled}, account: ${isAccountEnabled}`);
         return;
       }
 
@@ -512,13 +522,20 @@ class ZaloPersonalInboxService {
       let mergedSettings = {
         ...chatbotSettings,
         ...accountSettings,
-        // Preserve is_enabled checks above (don't override)
+        // Ensure is_enabled is true if we got here
+        is_enabled: true,
       };
 
       // If per-account system_instruction is empty, try to get from linked chatbot (id_chatbot)
       if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
         mergedSettings.system_instruction = accountSettings.chatbot_system_instruction;
         console.log(`[ZaloInbox] Using system_instruction from linked chatbot ${accountSettings.id_chatbot}`);
+      }
+      
+      // If still no system_instruction, try to get from main chatbot settings
+      if (!mergedSettings.system_instruction && chatbotSettings?.system_instruction) {
+        mergedSettings.system_instruction = chatbotSettings.system_instruction;
+        console.log(`[ZaloInbox] Using system_instruction from main chatbot settings`);
       }
 
       // Get AI response using chatRouterService

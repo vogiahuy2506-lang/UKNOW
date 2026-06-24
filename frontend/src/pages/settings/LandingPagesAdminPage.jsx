@@ -86,11 +86,14 @@ export default function LandingPagesAdminPage() {
   const tableRows = useMemo(() => {
     return rows.map((r) => {
       const st = statsBySlug.get(r.slug) || {};
+      const domain = r.customDomainHostname || `${r.slug}.${BASE_DOMAIN}`;
       return {
         ...r,
         viewCount: Number(st.viewCount || 0),
         clickCount: Number(st.clickCount || 0),
         submitCount: Number(st.submitCount || 0),
+        displayDomain: domain,
+        isCustomDomain: Boolean(r.customDomainHostname),
       };
     });
   }, [rows, statsBySlug]);
@@ -228,8 +231,11 @@ export default function LandingPagesAdminPage() {
     navigator.clipboard.writeText(text).then(() => toast.success(msg || 'Đã copy'));
   };
 
-  const getPublicUrl = (slug) => {
-    return `https://${slug}.${BASE_DOMAIN}`;
+  const getPublicUrl = (r) => {
+    if (r?.customDomainHostname) {
+      return `https://${r.customDomainHostname}`;
+    }
+    return `https://${r?.slug || ''}.${BASE_DOMAIN}`;
   };
 
   return (
@@ -273,8 +279,8 @@ export default function LandingPagesAdminPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 border-b border-gray-100 bg-gray-50/50">
-                <th className="p-3 font-medium">{t('landingPagesAdmin.slug')}</th>
                 <th className="p-3 font-medium">{t('landingPagesAdmin.titleCol')}</th>
+                <th className="p-3 font-medium">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
                 <th className="p-3 font-medium">{t('landingPagesAdmin.published')}</th>
                 <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.views')}</th>
                 <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.clicks')}</th>
@@ -286,21 +292,29 @@ export default function LandingPagesAdminPage() {
             <tbody>
               {tableRows.map((r) => (
                 <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                  <td className="p-3 font-medium text-gray-900">{r.title || '—'}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-800">
-                        {r.slug}.{BASE_DOMAIN}
+                      <code className={`font-mono text-xs px-2 py-1 rounded ${
+                        r.isCustomDomain ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {r.displayDomain}
                       </code>
+                      {r.isCustomDomain && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600">
+                          {r.domainSubtype === 'apex' ? 'Apex' : 'Sub'}
+                        </span>
+                      )}
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(getPublicUrl(r.slug), 'Đã copy URL')}
+                        onClick={() => copyToClipboard(getPublicUrl(r), 'Đã copy URL')}
                         className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                         title="Copy URL"
                       >
                         <HiOutlineClipboard className="w-3.5 h-3.5" />
                       </button>
                       <a
-                        href={getPublicUrl(r.slug)}
+                        href={getPublicUrl(r)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -310,7 +324,6 @@ export default function LandingPagesAdminPage() {
                       </a>
                     </div>
                   </td>
-                  <td className="p-3 text-gray-800 font-medium">{r.title || '—'}</td>
                   <td className="p-3">
                     {r.isPublished ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">

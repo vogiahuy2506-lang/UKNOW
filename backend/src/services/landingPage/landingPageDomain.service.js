@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import dns from 'dns/promises';
+import { spawn } from 'child_process';
 import landingPageDomainRepository from '../../repositories/landingPageDomain.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import cloudflareService from '../cloudflare.service.js';
@@ -280,7 +281,7 @@ function buildAutoHostname(slug) {
 
 /**
  * Build response object for getForLanding.
- * CF-managed domains skip DNS verification — already active on creation.
+ * All domains use Certbot for SSL provisioning.
  */
 function buildDomainResponse(row) {
   if (!row) {
@@ -300,24 +301,22 @@ function buildDomainResponse(row) {
   let record = null;
 
   if (isActive) {
-    instructions = isCfManaged
-      ? `Đã kích hoạt tự động qua Cloudflare.`
-      : `Đã kích hoạt. Domain đã trỏ về ${isApex ? 'địa chỉ IP của máy chủ.' : target}.`;
+    if (isCfManaged) {
+      instructions = `Đã kích hoạt tự động qua Cloudflare (subdomain).`;
+    } else if (isApex) {
+      instructions = `Đã kích hoạt. Domain đã trỏ về địa chỉ IP của máy chủ. SSL được cấp qua Let's Encrypt.`;
+    } else {
+      instructions = `Đã kích hoạt. Domain đã trỏ về ${target}. SSL được cấp qua Let's Encrypt.`;
+    }
   } else {
     if (isApex && platformIp) {
-      instructions = `Thêm bản ghi A tại DNS của bạn:\n- Type: A\n- Name: @\n- Value: ${platformIp}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
-      record = {
-        type: 'A',
-        name: '@',
-        value: platformIp,
-      };
+      // Apex domain with Certbot
+      instructions = `Thêm bản ghi A tại DNS của bạn:\n- Type: A\n- Name: @\n- Value: ${platformIp}\nSau đó bấm «Kiểm tra lại» để xác minh. SSL sẽ được cấp tự động qua Let's Encrypt.`;
+      record = { type: 'A', name: '@', value: platformIp };
     } else {
-      instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Type: CNAME\n- Name: phần trước dấu chấm (ví dụ "www" hoặc "lp")\n- Value: ${target}\nSau đó bấm «Kiểm tra lại» để xác minh.`;
-      record = {
-        type: 'CNAME',
-        name: row.hostname,
-        value: target,
-      };
+      // Subdomain with manual CNAME
+      instructions = `Thêm bản ghi CNAME tại DNS của bạn:\n- Type: CNAME\n- Name: phần trước dấu chấm (ví dụ "www" hoặc "lp")\n- Value: ${target}\nSau đó bấm «Kiểm tra lại» để xác minh. SSL sẽ được cấp tự động qua Let's Encrypt.`;
+      record = { type: 'CNAME', name: row.hostname, value: target };
     }
   }
 
@@ -338,13 +337,11 @@ function buildDomainResponse(row) {
 /**
  * Custom domain cho landing — hỗ trợ 2 chế độ:
  *
- * Mode 1 (Cloudflare tự động): nếu CLOUDFLARE_API_TOKEN được cấu hình VÀ
- * base domain của hostname có trong tài khoản CF của platform →
- * backend tự tạo CNAME record, domain active ngay, không cần user verify DNS.
+ * Mode 1 (Auto-provisioned subdomain): slug.founderai.biz được tạo tự động
+ * khi tạo landing page. DNS được tạo qua Cloudflare API.
  *
- * Mode 2 (Manual CNAME): nếu CF không cấu hình hoặc zone không tìm thấy →
- * CNAME target = LP_CNAME_TARGET (founderai.biz). Nếu user đã thêm CNAME →
- * tự động active. Nếu chưa → pending với hướng dẫn.
+ * Mode 2 (Custom domain): User tự thêm CNAME/A record ở DNS provider.
+ * Sau khi verify DNS, SSL được cấp tự động qua Let's Encrypt (Certbot).
  */
 class LandingPageDomainService {
   /**
@@ -378,10 +375,12 @@ class LandingPageDomainService {
 
   /**
    * Gắn hostname cho landing page.
-   *
-   * Nếu Cloudflare được cấu hình và base domain nằm trong tài khoản CF →
-   * tự động tạo CNAME và kích hoạt ngay (cfManaged = true).
-   * Ngược lại → tự động verify CNAME record và kích hoạt nếu đúng.
+   * 
+   * Flow:
+   * 1. User nhập hostname (subdomain hoặc apex)
+   * 2. Backend verify DNS (CNAME/A record)
+   * 3. Nếu DNS OK → status = active, trigger SSL provisioning
+   * 4. Nếu DNS chưa OK → status = pending_verification
    *
    * @param {number} landingPageId
    * @param {string} hostname
@@ -432,41 +431,14 @@ class LandingPageDomainService {
     }
 
     const token = crypto.randomBytes(18).toString('hex');
-
-    // --- Mode 1: Cloudflare tự động ---
-    if (cloudflareService.isConfigured()) {
-      const cfResult = await cloudflareService.setupLandingPageDNS(h, cnameTarget());
-      if (cfResult.success) {
-        console.log(`[LandingPageDomainService] CF auto-setup OK for ${h} → zone=${cfResult.zoneId} record=${cfResult.recordId}`);
-        try {
-          await landingPageDomainRepository.upsertForLanding({
-            landingPageId,
-            hostname: h,
-            verificationToken: token,
-            status: 'active',
-            cfManaged: true,
-            cfZoneId: cfResult.zoneId,
-            cfRecordId: cfResult.recordId,
-          });
-          // Clear CORS cache so new domain is immediately allowed
-          await getClearCacheFn();
-          return this.getForLanding(landingPageId, authUser);
-        } catch (e) {
-          if (e?.code === '23505') {
-            const err = new Error('Hostname đã tồn tại trên hệ thống');
-            err.statusCode = 409;
-            throw err;
-          }
-          throw e;
-        }
-      }
-      // Zone không thuộc CF account của platform → fall through sang Mode 2
-      console.log(`[LandingPageDomainService] CF zone not found for ${h}, falling back to manual CNAME verify. Reason: ${cfResult.message}`);
-    }
-
-    // --- Mode 2: Manual CNAME verification tự động ---
-    // CNAME target là founderai.biz (không phải verify.founderai.biz)
     const target = cnameTarget();
+
+    // Determine domain type from user choice or auto-detect
+    const isApex = isApexDomain === true;
+
+    // All domains use Certbot for SSL provisioning
+    // Verify DNS: kiểm tra CNAME/A record đã được thêm chưa
+    // (Customer tự thêm CNAME/A record ở DNS provider của họ, ta chỉ verify)
     const dnsStatus = await checkCnameStatus(h, target, isApexDomain);
     const isVerified = dnsStatus.verified;
 
@@ -480,9 +452,18 @@ class LandingPageDomainService {
         cfManaged: false,
         cfZoneId: null,
         cfRecordId: null,
+        cfHostnameId: null,
+        isApexDomain: isApex,
       });
-      // Clear CORS cache so new domain is immediately allowed (even if pending)
       await getClearCacheFn();
+
+      // If verified, trigger SSL provisioning via Certbot
+      if (isVerified) {
+        provisionSsl(h).catch((err) => {
+          console.error(`[LandingPageDomainService] SSL provisioning failed for ${h}:`, err.message);
+        });
+      }
+
       return this.getForLanding(landingPageId, authUser);
     } catch (e) {
       if (e?.code === '23505') {
@@ -495,9 +476,9 @@ class LandingPageDomainService {
   }
 
   /**
-   * Xác minh DNS bằng CNAME record.
-   * Kiểm tra CNAME có trỏ về founderai.biz không.
-   * Nếu domain đã được CF quản lý và active → trả về ngay, không cần verify.
+   * Xác minh DNS bằng CNAME record hoặc A record.
+   * Kiểm tra CNAME có trỏ về founderai.biz không, hoặc A record có trỏ về IP platform không.
+   * Sau khi verify thành công, trigger SSL provisioning qua Certbot.
    *
    * @param {number} landingPageId
    * @param {object} authUser
@@ -510,11 +491,6 @@ class LandingPageDomainService {
       err.statusCode = 404;
       throw err;
     }
-    console.log(`[LandingPageDomainService.verifyDns] landingPageId=${landingPageId}, hostname=${row.hostname}, status=${row.status}, cfManaged=${row.cfManaged}, userId=${authUser?.id}`);
-
-    if (row.cfManaged && row.status === 'active') {
-      return buildDomainResponse(row);
-    }
 
     if (row.status === 'active') {
       return buildDomainResponse(row);
@@ -525,6 +501,7 @@ class LandingPageDomainService {
       ? Boolean(row.isApexDomain)
       : null;
     const dnsStatus = await checkCnameStatus(row.hostname, expectedTarget, storedIsApex);
+
     const ok = dnsStatus.verified;
     console.log(`[LandingPageDomainService.verifyDns] expectedTarget=${expectedTarget}, reason=${dnsStatus.reason}, found=${(dnsStatus.found || []).join(',')}, ok=${ok}, isApex=${dnsStatus.isApexDomain}, currentIp=${dnsStatus.currentIp}`);
 
@@ -536,12 +513,49 @@ class LandingPageDomainService {
 
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
     await getClearCacheFn();
+
+    // Trigger SSL provisioning via Certbot
+    provisionSsl(row.hostname).catch((err) => {
+      console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
+    });
+
     return this.getForLanding(landingPageId, authUser);
   }
 
   /**
-   * Xóa custom domain (BYOD).
-   * Nếu domain được CF quản lý → tự động xóa CNAME record trên Cloudflare.
+   * Trigger SSL certificate provisioning for a domain.
+   * @param {string} hostname
+   */
+  async provisionSsl(hostname) {
+    const scriptPath = process.env.SSL_PROVISION_SCRIPT;
+    if (!scriptPath) {
+      console.log(`[LandingPageDomainService] SSL provision skipped: SSL_PROVISION_SCRIPT not set`);
+      return;
+    }
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn(scriptPath, [hostname], { shell: true });
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (data) => { stdout += data.toString(); });
+      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          console.log(`[LandingPageDomainService] SSL provisioned for ${hostname}`);
+          resolve();
+        } else {
+          console.error(`[LandingPageDomainService] SSL provision failed: ${stderr}`);
+          reject(new Error(stderr || `Exit code ${code}`));
+        }
+      });
+    });
+  }
+
+  /**
+   * Xóa custom domain.
+   * DNS record được quản lý bởi khách hàng (không phải platform).
    *
    * @param {number} landingPageId
    * @param {object} authUser
@@ -554,17 +568,9 @@ class LandingPageDomainService {
       throw err;
     }
 
-    if (row.cfManaged && row.cfZoneId && row.cfRecordId) {
-      const cfResult = await cloudflareService.deleteDnsRecord(row.cfZoneId, row.cfRecordId);
-      if (cfResult.success) {
-        console.log(`[LandingPageDomainService] CF DNS record deleted for ${row.hostname}`);
-      } else {
-        console.warn(`[LandingPageDomainService] CF DNS cleanup failed for ${row.hostname}: ${cfResult.message}`);
-      }
-    }
-
+    // Xóa domain khỏi database
+    // SSL certificate sẽ được cleanup bởi certbot renewal hooks hoặc manual
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
-    // Clear CORS cache so removed domain is no longer allowed
     await getClearCacheFn();
     return { ok: true };
   }
@@ -623,6 +629,7 @@ class LandingPageDomainService {
     const row = await landingPageDomainRepository.findByLandingPageId(landingPageId);
     if (!row) return;
 
+    // Delete DNS record for auto-provisioned subdomains (slug.founderai.biz)
     if (row.cfManaged && row.cfZoneId && row.cfRecordId) {
       const cfResult = await cloudflareService.deleteDnsRecord(row.cfZoneId, row.cfRecordId);
       if (!cfResult.success) {
@@ -639,7 +646,8 @@ class LandingPageDomainService {
 
   /**
    * Auto-verify pending domains - được gọi bởi scheduler mỗi 5 phút.
-   * Tìm các domain đang pending, kiểm tra CNAME và activate nếu đúng.
+   * Tìm các domain đang pending, kiểm tra DNS và activate nếu đúng.
+   * Sau khi verify thành công, trigger SSL provisioning qua Certbot.
    * @returns {{total: number, verified: number, failed: number}}
    */
   async autoVerifyPendingDomains() {
@@ -654,14 +662,20 @@ class LandingPageDomainService {
 
     for (const domain of pendingDomains) {
       try {
-        // Skip CF-managed domains
-        if (domain.cfManaged) continue;
+        // Skip auto-provisioned *.founderai.biz subdomains (cfManaged=true, no custom domain)
+        if (domain.cfManaged && !domain.cfHostnameId) continue;
 
         const dnsStatus = await checkCnameStatus(domain.hostname, target);
         if (dnsStatus.verified) {
           await landingPageDomainRepository.updateStatusById(domain.id, 'active');
           await getClearCacheFn();
-          console.log(`[LandingPageDomainService] Auto-verified: ${domain.hostname}`);
+          console.log(`[LandingPageDomainService] Auto-verified (DNS): ${domain.hostname}`);
+          
+          // Trigger SSL provisioning
+          provisionSsl(domain.hostname).catch((err) => {
+            console.error(`[LandingPageDomainService] SSL provision failed for ${domain.hostname}:`, err.message);
+          });
+          
           verified++;
         } else {
           failed++;
