@@ -114,11 +114,10 @@ class LandingPageRepository {
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
-         lp.domain_type AS "domainType",
-         lp.domain_subtype AS "domainSubtype",
+         ld.domain_type AS "domainType",
+         ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
-         ld.status AS "customDomainStatus",
-         ld.is_apex_domain AS "customDomainIsApex"
+         ld.status AS "customDomainStatus"
        FROM landing_pages lp
        LEFT JOIN landing_page_domains ld ON ld.landing_page_id = lp.id
        WHERE ${clause}
@@ -215,11 +214,10 @@ class LandingPageRepository {
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
-         lp.domain_type AS "domainType",
-         lp.domain_subtype AS "domainSubtype",
+         ld.domain_type AS "domainType",
+         ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
-         ld.status AS "customDomainStatus",
-         ld.is_apex_domain AS "customDomainIsApex"
+         ld.status AS "customDomainStatus"
        FROM landing_pages lp
        LEFT JOIN landing_page_domains ld ON ld.landing_page_id = lp.id
        WHERE lp.id = $${params.length + 1}
