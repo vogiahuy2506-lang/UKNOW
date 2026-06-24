@@ -4,8 +4,7 @@ import landingPageRepository from './landingPage.repository.js';
 const CF_COLS = `
          d.cf_managed      AS "cfManaged",
          d.cf_zone_id      AS "cfZoneId",
-         d.cf_record_id    AS "cfRecordId",
-         d.is_apex_domain  AS "isApexDomain"`;
+         d.cf_record_id    AS "cfRecordId"`;
 
 const BASE_COLS = `
          d.id,
@@ -13,7 +12,6 @@ const BASE_COLS = `
          d.hostname,
          d.verification_token AS "verificationToken",
          d.status,
-         d.is_apex_domain  AS "isApexDomain",
          d.created_at      AS "createdAt",
          d.updated_at      AS "updatedAt",
          d.verified_at     AS "verifiedAt",${CF_COLS}`;
@@ -36,7 +34,6 @@ class LandingPageDomainRepository {
          d.hostname,
          d.verification_token AS "verificationToken",
          d.status,
-         d.is_apex_domain  AS "isApexDomain",
          d.created_at AS "createdAt",
          d.updated_at AS "updatedAt",
          d.verified_at AS "verifiedAt",
@@ -61,7 +58,7 @@ class LandingPageDomainRepository {
     const h = String(hostname || '').trim().toLowerCase();
     if (!h) return null;
     const result = await db.query(
-      `SELECT id, landing_page_id AS "landingPageId", hostname, status, is_apex_domain AS "isApexDomain"
+      `SELECT id, landing_page_id AS "landingPageId", hostname, status
        FROM landing_page_domains
        WHERE LOWER(hostname) = $1
        LIMIT 1`,
@@ -133,20 +130,18 @@ class LandingPageDomainRepository {
       hostname,
       verificationToken,
       status = 'pending_verification',
-      isApexDomain = false,
       cfManaged = false,
       cfZoneId = null,
       cfRecordId = null,
     } = row;
     const result = await db.query(
       `INSERT INTO landing_page_domains
-         (landing_page_id, hostname, verification_token, status, is_apex_domain, cf_managed, cf_zone_id, cf_record_id, created_at, updated_at, verified_at)
-       VALUES ($1, LOWER(TRIM($2)), $3, $4, $5, $6, $7, $8, NOW(), NOW(), $9)
+         (landing_page_id, hostname, verification_token, status, cf_managed, cf_zone_id, cf_record_id, created_at, updated_at, verified_at)
+       VALUES ($1, LOWER(TRIM($2)), $3, $4, $5, $6, $7, NOW(), NOW(), $8)
        ON CONFLICT (landing_page_id) DO UPDATE SET
          hostname           = LOWER(TRIM(EXCLUDED.hostname)),
          verification_token = EXCLUDED.verification_token,
          status             = EXCLUDED.status,
-         is_apex_domain     = EXCLUDED.is_apex_domain,
          cf_managed         = EXCLUDED.cf_managed,
          cf_zone_id         = EXCLUDED.cf_zone_id,
          cf_record_id       = EXCLUDED.cf_record_id,
@@ -161,7 +156,6 @@ class LandingPageDomainRepository {
          hostname,
          verification_token AS "verificationToken",
          status,
-         is_apex_domain    AS "isApexDomain",
          cf_managed        AS "cfManaged",
          cf_zone_id        AS "cfZoneId",
          cf_record_id      AS "cfRecordId",
@@ -173,7 +167,6 @@ class LandingPageDomainRepository {
         hostname,
         verificationToken,
         status,
-        isApexDomain,
         cfManaged,
         cfZoneId,
         cfRecordId,
@@ -232,7 +225,6 @@ class LandingPageDomainRepository {
          d.landing_page_id AS "landingPageId",
          d.hostname,
          d.status,
-         d.is_apex_domain  AS "isApexDomain",
          d.cf_managed   AS "cfManaged",
          lp.slug AS "landingSlug"
        FROM landing_page_domains d
