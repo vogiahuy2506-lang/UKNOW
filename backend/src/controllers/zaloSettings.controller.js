@@ -12,7 +12,7 @@ import { request as rawRequest } from '../../node_modules/zca-js/dist/utils.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
-import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
 import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
@@ -509,22 +509,23 @@ class ZaloSettingsController {
     }
 
     const existingCount = await zaloSettingRepository.countByUserId(userId);
-    const zaloAccountLimitCheck = await checkUserResourceLimit({
-      userId,
-      roleCode,
-      resourceKey: 'zaloAccounts',
-    });
-    if (!zaloAccountLimitCheck.allowed) {
-      const limitError = new Error(zaloAccountLimitCheck.message);
-      limitError.statusCode = 400;
-      throw limitError;
-    }
 
-    const isDefault = existingCount === 0;
-    const inserted = await zaloSettingRepository.insertAccount(
-      userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now
-    );
-    return this.mapRow(inserted);
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'zaloAccounts' });
+      const isDefault = existingCount === 0;
+      const inserted = await zaloSettingRepository.insertAccount(
+        userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now, client
+      );
+      await client.query('COMMIT');
+      return this.mapRow(inserted);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

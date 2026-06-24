@@ -5,6 +5,16 @@ const productApiService = {
     return api.get('/products', { params });
   },
 
+  getCategories() {
+    return api.get('/products/categories');
+  },
+
+  uploadThumbnail(formData) {
+    return api.post('/uploads/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   getProduct(id) {
     return api.get(`/products/${id}`);
   },

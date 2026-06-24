@@ -314,6 +314,7 @@ class DashboardController {
       }
 
       const result = await dashboardInsightsService.generateInsights({
+        userId: req.user.id,
         overview,
         analytics,
         topListsData,

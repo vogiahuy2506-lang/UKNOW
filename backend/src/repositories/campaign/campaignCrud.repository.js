@@ -273,6 +273,162 @@ class CampaignCrudRepository {
   }
 
   /**
+   * @param {object} client
+   * @param {number} nodeId
+   * @param {object} config
+   */
+  async updateNodeConfigTx(client, nodeId, config) {
+    await client.query(
+      'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+      [JSON.stringify(config || {}), nodeId]
+    );
+  }
+
+  async pauseCampaignIfActive(campaignId, queryClient = null) {
+    const queryable = queryClient || db;
+    await queryable.query(
+      `UPDATE campaigns
+       SET status = 'paused',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'active'`,
+      [campaignId]
+    );
+  }
+
+  async updateCampaignLastRunStats(campaignId, successfulSends) {
+    await db.query(
+      `UPDATE campaigns SET
+         last_run_at = CURRENT_TIMESTAMP,
+         total_sent = total_sent + $1
+         WHERE id = $2`,
+      [successfulSends, campaignId]
+    );
+  }
+
+  async updateNodeExecutionOrder(client, nodeId, executionOrder) {
+    await db.query(
+      `UPDATE campaign_nodes
+       SET execution_order = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [executionOrder, nodeId]
+    );
+  }
+
+  /**
+   * @param {object} client
+   * @param {number|string} campaignId
+   * @returns {Promise<boolean>}
+   */
+  async hasRunningRunTx(client, campaignId) {
+    const result = await client.query(
+      `SELECT 1
+       FROM campaign_runs
+       WHERE id_campaign = $1 AND status = 'running'
+       LIMIT 1`,
+      [campaignId]
+    );
+    return result.rows.length > 0;
+  }
+
+  /**
+   * @param {object} client
+   * @param {object} params
+   * @returns {Promise<object>}
+   */
+  async updateCampaignFieldsTx(client, {
+    campaignId,
+    isAdmin,
+    userId,
+    campaignName,
+    description,
+    campaignType,
+    status,
+    landingPageUrl,
+    startDate,
+    endDate,
+    timezone,
+    flowJson,
+  }) {
+    const updateParams = [
+      campaignName,
+      description,
+      campaignType,
+      status,
+      landingPageUrl,
+      startDate,
+      endDate,
+      timezone,
+      flowJson != null ? JSON.stringify(flowJson) : null,
+      campaignId,
+    ];
+    let updateQuery = `UPDATE campaigns SET
+        campaign_name = COALESCE($1, campaign_name),
+        description = COALESCE($2, description),
+        campaign_type = COALESCE($3, campaign_type),
+        status = COALESCE($4, status),
+        landing_page_url = COALESCE($5, landing_page_url),
+        start_date = COALESCE($6, start_date),
+        end_date = COALESCE($7, end_date),
+        timezone = COALESCE($8, timezone),
+        flow_json = COALESCE($9, flow_json),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10`;
+    if (!isAdmin) {
+      updateParams.push(userId);
+      updateQuery += ` AND id_user = $${updateParams.length}`;
+    }
+    updateQuery += ' RETURNING *';
+    const result = await client.query(updateQuery, updateParams);
+    return result.rows[0];
+  }
+
+  /**
+   * @param {object} client
+   * @param {number|string} campaignId
+   */
+  async deleteConnectionsByCampaignTx(client, campaignId) {
+    await client.query('DELETE FROM campaign_connections WHERE id_campaign = $1', [campaignId]);
+  }
+
+  /**
+   * @param {object} client
+   * @param {number|string} campaignId
+   */
+  async deleteNodesByCampaignTx(client, campaignId) {
+    await client.query('DELETE FROM campaign_nodes WHERE id_campaign = $1', [campaignId]);
+  }
+
+  /**
+   * @param {object} client
+   * @param {object} params
+   * @returns {Promise<object[]|null>}
+   */
+  async findEmailTemplateAttachmentsTx(client, { templateId, isAdmin, userId }) {
+    const params = [templateId];
+    let query = 'SELECT attachments FROM email_templates WHERE id = $1';
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
+    const result = await client.query(query, params);
+    return result.rows[0]?.attachments ?? null;
+  }
+
+  /**
+   * @param {object} client
+   * @param {object} params
+   */
+  async deleteCampaignTx(client, { campaignId, isAdmin, userId }) {
+    const params = [campaignId];
+    let query = 'DELETE FROM campaigns WHERE id = $1';
+    if (!isAdmin) {
+      params.push(userId);
+      query += ` AND id_user = $${params.length}`;
+    }
+    await client.query(query, params);
+  }
+
+  /**
    * Set campaign status to active (publish).
    *
    * @param {object} params

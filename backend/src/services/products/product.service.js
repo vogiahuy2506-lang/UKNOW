@@ -20,6 +20,8 @@ class ProductService {
       usp: row.usp,
       category: row.category,
       thumbnailUrl: row.thumbnail_url,
+      productUrl: row.product_url,
+      targetAudience: row.target_audience,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -91,6 +93,11 @@ class ProductService {
     return this.mapProduct(row);
   }
 
+  async getCategories({ user }) {
+    const ownerId = this.resolveOwnerId(user);
+    return productRepository.listCategories(ownerId);
+  }
+
   async create({ payload, user }) {
     const productName = String(payload.productName || '').trim();
     if (!productName) {
@@ -110,6 +117,8 @@ class ProductService {
       originalPrice: payload.originalPrice?.trim() || null,
       category: payload.category?.trim() || null,
       thumbnailUrl: payload.thumbnailUrl?.trim() || null,
+      productUrl: payload.productUrl?.trim() || null,
+      targetAudience: payload.targetAudience?.trim() || null,
       status: this.normalizeStatus(payload.status),
     });
 
@@ -140,6 +149,8 @@ class ProductService {
       usp: payload.usp !== undefined ? (payload.usp?.trim() || null) : row.usp,
       category: payload.category !== undefined ? (payload.category?.trim() || null) : row.category,
       thumbnailUrl: payload.thumbnailUrl !== undefined ? (payload.thumbnailUrl?.trim() || null) : row.thumbnail_url,
+      productUrl: payload.productUrl !== undefined ? (payload.productUrl?.trim() || null) : row.product_url,
+      targetAudience: payload.targetAudience !== undefined ? (payload.targetAudience?.trim() || null) : row.target_audience,
       status: payload.status !== undefined ? this.normalizeStatus(payload.status) : this.normalizeStatus(row.status),
     });
 

@@ -86,7 +86,12 @@ class LandingTestimonialAdminController {
         ? req.user.activeContext.ownerId
         : userId;
 
-      const row = await landingTestimonialService.update(req.params.id, req.body || {}, effectiveOwnerId);
+      const row = await landingTestimonialService.update(
+        req.params.id,
+        req.body || {},
+        effectiveOwnerId,
+        req.user?.role
+      );
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -114,7 +119,7 @@ class LandingTestimonialAdminController {
         ? req.user.activeContext.ownerId
         : userId;
         
-      await landingTestimonialService.remove(req.params.id, effectiveOwnerId);
+      await landingTestimonialService.remove(req.params.id, effectiveOwnerId, req.user?.role);
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;

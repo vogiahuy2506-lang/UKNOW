@@ -116,8 +116,9 @@ class ZaloTemplateRepository {
     return result.rows[0] || null;
   }
 
-  async create({ userId, templateName, templateCode, subject, bodyText, attachments, variables, category }) {
-    const result = await db.query(
+  async create({ userId, templateName, templateCode, subject, bodyText, attachments, variables, category }, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `INSERT INTO zalo_templates (id_user, template_name, template_code, subject, body_text, attachments, variables, category)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
@@ -210,6 +211,17 @@ class ZaloTemplateRepository {
         : 'DELETE FROM zalo_templates WHERE id = $1 AND id_user = $2',
       isAdmin ? [id] : [id, userId]
     );
+  }
+
+  async findContentByIdForUser(templateId, userId) {
+    const result = await db.query(
+      `SELECT body_text, body_html, attachments
+       FROM zalo_templates
+       WHERE id = $1 AND id_user = $2
+       LIMIT 1`,
+      [templateId, userId]
+    );
+    return result.rows[0] || null;
   }
 }
 

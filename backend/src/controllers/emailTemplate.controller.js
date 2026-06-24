@@ -1,7 +1,8 @@
 import uploadController from './upload.controller.js';
 import emailTemplateRepository from '../repositories/email/emailTemplate.repository.js';
+import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
-import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 
 class EmailTemplateController {
   /**
@@ -191,20 +192,34 @@ class EmailTemplateController {
         }
       }
 
-      const item = await emailTemplateRepository.create({
-          userId,
-          templateName,
-          templateCode,
-          subject,
-          bodyHtml: normalizedBodyHtml,
-          bodyText: normalizedBodyText,
-          attachments: storedAttachments,
-          variables,
-          category,
-        });
-
-      // Đồng bộ template_files
-      await this.syncTemplateFiles(item.id, storedAttachments);
+      const item = await (async () => {
+        const client = await db.getClient();
+        try {
+          await client.query('BEGIN');
+          await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'emailTemplates' });
+          const created = await emailTemplateRepository.create({
+            userId,
+            templateName,
+            templateCode,
+            subject,
+            bodyHtml: normalizedBodyHtml,
+            bodyText: normalizedBodyText,
+            attachments: storedAttachments,
+            variables,
+            category,
+          }, client);
+          for (const attachment of storedAttachments) {
+            await emailTemplateRepository.syncTemplateFile(created.id, attachment, client);
+          }
+          await client.query('COMMIT');
+          return created;
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      })();
 
       res.status(201).json({
         success: true,
@@ -221,6 +236,13 @@ class EmailTemplateController {
       });
     } catch (error) {
       console.error('Create email template error:', error);
+      if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
+        return res.status(error.statusCode || 403).json({
+          success: false,
+          message: error.message,
+          limitReached: true,
+        });
+      }
       res.status(500).json({
         success: false,
         message: 'Lỗi máy chủ'

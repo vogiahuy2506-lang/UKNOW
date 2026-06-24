@@ -5,8 +5,23 @@ import {
   HiOutlineCube,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 
 const PRODUCT_STATUS_OPTIONS = ['active', 'inactive'];
+
+const buildProductColumnOptions = (t) => [
+  { key: 'productCode', label: t('readProductsDb.colProductCode') },
+  { key: 'productName', label: t('readProductsDb.colProductName') },
+  { key: 'price', label: t('readProductsDb.colPrice') },
+  { key: 'originalPrice', label: t('readProductsDb.colOriginalPrice') },
+  { key: 'description', label: t('readProductsDb.colDescription') },
+  { key: 'usp', label: t('readProductsDb.colUsp') },
+  { key: 'category', label: t('readProductsDb.colCategory') },
+  { key: 'thumbnailUrl', label: t('readProductsDb.colThumbnailUrl') },
+  { key: 'productUrl', label: t('readProductsDb.colProductUrl') },
+  { key: 'targetAudience', label: t('readProductsDb.colTargetAudience') },
+  { key: 'status', label: t('readProductsDb.colStatus') },
+];
 
 const normalizeProductStatus = (status) => String(status || '').trim().toLowerCase() || 'active';
 
@@ -33,6 +48,7 @@ export const NodeConfigReadProductsDbSection = ({
   productsPreviewItems,
 }) => {
   const { t } = useI18n();
+  const productColumnOptions = useMemo(() => buildProductColumnOptions(t), [t]);
   const [lastAutoLoadProductsKey, setLastAutoLoadProductsKey] = useState('');
   const selectedProductsDbIds = (Array.isArray(formData.productsDbSelectedIds) ? formData.productsDbSelectedIds : [])
     .map((v) => parseInt(v, 10))
@@ -127,6 +143,14 @@ export const NodeConfigReadProductsDbSection = ({
                 <strong>{t('readProductsDb.note')}:</strong> {t('readProductsDb.readProductsNote')}
               </p>
             </div>
+            <NodeConfigDataColumnPicker
+              title={t('readProductsDb.dataColumnsTitle')}
+              options={productColumnOptions}
+              selectedKeys={Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : []}
+              setFormData={setFormData}
+              formField="dataSelectedColumns"
+              hint={t('readProductsDb.dataColumnsHint')}
+            />
           </div>
         );
 

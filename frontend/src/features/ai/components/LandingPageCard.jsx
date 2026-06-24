@@ -166,7 +166,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                   srcDoc={fullHtml}
                   className={`w-full ${deviceHeight} border-0`}
                   title="Landing Page Preview"
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox="allow-scripts"
                 />
               </div>
             </div>
@@ -265,7 +265,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                     srcDoc={fullHtml}
                     className="w-full h-full border-0"
                     title="Landing Page Fullscreen Preview"
-                    sandbox="allow-scripts allow-same-origin"
+                    sandbox="allow-scripts"
                   />
                 </div>
               </div>
@@ -276,7 +276,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
                     srcDoc={fullHtml}
                     className="w-full h-full border-0"
                     title="Landing Page Fullscreen Preview"
-                    sandbox="allow-scripts allow-same-origin"
+                    sandbox="allow-scripts"
                   />
                 </div>
               </div>

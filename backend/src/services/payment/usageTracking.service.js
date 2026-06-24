@@ -1,5 +1,13 @@
+import db from '../../config/database.js';
 import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
 import * as planRepository from '../../repositories/payment/plan.repository.js';
+
+async function acquireUsageTrackingLock(client, userId, resourceType) {
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
+    [`usage:${userId}`, String(resourceType)]
+  );
+}
 
 class UsageTrackingService {
   /**
@@ -71,34 +79,67 @@ class UsageTrackingService {
   }
 
   /**
-   * Increment usage (and check limit)
+   * Increment usage (and check limit) atomically within a transaction.
    */
   async incrementUsage(userId, resourceType, delta = 1) {
-    // Check current limit first
-    const check = await this.checkLimit(userId, resourceType);
-    if (check.isExceeded) {
-      throw new Error(`Đã vượt quá giới hạn sử dụng cho ${resourceType}`);
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      await acquireUsageTrackingLock(client, userId, resourceType);
+      const limits = await usageTrackingRepository.getUserPlanLimits(userId, client);
+      const limit = this._getLimitForResource(limits, resourceType);
+      const currentUsage = await usageTrackingRepository.getCurrentUsage(userId, resourceType, client);
+      if (limit > 0 && currentUsage + delta > limit) {
+        const error = new Error(`Đã vượt quá giới hạn sử dụng cho ${resourceType}`);
+        error.status = 403;
+        error.code = 'RESOURCE_LIMIT_EXCEEDED';
+        error.resource = resourceType;
+        throw error;
+      }
+      await usageTrackingRepository.trackUsage(userId, resourceType, delta, {}, client);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
 
-    // Track the usage
-    await this.trackUsage(userId, resourceType, delta);
-
-    // Return updated status
     return this.getResourceUsage(userId, resourceType);
   }
 
   async ensureAvailable(userId, resourceType, delta = 1) {
-    const usage = await this.getResourceUsage(userId, resourceType);
-    if (usage.limit > 0 && usage.used + delta > usage.limit) {
-      const error = new Error(`Đã hết ${resourceType} trong gói dịch vụ hiện tại`);
-      error.status = 403;
-      error.code = 'RESOURCE_LIMIT_EXCEEDED';
-      error.resource = resourceType;
-      error.used = usage.used;
-      error.limit = usage.limit;
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      await acquireUsageTrackingLock(client, userId, resourceType);
+      const limits = await usageTrackingRepository.getUserPlanLimits(userId, client);
+      const limit = this._getLimitForResource(limits, resourceType);
+      const used = await usageTrackingRepository.getCurrentUsage(userId, resourceType, client);
+      if (limit > 0 && used + delta > limit) {
+        const error = new Error(`Đã hết ${resourceType} trong gói dịch vụ hiện tại`);
+        error.status = 403;
+        error.code = 'RESOURCE_LIMIT_EXCEEDED';
+        error.resource = resourceType;
+        error.used = used;
+        error.limit = limit;
+        throw error;
+      }
+      await client.query('COMMIT');
+      return {
+        used,
+        limit,
+        remaining: Math.max(0, limit - used),
+        percentage: limit > 0 ? Math.min(100, (used / limit) * 100) : 0,
+        isExceeded: limit > 0 && used >= limit,
+        isWarning: limit > 0 && (used / limit) * 100 >= 80 && (used / limit) * 100 < 100,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
-    return usage;
   }
 
   /**

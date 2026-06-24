@@ -6,6 +6,50 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
 
 /**
+ * Bỏ 1 `BEGIN;` đầu và 1 `COMMIT;` cuối (nếu có) để runner tự bọc transaction.
+ * Chỉ strip token đứng riêng — không đụng nội dung SQL bên trong.
+ *
+ * @param {string} sql
+ * @returns {string}
+ */
+export function stripOuterTransactionStatements(sql) {
+  let body = String(sql || '').trim();
+  if (!body) return body;
+  body = body.replace(/^\s*BEGIN\s*;\s*/i, '');
+  body = body.replace(/\s*COMMIT\s*;\s*$/i, '');
+  return body.trim();
+}
+
+/**
+ * Chạy một file migration trong transaction (all-or-nothing per file).
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {string} file
+ * @param {string} sql
+ */
+export async function runSingleMigration(client, file, sql) {
+  const migrationSql = stripOuterTransactionStatements(sql);
+  await client.query('BEGIN');
+  try {
+    if (migrationSql) {
+      await client.query(migrationSql);
+    }
+    await client.query(
+      `INSERT INTO schema_migrations (filename) VALUES ($1)`,
+      [file]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error(`[Migration] ROLLBACK thất bại cho ${file}: ${rollbackErr.message}`);
+    }
+    throw err;
+  }
+}
+
+/**
  * Chạy tất cả các file SQL trong thư mục migrations/ theo thứ tự.
  * Lưu lịch sử vào bảng schema_migrations để không chạy lại file đã chạy.
  *
@@ -61,11 +105,7 @@ export async function runMigrations(client) {
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
     console.log(`[Migration] Đang chạy ${file}...`);
     try {
-      await client.query(sql);
-      await client.query(
-        `INSERT INTO schema_migrations (filename) VALUES ($1)`,
-        [file]
-      );
+      await runSingleMigration(client, file, sql);
       console.log(`[Migration] ✓ ${file}`);
       newCount++;
     } catch (err) {

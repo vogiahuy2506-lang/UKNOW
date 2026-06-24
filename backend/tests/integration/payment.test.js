@@ -358,6 +358,39 @@ describe('POST /api/payments/webhook', () => {
     );
     expect(u.rows[0].subscription_reminder_count).toBe(0);
   });
+
+  it('webhook trùng (code=00 2 lần) → chỉ activate 1 lần, không cộng đôi hạn', async () => {
+    const user = await createUser({ username: 'dup-webhook' });
+    const plan = await createPlan({ code: 'dup-plan' });
+    const orderCode = Date.now() + 6;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
+    );
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode });
+
+    await request(app).post('/api/payments/webhook').send({});
+    const afterFirst = await db.query(
+      `SELECT subscription_expires_at, active_plan_id FROM users WHERE id = $1`,
+      [user.id]
+    );
+    const expiresAfterFirst = new Date(afterFirst.rows[0].subscription_expires_at).getTime();
+
+    await request(app).post('/api/payments/webhook').send({});
+    const afterSecond = await db.query(
+      `SELECT subscription_expires_at, active_plan_id FROM users WHERE id = $1`,
+      [user.id]
+    );
+    const expiresAfterSecond = new Date(afterSecond.rows[0].subscription_expires_at).getTime();
+
+    expect(Number(afterSecond.rows[0].active_plan_id)).toBe(Number(plan.id));
+    expect(expiresAfterSecond).toBe(expiresAfterFirst);
+
+    const o = await db.query(`SELECT status FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(o.rows[0].status).toBe('success');
+  });
 });
 
 // ===========================================================================

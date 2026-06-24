@@ -6,6 +6,10 @@ import landingTestimonialPublicController from '../controllers/landingTestimonia
 import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
 import * as publicPromotionController from '../controllers/publicPromotion.controller.js';
 import { domainResolver } from '../middleware/domainResolver.js';
+import {
+  publicLeadLimiter,
+  publicLandingAnalyticsLimiter,
+} from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -17,7 +21,12 @@ const landingPublicCors = cors({
   maxAge: 86400,
 });
 
-router.post('/leads', publicLeadController.create.bind(publicLeadController));
+router.post(
+  '/leads',
+  landingPublicCors,
+  publicLeadLimiter,
+  publicLeadController.create.bind(publicLeadController)
+);
 
 router.get('/promotions/active', publicPromotionController.active);
 
@@ -29,6 +38,7 @@ router.get(
 router.post(
   '/landing-analytics/view',
   landingPublicCors,
+  publicLandingAnalyticsLimiter,
   landingPagePublicController.postView.bind(landingPagePublicController)
 );
 

@@ -84,7 +84,12 @@ class LandingFeaturedCourseAdminController {
         ? req.user.activeContext.ownerId
         : userId;
 
-      const row = await landingFeaturedCourseService.update(req.params.id, req.body || {}, effectiveOwnerId);
+      const row = await landingFeaturedCourseService.update(
+        req.params.id,
+        req.body || {},
+        effectiveOwnerId,
+        req.user?.role
+      );
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -112,7 +117,7 @@ class LandingFeaturedCourseAdminController {
         ? req.user.activeContext.ownerId
         : userId;
         
-      await landingFeaturedCourseService.remove(req.params.id, effectiveOwnerId);
+      await landingFeaturedCourseService.remove(req.params.id, effectiveOwnerId, req.user?.role);
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;

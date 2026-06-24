@@ -860,7 +860,7 @@ export default function LandingPageFullEditor({
           <iframe
             title={t('landingPageEditor.landingPreview')}
             className="flex-1 w-full min-h-0 border-0 bg-white"
-            sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+            sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
             srcDoc={
               previewSrcDoc ||
               `<!DOCTYPE html><html><body><p class="p-4 text-gray-500 text-sm text-center">${t('landingPageEditor.enterSlugHtmlToPreview')}</p></body></html>`

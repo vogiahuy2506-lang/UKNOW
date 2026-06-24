@@ -180,6 +180,183 @@ class CustomerMutationRepository {
     );
     return result.rows[0] || null;
   }
+
+  async findZaloFriendCustomerByPhone(userId, phone) {
+    const result = await db.query(
+      `SELECT id
+       FROM customers
+       WHERE id_user = $1
+         AND (phone = $2 OR zalo_phone = $2)
+       ORDER BY id ASC
+       LIMIT 1`,
+      [userId, phone]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async updateZaloFriendCustomerByPhone({
+    userId,
+    customerId,
+    phone,
+    uid,
+    fullName,
+    email,
+  }) {
+    await db.query(
+      `UPDATE customers
+       SET
+         phone = COALESCE(NULLIF($1, ''), phone),
+         zalo_phone = COALESCE(NULLIF($2, ''), zalo_phone),
+         zalo_id = COALESCE(NULLIF($3, ''), zalo_id),
+         full_name = COALESCE(NULLIF($4, ''), full_name),
+         email = COALESCE(NULLIF($5, ''), email),
+         customer_source = COALESCE(customer_source, 'uknow_campaign'),
+         zalo_is_friend = TRUE,
+         zalo_friend_added_at = COALESCE(zalo_friend_added_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+         AND id_user = $7`,
+      [phone, phone, uid, fullName, email, customerId, userId]
+    );
+  }
+
+  async insertZaloFriendCustomer({
+    userId,
+    email,
+    phone,
+    uid,
+    fullName,
+  }) {
+    const result = await db.query(
+      `INSERT INTO customers
+         (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source,
+          zalo_is_friend, zalo_friend_added_at, created_at, updated_at)
+       VALUES
+         ($1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7,
+          TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id`,
+      [userId, email, phone, uid, phone, fullName, 'uknow_campaign']
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async updateCustomerZaloUidIfEmpty(userId, customerId, uid) {
+    await db.query(
+      `UPDATE customers
+       SET zalo_id = COALESCE(NULLIF(zalo_id, ''), $1),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         AND id_user = $3
+         AND (zalo_id IS NULL OR zalo_id = '')`,
+      [uid, customerId, userId]
+    );
+  }
+
+  async findCustomerByUidOrPhone(userId, uid, phonePlaceholder) {
+    const result = await db.query(
+      `SELECT id FROM customers
+       WHERE id_user = $1
+         AND (zalo_id = $2 OR (phone = $3 AND $3 <> '') OR (zalo_phone = $3 AND $3 <> ''))
+       ORDER BY id ASC
+       LIMIT 1`,
+      [userId, uid, phonePlaceholder]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async updateCustomerZaloUid(customerId, uid) {
+    await db.query(
+      `UPDATE customers
+       SET zalo_id = COALESCE(NULLIF(zalo_id, ''), $1),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [uid, customerId]
+    );
+  }
+
+  async insertMinimalCustomerByPhoneUid(userId, phone, uid) {
+    await db.query(
+      `INSERT INTO customers
+         (id_user, phone, zalo_id, zalo_phone, customer_source, created_at, updated_at)
+       VALUES ($1, $2, $3, $2, 'uknow_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT DO NOTHING`,
+      [userId, phone, uid]
+    );
+  }
+
+  async findOwnedCustomerId(userId, customerId) {
+    const result = await db.query(
+      `SELECT id
+       FROM customers
+       WHERE id = $1
+         AND id_user = $2
+       LIMIT 1`,
+      [customerId, userId]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async updateZaloPersonalEnsuredCustomer({
+    userId,
+    customerId,
+    fullName,
+    email,
+    phone,
+    uid,
+    utmSource,
+  }) {
+    await db.query(
+      `UPDATE customers
+       SET
+         full_name = COALESCE(NULLIF($1, ''), full_name),
+         email = COALESCE(NULLIF($2, ''), email),
+         phone = COALESCE(NULLIF($3, ''), phone),
+         zalo_phone = COALESCE(NULLIF($4, ''), zalo_phone),
+         zalo_id = COALESCE(NULLIF($5, ''), zalo_id),
+         customer_source = COALESCE(customer_source, 'uknow_campaign'),
+         utm_source = COALESCE(utm_source, $6),
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7
+         AND id_user = $8`,
+      [fullName, email, phone, phone, uid, utmSource, customerId, userId]
+    );
+  }
+
+  async findZaloPersonalCustomerByIdentifiers(userId, uid, phone, email) {
+    const result = await db.query(
+      `SELECT id
+       FROM customers
+       WHERE id_user = $1
+         AND (
+           ($2 <> '' AND zalo_id = $2)
+           OR ($3 <> '' AND (phone = $3 OR zalo_phone = $3))
+           OR ($4 <> '' AND LOWER(email) = LOWER($4))
+         )
+       ORDER BY id ASC
+       LIMIT 1`,
+      [userId, uid, phone, email]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  async insertZaloPersonalCustomer({
+    userId,
+    email,
+    phone,
+    uid,
+    fullName,
+    utmSource,
+  }) {
+    const result = await db.query(
+      `INSERT INTO customers
+         (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source, created_at, updated_at)
+       VALUES
+         ($1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id`,
+      [userId, email, phone, uid, phone, fullName, 'uknow_campaign', utmSource]
+    );
+    return result.rows[0]?.id ?? null;
+  }
 }
 
 export default new CustomerMutationRepository();

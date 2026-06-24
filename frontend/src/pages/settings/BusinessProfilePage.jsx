@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import businessProfileApiService from '../../features/settings/services/businessProfileApi.service';
+import productApiService from '../../features/products/services/productApi.service';
 
   const TONE_OPTIONS = (t) => [
   { value: 'professional', label: t('businessProfile.professional') },
@@ -137,10 +138,21 @@ const BusinessProfilePage = () => {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoDragging, setLogoDragging] = useState(false);
   const [logoPreview, setLogoPreview] = useState('');
+  const [productPreview, setProductPreview] = useState([]);
+  const [productTotal, setProductTotal] = useState(0);
   const logoInputRef = useRef(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchProfile(); }, []);
+  useEffect(() => { fetchProfile(); fetchProductPreview(); }, []);
+
+  const fetchProductPreview = async () => {
+    try {
+      const res = await productApiService.getProducts({ page: 1, limit: 5 });
+      const data = res.data?.data || {};
+      setProductPreview(data.products || []);
+      setProductTotal(data.pagination?.total ?? (data.products?.length || 0));
+    } catch { /* không chặn trang nếu lỗi đọc sản phẩm */ }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -327,14 +339,41 @@ const BusinessProfilePage = () => {
 
         {/* Sản phẩm / dịch vụ — quản lý tại trang Sản phẩm */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <p className="text-sm text-slate-600">{t('businessProfile.productsMovedHint')}</p>
-          <Link
-            to="/app/products"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700"
-          >
-            {t('businessProfile.manageProductsLink')}
-            <HiOutlineArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-700">
+                {t('businessProfile.productsPreviewTitle')} ({productTotal})
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">{t('businessProfile.productsMovedHint')}</p>
+            </div>
+            <Link
+              to="/app/products"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 shrink-0"
+            >
+              {t('businessProfile.manageProductsLink')}
+              <HiOutlineArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {productPreview.length > 0 ? (
+            <ul className="mt-3 space-y-1.5">
+              {productPreview.map((p) => (
+                <li key={p.id} className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
+                  <span className="font-medium text-slate-700 truncate">{p.productName}</span>
+                  {p.price && <span className="text-slate-400 shrink-0">— {p.price}</span>}
+                  {p.category && <span className="text-xs text-slate-400 shrink-0">· {p.category}</span>}
+                </li>
+              ))}
+              {productTotal > productPreview.length && (
+                <li className="text-xs text-slate-400 pl-3.5">
+                  {t('businessProfile.productsPreviewMore', { count: productTotal - productPreview.length })}
+                </li>
+              )}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-slate-400">{t('businessProfile.productsPreviewEmpty')}</p>
+          )}
         </div>
 
         {/* Khách hàng mục tiêu */}

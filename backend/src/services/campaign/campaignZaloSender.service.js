@@ -1748,6 +1748,7 @@ class CampaignZaloSenderService {
         message,
         attachments,
       },
+      jobOptions: { attempts: 1 },
     });
   }
 
@@ -1914,6 +1915,7 @@ class CampaignZaloSenderService {
         phone,
         message,
       },
+      jobOptions: { attempts: 1 },
     });
   }
 
@@ -2048,6 +2050,7 @@ class CampaignZaloSenderService {
         message,
         attachments,
       },
+      jobOptions: { attempts: 1 },
     });
   }
 

@@ -565,6 +565,16 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
             <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
           </div>
         ))}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI cao nhất (gói)</label>
+          <select className="input w-full" value={form.aiModel || 'gemini-2.5-flash'} onChange={(e) => set('aiModel', e.target.value)}>
+            <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          </select>
+        </div>
       </div>
     </div>
   );

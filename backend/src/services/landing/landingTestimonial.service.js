@@ -1,4 +1,5 @@
 import landingTestimonialRepository from '../../repositories/landingTestimonial.repository.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 import {
   deleteUploadedFileIfAny,
   extractStorageKeyFromImageUrl,
@@ -20,6 +21,14 @@ function normalizeStarRating(raw) {
     throw err;
   }
   return n;
+}
+
+function assertRecordOwnership(existing, userId, roleCode, notFoundMessage) {
+  if (Number(existing.idUser) !== Number(userId) && !isAdminRole(roleCode)) {
+    const err = new Error(notFoundMessage);
+    err.statusCode = 404;
+    throw err;
+  }
 }
 
 class LandingTestimonialService {
@@ -113,13 +122,14 @@ class LandingTestimonialService {
    * @param {object} body
    * @param {number} userId
    */
-  async update(id, body, userId) {
+  async update(id, body, userId, roleCode = null) {
     const existing = await landingTestimonialRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy đánh giá landing');
       err.statusCode = 404;
       throw err;
     }
+    assertRecordOwnership(existing, userId, roleCode, 'Không tìm thấy đánh giá landing');
     const b = body && typeof body === 'object' ? body : {};
     const starRating =
       b.starRating !== undefined ? normalizeStarRating(b.starRating) : existing.starRating;
@@ -207,18 +217,14 @@ class LandingTestimonialService {
    * @param {number|string} id
    * @param {number} userId
    */
-  async remove(id, userId) {
+  async remove(id, userId, roleCode = null) {
     const existing = await landingTestimonialRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy đánh giá landing');
       err.statusCode = 404;
       throw err;
     }
-    if (existing.idUser !== userId) {
-      const err = new Error('Bạn không có quyền xóa bản ghi này');
-      err.statusCode = 403;
-      throw err;
-    }
+    assertRecordOwnership(existing, userId, roleCode, 'Không tìm thấy đánh giá landing');
     const fileKey = extractStorageKeyFromImageUrl(existing.imageUrl);
     const ok = await landingTestimonialRepository.deleteById(id);
     if (!ok) {

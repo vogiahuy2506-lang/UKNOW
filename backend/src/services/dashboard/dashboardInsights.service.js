@@ -1,4 +1,5 @@
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
+import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 import { isInsightPayloadUsable } from '../../utils/dashboardInsightPayload.util.js';
 import dashboardInsightRepository from '../../repositories/dashboard/dashboardInsight.repository.js';
 
@@ -137,8 +138,8 @@ function repairTruncatedJsonObject(text) {
  *
  * @returns {number}
  */
-function resolveGeminiOutputCapForModel() {
-  const m = String(process.env.GEMINI_MODEL || '').toLowerCase();
+function resolveGeminiOutputCapForModel(modelName) {
+  const m = String(modelName || process.env.GEMINI_MODEL || '').toLowerCase();
   if (/gemini[^a-z0-9]*2\.5|2\.5[^a-z0-9]*flash|2\.5[^a-z0-9]*pro/.test(m)) {
     return 65536;
   }
@@ -151,8 +152,8 @@ function resolveGeminiOutputCapForModel() {
  *
  * @returns {number}
  */
-function resolveInsightMaxOutputTokens() {
-  const cap = resolveGeminiOutputCapForModel();
+function resolveInsightMaxOutputTokens(modelName) {
+  const cap = resolveGeminiOutputCapForModel(modelName);
   const raw = Number(process.env.GEMINI_MAX_OUTPUT_TOKENS);
   const fallback = cap > 8192 ? 16384 : 8192;
   const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
@@ -792,20 +793,24 @@ class DashboardInsightsService {
    * @param {object} input.filters
    * @returns {Promise<{ success: boolean, data: object }>}
    */
-  async generateInsights({ overview, analytics, topListsData, landingPageStats, filters }) {
+  async generateInsights({ userId, overview, analytics, topListsData, landingPageStats, filters }) {
     let lastText = '';
     let lastFinish = '';
     let lastBlock = '';
     let usedCompactRetry = false;
+    const insightModel = userId
+      ? await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash')
+      : (process.env.GEMINI_MODEL || 'gemini-2.0-flash');
 
     const runOnce = async (safePayload) => {
       const dataMarkdown = buildDataMarkdownSection(safePayload);
       const prompt = buildAnalysisPrompt(dataMarkdown);
       return generateGeminiText({
         prompt,
+        model: insightModel,
         timeoutMs: 120000,
         jsonMode: true,
-        maxOutputTokens: resolveInsightMaxOutputTokens(),
+        maxOutputTokens: resolveInsightMaxOutputTokens(insightModel),
       });
     };
 

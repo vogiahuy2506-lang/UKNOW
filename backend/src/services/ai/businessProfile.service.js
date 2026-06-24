@@ -17,9 +17,19 @@ export function serializeProductList(products) {
     const name = p.product_name || p.productName || p.name || 'Sản phẩm';
     const parts = [`${i + 1}. ${name}`];
     const price = p.price;
+    const originalPrice = p.original_price || p.originalPrice;
+    const category = p.category;
+    if (category) parts.push(`Danh mục: ${category}`);
     if (price) parts.push(`Giá: ${price}`);
+    if (originalPrice && String(originalPrice).trim() && String(originalPrice).trim() !== String(price || '').trim()) {
+      parts.push(`Giá gốc: ${originalPrice}`);
+    }
     if (p.description) parts.push(p.description);
     if (p.usp) parts.push(`Điểm nổi bật: ${p.usp}`);
+    const targetAudience = p.target_audience || p.targetAudience;
+    if (targetAudience) parts.push(`Đối tượng: ${targetAudience}`);
+    const productUrl = p.product_url || p.productUrl;
+    if (productUrl) parts.push(`Link: ${productUrl}`);
     return parts.join(' — ');
   }).join('\n');
 }

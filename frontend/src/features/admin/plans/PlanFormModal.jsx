@@ -37,6 +37,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     maxZaloTemplates: plan.maxZaloTemplates ?? '',
     maxChatbots: plan.maxChatbots ?? '',
     aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
+    aiModel: plan.aiModel || 'gemini-2.5-flash',
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));

@@ -143,8 +143,9 @@ class ZaloSettingRepository {
     return rows[0]?.total ?? 0;
   }
 
-  async insertAccount(userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now) {
-    const { rows } = await db.query(
+  async insertAccount(userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now, client = null) {
+    const queryable = client || db;
+    const { rows } = await queryable.query(
       `INSERT INTO zalo_settings (
         id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, cookie_text, status, is_active, is_default, notes, last_connected_at
       ) VALUES (

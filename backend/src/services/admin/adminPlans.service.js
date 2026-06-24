@@ -64,7 +64,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod }) {
+  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
   const normalizedCode = code?.trim() || null;
@@ -93,6 +93,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
       maxEmailTemplates:       parseLimitField(maxEmailTemplates),
       maxZaloTemplates:        parseLimitField(maxZaloTemplates),
       aiTokensPerPeriod:       parseLimitField(aiTokensPerPeriod),
+      aiModel:                 aiModel?.trim() || 'gemini-2.5-flash',
     });
   } catch (err) {
     if (err?.code === '23505' && String(err?.constraint || '').includes('plans_code')) {
@@ -132,6 +133,7 @@ export async function editPlan(id, payload) {
     maxEmailTemplates:     parseLimitField(payload.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(payload.maxZaloTemplates),
     aiTokensPerPeriod:     parseLimitField(payload.aiTokensPerPeriod),
+    aiModel:               payload.aiModel?.trim() || plan.ai_model || 'gemini-2.5-flash',
   });
 }
 
@@ -230,6 +232,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
     aiTokensPerPeriod:     parseLimitField(planData.aiTokensPerPeriod),
+    aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
   });
 
   return { ...result, assignedTo: user };

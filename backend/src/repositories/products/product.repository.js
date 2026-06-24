@@ -47,6 +47,8 @@ class ProductRepository {
         usp,
         category,
         thumbnail_url,
+        product_url,
+        target_audience,
         created_at,
         updated_at
       FROM products AS products
@@ -81,6 +83,8 @@ class ProductRepository {
         usp,
         category,
         thumbnail_url,
+        product_url,
+        target_audience,
         created_at,
         updated_at
       FROM products
@@ -92,7 +96,7 @@ class ProductRepository {
 
   async findAllByUser(userId) {
     const result = await db.query(
-      `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, status
+      `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, product_url, target_audience, status
        FROM products
        WHERE id_user = $1
        ORDER BY updated_at DESC, id DESC`,
@@ -111,15 +115,17 @@ class ProductRepository {
     originalPrice,
     category,
     thumbnailUrl,
+    productUrl,
+    targetAudience,
     status,
   }) {
     const { rows } = await db.query(
       `INSERT INTO products (
         id_user, product_code, product_name, description, usp,
-        price, original_price, category, thumbnail_url, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        price, original_price, category, thumbnail_url, product_url, target_audience, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id`,
-      [userId, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, status]
+      [userId, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, productUrl, targetAudience, status]
     );
     return rows[0]?.id || null;
   }
@@ -133,6 +139,8 @@ class ProductRepository {
     usp,
     category,
     thumbnailUrl,
+    productUrl,
+    targetAudience,
     status,
   }) {
     const { rows } = await db.query(
@@ -146,13 +154,28 @@ class ProductRepository {
          usp = $6,
          category = $7,
          thumbnail_url = $8,
-         status = $9,
+         product_url = $9,
+         target_audience = $10,
+         status = $11,
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10
+       WHERE id = $12
        RETURNING id`,
-      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, status, id]
+      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, productUrl, targetAudience, status, id]
     );
     return rows[0] || null;
+  }
+
+  async listCategories(userId) {
+    const result = await db.query(
+      `SELECT DISTINCT category
+       FROM products
+       WHERE id_user = $1
+         AND category IS NOT NULL
+         AND TRIM(category) <> ''
+       ORDER BY category ASC`,
+      [userId]
+    );
+    return result.rows.map((row) => String(row.category || '').trim()).filter(Boolean);
   }
 
   async deleteById(id) {

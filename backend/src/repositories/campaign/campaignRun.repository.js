@@ -470,6 +470,99 @@ class CampaignRunRepository {
       [errorMessage, runId]
     );
   }
+
+  async findCampaignForRunTx(client, { campaignId, isAdmin, userId }) {
+    const campaignParams = [campaignId];
+    let campaignQuery = `SELECT id, id_user, status, campaign_name
+       FROM campaigns
+       WHERE id = $1`;
+    if (!isAdmin) {
+      campaignParams.push(userId);
+      campaignQuery += ` AND id_user = $${campaignParams.length}`;
+    }
+    campaignQuery += ' FOR UPDATE';
+    const result = await client.query(campaignQuery, campaignParams);
+    return result.rows[0] || null;
+  }
+
+  async hasActiveRunForCampaignTx(client, campaignId) {
+    const result = await client.query(
+      `SELECT id
+         FROM campaign_runs
+         WHERE id_campaign = $1 AND status = 'running'
+         LIMIT 1`,
+      [campaignId]
+    );
+    return result.rows.length > 0;
+  }
+
+  async findResumeSourceRunTx(client, { resumeFromRunId, campaignId, isAdmin, userId }) {
+    const result = await client.query(
+      `SELECT cr.id
+           FROM campaign_runs cr
+           JOIN campaigns c ON c.id = cr.id_campaign
+           WHERE cr.id = $1
+             AND cr.id_campaign = $2
+             AND ($3::boolean = TRUE OR c.id_user = $4)
+             AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
+           LIMIT 1`,
+      [resumeFromRunId, campaignId, isAdmin, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async insertRunTx(client, { campaignId, scheduleId, runType, runMetadata }) {
+    const result = await client.query(
+      `INSERT INTO campaign_runs
+         (id_campaign, id_schedule, run_type, status, started_at, run_metadata)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+         RETURNING *`,
+      [campaignId, scheduleId, runType, 'running', JSON.stringify(runMetadata)]
+    );
+    return result.rows[0];
+  }
+
+  async findRunForContinuousResumeTx(client, { runId, campaignId, isAdmin, userId }) {
+    const result = await client.query(
+      `SELECT cr.*, c.id_user
+         FROM campaign_runs cr
+         JOIN campaigns c ON c.id = cr.id_campaign
+         WHERE cr.id = $1
+           AND cr.id_campaign = $2
+           AND ($3::boolean = TRUE OR c.id_user = $4)
+         FOR UPDATE`,
+      [runId, campaignId, isAdmin, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async hasOtherActiveRunForCampaignTx(client, campaignId, excludeRunId) {
+    const result = await client.query(
+      `SELECT id
+         FROM campaign_runs
+         WHERE id_campaign = $1
+           AND status = 'running'
+           AND id <> $2
+         LIMIT 1`,
+      [campaignId, excludeRunId]
+    );
+    return result.rows.length > 0;
+  }
+
+  async resumeContinuousRunTx(client, { runId, runMetadata }) {
+    const result = await client.query(
+      `UPDATE campaign_runs
+         SET status = 'running',
+             started_at = CURRENT_TIMESTAMP,
+             completed_at = NULL,
+             error_message = NULL,
+             run_metadata = $1::jsonb
+         WHERE id = $2
+         RETURNING *`,
+      [JSON.stringify(runMetadata), runId]
+    );
+    return result.rows[0];
+  }
 }
 
 export default new CampaignRunRepository();

@@ -1,4 +1,3 @@
-import db from '../config/database.js';
 import uploadController from './upload.controller.js';
 import { serverError, paginate } from '../helpers.js';
 import campaignFlowService from '../services/campaign/campaignFlow.service.js';
@@ -8,7 +7,6 @@ import campaignNodeDataService from '../services/campaign/campaignNodeData.servi
 import campaignExecutionLogService from '../services/campaign/campaignExecutionLog.service.js';
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
-import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
@@ -143,51 +141,6 @@ class CampaignController {
   }
 
   /**
-   * Xác định request update có phải đang sửa nội dung campaign trong Builder hay không.
-   *
-   * Luồng hoạt động:
-   * 1. Chỉ xét các field có thể làm thay đổi cấu trúc/nội dung chiến dịch.
-   * 2. Nếu bất kỳ field nào xuất hiện trong payload thì xem là request sửa nội dung.
-   * 3. Trường hợp chỉ cập nhật trạng thái (status-only) sẽ không bị chặn bởi quy tắc này.
-   *
-   * @param {object} payload body từ request cập nhật chiến dịch
-   * @returns {boolean} true nếu là cập nhật nội dung campaign
-   */
-  isCampaignContentUpdateRequest(payload = {}) {
-    const editableContentFields = [
-      'campaignName',
-      'description',
-      'campaignType',
-      'landingPageUrl',
-      'startDate',
-      'endDate',
-      'timezone',
-      'flowJson',
-      'nodes',
-      'connections',
-    ];
-    return editableContentFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field));
-  }
-
-  /**
-   * Kiểm tra campaign hiện còn lượt chạy trạng thái `running` hay không.
-   *
-   * @param {object} client postgres client trong transaction hiện tại
-   * @param {number|string} campaignId id chiến dịch cần kiểm tra
-   * @returns {Promise<boolean>} true nếu tồn tại ít nhất 1 campaign run đang chạy
-   */
-  async hasRunningCampaignRun(client, campaignId) {
-    const result = await client.query(
-      `SELECT 1
-       FROM campaign_runs
-       WHERE id_campaign = $1 AND status = 'running'
-       LIMIT 1`,
-      [campaignId]
-    );
-    return result.rows.length > 0;
-  }
-
-  /**
    * Lấy danh sách campaigns của user (có phân trang và lọc).
    * Query: page, limit, status, type, search.
    * @param {import('express').Request} req
@@ -262,8 +215,6 @@ class CampaignController {
    * @param {import('express').Response} res
    */
   async create(req, res) {
-    const client = await db.getClient();
-
     try {
       const userId = req.user.id;
       const roleCode = req.user?.role;
@@ -293,7 +244,6 @@ class CampaignController {
         });
       }
 
-      // Kiểm tra giới hạn theo loại campaign (zalo / zalo_group / email)
       const typeResourceKey = campaignType === 'email'
         ? 'emailCampaigns'
         : campaignType === 'zalo_group'
@@ -308,106 +258,36 @@ class CampaignController {
         }
       }
 
-      await client.query('BEGIN');
-
-      // Create campaign
-      const campaignResult = await client.query(
-        `INSERT INTO campaigns (id_user, campaign_name, description, campaign_type, landing_page_url, start_date, end_date, timezone, flow_json)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING *`,
-        [userId, campaignName, description, campaignType, landingPageUrl, startDate, endDate, timezone, flowJson ? JSON.stringify(flowJson) : null]
-      );
-
-      const campaign = campaignResult.rows[0];
-
-      // Create nodes if provided
-      const nodeIdMap = {};
-      const orderMap = this.buildExecutionOrderMap(nodes || [], connections || [], {
-        nodeIdKey: 'tempId',
-        fallbackKey: 'id',
-        sourceKey: 'sourceNodeId',
-        targetKey: 'targetNodeId',
+      const campaign = await campaignCrudService.createCampaign({
+        userId,
+        roleCode,
+        campaignName,
+        description,
+        campaignType,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson,
+        nodes,
+        connections,
       });
-      if (nodes && nodes.length > 0) {
-        for (let idx = 0; idx < nodes.length; idx += 1) {
-          const node = nodes[idx];
-          const nodeKey = String(node.tempId ?? node.id ?? '');
-          const executionOrder = orderMap.get(nodeKey) || idx + 1;
-          // Support both camelCase (AI output) and snake_case (normalized)
-          const nodeType = node.nodeType ?? node.node_type ?? 'unknown';
-          const nodeSubtype = node.nodeSubtype ?? node.node_subtype ?? '';
-          const nodeName = node.nodeName ?? node.node_name ?? 'Node';
-          const nodeDescription = node.nodeDescription ?? node.node_description ?? '';
-          const positionX = node.positionX ?? node.position_x ?? 0;
-          const positionY = node.positionY ?? node.position_y ?? 0;
-          const nodeResult = await client.query(
-            `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING id`,
-            [campaign.id, nodeType, nodeSubtype, nodeName, nodeDescription, positionX, positionY, JSON.stringify(node.config || {}), executionOrder]
-          );
-          nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
-        }
 
-        // Remap tempId references inside node configs to real DB IDs
-        const resolveId = (id) => {
-          if (id == null || String(id).trim() === '') return id;
-          const mapped = nodeIdMap[String(id)];
-          return mapped != null ? String(mapped) : String(id);
-        };
-        for (const node of nodes) {
-          const tempKey = String(node.tempId ?? node.id ?? '');
-          const dbId = nodeIdMap[tempKey];
-          if (dbId == null) continue;
-          const updatedConfig = this.normalizeNodeReferenceConfig(node.config || {}, resolveId);
-          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
-            await client.query(
-              'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
-              [JSON.stringify(updatedConfig), dbId]
-            );
-          }
-        }
-      }
-
-      // Create connections (chỉ những connection có cả source và target nằm trong nodes)
-      if (connections && connections.length > 0) {
-        const sortedConnections = [...connections].sort((a, b) => {
-          const sourceA = orderMap.get(String(a?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          const sourceB = orderMap.get(String(b?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          if (sourceA !== sourceB) return sourceA - sourceB;
-          const targetA = orderMap.get(String(a?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          const targetB = orderMap.get(String(b?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-          return targetA - targetB;
-        });
-        for (const conn of sortedConnections) {
-          const sourceId = nodeIdMap[conn.sourceNodeId];
-          const targetId = nodeIdMap[conn.targetNodeId];
-          if (sourceId == null || targetId == null) continue;
-
-          await client.query(
-            `INSERT INTO campaign_connections (id_campaign, source_node_id, target_node_id, connection_type, connection_label, condition_config)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [campaign.id, sourceId, targetId, conn.connectionType || 'default', conn.connectionLabel, conn.conditionConfig ? JSON.stringify(conn.conditionConfig) : null]
-          );
-        }
-      }
-
-      await client.query('COMMIT');
-
-      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaign_name, type: campaign.campaign_type });
+      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType });
       res.status(201).json({
         success: true,
         message: 'Tạo chiến dịch thành công',
-        data: {
-          id: campaign.id,
-          campaignName: campaign.campaign_name,
-          campaignType: campaign.campaign_type,
-          status: campaign.status
-        }
+        data: campaign,
       });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Create campaign error:', error);
+      if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
+        return res.status(error.statusCode || 403).json({
+          success: false,
+          message: error.message,
+          limitReached: true,
+        });
+      }
       if (this.isUnsupportedZaloGroupCampaignTypeError(error)) {
         return this.sendZaloGroupMigrationRequired(res);
       }
@@ -415,8 +295,6 @@ class CampaignController {
         success: false,
         message: 'Lỗi server'
       });
-    } finally {
-      client.release();
     }
   }
 
@@ -426,14 +304,9 @@ class CampaignController {
    * @param {import('express').Response} res
    */
   async update(req, res) {
-    const client = await db.getClient();
-
     try {
-      await client.query('BEGIN');
-
       const userId = req.user.id;
       const roleCode = req.user.role;
-      const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
       const {
         campaignName,
@@ -446,41 +319,14 @@ class CampaignController {
         timezone,
         flowJson,
         nodes,
-        connections
+        connections,
       } = req.body;
-      const isContentUpdateRequest = this.isCampaignContentUpdateRequest(req.body);
 
-      // Check ownership
-      const existingParams = [id];
-      let existingQuery = 'SELECT id FROM campaigns WHERE id = $1';
-      if (!isAdmin) {
-        existingParams.push(userId);
-        existingQuery += ` AND id_user = $${existingParams.length}`;
-      }
-      const existing = await client.query(existingQuery, existingParams);
-
-      if (existing.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy chiến dịch'
-        });
-      }
-
-      if (isContentUpdateRequest) {
-        const hasRunningCampaignRun = await this.hasRunningCampaignRun(client, id);
-        if (hasRunningCampaignRun) {
-          await client.query('ROLLBACK');
-          return res.status(409).json({
-            success: false,
-            message:
-              'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi lưu thay đổi.',
-          });
-        }
-      }
-
-      // Update campaign
-      const updateParams = [
+      const data = await campaignCrudService.updateCampaign({
+        campaignId: id,
+        userId,
+        roleCode,
+        isContentUpdate: campaignFlowService.isCampaignContentUpdateRequest(req.body),
         campaignName,
         description,
         campaignType,
@@ -489,121 +335,37 @@ class CampaignController {
         startDate,
         endDate,
         timezone,
-        flowJson ? JSON.stringify(flowJson) : null,
-        id,
-      ];
-      let updateQuery = `UPDATE campaigns SET
-        campaign_name = COALESCE($1, campaign_name),
-        description = COALESCE($2, description),
-        campaign_type = COALESCE($3, campaign_type),
-        status = COALESCE($4, status),
-        landing_page_url = COALESCE($5, landing_page_url),
-        start_date = COALESCE($6, start_date),
-        end_date = COALESCE($7, end_date),
-        timezone = COALESCE($8, timezone),
-        flow_json = COALESCE($9, flow_json),
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10`;
-      if (!isAdmin) {
-        updateParams.push(userId);
-        updateQuery += ` AND id_user = $${updateParams.length}`;
-      }
-      updateQuery += ' RETURNING *';
-      const result = await client.query(updateQuery, updateParams);
-
-      // Update nodes and connections if provided
-      if (nodes !== undefined) {
-        // Delete old nodes and connections
-        await client.query('DELETE FROM campaign_connections WHERE id_campaign = $1', [id]);
-        await client.query('DELETE FROM campaign_nodes WHERE id_campaign = $1', [id]);
-
-        // Create new nodes
-        const nodeIdMap = {};
-        const orderMap = this.buildExecutionOrderMap(nodes || [], connections || [], {
-          nodeIdKey: 'tempId',
-          fallbackKey: 'id',
-          sourceKey: 'sourceNodeId',
-          targetKey: 'targetNodeId',
-        });
-        for (let idx = 0; idx < nodes.length; idx += 1) {
-          const node = nodes[idx];
-          const nodeKey = String(node.tempId ?? node.id ?? '');
-          const executionOrder = orderMap.get(nodeKey) || idx + 1;
-          const nodeResult = await client.query(
-            `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING id`,
-            [id, node.nodeType, node.nodeSubtype, node.nodeName, node.nodeDescription, node.positionX || 0, node.positionY || 0, JSON.stringify(node.config || {}), executionOrder]
-          );
-          nodeIdMap[node.tempId || node.id] = nodeResult.rows[0].id;
-        }
-
-        // Remap tempId references inside node configs to real DB IDs
-        const resolveIdUpd = (id) => {
-          if (id == null || String(id).trim() === '') return id;
-          const mapped = nodeIdMap[String(id)];
-          return mapped != null ? String(mapped) : String(id);
-        };
-        for (const node of nodes) {
-          const tempKey = String(node.tempId ?? node.id ?? '');
-          const dbId = nodeIdMap[tempKey];
-          if (dbId == null) continue;
-          const updatedConfig = this.normalizeNodeReferenceConfig(node.config || {}, resolveIdUpd);
-          if (JSON.stringify(node.config || {}) !== JSON.stringify(updatedConfig)) {
-            await client.query(
-              'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
-              [JSON.stringify(updatedConfig), dbId]
-            );
-          }
-        }
-
-        // Create new connections (chỉ những connection có cả source và target nằm trong nodes vừa tạo)
-        if (connections) {
-          const sortedConnections = [...connections].sort((a, b) => {
-            const sourceA = orderMap.get(String(a?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-            const sourceB = orderMap.get(String(b?.sourceNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-            if (sourceA !== sourceB) return sourceA - sourceB;
-            const targetA = orderMap.get(String(a?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-            const targetB = orderMap.get(String(b?.targetNodeId ?? '')) || Number.MAX_SAFE_INTEGER;
-            return targetA - targetB;
-          });
-          for (const conn of sortedConnections) {
-            const sourceId = nodeIdMap[conn.sourceNodeId];
-            const targetId = nodeIdMap[conn.targetNodeId];
-            if (sourceId == null || targetId == null) continue;
-
-            await client.query(
-              `INSERT INTO campaign_connections (id_campaign, source_node_id, target_node_id, connection_type, connection_label, condition_config)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [id, sourceId, targetId, conn.connectionType || 'default', conn.connectionLabel, conn.conditionConfig ? JSON.stringify(conn.conditionConfig) : null]
-            );
-          }
-        }
-      }
-
-      await client.query('COMMIT');
+        flowJson,
+        nodes,
+        connections,
+      });
 
       res.json({
         success: true,
         message: 'Cập nhật chiến dịch thành công',
-        data: {
-          id: result.rows[0].id,
-          campaignName: result.rows[0].campaign_name,
-          status: result.rows[0].status
-        }
+        data,
       });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Update campaign error:', error);
+      if (error?.statusCode === 404) {
+        return res.status(404).json({
+          success: false,
+          message: error.message || 'Không tìm thấy chiến dịch',
+        });
+      }
+      if (error?.statusCode === 409) {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+        });
+      }
       if (this.isUnsupportedZaloGroupCampaignTypeError(error)) {
         return this.sendZaloGroupMigrationRequired(res);
       }
       res.status(500).json({
         success: false,
-        message: 'Lỗi server'
+        message: 'Lỗi server',
       });
-    } finally {
-      client.release();
     }
   }
 
@@ -613,97 +375,22 @@ class CampaignController {
    * @param {import('express').Response} res
    */
   async delete(req, res) {
-    const client = await db.getClient();
-    
     try {
-      await client.query('BEGIN');
-      
       const userId = req.user.id;
       const roleCode = req.user.role;
-      const isAdmin = isAdminRole(roleCode);
       const { id } = req.params;
 
-      // Kiểm tra campaign có tồn tại không
-      const campaignParams = [id];
-      let campaignQuery = 'SELECT id FROM campaigns WHERE id = $1';
-      if (!isAdmin) {
-        campaignParams.push(userId);
-        campaignQuery += ` AND id_user = $${campaignParams.length}`;
-      }
-      const campaignResult = await client.query(campaignQuery, campaignParams);
+      const { fileKeysToDelete } = await campaignCrudService.deleteCampaign({
+        campaignId: id,
+        userId,
+        roleCode,
+      });
 
-      if (campaignResult.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy chiến dịch'
-        });
-      }
-
-      // Lấy danh sách nodes của campaign để tìm email templates sử dụng attachments
-      const nodesResult = await client.query(
-        'SELECT id, config FROM campaign_nodes WHERE id_campaign = $1',
-        [id]
-      );
-
-      const allFileKeysToDelete = [];
-
-      // Duyệt qua các nodes để tìm email templates có attachments
-      for (const node of nodesResult.rows) {
+      if (fileKeysToDelete.length > 0) {
         try {
-          const config = node.config;
-          
-          // Kiểm tra nếu node có sử dụng email template
-          if (config && config.emailTemplateId) {
-            const templateParams = [config.emailTemplateId];
-            let templateQuery = 'SELECT attachments FROM email_templates WHERE id = $1';
-            if (!isAdmin) {
-              templateParams.push(userId);
-              templateQuery += ` AND id_user = $${templateParams.length}`;
-            }
-            const templateResult = await client.query(templateQuery, templateParams);
-            
-            if (templateResult.rows.length > 0) {
-              const attachments = templateResult.rows[0].attachments;
-              if (attachments && attachments.length > 0) {
-                const fileKeys = attachments
-                  .map((att) => uploadController.normalizeStorageKey(att))
-                  .filter(Boolean);
-                allFileKeysToDelete.push(...fileKeys);
-              }
-            }
-          }
-          
-          // Kiểm tra nếu config trực tiếp chứa attachments 
-          if (config && config.attachments && Array.isArray(config.attachments)) {
-            const fileKeys = config.attachments
-              .map((att) => uploadController.normalizeStorageKey(att))
-              .filter(Boolean);
-            allFileKeysToDelete.push(...fileKeys);
-          }
-        } catch (nodeError) {
-          console.warn('Error processing node attachments:', nodeError);
-        }
-      }
-
-      // Xóa campaign và các bảng liên quan (CASCADE sẽ tự động xóa nodes và connections)
-      const deleteParams = [id];
-      let deleteQuery = 'DELETE FROM campaigns WHERE id = $1';
-      if (!isAdmin) {
-        deleteParams.push(userId);
-        deleteQuery += ` AND id_user = $${deleteParams.length}`;
-      }
-      await client.query(deleteQuery, deleteParams);
-
-      await client.query('COMMIT');
-
-      // Xóa files local (nếu có)
-      if (allFileKeysToDelete.length > 0) {
-        try {
-          await uploadController.deleteFromS3(allFileKeysToDelete);
-          console.log(`🗑️ Deleted ${allFileKeysToDelete.length} local files for campaign ${id}`);
+          await uploadController.deleteFromS3(fileKeysToDelete);
+          console.log(`🗑️ Deleted ${fileKeysToDelete.length} local files for campaign ${id}`);
         } catch (s3Error) {
-          // Log error nhưng không fail vì campaign đã được xóa thành công
           console.error('Error deleting local files for campaign:', id, s3Error);
         }
       }
@@ -711,17 +398,20 @@ class CampaignController {
       logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_DELETED, AUDIT_ENTITY_TYPES.CAMPAIGN, Number(id), {});
       res.json({
         success: true,
-        message: 'Xóa chiến dịch thành công'
+        message: 'Xóa chiến dịch thành công',
       });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Delete campaign error:', error);
+      if (error?.statusCode === 404) {
+        return res.status(404).json({
+          success: false,
+          message: error.message || 'Không tìm thấy chiến dịch',
+        });
+      }
       res.status(500).json({
         success: false,
-        message: 'Lỗi máy chủ'
+        message: 'Lỗi máy chủ',
       });
-    } finally {
-      client.release();
     }
   }
 

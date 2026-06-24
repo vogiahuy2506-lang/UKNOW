@@ -10,6 +10,7 @@ import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
+import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -255,7 +256,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 
     console.log(`[ChatRouter] _callAI: sending ${chatHistory.length} messages (${chatHistory.filter(m => m.role === 'model').length} from model, ${chatHistory.filter(m => m.role === 'user').length} from user)`);
 
-    const modelName = process.env.GEMINI_MODEL || model;
+    const modelName = await resolveAllowedModel(userId, model);
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -424,7 +425,7 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
         systemPrompt,
         history: chatHistory,
         message,
-        model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+        model: await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash'),
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
       });

@@ -1,6 +1,7 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageDomainService from './landingPageDomain.service.js';
-import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import db from '../../config/database.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import {
   prepareLandingHtmlOnSave,
   resolveFrontendOriginFromEnv,
@@ -9,6 +10,14 @@ import {
 
 /** Slug dành cho landing React cố định `/l` — không quản lý qua bảng `landing_pages`. */
 const RESERVED_SLUG_FIXED_LANDING = 'l';
+
+function buildScopeFromAuthUser(authUser) {
+  return {
+    userId: authUser?.id,
+    roleCode: authUser?.role,
+    ownerId: authUser?.activeContext?.ownerId,
+  };
+}
 
 /**
  * CRUD landing page HTML theo phạm vi quyền user.
@@ -68,7 +77,7 @@ class LandingPageAdminService {
 
     const limitCheck = await checkUserResourceLimit({
       userId,
-      role: authUser?.role,
+      roleCode: authUser?.role,
       resourceKey: 'landingPages',
     });
     if (!limitCheck.allowed) {
@@ -97,13 +106,30 @@ class LandingPageAdminService {
       frontendOrigin: resolveFrontendOriginFromEnv(),
       apiBase: resolvePublicApiBaseFromEnv(),
     });
-    const lp = await landingPageRepository.insert({
-      slug,
-      title: body?.title,
-      htmlContent,
-      isPublished: Boolean(body?.isPublished),
-      idUser: userId,
-    });
+
+    const client = await db.getClient();
+    let lp;
+    try {
+      await client.query('BEGIN');
+      await enforceResourceLimitTx(client, {
+        userId,
+        roleCode: authUser?.role,
+        resourceKey: 'landingPages',
+      });
+      lp = await landingPageRepository.insert({
+        slug,
+        title: body?.title,
+        htmlContent,
+        isPublished: Boolean(body?.isPublished),
+        idUser: userId,
+      }, client);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
 
     // Tự động cấp subdomain slug.founderai.biz qua Cloudflare (lỗi CF không làm fail)
     const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
@@ -124,10 +150,7 @@ class LandingPageAdminService {
       err.statusCode = 400;
       throw err;
     }
-    const current = await landingPageRepository.findByIdInScope(id, {
-      userId: authUser?.id,
-      role: authUser?.role,
-    });
+    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;

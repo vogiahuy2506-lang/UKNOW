@@ -110,6 +110,24 @@ class CustomerZaloTrackingRepository {
     );
     return result.rows.length > 0;
   }
+
+  async insertZaloSentJourney({
+    customerId,
+    campaignId,
+    runId,
+    nodeId,
+    eventChannel,
+    zaloMessageId,
+    eventData,
+  }) {
+    await db.query(
+      `INSERT INTO customer_journey
+         (id_customer, id_campaign, id_run, id_node, event_type, event_channel, id_zalo_message, event_data, event_at)
+       VALUES
+         ($1, $2, $3, $4, 'zalo_sent', $5, $6, $7::jsonb, CURRENT_TIMESTAMP)`,
+      [customerId, campaignId, runId, nodeId, eventChannel, zaloMessageId, JSON.stringify(eventData)]
+    );
+  }
 }
 
 export default new CustomerZaloTrackingRepository();

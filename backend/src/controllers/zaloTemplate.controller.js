@@ -1,7 +1,8 @@
 import uploadController from './upload.controller.js';
 import zaloTemplateRepository from '../repositories/zalo/zaloTemplate.repository.js';
+import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
-import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 
 class ZaloTemplateController {
   /**
@@ -192,16 +193,30 @@ class ZaloTemplateController {
         }
       }
 
-      const template = await zaloTemplateRepository.create({
-          userId,
-          templateName,
-          templateCode,
-          subject,
-          bodyText: normalizedBodyText,
-          attachments: storedAttachments,
-          variables,
-          category,
-        });
+      const template = await (async () => {
+        const client = await db.getClient();
+        try {
+          await client.query('BEGIN');
+          await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'zaloTemplates' });
+          const created = await zaloTemplateRepository.create({
+            userId,
+            templateName,
+            templateCode,
+            subject,
+            bodyText: normalizedBodyText,
+            attachments: storedAttachments,
+            variables,
+            category,
+          }, client);
+          await client.query('COMMIT');
+          return created;
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      })();
 
       res.status(201).json({
         success: true,
@@ -211,6 +226,14 @@ class ZaloTemplateController {
     } catch (error) {
       if (error?.code === '42P01') {
         this.buildMissingTableResponse(res);
+        return;
+      }
+      if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
+        res.status(error.statusCode || 403).json({
+          success: false,
+          message: error.message,
+          limitReached: true,
+        });
         return;
       }
       console.error('Create zalo template error:', error);

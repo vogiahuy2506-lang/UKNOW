@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef } from 'react';
+import api from '../../../services/api';
 import {
   HiOutlineBookOpen,
   HiOutlineCheck,
@@ -75,12 +76,28 @@ const RESPONSE_STYLES = [
  */
 export function AIConfig({ config = {}, onChange, options = {} }) {
   const { showSystemInstruction = true, compact = false } = options;
+  const [allowedModels, setAllowedModels] = useState({
+    maxModel: 'gemini-2.5-flash',
+    models: AVAILABLE_AI_MODELS.map((m) => m.value),
+  });
+
+  useEffect(() => {
+    api.get('/ai/allowed-models')
+      .then((res) => {
+        if (res.data?.success && res.data.data) {
+          setAllowedModels(res.data.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
   
   const update = (key, value) => {
     onChange?.({ ...config, [key]: value });
   };
 
-  const aiModelOptions = AVAILABLE_AI_MODELS;
+  const aiModelOptions = AVAILABLE_AI_MODELS.filter((m) => allowedModels.models.includes(m.value));
+  const currentModel = config.ai_model || 'gemini-2.5-flash';
+  const modelAbovePlan = currentModel && !allowedModels.models.includes(currentModel);
 
   return (
     <div className={`space-y-${compact ? '4' : '5'}`}>
@@ -91,11 +108,11 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             Model AI
           </label>
           <span className="text-xs text-slate-400">
-            {aiModelOptions.find(m => m.value === (config.ai_model || 'gemini-2.5-flash'))?.provider}
+            {aiModelOptions.find(m => m.value === currentModel)?.provider || 'Google'}
           </span>
         </div>
         <select
-          value={config.ai_model || 'gemini-2.5-flash'}
+          value={currentModel}
           onChange={e => update('ai_model', e.target.value)}
           className="input w-full"
         >
@@ -105,6 +122,11 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             </option>
           ))}
         </select>
+        {modelAbovePlan && (
+          <p className="mt-1.5 text-xs text-amber-600">
+            Gói hiện tại chỉ hỗ trợ tối đa {allowedModels.maxModel}. Nâng cấp gói để dùng model cao hơn.
+          </p>
+        )}
       </div>
 
       {/* Response Style */}

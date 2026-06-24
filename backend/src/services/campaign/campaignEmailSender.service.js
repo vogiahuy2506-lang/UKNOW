@@ -28,7 +28,7 @@ class CampaignEmailSenderService {
     // State rate-limit in-memory cho email theo SMTP account.
     this.rateLimitStateMap = new Map();
     this.RATE_LIMIT_STATE_TTL_MS = 90 * 60 * 1000;
-    // Khoảng cách tối thiểu (và mặc định khi không set env) giữa các lần retry khi provider rate-limit: 10 giờ.
+    // Khoảng cách tối thiểu giữa các lần retry khi provider rate-limit (mặc định 24h, override bằng SENDGRID_LIMIT_RETRY_DELAY_MS).
     this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS = 24 * 60 * 60 * 1000;
   }
 
@@ -130,7 +130,7 @@ class CampaignEmailSenderService {
    * Lấy cấu hình retry khi gặp giới hạn gửi từ provider SMTP.
    *
    * Luồng:
-   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (mặc định = `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`, hiện 10 giờ).
+   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (mặc định = `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`, 24 giờ).
    * 2. Đọc `SENDGRID_LIMIT_MAX_RETRIES` — mặc định 50 lần nếu không set env.
    *
    * @returns {{delayMs: number, maxRetries: number}}
@@ -440,6 +440,7 @@ class CampaignEmailSenderService {
         retryMeta,
         sendMeta,
       },
+      jobOptions: { attempts: 1 },
     });
   }
 

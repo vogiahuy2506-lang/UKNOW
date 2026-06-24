@@ -364,7 +364,7 @@ const AdminMembersPage = () => {
           <div className="py-16 text-center text-gray-400">{t('adminMembers.noMembersFound')}</div>
         ) : (
           <div className="table-container">
-            <table className="table">
+            <table className="table !min-w-0">
               <thead>
                 <tr>
                   <th>{t('adminMembers.table.member')}</th>
@@ -374,7 +374,7 @@ const AdminMembersPage = () => {
                   <th>{t('adminMembers.table.status')}</th>
                   <th>{t('adminMembers.table.expiry')}</th>
                   <th>{t('adminMembers.table.createdAt')}</th>
-                  <th>{t('adminMembers.table.actions')}</th>
+                  <th className="whitespace-nowrap w-px px-2">{t('adminMembers.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -413,8 +413,8 @@ const AdminMembersPage = () => {
                       <td>
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
                       </td>
-                      <td className="text-sm text-gray-500">{fmtDate(m.createdAt)}</td>
-                      <td>
+                      <td className="text-sm text-gray-500 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
+                      <td className="whitespace-nowrap w-px px-2">
                         <div className="flex items-center gap-1">
                           {/* Gán gói */}
                           <Tooltip label={t('adminMembers.assignPlan')}>

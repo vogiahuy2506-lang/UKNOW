@@ -9,6 +9,7 @@ import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
+import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
 class AiCampaignService {
   /**
@@ -1232,7 +1233,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     }
 
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const modelName = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+    const modelName = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {
@@ -1579,7 +1580,7 @@ Khi muốn tạo Landing Page.
     }
 
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const modelName = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+    const modelName = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {

@@ -10,6 +10,8 @@ router.use(authMiddleware);
 
 router.get('/', productsController.getAll.bind(productsController));
 
+router.get('/categories', productsController.getCategories.bind(productsController));
+
 router.get(
   '/:id',
   [param('id').isInt({ min: 1 })],
@@ -28,6 +30,8 @@ router.post(
     body('usp').optional({ nullable: true }).trim(),
     body('category').optional({ nullable: true }).trim(),
     body('thumbnailUrl').optional({ nullable: true }).trim(),
+    body('productUrl').optional({ nullable: true }).trim(),
+    body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
   ],
   handleValidationErrors,
@@ -46,6 +50,8 @@ router.put(
     body('usp').optional({ nullable: true }).trim(),
     body('category').optional({ nullable: true }).trim(),
     body('thumbnailUrl').optional({ nullable: true }).trim(),
+    body('productUrl').optional({ nullable: true }).trim(),
+    body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
   ],
   handleValidationErrors,

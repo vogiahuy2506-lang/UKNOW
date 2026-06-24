@@ -222,8 +222,9 @@ class LandingPageRepository {
    * @param {object} payload
    * @returns {Promise<object>}
    */
-  async insert(payload) {
-    const result = await db.query(
+  async insert(payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `INSERT INTO landing_pages (slug, title, html_content, is_published, id_user, created_at, updated_at)
        VALUES (LOWER(TRIM($1)), $2, $3, COALESCE($4, false), $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING

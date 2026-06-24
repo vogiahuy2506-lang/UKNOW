@@ -1,4 +1,5 @@
 import landingTemplateRepository from '../../repositories/landingTemplate.repository.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
@@ -26,12 +27,23 @@ class LandingTemplateService {
   }
 
   /**
-   * Get template by ID.
+   * Get template by ID (respects isPublic + owner; superadmin bypass).
    * @param {number} id
+   * @param {{ userId?: number|null, roleCode?: string|null }} [scope]
    * @returns {Promise<object|null>}
    */
-  async getTemplateById(id) {
-    return landingTemplateRepository.findActiveById(id);
+  async getTemplateById(id, scope = {}) {
+    const template = await landingTemplateRepository.findActiveById(id);
+    if (!template) return null;
+
+    const { userId = null, roleCode = null } = scope;
+    const isPublic = template.isPublic === true || template.isPublic === 'true';
+    if (!isPublic
+      && Number(template.userId) !== Number(userId)
+      && !isAdminRole(roleCode)) {
+      return null;
+    }
+    return template;
   }
 
   /**

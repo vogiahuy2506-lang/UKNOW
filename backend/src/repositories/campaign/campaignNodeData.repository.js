@@ -91,6 +91,8 @@ class CampaignNodeDataRepository {
          p.usp,
          p.category,
          p.thumbnail_url AS "thumbnailUrl",
+         p.product_url AS "productUrl",
+         p.target_audience AS "targetAudience",
          p.created_at AS "createdAt",
          p.updated_at AS "updatedAt"
        FROM products p

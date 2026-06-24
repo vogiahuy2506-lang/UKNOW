@@ -67,7 +67,7 @@ export default function LpRendererByHost() {
     <iframe
       title={title || slug || host}
       className="w-full min-h-screen border-0 block"
-      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-same-origin"
+      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
       srcDoc={html}
     />
   );

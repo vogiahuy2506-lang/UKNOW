@@ -15,7 +15,7 @@ import {
 } from 'react-icons/hi';
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
-const MODAL_PANEL = 'relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto';
+const MODAL_PANEL = 'relative bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto';
 
 const PRODUCT_STATUS_OPTIONS = ['active', 'inactive'];
 
@@ -28,6 +28,8 @@ const EMPTY_FORM = {
   usp: '',
   category: '',
   thumbnailUrl: '',
+  productUrl: '',
+  targetAudience: '',
   status: 'active',
 };
 
@@ -60,6 +62,17 @@ const Products = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+
+  const loadCategories = async () => {
+    try {
+      const res = await productApiService.getCategories();
+      setCategorySuggestions(res.data?.data?.categories || []);
+    } catch {
+      setCategorySuggestions([]);
+    }
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -99,6 +112,7 @@ const Products = () => {
   const openCreate = () => {
     setFormData(EMPTY_FORM);
     setFormModal({ mode: 'create' });
+    loadCategories();
   };
 
   const openEdit = (product) => {
@@ -111,9 +125,12 @@ const Products = () => {
       usp: product.usp || '',
       category: product.category || '',
       thumbnailUrl: product.thumbnailUrl || '',
+      productUrl: product.productUrl || '',
+      targetAudience: product.targetAudience || '',
       status: product.status || 'active',
     });
     setFormModal({ mode: 'edit', id: product.id });
+    loadCategories();
   };
 
   const closeFormModal = () => {
@@ -161,6 +178,30 @@ const Products = () => {
   };
 
   const setField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
+
+  const handleThumbnailUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || isUploadingThumbnail) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('products.imageRequired'));
+      return;
+    }
+    setIsUploadingThumbnail(true);
+    try {
+      const payload = new FormData();
+      payload.append('file', file);
+      const res = await productApiService.uploadThumbnail(payload);
+      const url = res.data?.data?.url;
+      if (!url) throw new Error('missing-url');
+      setField('thumbnailUrl', url);
+      toast.success(t('products.uploadSuccess'));
+    } catch {
+      toast.error(t('products.uploadFailed'));
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -351,35 +392,31 @@ const Products = () => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
-                  <input
-                    type="text"
-                    value={formData.price}
-                    onChange={(e) => setField('price', e.target.value)}
-                    placeholder={t('products.pricePlaceholder')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.originalPrice')}</label>
-                  <input
-                    type="text"
-                    value={formData.originalPrice}
-                    onChange={(e) => setField('originalPrice', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
+                <input
+                  type="text"
+                  value={formData.price}
+                  onChange={(e) => setField('price', e.target.value)}
+                  placeholder={t('products.pricePlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.category')}</label>
                 <input
                   type="text"
+                  list="product-category-suggestions"
                   value={formData.category}
                   onChange={(e) => setField('category', e.target.value)}
+                  placeholder={t('products.categoryPlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
+                <datalist id="product-category-suggestions">
+                  {categorySuggestions.map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.description')}</label>
@@ -392,21 +429,62 @@ const Products = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.usp')}</label>
-                <input
-                  type="text"
+                <textarea
                   value={formData.usp}
                   onChange={(e) => setField('usp', e.target.value)}
+                  rows={3}
+                  placeholder={t('products.uspPlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.productUrl')}</label>
+                <input
+                  type="url"
+                  value={formData.productUrl}
+                  onChange={(e) => setField('productUrl', e.target.value)}
+                  placeholder={t('products.productUrlPlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.targetAudience')}</label>
+                <textarea
+                  value={formData.targetAudience}
+                  onChange={(e) => setField('targetAudience', e.target.value)}
+                  rows={2}
+                  placeholder={t('products.targetAudiencePlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.thumbnailUrl')}</label>
-                <input
-                  type="url"
-                  value={formData.thumbnailUrl}
-                  onChange={(e) => setField('thumbnailUrl', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={formData.thumbnailUrl}
+                    onChange={(e) => setField('thumbnailUrl', e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  />
+                  <label className="btn btn-secondary shrink-0 cursor-pointer">
+                    {isUploadingThumbnail ? t('products.uploading') : t('products.uploadImage')}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleThumbnailUpload}
+                      disabled={isUploadingThumbnail || isSaving}
+                    />
+                  </label>
+                </div>
+                {formData.thumbnailUrl ? (
+                  <img
+                    src={formData.thumbnailUrl}
+                    alt={t('products.thumbnailPreview')}
+                    className="mt-2 h-24 w-24 rounded-lg border border-gray-200 object-cover"
+                  />
+                ) : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('common.status')}</label>
