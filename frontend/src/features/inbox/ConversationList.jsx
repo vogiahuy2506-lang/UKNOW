@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useI18n } from '../../i18n';
 import ConfirmModal from './ConfirmModal';
+import { getMessagePreviewText } from './utils/normalizeMessageContent';
 
 const CHANNEL_LABELS = (t) => ({
   web: { label: t('inbox.webChat'), icon: '💬', bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -23,28 +24,33 @@ const parseVisitorInfo = (visitorInfo) => {
 };
 
 const getDisplayName = (conv) => {
-  const visitorInfo = parseVisitorInfo(conv.visitor_info);
+  const visitorInfo = parseVisitorInfo(conv.visitor_info || conv.visitorInfo);
   
   if (visitorInfo.is_group) {
-    if (visitorInfo.group_name && visitorInfo.group_name !== 'Nhóm') {
-      return visitorInfo.group_name;
+    const groupName = visitorInfo.group_name || visitorInfo.groupName;
+    if (groupName && groupName !== 'Nhóm') {
+      return groupName;
     }
-    const groupId = visitorInfo.group_id || '';
+    const groupId = visitorInfo.group_id || visitorInfo.groupId || '';
     const shortId = groupId.replace('group_', '').slice(-6);
     return `Nhóm ${shortId}`;
   }
   
-  if (visitorInfo.sender_name) {
-    return visitorInfo.sender_name;
+  const senderName = visitorInfo.sender_name || visitorInfo.senderName;
+  if (senderName) {
+    return senderName;
   }
   
   return conv.visitorName || 'Khách hàng';
 };
 
 const isGroupConversation = (conv) => {
-  const visitorInfo = parseVisitorInfo(conv.visitor_info);
+  const visitorInfo = parseVisitorInfo(conv.visitor_info || conv.visitorInfo);
   return visitorInfo.is_group === true || visitorInfo.source === 'zalo_group';
 };
+
+const getLastMessageAt = (conv) =>
+  conv.lastMessageAt || conv.last_message_at || conv.updatedAt || conv.createdAt || '';
 
 const formatTime = (dateString) => {
   if (!dateString) return '';
@@ -62,10 +68,11 @@ const formatTime = (dateString) => {
   return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' });
 };
 
-const truncateMessage = (message, maxLength = 45) => {
-  if (!message) return '';
-  if (message.length <= maxLength) return message;
-  return message.slice(0, maxLength) + '...';
+const truncateMessage = (message, maxLength = 45, labels) => {
+  const preview = getMessagePreviewText(message, labels);
+  if (!preview) return '';
+  if (preview.length <= maxLength) return preview;
+  return preview.slice(0, maxLength) + '...';
 };
 
 const ConversationItem = ({ 
@@ -78,6 +85,13 @@ const ConversationItem = ({
   const channel = CHANNEL_LABELS(t)[conv.channel] || CHANNEL_LABELS(t).web;
   const displayName = getDisplayName(conv);
   const isGroup = isGroupConversation(conv);
+  const messageLabels = {
+    sticker: t('inbox.messageSticker'),
+    groupEvent: t('inbox.messageGroupEvent'),
+    link: t('inbox.messageLink'),
+    call: t('inbox.messageCall'),
+    zaloEvent: t('inbox.messageZaloEvent'),
+  };
   
   const hasUnread = conv.unreadCount > 0;
   const isActive = conv.status === 'active';
@@ -132,7 +146,7 @@ const ConversationItem = ({
               )}
             </div>
             <span className="text-[10px] text-gray-400 shrink-0">
-              {formatTime(conv.lastMessageAt)}
+              {formatTime(getLastMessageAt(conv))}
             </span>
           </div>
 
@@ -140,7 +154,7 @@ const ConversationItem = ({
             <p className={`text-xs truncate ${
               hasUnread ? 'text-gray-800 font-medium' : 'text-gray-500'
             }`}>
-              {truncateMessage(conv.lastMessage, 52)}
+              {truncateMessage(conv.lastMessage, 52, messageLabels)}
             </p>
           )}
         </div>
@@ -212,7 +226,7 @@ const ConversationList = ({
 
     switch (sortBy) {
       case 'latest':
-        result.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+        result.sort((a, b) => new Date(getLastMessageAt(b)) - new Date(getLastMessageAt(a)));
         break;
       case 'unread':
         result.sort((a, b) => (b.unreadCount || 0) - (a.unreadCount || 0));
@@ -227,9 +241,12 @@ const ConversationList = ({
         break;
     }
 
+    if (sortBy !== 'unread') {
+      return result;
+    }
+
     const unread = result.filter((c) => c.unreadCount > 0);
     const read = result.filter((c) => !c.unreadCount || c.unreadCount === 0);
-
     return [...unread, ...read];
   }, [conversations, sortBy]);
 

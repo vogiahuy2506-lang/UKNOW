@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   HiArrowLeft, HiOutlineSearch, HiOutlineBell,
   HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
@@ -18,6 +18,26 @@ import useInboxSSE from '../../hooks/useInboxSSE';
 import useDesktopNotifications from '../../hooks/useDesktopNotifications';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useLocalStorageState } from '../../hooks/useLocalStorageState';
+import { getMessagePreviewText } from '../../features/inbox/utils/normalizeMessageContent';
+
+const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
+
+const mergeUniqueMessages = (baseMessages, nextMessages, markAsRead = false) => {
+  const merged = [...baseMessages];
+
+  for (const nextMessage of nextMessages) {
+    const isDuplicate = merged.some(m =>
+      m.createdAt === nextMessage.createdAt ||
+      (m.content === nextMessage.content && Math.abs(new Date(m.createdAt) - new Date(nextMessage.createdAt)) < 5000)
+    );
+
+    if (!isDuplicate) {
+      merged.push(markAsRead ? { ...nextMessage, isRead: true } : nextMessage);
+    }
+  }
+
+  return merged;
+};
 
 const InboxPage = () => {
   const { t } = useI18n();
@@ -48,6 +68,9 @@ const InboxPage = () => {
   const searchInputRef = useRef(null);
   
   const [pendingMessages, setPendingMessages] = useState({});
+  const selectedConversationRef = useRef(null);
+  const messagesRequestSeqRef = useRef(0);
+  const pendingMessagesForFetchRef = useRef(null);
 
   const [filters, setFilters] = useState({
     channel: '',
@@ -62,6 +85,24 @@ const InboxPage = () => {
   const [isResizing, setIsResizing] = useState(false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(360);
+  const messagePreviewLabels = useMemo(() => ({
+    sticker: t('inbox.messageSticker'),
+    groupEvent: t('inbox.messageGroupEvent'),
+    link: t('inbox.messageLink'),
+    call: t('inbox.messageCall'),
+    zaloEvent: t('inbox.messageZaloEvent'),
+  }), [t]);
+
+  const getDisplayMessage = useCallback((message, messageType) => {
+    if (message) return getMessagePreviewText(message, messagePreviewLabels);
+    if (messageType === 'image') return t('inbox.messageImage');
+    if (messageType === 'sticker') return t('inbox.messageSticker');
+    return '';
+  }, [messagePreviewLabels, t]);
+
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -177,23 +218,38 @@ const InboxPage = () => {
     }
   }, []);
 
-  const fetchMessages = useCallback(async () => {
-    if (!selectedConversation) return;
+  const fetchMessages = useCallback(async (conv = null) => {
+    const target = conv || selectedConversation;
+    if (!target) return;
+    const requestSeq = messagesRequestSeqRef.current + 1;
+    messagesRequestSeqRef.current = requestSeq;
+    const targetKey = getConversationKey(target);
     setIsLoadingMessages(true);
     try {
-      const response = await chatbotApi.getMessages(selectedConversation.id, selectedConversation.type);
+      const response = await chatbotApi.getMessages(target.id, target.type);
       if (response.success) {
-        setMessages(response.data || []);
+        const currentKey = getConversationKey(selectedConversationRef.current);
+        if (requestSeq !== messagesRequestSeqRef.current || currentKey !== targetKey) return;
+
+        const bufferedForTarget = pendingMessagesForFetchRef.current?.key === targetKey
+          ? pendingMessagesForFetchRef.current.messages
+          : [];
+        pendingMessagesForFetchRef.current = null;
+        setMessages(mergeUniqueMessages(response.data || [], bufferedForTarget, true));
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err);
       toast.error(t('errors.loadFailed'));
     } finally {
-      setIsLoadingMessages(false);
+      if (requestSeq === messagesRequestSeqRef.current && getConversationKey(selectedConversationRef.current) === targetKey) {
+        setIsLoadingMessages(false);
+      }
     }
   }, [selectedConversation, t]);
 
   const handleNewMessage = useCallback((data) => {
+    const displayMessage = getDisplayMessage(data.message, data.messageType);
+
     setConversations(prev => {
       const existingIndex = prev.findIndex(c => c.id === data.conversationId);
       
@@ -201,7 +257,8 @@ const InboxPage = () => {
         const existing = prev[existingIndex];
         const updated = {
           ...existing,
-          lastMessage: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          lastMessage: displayMessage,
+          lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
           unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : (existing.unreadCount || 0) + 1,
         };
@@ -215,7 +272,8 @@ const InboxPage = () => {
           visitorName: data.isGroup 
             ? (data.visitorName || data.groupName || data.senderName || 'Nhóm') 
             : (data.senderName || data.visitorName || 'Khách hàng'),
-          lastMessage: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          lastMessage: displayMessage,
+          lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
           unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : 1,
           isGroup: data.isGroup || false,
@@ -226,14 +284,14 @@ const InboxPage = () => {
       }
     });
 
-    if (document.hidden && data.message) {
+    if (document.hidden && displayMessage) {
       showNotification(t('inbox.newMessage'), {
-        body: `${data.senderName || t('inbox.customer')}: ${data.message.substring(0, 100)}`,
+        body: `${data.senderName || t('inbox.customer')}: ${displayMessage.substring(0, 100)}`,
         tag: `conv-${data.conversationId}`,
       });
-    } else if (!document.hidden && data.message && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
+    } else if (!document.hidden && displayMessage && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
       const sender = data.senderName || t('inbox.customer');
-      const msgPreview = data.message.length > 50 ? data.message.substring(0, 50) + '...' : data.message;
+      const msgPreview = displayMessage.length > 50 ? displayMessage.substring(0, 50) + '...' : displayMessage;
       toast.success(`${sender}: ${msgPreview}`, {
         icon: '💬',
         duration: 4000,
@@ -263,7 +321,7 @@ const InboxPage = () => {
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
           role: msgRole,
-          content: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          content: data.message || displayMessage,
           createdAt: data.timestamp || new Date().toISOString(),
           isRead: true,
           messageType: data.messageType || 'text',
@@ -294,7 +352,7 @@ const InboxPage = () => {
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
           role: msgRole,
-          content: data.message || (data.messageType === 'image' ? '[Hình ảnh]' : data.messageType === 'sticker' ? '[Sticker]' : ''),
+          content: data.message || displayMessage,
           createdAt: data.timestamp || new Date().toISOString(),
           isRead: false,
           messageType: data.messageType || 'text',
@@ -308,7 +366,7 @@ const InboxPage = () => {
         };
       });
     }
-  }, [selectedConversation, showNotification, t]);
+  }, [getDisplayMessage, selectedConversation, showNotification, t]);
 
   const handleUnreadChange = useCallback(() => {
     fetchUnreadCount();
@@ -370,28 +428,23 @@ const InboxPage = () => {
   }, []);
 
   const handleSelectConversation = useCallback(async (conv) => {
+    selectedConversationRef.current = conv;
     setSelectedConversation(conv);
-    await fetchMessages();
+    setIsLoadingMessages(true);
 
     const bufferedMessages = pendingMessages[conv.id] || [];
+    pendingMessagesForFetchRef.current = bufferedMessages.length > 0
+      ? { key: getConversationKey(conv), messages: bufferedMessages }
+      : null;
+
     if (bufferedMessages.length > 0) {
-      setMessages(prev => {
-        const merged = [...prev];
-        for (const bufferedMsg of bufferedMessages) {
-          const isDuplicate = merged.some(m => 
-            m.createdAt === bufferedMsg.createdAt || 
-            (m.content === bufferedMsg.content && Math.abs(new Date(m.createdAt) - new Date(bufferedMsg.createdAt)) < 5000)
-          );
-          if (!isDuplicate) {
-            merged.push({ ...bufferedMsg, isRead: true });
-          }
-        }
-        return merged;
-      });
+      setMessages(mergeUniqueMessages([], bufferedMessages, true));
       setPendingMessages(prev => {
         const { [conv.id]: _, ...rest } = prev;
         return rest;
       });
+    } else {
+      setMessages([]);
     }
 
     if (conv.unreadCount > 0) {
@@ -409,7 +462,7 @@ const InboxPage = () => {
         console.error('Failed to mark as read:', err);
       }
     }
-  }, [selectedConversation, fetchUnreadCount, pendingMessages]);
+  }, [fetchUnreadCount, pendingMessages]);
 
   useEffect(() => {
     fetchConversations(true);
@@ -420,14 +473,16 @@ const InboxPage = () => {
 
   useEffect(() => {
     if (selectedConversation) {
-      fetchMessages();
+      fetchMessages(selectedConversation);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedConversation?.id, selectedConversation?.type]);
+  }, [fetchMessages, selectedConversation]);
 
   const handleBack = () => {
+    messagesRequestSeqRef.current += 1;
+    selectedConversationRef.current = null;
     setSelectedConversation(null);
     setMessages([]);
+    setIsLoadingMessages(false);
   };
 
   const getChannelLabel = (channel) => {
@@ -554,7 +609,7 @@ const InboxPage = () => {
 
       {/* Right panel */}
       <div
-        className={`flex-1 flex flex-col bg-gray-50 ${
+        className={`flex-1 min-w-0 flex flex-col bg-gray-50 ${
           selectedConversation ? 'flex' : 'hidden lg:flex'
         }`}
       >

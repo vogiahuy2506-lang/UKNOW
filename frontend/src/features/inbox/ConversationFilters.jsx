@@ -1,51 +1,62 @@
 import { useState, useRef, useEffect } from 'react';
-import { HiChevronDown, HiX, HiCheck, HiAdjustments } from 'react-icons/hi';
+import {
+  HiAdjustments,
+  HiChatAlt2,
+  HiCheck,
+  HiChevronDown,
+  HiDeviceMobile,
+  HiGlobeAlt,
+  HiUser,
+  HiX,
+} from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 
-const SORT_OPTIONS = [
-  { value: 'latest', label: 'Mới nhất' },
-  { value: 'unread', label: 'Chưa đọc' },
-  { value: 'name_asc', label: 'A → Z' },
-  { value: 'name_desc', label: 'Z → A' },
+const SORT_OPTIONS = (t) => [
+  { value: 'latest', label: t('inbox.sortLatest') },
+  { value: 'unread', label: t('inbox.sortUnread') },
+  { value: 'name_asc', label: t('inbox.sortNameAsc') },
+  { value: 'name_desc', label: t('inbox.sortNameDesc') },
 ];
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'Tất cả' },
-  { value: 'active', label: 'Hoạt động' },
-  { value: 'closed', label: 'Đã đóng' },
+const STATUS_OPTIONS = (t) => [
+  { value: 'all', label: t('inbox.statusAll') },
+  { value: 'active', label: t('inbox.statusActive') },
+  { value: 'closed', label: t('inbox.statusClosed') },
 ];
 
-const DATE_OPTIONS = [
-  { value: 'all', label: 'Mọi lúc' },
-  { value: 'today', label: 'Hôm nay' },
-  { value: 'week', label: '7 ngày' },
-  { value: 'month', label: '30 ngày' },
+const DATE_OPTIONS = (t) => [
+  { value: 'all', label: t('inbox.dateAnytime') },
+  { value: 'today', label: t('inbox.dateToday') },
+  { value: 'week', label: t('inbox.dateWeek') },
+  { value: 'month', label: t('inbox.dateMonth') },
 ];
 
-const CHANNEL_OPTIONS = () => [
-  { value: '', label: 'Tất cả', icon: '🌐', short: 'All' },
-  { value: 'web', label: 'Web', icon: '💬', short: 'Web' },
-  { value: 'zalo_oa', label: 'Zalo OA', icon: '📱', short: 'OA' },
-  { value: 'facebook', label: 'Facebook', icon: '📘', short: 'FB' },
-  { value: 'zalo_personal', label: 'Zalo', icon: '👤', short: 'ZL' },
+const CHANNEL_OPTIONS = (t) => [
+  { value: '', label: t('inbox.allChannels'), Icon: HiGlobeAlt, short: t('inbox.channelAllShort') },
+  { value: 'web', label: t('inbox.webChat'), Icon: HiChatAlt2, short: t('inbox.webChatShort') },
+  { value: 'zalo_oa', label: t('inbox.zaloOA'), Icon: HiDeviceMobile, short: 'OA' },
+  { value: 'facebook', label: t('inbox.facebook'), Icon: HiChatAlt2, short: 'FB' },
+  { value: 'zalo_personal', label: t('inbox.zaloPersonal'), Icon: HiUser, short: t('inbox.zaloPersonalShort') },
 ];
 
 const ChannelTabs = ({ channels, value, onChange }) => (
-  <div className="flex gap-1 overflow-x-auto pb-0.5">
+  <div className="flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
     {channels.map((channel) => {
       const active = value === channel.value;
+      const Icon = channel.Icon;
       return (
         <button
           key={channel.value || 'all'}
           type="button"
           onClick={() => onChange(channel.value)}
           title={channel.label}
-          className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md whitespace-nowrap transition-colors ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all ${
             active
-              ? 'bg-primary-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-white text-primary-600 shadow-sm ring-1 ring-black/5'
+              : 'text-gray-500 hover:bg-white/70 hover:text-gray-700'
           }`}
         >
-          <span className="text-xs leading-none">{channel.icon}</span>
+          {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
           <span>{channel.short || channel.label}</span>
         </button>
       );
@@ -75,13 +86,14 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors ${
+        className={`flex min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-lg border transition-colors ${
           hasValue
-            ? 'bg-primary-50 text-primary-600 border border-primary-200'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            ? 'bg-primary-50 text-primary-700 border-primary-200'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
         }`}
       >
-        <span className="truncate max-w-[72px]">{selectedOption?.label || label}</span>
+        <span className="text-gray-400">{label}:</span>
+        <span className="truncate max-w-[88px] font-semibold">{selectedOption?.label || label}</span>
         <HiChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
@@ -112,7 +124,12 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
 };
 
 const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
+  const { t } = useI18n();
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const sortOptions = SORT_OPTIONS(t);
+  const statusOptions = STATUS_OPTIONS(t);
+  const dateOptions = DATE_OPTIONS(t);
+  const channelOptions = CHANNEL_OPTIONS(t);
 
   const handleChange = (key, value) => {
     onChange({ ...filters, [key]: value });
@@ -137,7 +154,7 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
     <div className="space-y-2">
       {showChannelTabs && (
         <ChannelTabs
-          channels={CHANNEL_OPTIONS()}
+          channels={channelOptions}
           value={filters.channel}
           onChange={(val) => handleChange('channel', val)}
         />
@@ -147,14 +164,14 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors ${
             showAdvanced || hasAdvancedFilters
-              ? 'bg-primary-50 text-primary-600 border-primary-200'
+              ? 'bg-primary-50 text-primary-700 border-primary-200'
               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
           }`}
         >
           <HiAdjustments className="w-3.5 h-3.5" />
-          <span>Lọc</span>
+          <span>{t('common.filter')}</span>
           {hasAdvancedFilters && (
             <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
           )}
@@ -164,33 +181,33 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
           <button
             type="button"
             onClick={handleClearAdvanced}
-            className="ml-auto flex items-center gap-0.5 px-1.5 py-1 text-[11px] text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100"
+            className="ml-auto flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
           >
             <HiX className="w-3 h-3" />
-            Xóa
+            {t('inbox.clearFilters')}
           </button>
         )}
       </div>
 
       {showAdvanced && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50/80 p-1.5">
           <FilterDropdown
-            options={SORT_OPTIONS}
+            options={sortOptions}
             value={filters.sort}
             onChange={(val) => handleChange('sort', val)}
-            label="Sắp xếp"
+            label={t('inbox.sort')}
           />
           <FilterDropdown
-            options={STATUS_OPTIONS}
+            options={statusOptions}
             value={filters.status}
             onChange={(val) => handleChange('status', val)}
-            label="Trạng thái"
+            label={t('inbox.status')}
           />
           <FilterDropdown
-            options={DATE_OPTIONS}
+            options={dateOptions}
             value={filters.date}
             onChange={(val) => handleChange('date', val)}
-            label="Thời gian"
+            label={t('inbox.date')}
           />
         </div>
       )}

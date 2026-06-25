@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HiCheck, HiDownload, HiReply, HiX, HiSearch } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
+import {
+  getMessagePreviewText,
+  getNormalizedMessageText,
+  normalizeMessageContent,
+} from './utils/normalizeMessageContent';
 
 const formatMessageTime = (dateString) => {
   if (!dateString) return '';
@@ -163,7 +169,8 @@ const MessageBubble = ({
   isGroupConversation, 
   isGroupChannel, 
   onReply,
-  replyingTo 
+  replyingTo,
+  messageLabels,
 }) => {
   const isBot = message.role === 'bot';
   const isAgent = message.role === 'agent';
@@ -197,6 +204,31 @@ const MessageBubble = ({
 
   const isReplyingToThis = replyingTo && replyingTo.id === message.id;
   const isAgentMessage = isOwn || isAgent || isBot;
+  const normalizedContent = normalizeMessageContent(message.content, messageLabels);
+  const normalizedText = getNormalizedMessageText(normalizedContent);
+
+  const renderTextWithLinks = (text) => (
+    <p
+      className="text-[15px] whitespace-pre-wrap break-words leading-relaxed"
+      style={{ overflowWrap: 'anywhere' }}
+    >
+      {String(text).split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
+        part.match(/^https?:\/\//) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`break-all underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </p>
+  );
 
   return (
     <>
@@ -208,8 +240,8 @@ const MessageBubble = ({
         </div>
       )}
 
-      <div className={`flex mb-4 ${isAgentMessage ? 'justify-end' : 'justify-start'}`}>
-        <div className={`max-w-[75%] ${isAgentMessage ? 'order-2' : 'order-1'}`}>
+      <div className={`flex min-w-0 mb-4 ${isAgentMessage ? 'justify-end' : 'justify-start'}`}>
+        <div className={`max-w-[75%] min-w-0 ${isAgentMessage ? 'order-2' : 'order-1'}`}>
           {/* Sender label */}
           <div className={`flex items-center justify-between gap-3 mb-1.5 ${isAgentMessage ? 'flex-row-reverse' : ''}`}>
             {isVisitor && showSenderName && senderName && (
@@ -234,7 +266,7 @@ const MessageBubble = ({
 
           {/* Message bubble */}
           <div
-            className={`relative group ${
+            className={`relative group min-w-0 ${
               isAgentMessage
                 ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-3xl rounded-br-sm shadow-lg shadow-primary-500/20'
                 : 'bg-white text-gray-800 rounded-3xl rounded-bl-sm border border-gray-100 shadow-sm'
@@ -247,20 +279,39 @@ const MessageBubble = ({
                 : '-left-1.5 bg-white rotate-45 border-l border-b border-gray-100'
             }`} />
             
-            <div className="px-4 py-3">
-              {message.content && (
-                <p className="text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-                  {String(message.content).split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
-                    part.match(/^https?:\/\//) ? (
-                      <a key={i} href={part} target="_blank" rel="noopener noreferrer" 
-                         className={`underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}>
-                        {part}
-                      </a>
-                    ) : (
-                      part
-                    )
+            <div className="px-4 py-3 min-w-0">
+              {normalizedText && normalizedContent.type === 'link' && normalizedContent.href && (
+                <div className="space-y-1.5">
+                  {normalizedContent.thumbUrl && (
+                    <img
+                      src={normalizedContent.thumbUrl}
+                      alt={normalizedContent.title || messageLabels.link}
+                      className="max-h-32 w-full rounded-2xl object-cover"
+                    />
                   )}
-                </p>
+                  {normalizedContent.title && (
+                    <p className="text-[15px] font-semibold leading-snug break-words" style={{ overflowWrap: 'anywhere' }}>
+                      {normalizedContent.title}
+                    </p>
+                  )}
+                  {normalizedContent.description && (
+                    <p className={`text-sm leading-snug break-words ${isAgentMessage ? 'text-white/80' : 'text-gray-500'}`} style={{ overflowWrap: 'anywhere' }}>
+                      {normalizedContent.description}
+                    </p>
+                  )}
+                  <a
+                    href={normalizedContent.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block break-all text-sm underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
+                  >
+                    {normalizedContent.href}
+                  </a>
+                </div>
+              )}
+
+              {normalizedText && (normalizedContent.type !== 'link' || !normalizedContent.href) && (
+                renderTextWithLinks(normalizedText)
               )}
               
               <MessageAttachments attachments={attachments} messageRole={message.role} />
@@ -305,12 +356,20 @@ const MessageBubble = ({
 };
 
 const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo }) => {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const searchInputRef = useRef(null);
+  const messageLabels = useMemo(() => ({
+    sticker: t('inbox.messageSticker'),
+    groupEvent: t('inbox.messageGroupEvent'),
+    link: t('inbox.messageLink'),
+    call: t('inbox.messageCall'),
+    zaloEvent: t('inbox.messageZaloEvent'),
+  }), [t]);
 
   const visitorInfo = typeof conversation?.visitor_info === 'string' 
     ? JSON.parse(conversation.visitor_info || '{}') 
@@ -328,7 +387,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
       const query = searchQuery.toLowerCase();
       const results = messages
         .map((msg, index) => ({ ...msg, index }))
-        .filter(msg => msg.content?.toLowerCase().includes(query));
+        .filter(msg => getMessagePreviewText(msg.content, messageLabels).toLowerCase().includes(query));
       setSearchResults(results);
       
       if (results.length > 0) {
@@ -340,7 +399,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, messages]);
+  }, [searchQuery, messages, messageLabels]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -390,7 +449,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       {/* Search bar */}
       <div className="px-5 py-3 bg-white border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -430,7 +489,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
       </div>
 
       {/* Messages */}
-      <div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+      <div ref={containerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto px-5 py-4">
         {messagesWithDate.map((msg, index) => {
           const isHighlighted = searchResults.some(r => r.index === index);
           return (
@@ -448,6 +507,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
                 conversation={conversation}
                 onReply={onReply}
                 replyingTo={replyingTo}
+                messageLabels={messageLabels}
               />
             </div>
           );
