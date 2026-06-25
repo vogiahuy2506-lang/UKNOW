@@ -11,6 +11,7 @@ import { runMigrations } from './utils/migrationRunner.util.js';
 import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
+import landingPageDomainService from './services/landingPage/landingPageDomain.service.js';
 
 const app = createApp();
 
@@ -134,6 +135,11 @@ app.listen(PORT, async () => {
   await outboundMessageQueueService.startWorker();
   await restoreZaloSessionsOnStartup();
   console.log(`Cleanup task scheduled`);
+
+  // Auto-provision SSL for active domains on startup
+  landingPageDomainService.provisionSslForAllActiveDomains().catch((err) => {
+    console.error('[Startup] Failed to auto-provision SSL for active domains:', err.message);
+  });
 
   // Restore Zalo sessions after all services are initialized
   // This ensures accounts remain connected even after server restart/update

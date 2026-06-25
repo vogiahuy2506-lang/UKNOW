@@ -72,6 +72,18 @@ class LandingPageDomainRepository {
   }
 
   /**
+   * @returns {Promise<Array>}
+   */
+  async findAllActive() {
+    const result = await db.query(
+      `SELECT id, landing_page_id AS "landingPageId", hostname, status, is_apex_domain AS "isApexDomain"
+       FROM landing_page_domains
+       WHERE status = 'active'`
+    );
+    return result.rows;
+  }
+
+  /**
    * @param {number} landingPageId
    * @returns {Promise<object|null>}
    */

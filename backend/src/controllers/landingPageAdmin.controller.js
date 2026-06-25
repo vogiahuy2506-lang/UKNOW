@@ -181,6 +181,24 @@ class LandingPageAdminController {
   }
 
   /**
+   * POST /api/admin/landing-pages/:id/custom-domain/provision-ssl
+   */
+  async postCustomDomainProvisionSsl(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageDomainService.provisionSslForDomain(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.postCustomDomainProvisionSsl]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Cấp SSL thất bại' });
+    }
+  }
+
+  /**
    * DELETE /api/admin/landing-pages/:id/custom-domain
    */
   async deleteCustomDomain(req, res) {

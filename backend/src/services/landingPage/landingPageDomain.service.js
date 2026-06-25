@@ -557,6 +557,65 @@ class LandingPageDomainService {
   }
 
   /**
+   * Auto-provision SSL for all active domains that don't have certificates.
+   * Called on backend startup.
+   */
+  async provisionSslForAllActiveDomains() {
+    const scriptPath = process.env.SSL_PROVISION_SCRIPT;
+    if (!scriptPath) {
+      console.log(`[LandingPageDomainService] SSL auto-provision skipped: SSL_PROVISION_SCRIPT not set`);
+      return;
+    }
+
+    try {
+      const domains = await landingPageDomainRepository.findAllActive();
+
+      if (!domains || domains.length === 0) {
+        console.log(`[LandingPageDomainService] No active domains found for SSL provisioning`);
+        return;
+      }
+
+      console.log(`[LandingPageDomainService] Found ${domains.length} active domain(s), checking SSL status...`);
+
+      for (const domain of domains) {
+        // Check if cert already exists and is valid
+        // We can't check from Node, so just try to provision - script will skip if valid
+        this.provisionSsl(domain.hostname).catch((err) => {
+          console.error(`[LandingPageDomainService] SSL provisioning failed for ${domain.hostname}:`, err.message);
+        });
+      }
+    } catch (err) {
+      console.error(`[LandingPageDomainService] Failed to get active domains for SSL provisioning:`, err.message);
+    }
+  }
+
+  /**
+   * Trigger SSL certificate provisioning for a domain by landing page ID.
+   * @param {number} landingPageId
+   * @param {object} authUser
+   * @returns {Promise<object>}
+   */
+  async provisionSslForDomain(landingPageId, authUser) {
+    const row = await this.getForLanding(landingPageId, authUser);
+    if (!row) {
+      const err = new Error('Chưa cấu hình tên miền');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const hostname = String(row.hostname || '').trim().toLowerCase();
+    if (!hostname) {
+      const err = new Error('Domain không hợp lệ');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    await this.provisionSsl(hostname);
+
+    return { hostname, status: row.status };
+  }
+
+  /**
    * Xóa custom domain.
    * DNS record được quản lý bởi khách hàng (không phải platform).
    *

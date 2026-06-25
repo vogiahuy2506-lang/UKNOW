@@ -173,6 +173,15 @@ export async function postLandingCustomDomainVerify(landingPageId) {
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
+export async function postLandingCustomDomainProvisionSsl(landingPageId) {
+  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/custom-domain/provision-ssl`);
+  return data;
+}
+
+/**
+ * @param {number} landingPageId
+ * @returns {Promise<object>}
+ */
 export async function deleteLandingCustomDomain(landingPageId) {
   const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`);
   return data;

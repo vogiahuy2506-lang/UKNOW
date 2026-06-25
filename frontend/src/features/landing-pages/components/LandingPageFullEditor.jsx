@@ -15,6 +15,7 @@ import {
   fetchLandingCustomDomain,
   generateLandingHtmlWithAi,
   postLandingCustomDomainVerify,
+  postLandingCustomDomainProvisionSsl,
   putLandingCustomDomain,
 } from '../services/landingPagesAdminApi.service.js';
 import { getLandingManualInsertSnippets } from '../utils/injectLandingEnhancements.js';
@@ -409,6 +410,21 @@ export default function LandingPageFullEditor({
     }
   };
 
+  const provisionSsl = async () => {
+    if (!editingId) return;
+    setCdBusy(true);
+    try {
+      const res = await postLandingCustomDomainProvisionSsl(editingId);
+      if (!res?.success) throw new Error(res?.message || 'Cấp SSL thất bại');
+      toast.success('Đã gửi yêu cầu cấp SSL. Vui lòng chờ vài phút và làm mới trang.');
+      setCdInfo((prev) => ({ ...prev, sslStatus: 'pending' }));
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || 'Cấp SSL thất bại');
+    } finally {
+      setCdBusy(false);
+    }
+  };
+
   if (!open) return null;
 
   const slug = String(form.slug || '').trim().toLowerCase();
@@ -574,7 +590,7 @@ export default function LandingPageFullEditor({
                   <>
                     {/* Domain Already Active */}
                     {cdInfo?.status === 'active' && (
-                      <div className="space-y-3">
+                        <div className="space-y-3">
                         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
                           <HiOutlineCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
                           <div className="flex-1">
@@ -592,13 +608,23 @@ export default function LandingPageFullEditor({
                             Mở domain
                           </a>
                         </div>
-                        <button
-                          type="button"
-                          className="text-sm text-red-600 hover:text-red-700 hover:underline"
-                          onClick={removeCustomDomain}
-                        >
-                          Xóa domain này
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            disabled={cdBusy}
+                            onClick={provisionSsl}
+                          >
+                            {cdBusy ? 'Đang xử lý...' : 'Cấp SSL ngay'}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-sm text-red-600 hover:text-red-700 hover:underline"
+                            onClick={removeCustomDomain}
+                          >
+                            Xóa domain này
+                          </button>
+                        </div>
                       </div>
                     )}
 
