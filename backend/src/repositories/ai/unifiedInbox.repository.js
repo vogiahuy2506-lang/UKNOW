@@ -209,6 +209,7 @@ class UnifiedInboxRepository {
           ch.channel,
           ch.display_name as channel_display_name,
           ch.is_active as channel_is_active,
+          NULL::TEXT as group_name_override,
           (
             SELECT content FROM channel_messages
             WHERE id_conversation = cc.id
@@ -247,6 +248,7 @@ class UnifiedInboxRepository {
           'zalo_personal' as channel,
           COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name,
           CASE WHEN zs.status = 'connected' THEN true ELSE false END as channel_is_active,
+          zg.group_name as group_name_override,
           (
             SELECT content FROM zalo_personal_messages
             WHERE id_conversation = zp.id
@@ -263,6 +265,20 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
+        LEFT JOIN LATERAL (
+          SELECT group_name
+          FROM zalo_groups
+          WHERE id_zalo_setting = zp.id_zalo_setting
+            AND group_name IS NOT NULL
+            AND group_name <> ''
+            AND (
+              group_id = NULLIF(zp.visitor_info::jsonb->>'group_id', '')
+              OR group_id = NULLIF(regexp_replace(COALESCE(zp.visitor_info::jsonb->>'group_id', zp.external_id), '^group_', ''), '')
+              OR CONCAT('group_', group_id) = NULLIF(zp.external_id, '')
+            )
+          ORDER BY updated_at DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) zg ON true
         WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
         ${zpStatusDate} ${zaloGate}
 
@@ -285,6 +301,7 @@ class UnifiedInboxRepository {
           'web' as channel,
           ww.display_name as channel_display_name,
           ww.is_active as channel_is_active,
+          NULL::TEXT as group_name_override,
           (
             SELECT content FROM webchat_messages
             WHERE id_conversation = wc.id
@@ -321,10 +338,14 @@ class UnifiedInboxRepository {
       // Determine display name - for groups, show group name prominently
       let displayName = row.visitor_name;
       const isGroup = visitorInfo.is_group === true;
+      const groupNameOverride = row.group_name_override || null;
 
       // For webchat: show "Chatbot Name - ID" instead of visitor_name
       if (row.conversation_type === 'webchat') {
         displayName = `${row.channel_display_name} - ${row.id}`;
+      } else if (isGroup && groupNameOverride) {
+        displayName = groupNameOverride;
+        visitorInfo.group_name = visitorInfo.group_name || groupNameOverride;
       }
       
       // Transform snake_case to camelCase for frontend compatibility
@@ -341,7 +362,7 @@ class UnifiedInboxRepository {
         visitorInfo: visitorInfo,
         isGroup: isGroup,
         groupId: isGroup ? visitorInfo.group_id : null,
-        groupName: isGroup ? visitorInfo.group_name : null,
+        groupName: isGroup ? (visitorInfo.group_name || groupNameOverride) : null,
         externalId: row.external_id,
         status: row.status,
         startedAt: row.started_at,

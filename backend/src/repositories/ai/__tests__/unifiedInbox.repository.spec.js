@@ -108,6 +108,32 @@ describe('unifiedInbox.repository conversation filters', () => {
     expect(params).toEqual([1, 20, 0]);
   });
 
+  it('uses zalo_groups name override for Zalo group conversations', async () => {
+    db.query.mockResolvedValue({
+      rows: [{
+        id: 172387,
+        conversation_type: 'zalo_personal',
+        channel: 'zalo_personal',
+        channel_display_name: 'Zalo Cá nhân',
+        visitor_name: 'Nhóm 172387',
+        visitor_info: { is_group: true, group_id: '172387' },
+        group_name_override: 'Team Marketing',
+        external_id: 'group_172387',
+        status: 'active',
+        started_at: '2026-06-25T00:00:00.000Z',
+        last_message_at: '2026-06-25T01:00:00.000Z',
+        last_message: 'hello',
+        unread_count: '0',
+      }],
+    });
+
+    const rows = await unifiedInboxRepository.getConversations(1, { limit: 20, offset: 0 });
+
+    expect(rows[0].visitorName).toBe('Team Marketing');
+    expect(rows[0].groupName).toBe('Team Marketing');
+    expect(rows[0].visitorInfo.group_name).toBe('Team Marketing');
+  });
+
   it('gates channel/zalo branches when filtering conversations by web', async () => {
     await unifiedInboxRepository.getConversations(1, { channel: 'web', limit: 20, offset: 0 });
 

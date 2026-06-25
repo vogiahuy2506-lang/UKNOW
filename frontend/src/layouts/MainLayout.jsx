@@ -119,7 +119,7 @@ const MainLayout = () => {
 
   const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
   const desktopMainClassName = isFullLayout || isInboxPage
-    ? 'flex-1 min-h-0 overflow-hidden p-0'
+    ? 'h-full flex-1 min-h-0 overflow-hidden p-0'
     : 'flex-1 min-h-0 p-6 overflow-auto';
 
   useEffect(() => {
@@ -128,7 +128,7 @@ const MainLayout = () => {
 
   if (isMobile) {
     const mainClassName = isFullLayout || isInboxPage
-      ? 'flex-1 min-h-0 overflow-hidden p-0'
+      ? 'h-full flex-1 min-h-0 overflow-hidden p-0'
       : 'flex-1 min-h-0 p-4 overflow-auto';
 
     return (
@@ -196,7 +196,7 @@ const MainLayout = () => {
       )}
 
       <div
-        className={`flex-1 min-w-0 flex flex-col${!isPanelResizing ? ' transition-all duration-300' : ''}${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
+        className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
         style={{
           marginLeft: `${effectiveSidebarWidth}px`,
           marginRight: aiPanelOpen && !isMobile ? `${aiPanelWidth}px` : '0px',

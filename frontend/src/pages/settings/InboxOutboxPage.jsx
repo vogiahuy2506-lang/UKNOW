@@ -496,10 +496,10 @@ const InboxPage = () => {
   };
 
   return (
-    <div className="h-full min-h-0 flex overflow-hidden bg-gray-100">
+    <div className="h-full min-h-0 flex overflow-hidden overscroll-none bg-gray-100">
       {/* Left Sidebar */}
       <div
-        className={`bg-white flex flex-col flex-shrink-0 border-r border-gray-200 ${
+        className={`h-full min-h-0 bg-white flex flex-col flex-shrink-0 overflow-hidden border-r border-gray-200 ${
           !isResizing && 'transition-all duration-200'
         } ${selectedConversation ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
         style={{ width: isMobile && !selectedConversation ? '100%' : `${sidebarWidth}px` }}
@@ -583,7 +583,7 @@ const InboxPage = () => {
         </div>
 
         {/* Conversation list */}
-        <div className="flex-1 overflow-hidden bg-white">
+        <div className="flex-1 min-h-0 overflow-hidden bg-white">
           <ConversationList
             conversations={conversations}
             isLoading={isLoadingConversations}
@@ -609,14 +609,14 @@ const InboxPage = () => {
 
       {/* Right panel */}
       <div
-        className={`flex-1 min-w-0 flex flex-col bg-gray-50 ${
+        className={`h-full min-h-0 flex-1 min-w-0 flex flex-col overflow-hidden bg-gray-50 ${
           selectedConversation ? 'flex' : 'hidden lg:flex'
         }`}
       >
         {selectedConversation ? (
           <>
             {/* Message header */}
-            <div className="px-5 py-4 bg-white border-b border-gray-200 flex items-center gap-4 shadow-sm">
+            <div className="shrink-0 px-5 py-4 bg-white border-b border-gray-200 flex items-center gap-4 shadow-sm">
               <button
                 onClick={handleBack}
                 className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"

@@ -95,12 +95,22 @@ const ConversationItem = ({
   
   const hasUnread = conv.unreadCount > 0;
   const isActive = conv.status === 'active';
+  const lastMessageTime = formatTime(getLastMessageAt(conv));
+  const handleSelect = () => onSelect(conv);
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleSelect();
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(conv)}
-      className={`w-full px-3 py-2.5 text-left transition-colors group relative border-b border-gray-50 ${
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleSelect}
+      onKeyDown={handleKeyDown}
+      className={`w-full cursor-pointer px-3 py-2.5 text-left transition-colors group relative border-b border-gray-50 ${
         isSelected
           ? 'bg-primary-50 border-l-2 border-l-primary-500'
           : 'hover:bg-gray-50 border-l-2 border-l-transparent'
@@ -145,9 +155,26 @@ const ConversationItem = ({
                 </span>
               )}
             </div>
-            <span className="text-[10px] text-gray-400 shrink-0">
-              {formatTime(getLastMessageAt(conv))}
-            </span>
+            <div className="flex h-6 w-12 shrink-0 items-center justify-end">
+              <span className={`text-[10px] text-gray-400 transition-opacity ${onDelete ? 'group-hover:opacity-0' : ''}`}>
+                {lastMessageTime}
+              </span>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(conv);
+                  }}
+                  className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex"
+                  title="Xóa cuộc trò chuyện"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {conv.lastMessage && (
@@ -159,23 +186,7 @@ const ConversationItem = ({
           )}
         </div>
       </div>
-
-      {onDelete && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(conv);
-          }}
-          className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-          title="Xóa cuộc trò chuyện"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
-      )}
-    </button>
+    </div>
   );
 };
 
@@ -263,7 +274,7 @@ const ConversationList = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full min-h-0 bg-white">
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (
@@ -271,7 +282,7 @@ const ConversationList = ({
       )}
 
       {filteredConversations.length > 0 && (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {filteredConversations.map((conv) => (
             <ConversationItem
               key={`${conv.type}-${conv.id}`}

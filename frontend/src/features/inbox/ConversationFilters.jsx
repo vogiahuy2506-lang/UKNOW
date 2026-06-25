@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  HiAdjustments,
   HiChatAlt2,
   HiCheck,
   HiChevronDown,
@@ -125,7 +124,6 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
 
 const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
   const { t } = useI18n();
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const sortOptions = SORT_OPTIONS(t);
   const statusOptions = STATUS_OPTIONS(t);
   const dateOptions = DATE_OPTIONS(t);
@@ -146,10 +144,6 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
 
   const hasAdvancedFilters = filters.sort !== 'latest' || filters.status !== 'all' || filters.date !== 'all';
 
-  useEffect(() => {
-    if (hasAdvancedFilters) setShowAdvanced(true);
-  }, [hasAdvancedFilters]);
-
   return (
     <div className="space-y-2">
       {showChannelTabs && (
@@ -160,23 +154,25 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
         />
       )}
 
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors ${
-            showAdvanced || hasAdvancedFilters
-              ? 'bg-primary-50 text-primary-700 border-primary-200'
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <HiAdjustments className="w-3.5 h-3.5" />
-          <span>{t('common.filter')}</span>
-          {hasAdvancedFilters && (
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-          )}
-        </button>
-
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50/80 p-1.5">
+        <FilterDropdown
+          options={sortOptions}
+          value={filters.sort}
+          onChange={(val) => handleChange('sort', val)}
+          label={t('inbox.sort')}
+        />
+        <FilterDropdown
+          options={statusOptions}
+          value={filters.status}
+          onChange={(val) => handleChange('status', val)}
+          label={t('inbox.status')}
+        />
+        <FilterDropdown
+          options={dateOptions}
+          value={filters.date}
+          onChange={(val) => handleChange('date', val)}
+          label={t('inbox.date')}
+        />
         {hasAdvancedFilters && (
           <button
             type="button"
@@ -188,29 +184,6 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
           </button>
         )}
       </div>
-
-      {showAdvanced && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50/80 p-1.5">
-          <FilterDropdown
-            options={sortOptions}
-            value={filters.sort}
-            onChange={(val) => handleChange('sort', val)}
-            label={t('inbox.sort')}
-          />
-          <FilterDropdown
-            options={statusOptions}
-            value={filters.status}
-            onChange={(val) => handleChange('status', val)}
-            label={t('inbox.status')}
-          />
-          <FilterDropdown
-            options={dateOptions}
-            value={filters.date}
-            onChange={(val) => handleChange('date', val)}
-            label={t('inbox.date')}
-          />
-        </div>
-      )}
     </div>
   );
 };

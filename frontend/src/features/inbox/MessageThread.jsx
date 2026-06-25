@@ -489,7 +489,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
       </div>
 
       {/* Messages */}
-      <div ref={containerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto px-5 py-4">
+      <div ref={containerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto overscroll-contain px-5 py-4">
         {messagesWithDate.map((msg, index) => {
           const isHighlighted = searchResults.some(r => r.index === index);
           return (
