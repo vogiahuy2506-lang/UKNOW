@@ -79,6 +79,10 @@ jobs:
             echo "Deploying backend image: $BACKEND_IMAGE"
             docker pull "$BACKEND_IMAGE"
             docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
+            mkdir -p /opt/uknow
+            cp .github/workflows/../server/scripts/ssl-auto-provision.sh /opt/uknow/ssl-auto-provision.sh
+            chmod +x /opt/uknow/ssl-auto-provision.sh
+            echo "SSL provision script deployed to /opt/uknow/ssl-auto-provision.sh"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
               echo "Removing old backend container..."
               docker update --restart=no uknow-campaign-backend || true
@@ -111,6 +115,7 @@ jobs:
               -v /var/run/docker.sock:/var/run/docker.sock:ro \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
+              -v /opt/uknow:/opt/uknow \
               "$BACKEND_IMAGE"
             docker image prune -f
             echo "Chờ server khởi động..."
