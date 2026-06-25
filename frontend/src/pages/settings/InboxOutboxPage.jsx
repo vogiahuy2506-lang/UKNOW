@@ -496,7 +496,7 @@ const InboxPage = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-56px)] flex overflow-hidden bg-gray-100">
+    <div className="h-full min-h-0 flex overflow-hidden bg-gray-100">
       {/* Left Sidebar */}
       <div
         className={`bg-white flex flex-col flex-shrink-0 border-r border-gray-200 ${
