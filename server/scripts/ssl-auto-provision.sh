@@ -9,10 +9,10 @@ set -o pipefail
 LOG_FILE="/var/log/ssl-provision.log"
 CERTBOT="/usr/bin/certbot"
 CERT_DIR="/etc/letsencrypt/live"
-WEBROOT="${WEBROOT:-/root/uknow/certbot}"
 NGINX_WEBROOT="${NGINX_WEBROOT:-/var/www/certbot}"
 DOMAIN_CONF_DIR="${DOMAIN_CONF_DIR:-/root/uknow/nginx-domains}"
 FRONTEND_CONTAINER="${FRONTEND_CONTAINER:-uknow-campaign-frontend}"
+DEFAULT_WEBROOT="/root/uknow/certbot"
 CERT_CHANGED=0
 CONFIG_CHANGED=0
 
@@ -41,10 +41,36 @@ fi
 
 log "Starting SSL provision for: $DOMAIN"
 
+detect_container_webroot() {
+    docker inspect \
+        --format "{{range .Mounts}}{{if eq .Destination \"$NGINX_WEBROOT\"}}{{.Source}}{{end}}{{end}}" \
+        "$FRONTEND_CONTAINER" 2>/dev/null || true
+}
+
+if [[ -z "${WEBROOT:-}" ]]; then
+    DETECTED_WEBROOT="$(detect_container_webroot)"
+    WEBROOT="${DETECTED_WEBROOT:-$DEFAULT_WEBROOT}"
+fi
+
+log "Using certbot webroot: $WEBROOT (nginx path: $NGINX_WEBROOT)"
+
 # Create webroot if not exists
 mkdir -p "$WEBROOT/.well-known/acme-challenge"
 chown -R www-data:www-data "$WEBROOT" 2>/dev/null || true
 mkdir -p "$DOMAIN_CONF_DIR"
+
+verify_webroot_challenge() {
+    local token body
+    token="uknow-acme-check-$(date +%s)-$$"
+    echo "ok" > "$WEBROOT/.well-known/acme-challenge/$token"
+
+    body="$(curl --max-time 10 -fsS "http://$DOMAIN/.well-known/acme-challenge/$token" 2>/dev/null || true)"
+    rm -f "$WEBROOT/.well-known/acme-challenge/$token"
+
+    if [[ "$body" != "ok" ]]; then
+        error "ACME webroot is not reachable for $DOMAIN. Expected token from $WEBROOT via http://$DOMAIN/.well-known/acme-challenge/$token, got '${body:-<empty>}'"
+    fi
+}
 
 # Check if certificate already exists
 if [[ -d "$CERT_DIR/$DOMAIN" ]]; then
@@ -63,6 +89,7 @@ if [[ -d "$CERT_DIR/$DOMAIN" ]]; then
 else
     # Get new certificate
     log "Requesting SSL certificate from Let's Encrypt..."
+    verify_webroot_challenge
 
     if $CERTBOT certonly \
         --webroot \
