@@ -219,7 +219,7 @@ export default {
     subAssistants: 'Sub-assistants',
     chatbotWidget: 'Chatbot Widget',
     chatbotChannels: 'Kênh Chatbot',
-    channelManagement: 'Quản lý kênh gửi',
+    channelManagement: '@digiso.vn',
     messageTemplates: 'Thư viện nội dung',
     myProducts: 'Quản lý sản phẩm',
     courseManagement: 'Quản lý khóa học',

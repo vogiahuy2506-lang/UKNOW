@@ -102,6 +102,9 @@ jobs:
               fi
               docker rm uknow-campaign-frontend
             fi
+            mkdir -p /var/www/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
+            chown -R www-data:www-data /var/www/certbot 2>/dev/null || true
+
             docker run -d \
               --name uknow-campaign-frontend \
               --network uknow_network \
@@ -111,7 +114,7 @@ jobs:
               -p 443:443 \
               -v /etc/letsencrypt:/etc/letsencrypt:ro \
               -v /var/www/certbot:/var/www/certbot:ro \
-              -v /opt/uknow/nginx-domains:/etc/nginx/domains:ro \
+              -v /root/uknow/nginx-domains:/etc/nginx/domains:ro \
               "$FRONTEND_IMAGE"
             docker image prune -f
             echo "Chờ nginx khởi động..."

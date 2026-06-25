@@ -6,8 +6,8 @@
 set -euo pipefail
 
 LOG_FILE="${SSL_PROVISION_LOG:-/var/log/ssl-provision.log}"
-BACKEND_ENV_FILE="${BACKEND_ENV_FILE:-/opt/uknow/backend/.env}"
-SSL_AUTO_PROVISION_SCRIPT="${SSL_AUTO_PROVISION_SCRIPT:-/opt/uknow/ssl-auto-provision.sh}"
+BACKEND_ENV_FILE="${BACKEND_ENV_FILE:-/root/uknow/backend/.env}"
+SSL_AUTO_PROVISION_SCRIPT="${SSL_AUTO_PROVISION_SCRIPT:-/root/uknow/scripts/ssl-auto-provision.sh}"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
