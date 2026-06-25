@@ -607,7 +607,11 @@ function ChatbotStudioPage() {
           <div className="card h-[700px] flex flex-col overflow-hidden relative">
             <button
               onClick={() => setRightCollapsed(!rightCollapsed)}
-              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+              className={`absolute z-20 w-7 h-14 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-l-xl shadow-md border border-slate-200 border-r-0 transition-colors ${
+                rightCollapsed
+                  ? 'top-3 left-1/2 -translate-x-1/2'
+                  : 'top-3 left-3 xl:top-1/2 xl:left-0 xl:-translate-x-1/2 xl:-translate-y-1/2'
+              }`}
               title={rightCollapsed ? 'Mở rộng' : 'Thu gọn'}
             >
               {rightCollapsed ? <HiOutlineChevronLeft className="w-4 h-4" /> : <HiOutlineChevronRight className="w-4 h-4" />}

@@ -28,6 +28,8 @@ const MainLayout = () => {
     location.pathname.startsWith('/campaigns') &&
     (location.pathname.endsWith('/new') || location.pathname.includes('/builder'));
 
+  const isChatbotStudio = location.pathname.includes('/chatbot-studio');
+
   // Close mobile drawer on route change
   useEffect(() => {
     setMobileDrawerOpen(false);
@@ -213,8 +215,8 @@ const MainLayout = () => {
         onResizeEnd={() => { setIsPanelResizing(false); window.dispatchEvent(new Event('resize')); }}
       />
 
-      {/* AI Toggle Bar (Desktop) */}
-      {!aiPanelOpen && (
+      {/* AI Toggle Bar (Desktop) — hidden on chatbot studio (has its own 3-column layout) */}
+      {!aiPanelOpen && !isChatbotStudio && (
         <div className="fixed top-0 right-0 h-full w-1 z-30 group">
           <button 
             onClick={() => setAiPanelOpen(true)}
