@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineX } from 'react-icons/hi';
 import { changePassword } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
@@ -77,7 +78,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     { key: 'confirmPassword', label: t('changePassword.confirmNewPassword'), showKey: 'confirm' },
   ];
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleClose}>
       <div
         className="modal-content modal-content-animate w-full max-w-md mx-4"
@@ -148,7 +149,8 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

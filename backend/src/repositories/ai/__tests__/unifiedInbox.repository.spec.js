@@ -78,6 +78,60 @@ describe('unifiedInbox.repository conversation filters', () => {
     expect(sql).not.toMatch(/\bcw\./);
     expect(params).toEqual([1, 20, 0, '%nguyen%']);
   });
+
+  it('gates zalo/web branches when filtering conversations by zalo_oa', async () => {
+    await unifiedInboxRepository.getConversations(1, { channel: 'zalo_oa', limit: 20, offset: 0 });
+
+    const [sql, params] = db.query.mock.calls[0];
+    const channelBranch = sql.split('UNION ALL')[0];
+    const zaloBranch = sql.split('UNION ALL')[1];
+    const webBranch = sql.split('UNION ALL')[2];
+
+    expect(channelBranch).toMatch(/ch\.channel = \$4/);
+    expect(zaloBranch).toMatch(/AND 1=0/);
+    expect(webBranch).toMatch(/AND 1=0/);
+    expect(params).toEqual([1, 20, 0, 'zalo_oa']);
+  });
+
+  it('gates channel/web branches when filtering conversations by zalo_personal', async () => {
+    await unifiedInboxRepository.getConversations(1, { channel: 'zalo_personal', limit: 20, offset: 0 });
+
+    const [sql, params] = db.query.mock.calls[0];
+    const channelBranch = sql.split('UNION ALL')[0];
+    const zaloBranch = sql.split('UNION ALL')[1];
+    const webBranch = sql.split('UNION ALL')[2];
+
+    expect(channelBranch).toMatch(/AND 1=0/);
+    expect(channelBranch).not.toMatch(/ch\.channel = \$/);
+    expect(zaloBranch).not.toMatch(/AND 1=0/);
+    expect(webBranch).toMatch(/AND 1=0/);
+    expect(params).toEqual([1, 20, 0]);
+  });
+
+  it('gates channel/zalo branches when filtering conversations by web', async () => {
+    await unifiedInboxRepository.getConversations(1, { channel: 'web', limit: 20, offset: 0 });
+
+    const [sql] = db.query.mock.calls[0];
+    const channelBranch = sql.split('UNION ALL')[0];
+    const zaloBranch = sql.split('UNION ALL')[1];
+    const webBranch = sql.split('UNION ALL')[2];
+
+    expect(channelBranch).toMatch(/AND 1=0/);
+    expect(zaloBranch).toMatch(/AND 1=0/);
+    expect(webBranch).not.toMatch(/AND 1=0/);
+  });
+
+  it('applies channel gates in getConversationsCount for facebook', async () => {
+    db.query.mockResolvedValue({ rows: [{ total: '4' }] });
+
+    const total = await unifiedInboxRepository.getConversationsCount(2, { channel: 'facebook' });
+
+    expect(total).toBe(4);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(/ch\.channel = \$2/);
+    expect(sql.match(/AND 1=0/g)?.length).toBe(2);
+    expect(params).toEqual([2, 'facebook']);
+  });
 });
 
 describe('unifiedInbox.repository outbox search filters', () => {

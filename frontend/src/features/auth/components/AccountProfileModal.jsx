@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   HiOutlineUserCircle,
   HiOutlineX,
@@ -590,7 +591,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleClose}>
       <div
         className="modal-content modal-content-animate w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]"
@@ -745,7 +746,8 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

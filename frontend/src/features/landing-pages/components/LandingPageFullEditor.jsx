@@ -416,7 +416,7 @@ export default function LandingPageFullEditor({
 
   const overlay = (
     <div
-      className="fixed z-[200] flex flex-col bg-white"
+      className="fixed z-[35] flex flex-col bg-white"
       style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
     >
       <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
@@ -929,7 +929,7 @@ export default function LandingPageFullEditor({
     aiOpen &&
     createPortal(
       <div
-        className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/40"
+        className="fixed inset-0 z-[45] flex items-center justify-center p-4 bg-black/40"
         role="dialog"
         aria-modal="true"
         onClick={() => !aiBusy && setAiOpen(false)}

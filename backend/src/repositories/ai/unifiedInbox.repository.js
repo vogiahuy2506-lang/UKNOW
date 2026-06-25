@@ -124,6 +124,25 @@ function buildOutboxChannelGates(channel) {
   };
 }
 
+const CHANNEL_CONNECTION_TYPES = new Set(['zalo_oa', 'facebook']);
+
+/** Gate UNION branches when filtering inbox conversations by channel. */
+function buildConversationChannelGates(channel) {
+  if (!channel) {
+    return { channelGate: '', zaloGate: '', webGate: '' };
+  }
+  if (channel === 'zalo_personal') {
+    return { channelGate: 'AND 1=0', zaloGate: '', webGate: 'AND 1=0' };
+  }
+  if (channel === 'web') {
+    return { channelGate: 'AND 1=0', zaloGate: 'AND 1=0', webGate: '' };
+  }
+  if (CHANNEL_CONNECTION_TYPES.has(channel)) {
+    return { channelGate: '', zaloGate: 'AND 1=0', webGate: 'AND 1=0' };
+  }
+  return { channelGate: 'AND 1=0', zaloGate: 'AND 1=0', webGate: 'AND 1=0' };
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -133,16 +152,18 @@ class UnifiedInboxRepository {
   async getConversations(userId, filters = {}) {
     const { channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = filters;
 
-    // Build channel filter
+    // Build channel filter (Zalo OA / Facebook live in channel_connections branch only)
     let channelFilter = '';
     const params = [userId, limit, offset];
     let paramIndex = 4;
 
-    if (channel) {
-      channelFilter = `AND cc.channel = $${paramIndex}`;
+    if (channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
+      channelFilter = `AND ch.channel = $${paramIndex}`;
       params.push(channel);
       paramIndex++;
     }
+
+    const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
 
     // Build zaloAccountId filter (for zalo_personal channel filtering by specific account)
     let zaloAccountIdFilter = '';
@@ -204,7 +225,7 @@ class UnifiedInboxRepository {
           ) as last_message_at_override
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${ccSearch}
+        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
         ${ccStatusDate}
 
         UNION ALL
@@ -243,7 +264,7 @@ class UnifiedInboxRepository {
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
         WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
-        ${zpStatusDate}
+        ${zpStatusDate} ${zaloGate}
 
         UNION ALL
 
@@ -281,7 +302,7 @@ class UnifiedInboxRepository {
         FROM webchat_conversations wc
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
         WHERE wc.id_user = $1 ${wcSearch}
-        ${wcStatusDate}
+        ${wcStatusDate} ${webGate}
       )
       SELECT * FROM all_conversations
       ORDER BY COALESCE(last_message_at_override, last_message_at) DESC
@@ -341,11 +362,13 @@ class UnifiedInboxRepository {
     const params = [userId];
     let paramIndex = 2;
 
-    if (channel) {
-      channelFilter = `AND cc.channel = $${paramIndex}`;
+    if (channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
+      channelFilter = `AND ch.channel = $${paramIndex}`;
       params.push(channel);
       paramIndex++;
     }
+
+    const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
 
     const searchBuilt = buildSearchFilter(search, paramIndex);
     if (searchBuilt.params.length) {
@@ -372,17 +395,17 @@ class UnifiedInboxRepository {
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${ccStatusDate} ${ccSearch}
+        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccStatusDate} ${ccSearch}
 
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch} ${zaloGate}
 
         UNION ALL
 
         SELECT wc.id FROM webchat_conversations wc
-        WHERE wc.id_user = $1 ${wcStatusDate} ${wcSearch}
+        WHERE wc.id_user = $1 ${wcStatusDate} ${wcSearch} ${webGate}
       ) as combined
     `;
 

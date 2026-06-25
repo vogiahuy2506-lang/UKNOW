@@ -84,80 +84,76 @@ const ConversationItem = ({
 
   return (
     <button
+      type="button"
       onClick={() => onSelect(conv)}
-      className={`w-full p-4 text-left transition-all duration-200 group relative ${
+      className={`w-full px-3 py-2.5 text-left transition-colors group relative border-b border-gray-50 ${
         isSelected
-          ? 'bg-primary-50 border-l-4 border-l-primary-500'
-          : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+          ? 'bg-primary-50 border-l-2 border-l-primary-500'
+          : 'hover:bg-gray-50 border-l-2 border-l-transparent'
       }`}
     >
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
+      <div className="flex items-start gap-2.5">
         <div className="relative flex-shrink-0">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shadow-sm ${
-            isGroup 
-              ? 'bg-gradient-to-br from-violet-100 to-violet-200 text-violet-600' 
-              : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-600'
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+            isGroup
+              ? 'bg-violet-100 text-violet-600'
+              : 'bg-gray-100 text-gray-600'
           }`}>
             {displayName ? displayName[0]?.toUpperCase() : '?'}
           </div>
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] border border-white ${channel.bg}`}
+            title={channel.label}
+          >
+            {channel.icon}
+          </span>
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full border-2 border-white flex items-center justify-center shadow-md">
-              <span className="text-[10px] text-white font-bold">{conv.unreadCount > 9 ? '9+' : conv.unreadCount}</span>
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full border border-white flex items-center justify-center">
+              <span className="text-[9px] text-white font-bold leading-none">
+                {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
+              </span>
             </span>
           )}
         </div>
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-2 min-w-0">
-              {isGroup && (
-                <span className="text-violet-500 text-sm">👥</span>
-              )}
-              <span className={`font-bold text-sm truncate ${
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <div className="flex items-center gap-1 min-w-0">
+              {isGroup && <span className="text-violet-500 text-xs">👥</span>}
+              <span className={`font-semibold text-sm truncate ${
                 isSelected ? 'text-primary-700' : 'text-gray-900'
               }`}>
                 {displayName || 'Khách hàng'}
               </span>
+              {!isActive && (
+                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-gray-100 text-gray-500">
+                  Đóng
+                </span>
+              )}
             </div>
-            <span className="text-xs text-gray-400 flex-shrink-0 ml-2 font-medium">
+            <span className="text-[10px] text-gray-400 shrink-0">
               {formatTime(conv.lastMessageAt)}
             </span>
           </div>
 
-          {/* Channel badge */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`text-[10px] px-2 py-0.5 rounded-full ${channel.bg} text-white font-semibold`}>
-              {channel.icon} {channel.label}
-            </span>
-            {isActive && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">
-                ● Hoạt động
-              </span>
-            )}
-          </div>
-
-          {/* Message preview */}
           {conv.lastMessage && (
-            <p className={`text-sm truncate ${
-              hasUnread ? 'text-gray-800 font-semibold' : 'text-gray-500'
+            <p className={`text-xs truncate ${
+              hasUnread ? 'text-gray-800 font-medium' : 'text-gray-500'
             }`}>
-              {truncateMessage(conv.lastMessage)}
+              {truncateMessage(conv.lastMessage, 52)}
             </p>
           )}
         </div>
       </div>
 
-      {/* Delete button */}
       {onDelete && (
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(conv);
           }}
-          className="absolute right-3 top-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+          className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
           title="Xóa cuộc trò chuyện"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,17 +178,16 @@ const EmptyState = ({ message }) => (
 );
 
 const LoadingSkeleton = () => (
-  <div className="flex-1 overflow-y-auto p-4 space-y-4">
-    {[1, 2, 3, 4, 5].map((i) => (
-      <div key={i} className="flex items-start gap-3 animate-pulse">
-        <div className="w-12 h-12 rounded-2xl bg-gray-200"></div>
+  <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <div key={i} className="flex items-start gap-2.5 animate-pulse">
+        <div className="w-10 h-10 rounded-xl bg-gray-200" />
         <div className="flex-1">
-          <div className="flex justify-between mb-2">
-            <div className="h-4 bg-gray-200 rounded w-36"></div>
-            <div className="h-3 bg-gray-200 rounded w-14"></div>
+          <div className="flex justify-between mb-1.5">
+            <div className="h-3.5 bg-gray-200 rounded w-32" />
+            <div className="h-3 bg-gray-200 rounded w-10" />
           </div>
-          <div className="h-3 bg-gray-200 rounded w-full mb-1.5"></div>
-          <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+          <div className="h-3 bg-gray-200 rounded w-full" />
         </div>
       </div>
     ))}
@@ -252,21 +247,6 @@ const ConversationList = ({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white flex items-center justify-center text-sm shadow-sm">
-              💬
-            </span>
-            <span>Danh sách</span>
-          </h2>
-          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-            {filteredConversations.length}
-          </span>
-        </div>
-      </div>
-
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { HiChevronDown, HiX, HiCheck } from 'react-icons/hi';
+import { HiChevronDown, HiX, HiCheck, HiAdjustments } from 'react-icons/hi';
 
 const SORT_OPTIONS = [
   { value: 'latest', label: 'Mới nhất' },
@@ -22,33 +22,36 @@ const DATE_OPTIONS = [
 ];
 
 const CHANNEL_OPTIONS = () => [
-  { value: '', label: 'Tất cả', icon: '🌐' },
-  { value: 'web', label: 'Web', icon: '💬' },
-  { value: 'zalo_oa', label: 'Zalo OA', icon: '📱' },
-  { value: 'facebook', label: 'Facebook', icon: '📘' },
-  { value: 'zalo_personal', label: 'Zalo', icon: '👤' },
+  { value: '', label: 'Tất cả', icon: '🌐', short: 'All' },
+  { value: 'web', label: 'Web', icon: '💬', short: 'Web' },
+  { value: 'zalo_oa', label: 'Zalo OA', icon: '📱', short: 'OA' },
+  { value: 'facebook', label: 'Facebook', icon: '📘', short: 'FB' },
+  { value: 'zalo_personal', label: 'Zalo', icon: '👤', short: 'ZL' },
 ];
 
-const ChannelTabs = ({ channels, value, onChange }) => {
-  return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-      {channels.map((channel) => (
+const ChannelTabs = ({ channels, value, onChange }) => (
+  <div className="flex gap-1 overflow-x-auto pb-0.5">
+    {channels.map((channel) => {
+      const active = value === channel.value;
+      return (
         <button
-          key={channel.value}
+          key={channel.value || 'all'}
+          type="button"
           onClick={() => onChange(channel.value)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all duration-200 ${
-            value === channel.value
-              ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+          title={channel.label}
+          className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md whitespace-nowrap transition-colors ${
+            active
+              ? 'bg-primary-500 text-white'
               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          <span>{channel.icon}</span>
-          <span>{channel.label}</span>
+          <span className="text-xs leading-none">{channel.icon}</span>
+          <span>{channel.short || channel.label}</span>
         </button>
-      ))}
-    </div>
-  );
-};
+      );
+    })}
+  </div>
+);
 
 const FilterDropdown = ({ options, value, onChange, label }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,40 +67,42 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedOption = options.find(opt => opt.value === value);
+  const selectedOption = options.find((opt) => opt.value === value);
   const hasValue = value !== 'all' && value !== 'latest';
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
+        className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors ${
           hasValue
             ? 'bg-primary-50 text-primary-600 border border-primary-200'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
         }`}
       >
-        <span className="font-semibold">{selectedOption?.label || label}</span>
-        <HiChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="truncate max-w-[72px]">{selectedOption?.label || label}</span>
+        <HiChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 min-w-[140px] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 min-w-[128px]">
           {options.map((option) => (
             <button
               key={option.value}
+              type="button"
               onClick={() => {
                 onChange(option.value);
                 setIsOpen(false);
               }}
-              className={`w-full px-3.5 py-2 text-xs text-left flex items-center justify-between transition-colors ${
+              className={`w-full px-3 py-1.5 text-xs text-left flex items-center justify-between ${
                 value === option.value
                   ? 'text-primary-600 bg-primary-50 font-semibold'
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <span>{option.label}</span>
-              {value === option.value && <HiCheck className="w-4 h-4" />}
+              {value === option.value && <HiCheck className="w-3.5 h-3.5" />}
             </button>
           ))}
         </div>
@@ -107,11 +112,13 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
 };
 
 const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const handleChange = (key, value) => {
     onChange({ ...filters, [key]: value });
   };
 
-  const handleClearAll = () => {
+  const handleClearAdvanced = () => {
     onChange({
       ...filters,
       sort: 'latest',
@@ -120,11 +127,14 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
     });
   };
 
-  const hasActiveFilters = filters.sort !== 'latest' || filters.status !== 'all' || filters.date !== 'all';
+  const hasAdvancedFilters = filters.sort !== 'latest' || filters.status !== 'all' || filters.date !== 'all';
+
+  useEffect(() => {
+    if (hasAdvancedFilters) setShowAdvanced(true);
+  }, [hasAdvancedFilters]);
 
   return (
-    <div className="space-y-2.5">
-      {/* Channel Tabs */}
+    <div className="space-y-2">
       {showChannelTabs && (
         <ChannelTabs
           channels={CHANNEL_OPTIONS()}
@@ -133,9 +143,37 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
         />
       )}
 
-      {/* Filter Row */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+            showAdvanced || hasAdvancedFilters
+              ? 'bg-primary-50 text-primary-600 border-primary-200'
+              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <HiAdjustments className="w-3.5 h-3.5" />
+          <span>Lọc</span>
+          {hasAdvancedFilters && (
+            <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+          )}
+        </button>
+
+        {hasAdvancedFilters && (
+          <button
+            type="button"
+            onClick={handleClearAdvanced}
+            className="ml-auto flex items-center gap-0.5 px-1.5 py-1 text-[11px] text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100"
+          >
+            <HiX className="w-3 h-3" />
+            Xóa
+          </button>
+        )}
+      </div>
+
+      {showAdvanced && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           <FilterDropdown
             options={SORT_OPTIONS}
             value={filters.sort}
@@ -155,18 +193,7 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
             label="Thời gian"
           />
         </div>
-
-        {/* Clear All Button */}
-        {hasActiveFilters && (
-          <button
-            onClick={handleClearAll}
-            className="ml-auto text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 font-medium"
-          >
-            <HiX className="w-3.5 h-3.5" />
-            <span>Xóa lọc</span>
-          </button>
-        )}
-      </div>
+      )}
     </div>
   );
 };

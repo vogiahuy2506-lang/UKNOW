@@ -217,7 +217,7 @@ const MainLayout = () => {
 
       {/* AI Toggle Bar (Desktop) — hidden on chatbot studio (has its own 3-column layout) */}
       {!aiPanelOpen && !isChatbotStudio && (
-        <div className="fixed top-0 right-0 h-full w-1 z-30 group">
+        <div className="fixed top-0 right-0 h-full w-1 z-50 group">
           <button 
             onClick={() => setAiPanelOpen(true)}
             className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-24 bg-white border border-slate-200 border-r-0 rounded-l-2xl shadow-xl flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 hover:w-10 transition-all group-hover:border-orange-200"

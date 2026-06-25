@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   HiArrowLeft, HiOutlineSearch, HiOutlineBell,
   HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
-  HiOutlineMail, HiOutlineLogout, HiOutlineInbox
+  HiOutlineMail, HiOutlineInbox, HiX
 } from 'react-icons/hi';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ConversationList from '../../features/inbox/ConversationList';
@@ -449,80 +449,82 @@ const InboxPage = () => {
         } ${selectedConversation ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
         style={{ width: isMobile && !selectedConversation ? '100%' : `${sidebarWidth}px` }}
       >
-        {/* Header */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-md shadow-primary-500/20">
-                <HiOutlineInbox className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">{t('inbox.title')}</h1>
+        {/* Sidebar toolbar — compact so list gets most of the height */}
+        <div className="shrink-0 border-b border-gray-100">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm">
+              <HiOutlineInbox className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-bold text-gray-900 truncate">{t('inbox.title')}</h1>
                 {unreadCount > 0 && (
-                  <span className="text-xs text-primary-600 font-semibold">{unreadCount} chưa đọc</span>
+                  <span className="shrink-0 text-[10px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full">
+                    {unreadCount} {t('inbox.unread')}
+                  </span>
                 )}
               </div>
             </div>
             <button
+              type="button"
               onClick={toggleNotifications}
-              className={`p-2.5 rounded-xl transition-all duration-200 ${
-                notificationsEnabled 
-                  ? 'text-primary-600 bg-primary-50 shadow-sm' 
+              className={`p-1.5 rounded-lg transition-colors ${
+                notificationsEnabled
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
               }`}
               title={notificationsEnabled ? 'Tắt thông báo' : 'Bật thông báo'}
             >
-              <HiOutlineBell className="w-5 h-5" />
+              <HiOutlineBell className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Session warning */}
           {!sessionStatus.connected && sessionStatus.accounts?.length > 0 && (
-            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-              <div className="flex items-start gap-2">
-                <HiOutlineExclamation className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-semibold text-amber-800">{t('inbox.sessionExpired')}</p>
-                  <p className="text-xs text-amber-600 mt-0.5">{t('inbox.rescanQR')}</p>
-                </div>
-              </div>
+            <div className="mx-3 mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-1.5">
+              <HiOutlineExclamation className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <p className="text-[11px] text-amber-800 leading-tight">
+                {t('inbox.sessionExpired')} — {t('inbox.rescanQR')}
+              </p>
             </div>
           )}
 
-          {/* Search */}
-          <div className="relative">
-            <HiOutlineSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder={t('inbox.searchConversations')}
-              value={filters.search}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder={t('inbox.searchConversations')}
+                value={filters.search}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="w-full pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+              />
+              {filters.search && (
+                <button
+                  type="button"
+                  onClick={() => handleSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded"
+                >
+                  <HiX className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="px-3 pb-2 space-y-2">
+            <ConversationFilters
+              filters={filters}
+              onChange={handleFilterChange}
             />
-            {filters.search && (
-              <button
-                onClick={() => handleSearch('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
-              >
-                <HiOutlineLogout className="w-4 h-4" />
-              </button>
+
+            {(!filters.channel || filters.channel === 'zalo_personal') && (
+              <ZaloAccountSelector
+                selectedAccountId={selectedAccountId}
+                onAccountChange={setSelectedAccountId}
+                onSyncComplete={fetchSessionStatus}
+              />
             )}
           </div>
-        </div>
-
-        {/* Filters + Zalo selector */}
-        <div className="px-4 py-3 border-b border-gray-100 space-y-3 bg-gray-50/50">
-          <ConversationFilters
-            filters={filters}
-            onChange={handleFilterChange}
-          />
-          
-          <ZaloAccountSelector 
-            selectedAccountId={selectedAccountId}
-            onAccountChange={setSelectedAccountId}
-            onSyncComplete={fetchSessionStatus}
-          />
         </div>
 
         {/* Conversation list */}
