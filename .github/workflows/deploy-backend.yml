@@ -90,11 +90,11 @@ jobs:
             echo "Deploying backend image: $BACKEND_IMAGE"
             docker pull "$BACKEND_IMAGE"
             docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
-            mkdir -p /root/uknow/scripts /var/www/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
+            mkdir -p /root/uknow/scripts /root/uknow/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
             cp /tmp/uknow-ssl-scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-auto-provision.sh
             cp /tmp/uknow-ssl-scripts/ssl-provision-pending.sh /root/uknow/scripts/ssl-provision-pending.sh
             chmod +x /root/uknow/scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-provision-pending.sh
-            chown -R www-data:www-data /var/www/certbot 2>/dev/null || true
+            chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
             echo "SSL scripts deployed to /root/uknow/scripts"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
               echo "Removing old backend container..."

@@ -9,7 +9,8 @@ set -o pipefail
 LOG_FILE="/var/log/ssl-provision.log"
 CERTBOT="/usr/bin/certbot"
 CERT_DIR="/etc/letsencrypt/live"
-WEBROOT="/var/www/certbot"
+WEBROOT="${WEBROOT:-/root/uknow/certbot}"
+NGINX_WEBROOT="${NGINX_WEBROOT:-/var/www/certbot}"
 DOMAIN_CONF_DIR="${DOMAIN_CONF_DIR:-/root/uknow/nginx-domains}"
 FRONTEND_CONTAINER="${FRONTEND_CONTAINER:-uknow-campaign-frontend}"
 CERT_CHANGED=0
@@ -93,7 +94,7 @@ server {
     server_name $DOMAIN;
 
     location /.well-known/acme-challenge/ {
-        root $WEBROOT;
+        root $NGINX_WEBROOT;
         try_files \$uri =404;
     }
 
@@ -118,7 +119,7 @@ server {
 
     # ACME challenge
     location /.well-known/acme-challenge/ {
-        root $WEBROOT;
+        root $NGINX_WEBROOT;
         try_files \$uri =404;
     }
 

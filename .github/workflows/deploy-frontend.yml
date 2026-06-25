@@ -102,8 +102,8 @@ jobs:
               fi
               docker rm uknow-campaign-frontend
             fi
-            mkdir -p /var/www/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
-            chown -R www-data:www-data /var/www/certbot 2>/dev/null || true
+            mkdir -p /root/uknow/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
+            chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
 
             docker run -d \
               --name uknow-campaign-frontend \
@@ -113,7 +113,7 @@ jobs:
               -p 80:80 \
               -p 443:443 \
               -v /etc/letsencrypt:/etc/letsencrypt:ro \
-              -v /var/www/certbot:/var/www/certbot:ro \
+              -v /root/uknow/certbot:/var/www/certbot:ro \
               -v /root/uknow/nginx-domains:/etc/nginx/domains:ro \
               "$FRONTEND_IMAGE"
             docker image prune -f
