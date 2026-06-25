@@ -110,6 +110,8 @@ jobs:
               -p 80:80 \
               -p 443:443 \
               -v /etc/letsencrypt:/etc/letsencrypt:ro \
+              -v /var/www/certbot:/var/www/certbot:ro \
+              -v /opt/uknow/nginx-domains:/etc/nginx/domains:ro \
               "$FRONTEND_IMAGE"
             docker image prune -f
             echo "Chờ nginx khởi động..."
