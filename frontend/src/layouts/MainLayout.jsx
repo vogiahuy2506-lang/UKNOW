@@ -28,6 +28,8 @@ const MainLayout = () => {
     location.pathname.startsWith('/campaigns') &&
     (location.pathname.endsWith('/new') || location.pathname.includes('/builder'));
 
+  const isInboxPage = location.pathname.includes('/settings/inbox');
+
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
 
   // Close mobile drawer on route change
@@ -66,7 +68,7 @@ const MainLayout = () => {
   // Persist scroll position per route in main content area
   useEffect(() => {
     const el = mainContentRef.current;
-    if (!el || isFullLayout) return;
+    if (!el || isFullLayout || isInboxPage) return;
 
     const storageKey = `founder_ai_scroll_${location.pathname}`;
 
@@ -106,7 +108,7 @@ const MainLayout = () => {
       el.removeEventListener('scroll', handleScroll);
       if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     };
-  }, [location.pathname, isFullLayout]);
+  }, [location.pathname, isFullLayout, isInboxPage]);
 
   // Dispatch resize after the 300ms CSS transition so Recharts/ResizeObserver-based
   // components (charts, etc.) re-measure at the correct content width.
@@ -116,7 +118,7 @@ const MainLayout = () => {
   }, [aiPanelOpen]);
 
   const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
-  const desktopMainClassName = isFullLayout
+  const desktopMainClassName = isFullLayout || isInboxPage
     ? 'flex-1 min-h-0 overflow-hidden p-0'
     : 'flex-1 min-h-0 p-6 overflow-auto';
 
@@ -125,7 +127,7 @@ const MainLayout = () => {
   }, [effectiveSidebarWidth]);
 
   if (isMobile) {
-    const mainClassName = isFullLayout
+    const mainClassName = isFullLayout || isInboxPage
       ? 'flex-1 min-h-0 overflow-hidden p-0'
       : 'flex-1 min-h-0 p-4 overflow-auto';
 
