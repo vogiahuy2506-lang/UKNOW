@@ -419,8 +419,6 @@ jobs:
               -v /var/run/docker.sock:/var/run/docker.sock:ro \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
-              -v /root/uknow/scripts/ssl-auto-provision.sh:/opt/uknow/ssl-auto-provision.sh:ro \
-              -e SSL_PROVISION_SCRIPT=/opt/uknow/ssl-auto-provision.sh \
               "$BACKEND_IMAGE"
             docker image prune -f
             echo "Chờ server khởi động..."
