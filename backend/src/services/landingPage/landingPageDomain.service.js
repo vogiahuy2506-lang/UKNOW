@@ -493,6 +493,9 @@ class LandingPageDomainService {
     }
 
     if (row.status === 'active') {
+      this.provisionSsl(row.hostname).catch((err) => {
+        console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
+      });
       return buildDomainResponse(row);
     }
 
