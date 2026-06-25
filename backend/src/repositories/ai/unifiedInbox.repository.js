@@ -248,7 +248,24 @@ class UnifiedInboxRepository {
           'zalo_personal' as channel,
           COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name,
           CASE WHEN zs.status = 'connected' THEN true ELSE false END as channel_is_active,
-          zg.group_name as group_name_override,
+          COALESCE(
+            zg.group_name,
+            NULLIF(zp.visitor_info::jsonb->>'group_name', ''),
+            NULLIF(zp.visitor_info::jsonb->>'groupName', ''),
+            (
+              SELECT COALESCE(
+                NULLIF(metadata::jsonb->>'group_name', ''),
+                NULLIF(metadata::jsonb->>'groupName', ''),
+                NULLIF(metadata::jsonb#>>'{_raw,group_name}', ''),
+                NULLIF(metadata::jsonb#>>'{_raw,groupName}', ''),
+                NULLIF(metadata::jsonb#>>'{_raw,gridName}', '')
+              )
+              FROM zalo_personal_messages
+              WHERE id_conversation = zp.id
+              ORDER BY created_at DESC
+              LIMIT 1
+            )
+          ) as group_name_override,
           (
             SELECT content FROM zalo_personal_messages
             WHERE id_conversation = zp.id
@@ -273,6 +290,8 @@ class UnifiedInboxRepository {
             AND group_name <> ''
             AND (
               group_id = NULLIF(zp.visitor_info::jsonb->>'group_id', '')
+              OR group_id = NULLIF(zp.visitor_info::jsonb->>'groupId', '')
+              OR group_id = NULLIF(zp.external_id, '')
               OR group_id = NULLIF(regexp_replace(COALESCE(zp.visitor_info::jsonb->>'group_id', zp.external_id), '^group_', ''), '')
               OR CONCAT('group_', group_id) = NULLIF(zp.external_id, '')
             )

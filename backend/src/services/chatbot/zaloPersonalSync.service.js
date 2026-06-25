@@ -71,7 +71,8 @@ class ZaloPersonalSyncService {
 
       // Get detailed info for each group (includes member list)
       const groups = [];
-      for (const groupId of groupIds.slice(0, 10)) { // Limit to 10 for performance
+      const maxGroups = Math.max(1, Number(process.env.ZALO_GROUP_SYNC_LIMIT || 200));
+      for (const groupId of groupIds.slice(0, maxGroups)) {
         try {
           const groupInfo = await api.getGroupInfo(groupId);
           const info = groupInfo?.gridInfoMap?.[groupId];
@@ -87,11 +88,84 @@ class ZaloPersonalSyncService {
         }
       }
 
-      return { synced: groups.length, groups, totalGroups: groupIds.length };
+      const persisted = await this.persistGroups(accountId, groups);
+      const conversationsUpdated = await this.backfillGroupConversationNames(accountId, groups);
+
+      return { synced: groups.length, persisted, conversationsUpdated, groups, totalGroups: groupIds.length };
     } catch (error) {
       console.error('[ZaloSync] Error syncing groups:', error.message, error.stack);
       throw error;
     }
+  }
+
+  async persistGroups(accountId, groups = []) {
+    let persisted = 0;
+
+    for (const group of groups) {
+      const groupId = String(group.groupId || '').trim();
+      const groupName = String(group.groupName || '').trim();
+      if (!groupId || !groupName) continue;
+
+      const updateResult = await db.query(
+        `UPDATE zalo_groups
+         SET group_name = $3, member_count = $4, updated_at = NOW()
+         WHERE id_zalo_setting = $1 AND group_id = $2`,
+        [accountId, groupId, groupName, group.memberCount || 0]
+      );
+
+      if (updateResult.rowCount === 0) {
+        await db.query(
+          `INSERT INTO zalo_groups (id_zalo_setting, group_id, group_name, member_count)
+           VALUES ($1, $2, $3, $4)`,
+          [accountId, groupId, groupName, group.memberCount || 0]
+        );
+      }
+
+      persisted++;
+    }
+
+    return persisted;
+  }
+
+  async backfillGroupConversationNames(accountId, groups = []) {
+    let updated = 0;
+
+    for (const group of groups) {
+      const groupId = String(group.groupId || '').trim();
+      const groupName = String(group.groupName || '').trim();
+      if (!groupId || !groupName || groupName === 'Nhóm' || groupName.startsWith('Nhóm group_')) continue;
+
+      const result = await db.query(
+        `UPDATE zalo_personal_conversations
+         SET visitor_name = $3,
+             visitor_info = jsonb_set(
+               COALESCE(visitor_info::jsonb, '{}'::jsonb),
+               '{group_name}',
+               to_jsonb($3::text),
+               true
+             )
+         WHERE id_zalo_setting = $1
+           AND (
+             external_id = $2
+             OR external_id = $4
+             OR visitor_info::jsonb->>'group_id' = $2
+             OR visitor_info::jsonb->>'group_id' = $4
+             OR visitor_info::jsonb->>'groupId' = $2
+             OR visitor_info::jsonb->>'groupId' = $4
+           )
+           AND (
+             visitor_name IS NULL
+             OR visitor_name LIKE 'Nhóm %'
+             OR visitor_info::jsonb->>'group_name' IS NULL
+             OR visitor_info::jsonb->>'group_name' = ''
+           )`,
+        [accountId, groupId, groupName, `group_${groupId}`]
+      );
+
+      updated += result.rowCount || 0;
+    }
+
+    return updated;
   }
 
   /**

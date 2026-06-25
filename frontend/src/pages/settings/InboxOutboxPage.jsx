@@ -485,7 +485,18 @@ const InboxPage = () => {
     setIsLoadingMessages(false);
   };
 
-  const getChannelLabel = (channel) => {
+  const getChannelLabel = (channel, conversation = null) => {
+    const visitorInfo = conversation?.visitorInfo || conversation?.visitor_info || {};
+    const parsedVisitorInfo = typeof visitorInfo === 'string' ? JSON.parse(visitorInfo || '{}') : visitorInfo;
+    if (
+      conversation?.isGroup === true ||
+      parsedVisitorInfo?.is_group === true ||
+      parsedVisitorInfo?.isGroup === true ||
+      parsedVisitorInfo?.source === 'zalo_group'
+    ) {
+      return t('inbox.zaloGroup') || 'Zalo Nhóm';
+    }
+
     const channelMap = {
       web: 'Web Chat',
       zalo_oa: 'Zalo OA',
@@ -576,7 +587,10 @@ const InboxPage = () => {
               <ZaloAccountSelector
                 selectedAccountId={selectedAccountId}
                 onAccountChange={setSelectedAccountId}
-                onSyncComplete={fetchSessionStatus}
+                onSyncComplete={() => {
+                  fetchSessionStatus();
+                  fetchConversations(true);
+                }}
               />
             )}
           </div>
@@ -609,8 +623,8 @@ const InboxPage = () => {
 
       {/* Right panel */}
       <div
-        className={`h-full min-h-0 flex-1 min-w-0 flex flex-col overflow-hidden bg-gray-50 ${
-          selectedConversation ? 'flex' : 'hidden lg:flex'
+        className={`h-full min-h-0 flex-1 min-w-0 overflow-hidden bg-gray-50 ${
+          selectedConversation ? 'grid grid-rows-[auto,minmax(0,1fr),auto]' : 'hidden lg:flex lg:flex-col'
         }`}
       >
         {selectedConversation ? (
@@ -633,7 +647,7 @@ const InboxPage = () => {
                   {selectedConversation.visitorName || t('inbox.anonymousCustomer')}
                 </h2>
                 <p className="text-sm text-gray-500">
-                  {getChannelLabel(selectedConversation.channel)}
+                  {getChannelLabel(selectedConversation.channel, selectedConversation)}
                 </p>
               </div>
 
@@ -662,7 +676,7 @@ const InboxPage = () => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="min-h-0 min-w-0 overflow-hidden">
               <MessageThread 
                 messages={messages} 
                 isLoading={isLoadingMessages}

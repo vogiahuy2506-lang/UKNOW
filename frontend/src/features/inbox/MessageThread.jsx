@@ -371,14 +371,17 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
     zaloEvent: t('inbox.messageZaloEvent'),
   }), [t]);
 
-  const visitorInfo = typeof conversation?.visitor_info === 'string' 
-    ? JSON.parse(conversation.visitor_info || '{}') 
-    : (conversation?.visitor_info || {});
+  const rawVisitorInfo = conversation?.visitor_info || conversation?.visitorInfo || {};
+  const visitorInfo = typeof rawVisitorInfo === 'string'
+    ? JSON.parse(rawVisitorInfo || '{}')
+    : rawVisitorInfo;
   
   const isGroupConversation = 
-    visitorInfo.is_group === true || 
+    conversation?.isGroup === true ||
+    visitorInfo.is_group === true ||
+    visitorInfo.isGroup === true ||
     visitorInfo.source === 'zalo_group' ||
-    String(conversation?.visitor_name || '').startsWith('Nhóm ');
+    String(conversation?.visitor_name || conversation?.visitorName || '').startsWith('Nhóm ');
   
   const isGroupChannel = conversation?.channel === 'zalo_group' || conversation?.channel === 'zalo_personal';
 
@@ -393,7 +396,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
       if (results.length > 0) {
         setTimeout(() => {
           const element = containerRef.current?.querySelector(`[data-msg-index="${results[0].index}"]`);
-          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
         }, 100);
       }
     } else {
@@ -402,8 +405,8 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
   }, [searchQuery, messages, messageLabels]);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [messages]);
 
@@ -425,7 +428,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
 
   if (isLoading) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center">
+      <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center">
           <div className="w-14 h-14 border-3 border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
           <p className="text-gray-500 font-medium">Đang tải tin nhắn...</p>
@@ -436,7 +439,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center">
+      <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center p-8">
           <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
             <span className="text-4xl">💬</span>
@@ -449,7 +452,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0">
+    <div className="grid h-full min-h-0 min-w-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden">
       {/* Search bar */}
       <div className="px-5 py-3 bg-white border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -489,7 +492,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
       </div>
 
       {/* Messages */}
-      <div ref={containerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto overscroll-contain px-5 py-4">
+      <div ref={containerRef} className="h-full min-h-0 min-w-0 overflow-y-scroll overscroll-contain px-5 py-4 [scrollbar-gutter:stable]">
         {messagesWithDate.map((msg, index) => {
           const isHighlighted = searchResults.some(r => r.index === index);
           return (

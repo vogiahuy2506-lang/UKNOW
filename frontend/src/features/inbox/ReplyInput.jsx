@@ -128,7 +128,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
   const canSend = (message.trim() || uploadedFiles.length > 0) && !isSending && !disabled;
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-white shadow-lg">
+    <form onSubmit={handleSubmit} className="shrink-0 border-t border-gray-200 p-4 bg-white shadow-lg">
       {/* Reply preview */}
       {replyingTo && (
         <div className="mb-3 p-3 bg-primary-50/50 border border-primary-100 rounded-2xl flex items-center justify-between">

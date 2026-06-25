@@ -27,9 +27,12 @@ const getDisplayName = (conv) => {
   const visitorInfo = parseVisitorInfo(conv.visitor_info || conv.visitorInfo);
   
   if (visitorInfo.is_group) {
-    const groupName = visitorInfo.group_name || visitorInfo.groupName;
+    const groupName = visitorInfo.group_name || visitorInfo.groupName || conv.groupName || conv.group_name;
     if (groupName && groupName !== 'Nhóm') {
       return groupName;
+    }
+    if (conv.visitorName && !String(conv.visitorName).startsWith('Nhóm ')) {
+      return conv.visitorName;
     }
     const groupId = visitorInfo.group_id || visitorInfo.groupId || '';
     const shortId = groupId.replace('group_', '').slice(-6);
@@ -96,7 +99,18 @@ const ConversationItem = ({
   const hasUnread = conv.unreadCount > 0;
   const isActive = conv.status === 'active';
   const lastMessageTime = formatTime(getLastMessageAt(conv));
-  const handleSelect = () => onSelect(conv);
+  const selectedConversation = isGroup
+    ? {
+        ...conv,
+        visitorName: displayName,
+        groupName: displayName,
+        visitorInfo: {
+          ...parseVisitorInfo(conv.visitor_info || conv.visitorInfo),
+          group_name: displayName,
+        },
+      }
+    : conv;
+  const handleSelect = () => onSelect(selectedConversation);
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
