@@ -185,7 +185,8 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name $DOMAIN;
 
     ssl_certificate $CERT_DIR/$DOMAIN/fullchain.pem;
@@ -198,13 +199,31 @@ server {
 
     client_max_body_size 50m;
 
+    root /usr/share/nginx/html;
+    index index.html;
+
     # ACME challenge
     location /.well-known/acme-challenge/ {
         root $NGINX_WEBROOT;
         try_files \$uri =404;
     }
 
-    location / {
+    location = /version.json {
+        add_header Cache-Control "no-store";
+        try_files \$uri =404;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-store";
+        try_files \$uri =404;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files \$uri =404;
+    }
+
+    location /api/ {
         resolver 127.0.0.11 valid=10s ipv6=off;
         set \$backend_upstream http://uknow-campaign-backend:5001;
         proxy_pass \$backend_upstream;
@@ -214,6 +233,23 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /t/ {
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set \$backend_upstream http://uknow-campaign-backend:5001;
+        proxy_pass \$backend_upstream;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location / {
+        add_header Cache-Control "no-store";
+        try_files \$uri /index.html;
     }
 }
 EOF
