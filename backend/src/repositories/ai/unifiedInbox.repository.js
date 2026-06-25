@@ -69,6 +69,61 @@ function buildSearchFilter(search, startIndex) {
   };
 }
 
+function withOutboxAliases(sql, convAlias, msgAlias) {
+  return sql.replaceAll('__CONV__', convAlias).replaceAll('__MSG__', msgAlias);
+}
+
+/** @returns {{ sql: string, nextIndex: number, params: string[] }} */
+function buildOutboxSearchFilter(search, startIndex) {
+  if (!search) {
+    return { sql: '', nextIndex: startIndex, params: [] };
+  }
+
+  const sql = `AND (
+        __CONV__.visitor_name ILIKE $${startIndex} OR
+        __CONV__.visitor_info::text ILIKE $${startIndex} OR
+        __MSG__.content ILIKE $${startIndex}
+      )`;
+
+  return {
+    sql,
+    nextIndex: startIndex + 1,
+    params: [`%${search}%`],
+  };
+}
+
+/** @returns {{ sql: string, channelDate: string, zaloDate: string, webDate: string, nextIndex: number }} */
+function buildOutboxDateFilter({ startDate, endDate, params, startIndex }) {
+  let idx = startIndex;
+  let sql = '';
+
+  if (startDate) {
+    sql += ` AND __MSG__.created_at >= $${idx}`;
+    params.push(startDate);
+    idx += 1;
+  }
+  if (endDate) {
+    sql += ` AND __MSG__.created_at <= $${idx}`;
+    params.push(endDate);
+    idx += 1;
+  }
+
+  return {
+    sql,
+    channelDate: sql.replaceAll('__MSG__', 'cm'),
+    zaloDate: sql.replaceAll('__MSG__', 'zpm'),
+    webDate: sql.replaceAll('__MSG__', 'wm'),
+    nextIndex: idx,
+  };
+}
+
+function buildOutboxChannelGates(channel) {
+  return {
+    zaloChannelGate: (channel && channel !== 'zalo_personal') ? 'AND 1=0' : '',
+    webChannelGate: (channel && channel !== 'web') ? 'AND 1=0' : '',
+  };
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -574,8 +629,6 @@ class UnifiedInboxRepository {
     const params = [userId, limit, offset];
     let paramIndex = 4;
     let channelFilter = '';
-    let dateFilter = '';
-    let searchFilter = '';
 
     // Channel filter
     if (channel) {
@@ -584,29 +637,18 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
-    // Date range filter
-    if (startDate) {
-      dateFilter += ` AND cm.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
-    if (endDate) {
-      dateFilter += ` AND cm.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+    const dateBuilt = buildOutboxDateFilter({ startDate, endDate, params, startIndex: paramIndex });
+    paramIndex = dateBuilt.nextIndex;
+    const { zaloChannelGate, webChannelGate } = buildOutboxChannelGates(channel);
 
-    // Search filter
-    if (search) {
-      searchFilter = `AND (
-        cc.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_name ILIKE $${paramIndex} OR
-        zp.visitor_name ILIKE $${paramIndex} OR
-        cm.content ILIKE $${paramIndex}
-      )`;
-      params.push(`%${search}%`);
-      paramIndex++;
+    const searchBuilt = buildOutboxSearchFilter(search, paramIndex);
+    if (searchBuilt.params.length) {
+      params.push(...searchBuilt.params);
+      paramIndex = searchBuilt.nextIndex;
     }
+    const channelSearch = withOutboxAliases(searchBuilt.sql, 'cc', 'cm');
+    const zaloSearch = withOutboxAliases(searchBuilt.sql, 'zpc', 'zpm');
+    const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
 
     const query = `
       WITH outbox_messages AS (
@@ -634,7 +676,7 @@ class UnifiedInboxRepository {
         FROM channel_messages cm
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateBuilt.channelDate} ${channelSearch}
 
         UNION ALL
 
@@ -662,8 +704,7 @@ class UnifiedInboxRepository {
         FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
         LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateFilter} ${searchFilter}
-        ${channel === 'zalo_personal' ? channelFilter : ''}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate}
 
         UNION ALL
 
@@ -691,7 +732,7 @@ class UnifiedInboxRepository {
         FROM webchat_messages wm
         JOIN webchat_conversations wc ON wc.id = wm.id_conversation
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
-        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateFilter} ${searchFilter}
+        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateBuilt.webDate} ${webSearch} ${webChannelGate}
       )
       SELECT * FROM outbox_messages
       ORDER BY created_at DESC
@@ -711,8 +752,6 @@ class UnifiedInboxRepository {
     const params = [userId];
     let paramIndex = 2;
     let channelFilter = '';
-    let dateFilter = '';
-    let searchFilter = '';
 
     if (channel) {
       channelFilter = `AND ch.channel = $${paramIndex}`;
@@ -720,47 +759,37 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
-    if (startDate) {
-      dateFilter += ` AND cm.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
-    if (endDate) {
-      dateFilter += ` AND cm.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+    const dateBuilt = buildOutboxDateFilter({ startDate, endDate, params, startIndex: paramIndex });
+    paramIndex = dateBuilt.nextIndex;
+    const { zaloChannelGate, webChannelGate } = buildOutboxChannelGates(channel);
 
-    if (search) {
-      searchFilter = `AND (
-        cc.visitor_name ILIKE $${paramIndex} OR
-        cw.visitor_name ILIKE $${paramIndex} OR
-        zp.visitor_name ILIKE $${paramIndex} OR
-        cm.content ILIKE $${paramIndex}
-      )`;
-      params.push(`%${search}%`);
-      paramIndex++;
+    const searchBuilt = buildOutboxSearchFilter(search, paramIndex);
+    if (searchBuilt.params.length) {
+      params.push(...searchBuilt.params);
+      paramIndex = searchBuilt.nextIndex;
     }
+    const channelSearch = withOutboxAliases(searchBuilt.sql, 'cc', 'cm');
+    const zaloSearch = withOutboxAliases(searchBuilt.sql, 'zpc', 'zpm');
+    const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
 
     const query = `
       SELECT COUNT(*) as total FROM (
         SELECT cm.id FROM channel_messages cm
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateFilter} ${searchFilter}
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateBuilt.channelDate} ${channelSearch}
 
         UNION ALL
 
         SELECT zpm.id FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateFilter} ${searchFilter}
-        ${channel === 'zalo_personal' ? channelFilter : ''}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate}
 
         UNION ALL
 
         SELECT wm.id FROM webchat_messages wm
         JOIN webchat_conversations wc ON wc.id = wm.id_conversation
-        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateFilter} ${searchFilter}
+        WHERE wm.id_user = $1 AND wm.role = 'agent' ${dateBuilt.webDate} ${webSearch} ${webChannelGate}
       ) as outbox
     `;
 
