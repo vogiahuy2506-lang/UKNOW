@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import { spawn } from 'child_process';
+import fs from 'fs';
 import landingPageDomainRepository from '../../repositories/landingPageDomain.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import cloudflareService from '../cloudflare.service.js';
@@ -536,7 +537,7 @@ class LandingPageDomainService {
       return;
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const proc = spawn(scriptPath, [hostname], { shell: true });
       let stdout = '';
       let stderr = '';
@@ -549,8 +550,8 @@ class LandingPageDomainService {
           console.log(`[LandingPageDomainService] SSL provisioned for ${hostname}`);
           resolve();
         } else {
-          console.error(`[LandingPageDomainService] SSL provision failed: ${stderr}`);
-          reject(new Error(stderr || `Exit code ${code}`));
+          console.error(`[LandingPageDomainService] SSL provision failed for ${hostname}: ${stderr}`);
+          resolve();
         }
       });
     });
