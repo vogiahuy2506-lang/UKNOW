@@ -80,7 +80,7 @@ jobs:
             docker pull "$BACKEND_IMAGE"
             docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             mkdir -p /opt/uknow
-            cp .github/workflows/../server/scripts/ssl-auto-provision.sh /opt/uknow/ssl-auto-provision.sh
+            cp /root/uknow/server/scripts/ssl-auto-provision.sh /opt/uknow/ssl-auto-provision.sh
             chmod +x /opt/uknow/ssl-auto-provision.sh
             echo "SSL provision script deployed to /opt/uknow/ssl-auto-provision.sh"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
