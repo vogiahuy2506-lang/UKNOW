@@ -33,6 +33,7 @@ CREATE TABLE users (
   last_login_at           TIMESTAMPTZ,
   last_login_ip           VARCHAR(45),
   active_plan_id          BIGINT,
+  preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
   max_employees           INTEGER,
@@ -149,6 +150,30 @@ CREATE TABLE plans (
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- ─── AI model catalog (migration 077-078) ──────────────────────────────
+CREATE TABLE ai_models (
+  model_id                  VARCHAR(80) PRIMARY KEY,
+  display_name              VARCHAR(120) NOT NULL,
+  tier_rank                 INTEGER      NOT NULL,
+  is_enabled                BOOLEAN      NOT NULL DEFAULT TRUE,
+  supports_generate_content BOOLEAN      NOT NULL DEFAULT TRUE,
+  source                    VARCHAR(20)  NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('google', 'manual')),
+  last_seen_at              TIMESTAMPTZ,
+  created_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ai_models_enabled_rank
+  ON ai_models(is_enabled, supports_generate_content, tier_rank);
+
+INSERT INTO ai_models
+  (model_id, display_name, tier_rank, is_enabled, supports_generate_content, source)
+VALUES
+  ('gemini-2.5-flash-lite', 'Gemini 2.5 Flash Lite', 10, TRUE, TRUE, 'manual'),
+  ('gemini-2.5-flash', 'Gemini 2.5 Flash', 20, TRUE, TRUE, 'manual'),
+  ('gemini-2.5-pro', 'Gemini 2.5 Pro', 30, TRUE, TRUE, 'manual');
 
 -- FK sau khi plans tồn tại: users.active_plan_id → plans(id)
 ALTER TABLE users
