@@ -34,8 +34,9 @@ describe('AI model tier gating', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.maxModel).toBe('gemini-2.0-flash');
-    expect(res.body.data.models).toContain('gemini-2.0-flash');
-    expect(res.body.data.models).not.toContain('gemini-2.5-pro');
+    const modelIds = res.body.data.models.map((model) => model.modelId || model.model_id || model);
+    expect(res.body.data.maxModel).toBe('gemini-2.5-flash');
+    expect(modelIds).toContain('gemini-2.5-flash');
+    expect(modelIds).not.toContain('gemini-2.5-pro');
   });
 });
