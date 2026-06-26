@@ -937,11 +937,22 @@ CREATE TABLE zalo_unreachable_phones (
 CREATE TABLE campaign_run_recipient_steps (
   id                 BIGSERIAL PRIMARY KEY,
   id_campaign_run    BIGINT REFERENCES campaign_runs(id) ON DELETE CASCADE,
+  id_run             BIGINT REFERENCES campaign_runs(id) ON DELETE CASCADE,
+  id_campaign        BIGINT REFERENCES campaigns(id) ON DELETE CASCADE,
+  id_node            VARCHAR(100),
+  channel            VARCHAR(50),
+  recipient_key      TEXT,
+  last_completed_step INTEGER NOT NULL DEFAULT 0,
   meta               JSONB NOT NULL DEFAULT '{}',
   is_fully_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  last_sent_at       TIMESTAMPTZ,
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_crrs_run ON campaign_run_recipient_steps(id_campaign_run);
+CREATE INDEX idx_crrs_campaign_run ON campaign_run_recipient_steps(id_campaign_run);
+CREATE INDEX idx_crrs_id_run ON campaign_run_recipient_steps(id_run);
+CREATE UNIQUE INDEX uq_crrs_progress
+  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key)
+  WHERE id_run IS NOT NULL AND id_node IS NOT NULL AND channel IS NOT NULL AND recipient_key IS NOT NULL;
 
 -- ─── Audit logs ─────────────────────────────────────────────────────────
 CREATE TABLE audit_logs (
