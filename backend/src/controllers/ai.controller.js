@@ -4,7 +4,7 @@ import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
-import { getAllowedModelsForUser } from '../services/ai/aiModelPolicy.service.js';
+import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
@@ -105,7 +105,7 @@ class AiController {
    */
   async chat(req, res) {
     try {
-      const { history, files, sessionId, locale } = req.body;
+      const { history, files, sessionId, locale, model } = req.body;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -120,6 +120,7 @@ class AiController {
         userId: req.user.id,
         userRole: req.user.role,
         locale: locale || 'vi',
+        model,
       });
 
       // Persist session + messages (bỏ qua lỗi DB để không block chat)
@@ -159,7 +160,7 @@ class AiController {
    */
   async chatV2(req, res) {
     try {
-      const { history, files, locale } = req.body;
+      const { history, files, locale, model } = req.body;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -174,6 +175,7 @@ class AiController {
         userId: req.user.id,
         userRole: req.user.role,
         locale: locale || 'vi',
+        model,
       });
 
       return res.json({
@@ -575,6 +577,19 @@ class AiController {
       return res.json({ success: true, data });
     } catch (error) {
       console.error('Get allowed AI models error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message || 'Lỗi server' });
+    }
+  }
+
+  /**
+   * PUT /ai/preferred-model — lưu model AI Assistant user chọn.
+   */
+  async savePreferredModel(req, res) {
+    try {
+      const data = await savePreferredModelForUser(req.user.id, req.body?.model);
+      return res.json({ success: true, data, message: 'Đã lưu model AI mặc định' });
+    } catch (error) {
+      console.error('Save preferred AI model error:', error);
       return res.status(error.status || 500).json({ success: false, message: error.message || 'Lỗi server' });
     }
   }

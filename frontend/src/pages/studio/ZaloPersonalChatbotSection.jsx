@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
+import aiApi from '../../services/aiApi';
 
 /**
  * Zalo Personal Chatbot Section for Chatbot Studio
@@ -19,6 +20,9 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
   const [configModal, setConfigModal] = useState({ isOpen: false, account: null, settings: null });
   const [subAssistants, setSubAssistants] = useState([]);
   const [chatbots, setChatbots] = useState([]);
+  const [aiModelOptions, setAiModelOptions] = useState([
+    { modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+  ]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -54,6 +58,19 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    aiApi.getAllowedModels()
+      .then((res) => {
+        const rows = Array.isArray(res?.data?.models) ? res.data.models : [];
+        const next = rows.map((row) => ({
+          modelId: row.modelId || row.model_id || row,
+          displayName: row.displayName || row.display_name || row.modelId || row.model_id || row,
+        })).filter((row) => row.modelId);
+        if (next.length) setAiModelOptions(next);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleToggle = async (account, enabled) => {
     try {
@@ -226,6 +243,7 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
           settings={chatbotSettings[configModal.account.id] || {}}
           subAssistants={subAssistants}
           chatbots={chatbots}
+          aiModelOptions={aiModelOptions}
           onSave={(formData) => handleSaveConfig(configModal.account, formData)}
           onClose={() => setConfigModal({ isOpen: false, account: null, settings: null })}
         />
@@ -237,7 +255,7 @@ export default function ZaloPersonalChatbotSection({ chatbotId }) {
 /**
  * Configuration Modal for Zalo Personal Chatbot
  */
-function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, chatbots, onSave, onClose }) {
+function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, chatbots, aiModelOptions = [], onSave, onClose }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
     is_enabled: settings?.is_enabled || false,
@@ -373,9 +391,12 @@ function ZaloPersonalChatbotConfigModal({ account, settings, subAssistants, chat
               onChange={(e) => setForm(f => ({ ...f, ai_model: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400"
             >
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              {(aiModelOptions.some((model) => model.modelId === form.ai_model)
+                ? aiModelOptions
+                : [{ modelId: form.ai_model, displayName: `${form.ai_model} (đang lưu)` }, ...aiModelOptions]
+              ).map((model) => (
+                <option key={model.modelId} value={model.modelId}>{model.displayName || model.modelId}</option>
+              ))}
             </select>
           </div>
 

@@ -96,6 +96,12 @@ const superAdminMenuItems = (t) => [
     icon: HiOutlineSparkles,
   },
   {
+    name: t('nav.aiModels'),
+    section: t('nav.adminNavMessaging'),
+    path: '/admin/ai-models',
+    icon: HiOutlineCog,
+  },
+  {
     name: t('nav.bulkNotification'),
     section: t('nav.adminNavMessaging'),
     path: '/admin/bulk-notification',

@@ -578,7 +578,7 @@ D. ZALO NHÓM:
     return response;
   }
 
-  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi' }) {
+  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
     let contextBlock = '';
 
     if (userRole === 'admin') {
@@ -611,7 +611,7 @@ QUY TẮC:
   "data": null
 }`;
 
-      return this._runChat(adminSystemPrompt, history, files, userId);
+      return this._runChat(adminSystemPrompt, history, files, userId, model);
     }
 
     // Thu thập existing resources cho non-admin users
@@ -1177,105 +1177,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
-    const response = await this._runChat(systemPrompt, history, files, userId);
+    const response = await this._runChat(systemPrompt, history, files, userId, model);
     return this._guardCampaignDataSourceResponse(response, history, locale);
-  }
-
-  /**
-   * Shared Gemini chat runner — builds history, attaches files, calls API.
-   * @param {string} systemPrompt
-   * @param {Array}  history  — [{role, content}]
-   * @param {Array}  files    — [{tempId, originalName, contentType}]
-   */
-  async _runChat(systemPrompt, history, files, userId = null) {
-    // Hàm đọc và đính kèm một file vào parts array
-    const attachFileToParts = async (parts, file) => {
-      try {
-        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-        const mimeType = String(file.contentType || '').toLowerCase();
-        if (mimeType.startsWith('image/')) {
-          parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
-        } else {
-          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
-          if (extractedText.trim()) {
-            parts.push({
-              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
-            });
-          }
-        }
-      } catch (err) {
-        console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
-      }
-    };
-
-    // Build Gemini history — re-attach files từ TẤT CẢ tin nhắn trong lịch sử
-    const geminiHistory = await Promise.all(history.map(async (msg) => {
-      const parts = [{ text: msg.content || '(no text)' }];
-      if (msg.role === 'user' && Array.isArray(msg.files) && msg.files.length > 0) {
-        for (const file of msg.files) {
-          await attachFileToParts(parts, file);
-        }
-      }
-      return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
-    }));
-
-    // Đính kèm thêm files của tin nhắn hiện tại (nếu có, không trùng với history)
-    if (files.length > 0) {
-      const lastMessage = geminiHistory[geminiHistory.length - 1];
-      const historyFileIds = new Set(
-        (history[history.length - 1]?.files || []).map(f => f.tempId)
-      );
-      for (const file of files) {
-        if (!historyFileIds.has(file.tempId)) {
-          await attachFileToParts(lastMessage.parts, file);
-        }
-      }
-    }
-
-    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const modelName = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-    try {
-      const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
-        contents: geminiHistory,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        model: modelName,
-        requestedMaxOutputTokens: 8192,
-      });
-
-      const { data: result } = await axios.post(url, {
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: geminiHistory,
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens },
-      }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
-
-      if (!result.candidates || result.candidates.length === 0) {
-        if (result.promptFeedback?.blockReason) {
-          throw new Error(`Yêu cầu bị chặn: ${result.promptFeedback.blockReason}`);
-        }
-        throw new Error('AI không phản hồi, vui lòng thử lại.');
-      }
-
-      // Filter thought parts (Gemini 2.5 Flash thinking mode) — chỉ lấy output thực sự
-      const text = (result.candidates[0].content?.parts || [])
-        .filter(p => p.text && !p.thought)
-        .map(p => p.text)
-        .join('');
-      if (!text) throw new Error('AI trả về kết quả rỗng.');
-
-      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
-        feature: 'smart_chat',
-        model: modelName,
-      });
-      return this._parseJson(text);
-    } catch (err) {
-      if (err.response) {
-        console.error('Gemini API Error Detail:', JSON.stringify(err.response.data, null, 2));
-        throw new Error(`Gemini API Error (${err.response.status}): ${JSON.stringify(err.response.data)}`);
-      }
-      throw err;
-    }
   }
 
   /**
@@ -1385,7 +1288,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     return parsed;
   }
 
-  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi' }) {
+  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
     let contextBlock = '';
 
     // Lấy existing resources
@@ -1520,7 +1423,7 @@ Khi muốn tạo Landing Page.
 - Nếu thiếu thông tin cơ bản → vẫn tạo nhưng dùng placeholder có ý nghĩa
 `;
 
-    return this._runChat(systemPrompt, history, files, userId);
+    return this._runChat(systemPrompt, history, files, userId, model);
   }
 
   /**
@@ -1529,7 +1432,7 @@ Khi muốn tạo Landing Page.
    * @param {Array}  history  — [{role, content}]
    * @param {Array}  files    — [{tempId, originalName, contentType}]
    */
-  async _runChat(systemPrompt, history, files, userId = null) {
+  async _runChat(systemPrompt, history, files, userId = null, requestedModel = null) {
     const googleUrlCache = new Map();
 
     // Hàm đọc và đính kèm một file vào parts array
@@ -1580,7 +1483,7 @@ Khi muốn tạo Landing Page.
     }
 
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const modelName = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash');
+    const modelName = await resolveAllowedModel(userId, requestedModel);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     try {
@@ -1604,7 +1507,10 @@ Khi muốn tạo Landing Page.
         throw new Error('AI không phản hồi, vui lòng thử lại.');
       }
 
-      const text = result.candidates[0].content?.parts?.[0]?.text;
+      const text = (result.candidates[0].content?.parts || [])
+        .filter(p => p.text && !p.thought)
+        .map(p => p.text)
+        .join('');
       if (!text) throw new Error('AI trả về kết quả rỗng.');
 
       console.log('[AI Chat] Gemini response (first 500 chars):', text.substring(0, 500));

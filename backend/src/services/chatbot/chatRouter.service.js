@@ -425,7 +425,7 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
         systemPrompt,
         history: chatHistory,
         message,
-        model: await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash'),
+        model: await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
       });

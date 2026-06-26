@@ -18,7 +18,7 @@ const HARD_CAP = Number.parseInt(process.env.AI_MAX_TOKENS_PER_REQUEST || '', 10
 class AiUsageMeterService {
   async _resolveModel(userId, model) {
     if (!userId) {
-      return normalizeModelId(model) || normalizeModelId(process.env.GEMINI_MODEL) || 'gemini-2.0-flash';
+      return normalizeModelId(model) || normalizeModelId(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
     }
     return resolveAllowedModel(userId, model);
   }

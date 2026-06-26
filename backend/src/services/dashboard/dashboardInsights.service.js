@@ -799,8 +799,8 @@ class DashboardInsightsService {
     let lastBlock = '';
     let usedCompactRetry = false;
     const insightModel = userId
-      ? await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.0-flash')
-      : (process.env.GEMINI_MODEL || 'gemini-2.0-flash');
+      ? await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash')
+      : (process.env.GEMINI_MODEL || 'gemini-2.5-flash');
 
     const runOnce = async (safePayload) => {
       const dataMarkdown = buildDataMarkdownSection(safePayload);
@@ -867,7 +867,7 @@ class DashboardInsightsService {
             : 'Không nhận được nội dung từ Gemini.',
         charts: defaultCharts(),
         notes: [
-          'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.0-flash) và GEMINI_API_KEY.',
+          'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.5-flash) và GEMINI_API_KEY.',
           lastFinish ? `Gemini finishReason: ${lastFinish}` : '',
           lastBlock ? `Chặn prompt: ${lastBlock}` : '',
           usedCompactRetry ? 'Đã thử prompt thu gọn nhưng vẫn không parse được JSON.' : '',

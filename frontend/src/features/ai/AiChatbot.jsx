@@ -8,6 +8,7 @@ import {
   HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
   HiOutlineMail, HiOutlineGlobeAlt, HiOutlinePlus,
   HiOutlineClipboardList, HiOutlineChat, HiOutlineLink, HiOutlineClock,
+  HiOutlineCog,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
@@ -168,6 +169,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState(null);
+  const [allowedModels, setAllowedModels] = useState([]);
+  const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.5-flash');
+  const [modelLoading, setModelLoading] = useState(false);
 
   const isMobile = useIsMobile();
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -192,6 +196,46 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return t('aiChatbot.aiTokenExceeded');
     }
     return data.message || error?.message || t('aiChatbot.genericError');
+  };
+
+  const normalizeAllowedModels = (payload) => {
+    const models = Array.isArray(payload?.models) ? payload.models : [];
+    return models.map((model) => {
+      if (typeof model === 'string') {
+        return { modelId: model, displayName: model };
+      }
+      const modelId = model.modelId || model.model_id || model.value;
+      return {
+        modelId,
+        displayName: model.displayName || model.display_name || model.label || modelId,
+      };
+    }).filter((model) => model.modelId);
+  };
+
+  const loadAllowedModels = async () => {
+    setModelLoading(true);
+    try {
+      const res = await aiApi.getAllowedModels();
+      const list = normalizeAllowedModels(res?.data);
+      setAllowedModels(list);
+      const preferred = res?.data?.preferredModel || res?.data?.maxModel || list[0]?.modelId || 'gemini-2.5-flash';
+      setSelectedAiModel(list.some((model) => model.modelId === preferred) ? preferred : (list[0]?.modelId || 'gemini-2.5-flash'));
+    } catch {
+      setAllowedModels([{ modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }]);
+      setSelectedAiModel('gemini-2.5-flash');
+    } finally {
+      setModelLoading(false);
+    }
+  };
+
+  const handleModelChange = async (modelId) => {
+    setSelectedAiModel(modelId);
+    try {
+      await aiApi.savePreferredModel(modelId);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Không lưu được model AI');
+      loadAllowedModels();
+    }
   };
 
   useEffect(() => {
@@ -349,6 +393,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      loadAllowedModels();
       if (!isSuperAdmin) {
         aiApi.getBusinessProfile()
           .then(res => setHasProfile(!!res.data))
@@ -681,7 +726,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setIsTyping(true);
 
     try {
-      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale);
+      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale, selectedAiModel);
       if (response.success) {
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
         // Cập nhật session state
@@ -984,7 +1029,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         const slotUserMsg = { role: 'user', content: slotPrompt };
         workingHistory = [...workingHistory, slotUserMsg];
-        const response = await aiApi.chat(workingHistory, [], mySessionId, locale);
+        const response = await aiApi.chat(workingHistory, [], mySessionId, locale, selectedAiModel);
         if (!response?.success) {
           throw new Error('AI không trả về kết quả hợp lệ');
         }
@@ -1205,7 +1250,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
         { role: 'user', content: summaryText + emailTemplateContext },
       ];
-      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale);
+      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale, selectedAiModel);
       if (response.success) {
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
@@ -1311,7 +1356,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
       ];
       
-      const response = await aiApi.chat(enrichedHistory, [], null, locale);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
       
       if (response.success) {
         const { type, content, data } = response.data;
@@ -1374,7 +1419,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Gửi cho ${audienceLabel}` }
       ];
 
-      const response = await aiApi.chat(enrichedHistory, [], null, locale);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
 
       if (response.success) {
         const { type, content, data } = response.data;
@@ -1540,7 +1585,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1">
+            <HiOutlineCog className="h-3.5 w-3.5 text-slate-400" />
+            <select
+              value={selectedAiModel}
+              disabled={modelLoading || allowedModels.length === 0}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="max-w-[150px] bg-transparent text-[11px] font-semibold text-slate-600 outline-none"
+              title="Powered by Gemini"
+            >
+              {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
+                <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
+              ))}
+            </select>
+          </div>
           <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
             <HiOutlineArrowRight className="w-5 h-5" />
           </button>
@@ -1913,6 +1972,20 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       {/* Input */}
       <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-slate-100 bg-white">
+        <div className="mb-2 flex sm:hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <HiOutlineCog className="h-4 w-4 text-slate-400" />
+          <span className="text-[11px] font-bold uppercase text-slate-400">Gemini</span>
+          <select
+            value={selectedAiModel}
+            disabled={modelLoading || allowedModels.length === 0}
+            onChange={(e) => handleModelChange(e.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-700 outline-none"
+          >
+            {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
+              <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
+            ))}
+          </select>
+        </div>
         <div className={`rounded-2xl border transition-all outline-none ${isDragging ? 'border-orange-300 bg-orange-50/40' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
           {/* File chips */}
           {uploadedFiles.length > 0 && (

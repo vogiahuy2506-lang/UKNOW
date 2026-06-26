@@ -73,8 +73,8 @@ const aiApi = {
    * @param {Array} files Array of current attached files
    * @param {number|null} sessionId Active session ID (null = tạo session mới)
    */
-  chat: async (history, files = [], sessionId = null, locale = 'vi') => {
-    const response = await api.post('/ai/chat', { history, files, sessionId, locale }, {
+  chat: async (history, files = [], sessionId = null, locale = 'vi', model = null) => {
+    const response = await api.post('/ai/chat', { history, files, sessionId, locale, model }, {
       timeout: 120000
     });
     return response.data;
@@ -85,10 +85,20 @@ const aiApi = {
    * @param {Array} history Array of { role, content }
    * @param {Array} files Array of current attached files
    */
-  chatV2: async (history, files = [], locale = 'vi') => {
-    const response = await api.post('/ai/chat-v2', { history, files, locale }, {
+  chatV2: async (history, files = [], locale = 'vi', model = null) => {
+    const response = await api.post('/ai/chat-v2', { history, files, locale, model }, {
       timeout: 120000
     });
+    return response.data;
+  },
+
+  getAllowedModels: async () => {
+    const response = await api.get('/ai/allowed-models');
+    return response.data;
+  },
+
+  savePreferredModel: async (model) => {
+    const response = await api.put('/ai/preferred-model', { model });
     return response.data;
   },
 

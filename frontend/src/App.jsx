@@ -56,6 +56,7 @@ import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import AdminAiUsagePage from './pages/admin/AdminAiUsagePage';
+import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
 import BulkNotificationPage from './pages/admin/BulkNotificationPage';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
@@ -315,6 +316,7 @@ function App() {
             <Route path="system" element={<AdminSystemPage />} />
             <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
             <Route path="ai-usage" element={<AdminAiUsagePage />} />
+            <Route path="ai-models" element={<AdminAiModelsPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="diagnostic" element={<DiagnosticPage />} />
             <Route path="bulk-notification" element={<BulkNotificationPage />} />

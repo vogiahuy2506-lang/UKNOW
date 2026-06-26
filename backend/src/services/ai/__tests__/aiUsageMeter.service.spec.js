@@ -20,7 +20,7 @@ jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
 }));
 
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
-  resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.0-flash'),
+  resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));
 
 jest.unstable_mockModule('../../../utils/subscriptionStatus.util.js', () => ({
@@ -43,7 +43,7 @@ describe('aiUsageMeter.service', () => {
     mockGetSubscriptionStatus.mockReset();
     mockDbQuery.mockReset();
     resolveAllowedModel.mockReset();
-    resolveAllowedModel.mockImplementation(async (_userId, model) => model || 'gemini-2.0-flash');
+    resolveAllowedModel.mockImplementation(async (_userId, model) => model || 'gemini-2.5-flash');
     mockGetSubscriptionStatus.mockResolvedValue({
       hasPlan: true,
       isExpired: false,
@@ -79,20 +79,20 @@ describe('aiUsageMeter.service', () => {
 
   it('reserve trả model đã clamp khi gói không giới hạn token (limit <= 0)', async () => {
     getResourceUsage.mockResolvedValue({ used: 0, limit: 0 });
-    resolveAllowedModel.mockResolvedValue('gemini-2.0-flash');
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
 
     const result = await aiUsageMeter.reserve(10, {
       contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
       model: 'gemini-2.5-pro',
     });
 
-    expect(result.model).toBe('gemini-2.0-flash');
+    expect(result.model).toBe('gemini-2.5-flash');
     expect(countGeminiTokens).not.toHaveBeenCalled();
   });
 
   it('generateWithBudget vẫn dùng model đã clamp khi limit <= 0', async () => {
     getResourceUsage.mockResolvedValue({ used: 0, limit: null });
-    resolveAllowedModel.mockResolvedValue('gemini-2.0-flash');
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
     generateGeminiContent.mockResolvedValue({
       text: 'ok',
       usage: { promptTokens: 1, outputTokens: 2, totalTokens: 3 },
@@ -105,7 +105,7 @@ describe('aiUsageMeter.service', () => {
     });
 
     expect(generateGeminiContent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemini-2.0-flash' })
+      expect.objectContaining({ model: 'gemini-2.5-flash' })
     );
   });
 

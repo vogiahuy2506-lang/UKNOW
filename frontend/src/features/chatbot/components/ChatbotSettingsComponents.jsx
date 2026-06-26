@@ -55,10 +55,8 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
 
 // ── AI Model Configuration ────────────────────────────────────────────────────
 
-const AVAILABLE_AI_MODELS = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google', badge: 'fast' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'Google', badge: 'stable' },
-  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', provider: 'Google', badge: 'legacy' },
+const FALLBACK_AI_MODELS = [
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google' },
 ];
 
 const RESPONSE_STYLES = [
@@ -78,14 +76,29 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
   const { showSystemInstruction = true, compact = false } = options;
   const [allowedModels, setAllowedModels] = useState({
     maxModel: 'gemini-2.5-flash',
-    models: AVAILABLE_AI_MODELS.map((m) => m.value),
+    models: FALLBACK_AI_MODELS,
+    modelIds: FALLBACK_AI_MODELS.map((m) => m.value),
   });
 
   useEffect(() => {
     api.get('/ai/allowed-models')
       .then((res) => {
         if (res.data?.success && res.data.data) {
-          setAllowedModels(res.data.data);
+          const payload = res.data.data;
+          const models = Array.isArray(payload.models) ? payload.models.map((model) => {
+            if (typeof model === 'string') return { value: model, label: model, provider: 'Google' };
+            const value = model.modelId || model.model_id || model.value;
+            return {
+              value,
+              label: model.displayName || model.display_name || model.label || value,
+              provider: 'Google',
+            };
+          }).filter((model) => model.value) : FALLBACK_AI_MODELS;
+          setAllowedModels({
+            ...payload,
+            models,
+            modelIds: payload.modelIds || models.map((model) => model.value),
+          });
         }
       })
       .catch(() => {});
@@ -95,9 +108,13 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
     onChange?.({ ...config, [key]: value });
   };
 
-  const aiModelOptions = AVAILABLE_AI_MODELS.filter((m) => allowedModels.models.includes(m.value));
+  const aiModelOptions = allowedModels.models?.length ? allowedModels.models : FALLBACK_AI_MODELS;
   const currentModel = config.ai_model || 'gemini-2.5-flash';
-  const modelAbovePlan = currentModel && !allowedModels.models.includes(currentModel);
+  const modelIds = allowedModels.modelIds || aiModelOptions.map((m) => m.value);
+  const modelAbovePlan = currentModel && !modelIds.includes(currentModel);
+  const renderedOptions = aiModelOptions.some((model) => model.value === currentModel)
+    ? aiModelOptions
+    : [{ value: currentModel, label: `${currentModel} (đang lưu)`, provider: 'Google' }, ...aiModelOptions];
 
   return (
     <div className={`space-y-${compact ? '4' : '5'}`}>
@@ -108,7 +125,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             Model AI
           </label>
           <span className="text-xs text-slate-400">
-            {aiModelOptions.find(m => m.value === currentModel)?.provider || 'Google'}
+            {renderedOptions.find(m => m.value === currentModel)?.provider || 'Google'}
           </span>
         </div>
         <select
@@ -116,7 +133,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
           onChange={e => update('ai_model', e.target.value)}
           className="input w-full"
         >
-          {aiModelOptions.map(model => (
+          {renderedOptions.map(model => (
             <option key={model.value} value={model.value}>
               {model.label}
             </option>

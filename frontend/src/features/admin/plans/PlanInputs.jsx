@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import { HiOutlineSparkles } from 'react-icons/hi2';
 import adminPlansApiService from '../services/adminPlansApi.service';
+import adminAiModelsApiService from '../services/adminAiModelsApi.service';
 import { useI18n } from '../../../i18n';
 import { normalizeMoneyValue } from './planUtils.jsx';
 
@@ -542,6 +543,27 @@ export const PeriodMessagesField = ({ form, set }) => {
 export const ResourceLimitsFields = ({ form, set, hint }) => {
   const { t } = useI18n();
   const hintText = hint || t('planInputs.hintLeaveEmptyUnlimited');
+  const [aiModelOptions, setAiModelOptions] = useState([
+    { modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+  ]);
+
+  useEffect(() => {
+    adminAiModelsApiService.list()
+      .then((res) => {
+        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+        const enabled = rows
+          .filter((row) => row.isEnabled && row.supportsGenerateContent)
+          .map((row) => ({ modelId: row.modelId || row.model_id, displayName: row.displayName || row.display_name }))
+          .filter((row) => row.modelId);
+        if (enabled.length) setAiModelOptions(enabled);
+      })
+      .catch(() => {});
+  }, []);
+
+  const selectedAiModel = form.aiModel || 'gemini-2.5-flash';
+  const renderedAiModelOptions = aiModelOptions.some((model) => model.modelId === selectedAiModel)
+    ? aiModelOptions
+    : [{ modelId: selectedAiModel, displayName: `${selectedAiModel} (đang lưu)` }, ...aiModelOptions];
 
   return (
     <div>
@@ -567,16 +589,13 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
         ))}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI tối đa (bao gồm mọi model thấp hơn)</label>
-          <select className="input w-full" value={form.aiModel || 'gemini-2.5-flash'} onChange={(e) => set('aiModel', e.target.value)}>
-            <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <select className="input w-full" value={selectedAiModel} onChange={(e) => set('aiModel', e.target.value)}>
+            {renderedAiModelOptions.map((model) => (
+              <option key={model.modelId} value={model.modelId}>{model.displayName || model.modelId}</option>
+            ))}
           </select>
           <p className="mt-1.5 text-xs text-slate-500">
-            Thứ tự tier thấp → cao: 2.0 Flash Lite → 1.5 Flash → 2.0 Flash → 2.5 Flash → 2.5 Pro.
-            Chọn mức nào sẽ mở model đó và mọi model thấp hơn.
+            Thứ tự tier thấp → cao được lấy từ catalog AI models. Chọn mức nào sẽ mở model đó và mọi model thấp hơn.
           </p>
         </div>
       </div>

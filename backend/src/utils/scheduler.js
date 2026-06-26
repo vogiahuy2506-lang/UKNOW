@@ -575,4 +575,23 @@ export const initScheduler = () => {
   autoVerifyDomains();
 
   console.log('[Scheduler] Đã khởi tạo Custom Domain Auto-Verify: kiểm tra pending domains mỗi 5 phút');
+
+  // ── AI Model Catalog Sync - Đồng bộ danh sách model Gemini ─────────────────────
+  const aiModelSyncCron = String(process.env.AI_MODEL_SYNC_CRON || '15 2 * * *').trim();
+  const syncAiModels = async () => {
+    try {
+      const { syncModelsFromGoogle } = await import('../services/ai/aiModelCatalog.service.js');
+      const result = await syncModelsFromGoogle();
+      console.log('[Scheduler] AI model catalog synced:', result);
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi đồng bộ AI models:', error.message);
+    }
+  };
+
+  if (cron.validate(aiModelSyncCron)) {
+    cron.schedule(aiModelSyncCron, syncAiModels, { timezone: HANOI_TIME_ZONE });
+    console.log(`[Scheduler] Đã khởi tạo AI Model Catalog Sync: ${aiModelSyncCron}`);
+  } else {
+    console.warn(`[Scheduler] AI_MODEL_SYNC_CRON không hợp lệ, bỏ qua sync AI models: ${aiModelSyncCron}`);
+  }
 };

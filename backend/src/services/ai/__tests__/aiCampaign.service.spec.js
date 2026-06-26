@@ -62,7 +62,7 @@ jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
-  resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.0-flash'),
+  resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));
 
 const { default: aiCampaignService } = await import('../aiCampaign.service.js');
