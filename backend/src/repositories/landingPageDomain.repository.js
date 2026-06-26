@@ -76,7 +76,14 @@ class LandingPageDomainRepository {
    */
   async findAllActive() {
     const result = await db.query(
-      `SELECT id, landing_page_id AS "landingPageId", hostname, status, is_apex_domain AS "isApexDomain"
+      `SELECT
+         id,
+         landing_page_id AS "landingPageId",
+         hostname,
+         status,
+         is_apex_domain AS "isApexDomain",
+         cf_managed AS "cfManaged",
+         cf_hostname_id AS "cfHostnameId"
        FROM landing_page_domains
        WHERE status = 'active'`
     );
@@ -250,7 +257,8 @@ class LandingPageDomainRepository {
          d.landing_page_id AS "landingPageId",
          d.hostname,
          d.status,
-         d.cf_managed   AS "cfManaged",
+         d.cf_managed AS "cfManaged",
+         d.cf_hostname_id AS "cfHostnameId",
          lp.slug AS "landingSlug"
        FROM landing_page_domains d
        INNER JOIN landing_pages lp ON lp.id = d.landing_page_id

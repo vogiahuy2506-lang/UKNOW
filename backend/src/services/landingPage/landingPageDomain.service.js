@@ -282,7 +282,7 @@ function buildAutoHostname(slug) {
 
 /**
  * Build response object for getForLanding.
- * All domains use Certbot for SSL provisioning.
+ * Custom domains use Certbot. Platform subdomains use Cloudflare Universal SSL.
  */
 function buildDomainResponse(row) {
   if (!row) {
@@ -310,7 +310,10 @@ function buildDomainResponse(row) {
       instructions = `Đã kích hoạt. Domain đã trỏ về ${target}. SSL được cấp qua Let's Encrypt.`;
     }
   } else {
-    if (isApex && platformIp) {
+    if (isCfManaged) {
+      instructions = `Subdomain ${row.hostname} đang chờ hệ thống cấp DNS qua Cloudflare. Vui lòng bấm «Thử lại» hoặc liên hệ admin nếu lỗi tiếp diễn.`;
+      record = null;
+    } else if (isApex && platformIp) {
       // Apex domain with Certbot
       instructions = `Thêm bản ghi A tại DNS của bạn:\n- Type: A\n- Name: @\n- Value: ${platformIp}\nSau đó bấm «Kiểm tra lại» để xác minh. SSL sẽ được cấp tự động qua Let's Encrypt.`;
       record = { type: 'A', name: '@', value: platformIp };
@@ -326,6 +329,8 @@ function buildDomainResponse(row) {
     hostname: row.hostname,
     status: row.status,
     cfManaged: isCfManaged,
+    cfHostnameId: row.cfHostnameId || null,
+    canRetryAutoProvision: isCfManaged && !row.cfHostnameId && row.status !== 'active',
     verifiedAt: row.verifiedAt,
     instructions,
     record,
@@ -345,6 +350,81 @@ function buildDomainResponse(row) {
  * Sau khi verify DNS, SSL được cấp tự động qua Let's Encrypt (Certbot).
  */
 class LandingPageDomainService {
+  async persistPendingAutoProvision(landingPageId, hostname, message) {
+    const token = crypto.randomBytes(18).toString('hex');
+    try {
+      await landingPageDomainRepository.upsertForLanding({
+        landingPageId,
+        hostname,
+        verificationToken: token,
+        status: 'pending_verification',
+        cfManaged: true,
+        cfZoneId: null,
+        cfRecordId: null,
+        cfHostnameId: null,
+        isApexDomain: false,
+      });
+      await getClearCacheFn();
+    } catch (e) {
+      console.warn(`[LandingPageDomainService] DB upsert pending failed for ${hostname}: ${e.message}`);
+      return {
+        hostname,
+        cfManaged: true,
+        ok: false,
+        message: `${message}. Không lưu được trạng thái pending: ${e.message}`,
+      };
+    }
+
+    return { hostname, cfManaged: true, ok: false, message };
+  }
+
+  async provisionCloudflareSubdomain(landingPageId, hostname) {
+    if (!cloudflareService.isConfigured()) {
+      const message = 'Cloudflare API chưa được cấu hình trên backend (thiếu CLOUDFLARE_API_TOKEN)';
+      console.log(`[LandingPageDomainService] CF not configured, skipping auto-provision for ${hostname}`);
+      return this.persistPendingAutoProvision(landingPageId, hostname, message);
+    }
+
+    const cfResult = await cloudflareService.setupLandingPageDNS(hostname, cnameTarget());
+    if (!cfResult.success) {
+      const message = cfResult.message || 'Cloudflare API không tạo được DNS record';
+      console.warn(`[LandingPageDomainService] CF auto-provision failed for ${hostname}: ${message}`);
+      return this.persistPendingAutoProvision(landingPageId, hostname, message);
+    }
+
+    const token = crypto.randomBytes(18).toString('hex');
+    try {
+      await landingPageDomainRepository.upsertForLanding({
+        landingPageId,
+        hostname,
+        verificationToken: token,
+        status: 'active',
+        cfManaged: true,
+        cfZoneId: cfResult.zoneId,
+        cfRecordId: cfResult.recordId,
+        cfHostnameId: null,
+        isApexDomain: false,
+      });
+      // Clear CORS cache so auto-provisioned subdomain is immediately allowed
+      await getClearCacheFn();
+      console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
+      return {
+        hostname,
+        cfManaged: true,
+        ok: true,
+        message: cfResult.message || 'Đã cấp subdomain qua Cloudflare',
+      };
+    } catch (e) {
+      console.warn(`[LandingPageDomainService] DB upsert failed for ${hostname}: ${e.message}`);
+      return {
+        hostname,
+        cfManaged: true,
+        ok: false,
+        message: `Cloudflare đã tạo DNS nhưng không lưu được domain vào DB: ${e.message}`,
+      };
+    }
+  }
+
   /**
    * Public: resolve hostname → slug (chỉ active + landing publish).
    * Skip apex domain founderai.biz vì nó trỏ về WordPress.
@@ -494,10 +574,22 @@ class LandingPageDomainService {
     }
 
     if (row.status === 'active') {
-      this.provisionSsl(row.hostname).catch((err) => {
-        console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
-      });
+      if (!row.cfManaged) {
+        this.provisionSsl(row.hostname).catch((err) => {
+          console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
+        });
+      }
       return buildDomainResponse(row);
+    }
+
+    if (row.cfManaged && !row.cfHostnameId) {
+      const result = await this.provisionCloudflareSubdomain(row.landingPageId, row.hostname);
+      if (!result.ok) {
+        const err = new Error(result.message || 'Chưa cấp được subdomain qua Cloudflare');
+        err.statusCode = 400;
+        throw err;
+      }
+      return this.getForLanding(landingPageId, authUser);
     }
 
     const expectedTarget = cnameTarget();
@@ -579,6 +671,9 @@ class LandingPageDomainService {
       console.log(`[LandingPageDomainService] Found ${domains.length} active domain(s), checking SSL status...`);
 
       for (const domain of domains) {
+        // Cloudflare-managed platform subdomains use Universal SSL, not Certbot/Let's Encrypt.
+        if (domain.cfManaged && !domain.cfHostnameId) continue;
+
         // Check if cert already exists and is valid
         // We can't check from Node, so just try to provision - script will skip if valid
         this.provisionSsl(domain.hostname).catch((err) => {
@@ -645,41 +740,11 @@ class LandingPageDomainService {
    *
    * @param {number} landingPageId
    * @param {string} slug
-   * @returns {Promise<{hostname:string, cfManaged:boolean}>}
+   * @returns {Promise<{hostname:string, cfManaged:boolean, ok:boolean, message?:string}>}
    */
   async autoProvisionSubdomain(landingPageId, slug) {
     const hostname = buildAutoHostname(slug);
-
-    if (!cloudflareService.isConfigured()) {
-      console.log(`[LandingPageDomainService] CF not configured, skipping auto-provision for ${hostname}`);
-      return { hostname, cfManaged: false };
-    }
-
-    const cfResult = await cloudflareService.setupLandingPageDNS(hostname, cnameTarget());
-    if (!cfResult.success) {
-      console.warn(`[LandingPageDomainService] CF auto-provision failed for ${hostname}: ${cfResult.message}`);
-      return { hostname, cfManaged: false };
-    }
-
-    const token = crypto.randomBytes(18).toString('hex');
-    try {
-      await landingPageDomainRepository.upsertForLanding({
-        landingPageId,
-        hostname,
-        verificationToken: token,
-        status: 'active',
-        cfManaged: true,
-        cfZoneId: cfResult.zoneId,
-        cfRecordId: cfResult.recordId,
-      });
-      // Clear CORS cache so auto-provisioned subdomain is immediately allowed
-      await getClearCacheFn();
-      console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
-      return { hostname, cfManaged: true };
-    } catch (e) {
-      console.warn(`[LandingPageDomainService] DB upsert failed for ${hostname}: ${e.message}`);
-      return { hostname, cfManaged: false };
-    }
+    return this.provisionCloudflareSubdomain(landingPageId, hostname);
   }
 
   /**

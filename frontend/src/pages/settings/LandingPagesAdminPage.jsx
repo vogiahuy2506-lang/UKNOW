@@ -198,13 +198,16 @@ export default function LandingPagesAdminPage() {
         });
         toast.success(t('landingPagesAdmin.updated'));
       } else {
-        await createLandingPageAdmin({
+        const created = await createLandingPageAdmin({
           slug,
           title: form.title,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
         });
         toast.success(t('landingPagesAdmin.created'));
+        if (created?.customDomainProvisioned === false) {
+          toast.error(created.customDomainMessage || 'Landing đã tạo nhưng subdomain chưa được cấp qua Cloudflare.');
+        }
       }
       closeModal();
       reloadAll();
