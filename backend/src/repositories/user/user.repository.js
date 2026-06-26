@@ -21,6 +21,7 @@ const PLAN_COLUMNS = `
   p.daily_zalo_limit,
   p.monthly_zalo_limit,
   p.ai_tokens_per_period,
+  p.ai_credits_per_period,
   p.grace_period_days
 `;
 
@@ -37,6 +38,7 @@ const PLAN_COLUMNS_FALLBACK = `
   NULL::int AS daily_zalo_limit,
   NULL::int AS monthly_zalo_limit,
   NULL::int AS ai_tokens_per_period,
+  NULL::int AS ai_credits_per_period,
   NULL::int AS grace_period_days
 `;
 
@@ -94,6 +96,28 @@ export async function findProfilePlanFallback({ activePlanId, userId, email }) {
      FROM plans p
      ${PROFILE_PLAN_WHERE}`,
     [activePlanId || null, userId, email]
+  );
+  return rows[0] || null;
+}
+
+export async function findProfilePlanByUserId(userId) {
+  const { rows } = await db.query(
+    `SELECT ${PLAN_COLUMNS}
+     FROM users u
+     JOIN plans p ON p.id = u.active_plan_id
+     WHERE u.id = $1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+export async function findProfilePlanByUserIdFallback(userId) {
+  const { rows } = await db.query(
+    `SELECT ${PLAN_COLUMNS_FALLBACK}
+     FROM users u
+     JOIN plans p ON p.id = u.active_plan_id
+     WHERE u.id = $1`,
+    [userId]
   );
   return rows[0] || null;
 }

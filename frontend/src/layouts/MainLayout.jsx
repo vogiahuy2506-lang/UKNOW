@@ -7,6 +7,8 @@ import { HiOutlineSparkles } from 'react-icons/hi';
 import useIsMobile from '../hooks/useIsMobile';
 import AiChatbot from '../features/ai/AiChatbot';
 import { useI18n } from '../i18n';
+import { useAuthStore } from '../stores/authStore';
+import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 
 const MainLayout = () => {
   const { t } = useI18n();
@@ -23,6 +25,9 @@ const MainLayout = () => {
   const mainContentRef = useRef(null);
   const scrollTimerRef = useRef(null);
   const isMobile = useIsMobile();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
 
   const isFullLayout =
     location.pathname.startsWith('/campaigns') &&
@@ -31,6 +36,11 @@ const MainLayout = () => {
   const isInboxPage = location.pathname.includes('/settings/inbox');
 
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchAiCredits().catch(() => {});
+  }, [activeContext?.ownerId, activeContext?.type, fetchAiCredits, isAuthenticated]);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -154,6 +164,7 @@ const MainLayout = () => {
         {/* Main content — offset by header height (64px) */}
         <div className="flex-1 min-w-0 flex flex-col mt-16 min-h-0">
           <main ref={mainContentRef} className={mainClassName}>
+            <CreditWarningBanner />
             <Outlet />
           </main>
         </div>
@@ -203,6 +214,7 @@ const MainLayout = () => {
         }}
       >
         <main ref={mainContentRef} className={desktopMainClassName}>
+          <CreditWarningBanner />
           <Outlet />
         </main>
       </div>

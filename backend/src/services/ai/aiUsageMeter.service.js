@@ -1,18 +1,10 @@
-import db from '../../config/database.js';
 import usageTrackingService from '../payment/usageTracking.service.js';
-import {
-  countGeminiTokens,
-  generateGeminiContent,
-} from '../../utils/geminiClient.util.js';
-import { isAdminRole } from '../../utils/roleScope.util.js';
-import { getSubscriptionStatus } from '../../utils/subscriptionStatus.util.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { normalizeModelId } from '../../utils/aiModelTier.util.js';
 
 export const AI_TOKEN_RESOURCE = 'ai_token';
 
-const DEFAULT_MIN_OUTPUT_TOKENS = 256;
-const MIN_OUTPUT_TOKENS = Number.parseInt(process.env.AI_MIN_OUTPUT_TOKENS || '', 10) || DEFAULT_MIN_OUTPUT_TOKENS;
 const HARD_CAP = Number.parseInt(process.env.AI_MAX_TOKENS_PER_REQUEST || '', 10) || 0;
 
 class AiUsageMeterService {
@@ -23,9 +15,10 @@ class AiUsageMeterService {
     return resolveAllowedModel(userId, model);
   }
 
+  /**
+   * Resolve model + output cap. Token quota gate removed — credit meter gates user actions.
+   */
   async reserve(userId, {
-    contents,
-    systemInstruction = null,
     model = null,
     requestedMaxOutputTokens = 2048,
   } = {}) {
@@ -36,50 +29,12 @@ class AiUsageMeterService {
       maxOutputTokens = Math.min(maxOutputTokens, HARD_CAP);
     }
 
-    if (!userId) {
-      return { maxOutputTokens, inputTokens: 0, remaining: null, limit: null, used: 0, model: resolvedModel };
-    }
-
-    const subscription = await getSubscriptionStatus(userId);
-    if (subscription.hasPlan && subscription.isExpired) {
-      const roleRow = await this._getUserRole(userId);
-      if (!isAdminRole(roleRow)) {
-        throw this._subscriptionExpired();
-      }
-    }
-
-    const currentUsage = await usageTrackingService.getResourceUsage(userId, AI_TOKEN_RESOURCE);
-    const limit = Number(currentUsage.limit) || 0;
-    if (limit <= 0) {
-      return { maxOutputTokens, inputTokens: 0, remaining: null, limit, used: currentUsage.used, model: resolvedModel };
-    }
-
-    const used = Number(currentUsage.used) || 0;
-    const remaining = Math.max(0, limit - used);
-    if (remaining <= 0) {
-      throw this._exhausted(currentUsage);
-    }
-
-    let inputTokens = await countGeminiTokens({ model: resolvedModel, contents, systemInstruction });
-    if (inputTokens === null || inputTokens === undefined) {
-      inputTokens = this._estimateLocalTokens(contents, systemInstruction);
-    }
-
-    if (inputTokens >= remaining) {
-      throw this._exhausted(currentUsage);
-    }
-
-    const allowedOutput = remaining - inputTokens;
-    if (allowedOutput < MIN_OUTPUT_TOKENS) {
-      throw this._exhausted(currentUsage);
-    }
-
     return {
-      maxOutputTokens: Math.min(maxOutputTokens, allowedOutput),
-      inputTokens,
-      remaining,
-      limit,
-      used,
+      maxOutputTokens,
+      inputTokens: 0,
+      remaining: null,
+      limit: null,
+      used: 0,
       model: resolvedModel,
     };
   }
@@ -112,10 +67,7 @@ class AiUsageMeterService {
     metadata = {},
     ...options
   } = {}) {
-    const contents = [{ role: 'user', parts }];
     const reserved = await this.reserve(userId, {
-      contents,
-      systemInstruction,
       model,
       requestedMaxOutputTokens: maxOutputTokens,
     });
@@ -137,37 +89,8 @@ class AiUsageMeterService {
   }
 
   isLimitError(error) {
-    return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === AI_TOKEN_RESOURCE;
-  }
-
-  _exhausted(usage = {}) {
-    const error = new Error('Đã hết token AI trong gói dịch vụ kỳ này');
-    error.status = 403;
-    error.code = 'RESOURCE_LIMIT_EXCEEDED';
-    error.resource = AI_TOKEN_RESOURCE;
-    error.used = usage.used;
-    error.limit = usage.limit;
-    error.upgradeRequired = true;
-    return error;
-  }
-
-  _subscriptionExpired() {
-    const error = new Error('Gói đã hết hạn — vui lòng gia hạn để dùng AI');
-    error.status = 403;
-    error.code = 'RESOURCE_LIMIT_EXCEEDED';
-    error.resource = AI_TOKEN_RESOURCE;
-    error.upgradeRequired = true;
-    return error;
-  }
-
-  async _getUserRole(userId) {
-    const { rows } = await db.query(`SELECT role FROM users WHERE id = $1 LIMIT 1`, [userId]);
-    return rows[0]?.role ?? null;
-  }
-
-  _estimateLocalTokens(contents, systemInstruction) {
-    const serialized = JSON.stringify({ contents, systemInstruction });
-    return Math.ceil(String(serialized || '').length / 3);
+    return error?.code === 'RESOURCE_LIMIT_EXCEEDED'
+      && (error?.resource === AI_TOKEN_RESOURCE || error?.resource === 'ai_credit');
   }
 }
 

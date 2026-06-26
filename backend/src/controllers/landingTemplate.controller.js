@@ -1,5 +1,6 @@
 import landingTemplateService from '../services/landingTemplate/landingTemplate.service.js';
 import { saveMessages, saveAssistantMessage } from '../repositories/aiSession.repository.js';
+import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 
 /**
  * Controller for landing page templates.
@@ -296,6 +297,8 @@ class LandingTemplateController {
           console.warn('[LandingTemplate] Could not save message to session:', saveErr.message);
         }
       }
+
+      await chargeAiCredit(req);
 
       res.json({
         success: true,

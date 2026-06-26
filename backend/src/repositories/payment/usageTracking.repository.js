@@ -33,6 +33,24 @@ class UsageTrackingRepository {
   }
 
   /**
+   * Sum usage for a resource within an arbitrary date range (billing cycle).
+   */
+  async getUsageInRange(userId, resourceType, from, to, client = null) {
+    const queryable = client || db;
+    if (!from || !to) return 0;
+    const { rows } = await queryable.query(
+      `SELECT COALESCE(SUM(delta), 0) AS total_usage
+       FROM usage_logs
+       WHERE id_user = $1
+         AND resource_type = $2
+         AND created_at >= $3
+         AND created_at <= $4`,
+      [userId, resourceType, from, to]
+    );
+    return parseInt(rows[0]?.total_usage || 0, 10);
+  }
+
+  /**
    * Get usage summary for all resources in current period
    */
   async getUsageSummary(userId) {
@@ -102,7 +120,8 @@ class UsageTrackingRepository {
          p.messages_per_period,
          p.is_fup_enabled,
          p.max_chatbots,
-         p.ai_tokens_per_period
+         p.ai_tokens_per_period,
+         p.ai_credits_per_period
        FROM users u
        JOIN plans p ON p.id = u.active_plan_id
        WHERE u.id = $1`,

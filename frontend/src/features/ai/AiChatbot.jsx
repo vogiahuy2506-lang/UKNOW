@@ -21,6 +21,7 @@ import {
   AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
 } from './components/AiChatbotCards';
 import ConfirmModal from '../inbox/ConfirmModal';
+import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -131,7 +132,7 @@ const normalizeContentPlanData = (rawData) => {
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
   const { t, locale } = useI18n();
-  const { user } = useAuthStore();
+  const { user, fetchAiCredits } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
 
   const welcomeMessage = isSuperAdmin
@@ -190,12 +191,34 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
 
-  const getAiRequestErrorMessage = (error) => {
-    const data = error?.response?.data || {};
-    if (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED') {
-      return t('aiChatbot.aiTokenExceeded');
+  const getAiRequestErrorMessage = (error) => getAiQuotaErrorMessage(error, t);
+
+  const refreshAiCredits = () => {
+    if (isSuperAdmin) return;
+    fetchAiCredits?.().catch(() => {});
+  };
+
+  const notifyAiRequestError = (error) => {
+    const message = getAiRequestErrorMessage(error);
+    if (shouldShowAiUpgradeCta(error)) {
+      toast((toastInstance) => (
+        <div className="flex flex-col gap-2 text-sm">
+          <span>{message}</span>
+          <button
+            type="button"
+            className="self-start font-semibold text-orange-600 underline"
+            onClick={() => {
+              toast.dismiss(toastInstance.id);
+              navigate('/pricing');
+            }}
+          >
+            {t('aiChatbot.upgradePlan')}
+          </button>
+        </div>
+      ), { duration: 8000 });
+      return;
     }
-    return data.message || error?.message || t('aiChatbot.genericError');
+    toast.error(message);
   };
 
   const normalizeAllowedModels = (payload) => {
@@ -728,6 +751,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     try {
       const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale, selectedAiModel);
       if (response.success) {
+        refreshAiCredits();
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
         // Cập nhật session state
         if (returnedSessionId && !currentSessionId) {
@@ -1033,6 +1057,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (!response?.success) {
           throw new Error('AI không trả về kết quả hợp lệ');
         }
+        refreshAiCredits();
 
         const { type, data, content, sessionId: returnedSessionId, sessionTitle } = response.data;
         if (returnedSessionId && !mySessionId) {
@@ -1106,7 +1131,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return true;
     } catch (err) {
       const message = getAiRequestErrorMessage(err);
-      toast.error(message);
+      notifyAiRequestError(err);
       if (generatedDrafts.length > 0) {
         setContentPlanWorkflow((prev) => {
           if (!prev) return prev;
@@ -1252,6 +1277,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       ];
       const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale, selectedAiModel);
       if (response.success) {
+        refreshAiCredits();
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
           setCurrentScript({ ...data, ...answers });
@@ -1317,6 +1343,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     try {
       const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId, summaryText);
       if (response.success) {
+        refreshAiCredits();
         const { title, html, css } = response.data;
         update(prev => [...prev, {
           role: 'assistant',
@@ -1359,6 +1386,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
       
       if (response.success) {
+        refreshAiCredits();
         const { type, content, data } = response.data;
         
         // Nếu AI trả về confirm_create
@@ -1422,6 +1450,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
 
       if (response.success) {
+        refreshAiCredits();
         const { type, content, data } = response.data;
 
         // Nếu AI trả về confirm_create

@@ -1,5 +1,6 @@
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
+import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import { isInsightPayloadUsable } from '../../utils/dashboardInsightPayload.util.js';
 import dashboardInsightRepository from '../../repositories/dashboard/dashboardInsight.repository.js';
 
@@ -805,13 +806,22 @@ class DashboardInsightsService {
     const runOnce = async (safePayload) => {
       const dataMarkdown = buildDataMarkdownSection(safePayload);
       const prompt = buildAnalysisPrompt(dataMarkdown);
-      return generateGeminiText({
+      const result = await generateGeminiText({
         prompt,
         model: insightModel,
         timeoutMs: 120000,
         jsonMode: true,
         maxOutputTokens: resolveInsightMaxOutputTokens(insightModel),
       });
+      // Ghi token cho dashboard admin (credit user đã trừ ở route /dashboard/insights).
+      // record() tự nuốt lỗi nên không ảnh hưởng luồng insight.
+      if (userId) {
+        await aiUsageMeter.record(userId, result?.usage, {
+          feature: 'dashboard_insights',
+          model: insightModel,
+        });
+      }
+      return result;
     };
 
     let safePayload = buildInsightSafePayload(

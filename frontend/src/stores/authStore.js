@@ -101,6 +101,7 @@ export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  aiCredits: { used: 0, limit: null },
   /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
   activeContext: { type: 'self' },
 
@@ -146,6 +147,7 @@ export const useAuthStore = create((set, get) => ({
           user: null,
           isAuthenticated: false,
           isLoading: false,
+          aiCredits: { used: 0, limit: null },
           activeContext: { type: 'self' },
         });
       }
@@ -219,9 +221,27 @@ export const useAuthStore = create((set, get) => ({
       set({
         user: null,
         isAuthenticated: false,
+        aiCredits: { used: 0, limit: null },
         activeContext: { type: 'self' },
       });
     }
+  },
+
+  /** Lấy số credit AI hiện tại từ profile tài khoản/billing owner. */
+  fetchAiCredits: async () => {
+    if (!get().isAuthenticated) {
+      set({ aiCredits: { used: 0, limit: null } });
+      return { used: 0, limit: null };
+    }
+
+    const response = await api.get('/users/profile');
+    const profile = response?.data?.data || {};
+    const nextCredits = {
+      used: Number(profile.aiCreditsUsed || 0),
+      limit: profile.aiCreditsPerPeriod ?? null,
+    };
+    set({ aiCredits: nextCredits });
+    return nextCredits;
   },
 
   /**

@@ -64,6 +64,13 @@ export default {
     nodeName: 'Tên node',
   },
 
+  creditBanner: {
+    low: 'Sắp hết credit AI — còn {remaining} lượt ({percent}%).',
+    empty: 'Đã hết credit AI kỳ này — nâng cấp để tiếp tục.',
+    upgrade: 'Nâng cấp',
+    dismiss: 'Ẩn cảnh báo credit AI',
+  },
+
   auth: {
     username: 'Tên đăng nhập',
     login: 'Đăng nhập',
@@ -2649,6 +2656,8 @@ export default {
     dayLabel: 'Ngày {day}',
     templateCreated: 'Đã tạo template cho bạn.',
     aiTokenExceeded: 'Bạn đã dùng hết token AI của gói trong kỳ này. Vui lòng nâng cấp gói để tiếp tục.',
+    aiCreditExceeded: 'Bạn đã dùng hết lượt AI trong kỳ này. Vui lòng nâng cấp gói để tiếp tục.',
+    upgradePlan: 'Nâng cấp gói',
     genericError: 'Có lỗi xảy ra, vui lòng thử lại.',
     // Ask more card
     needMoreInfo: 'Cần thêm thông tin:',
@@ -4283,6 +4292,7 @@ export default {
     zaloToday: 'Zalo hôm nay',
     zaloThisMonth: 'Zalo tháng này',
     aiTokens: 'Token AI',
+    aiCredits: 'Lượt AI / Credit',
     // Plan expiry
     expiresOn: 'Hết hạn ngày {date}',
     daysLeft: '— còn {days} ngày',
@@ -5437,7 +5447,7 @@ export default {
     days: '{days} ngày',
     loadFailed: 'Không thể tải dữ liệu token AI',
     noData: 'Chưa có dữ liệu trong khoảng thời gian này.',
-    costDisclaimer: 'Chi phí chỉ là ƯỚC TÍNH theo giá Gemini text token cấu hình hiện tại; giá có thể thay đổi, embeddings và request countTokens chưa được tính.',
+    costDisclaimer: 'Chi phí chỉ là ƯỚC TÍNH theo giá Gemini text token cấu hình hiện tại; giá có thể thay đổi. Embedding được ghi khi có userId; request countTokens chưa được tính.',
     timeline: 'Token AI theo ngày',
     timelineHint: 'Tổng token đã ghi trong usage_logs theo từng ngày.',
     byPlan: 'Theo gói dịch vụ',
@@ -5460,7 +5470,7 @@ export default {
     kpi: {
       totalTokens: 'Tổng token',
       estimatedCost: 'Chi phí ước tính',
-      estimatedOnly: 'Chưa gồm embeddings và countTokens',
+      estimatedOnly: 'Chưa gồm countTokens',
       aiUsers: 'User dùng AI',
       logCount: '{count} log usage',
       avgPerUser: 'TB token/user',

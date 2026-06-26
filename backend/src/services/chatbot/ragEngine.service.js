@@ -33,7 +33,10 @@ class RagEngineService {
 
     try {
       // 1. Embed user query
-      const queryEmbedding = await embedText(userQuery);
+      const queryEmbedding = await embedText(userQuery, {
+        userId,
+        feature: 'embedding_rag_query',
+      });
 
       // 2. Search KB chunks
       const kbChunks = await knowledgeBaseRepository.searchChunks(
@@ -82,7 +85,10 @@ class RagEngineService {
    */
   async hasRelevantContent(userId, userQuery, kbId = null) {
     try {
-      const queryEmbedding = await embedText(userQuery);
+      const queryEmbedding = await embedText(userQuery, {
+        userId,
+        feature: 'embedding_rag_query',
+      });
       const chunks = await knowledgeBaseRepository.searchChunks(
         userId, queryEmbedding,
         { kbId, limit: 1, minSimilarity: MIN_SIMILARITY }

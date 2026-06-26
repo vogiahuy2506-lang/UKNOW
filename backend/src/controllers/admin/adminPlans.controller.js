@@ -55,14 +55,14 @@ export async function create(req, res) {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays } = req.body;
     const plan = await adminPlansService.createNewPlan({
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays,
     });
     logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
@@ -76,14 +76,14 @@ export async function update(req, res) {
     const { name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays } = req.body;
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
       name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiModel,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays,
     });
     logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
@@ -106,14 +106,14 @@ export async function createCustomWithPayment(req, res) {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod } = req.body;
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanWithPayment(userEmail, {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? -1), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod,
     });
     return res.status(201).json({
       success: true,
@@ -129,14 +129,14 @@ export async function createCustom(req, res) {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod } = req.body;
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanForUser(userEmail, {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? 0), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod,
+      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod,
     });
     return res.status(201).json({ success: true, message: `Đã tạo và gán gói "${result.plan.name}" cho ${result.assignedTo.email}`, data: result });
   } catch (err) { return handleError(res, err); }

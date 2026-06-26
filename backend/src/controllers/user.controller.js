@@ -6,6 +6,8 @@ import {
   findProfileBase,
   findProfileBaseFallback,
   findProfilePlan,
+  findProfilePlanByUserId,
+  findProfilePlanByUserIdFallback,
   findProfilePlanFallback,
   findProfileUsageCounts,
   findRoleAndLimits,
@@ -100,6 +102,8 @@ const mapProfileResponse = (userRow) => ({
   monthlyZaloLimit: userRow.monthly_zalo_limit ?? null,
   aiTokensPerPeriod: userRow.ai_tokens_per_period ?? null,
   aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
+  aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
+  aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
   planGracePeriodDays: userRow.grace_period_days ?? 0,
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
@@ -159,6 +163,27 @@ class UserController {
         console.error('[Profile] getResourceUsage(ai_token) failed', { userId, message: err.message });
       }
 
+      let aiCreditUsage = { used: 0 };
+      try {
+        aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId);
+      } catch (err) {
+        console.error('[Profile] getCreditUsageForCycle failed', { userId, message: err.message });
+      }
+
+      const billingUserId = aiCreditUsage?.cycle?.billingUserId;
+      if (billingUserId && String(billingUserId) !== String(userId)) {
+        try {
+          planRow = await findProfilePlanByUserId(billingUserId);
+        } catch (err) {
+          console.error('[Profile] findProfilePlanByUserId failed', { userId, billingUserId, message: err.message });
+          try {
+            planRow = await findProfilePlanByUserIdFallback(billingUserId);
+          } catch (fallbackErr) {
+            console.error('[Profile] findProfilePlanByUserIdFallback failed', { userId, billingUserId, message: fallbackErr.message });
+          }
+        }
+      }
+
       res.json({
         success: true,
         data: mapProfileResponse({
@@ -166,6 +191,7 @@ class UserController {
           ...(planRow || {}),
           ...usageCounts,
           ai_tokens_used: aiTokenUsage.used,
+          ai_credits_used: aiCreditUsage.used,
         }),
       });
     } catch (error) {

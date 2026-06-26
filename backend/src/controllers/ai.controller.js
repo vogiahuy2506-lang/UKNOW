@@ -5,6 +5,7 @@ import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
 import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
+import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
@@ -53,6 +54,8 @@ class AiController {
         });
       }
 
+      await chargeAiCredit(req);
+
       return res.json({
         success: true,
         data: script,
@@ -86,6 +89,8 @@ class AiController {
         files: files || [],
         userId: req.user.id,
       });
+
+      await chargeAiCredit(req);
 
       return res.json({
         success: true,
@@ -142,6 +147,8 @@ class AiController {
         console.warn('[AI] Không lưu được session:', dbErr.message);
       }
 
+      await chargeAiCredit(req);
+
       return res.json({
         success: true,
         data: { ...response, sessionId: finalSessionId, sessionTitle },
@@ -177,6 +184,8 @@ class AiController {
         locale: locale || 'vi',
         model,
       });
+
+      await chargeAiCredit(req);
 
       return res.json({
         success: true,
@@ -638,6 +647,8 @@ class AiController {
         await aiSessionRepo.saveMessages(sid, userContent, assistantMsg).catch(() => {});
       }
 
+      await chargeAiCredit(req);
+
       return res.json({ success: true, data });
     } catch (error) {
       console.error('AI generate landing HTML error:', error);
@@ -684,6 +695,8 @@ class AiController {
         temperature,
         maxTokens: max_tokens,
       });
+
+      await chargeAiCredit(req);
 
       return res.json({
         success: true,

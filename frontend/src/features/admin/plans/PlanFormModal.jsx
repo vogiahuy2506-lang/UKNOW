@@ -37,6 +37,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     maxZaloTemplates: plan.maxZaloTemplates ?? '',
     maxChatbots: plan.maxChatbots ?? '',
     aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
+    aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
     aiModel: plan.aiModel || 'gemini-2.5-flash',
     gracePeriodDays: plan.gracePeriodDays ?? '',
   } : emptyForm());

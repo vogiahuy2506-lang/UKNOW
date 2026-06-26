@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
 import * as planRepository from '../../repositories/payment/plan.repository.js';
+import { getBillingCycle } from '../../utils/billingCycle.util.js';
 
 async function acquireUsageTrackingLock(client, userId, resourceType) {
   await client.query(
@@ -65,6 +66,26 @@ class UsageTrackingService {
       isExceeded: limit > 0 && currentUsage >= limit,
       isWarning: percentage >= 80 && percentage < 100,
     };
+  }
+
+  /**
+   * AI credit usage within the current billing cycle.
+   * @param {number|string} userId
+   * @param {object|null} [cycle] - optional pre-resolved billing cycle
+   */
+  async getCreditUsageForCycle(userId, cycle = null) {
+    const resolvedCycle = cycle || await getBillingCycle(userId);
+    if (!resolvedCycle.hasPlan || !resolvedCycle.cycleStart || !resolvedCycle.cycleEnd) {
+      return { used: 0, cycle: resolvedCycle };
+    }
+    const billingUserId = resolvedCycle.billingUserId || userId;
+    const used = await usageTrackingRepository.getUsageInRange(
+      billingUserId,
+      'ai_credit',
+      resolvedCycle.cycleStart,
+      resolvedCycle.cycleEnd
+    );
+    return { used, cycle: resolvedCycle };
   }
 
   /**
@@ -192,6 +213,8 @@ class UsageTrackingService {
       zalo: 'monthly_zalo_limit',
       ai_token: 'ai_tokens_per_period',
       ai_tokens: 'ai_tokens_per_period',
+      ai_credit: 'ai_credits_per_period',
+      ai_credits: 'ai_credits_per_period',
       chatbot: 'max_chatbots',
       chatbots: 'max_chatbots',
     };

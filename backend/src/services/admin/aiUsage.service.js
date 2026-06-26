@@ -313,7 +313,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
   return {
     windowDays,
     pricing,
-    pricingNote: 'Estimated Gemini text-token cost only. Prices can change; embeddings and countTokens requests are not included.',
+    pricingNote: 'Estimated Gemini text-token cost only. Prices can change; countTokens requests are not included. Embedding usage is included when callers pass userId.',
     summary,
     byPlan,
     byFeature,

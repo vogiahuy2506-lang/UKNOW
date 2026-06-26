@@ -25,6 +25,7 @@ export const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
     maxChatbots: 1,
+    aiCreditsPerPeriod: 50,
     aiTokensPerPeriod: 50000,
   },
   {
@@ -50,6 +51,7 @@ export const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
     maxChatbots: 1,
+    aiCreditsPerPeriod: 3000,
     aiTokensPerPeriod: 3000000,
   },
   {
@@ -75,6 +77,7 @@ export const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
     maxChatbots: 5,
+    aiCreditsPerPeriod: '',
     aiTokensPerPeriod: '',
   },
   {
@@ -100,6 +103,7 @@ export const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
     maxChatbots: '',
+    aiCreditsPerPeriod: '',
     aiTokensPerPeriod: '',
   },
   {
@@ -125,6 +129,7 @@ export const PLAN_PRESETS = [
     maxEmailTemplates: '',
     maxZaloTemplates: '',
     maxChatbots: '',
+    aiCreditsPerPeriod: '',
     aiTokensPerPeriod: '',
   },
 ];

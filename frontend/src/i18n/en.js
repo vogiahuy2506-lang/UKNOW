@@ -64,6 +64,13 @@ export default {
     nodeName: 'Node name',
   },
 
+  creditBanner: {
+    low: 'AI credits are running low — {remaining} left ({percent}%).',
+    empty: 'AI credits are used up for this period — upgrade to continue.',
+    upgrade: 'Upgrade',
+    dismiss: 'Dismiss AI credit warning',
+  },
+
   auth: {
     username: 'Username',
     login: 'Login',
@@ -2589,6 +2596,8 @@ export default {
     dayLabel: 'Day {day}',
     templateCreated: 'Template generated.',
     aiTokenExceeded: 'You have used all AI tokens in your plan for this period. Please upgrade your plan to continue.',
+    aiCreditExceeded: 'You have used all AI credits for this billing period. Please upgrade your plan to continue.',
+    upgradePlan: 'Upgrade plan',
     genericError: 'Something went wrong. Please try again.',
     // Ask more card
     needMoreInfo: 'Need more information:',
@@ -4232,6 +4241,7 @@ export default {
     zaloToday: 'Zalo today',
     zaloThisMonth: 'Zalo this month',
     aiTokens: 'AI tokens',
+    aiCredits: 'AI credits',
     // Plan expiry
     expiresOn: 'Expires on {date}',
     daysLeft: '— {days} days left',
@@ -5384,7 +5394,7 @@ export default {
     days: '{days} days',
     loadFailed: 'Cannot load AI token data',
     noData: 'No data in this time window.',
-    costDisclaimer: 'Cost is an ESTIMATE based on the configured Gemini text-token pricing; prices may change, embeddings and countTokens requests are not included.',
+    costDisclaimer: 'Cost is an ESTIMATE based on the configured Gemini text-token pricing; prices may change. Embedding usage is included when recorded; countTokens requests are not included.',
     timeline: 'AI tokens by day',
     timelineHint: 'Total tokens recorded in usage_logs by day.',
     byPlan: 'By plan',
@@ -5407,7 +5417,7 @@ export default {
     kpi: {
       totalTokens: 'Total tokens',
       estimatedCost: 'Estimated cost',
-      estimatedOnly: 'Excludes embeddings and countTokens',
+      estimatedOnly: 'Excludes countTokens only',
       aiUsers: 'AI users',
       logCount: '{count} usage logs',
       avgPerUser: 'Avg token/user',

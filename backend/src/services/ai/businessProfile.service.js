@@ -123,7 +123,10 @@ class BusinessProfileService {
       const profile = profileOverride || await businessProfileRepository.findByUserId(userId);
       const chunks = await buildChunksFromProfile(profile, userId);
       if (chunks.length > 0) {
-        const embeddings = await embedTexts(chunks.map(c => c.text));
+        const embeddings = await embedTexts(chunks.map(c => c.text), {
+          userId,
+          feature: 'embedding_business_profile',
+        });
         const chunksWithEmbeddings = chunks.map((c, i) => ({ ...c, embedding: embeddings[i] }));
         await businessProfileRepository.deleteChunksByUserId(userId);
         await businessProfileRepository.insertChunks(userId, chunksWithEmbeddings);
@@ -158,7 +161,10 @@ class BusinessProfileService {
     if (!profile) return '';
 
     // Embed query của user
-    const queryEmbedding = await embedText(userPrompt);
+    const queryEmbedding = await embedText(userPrompt, {
+      userId,
+      feature: 'embedding_rag_query',
+    });
 
     // Tìm top-5 chunks liên quan nhất
     const relevantChunks = await businessProfileRepository.searchSimilarChunks(userId, queryEmbedding, 5);

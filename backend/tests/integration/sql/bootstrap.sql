@@ -141,6 +141,7 @@ CREATE TABLE plans (
   max_zalo_templates    INTEGER,
   max_chatbots          INTEGER,
   ai_tokens_per_period  INTEGER,
+  ai_credits_per_period INTEGER,
   ai_model              VARCHAR(64) DEFAULT 'gemini-2.5-flash',
   grace_period_days     INTEGER      NOT NULL DEFAULT 0,
   duration_days         INTEGER,

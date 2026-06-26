@@ -111,7 +111,10 @@ class KnowledgeBaseService {
       // Embed all chunks
       let embeddings;
       try {
-        embeddings = await embedTexts(chunks.map(c => c.text));
+        embeddings = await embedTexts(chunks.map(c => c.text), {
+          userId,
+          feature: 'embedding_kb_ingest',
+        });
       } catch (e) {
         console.warn('[KB] Embedding failed, storing without vectors:', e.message);
         embeddings = chunks.map(() => null);

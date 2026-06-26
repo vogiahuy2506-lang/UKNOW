@@ -234,9 +234,9 @@ function PlanSection({ data, t }) {
         />
         <UsageBar
           icon={HiOutlineSparkles}
-          label={t('accountProfileModal.aiTokens')}
-          used={data.aiTokensUsed || 0}
-          limit={data.aiTokensPerPeriod}
+          label={t('accountProfileModal.aiCredits')}
+          used={data.aiCreditsUsed || 0}
+          limit={data.aiCreditsPerPeriod}
           t={t}
         />
       </div>
@@ -468,7 +468,7 @@ const ROLE_LABELS = {
 
 const AccountProfileModal = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { user, updateUser, activeContext } = useAuthStore();
+  const { user, updateUser, activeContext, fetchAiCredits } = useAuthStore();
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const TABS = isEmployeeCtx
@@ -541,6 +541,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
     setError('');
     setSuccess('');
     setActiveTab('profile');
+    fetchAiCredits?.().catch(() => {});
     onClose();
   };
 

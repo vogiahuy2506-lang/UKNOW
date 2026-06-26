@@ -184,7 +184,10 @@ QUY TẮC TRẢ LỜI:
     try {
       // Try embedding-based search first
       const { embedText } = await import('../../utils/embeddingClient.util.js');
-      const queryEmbedding = await embedText(query);
+      const queryEmbedding = await embedText(query, {
+        userId,
+        feature: 'embedding_rag_query',
+      });
       const results = await customChatDocumentRepository.searchByEmbedding({
         chatbotId,
         userId,
@@ -241,7 +244,7 @@ QUY TẮC TRẢ LỜI:
     }
 
     const chunks = this.chunkText(text, 500);
-    const embeddings = await this.generateEmbeddings(chunks);
+    const embeddings = await this.generateEmbeddings(chunks, userId);
 
     await customChatDocumentRepository.replaceChunks({
       chatbotId,
@@ -258,12 +261,15 @@ QUY TẮC TRẢ LỜI:
     };
   }
 
-  async generateEmbeddings(chunks) {
+  async generateEmbeddings(chunks, userId) {
     if (!process.env.GEMINI_API_KEY) return [];
 
     try {
       const { embedTexts } = await import('../../utils/embeddingClient.util.js');
-      return embedTexts(chunks.map((chunk, index) => `[${index}] ${chunk}`));
+      return embedTexts(chunks.map((chunk, index) => `[${index}] ${chunk}`), {
+        userId,
+        feature: 'embedding_custom_chat_doc',
+      });
     } catch (e) {
       console.warn('[CustomChat] Embedding failed, using text only:', e.message);
       return [];
@@ -331,7 +337,7 @@ QUY TẮC TRẢ LỜI:
     const cleanTitle = title ? title.trim().normalize('NFC') : 'Text Document';
     const text = content.trim();
     const chunks = this.chunkText(text, 500);
-    const embeddings = await this.generateEmbeddings(chunks);
+    const embeddings = await this.generateEmbeddings(chunks, userId);
 
     await customChatDocumentRepository.replaceChunks({
       chatbotId,

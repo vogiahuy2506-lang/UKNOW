@@ -10,6 +10,10 @@ import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
+import aiCreditMeter, {
+  VISITOR_CHAT_UNAVAILABLE_MESSAGE,
+  VISITOR_CHAT_ERROR_MESSAGE,
+} from '../ai/aiCreditMeter.service.js';
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 
 const ADAPTERS = {
@@ -36,10 +40,17 @@ class ChatRouterService {
     const adapter = ADAPTERS[channel];
     if (!adapter) throw new Error(`Unknown channel: ${channel}`);
 
+    const creditFeature = `chatbot_${channel}`;
+
     // 1. Get chatbot settings
     const settings = await chatbotRepository.getSettings(userId, channel);
     if (!settings?.is_enabled) {
       return { type: 'disabled', content: null };
+    }
+
+    const creditPrep = await this._prepareChatCredit(userId, creditFeature);
+    if (creditPrep.visitorMessage) {
+      return { type: 'text', content: creditPrep.visitorMessage };
     }
 
     // 2. Get sub-assistant info
@@ -76,6 +87,7 @@ class ChatRouterService {
     });
 
     let aiResponse;
+    let shouldChargeCredit = false;
     try {
       aiResponse = await this._callAI({
         userId,
@@ -86,9 +98,14 @@ class ChatRouterService {
         temperature: parseFloat(settings.temperature || 0.7),
         maxTokens: settings.max_tokens || 2048,
       });
+      shouldChargeCredit = true;
     } catch (error) {
-      if (!aiUsageMeter.isLimitError(error)) throw error;
-      aiResponse = { text: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' };
+      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) throw error;
+      aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
+    }
+
+    if (shouldChargeCredit) {
+      await this._chargeChatCredit(userId, creditFeature, creditPrep.creditContext);
     }
 
     // 8. Strip markdown formatting before sending (Zalo cannot render markdown)
@@ -122,6 +139,12 @@ class ChatRouterService {
     // Skip if chatbot is disabled
     if (!chatbotSettings?.is_enabled) {
       return { type: 'disabled', content: null };
+    }
+
+    const creditFeature = `chatbot_${channel}`;
+    const creditPrep = await this._prepareChatCredit(userId, creditFeature);
+    if (creditPrep.visitorMessage) {
+      return { type: 'text', content: creditPrep.visitorMessage };
     }
 
     // Get sub-assistant info if configured
@@ -159,6 +182,7 @@ class ChatRouterService {
     });
 
     let aiResponse;
+    let shouldChargeCredit = false;
     try {
       aiResponse = await this._callAI({
         userId,
@@ -169,10 +193,16 @@ class ChatRouterService {
         temperature: parseFloat(chatbotSettings.temperature || 0.7),
         maxTokens: chatbotSettings.max_tokens || 2048,
       });
+      shouldChargeCredit = true;
     } catch (error) {
-      if (!aiUsageMeter.isLimitError(error)) throw error;
-      aiResponse = { text: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' };
+      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) throw error;
+      aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
     }
+
+    if (shouldChargeCredit) {
+      await this._chargeChatCredit(userId, creditFeature, creditPrep.creditContext);
+    }
+
     // Strip markdown formatting before sending (Zalo cannot render markdown)
     const cleanResponse = stripMarkdown(aiResponse.text);
 
@@ -181,6 +211,23 @@ class ChatRouterService {
     await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
 
     return { type: 'text', content: cleanResponse };
+  }
+
+  async _prepareChatCredit(userId, feature) {
+    try {
+      const creditContext = await aiCreditMeter.assertAvailable(userId);
+      return { creditContext };
+    } catch (error) {
+      if (aiCreditMeter.isLimitError(error)) {
+        console.warn(`[ChatRouter] Owner ${userId} out of AI credits (feature=${feature})`);
+        return { visitorMessage: VISITOR_CHAT_UNAVAILABLE_MESSAGE };
+      }
+      throw error;
+    }
+  }
+
+  async _chargeChatCredit(userId, feature, creditContext) {
+    await aiCreditMeter.consume(userId, { feature, creditContext });
   }
 
   _buildSystemPrompt({ subAssistant, settings, ragContext, profileContext, isFirstMessage }) {
@@ -400,6 +447,12 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         throw new Error('Chatbot not found');
       }
 
+      const ownerId = chatbot.id_user;
+      const creditPrep = await this._prepareChatCredit(ownerId, 'chatbot_widget');
+      if (creditPrep.visitorMessage) {
+        return { content: creditPrep.visitorMessage };
+      }
+
       const historyRows = await chatbotRepository.getConversationHistory(conversationId, MAX_HISTORY_MESSAGES);
 
       const chatHistory = (historyRows || []).reverse().map(m => ({
@@ -421,19 +474,21 @@ ${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than th
 - Neu khong biet, hay noi ro`;
 
       const response = await this._callAI({
-        userId: chatbot.id_user,
+        userId: ownerId,
         systemPrompt,
         history: chatHistory,
         message,
-        model: await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+        model: await resolveAllowedModel(ownerId, process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
       });
 
+      await this._chargeChatCredit(ownerId, 'chatbot_widget', creditPrep.creditContext);
+
       return { content: stripMarkdown(response.text) };
     } catch (err) {
       console.error('[ChatRouter] routeChatbotMessage error:', err);
-      return { content: 'Xin loi, da xay ra loi. Vui long thu lai.' };
+      return { content: VISITOR_CHAT_ERROR_MESSAGE };
     }
   }
 }

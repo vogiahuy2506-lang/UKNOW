@@ -23,15 +23,16 @@ import SaveTemplateModal from './SaveTemplateModal.jsx';
 import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrackApiBase.js';
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
+import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
 const BASE_DOMAIN = 'founderai.biz';
 
 const getAiErrorMessage = (error, t, fallbackKey) => {
-  const data = error?.response?.data || {};
-  if (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED') {
-    return t('aiChatbot.aiTokenExceeded');
+  if (error?.response?.data?.code === 'RESOURCE_LIMIT_EXCEEDED') {
+    return getAiQuotaErrorMessage(error, t);
   }
+  const data = error?.response?.data || {};
   return data.message || error?.message || t(fallbackKey);
 };
 

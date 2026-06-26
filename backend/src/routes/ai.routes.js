@@ -2,6 +2,7 @@ import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
+import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import multer from 'multer';
 
 const router = express.Router();
@@ -10,19 +11,19 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 router.use(authMiddleware);
 
 // Smart interactive chat
-router.post('/chat', aiLimiter, aiController.chat.bind(aiController));
+router.post('/chat', aiLimiter, assertAiCreditAvailable('ai_assistant_chat'), aiController.chat.bind(aiController));
 
 // Smart interactive chat V2 - multi-step support
-router.post('/chat-v2', aiLimiter, aiController.chatV2.bind(aiController));
+router.post('/chat-v2', aiLimiter, assertAiCreditAvailable('ai_assistant_chat_v2'), aiController.chatV2.bind(aiController));
 
 // Generate campaign script from AI (legacy)
-router.post('/generate-campaign', aiLimiter, aiController.generateCampaign.bind(aiController));
+router.post('/generate-campaign', aiLimiter, assertAiCreditAvailable('ai_generate_campaign'), aiController.generateCampaign.bind(aiController));
 
 // Generate campaign with Registry support (multi-step in 1 node)
-router.post('/generate-campaign-v2', aiLimiter, aiController.generateCampaignV2.bind(aiController));
+router.post('/generate-campaign-v2', aiLimiter, assertAiCreditAvailable('ai_generate_campaign_v2'), aiController.generateCampaignV2.bind(aiController));
 
 // Generate full landing page HTML (Tailwind CDN + business context)
-router.post('/generate-landing-html', aiLimiter, aiController.generateLandingHtml.bind(aiController));
+router.post('/generate-landing-html', aiLimiter, assertAiCreditAvailable('ai_generate_landing_html'), aiController.generateLandingHtml.bind(aiController));
 
 // Create and optionally run the campaign
 router.post('/execute-campaign', aiLimiter, aiController.executeCampaign.bind(aiController));
@@ -48,7 +49,7 @@ router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiCont
 router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
-router.post('/custom-chat', aiLimiter, aiController.customChat.bind(aiController));
+router.post('/custom-chat', aiLimiter, assertAiCreditAvailable('ai_custom_chat'), aiController.customChat.bind(aiController));
 
 // Chatbot Studio Conversations
 router.get('/chatbot-studio/conversations', aiController.getChatbotStudioConversations.bind(aiController));

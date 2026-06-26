@@ -1,5 +1,6 @@
 import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.service.js';
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
+import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import dashboardRepository from '../repositories/dashboard/dashboard.repository.js';
 
 class DashboardController {
@@ -327,6 +328,8 @@ class DashboardController {
       } catch (persistErr) {
         console.error('Persist dashboard insight error:', persistErr);
       }
+
+      await chargeAiCredit(req);
 
       this.setNoCacheHeaders(res);
       return res.json(result);

@@ -580,7 +580,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxEmailTemplates',     t('planInputs.emailTemplates')],
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
           ['maxChatbots',           'Số chatbot tối đa'],
-          ['aiTokensPerPeriod',    'Token AI / kỳ (hạn mức token tiêu thụ)'],
+          ['aiCreditsPerPeriod',    'Credit AI / kỳ (số lượt nhờ AI)'],
+          ['aiTokensPerPeriod',    'Token AI / kỳ (hạn mức token tiêu thụ — admin)'],
         ].map(([key, label]) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>

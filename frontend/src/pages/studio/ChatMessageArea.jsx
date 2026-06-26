@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
+import { getAiQuotaErrorMessage } from '../../utils/aiLimitError.util';
 
 function ChatMessageArea({ chatbot }) {
   const { t } = useI18n();
@@ -115,10 +116,7 @@ function ChatMessageArea({ chatbot }) {
         toast.error(res.data.message);
       }
     } catch (err) {
-      const data = err?.response?.data || {};
-      const message = (data.resource === 'ai_token' || data.code === 'RESOURCE_LIMIT_EXCEEDED')
-        ? t('aiChatbot.aiTokenExceeded')
-        : (data.message || err.message || 'Gửi thất bại');
+      const message = getAiQuotaErrorMessage(err, t) || err.message || 'Gửi thất bại';
       toast.error(message);
       setMessages(prev => prev.slice(0, -1));
     } finally {

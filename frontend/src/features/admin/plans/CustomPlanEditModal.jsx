@@ -33,6 +33,7 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     maxZaloTemplates: plan.maxZaloTemplates ?? '',
     maxChatbots: plan.maxChatbots ?? '',
     aiTokensPerPeriod: plan.aiTokensPerPeriod ?? '',
+    aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
     gracePeriodDays: plan.gracePeriodDays ?? '',
   });
   const [isSaving, setIsSaving] = useState(false);

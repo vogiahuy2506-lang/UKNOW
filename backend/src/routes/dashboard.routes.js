@@ -1,6 +1,7 @@
 import express from 'express';
 import dashboardController from '../controllers/dashboard.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 
 const router = express.Router();
 
@@ -34,6 +35,6 @@ router.get('/compare', dashboardController.compareCampaigns.bind(dashboardContro
 router.get('/insights/saved', dashboardController.getSavedInsights.bind(dashboardController));
 
 // Generate Gemini insights for dashboard (thành công + payload hợp lệ thì ghi đè DB)
-router.post('/insights', dashboardController.generateInsights.bind(dashboardController));
+router.post('/insights', assertAiCreditAvailable('dashboard_insights'), dashboardController.generateInsights.bind(dashboardController));
 
 export default router;
