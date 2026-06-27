@@ -5,25 +5,16 @@ import {
   upsertGoogleModel,
 } from '../../repositories/ai/aiModelCatalog.repository.js';
 import { DEFAULT_AI_MODEL, normalizeModelId } from '../../utils/aiModelTier.util.js';
+import {
+  extractGoogleModelMetadata,
+  isRelevantChatModel,
+} from '../../utils/aiModelMetadata.util.js';
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 let catalogCache = null;
 
 function nowMs() {
   return Date.now();
-}
-
-function normalizeGoogleModelName(name) {
-  return String(name || '').trim().replace(/^models\//, '').toLowerCase();
-}
-
-function displayNameFor(modelId, displayName) {
-  const clean = String(displayName || '').trim();
-  if (clean) return clean;
-  return String(modelId || '')
-    .split('-')
-    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
-    .join(' ');
 }
 
 function parseBoolean(value) {
@@ -33,14 +24,19 @@ function parseBoolean(value) {
 }
 
 function fallbackCatalog() {
+  const modelId = normalizeModelId(process.env.GEMINI_MODEL) || DEFAULT_AI_MODEL;
   return [
     {
-      modelId: DEFAULT_AI_MODEL,
-      displayName: 'Gemini 2.5 Flash',
-      tierRank: 20,
+      modelId,
+      displayName: modelId,
+      inputTokenLimit: null,
+      outputTokenLimit: null,
+      description: null,
+      version: null,
+      thinking: false,
       isEnabled: true,
       supportsGenerateContent: true,
-      source: 'manual',
+      source: 'env',
     },
   ];
 }
@@ -101,15 +97,6 @@ export async function updateCatalogModel(modelId, patch = {}) {
 
   const normalizedPatch = {};
   if (patch.displayName !== undefined) normalizedPatch.displayName = String(patch.displayName || '').trim() || id;
-  if (patch.tierRank !== undefined) {
-    const rank = Number.parseInt(String(patch.tierRank), 10);
-    if (!Number.isFinite(rank)) {
-      const err = new Error('tier_rank không hợp lệ');
-      err.status = 400;
-      throw err;
-    }
-    normalizedPatch.tierRank = rank;
-  }
   if (patch.isEnabled !== undefined) normalizedPatch.isEnabled = parseBoolean(patch.isEnabled);
 
   const row = await updateAiModel(id, normalizedPatch);
@@ -136,6 +123,7 @@ export async function syncModelsFromGoogle() {
   let fetched = 0;
   let generateContentCount = 0;
   let skippedUnsupported = 0;
+  let skippedIrrelevant = 0;
 
   do {
     const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
@@ -155,8 +143,9 @@ export async function syncModelsFromGoogle() {
     fetched += models.length;
 
     for (const model of models) {
-      const modelId = normalizeGoogleModelName(model.name);
-      if (!modelId) continue;
+      const meta = extractGoogleModelMetadata(model);
+      if (!meta.modelId) continue;
+
       const supportedMethods = Array.isArray(model.supportedGenerationMethods)
         ? model.supportedGenerationMethods
         : [];
@@ -165,11 +154,16 @@ export async function syncModelsFromGoogle() {
         skippedUnsupported++;
         continue;
       }
+
+      if (!isRelevantChatModel(meta.modelId)) {
+        skippedIrrelevant++;
+        continue;
+      }
+
       generateContentCount++;
-      seenModelIds.push(modelId);
+      seenModelIds.push(meta.modelId);
       await upsertGoogleModel({
-        modelId,
-        displayName: displayNameFor(modelId, model.displayName),
+        ...meta,
         supportsGenerateContent: true,
         seenAt,
       });
@@ -186,6 +180,7 @@ export async function syncModelsFromGoogle() {
     seen: seenModelIds.length,
     generateContent: generateContentCount,
     skippedUnsupported,
+    skippedIrrelevant,
     markedUnsupported,
   };
 }

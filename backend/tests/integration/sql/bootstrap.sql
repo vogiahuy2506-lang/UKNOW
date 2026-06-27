@@ -156,25 +156,30 @@ CREATE TABLE plans (
 CREATE TABLE ai_models (
   model_id                  VARCHAR(80) PRIMARY KEY,
   display_name              VARCHAR(120) NOT NULL,
-  tier_rank                 INTEGER      NOT NULL,
+  input_token_limit         INTEGER,
+  output_token_limit        INTEGER,
+  description               TEXT,
+  version                   VARCHAR(40),
+  thinking                  BOOLEAN,
   is_enabled                BOOLEAN      NOT NULL DEFAULT TRUE,
   supports_generate_content BOOLEAN      NOT NULL DEFAULT TRUE,
-  source                    VARCHAR(20)  NOT NULL DEFAULT 'manual'
+  source                    VARCHAR(20)  NOT NULL DEFAULT 'google'
     CHECK (source IN ('google', 'manual')),
   last_seen_at              TIMESTAMPTZ,
   created_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_ai_models_enabled_rank
-  ON ai_models(is_enabled, supports_generate_content, tier_rank);
+CREATE INDEX idx_ai_models_enabled_output
+  ON ai_models(is_enabled, supports_generate_content, output_token_limit);
 
+-- Integration-test fixture (not production seed).
 INSERT INTO ai_models
-  (model_id, display_name, tier_rank, is_enabled, supports_generate_content, source)
+  (model_id, display_name, input_token_limit, output_token_limit, is_enabled, supports_generate_content, source)
 VALUES
-  ('gemini-2.5-flash-lite', 'Gemini 2.5 Flash Lite', 10, TRUE, TRUE, 'manual'),
-  ('gemini-2.5-flash', 'Gemini 2.5 Flash', 20, TRUE, TRUE, 'manual'),
-  ('gemini-2.5-pro', 'Gemini 2.5 Pro', 30, TRUE, TRUE, 'manual');
+  ('gemini-2.5-flash-lite', 'Gemini 2.5 Flash Lite', 1048576, 8192, TRUE, TRUE, 'google'),
+  ('gemini-2.5-flash', 'Gemini 2.5 Flash', 1048576, 65536, TRUE, TRUE, 'google'),
+  ('gemini-2.5-pro', 'Gemini 2.5 Pro', 1048576, 131072, FALSE, TRUE, 'google');
 
 -- FK sau khi plans tồn tại: users.active_plan_id → plans(id)
 ALTER TABLE users

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
 import adminAiModelsApiService from '../../features/admin/services/adminAiModelsApi.service';
@@ -6,12 +6,27 @@ import { useI18n } from '../../i18n';
 
 const toModelId = (model) => model.modelId || model.model_id;
 
+function formatTokenLimit(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n >= 1_000_000) {
+    const millions = n / 1_000_000;
+    return Number.isInteger(millions) ? `${millions}M` : `${millions.toFixed(1)}M`;
+  }
+  if (n >= 1_000) {
+    const thousands = n / 1_000;
+    return Number.isInteger(thousands) ? `${thousands}K` : `${thousands.toFixed(1)}K`;
+  }
+  return String(n);
+}
+
 export default function AdminAiModelsPage() {
   const { t } = useI18n();
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,6 +43,11 @@ export default function AdminAiModelsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const visibleModels = useMemo(() => {
+    if (showAll) return models;
+    return models.filter((model) => model.isEnabled);
+  }, [models, showAll]);
 
   const updateModel = async (model, patch) => {
     const modelId = toModelId(model);
@@ -66,7 +86,7 @@ export default function AdminAiModelsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('adminAiModels.title')}</h1>
           <p className="mt-1 text-gray-500">{t('adminAiModels.subtitle')}</p>
-          <p className="mt-2 max-w-3xl text-sm text-amber-700">{t('adminAiModels.rankHint')}</p>
+          <p className="mt-2 max-w-3xl text-sm text-amber-700">{t('adminAiModels.metadataHint')}</p>
         </div>
         <button
           type="button"
@@ -80,11 +100,20 @@ export default function AdminAiModelsPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-4">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <HiOutlineSparkles className="h-5 w-5 text-orange-500" />
             <p className="font-semibold text-slate-800">{t('adminAiModels.catalog')}</p>
           </div>
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-orange-600"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+            />
+            {t('adminAiModels.showAll')}
+          </label>
         </div>
         {loading ? (
           <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
@@ -95,24 +124,33 @@ export default function AdminAiModelsPage() {
                 <tr>
                   <th className="px-5 py-3">{t('adminAiModels.model')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.displayName')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.rank')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.inputTokens')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.outputTokens')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.description')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.status')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.source')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {models.length === 0 && (
+                {visibleModels.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-slate-400">{t('adminAiModels.noModels')}</td>
+                    <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                      {models.length === 0 ? t('adminAiModels.noModels') : t('adminAiModels.noEnabledModels')}
+                    </td>
                   </tr>
                 )}
-                {models.map((model) => {
+                {visibleModels.map((model) => {
                   const modelId = toModelId(model);
                   const busy = savingId === modelId;
                   return (
                     <tr key={modelId} className="align-top">
                       <td className="px-5 py-4">
                         <p className="font-mono font-semibold text-slate-800">{modelId}</p>
+                        {model.thinking && (
+                          <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                            {t('adminAiModels.thinking')}
+                          </span>
+                        )}
                         {!model.supportsGenerateContent && (
                           <p className="mt-1 text-xs text-amber-600">{t('adminAiModels.notSupported')}</p>
                         )}
@@ -127,17 +165,10 @@ export default function AdminAiModelsPage() {
                           }}
                         />
                       </td>
-                      <td className="px-5 py-4">
-                        <input
-                          type="number"
-                          className="input h-9 w-24"
-                          defaultValue={model.tierRank}
-                          disabled={busy}
-                          onBlur={(e) => {
-                            const next = Number(e.target.value);
-                            if (Number.isFinite(next) && next !== Number(model.tierRank)) updateModel(model, { tierRank: next });
-                          }}
-                        />
+                      <td className="px-5 py-4 text-slate-700">{formatTokenLimit(model.inputTokenLimit)}</td>
+                      <td className="px-5 py-4 text-slate-700">{formatTokenLimit(model.outputTokenLimit)}</td>
+                      <td className="max-w-xs px-5 py-4 text-xs text-slate-500">
+                        {model.description || '—'}
                       </td>
                       <td className="px-5 py-4">
                         <label className="inline-flex cursor-pointer items-center gap-2">
@@ -153,7 +184,7 @@ export default function AdminAiModelsPage() {
                           </span>
                         </label>
                       </td>
-                      <td className="px-5 py-4 text-slate-500">{model.source || 'manual'}</td>
+                      <td className="px-5 py-4 text-slate-500">{model.source || 'google'}</td>
                     </tr>
                   );
                 })}

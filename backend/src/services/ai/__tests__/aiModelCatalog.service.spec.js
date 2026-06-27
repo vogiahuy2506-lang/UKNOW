@@ -26,7 +26,7 @@ describe('aiModelCatalog.service', () => {
     global.fetch = originalFetch;
   });
 
-  it('syncs only generateContent-capable Google models and marks missing models unsupported', async () => {
+  it('syncs generateContent Gemini chat models with Google metadata', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -34,7 +34,15 @@ describe('aiModelCatalog.service', () => {
           {
             name: 'models/gemini-2.5-flash',
             displayName: 'Gemini 2.5 Flash',
+            description: 'Fast multimodal model',
+            inputTokenLimit: 1048576,
+            outputTokenLimit: 65536,
             supportedGenerationMethods: ['generateContent', 'countTokens'],
+          },
+          {
+            name: 'models/gemini-2.5-flash-preview-09-2025',
+            displayName: 'Gemini 2.5 Flash Preview',
+            supportedGenerationMethods: ['generateContent'],
           },
           {
             name: 'models/text-embedding-004',
@@ -48,14 +56,18 @@ describe('aiModelCatalog.service', () => {
     const result = await catalogService.syncModelsFromGoogle();
 
     expect(result).toEqual(expect.objectContaining({
-      fetched: 2,
+      fetched: 3,
       seen: 1,
       generateContent: 1,
       skippedUnsupported: 1,
+      skippedIrrelevant: 1,
     }));
     expect(mockRepo.upsertGoogleModel).toHaveBeenCalledWith(expect.objectContaining({
       modelId: 'gemini-2.5-flash',
       displayName: 'Gemini 2.5 Flash',
+      inputTokenLimit: 1048576,
+      outputTokenLimit: 65536,
+      description: 'Fast multimodal model',
       supportsGenerateContent: true,
     }));
     expect(mockRepo.upsertGoogleModel).toHaveBeenCalledTimes(1);

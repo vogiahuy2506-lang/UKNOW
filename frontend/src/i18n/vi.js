@@ -190,7 +190,7 @@ export default {
   },
 
   nav: {
-    dashboard: 'Dashboard',
+    dashboard: 'Tổng quan',
     campaigns: 'Chiến dịch',
     customers: 'Khách hàng từ chiến dịch',
     orders: 'Đơn hàng',
@@ -246,7 +246,7 @@ export default {
 
   dashboard: {
     // Basic
-    title: 'Dashboard',
+    title: 'Tổng quan',
     welcome: 'Chào mừng trở lại',
     overview: 'Tổng quan',
     recentActivity: 'Hoạt động gần đây',
@@ -5481,8 +5481,8 @@ export default {
 
   adminAiModels: {
     title: 'Quản lý model AI',
-    subtitle: 'Bật/tắt, đặt tên hiển thị và sắp xếp tier model Gemini dùng trong hệ thống.',
-    rankHint: 'Model mới từ Google mặc định tắt và có tier rank cao; hãy chỉnh tier rank để map đúng vào gói trước khi bật.',
+    subtitle: 'Đồng bộ catalog từ Google, bật model dùng trong hệ thống và đặt tên hiển thị.',
+    metadataHint: 'Thông số input/output token lấy từ Google ListModels — dùng để map gói dịch vụ (model cao hơn = output token lớn hơn). Bấm Đồng bộ sau deploy lần đầu.',
     catalog: 'Catalog model',
     sync: 'Đồng bộ từ Google',
     syncing: 'Đang đồng bộ...',
@@ -5493,12 +5493,17 @@ export default {
     saved: 'Đã lưu model AI',
     model: 'Model',
     displayName: 'Tên hiển thị',
-    rank: 'Tier rank',
+    inputTokens: 'Input token (context)',
+    outputTokens: 'Output token (tối đa)',
+    description: 'Mô tả Google',
+    thinking: 'Thinking',
     status: 'Trạng thái',
     source: 'Nguồn',
     enabled: 'Bật',
     disabled: 'Tắt',
-    noModels: 'Chưa có model nào.',
+    showAll: 'Hiện cả model đang tắt',
+    noModels: 'Chưa có model — bấm Đồng bộ từ Google.',
+    noEnabledModels: 'Chưa có model nào đang bật.',
     notSupported: 'Google không còn báo hỗ trợ generateContent',
   },
 

@@ -26,9 +26,30 @@ jest.unstable_mockModule('../../../repositories/ai/aiModelCatalog.repository.js'
 const policy = await import('../aiModelPolicy.service.js');
 
 const fullCatalog = [
-  { modelId: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash Lite', tierRank: 10, isEnabled: true, supportsGenerateContent: true },
-  { modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', tierRank: 20, isEnabled: true, supportsGenerateContent: true },
-  { modelId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', tierRank: 30, isEnabled: false, supportsGenerateContent: true },
+  {
+    modelId: 'gemini-2.5-flash-lite',
+    displayName: 'Gemini 2.5 Flash Lite',
+    inputTokenLimit: 1048576,
+    outputTokenLimit: 8192,
+    isEnabled: true,
+    supportsGenerateContent: true,
+  },
+  {
+    modelId: 'gemini-2.5-flash',
+    displayName: 'Gemini 2.5 Flash',
+    inputTokenLimit: 1048576,
+    outputTokenLimit: 65536,
+    isEnabled: true,
+    supportsGenerateContent: true,
+  },
+  {
+    modelId: 'gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    inputTokenLimit: 1048576,
+    outputTokenLimit: 131072,
+    isEnabled: false,
+    supportsGenerateContent: true,
+  },
 ];
 const enabledCatalog = fullCatalog.filter((row) => row.isEnabled);
 
@@ -44,7 +65,7 @@ describe('aiModelPolicy.service dynamic catalog', () => {
     mockCatalogRepo.updateUserPreferredModel.mockResolvedValue('gemini-2.5-flash');
   });
 
-  it('clamps a disabled plan max down to the highest enabled model at or below that rank', async () => {
+  it('clamps a disabled plan max down to the highest enabled model at or below that capability', async () => {
     await expect(policy.getUserMaxAllowedModel(123)).resolves.toBe('gemini-2.5-flash');
     await expect(policy.resolveAllowedModel(123, 'gemini-2.5-pro')).resolves.toBe('gemini-2.5-flash');
   });
@@ -57,7 +78,7 @@ describe('aiModelPolicy.service dynamic catalog', () => {
     expect(result.preferredModel).toBe('gemini-2.5-flash');
     expect(result.models[0]).toEqual(expect.objectContaining({
       model_id: 'gemini-2.5-flash-lite',
-      display_name: 'Gemini 2.5 Flash Lite',
+      output_token_limit: 8192,
     }));
   });
 

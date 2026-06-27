@@ -20,8 +20,6 @@ router.patch(
     param('id').trim().notEmpty(),
     body('displayName').optional().isString(),
     body('display_name').optional().isString(),
-    body('tierRank').optional().isInt(),
-    body('tier_rank').optional().isInt(),
     body('isEnabled').optional().isBoolean(),
     body('is_enabled').optional().isBoolean(),
   ],

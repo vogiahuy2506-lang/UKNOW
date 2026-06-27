@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { HiChevronDown, HiOutlinePlus, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
+import {
+  HiChevronDown,
+  HiChevronUp,
+  HiOutlinePencil,
+  HiOutlinePlus,
+  HiOutlineCheck,
+  HiOutlineX,
+} from 'react-icons/hi';
 import { HiOutlineSparkles } from 'react-icons/hi2';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import adminAiModelsApiService from '../services/adminAiModelsApi.service';
@@ -44,6 +51,9 @@ export const FeatureEditor = ({ features, onChange }) => {
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState('');
   const [translatingIdxs, setTranslatingIdxs] = useState(new Set());
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const skipEditCommitRef = useRef(false);
   const featuresRef = useRef(features);
   useEffect(() => { featuresRef.current = features; }, [features]);
 
@@ -114,6 +124,43 @@ export const FeatureEditor = ({ features, onChange }) => {
     add();
   };
 
+  const moveFeature = (index, direction) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= list.length) return;
+    const next = [...list];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    onChange(next);
+    if (editingIdx === index) setEditingIdx(nextIndex);
+  };
+
+  const startEdit = (index, feature) => {
+    setEditingIdx(index);
+    setEditValue(getDisplayText(feature));
+  };
+
+  const cancelEdit = ({ skipBlurCommit = false } = {}) => {
+    if (skipBlurCommit) skipEditCommitRef.current = true;
+    setEditingIdx(null);
+    setEditValue('');
+  };
+
+  const commitEdit = (index, feature) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
+      cancelEdit();
+      return;
+    }
+
+    const next = [...list];
+    if (typeof feature === 'object' && feature !== null) {
+      next[index] = { ...feature, [locale]: trimmed };
+    } else {
+      next[index] = trimmed;
+    }
+    onChange(next);
+    cancelEdit();
+  };
+
   return (
     <div className="space-y-2">
       {viOnlyIdxs.length > 0 && (
@@ -131,14 +178,69 @@ export const FeatureEditor = ({ features, onChange }) => {
         {list.map((f, i) => {
           const isObj = typeof f === 'object' && f !== null;
           const isTranslating = translatingIdxs.has(i);
+          const isEditing = editingIdx === i;
           return (
             <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveFeature(i, -1)}
+                  disabled={i === 0}
+                  className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  title={t('common.previous')}
+                >
+                  <HiChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveFeature(i, 1)}
+                  disabled={i === list.length - 1}
+                  className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  title={t('common.next')}
+                >
+                  <HiChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
-              <span className="text-sm text-gray-700 flex-1">{getDisplayText(f)}</span>
-              {isTranslating && (
+              {isEditing ? (
+                <input
+                  type="text"
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => {
+                    if (skipEditCommitRef.current) {
+                      skipEditCommitRef.current = false;
+                      return;
+                    }
+                    commitEdit(i, f);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitEdit(i, f);
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelEdit({ skipBlurCommit: true });
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded border border-orange-200 bg-white px-2 py-1 text-sm text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startEdit(i, f)}
+                  className="group min-w-0 flex-1 rounded px-1 py-0.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                >
+                  <span className="break-words">{getDisplayText(f)}</span>
+                  <HiOutlinePencil className="ml-1 inline h-3 w-3 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              )}
+              {isTranslating && !isEditing && (
                 <span className="text-[10px] text-gray-400 animate-pulse">translating...</span>
               )}
-              {!isObj && !isTranslating && (
+              {!isObj && !isTranslating && !isEditing && (
                 <span className="text-[10px] text-amber-500 font-medium">VI only</span>
               )}
               <button
@@ -553,7 +655,11 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
         const rows = Array.isArray(res.data?.data) ? res.data.data : [];
         const enabled = rows
           .filter((row) => row.isEnabled && row.supportsGenerateContent)
-          .map((row) => ({ modelId: row.modelId || row.model_id, displayName: row.displayName || row.display_name }))
+          .map((row) => ({
+            modelId: row.modelId || row.model_id,
+            displayName: row.displayName || row.display_name,
+            outputTokenLimit: row.outputTokenLimit ?? row.output_token_limit,
+          }))
           .filter((row) => row.modelId);
         if (enabled.length) setAiModelOptions(enabled);
       })
@@ -589,14 +695,17 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           </div>
         ))}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI tối đa (bao gồm mọi model thấp hơn)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI tối đa (theo output token Google)</label>
           <select className="input w-full" value={selectedAiModel} onChange={(e) => set('aiModel', e.target.value)}>
             {renderedAiModelOptions.map((model) => (
-              <option key={model.modelId} value={model.modelId}>{model.displayName || model.modelId}</option>
+              <option key={model.modelId} value={model.modelId}>
+                {model.displayName || model.modelId}
+                {model.outputTokenLimit ? ` — output ${Number(model.outputTokenLimit).toLocaleString()} tokens` : ''}
+              </option>
             ))}
           </select>
           <p className="mt-1.5 text-xs text-slate-500">
-            Thứ tự tier thấp → cao được lấy từ catalog AI models. Chọn mức nào sẽ mở model đó và mọi model thấp hơn.
+            Gói được phép dùng model này và mọi model enabled có output token thấp hơn hoặc bằng. Thông số lấy từ Google sau khi đồng bộ catalog.
           </p>
         </div>
       </div>

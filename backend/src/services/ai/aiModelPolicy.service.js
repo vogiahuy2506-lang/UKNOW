@@ -3,9 +3,9 @@ import { isAdminRole } from '../../utils/roleScope.util.js';
 import {
   DEFAULT_AI_MODEL,
   clampToTiers,
-  listUpToTier,
   normalizeModelId,
 } from '../../utils/aiModelTier.util.js';
+import { capabilityScore } from '../../utils/aiModelMetadata.util.js';
 import {
   getCatalog,
   getDefaultModel,
@@ -40,26 +40,41 @@ async function getUserPlanModelRow(userId) {
   };
 }
 
-function modelRankMap(catalog = []) {
-  return new Map(catalog.map((row) => [normalizeModelId(row.modelId), Number(row.tierRank) || 0]));
+function findCatalogRow(catalog = [], modelId) {
+  const normalized = normalizeModelId(modelId);
+  return catalog.find((row) => normalizeModelId(row.modelId) === normalized) || null;
+}
+
+function sortByCapability(rows = []) {
+  return [...rows].sort((a, b) => {
+    const diff = capabilityScore(a) - capabilityScore(b);
+    if (diff !== 0) return diff;
+    return String(a.modelId).localeCompare(String(b.modelId));
+  });
 }
 
 function pickEnabledAtOrBelow(planMaxModel, enabledCatalog = [], fullCatalog = []) {
   if (!enabledCatalog.length) return DEFAULT_AI_MODEL;
-  const fullRank = modelRankMap(fullCatalog);
-  const enabledByRank = [...enabledCatalog].sort((a, b) => (Number(a.tierRank) || 0) - (Number(b.tierRank) || 0));
-  const requested = normalizeModelId(planMaxModel) || ENV_DEFAULT_MODEL;
-  const planRank = fullRank.has(requested)
-    ? fullRank.get(requested)
-    : fullRank.get(ENV_DEFAULT_MODEL) ?? enabledByRank[enabledByRank.length - 1]?.tierRank ?? 0;
-  const eligible = enabledByRank.filter((row) => (Number(row.tierRank) || 0) <= planRank);
-  return (eligible[eligible.length - 1] || enabledByRank[0])?.modelId || DEFAULT_AI_MODEL;
+
+  const sortedEnabled = sortByCapability(enabledCatalog);
+  const planRow = findCatalogRow(fullCatalog, planMaxModel) || findCatalogRow(fullCatalog, ENV_DEFAULT_MODEL);
+  const planLimit = capabilityScore(planRow);
+
+  if (!planLimit) {
+    return sortedEnabled[sortedEnabled.length - 1]?.modelId || DEFAULT_AI_MODEL;
+  }
+
+  const eligible = sortedEnabled.filter((row) => capabilityScore(row) <= planLimit);
+  return (eligible[eligible.length - 1] || sortedEnabled[0])?.modelId || DEFAULT_AI_MODEL;
 }
 
 function rowsUpToMax(maxModel, enabledCatalog = []) {
-  const tiers = enabledCatalog.map((row) => row.modelId);
-  const ids = new Set(listUpToTier(maxModel, tiers));
-  return enabledCatalog.filter((row) => ids.has(row.modelId));
+  const sortedEnabled = sortByCapability(enabledCatalog);
+  const maxRow = findCatalogRow(sortedEnabled, maxModel) || sortedEnabled[sortedEnabled.length - 1];
+  const maxLimit = capabilityScore(maxRow);
+  if (!maxLimit) return sortedEnabled;
+
+  return sortedEnabled.filter((row) => capabilityScore(row) <= maxLimit);
 }
 
 /**
@@ -81,7 +96,7 @@ export async function getUserMaxAllowedModel(userId) {
 }
 
 /**
- * Clamp model theo gói — không throw, hạ êm nếu vượt tier.
+ * Clamp model theo gói — không throw, hạ êm nếu vượt capability.
  *
  * @param {number|string|null|undefined} userId
  * @param {string|null|undefined} requestedModel
@@ -119,29 +134,25 @@ export async function getAllowedModelsForUser(userId) {
       modelId: row.modelId,
       display_name: row.displayName,
       displayName: row.displayName,
-      tier_rank: row.tierRank,
-      tierRank: row.tierRank,
+      input_token_limit: row.inputTokenLimit,
+      inputTokenLimit: row.inputTokenLimit,
+      output_token_limit: row.outputTokenLimit,
+      outputTokenLimit: row.outputTokenLimit,
+      description: row.description,
+      thinking: row.thinking,
     })),
     modelIds,
     preferredModel: resolvedPreferred,
   };
 }
 
-export async function savePreferredModelForUser(userId, requestedModel) {
-  const modelId = normalizeModelId(requestedModel);
-  if (!modelId) {
-    const err = new Error('Model AI không hợp lệ');
-    err.status = 400;
-    throw err;
-  }
-
+export async function savePreferredModelForUser(userId, modelId) {
   const allowed = await getAllowedModelsForUser(userId);
-  if (!allowed.modelIds.includes(modelId)) {
-    const err = new Error('Model AI không nằm trong gói hiện tại hoặc đã bị tắt');
-    err.status = 400;
+  const normalized = normalizeModelId(modelId);
+  if (!allowed.modelIds.includes(normalized)) {
+    const err = new Error('Model AI không nằm trong gói của bạn');
+    err.status = 403;
     throw err;
   }
-
-  const preferredModel = await updateUserPreferredModel(userId, modelId);
-  return { ...allowed, preferredModel };
+  return updateUserPreferredModel(userId, normalized);
 }

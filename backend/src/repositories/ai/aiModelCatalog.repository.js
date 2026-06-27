@@ -3,7 +3,11 @@ import db from '../../config/database.js';
 const MODEL_COLS = `
   model_id AS "modelId",
   display_name AS "displayName",
-  tier_rank AS "tierRank",
+  input_token_limit AS "inputTokenLimit",
+  output_token_limit AS "outputTokenLimit",
+  description,
+  version,
+  thinking,
   is_enabled AS "isEnabled",
   supports_generate_content AS "supportsGenerateContent",
   source,
@@ -19,7 +23,7 @@ export async function listAiModels({ enabledOnly = false, generateContentOnly = 
     `SELECT ${MODEL_COLS}
      FROM ai_models
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY tier_rank ASC, model_id ASC`
+     ORDER BY output_token_limit ASC NULLS LAST, model_id ASC`
   );
   return rows;
 }
@@ -27,31 +31,42 @@ export async function listAiModels({ enabledOnly = false, generateContentOnly = 
 export async function upsertGoogleModel({
   modelId,
   displayName,
+  description = null,
+  version = null,
+  inputTokenLimit = null,
+  outputTokenLimit = null,
+  thinking = false,
   supportsGenerateContent = true,
   seenAt = new Date(),
 }) {
   const { rows } = await db.query(
     `INSERT INTO ai_models
-       (model_id, display_name, tier_rank, is_enabled, supports_generate_content, source, last_seen_at, created_at, updated_at)
-     VALUES (
-       $1,
-       $2,
-       COALESCE((SELECT MAX(tier_rank) + 10 FROM ai_models), 100),
-       FALSE,
-       $3,
-       'google',
-       $4,
-       NOW(),
-       NOW()
-     )
+       (model_id, display_name, input_token_limit, output_token_limit, description, version, thinking,
+        is_enabled, supports_generate_content, source, last_seen_at, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, 'google', $9, NOW(), NOW())
      ON CONFLICT (model_id) DO UPDATE SET
        display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), ai_models.display_name),
+       input_token_limit = COALESCE(EXCLUDED.input_token_limit, ai_models.input_token_limit),
+       output_token_limit = COALESCE(EXCLUDED.output_token_limit, ai_models.output_token_limit),
+       description = COALESCE(EXCLUDED.description, ai_models.description),
+       version = COALESCE(EXCLUDED.version, ai_models.version),
+       thinking = COALESCE(EXCLUDED.thinking, ai_models.thinking),
        supports_generate_content = EXCLUDED.supports_generate_content,
-       source = CASE WHEN ai_models.source = 'manual' THEN ai_models.source ELSE 'google' END,
+       source = 'google',
        last_seen_at = EXCLUDED.last_seen_at,
        updated_at = NOW()
      RETURNING ${MODEL_COLS}`,
-    [modelId, displayName || modelId, Boolean(supportsGenerateContent), seenAt]
+    [
+      modelId,
+      displayName || modelId,
+      inputTokenLimit,
+      outputTokenLimit,
+      description,
+      version,
+      Boolean(thinking),
+      Boolean(supportsGenerateContent),
+      seenAt,
+    ]
   );
   return rows[0] || null;
 }
@@ -72,7 +87,6 @@ export async function markGoogleModelsMissing({ seenModelIds = [], seenAt = new 
 export async function updateAiModel(modelId, patch = {}) {
   const allowed = {
     displayName: 'display_name',
-    tierRank: 'tier_rank',
     isEnabled: 'is_enabled',
   };
   const sets = [];

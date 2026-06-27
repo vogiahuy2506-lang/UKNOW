@@ -12,7 +12,6 @@ export async function listModels() {
 export async function updateModel(modelId, patch = {}) {
   return updateCatalogModel(modelId, {
     displayName: patch.displayName ?? patch.display_name,
-    tierRank: patch.tierRank ?? patch.tier_rank,
     isEnabled: patch.isEnabled ?? patch.is_enabled,
   });
 }
