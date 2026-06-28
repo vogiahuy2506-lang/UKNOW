@@ -830,6 +830,21 @@ CREATE TABLE file_access_events (
 );
 CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
 
+-- ─── Usage tracking (migration 033) ───────────────────────────────────
+CREATE TABLE usage_logs (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_type VARCHAR(50) NOT NULL,
+  delta         INTEGER NOT NULL DEFAULT 1,
+  period_start  TIMESTAMPTZ NOT NULL,
+  period_end    TIMESTAMPTZ NOT NULL,
+  metadata      JSONB DEFAULT '{}',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_usage_logs_user ON usage_logs(id_user);
+CREATE INDEX idx_usage_logs_resource ON usage_logs(resource_type);
+CREATE INDEX idx_usage_logs_period ON usage_logs(period_start, period_end);
+
 -- ─── Dashboard insights (Gemini AI persistence) ───────────────────────
 CREATE TABLE dashboard_insights (
   id                BIGSERIAL PRIMARY KEY,

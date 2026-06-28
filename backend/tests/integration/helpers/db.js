@@ -13,6 +13,7 @@ import db from '../../../src/config/database.js';
 export async function truncateAll() {
   await db.query(`
     TRUNCATE TABLE
+      usage_logs,
       dashboard_insights,
       landing_testimonials,
       landing_featured_courses,
@@ -122,8 +123,9 @@ export async function createPlan(overrides = {}) {
 
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
-                        daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                        ai_credits_per_period)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
     [
       code,
@@ -138,6 +140,7 @@ export async function createPlan(overrides = {}) {
       overrides.monthlyEmailLimit ?? null,
       overrides.dailyZaloLimit ?? null,
       overrides.monthlyZaloLimit ?? null,
+      overrides.aiCreditsPerPeriod ?? null,
     ]
   );
   return rows[0];

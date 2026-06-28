@@ -3,6 +3,27 @@ import dashboardInsightsService from '../services/dashboard/dashboardInsights.se
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import dashboardRepository from '../repositories/dashboard/dashboard.repository.js';
 
+const INSIGHTS_MISSING_DATA_MESSAGE =
+  'Thiếu dữ liệu dashboard để phân tích (overview/analytics/topListsData)';
+
+/**
+ * Validate POST /dashboard/insights body before credit pre-flight.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+export function validateDashboardInsightsPayload(req, res, next) {
+  const { overview, analytics, topListsData } = req.body || {};
+  if (!overview || !analytics || !topListsData) {
+    return res.status(400).json({
+      success: false,
+      message: INSIGHTS_MISSING_DATA_MESSAGE,
+    });
+  }
+  return next();
+}
+
 class DashboardController {
   /**
    * Disable HTTP cache for dashboard APIs to avoid stale 304 bodies on SPA data fetch.
@@ -310,7 +331,7 @@ class DashboardController {
       if (!overview || !analytics || !topListsData) {
         return res.status(400).json({
           success: false,
-          message: 'Thiếu dữ liệu dashboard để phân tích (overview/analytics/topListsData)',
+          message: INSIGHTS_MISSING_DATA_MESSAGE,
         });
       }
 
