@@ -3,7 +3,7 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
-router.get('/active', async (req, res) => {
+router.get('/promotions/active', async (req, res) => {
   try {
     const billingPeriod = ['monthly', 'yearly'].includes(req.query.billingPeriod)
       ? req.query.billingPeriod
