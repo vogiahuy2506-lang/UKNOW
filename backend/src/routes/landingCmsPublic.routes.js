@@ -107,13 +107,13 @@ router.get('/landing-track/go', async (req, res) => {
       targetUrl.searchParams.set('utm_source', 'landing_page');
     }
     if (!targetUrl.searchParams.has('utm_medium')) {
-      targetUrl.searchParams.set('utm_medium', 'custom');
+      targetUrl.searchParams.set('utm_medium', normalizedSlug);
     }
 
     await db.query(
       `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium)
-       VALUES ($1, 'click', 'landing_page', 'custom')`,
-      [normalizedSlug]
+       VALUES ($1, 'click', 'landing_page', $2)`,
+      [normalizedSlug, normalizedSlug]
     );
 
     return res.redirect(302, targetUrl.toString());

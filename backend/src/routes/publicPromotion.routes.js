@@ -17,15 +17,18 @@ router.get('/promotions/active', async (req, res) => {
     let hasPromotion = false;
     let topPromotion = null;
 
+    const byPlanCode = {};
+
     if (plans[0]) {
       const price = billingPeriod === 'yearly' ? (plans[0].price_yearly || plans[0].price) : plans[0].price;
+      byPlanCode[plans[0].code] = { price };
 
       const { rows: vouchers } = await db.query(
-        `SELECT id, code, discount_type, discount_amount, discount_percent, max_discount, min_order_amount
+        `SELECT id, code, discount_type, discount_value, max_discount_amount, min_order_amount
          FROM vouchers
          WHERE is_active = true AND auto_apply = true
-           AND (start_date IS NULL OR start_date <= NOW())
-           AND (end_date IS NULL OR end_date >= NOW())
+           AND (starts_at IS NULL OR starts_at <= NOW())
+           AND (ends_at IS NULL OR ends_at >= NOW())
          ORDER BY id ASC`
       );
 
@@ -34,9 +37,9 @@ router.get('/promotions/active', async (req, res) => {
         let maxDiscountAmount = 0;
 
         for (const voucher of vouchers) {
-          let discountAmount = voucher.discount_type === 'percent'
-            ? Math.min(voucher.discount_percent * price / 100, voucher.max_discount || Infinity)
-            : voucher.discount_amount;
+          let discountAmount = voucher.discount_type === 'percentage'
+            ? Math.min(voucher.discount_value * price / 100, voucher.max_discount_amount || Infinity)
+            : voucher.discount_value;
 
           if (discountAmount > maxDiscountAmount) {
             maxDiscountAmount = discountAmount;
@@ -50,8 +53,8 @@ router.get('/promotions/active', async (req, res) => {
             code: topVoucher.code,
             discountType: topVoucher.discount_type,
             discountAmount: Math.round(maxDiscountAmount),
-            discountPercent: topVoucher.discount_percent,
-            maxDiscount: topVoucher.max_discount,
+            discountPercent: topVoucher.discount_type === 'percentage' ? topVoucher.discount_value : null,
+            maxDiscount: topVoucher.max_discount_amount,
             minOrderAmount: topVoucher.min_order_amount,
           };
         }
@@ -65,6 +68,7 @@ router.get('/promotions/active', async (req, res) => {
         topPromotion,
         billingPeriod,
         plan: plans[0] || null,
+        byPlanCode,
       },
     });
   } catch (error) {
