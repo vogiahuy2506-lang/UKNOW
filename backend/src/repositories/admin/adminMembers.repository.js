@@ -5,8 +5,8 @@ import db from '../../config/database.js';
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
 export async function findAllMembers({ search, planId, status, expiry, role } = {}) {
-  // If role is specified, use it; otherwise get all users (including admins)
-  const roleCondition = role ? `u.role = '${role}'` : '1=1';
+  // Default to role='user' for member listing, allow override
+  const roleCondition = role ? `u.role = '${role}'` : "u.role = 'user'";
   const conditions = [roleCondition];
   const params = [];
 
