@@ -23,6 +23,15 @@ class UsageTrackingService {
   }
 
   /**
+   * Plan limits for a user (delegates to repository).
+   * @param {number|string} userId
+   * @param {import('pg').PoolClient} [client]
+   */
+  async getUserPlanLimits(userId, client = null) {
+    return usageTrackingRepository.getUserPlanLimits(userId, client);
+  }
+
+  /**
    * Get current usage for a user
    */
   async getUserUsage(userId) {
