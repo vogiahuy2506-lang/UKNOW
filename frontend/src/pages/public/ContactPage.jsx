@@ -7,6 +7,7 @@ import {
 } from 'react-icons/hi';
 import { submitContactForm } from '../../services/contactApi.service';
 import { useI18n } from '../../i18n';
+import { usePublicLandingOverrides } from '../../features/landing-customizer';
 
 const COMPANY_SIZES = (t) => [
   { value: '', label: t('contact.companySizePlaceholder') },
@@ -17,39 +18,16 @@ const COMPANY_SIZES = (t) => [
   { value: '500+', label: t('contact.companySize5') },
 ];
 
-const CONTACT_CHANNELS = (t) => [
-  {
-    icon: HiOutlineMail,
-    label: t('contact.email'),
-    value: t('contact.emailValue'),
-    href: 'mailto:hello@founderai.vn',
-    description: t('contact.emailDesc'),
-  },
-  {
-    icon: HiOutlinePhone,
-    label: t('contact.hotline'),
-    value: t('contact.hotlineValue'),
-    href: 'tel:19006868',
-    description: t('contact.hotlineDesc'),
-  },
-  {
-    icon: HiOutlineChat,
-    label: t('contact.zalo'),
-    value: t('contact.zaloValue'),
-    href: 'https://zalo.me/founderai',
-    description: t('contact.zaloDesc'),
-  },
-  {
-    icon: HiOutlineLocationMarker,
-    label: t('contact.office'),
-    value: t('contact.officeValue'),
-    href: null,
-    description: t('contact.officeDesc'),
-  },
-];
-
 export default function ContactPage() {
   const { t } = useI18n();
+  const { getOverride } = usePublicLandingOverrides('contact');
+
+  // Helper to get override value with i18n fallback
+  const getValue = (key, fallback) => {
+    const override = getOverride(key);
+    return override || fallback;
+  };
+
   const [form, setForm] = useState({
     name: '', email: '', phone: '', company: '', companySize: '', message: '',
   });
@@ -92,11 +70,18 @@ export default function ContactPage() {
       <div className="relative pt-8 pb-20">
       {/* Hero */}
       <div className="max-w-7xl mx-auto px-6 text-center mb-12 pt-10">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4">
-          {t('contact.title')}
+        <h1 
+          className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4"
+          style={{ color: getValue('contact.titleColor', undefined) }}
+          data-edit="contact.title"
+        >
+          {getValue('contact.title', t('contact.title'))}
         </h1>
-        <p className="text-base md:text-lg text-white/70 max-w-2xl mx-auto">
-          {t('contact.subtitle')}
+        <p 
+          className="text-base md:text-lg text-white/70 max-w-2xl mx-auto"
+          data-edit="contact.subtitle"
+        >
+          {getValue('contact.subtitle', t('contact.subtitle'))}
         </p>
       </div>
 
@@ -132,11 +117,11 @@ export default function ContactPage() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-1">
-                    {t('contact.formTitle')}
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-1" data-edit="contact.formTitle">
+                    {getValue('contact.formTitle', t('contact.formTitle'))}
                   </h2>
-                  <p className="text-sm text-slate-500">
-                    {t('contact.formSubtitle')}
+                  <p className="text-sm text-slate-500" data-edit="contact.formSubtitle">
+                    {getValue('contact.formSubtitle', t('contact.formSubtitle'))}
                   </p>
                 </div>
 
@@ -240,55 +225,110 @@ export default function ContactPage() {
         {/* RIGHT: Contact info (2 cols) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border border-orange-100 p-6">
-            <h3 className="text-lg font-black text-slate-900 mb-1">{t('contact.contactChannels')}</h3>
-            <p className="text-sm text-slate-600 mb-5">
-              {t('contact.contactChannelsSubtitle')}
+            <h3 className="text-lg font-black text-slate-900 mb-1" data-edit="contact.contactChannels">{t('contact.contactChannels')}</h3>
+            <p className="text-sm text-slate-600 mb-5" data-edit="contact.contactChannelsSubtitle">
+              {getValue('contact.contactChannelsSubtitle', t('contact.contactChannelsSubtitle'))}
             </p>
 
             <div className="space-y-3">
-              {CONTACT_CHANNELS(t).map((channel) => {
-                const Icon = channel.icon;
-                const content = (
-                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
-                      <Icon className="w-5 h-5 text-white" />
+              {/* Email */}
+              <a
+                href={getValue('contact.emailHref', 'mailto:hello@founderai.vn')}
+                className="block"
+              >
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
+                    <HiOutlineMail className="w-5 h-5 text-white" data-edit="contact.email.icon" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.email.label">
+                      {getValue('contact.email.label', t('contact.email'))}
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                        {channel.label}
-                      </div>
-                      <div className="text-sm font-bold text-slate-900 truncate">
-                        {channel.value}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {channel.description}
-                      </div>
+                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.email.value">
+                      {getValue('contact.email.value', t('contact.emailValue'))}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.email.desc">
+                      {getValue('contact.email.desc', t('contact.emailDesc'))}
                     </div>
                   </div>
-                );
+                </div>
+              </a>
 
-                return channel.href ? (
-                  <a
-                    key={channel.label}
-                    href={channel.href}
-                    target={channel.href.startsWith('http') ? '_blank' : undefined}
-                    rel={channel.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    className="block"
-                  >
-                    {content}
-                  </a>
-                ) : (
-                  <div key={channel.label}>{content}</div>
-                );
-              })}
+              {/* Phone */}
+              <a
+                href={getValue('contact.phoneHref', 'tel:19006868')}
+                className="block"
+              >
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
+                    <HiOutlinePhone className="w-5 h-5 text-white" data-edit="contact.phone.icon" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.phone.label">
+                      {getValue('contact.phone.label', t('contact.hotline'))}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.phone.value">
+                      {getValue('contact.phone.value', t('contact.hotlineValue'))}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.phone.desc">
+                      {getValue('contact.phone.desc', t('contact.hotlineDesc'))}
+                    </div>
+                  </div>
+                </div>
+              </a>
+
+              {/* Zalo */}
+              <a
+                href={getValue('contact.zaloHref', 'https://zalo.me/founderai')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0">
+                    <HiOutlineChat className="w-5 h-5 text-white" data-edit="contact.zalo.icon" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.zalo.label">
+                      {getValue('contact.zalo.label', t('contact.zalo'))}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.zalo.value">
+                      {getValue('contact.zalo.value', t('contact.zaloValue'))}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.zalo.desc">
+                      {getValue('contact.zalo.desc', t('contact.zaloDesc'))}
+                    </div>
+                  </div>
+                </div>
+              </a>
+
+              {/* Office */}
+              <div>
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shrink-0">
+                    <HiOutlineLocationMarker className="w-5 h-5 text-white" data-edit="contact.office.icon" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.office.label">
+                      {getValue('contact.office.label', t('contact.office'))}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900" data-edit="contact.office.value">
+                      {getValue('contact.office.value', t('contact.officeValue'))}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.office.desc">
+                      {getValue('contact.office.desc', t('contact.officeDesc'))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* CTA secondary */}
           <div className="bg-slate-900 rounded-2xl p-6 text-white">
-            <h4 className="font-black text-lg mb-2">{t('contact.readyToStart')}</h4>
-            <p className="text-sm text-slate-300 mb-4">
-              {t('contact.freeTrial')}
+            <h4 className="font-black text-lg mb-2" data-edit="contact.readyToStart">{t('contact.readyToStart')}</h4>
+            <p className="text-sm text-slate-300 mb-4" data-edit="contact.freeTrial">
+              {getValue('contact.freeTrial', t('contact.freeTrial'))}
             </p>
             <div className="flex flex-col gap-2">
               <Link

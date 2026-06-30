@@ -37,6 +37,7 @@ import {
   HiOutlineTag,
   HiOutlinePhone,
   HiOutlineMailOpen,
+  HiOutlinePencil,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -102,9 +103,9 @@ const superAdminMenuItems = (t) => [
     icon: HiOutlineCog,
   },
   {
-    name: t('nav.bulkNotification'),
+    name: t('nav.notificationCenter'),
     section: t('nav.adminNavMessaging'),
-    path: '/admin/bulk-notification',
+    path: '/admin/notification-center',
     icon: HiOutlineMailOpen,
   },
   {
@@ -118,6 +119,12 @@ const superAdminMenuItems = (t) => [
     section: t('nav.adminNavMonitoring'),
     path: '/admin/diagnostic',
     icon: HiOutlinePhone,
+  },
+  {
+    name: t('nav.landingCustomizer'),
+    section: t('nav.adminNavMonitoring'),
+    path: '/admin/landing-customizer',
+    icon: HiOutlinePencil,
   },
 ];
 

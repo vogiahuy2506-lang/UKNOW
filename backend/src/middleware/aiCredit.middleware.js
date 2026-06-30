@@ -25,7 +25,8 @@ export function assertAiCreditAvailable(feature) {
       req.aiCreditContext = await aiCreditMeter.assertAvailable(req.user?.id);
       next();
     } catch (error) {
-      return res.status(error.status || 403).json(buildCreditErrorPayload(error));
+      const status = error.status || (error.code === 'RESOURCE_LIMIT_EXCEEDED' ? 402 : 403);
+      return res.status(status).json(buildCreditErrorPayload(error));
     }
   };
 }

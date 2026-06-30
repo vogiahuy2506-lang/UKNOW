@@ -6,6 +6,7 @@ import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderC
 import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
+import notificationService from '../services/admin/notification.service.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
@@ -594,4 +595,28 @@ export const initScheduler = () => {
   } else {
     console.warn(`[Scheduler] AI_MODEL_SYNC_CRON không hợp lệ, bỏ qua sync AI models: ${aiModelSyncCron}`);
   }
+
+  // ── Scheduled Notifications - Xử lý notification đã hẹn giờ ─────────────────
+  // Chạy mỗi phút để kiểm tra và gửi các notification đã đến giờ
+  const processScheduledNotifications = async () => {
+    try {
+      const results = await notificationService.processScheduledNotifications();
+      for (const result of results) {
+        if (result.success) {
+          console.log(`[Scheduler] Đã gửi notification #${result.id}: ${result.result.sent}/${result.result.total} email`);
+        } else {
+          console.error(`[Scheduler] Lỗi gửi notification #${result.id}: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi xử lý scheduled notifications:', error.message);
+    }
+  };
+
+  // Chạy mỗi phút
+  cron.schedule('* * * * *', async () => {
+    await processScheduledNotifications();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Scheduled Notifications: xử lý mỗi phút');
 };

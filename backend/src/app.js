@@ -34,6 +34,8 @@ import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
 import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
 import adminLandingPageRoutes from './routes/adminLandingPage.routes.js';
+import adminLandingCustomizerRoutes from './routes/adminLandingCustomizer.routes.js';
+import adminLandingSectionRoutes from './routes/adminLandingSection.routes.js';
 import adminStatsRoutes from './routes/adminStats.routes.js';
 import adminPlansRoutes from './routes/adminPlans.routes.js';
 import adminMembersRoutes from './routes/adminMembers.routes.js';
@@ -44,6 +46,7 @@ import adminDeliveryMonitorRoutes from './routes/adminDeliveryMonitor.routes.js'
 import adminAiUsageRoutes from './routes/adminAiUsage.routes.js';
 import adminAiModelsRoutes from './routes/adminAiModels.routes.js';
 import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.js';
+import adminNotificationRoutes from './routes/adminNotification.routes.js';
 import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
@@ -154,6 +157,8 @@ export function createApp() {
   app.use('/api/admin/landing-featured-courses', adminLandingFeaturedCourseRoutes);
   app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);
   app.use('/api/admin/landing-pages', adminLandingPageRoutes);
+  app.use('/api/admin/landing-customizer', adminLandingCustomizerRoutes);
+  app.use('/api/admin/landing-sections', adminLandingSectionRoutes);
   app.use('/api/leads', leadRoutes);
   app.use('/api/verification', verificationRoutes);
   app.use('/api/payments', paymentRoutes);
@@ -171,6 +176,7 @@ export function createApp() {
   app.use('/api/admin/ai-usage', adminAiUsageRoutes);
   app.use('/api/admin/ai-models', adminAiModelsRoutes);
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
+  app.use('/api/admin/notifications', adminNotificationRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
   app.use('/api/ai', aiRoutes);

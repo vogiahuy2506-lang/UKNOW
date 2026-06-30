@@ -57,9 +57,10 @@ import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import AdminAiUsagePage from './pages/admin/AdminAiUsagePage';
 import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
-import BulkNotificationPage from './pages/admin/BulkNotificationPage';
-import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
+import NotificationCenter from './pages/admin/NotificationCenter';
+import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
+import LandingPageCustomizer from './pages/superadmin/LandingPageCustomizer';
 import AuditLogsPage from './pages/settings/AuditLogsPage';
 import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
@@ -319,7 +320,8 @@ function App() {
             <Route path="ai-models" element={<AdminAiModelsPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="diagnostic" element={<DiagnosticPage />} />
-            <Route path="bulk-notification" element={<BulkNotificationPage />} />
+            <Route path="notification-center" element={<NotificationCenter />} />
+            <Route path="landing-customizer" element={<LandingPageCustomizer />} />
           </Route>
 
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}

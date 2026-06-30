@@ -87,7 +87,7 @@ class AiCreditMeterService {
 
   _exhausted({ used = 0, limit = 0 } = {}) {
     const error = new Error('Bạn đã dùng hết lượt AI trong kỳ — nâng cấp gói để tiếp tục');
-    error.status = 403;
+    error.status = 402; // Payment Required - hết credits
     error.code = 'RESOURCE_LIMIT_EXCEEDED';
     error.resource = AI_CREDIT_RESOURCE;
     error.used = used;
@@ -98,7 +98,7 @@ class AiCreditMeterService {
 
   _subscriptionExpired() {
     const error = new Error('Gói đã hết hạn — vui lòng gia hạn để dùng AI');
-    error.status = 403;
+    error.status = 402; // Payment Required - gói hết hạn
     error.code = 'RESOURCE_LIMIT_EXCEEDED';
     error.resource = AI_CREDIT_RESOURCE;
     error.upgradeRequired = true;

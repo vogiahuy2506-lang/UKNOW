@@ -133,7 +133,7 @@ api.interceptors.response.use(
     const isAuthRequest = isAuthEndpointRequest(requestUrl);
 
     // Khi server báo đạt giới hạn tài nguyên → show upgrade toast toàn app
-    if (error.response?.data?.limitReached) {
+    if (error.response?.data?.limitReached || error.response?.data?.upgradeRequired) {
       const msg = error.response.data.message;
       toast.custom(
         (tst) => React.createElement(
@@ -166,8 +166,8 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Chỉ xử lý phiên cho các lỗi 401
-    if (statusCode !== 401) {
+    // Chỉ xử lý phiên cho các lỗi 401 và 402
+    if (statusCode !== 401 && statusCode !== 402) {
       return Promise.reject(error);
     }
 

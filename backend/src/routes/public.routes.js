@@ -1,77 +1,46 @@
 import express from 'express';
-import cors from 'cors';
-import publicLeadController from '../controllers/publicLead.controller.js';
-import landingFeaturedCoursePublicController from '../controllers/landingFeaturedCoursePublic.controller.js';
-import landingTestimonialPublicController from '../controllers/landingTestimonialPublic.controller.js';
-import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
-import * as publicPromotionController from '../controllers/publicPromotion.controller.js';
-import { domainResolver } from '../middleware/domainResolver.js';
-import {
-  publicLeadLimiter,
-  publicLandingAnalyticsLimiter,
-} from '../middleware/rateLimiter.middleware.js';
+import landingCustomizerService from '../services/landingCustomizer.service.js';
 
 const router = express.Router();
 
-/** Cho phép gọi API public từ custom domain (Origin = www.khách.com) — GET/POST landing + analytics. */
-const landingPublicCors = cors({
-  origin: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  maxAge: 86400,
+router.get('/landing-overrides', async (req, res) => {
+  try {
+    const overrides = await landingCustomizerService.getActiveOverrides();
+    const overridesMap = landingCustomizerService.getOverridesMap(overrides);
+    return res.json({ success: true, data: overridesMap });
+  } catch (error) {
+    console.error('[PublicLandingOverrides]', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể tải landing overrides',
+    });
+  }
 });
 
-router.post(
-  '/leads',
-  landingPublicCors,
-  publicLeadLimiter,
-  publicLeadController.create.bind(publicLeadController)
-);
-
-router.get('/promotions/active', publicPromotionController.active);
-
-router.get(
-  '/landing-track/go',
-  landingPagePublicController.getTrackGo.bind(landingPagePublicController)
-);
-
-router.post(
-  '/landing-analytics/view',
-  landingPublicCors,
-  publicLandingAnalyticsLimiter,
-  landingPagePublicController.postView.bind(landingPagePublicController)
-);
-
-// GET /api/public/landing-pages/:slug - Get landing page by slug
-router.get(
-  '/landing-pages-by-host',
-  landingPublicCors,
-  landingPagePublicController.getPublishedByHost.bind(landingPagePublicController)
-);
-
-router.get(
-  '/landing-pages/:slug',
-  landingPublicCors,
-  landingPagePublicController.getPublished.bind(landingPagePublicController)
-);
-
-// GET /api/public/lp - Get landing page for custom domain (resolves from Host header)
-// This route is checked when req.isCustomDomain is set by domainResolver
-router.get(
-  '/lp',
-  landingPagePublicController.getByDomain.bind(landingPagePublicController)
-);
-
-// GET /api/public/landing-featured-courses
-router.get(
-  '/landing-featured-courses',
-  landingFeaturedCoursePublicController.list.bind(landingFeaturedCoursePublicController)
-);
-
-// GET /api/public/landing-testimonials
-router.get(
-  '/landing-testimonials',
-  landingTestimonialPublicController.list.bind(landingTestimonialPublicController)
-);
+router.get('/landing-overrides/:page', async (req, res) => {
+  try {
+    const { page } = req.params;
+    const overrides = await landingCustomizerService.getOverridesByPage(page);
+    const map = {};
+    for (const override of overrides) {
+      if (!map[override.section]) {
+        map[override.section] = {};
+      }
+      map[override.section][override.key] = {
+        valueVi: override.valueVi,
+        valueEn: override.valueEn,
+        extraData: override.extraData,
+      };
+    }
+    return res.json({ success: true, data: map });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error('[PublicLandingOverrides.page]', error);
+    return res.status(status).json({
+      success: false,
+      message: error.message || 'Không thể tải landing overrides',
+    });
+  }
+});
 
 export default router;

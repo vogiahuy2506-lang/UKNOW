@@ -4,9 +4,10 @@ import db from '../../config/database.js';
  * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
-export async function findAllMembers({ search, planId, status, expiry, role = 'user' } = {}) {
-  const safeRole = role === 'admin' ? 'admin' : 'user';
-  const conditions = [`u.role = '${safeRole}'`];
+export async function findAllMembers({ search, planId, status, expiry, role } = {}) {
+  // If role is specified, use it; otherwise get all users (including admins)
+  const roleCondition = role ? `u.role = '${role}'` : '1=1';
+  const conditions = [roleCondition];
   const params = [];
 
   if (search) {

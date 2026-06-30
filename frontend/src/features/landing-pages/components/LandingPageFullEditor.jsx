@@ -366,7 +366,11 @@ export default function LandingPageFullEditor({
       if (res.data.status === 'active') {
         toast.success(t('landingPageEditor.dnsSaved'));
       } else {
-        toast.success('Đã thêm domain. Vui lòng thêm bản ghi DNS và bấm "Kiểm tra lại".');
+        // Thông báo rõ ràng về thời gian chờ DNS propagate
+        const waitTime = cdIsApexDomain ? '5-30 phút' : '30 phút - 24 giờ';
+        toast.success(
+          `Đã thêm domain. DNS cần khoảng ${waitTime} để xác thực. Bạn có thể đóng trang này và quay lại sau.`
+        );
       }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.saveDomainFailed'));
@@ -387,7 +391,9 @@ export default function LandingPageFullEditor({
       } else {
         const isApex = res.data?.isApexDomain;
         const recordType = isApex ? 'A record' : 'CNAME record';
-        toast.error(`${recordType} chưa đúng hoặc DNS chưa propagate. Hãy thử lại sau vài phút.`);
+        toast.error(
+          `${recordType} chưa đúng hoặc DNS chưa propagate. Vui lòng đợi khoảng 30 phút - 24 giờ rồi thử lại.`
+        );
       }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || t('landingPageEditor.verifyFailed'));
@@ -660,9 +666,12 @@ export default function LandingPageFullEditor({
                                 <div className="min-w-0">
                                   <p className="font-mono font-semibold text-gray-900 break-all">{cdInfo.hostname}</p>
                                   <p className="text-sm text-gray-600 mt-1">
-                                    {cdInfo.instructions || 'Hệ thống sẽ tạo CNAME proxied trong Cloudflare cho subdomain này. Nếu chưa thấy hoạt động, bấm thử lại để cấp lại DNS.'}
+                                    {cdInfo.instructions || 'Hệ thống sẽ tạo CNAME proxied trong Cloudflare cho subdomain này.'}
                                   </p>
                                 </div>
+                              </div>
+                              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-700">
+                                <strong> Lưu ý:</strong> Việc cấp subdomain qua Cloudflare có thể mất <strong>30 phút - 24 giờ</strong>. Bạn có thể đóng trang này và quay lại sau.
                               </div>
                               <button
                                 type="button"
@@ -804,8 +813,11 @@ export default function LandingPageFullEditor({
                                 <ol className="text-sm text-blue-700 mt-2 space-y-1 list-decimal list-inside">
                                   <li>Đăng nhập trang quản lý DNS của domain <strong>{cdInfo.hostname}</strong></li>
                                   <li>Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} như bảng trên</li>
-                                  <li>Bấm "Kiểm tra lại" hoặc đợi 5 phút để hệ thống tự động kích hoạt</li>
+                                  <li>Bấm "Kiểm tra lại" hoặc đợi để hệ thống tự động kích hoạt</li>
                                 </ol>
+                                <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                                  <strong> Lưu ý:</strong> DNS propagation có thể mất từ <strong>30 phút đến 24 giờ</strong>. Nếu chưa hoạt động, hãy quay lại kiểm tra sau.
+                                </div>
                               </div>
                               <div className="bg-purple-50 border border-purple-200 rounded p-3 text-sm text-purple-700">
                                 <strong>SSL tự động:</strong> SSL certificate sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.

@@ -10,6 +10,7 @@ import AnimatedSection from '../../components/AnimatedSection';
 import TestimonialSlider from './components/TestimonialSlider';
 import Footer from '../../components/layout/client/Footer';
 import { useI18n } from '../../i18n';
+import { usePublicLandingOverrides } from '../../features/landing-customizer';
 
 const features = (t) => [
   { icon: FaLaptopCode, title: t('heroPage.feature1Title'), description: t('heroPage.feature1Desc'), color: 'from-orange-500 to-red-500' },
@@ -18,13 +19,6 @@ const features = (t) => [
   { icon: FaUsers, title: t('heroPage.feature4Title'), description: t('heroPage.feature4Desc'), color: 'from-rose-400 to-red-500' },
   { icon: FaChartBar, title: t('heroPage.feature5Title'), description: t('heroPage.feature5Desc'), color: 'from-orange-400 to-amber-500' },
   { icon: FaShieldAlt, title: t('heroPage.feature6Title'), description: t('heroPage.feature6Desc'), color: 'from-slate-600 to-slate-800' },
-];
-
-const stats = (t) => [
-  { value: '1,500+', label: t('heroPage.statsBusinesses') },
-  { value: '5M+', label: t('heroPage.statsLeads') },
-  { value: '500+', label: t('heroPage.statsCampaigns') },
-  { value: '99.9%', label: t('heroPage.statsUptime') },
 ];
 
 const steps = (t) => [
@@ -42,7 +36,16 @@ const benefits = (t) => [
 ];
 
 export default function HeroPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { getOverride } = usePublicLandingOverrides('hero');
+
+  // Helper to get override value with i18n fallback
+  // Keys use _vi and _en suffixes
+  const getValue = (baseKey, fallback) => {
+    const key = locale === 'en' ? `${baseKey}_en` : `${baseKey}_vi`;
+    const override = getOverride(key);
+    return override || fallback;
+  };
 
   return (
     <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative">
@@ -51,7 +54,7 @@ export default function HeroPage() {
       <video
         className="fixed inset-0 w-full h-full object-cover pointer-events-none"
         style={{ zIndex: -1 }}
-        src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260403_050628_c4e32401-fab4-4a27-b7a8-6e9291cd5959.mp4"
+        src={getValue('media.videoUrl', 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260403_050628_c4e32401-fab4-4a27-b7a8-6e9291cd5959.mp4')}
         autoPlay loop muted playsInline preload="auto"
       />
 
@@ -60,29 +63,32 @@ export default function HeroPage() {
         <HeroNavbar />
 
         <div className="flex flex-col items-center px-4 pt-10 sm:pt-14 pb-6 sm:pb-10 text-center">
+          {/* Badge - Editable */}
           <div className="inline-flex items-center gap-2 liquid-glass border border-white/20 rounded-full px-4 py-1.5 text-[13px] font-medium text-white">
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#ef4d23' }} />
-            {t('heroPage.tagline')}
+            <span data-edit="hero.tagline">{getValue('hero.tagline', t('heroPage.tagline'))}</span>
           </div>
 
+          {/* Title - Editable parts */}
           <h1
             className="mt-5 sm:mt-6 max-w-4xl text-white"
             style={{ fontSize: 'clamp(32px, 7vw, 80px)', lineHeight: 1.05, fontWeight: 500, letterSpacing: 0 }}
           >
-            {t('heroPage.heroTitleLine1')}{' '}
-            <span style={{ fontFamily: "'', serif", fontStyle: 'italic', fontWeight: 400 }}>
-              {t('heroPage.heroTitleAccent')}
+            <span data-edit="hero.titleLine1">{getValue('hero.titleLine1', t('heroPage.heroTitleLine1'))}</span>{' '}
+            <span data-edit="hero.titleAccent" style={{ fontFamily: "'', serif", fontStyle: 'italic', fontWeight: 400 }}>
+              {getValue('hero.titleAccent', t('heroPage.heroTitleAccent'))}
             </span>
-            <br />{t('heroPage.heroTitleLine2')}
+            <br /><span data-edit="hero.titleLine2">{getValue('hero.titleLine2', t('heroPage.heroTitleLine2'))}</span>
           </h1>
 
+          {/* Subtitle - Editable */}
           <p
             className="mt-4 sm:mt-5 text-white/70 px-2 max-w-xl"
             style={{ fontSize: 'clamp(13px, 3vw, 16px)' }}
+            data-edit="hero.subtitle"
           >
-            {t('heroPage.heroSubtitle')}
+            {getValue('hero.subtitle', t('heroPage.heroSubtitle'))}
           </p>
-
         </div>
 
         {/* Dashboard — fade out ở bottom */}
@@ -98,12 +104,22 @@ export default function HeroPage() {
         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
         <div className="relative max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-white/20">
-            {stats(t).map((stat, i) => (
-              <AnimatedSection key={i} delay={i * 100} className="text-center px-4">
-                <div className="text-4xl md:text-5xl font-black text-white mb-2">{stat.value}</div>
-                <div className="text-white/70 font-semibold text-sm uppercase tracking-wider">{stat.label}</div>
-              </AnimatedSection>
-            ))}
+            <AnimatedSection delay={0} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-white mb-2" data-edit="stats.businesses">{getValue('stats.businesses', '1,500+')}</div>
+              <div className="text-white/70 font-semibold text-sm uppercase tracking-wider" data-edit="stats.businessesLabel">{getValue('stats.businessesLabel', t('heroPage.statsBusinesses'))}</div>
+            </AnimatedSection>
+            <AnimatedSection delay={100} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-white mb-2" data-edit="stats.leads">{getValue('stats.leads', '5M+')}</div>
+              <div className="text-white/70 font-semibold text-sm uppercase tracking-wider" data-edit="stats.leadsLabel">{getValue('stats.leadsLabel', t('heroPage.statsLeads'))}</div>
+            </AnimatedSection>
+            <AnimatedSection delay={200} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-white mb-2" data-edit="stats.campaigns">{getValue('stats.campaigns', '500+')}</div>
+              <div className="text-white/70 font-semibold text-sm uppercase tracking-wider" data-edit="stats.campaignsLabel">{getValue('stats.campaignsLabel', t('heroPage.statsCampaigns'))}</div>
+            </AnimatedSection>
+            <AnimatedSection delay={300} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-white mb-2" data-edit="stats.uptime">{getValue('stats.uptime', '99.9%')}</div>
+              <div className="text-white/70 font-semibold text-sm uppercase tracking-wider" data-edit="stats.uptimeLabel">{getValue('stats.uptimeLabel', t('heroPage.statsUptime'))}</div>
+            </AnimatedSection>
           </div>
         </div>
       </section>
@@ -113,14 +129,14 @@ export default function HeroPage() {
         <div className="absolute inset-0 bg-white/70 backdrop-blur-md" />
         <div className="relative max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20 max-w-3xl mx-auto">
-            <span className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full font-bold text-sm tracking-wide uppercase mb-6 border border-orange-200">
-              {t('heroPage.featuresBadge')}
+            <span className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full font-bold text-sm tracking-wide uppercase mb-6 border border-orange-200" data-edit="features.badge">
+              {getValue('features.badge', t('heroPage.featuresBadge'))}
             </span>
             <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
-              {t('heroPage.featuresTitle')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{t('heroPage.featuresTitleHighlight')}</span>
+              <span data-edit="features.title">{getValue('features.title', t('heroPage.featuresTitle'))}</span> <span data-edit="features.titleHighlight" className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{getValue('features.titleHighlight', t('heroPage.featuresTitleHighlight'))}</span>
             </h2>
-            <p className="text-xl text-slate-600 leading-relaxed">
-              {t('heroPage.featuresSubtitle')}
+            <p className="text-xl text-slate-600 leading-relaxed" data-edit="features.subtitle">
+              {getValue('features.subtitle', t('heroPage.featuresSubtitle'))}
             </p>
           </AnimatedSection>
 
@@ -131,8 +147,8 @@ export default function HeroPage() {
                   <div className={`w-16 h-16 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                     <feature.icon className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-4">{feature.title}</h3>
-                  <p className="text-slate-600 leading-relaxed">{feature.description}</p>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4" data-edit={`features.f${i+1}.title`}>{feature.title}</h3>
+                  <p className="text-slate-600 leading-relaxed" data-edit={`features.f${i+1}.desc`}>{feature.description}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -145,11 +161,11 @@ export default function HeroPage() {
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
         <div className="relative max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-24 max-w-3xl mx-auto">
-            <span className="inline-block px-4 py-2 bg-white/20 text-white rounded-full font-bold text-sm tracking-wide uppercase mb-6 border border-white/30">
-              {t('heroPage.howItWorksBadge')}
+            <span className="inline-block px-4 py-2 bg-white/20 text-white rounded-full font-bold text-sm tracking-wide uppercase mb-6 border border-white/30" data-edit="steps.badge">
+              {getValue('steps.badge', t('heroPage.howItWorksBadge'))}
             </span>
             <h2 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight">
-              {t('heroPage.howItWorksTitle')} <span className="text-orange-400">{t('heroPage.howItWorksSubtitle')}</span>
+              <span data-edit="steps.title">{getValue('steps.title', t('heroPage.howItWorksTitle'))}</span> <span data-edit="steps.subtitle" className="text-orange-400">{getValue('steps.subtitle', t('heroPage.howItWorksSubtitle'))}</span>
             </h2>
           </AnimatedSection>
 
@@ -160,8 +176,8 @@ export default function HeroPage() {
                   <step.icon className="w-9 h-9 text-orange-400" />
                 </div>
                 <div className="text-sm font-black text-orange-400 uppercase tracking-widest mb-3">{t('heroPage.step')} {step.number}</div>
-                <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-                <p className="text-white/70 leading-relaxed">{step.description}</p>
+                <h3 className="text-xl font-bold text-white mb-3" data-edit={`steps.s${i+1}.title`}>{step.title}</h3>
+                <p className="text-white/70 leading-relaxed" data-edit={`steps.s${i+1}.desc`}>{step.description}</p>
               </AnimatedSection>
             ))}
           </div>
@@ -173,7 +189,7 @@ export default function HeroPage() {
         <div className="absolute inset-0 bg-white/75 backdrop-blur-md" />
         <div className="relative max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6">{t('heroPage.whyChooseTitle')}</h2>
+            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6" data-edit="benefits.title">{getValue('benefits.title', t('heroPage.whyChooseTitle'))}</h2>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
@@ -183,8 +199,8 @@ export default function HeroPage() {
                   <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <b.icon className="w-8 h-8 text-orange-500" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">{b.title}</h3>
-                  <p className="text-slate-600">{b.desc}</p>
+                  <h3 className="text-xl font-bold text-slate-900 mb-3" data-edit={`benefits.b${i+1}.title`}>{b.title}</h3>
+                  <p className="text-slate-600" data-edit={`benefits.b${i+1}.desc`}>{b.desc}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -195,18 +211,19 @@ export default function HeroPage() {
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
               <div className="flex flex-col md:flex-row items-center justify-between gap-12 relative z-10">
                 <div>
-                  <h3 className="text-3xl md:text-4xl font-black text-white mb-4">{t('heroPage.ctaReady')}</h3>
-                  <p className="text-orange-100 text-lg">{t('heroPage.ctaSubtitle')}</p>
+                  <h3 className="text-3xl md:text-4xl font-black text-white mb-4" data-edit="cta.title">{getValue('cta.title', t('heroPage.ctaReady'))}</h3>
+                  <p className="text-orange-100 text-lg" data-edit="cta.subtitle">{getValue('cta.subtitle', t('heroPage.ctaSubtitle'))}</p>
                 </div>
                 <div className="shrink-0 flex flex-col items-center gap-4">
                   <Link
                     to="/login"
                     className="px-10 py-5 bg-white text-orange-600 rounded-full font-bold text-xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 block text-center"
+                    data-edit="cta.button"
                   >
-                    {t('heroPage.ctaButton')}
+                    {getValue('cta.button', t('heroPage.ctaButton'))}
                   </Link>
-                  <span className="text-orange-100 text-sm font-medium flex items-center gap-2">
-                    <FaCheckCircle /> {t('heroPage.ctaNote')}
+                  <span className="text-orange-100 text-sm font-medium flex items-center gap-2" data-edit="cta.note">
+                    <FaCheckCircle /> {getValue('cta.note', t('heroPage.ctaNote'))}
                   </span>
                 </div>
               </div>
