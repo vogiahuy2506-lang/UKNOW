@@ -27,29 +27,35 @@ router.get('/promotions/active', async (req, res) => {
          WHERE is_active = true AND auto_apply = true
            AND (start_date IS NULL OR start_date <= NOW())
            AND (end_date IS NULL OR end_date >= NOW())
-         ORDER BY
-           CASE WHEN discount_type = 'percent' THEN discount_percent * $2 / 100
-                ELSE discount_amount
-           END DESC
-         LIMIT 1`,
-        [plans[0].id, plans[0].price]
+         ORDER BY id ASC`
       );
 
-      if (vouchers[0]) {
-        hasPromotion = true;
-        const voucher = vouchers[0];
-        let discountAmount = voucher.discount_type === 'percent'
-          ? Math.min(voucher.discount_percent * plans[0].price / 100, voucher.max_discount || Infinity)
-          : voucher.discount_amount;
+      if (vouchers.length > 0) {
+        let topVoucher = null;
+        let maxDiscountAmount = 0;
 
-        topPromotion = {
-          code: voucher.code,
-          discountType: voucher.discount_type,
-          discountAmount: Math.round(discountAmount),
-          discountPercent: voucher.discount_percent,
-          maxDiscount: voucher.max_discount,
-          minOrderAmount: voucher.min_order_amount,
-        };
+        for (const voucher of vouchers) {
+          let discountAmount = voucher.discount_type === 'percent'
+            ? Math.min(voucher.discount_percent * plans[0].price / 100, voucher.max_discount || Infinity)
+            : voucher.discount_amount;
+
+          if (discountAmount > maxDiscountAmount) {
+            maxDiscountAmount = discountAmount;
+            topVoucher = voucher;
+          }
+        }
+
+        if (topVoucher) {
+          hasPromotion = true;
+          topPromotion = {
+            code: topVoucher.code,
+            discountType: topVoucher.discount_type,
+            discountAmount: Math.round(maxDiscountAmount),
+            discountPercent: topVoucher.discount_percent,
+            maxDiscount: topVoucher.max_discount,
+            minOrderAmount: topVoucher.min_order_amount,
+          };
+        }
       }
     }
 
