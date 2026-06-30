@@ -67,7 +67,9 @@ export default {
   creditBanner: {
     low: 'AI credits are running low — {remaining} left ({percent}%).',
     empty: 'AI credits are used up for this period — upgrade to continue.',
+    expired: 'Your plan has expired — messaging and AI are paused until renewal.',
     upgrade: 'Upgrade',
+    viewPricing: 'View pricing',
     dismiss: 'Dismiss AI credit warning',
   },
 
@@ -2599,6 +2601,10 @@ export default {
     templateCreated: 'Template generated.',
     aiTokenExceeded: 'You have used all AI tokens in your plan for this period. Please upgrade your plan to continue.',
     aiCreditExceeded: 'You have used all AI credits for this billing period. Please upgrade your plan to continue.',
+    planExpired: 'Your plan has expired — renew to continue using AI.',
+    planExpiredBanner: 'Your plan has expired. Renew or choose a new plan to keep using AI.',
+    creditsEmptyBanner: 'You have used all AI credits for this period. Upgrade to continue.',
+    inputBlockedPlaceholder: 'Renew or upgrade your plan to continue chatting...',
     upgradePlan: 'Upgrade plan',
     genericError: 'Something went wrong. Please try again.',
     // Ask more card
@@ -4249,6 +4255,7 @@ export default {
     daysLeft: '— {days} days left',
     inGracePeriod: 'Expired — {days} grace days remaining, please renew',
     fullyExpired: 'Plan expired — sending & AI paused until renewal',
+    suspended: 'Paused',
     // Status
     success: 'Success',
     pending: 'Pending payment',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HiOutlineExclamation, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
+import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 
 const DISMISS_KEY = 'founder_ai_credit_warning_dismissed';
 
@@ -21,6 +22,7 @@ const CreditWarningBanner = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const aiCredits = useAuthStore((state) => state.aiCredits);
+  const billingStatus = useAuthStore((state) => state.billingStatus);
   const [isDismissed, setIsDismissed] = useState(() => {
     try {
       return sessionStorage.getItem(DISMISS_KEY) === '1';
@@ -29,9 +31,34 @@ const CreditWarningBanner = () => {
     }
   });
 
-  const creditState = useMemo(() => {
+  const alertState = useMemo(() => {
+    if (isAdminUser(user)) return null;
+
+    if (billingStatus?.isFullyExpired) {
+      return {
+        kind: 'expired',
+        isEmpty: true,
+        message: t('creditBanner.expired'),
+        cta: t('creditBanner.viewPricing'),
+      };
+    }
+
+    const aiBlock = getAiBillingBlockState({ isAdmin: false, billingStatus, aiCredits });
+    if (aiBlock?.type === 'credits') {
+      const limit = toFiniteNumber(aiCredits?.limit);
+      const used = Math.max(0, toFiniteNumber(aiCredits?.used));
+      return {
+        kind: 'credits-empty',
+        isEmpty: true,
+        message: t('creditBanner.empty'),
+        cta: t('creditBanner.upgrade'),
+        used,
+        limit,
+      };
+    }
+
     const limit = toFiniteNumber(aiCredits?.limit);
-    if (limit <= 0 || isAdminUser(user)) return null;
+    if (limit <= 0) return null;
 
     const used = Math.max(0, toFiniteNumber(aiCredits?.used));
     const ratio = used / limit;
@@ -40,23 +67,28 @@ const CreditWarningBanner = () => {
     const remaining = Math.max(0, Math.ceil(limit - used));
     const remainingPercent = Math.max(0, Math.round((1 - ratio) * 100));
     return {
+      kind: 'credits-low',
+      isEmpty: false,
+      message: t('creditBanner.low', {
+        remaining: remaining.toLocaleString(),
+        percent: remainingPercent,
+      }),
+      cta: t('creditBanner.upgrade'),
       used,
       limit,
-      ratio,
       remaining,
       remainingPercent,
-      isEmpty: ratio >= 1,
     };
-  }, [aiCredits?.limit, aiCredits?.used, user]);
+  }, [aiCredits, billingStatus, t, user]);
 
   useEffect(() => {
-    if (creditState?.isEmpty) setIsDismissed(false);
-  }, [creditState?.isEmpty]);
+    if (alertState?.isEmpty) setIsDismissed(false);
+  }, [alertState?.isEmpty, alertState?.kind]);
 
-  if (!creditState || (!creditState.isEmpty && isDismissed)) return null;
+  if (!alertState || (!alertState.isEmpty && isDismissed)) return null;
 
   const handleDismiss = () => {
-    if (creditState.isEmpty) return;
+    if (alertState.isEmpty) return;
     try {
       sessionStorage.setItem(DISMISS_KEY, '1');
     } catch {
@@ -68,7 +100,7 @@ const CreditWarningBanner = () => {
   return (
     <div
       className={`sticky top-0 z-20 mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-sm ${
-        creditState.isEmpty
+        alertState.isEmpty
           ? 'border-red-200 bg-red-50 text-red-800'
           : 'border-amber-200 bg-amber-50 text-amber-900'
       }`}
@@ -76,30 +108,23 @@ const CreditWarningBanner = () => {
     >
       <div className="flex min-w-0 items-center gap-2">
         <HiOutlineExclamation
-          className={`h-5 w-5 shrink-0 ${creditState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
+          className={`h-5 w-5 shrink-0 ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
         />
-        <span className="min-w-0">
-          {creditState.isEmpty
-            ? t('creditBanner.empty')
-            : t('creditBanner.low', {
-                remaining: creditState.remaining.toLocaleString(),
-                percent: creditState.remainingPercent,
-              })}
-        </span>
+        <span className="min-w-0">{alertState.message}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={() => navigate('/pricing')}
           className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
-            creditState.isEmpty
+            alertState.isEmpty
               ? 'bg-red-600 text-white hover:bg-red-700'
               : 'bg-amber-500 text-white hover:bg-amber-600'
           }`}
         >
-          {t('creditBanner.upgrade')}
+          {alertState.cta}
         </button>
-        {!creditState.isEmpty && (
+        {!alertState.isEmpty && (
           <button
             type="button"
             onClick={handleDismiss}

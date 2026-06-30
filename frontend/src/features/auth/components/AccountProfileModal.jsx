@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getMyOrders } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
+import { getSubscriptionUiStatus, isUnlimitedPlanLimit } from '../../../utils/subscriptionStatus.util.js';
 
 const PROFILE_FORM_INITIAL_STATE = { fullName: '', email: '', phone: '' };
 
@@ -34,8 +35,22 @@ function formatPrice(price, t) {
 }
 
 /** Single usage row with a progress bar. */
-function UsageBar({ icon: Icon, label, used, limit, t }) {
-  if (limit === null || limit === undefined) {
+function UsageBar({ icon: Icon, label, used, limit, t, serviceSuspended = false }) {
+  if (serviceSuspended) {
+    return (
+      <div className="flex items-center justify-between py-1">
+        <span className="flex items-center gap-1.5 text-sm text-gray-600">
+          {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+          {label}
+        </span>
+        <span className="text-xs font-semibold text-red-600">
+          {t('accountProfileModal.suspended')}
+        </span>
+      </div>
+    );
+  }
+
+  if (isUnlimitedPlanLimit(limit)) {
     return (
       <div className="flex items-center justify-between py-1">
         <span className="flex items-center gap-1.5 text-sm text-gray-600">
@@ -90,6 +105,14 @@ function PlanSection({ data, t }) {
       return [];
     }
   }, [data?.activePlanFeatures]);
+
+  const subscriptionUi = useMemo(() => getSubscriptionUiStatus({
+    hasPlan,
+    subscriptionExpiresAt: data?.subscriptionExpiresAt,
+    gracePeriodDays: data?.planGracePeriodDays,
+  }), [hasPlan, data?.subscriptionExpiresAt, data?.planGracePeriodDays]);
+
+  const serviceSuspended = subscriptionUi.serviceSuspended;
 
   if (!hasPlan) {
     return (
@@ -210,6 +233,7 @@ function PlanSection({ data, t }) {
           used={data.emailSentToday}
           limit={data.dailyEmailLimit}
           t={t}
+          serviceSuspended={serviceSuspended}
         />
         <UsageBar
           icon={HiOutlineMail}
@@ -217,6 +241,7 @@ function PlanSection({ data, t }) {
           used={data.emailSentMonth}
           limit={data.monthlyEmailLimit}
           t={t}
+          serviceSuspended={serviceSuspended}
         />
         <UsageBar
           icon={HiOutlineChatAlt2}
@@ -224,6 +249,7 @@ function PlanSection({ data, t }) {
           used={data.zaloSentToday}
           limit={data.dailyZaloLimit}
           t={t}
+          serviceSuspended={serviceSuspended}
         />
         <UsageBar
           icon={HiOutlineChatAlt2}
@@ -231,6 +257,7 @@ function PlanSection({ data, t }) {
           used={data.zaloSentMonth}
           limit={data.monthlyZaloLimit}
           t={t}
+          serviceSuspended={serviceSuspended}
         />
         <UsageBar
           icon={HiOutlineSparkles}
@@ -238,6 +265,7 @@ function PlanSection({ data, t }) {
           used={data.aiCreditsUsed || 0}
           limit={data.aiCreditsPerPeriod}
           t={t}
+          serviceSuspended={serviceSuspended}
         />
       </div>
     </div>
@@ -468,7 +496,7 @@ const ROLE_LABELS = {
 
 const AccountProfileModal = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { user, updateUser, activeContext, fetchAiCredits } = useAuthStore();
+  const { user, updateUser, activeContext, fetchAiCredits, syncBillingFromProfile } = useAuthStore();
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const TABS = isEmployeeCtx
@@ -516,6 +544,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         const nextProfile = response?.data || null;
         if (isCancelled || !nextProfile) return;
         setProfileData(nextProfile);
+        syncBillingFromProfile(nextProfile);
         setFormValues({
           fullName: String(nextProfile.fullName || ''),
           email: String(nextProfile.email || ''),
@@ -532,7 +561,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
 
     loadProfile();
     return () => { isCancelled = true; };
-  }, [isOpen, t]);
+  }, [isOpen, t, syncBillingFromProfile]);
 
   if (!isOpen) return null;
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../services/api';
+import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
@@ -102,6 +103,7 @@ export const useAuthStore = create((set, get) => ({
   isAuthenticated: false,
   isLoading: true,
   aiCredits: { used: 0, limit: null },
+  billingStatus: null,
   /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
   activeContext: { type: 'self' },
 
@@ -148,6 +150,7 @@ export const useAuthStore = create((set, get) => ({
           isAuthenticated: false,
           isLoading: false,
           aiCredits: { used: 0, limit: null },
+          billingStatus: null,
           activeContext: { type: 'self' },
         });
       }
@@ -222,15 +225,16 @@ export const useAuthStore = create((set, get) => ({
         user: null,
         isAuthenticated: false,
         aiCredits: { used: 0, limit: null },
+        billingStatus: null,
         activeContext: { type: 'self' },
       });
     }
   },
 
-  /** Lấy số credit AI hiện tại từ profile tài khoản/billing owner. */
+  /** Lấy credit AI + trạng thái gói từ profile tài khoản/billing owner. */
   fetchAiCredits: async () => {
     if (!get().isAuthenticated) {
-      set({ aiCredits: { used: 0, limit: null } });
+      set({ aiCredits: { used: 0, limit: null }, billingStatus: null });
       return { used: 0, limit: null };
     }
 
@@ -240,8 +244,20 @@ export const useAuthStore = create((set, get) => ({
       used: Number(profile.aiCreditsUsed || 0),
       limit: profile.aiCreditsPerPeriod ?? null,
     };
-    set({ aiCredits: nextCredits });
+    const billingStatus = buildBillingStatusFromProfile(profile);
+    set({ aiCredits: nextCredits, billingStatus });
     return nextCredits;
+  },
+
+  /** Đồng bộ billing từ payload profile đã có (tránh gọi API trùng). */
+  syncBillingFromProfile: (profile = {}) => {
+    set({
+      aiCredits: {
+        used: Number(profile.aiCreditsUsed || 0),
+        limit: profile.aiCreditsPerPeriod ?? null,
+      },
+      billingStatus: buildBillingStatusFromProfile(profile),
+    });
   },
 
   /**

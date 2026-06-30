@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useNavigate, Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
@@ -8,7 +8,7 @@ import {
   HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
   HiOutlineMail, HiOutlineGlobeAlt, HiOutlinePlus,
   HiOutlineClipboardList, HiOutlineChat, HiOutlineLink, HiOutlineClock,
-  HiOutlineCog,
+  HiOutlineCog, HiOutlineExclamation,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
@@ -22,6 +22,7 @@ import {
 } from './components/AiChatbotCards';
 import ConfirmModal from '../inbox/ConfirmModal';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
+import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -132,8 +133,13 @@ const normalizeContentPlanData = (rawData) => {
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
   const { t, locale } = useI18n();
-  const { user, fetchAiCredits } = useAuthStore();
+  const { user, fetchAiCredits, aiCredits, billingStatus } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
+
+  const aiBillingBlock = useMemo(
+    () => getAiBillingBlockState({ isAdmin: isSuperAdmin, billingStatus, aiCredits }),
+    [aiCredits, billingStatus, isSuperAdmin],
+  );
 
   const welcomeMessage = isSuperAdmin
     ? t('aiChatbot.welcomeAdmin')
@@ -719,6 +725,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const handleSend = async () => {
     if (isSendingRef.current) return;
+    if (aiBillingBlock) {
+      notifyAiRequestError({
+        response: {
+          data: {
+            code: 'RESOURCE_LIMIT_EXCEEDED',
+            resource: aiBillingBlock.type === 'expired' ? 'ai_credit' : 'ai_credit',
+            upgradeRequired: true,
+            message: aiBillingBlock.type === 'expired'
+              ? t('aiChatbot.planExpired')
+              : t('aiChatbot.aiCreditExceeded'),
+          },
+        },
+      });
+      return;
+    }
     const trimmedInput = inputText.trim();
     if (!trimmedInput && !uploadedFiles.length) return;
 
@@ -1690,6 +1711,27 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </button>
       </div>
 
+      {/* Gói hết hạn / hết credit AI */}
+      {!isSuperAdmin && aiBillingBlock && (
+        <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5">
+          <HiOutlineExclamation className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-red-800 leading-snug">
+              {aiBillingBlock.type === 'expired'
+                ? t('aiChatbot.planExpiredBanner')
+                : t('aiChatbot.creditsEmptyBanner')}
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/pricing')}
+              className="mt-1.5 text-xs font-semibold text-red-700 underline hover:text-red-900"
+            >
+              {t('aiChatbot.upgradePlan')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
       {!isSuperAdmin && (
         <div className={`flex-shrink-0 mx-4 mt-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 ${hasProfile ? 'bg-slate-50 border border-slate-200' : 'bg-orange-50 border border-orange-200'}`}>
@@ -2028,9 +2070,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
-            placeholder={isDragging ? t('aiChatbot.dropFilePlaceholder') : t('aiChatbot.inputPlaceholder')}
+            placeholder={aiBillingBlock
+              ? t('aiChatbot.inputBlockedPlaceholder')
+              : (isDragging ? t('aiChatbot.dropFilePlaceholder') : t('aiChatbot.inputPlaceholder'))}
             rows={2}
-            className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400"
+            disabled={Boolean(aiBillingBlock)}
+            className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400 disabled:opacity-60"
             style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
           />
           {/* Toolbar */}
@@ -2044,7 +2089,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             </button>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-slate-300">{t('aiChatbot.enterToSend')}</span>
-              <button onClick={handleSend} disabled={!inputText.trim() && !uploadedFiles.length}
+              <button onClick={handleSend} disabled={Boolean(aiBillingBlock) || (!inputText.trim() && !uploadedFiles.length)}
                 className="w-8 h-8 flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all">
                 <HiOutlineChevronRight className="w-4 h-4" />
               </button>

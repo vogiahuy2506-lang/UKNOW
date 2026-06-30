@@ -67,7 +67,9 @@ export default {
   creditBanner: {
     low: 'Sắp hết credit AI — còn {remaining} lượt ({percent}%).',
     empty: 'Đã hết credit AI kỳ này — nâng cấp để tiếp tục.',
+    expired: 'Gói đã hết hạn — gửi tin & AI tạm dừng cho đến khi gia hạn.',
     upgrade: 'Nâng cấp',
+    viewPricing: 'Xem bảng giá',
     dismiss: 'Ẩn cảnh báo credit AI',
   },
 
@@ -2659,6 +2661,10 @@ export default {
     templateCreated: 'Đã tạo template cho bạn.',
     aiTokenExceeded: 'Bạn đã dùng hết token AI của gói trong kỳ này. Vui lòng nâng cấp gói để tiếp tục.',
     aiCreditExceeded: 'Bạn đã dùng hết lượt AI trong kỳ này. Vui lòng nâng cấp gói để tiếp tục.',
+    planExpired: 'Gói đã hết hạn — vui lòng gia hạn để tiếp tục dùng AI.',
+    planExpiredBanner: 'Gói đã hết hạn. Gia hạn hoặc chọn gói mới để tiếp tục dùng AI.',
+    creditsEmptyBanner: 'Bạn đã hết lượt AI trong kỳ này. Nâng cấp gói để tiếp tục.',
+    inputBlockedPlaceholder: 'Gia hạn hoặc nâng cấp gói để tiếp tục chat...',
     upgradePlan: 'Nâng cấp gói',
     genericError: 'Có lỗi xảy ra, vui lòng thử lại.',
     // Ask more card
@@ -4300,6 +4306,7 @@ export default {
     daysLeft: '— còn {days} ngày',
     inGracePeriod: 'Đã hết hạn — còn {days} ngày ân hạn, vui lòng gia hạn',
     fullyExpired: 'Gói đã hết hạn — tạm ngưng gửi tin & AI cho tới khi gia hạn',
+    suspended: 'Tạm dừng',
     // Status
     success: 'Thành công',
     pending: 'Chờ thanh toán',
