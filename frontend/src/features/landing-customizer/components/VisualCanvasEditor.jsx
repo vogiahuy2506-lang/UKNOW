@@ -92,13 +92,6 @@ export default function VisualCanvasEditor({
 
   const elements = useMemo(() => ELEMENT_MAP[page] || [], [page]);
 
-  // Close panel
-  const closePanel = useCallback(() => {
-    setShowPanel(false);
-    setSelectedElement(null);
-    setEditValue('');
-  }, []);
-
   // Handle save value
   const handleSave = useCallback(() => {
     if (selectedElement) {

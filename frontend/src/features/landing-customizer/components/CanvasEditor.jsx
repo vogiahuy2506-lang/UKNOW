@@ -399,14 +399,10 @@ export default function CanvasEditor() {
 
           <label className="text-sm font-medium text-slate-600">Ngôn ngữ preview:</label>
           <div className="flex bg-slate-100 rounded-lg p-1">
-            <span className={`px-4 py-2 text-sm font-medium rounded-lg ${
-              true ? 'bg-blue-500 text-white' : 'text-slate-600'
-            }`}>
+            <span className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white">
               Tiếng Việt
             </span>
-            <span className={`px-4 py-2 text-sm font-medium rounded-lg ${
-              false ? 'bg-blue-500 text-white' : 'text-slate-600'
-            }`}>
+            <span className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600">
               English
             </span>
           </div>

@@ -16,7 +16,6 @@ import {
 export default function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('history');
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   // Notification form state
   const [notificationType, setNotificationType] = useState('announcement');
@@ -202,7 +201,7 @@ export default function NotificationCenter() {
   const handleSendNotification = async (notification) => {
     if (!confirm(`Gửi thông báo "${notification.title}"?`)) return;
 
-    setLoading(true);
+    setSending(true);
     try {
       const response = await adminNotificationApiService.sendNotification(notification.id);
       if (response.data?.success) {
@@ -215,14 +214,14 @@ export default function NotificationCenter() {
     } catch (error) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
   const handleDeleteNotification = async (notification) => {
     if (!confirm(`Xóa thông báo "${notification.title}"?`)) return;
 
-    setLoading(true);
+    setSending(true);
     try {
       const response = await adminNotificationApiService.deleteNotification(notification.id);
       if (response.data?.success) {
@@ -234,7 +233,7 @@ export default function NotificationCenter() {
     } catch (error) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
@@ -248,7 +247,7 @@ export default function NotificationCenter() {
       return;
     }
 
-    setLoading(true);
+    setSending(true);
     try {
       const response = await adminNotificationApiService.scheduleNotification(
         notification.id,
@@ -263,7 +262,7 @@ export default function NotificationCenter() {
     } catch (error) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
@@ -292,7 +291,7 @@ export default function NotificationCenter() {
   const handleResend = async (notification) => {
     if (!confirm(`Gửi lại thông báo "${notification.title}"?\n\nLưu ý: Có thể gửi trùng email cho những người đã nhận.`)) return;
 
-    setLoading(true);
+    setSending(true);
     try {
       const response = await adminNotificationApiService.sendDirect({
         type: notification.type,
@@ -319,7 +318,7 @@ export default function NotificationCenter() {
     } catch (error) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
