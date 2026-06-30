@@ -147,7 +147,6 @@ export default function LandingPageEditor() {
   const [overrides, setOverrides] = useState({});
   const [overridesEn, setOverridesEn] = useState({});
   const [editedValues, setEditedValues] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [device, setDevice] = useState('desktop');
@@ -182,7 +181,6 @@ export default function LandingPageEditor() {
   }, [editedValues, overrides, overridesEn, selectedLang]);
 
   const loadOverrides = async (page, lang) => {
-    setIsLoading(true);
     try {
       const [resVi, resEn] = await Promise.all([
         landingCustomizerApiService.getOverrides(page, 'vi'),
@@ -214,8 +212,6 @@ export default function LandingPageEditor() {
       setOverrides({});
       setOverridesEn({});
       setEditedValues({});
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -408,11 +404,6 @@ export default function LandingPageEditor() {
               <span className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">
                 🎯 Click vào text để sửa
               </span>
-              {hoveredElement && (
-                <span className="text-xs text-slate-500">
-                  Hover: {hoveredElement}
-                </span>
-              )}
             </div>
             
             <div className="flex items-center gap-4">

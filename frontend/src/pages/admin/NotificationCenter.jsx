@@ -16,6 +16,7 @@ import {
 export default function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('history');
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Notification form state
   const [notificationType, setNotificationType] = useState('announcement');

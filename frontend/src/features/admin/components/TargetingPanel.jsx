@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { FaUsers, FaSearch, FaTimes, FaCheck, FaUserCheck, FaEnvelope, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { HiOutlineUserGroup } from 'react-icons/hi';
 import adminNotificationApiService from '../services/adminNotificationApi.service';
@@ -42,7 +42,7 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
     }
   };
 
-  const fetchRecipientCount = async () => {
+  const fetchRecipientCount = useCallback(async () => {
     if (selectedUserIds.length === 0) {
       onCountChange?.(null);
       return;
@@ -60,13 +60,13 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedUserIds, onCountChange]);
 
   useEffect(() => {
     if (onCountChange) {
       fetchRecipientCount();
     }
-  }, [criteria, selectedUserIds, onCountChange]);
+  }, [onCountChange, fetchRecipientCount]);
 
   useEffect(() => {
     if (showUserSelector && allUsers.length === 0) {

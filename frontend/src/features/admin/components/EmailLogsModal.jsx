@@ -47,13 +47,13 @@ export default function EmailLogsModal({ isOpen, onClose, notificationId, notifi
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, filterStatus, notificationId]);
 
   useEffect(() => {
     if (isOpen && notificationId) {
       loadLogs();
     }
-  }, [isOpen, notificationId, pagination.page, filterStatus, loadLogs]);
+  }, [isOpen, notificationId, loadLogs]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';

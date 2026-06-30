@@ -208,7 +208,6 @@ export default function CanvasEditor() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [editedValues, setEditedValues] = useState({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [device, setDevice] = useState('desktop');
   const [previewScale, setPreviewScale] = useState(1);
   
@@ -225,7 +224,6 @@ export default function CanvasEditor() {
   }, [selectedPage]);
 
   const loadOverrides = async (page) => {
-    setIsLoading(true);
     try {
       const res = await landingCustomizerApiService.getOverrides(page, 'vi');
       let data = {};
@@ -250,8 +248,6 @@ export default function CanvasEditor() {
     } catch (err) {
       console.error('Load overrides error:', err);
       setEditedValues({});
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -404,12 +400,12 @@ export default function CanvasEditor() {
           <label className="text-sm font-medium text-slate-600">Ngôn ngữ preview:</label>
           <div className="flex bg-slate-100 rounded-lg p-1">
             <span className={`px-4 py-2 text-sm font-medium rounded-lg ${
-              locale === 'vi' ? 'bg-blue-500 text-white' : 'text-slate-600'
+              true ? 'bg-blue-500 text-white' : 'text-slate-600'
             }`}>
               Tiếng Việt
             </span>
             <span className={`px-4 py-2 text-sm font-medium rounded-lg ${
-              locale === 'en' ? 'bg-blue-500 text-white' : 'text-slate-600'
+              false ? 'bg-blue-500 text-white' : 'text-slate-600'
             }`}>
               English
             </span>
@@ -495,7 +491,7 @@ export default function CanvasEditor() {
                   <div className="w-3 h-3 rounded-full bg-green-500" />
                 </div>
                 <div className="flex-1 bg-slate-700 rounded-md px-3 py-1 text-xs text-slate-300 truncate">
-                  {window.location.origin}{PAGE_URLS[selectedPage]}?lang={locale}&preview=edit
+                  {window.location.origin}{PAGE_URLS[selectedPage]}?lang=vi&preview=edit
                 </div>
               </div>
 
@@ -509,9 +505,9 @@ export default function CanvasEditor() {
                 }}
               >
                 <iframe
-                  key={`${selectedPage}-${locale}-${device}`}
+                  key={`${selectedPage}-vi-${device}`}
                   ref={iframeRef}
-                  src={`${window.location.origin}${PAGE_URLS[selectedPage]}?lang=${locale}&preview=edit`}
+                  src={`${window.location.origin}${PAGE_URLS[selectedPage]}?lang=vi&preview=edit`}
                   title={`Preview: ${selectedPage}`}
                   className="border-0 w-full"
                   style={{ height: '800px', minHeight: '800px' }}
