@@ -37,7 +37,7 @@ const DEFAULT_HTML = `
 </div>
 `;
 
-export default function LivePreviewFrame({ html, css, previewKey, device = 'desktop', pageName = 'Hero' }) {
+export default function LivePreviewFrame({ html, css, device = 'desktop', pageName = 'Hero' }) {
   const iframeRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dimensions, setDimensions] = useState({ width: '100%', height: '600px' });

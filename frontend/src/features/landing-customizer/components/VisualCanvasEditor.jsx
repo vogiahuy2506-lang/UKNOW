@@ -20,11 +20,16 @@ export default function VisualCanvasEditor({
   children,
 }) {
   const [selectedElement, setSelectedElement] = useState(null);
-  const [, setHoveredElement] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showPanel, setShowPanel] = useState(false);
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
-  const overlayRef = useRef(null);
+
+  // Close panel
+  const closePanel = useCallback(() => {
+    setShowPanel(false);
+    setSelectedElement(null);
+    setEditValue('');
+  }, []);
 
   // Element map - định nghĩa các element có thể edit trên mỗi page
   const ELEMENT_MAP = {
@@ -87,20 +92,20 @@ export default function VisualCanvasEditor({
 
   const elements = useMemo(() => ELEMENT_MAP[page] || [], [page]);
 
-  // Handle save value
-  const handleSave = useCallback(() => {
-    if (selectedElement) {
-      onValueChange(selectedElement.id, editValue);
-      closePanel();
-    }
-  }, [selectedElement, editValue, onValueChange]);
-
   // Close panel
   const closePanel = useCallback(() => {
     setShowPanel(false);
     setSelectedElement(null);
     setEditValue('');
   }, []);
+
+  // Handle save value
+  const handleSave = useCallback(() => {
+    if (selectedElement) {
+      onValueChange(selectedElement.id, editValue);
+      closePanel();
+    }
+  }, [selectedElement, editValue, onValueChange, closePanel]);
 
   // Handle keyboard
   useEffect(() => {

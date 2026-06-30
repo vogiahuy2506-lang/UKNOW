@@ -147,6 +147,7 @@ export default function LandingPageEditor() {
   const [overrides, setOverrides] = useState({});
   const [overridesEn, setOverridesEn] = useState({});
   const [editedValues, setEditedValues] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [device, setDevice] = useState('desktop');
@@ -155,7 +156,6 @@ export default function LandingPageEditor() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showEditPanel, setShowEditPanel] = useState(false);
-  const [hoveredElement, setHoveredElement] = useState(null);
   const [elements, setElements] = useState([]);
   
   const lastLoaded = useRef({ page: null, lang: null });
@@ -166,7 +166,6 @@ export default function LandingPageEditor() {
   }, [selectedPage]);
 
   useEffect(() => {
-    const key = `${selectedPage}-${selectedLang}`;
     if (lastLoaded.current.page === selectedPage && lastLoaded.current.lang === selectedLang) {
       return;
     }

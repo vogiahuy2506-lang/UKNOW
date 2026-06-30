@@ -24,7 +24,6 @@ export function useLandingOverrides(page) {
       const res = await api.get(`/public/landing-overrides/${page}`);
       const data = res.data?.data || {};
       cachedOverrides[page] = data;
-      cacheTime = Date.now();
       setOverrides(data);
       return data;
     } catch (err) {

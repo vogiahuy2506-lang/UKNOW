@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FaUsers, FaSearch, FaTimes, FaCheck, FaUserCheck, FaEnvelope, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { HiOutlineUserGroup } from 'react-icons/hi';
 import adminNotificationApiService from '../services/adminNotificationApi.service';
@@ -27,18 +27,6 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
   // Filters
   const [filterPlan, setFilterPlan] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-
-  useEffect(() => {
-    if (onCountChange) {
-      fetchRecipientCount();
-    }
-  }, [criteria, selectedUserIds, onCountChange, fetchRecipientCount]);
-
-  useEffect(() => {
-    if (showUserSelector && allUsers.length === 0) {
-      fetchAllUsers();
-    }
-  }, [showUserSelector, allUsers.length]);
 
   const fetchAllUsers = async () => {
     setLoadingUsers(true);
@@ -73,6 +61,18 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (onCountChange) {
+      fetchRecipientCount();
+    }
+  }, [criteria, selectedUserIds, onCountChange]);
+
+  useEffect(() => {
+    if (showUserSelector && allUsers.length === 0) {
+      fetchAllUsers();
+    }
+  }, [showUserSelector, allUsers.length]);
 
   const updateCriteria = (updates) => {
     onChange?.({ ...criteria, ...updates });

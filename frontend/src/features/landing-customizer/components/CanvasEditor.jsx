@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useI18n } from '../../../i18n';
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 import PropertiesPanel from './PropertiesPanel';
 
@@ -209,6 +208,7 @@ export default function CanvasEditor() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [editedValues, setEditedValues] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [device, setDevice] = useState('desktop');
   const [previewScale, setPreviewScale] = useState(1);
   

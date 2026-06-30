@@ -60,7 +60,7 @@ export default function NotificationCenter() {
     } finally {
       setLoadingList(false);
     }
-  };
+  }, [pagination.limit]);
 
   // Load notifications on mount
   useEffect(() => {
