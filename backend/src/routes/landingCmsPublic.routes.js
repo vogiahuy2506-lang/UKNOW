@@ -111,9 +111,9 @@ router.get('/landing-track/go', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium)
-       VALUES ($1, 'click', 'landing_page', $2)`,
-      [normalizedSlug, normalizedSlug]
+      `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium, target_url)
+       VALUES ($1, 'click', 'landing_page', $2, $3)`,
+      [normalizedSlug, normalizedSlug, targetUrl.toString()]
     );
 
     return res.redirect(302, targetUrl.toString());
