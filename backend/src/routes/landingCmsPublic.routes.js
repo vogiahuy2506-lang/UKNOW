@@ -48,9 +48,9 @@ router.post('/landing-analytics/view', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium)
-       VALUES ($1, $2, 'view', $3, $4, $5, $6)`,
-      [rows[0].id, slug, visitorId || null, utmSource || null, utmCampaign || null, utmMedium || null]
+      `INSERT INTO landing_page_events (landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium)
+       VALUES ($1, 'view', $2, $3, $4, $5)`,
+      [slug, visitorId || null, utmSource || null, utmCampaign || null, utmMedium || null]
     );
     return res.status(201).json({ success: true });
   } catch (error) {
@@ -96,7 +96,7 @@ router.get('/landing-track/go', async (req, res) => {
     }
 
     const { rows } = await db.query(
-      `SELECT id, target_url FROM landing_pages WHERE slug = $1 AND is_published = true`,
+      `SELECT id FROM landing_pages WHERE slug = $1 AND is_published = true`,
       [normalizedSlug]
     );
     if (!rows[0]) {
@@ -111,9 +111,9 @@ router.get('/landing-track/go', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_medium)
-       VALUES ($1, $2, 'click', 'landing_page', 'custom')`,
-      [rows[0].id, normalizedSlug]
+      `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium)
+       VALUES ($1, 'click', 'landing_page', 'custom')`,
+      [normalizedSlug]
     );
 
     return res.redirect(302, targetUrl.toString());

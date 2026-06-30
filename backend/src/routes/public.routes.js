@@ -74,8 +74,8 @@ router.post('/leads', async (req, res) => {
       if (landingRows[0]) {
         idUser = landingRows[0].id_user;
         await db.query(
-          `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)
-           VALUES ((SELECT id FROM landing_pages WHERE slug = $1), $1, 'submit', $2, $3)`,
+          `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_campaign)
+           VALUES ($1, 'submit', $2, $3)`,
           [landingPageSlug, utmSource || null, utmCampaign || null]
         );
       }

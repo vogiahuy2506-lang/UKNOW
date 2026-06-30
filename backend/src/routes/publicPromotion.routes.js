@@ -9,11 +9,8 @@ router.get('/promotions/active', async (req, res) => {
       ? req.query.billingPeriod
       : 'monthly';
 
-    const priceCol = billingPeriod === 'yearly' ? 'price_yearly' : 'price_monthly';
-    const discountCol = billingPeriod === 'yearly' ? 'discount_yearly' : 'discount_monthly';
-
     const { rows: plans } = await db.query(
-      `SELECT id, code, name, ${priceCol} as price, ${discountCol} as discount
+      `SELECT id, code, name, price, price_yearly
        FROM plans WHERE is_active = true LIMIT 1`
     );
 
@@ -21,6 +18,8 @@ router.get('/promotions/active', async (req, res) => {
     let topPromotion = null;
 
     if (plans[0]) {
+      const price = billingPeriod === 'yearly' ? (plans[0].price_yearly || plans[0].price) : plans[0].price;
+
       const { rows: vouchers } = await db.query(
         `SELECT id, code, discount_type, discount_amount, discount_percent, max_discount, min_order_amount
          FROM vouchers
@@ -36,7 +35,7 @@ router.get('/promotions/active', async (req, res) => {
 
         for (const voucher of vouchers) {
           let discountAmount = voucher.discount_type === 'percent'
-            ? Math.min(voucher.discount_percent * plans[0].price / 100, voucher.max_discount || Infinity)
+            ? Math.min(voucher.discount_percent * price / 100, voucher.max_discount || Infinity)
             : voucher.discount_amount;
 
           if (discountAmount > maxDiscountAmount) {
