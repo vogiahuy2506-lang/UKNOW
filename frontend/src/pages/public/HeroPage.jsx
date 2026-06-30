@@ -40,10 +40,9 @@ export default function HeroPage() {
   const { getOverride } = usePublicLandingOverrides('hero');
 
   // Helper to get override value with i18n fallback
-  // Keys use _vi and _en suffixes
+  // Keys use _vi and _en suffixes, getOverride handles locale suffix internally
   const getValue = (baseKey, fallback) => {
-    const key = locale === 'en' ? `${baseKey}_en` : `${baseKey}_vi`;
-    const override = getOverride(key);
+    const override = getOverride(baseKey);
     return override || fallback;
   };
 
@@ -145,10 +144,10 @@ export default function HeroPage() {
               <AnimatedSection key={i} delay={i * 100}>
                 <div className="group h-full bg-white/80 backdrop-blur-sm rounded-[2rem] p-8 shadow-sm border border-white/60 hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
                   <div className={`w-16 h-16 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <feature.icon className="w-8 h-8 text-white" />
+                    <feature.icon className="w-8 h-8 text-white" style={getValue(`features.f${i+1}.iconColor`, undefined) ? { color: getValue(`features.f${i+1}.iconColor`) } : undefined} />
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-4" data-edit={`features.f${i+1}.title`}>{feature.title}</h3>
-                  <p className="text-slate-600 leading-relaxed" data-edit={`features.f${i+1}.desc`}>{feature.description}</p>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4" data-edit={`features.f${i+1}.title`}>{getValue(`features.f${i+1}.title`, feature.title)}</h3>
+                  <p className="text-slate-600 leading-relaxed" data-edit={`features.f${i+1}.desc`}>{getValue(`features.f${i+1}.desc`, feature.description)}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -176,8 +175,8 @@ export default function HeroPage() {
                   <step.icon className="w-9 h-9 text-orange-400" />
                 </div>
                 <div className="text-sm font-black text-orange-400 uppercase tracking-widest mb-3">{t('heroPage.step')} {step.number}</div>
-                <h3 className="text-xl font-bold text-white mb-3" data-edit={`steps.s${i+1}.title`}>{step.title}</h3>
-                <p className="text-white/70 leading-relaxed" data-edit={`steps.s${i+1}.desc`}>{step.description}</p>
+                <h3 className="text-xl font-bold text-white mb-3" data-edit={`steps.s${i+1}.title`}>{getValue(`steps.s${i+1}.title`, step.title)}</h3>
+                <p className="text-white/70 leading-relaxed" data-edit={`steps.s${i+1}.desc`}>{getValue(`steps.s${i+1}.desc`, step.description)}</p>
               </AnimatedSection>
             ))}
           </div>
@@ -199,8 +198,8 @@ export default function HeroPage() {
                   <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <b.icon className="w-8 h-8 text-orange-500" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3" data-edit={`benefits.b${i+1}.title`}>{b.title}</h3>
-                  <p className="text-slate-600" data-edit={`benefits.b${i+1}.desc`}>{b.desc}</p>
+                  <h3 className="text-xl font-bold text-slate-900 mb-3" data-edit={`benefits.b${i+1}.title`}>{getValue(`benefits.b${i+1}.title`, b.title)}</h3>
+                  <p className="text-slate-600" data-edit={`benefits.b${i+1}.desc`}>{getValue(`benefits.b${i+1}.desc`, b.desc)}</p>
                 </div>
               </AnimatedSection>
             ))}

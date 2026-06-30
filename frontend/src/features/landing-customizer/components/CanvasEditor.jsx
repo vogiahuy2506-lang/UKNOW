@@ -17,22 +17,16 @@ const ELEMENT_DEFS = {
     { id: 'hero.titleAccent', section: 'Header', label: 'Tiêu đề nhấn', type: 'text' },
     { id: 'hero.titleLine2', section: 'Header', label: 'Tiêu đề dòng 2', type: 'text' },
     { id: 'hero.subtitle', section: 'Header', label: 'Phụ đề', type: 'textarea' },
-    { id: 'hero.ctaText', section: 'Header', label: 'Nút CTA chính', type: 'text' },
-    { id: 'hero.backgroundColor', section: 'Header', label: 'Màu nền Header', type: 'color' },
-    { id: 'hero.titleColor', section: 'Header', label: 'Màu tiêu đề', type: 'color' },
-    { id: 'hero.accentColor', section: 'Header', label: 'Màu nhấn', type: 'color' },
-    { id: 'hero.image', section: 'Header', label: 'Ảnh chính', type: 'image' },
     
     // Stats Section
-    { id: 'stats.businesses', section: 'Thống kê', label: 'Doanh nghiệp', type: 'text' },
-    { id: 'stats.businessesIcon', section: 'Thống kê', label: 'Icon Doanh nghiệp', type: 'icon' },
-    { id: 'stats.leads', section: 'Thống kê', label: 'Leads', type: 'text' },
-    { id: 'stats.leadsIcon', section: 'Thống kê', label: 'Icon Leads', type: 'icon' },
-    { id: 'stats.campaigns', section: 'Thống kê', label: 'Chiến dịch', type: 'text' },
-    { id: 'stats.campaignsIcon', section: 'Thống kê', label: 'Icon Chiến dịch', type: 'icon' },
+    { id: 'stats.businesses', section: 'Thống kê', label: 'Số Doanh nghiệp', type: 'text' },
+    { id: 'stats.businessesLabel', section: 'Thống kê', label: 'Nhãn Doanh nghiệp', type: 'text' },
+    { id: 'stats.leads', section: 'Thống kê', label: 'Số Leads', type: 'text' },
+    { id: 'stats.leadsLabel', section: 'Thống kê', label: 'Nhãn Leads', type: 'text' },
+    { id: 'stats.campaigns', section: 'Thống kê', label: 'Số Chiến dịch', type: 'text' },
+    { id: 'stats.campaignsLabel', section: 'Thống kê', label: 'Nhãn Chiến dịch', type: 'text' },
     { id: 'stats.uptime', section: 'Thống kê', label: 'Uptime', type: 'text' },
-    { id: 'stats.uptimeIcon', section: 'Thống kê', label: 'Icon Uptime', type: 'icon' },
-    { id: 'stats.bgColor', section: 'Thống kê', label: 'Màu nền', type: 'color' },
+    { id: 'stats.uptimeLabel', section: 'Thống kê', label: 'Nhãn Uptime', type: 'text' },
     { id: 'stats.numberColor', section: 'Thống kê', label: 'Màu số', type: 'color' },
     { id: 'stats.labelColor', section: 'Thống kê', label: 'Màu nhãn', type: 'color' },
     
@@ -41,128 +35,130 @@ const ELEMENT_DEFS = {
     { id: 'features.title', section: 'Tính năng', label: 'Tiêu đề', type: 'text' },
     { id: 'features.titleHighlight', section: 'Tính năng', label: 'Tiêu đề nhấn', type: 'text' },
     { id: 'features.subtitle', section: 'Tính năng', label: 'Phụ đề', type: 'textarea' },
-    { id: 'features.sectionBg', section: 'Tính năng', label: 'Màu nền', type: 'color' },
-    { id: 'features.titleColor', section: 'Tính năng', label: 'Màu tiêu đề', type: 'color' },
     
     // Feature 1
     { id: 'features.f1.title', section: 'Tính năng', label: 'Tính năng 1 - Tiêu đề', type: 'text' },
     { id: 'features.f1.desc', section: 'Tính năng', label: 'Tính năng 1 - Mô tả', type: 'textarea' },
-    { id: 'features.f1.icon', section: 'Tính năng', label: 'Tính năng 1 - Icon', type: 'icon' },
     { id: 'features.f1.iconColor', section: 'Tính năng', label: 'Tính năng 1 - Màu icon', type: 'color' },
     
     // Feature 2
     { id: 'features.f2.title', section: 'Tính năng', label: 'Tính năng 2 - Tiêu đề', type: 'text' },
     { id: 'features.f2.desc', section: 'Tính năng', label: 'Tính năng 2 - Mô tả', type: 'textarea' },
-    { id: 'features.f2.icon', section: 'Tính năng', label: 'Tính năng 2 - Icon', type: 'icon' },
     { id: 'features.f2.iconColor', section: 'Tính năng', label: 'Tính năng 2 - Màu icon', type: 'color' },
     
     // Feature 3
     { id: 'features.f3.title', section: 'Tính năng', label: 'Tính năng 3 - Tiêu đề', type: 'text' },
     { id: 'features.f3.desc', section: 'Tính năng', label: 'Tính năng 3 - Mô tả', type: 'textarea' },
-    { id: 'features.f3.icon', section: 'Tính năng', label: 'Tính năng 3 - Icon', type: 'icon' },
     { id: 'features.f3.iconColor', section: 'Tính năng', label: 'Tính năng 3 - Màu icon', type: 'color' },
     
     // Feature 4
     { id: 'features.f4.title', section: 'Tính năng', label: 'Tính năng 4 - Tiêu đề', type: 'text' },
     { id: 'features.f4.desc', section: 'Tính năng', label: 'Tính năng 4 - Mô tả', type: 'textarea' },
-    { id: 'features.f4.icon', section: 'Tính năng', label: 'Tính năng 4 - Icon', type: 'icon' },
     { id: 'features.f4.iconColor', section: 'Tính năng', label: 'Tính năng 4 - Màu icon', type: 'color' },
     
     // Feature 5
     { id: 'features.f5.title', section: 'Tính năng', label: 'Tính năng 5 - Tiêu đề', type: 'text' },
     { id: 'features.f5.desc', section: 'Tính năng', label: 'Tính năng 5 - Mô tả', type: 'textarea' },
-    { id: 'features.f5.icon', section: 'Tính năng', label: 'Tính năng 5 - Icon', type: 'icon' },
     { id: 'features.f5.iconColor', section: 'Tính năng', label: 'Tính năng 5 - Màu icon', type: 'color' },
     
     // Feature 6
     { id: 'features.f6.title', section: 'Tính năng', label: 'Tính năng 6 - Tiêu đề', type: 'text' },
     { id: 'features.f6.desc', section: 'Tính năng', label: 'Tính năng 6 - Mô tả', type: 'textarea' },
-    { id: 'features.f6.icon', section: 'Tính năng', label: 'Tính năng 6 - Icon', type: 'icon' },
     { id: 'features.f6.iconColor', section: 'Tính năng', label: 'Tính năng 6 - Màu icon', type: 'color' },
     
     // Steps Section
     { id: 'steps.badge', section: 'Quy trình', label: 'Badge', type: 'text' },
     { id: 'steps.title', section: 'Quy trình', label: 'Tiêu đề', type: 'text' },
     { id: 'steps.subtitle', section: 'Quy trình', label: 'Phụ đề', type: 'text' },
-    { id: 'steps.bgColor', section: 'Quy trình', label: 'Màu nền', type: 'color' },
     
     // Step 1
     { id: 'steps.s1.title', section: 'Quy trình', label: 'Bước 1 - Tiêu đề', type: 'text' },
     { id: 'steps.s1.desc', section: 'Quy trình', label: 'Bước 1 - Mô tả', type: 'textarea' },
-    { id: 'steps.s1.icon', section: 'Quy trình', label: 'Bước 1 - Icon', type: 'icon' },
     
     // Step 2
     { id: 'steps.s2.title', section: 'Quy trình', label: 'Bước 2 - Tiêu đề', type: 'text' },
     { id: 'steps.s2.desc', section: 'Quy trình', label: 'Bước 2 - Mô tả', type: 'textarea' },
-    { id: 'steps.s2.icon', section: 'Quy trình', label: 'Bước 2 - Icon', type: 'icon' },
     
     // Step 3
     { id: 'steps.s3.title', section: 'Quy trình', label: 'Bước 3 - Tiêu đề', type: 'text' },
     { id: 'steps.s3.desc', section: 'Quy trình', label: 'Bước 3 - Mô tả', type: 'textarea' },
-    { id: 'steps.s3.icon', section: 'Quy trình', label: 'Bước 3 - Icon', type: 'icon' },
     
     // Step 4
     { id: 'steps.s4.title', section: 'Quy trình', label: 'Bước 4 - Tiêu đề', type: 'text' },
     { id: 'steps.s4.desc', section: 'Quy trình', label: 'Bước 4 - Mô tả', type: 'textarea' },
-    { id: 'steps.s4.icon', section: 'Quy trình', label: 'Bước 4 - Icon', type: 'icon' },
     
     // Benefits Section
     { id: 'benefits.title', section: 'Lợi ích', label: 'Tiêu đề', type: 'text' },
-    { id: 'benefits.bgColor', section: 'Lợi ích', label: 'Màu nền', type: 'color' },
     
     // Benefit 1
     { id: 'benefits.b1.title', section: 'Lợi ích', label: 'Lợi ích 1 - Tiêu đề', type: 'text' },
     { id: 'benefits.b1.desc', section: 'Lợi ích', label: 'Lợi ích 1 - Mô tả', type: 'textarea' },
-    { id: 'benefits.b1.icon', section: 'Lợi ích', label: 'Lợi ích 1 - Icon', type: 'icon' },
-    { id: 'benefits.b1.iconColor', section: 'Lợi ích', label: 'Lợi ích 1 - Màu icon', type: 'color' },
     
     // Benefit 2
     { id: 'benefits.b2.title', section: 'Lợi ích', label: 'Lợi ích 2 - Tiêu đề', type: 'text' },
     { id: 'benefits.b2.desc', section: 'Lợi ích', label: 'Lợi ích 2 - Mô tả', type: 'textarea' },
-    { id: 'benefits.b2.icon', section: 'Lợi ích', label: 'Lợi ích 2 - Icon', type: 'icon' },
-    { id: 'benefits.b2.iconColor', section: 'Lợi ích', label: 'Lợi ích 2 - Màu icon', type: 'color' },
     
     // Benefit 3
     { id: 'benefits.b3.title', section: 'Lợi ích', label: 'Lợi ích 3 - Tiêu đề', type: 'text' },
     { id: 'benefits.b3.desc', section: 'Lợi ích', label: 'Lợi ích 3 - Mô tả', type: 'textarea' },
-    { id: 'benefits.b3.icon', section: 'Lợi ích', label: 'Lợi ích 3 - Icon', type: 'icon' },
-    { id: 'benefits.b3.iconColor', section: 'Lợi ích', label: 'Lợi ích 3 - Màu icon', type: 'color' },
     
     // Benefit 4
     { id: 'benefits.b4.title', section: 'Lợi ích', label: 'Lợi ích 4 - Tiêu đề', type: 'text' },
     { id: 'benefits.b4.desc', section: 'Lợi ích', label: 'Lợi ích 4 - Mô tả', type: 'textarea' },
-    { id: 'benefits.b4.icon', section: 'Lợi ích', label: 'Lợi ích 4 - Icon', type: 'icon' },
-    { id: 'benefits.b4.iconColor', section: 'Lợi ích', label: 'Lợi ích 4 - Màu icon', type: 'color' },
     
     // CTA Section
     { id: 'cta.title', section: 'CTA', label: 'Tiêu đề', type: 'text' },
     { id: 'cta.subtitle', section: 'CTA', label: 'Phụ đề', type: 'text' },
     { id: 'cta.button', section: 'CTA', label: 'Nút bấm', type: 'text' },
     { id: 'cta.note', section: 'CTA', label: 'Ghi chú', type: 'text' },
-    { id: 'cta.bgColor', section: 'CTA', label: 'Màu nền', type: 'color' },
-    { id: 'cta.buttonColor', section: 'CTA', label: 'Màu nút', type: 'color' },
   ],
   contact: [
     { id: 'contact.title', section: 'Header', label: 'Tiêu đề', type: 'text' },
     { id: 'contact.subtitle', section: 'Header', label: 'Phụ đề', type: 'text' },
-    { id: 'contact.bgColor', section: 'Header', label: 'Màu nền', type: 'color' },
     { id: 'contact.titleColor', section: 'Header', label: 'Màu tiêu đề', type: 'color' },
-    { id: 'contact.email.icon', section: 'Liên hệ', label: 'Email - Icon', type: 'icon' },
-    { id: 'contact.email.value', section: 'Liên hệ', label: 'Email', type: 'text' },
-    { id: 'contact.hotline.icon', section: 'Liên hệ', label: 'Hotline - Icon', type: 'icon' },
-    { id: 'contact.hotline.value', section: 'Liên hệ', label: 'Hotline', type: 'text' },
-    { id: 'contact.zalo.icon', section: 'Liên hệ', label: 'Zalo - Icon', type: 'icon' },
-    { id: 'contact.zalo.value', section: 'Liên hệ', label: 'Zalo', type: 'text' },
-    { id: 'contact.office.icon', section: 'Liên hệ', label: 'Địa chỉ - Icon', type: 'icon' },
-    { id: 'contact.office.value', section: 'Liên hệ', label: 'Địa chỉ', type: 'textarea' },
-    { id: 'contact.mapEmbed', section: 'Liên hệ', label: 'Google Maps Embed', type: 'textarea' },
+    
+    // Form
+    { id: 'contact.formTitle', section: 'Form', label: 'Tiêu đề Form', type: 'text' },
+    { id: 'contact.formSubtitle', section: 'Form', label: 'Phụ đề Form', type: 'text' },
+    
+    // Contact Channels Header
+    { id: 'contact.contactChannels', section: 'Liên hệ', label: 'Tiêu đề Liên hệ', type: 'text' },
+    { id: 'contact.contactChannelsSubtitle', section: 'Liên hệ', label: 'Phụ đề Liên hệ', type: 'text' },
+    
+    // Email
+    { id: 'contact.emailHref', section: 'Liên hệ', label: 'Email Link', type: 'text' },
+    { id: 'contact.email.label', section: 'Liên hệ', label: 'Email - Nhãn', type: 'text' },
+    { id: 'contact.email.value', section: 'Liên hệ', label: 'Email - Giá trị', type: 'text' },
+    { id: 'contact.email.desc', section: 'Liên hệ', label: 'Email - Mô tả', type: 'text' },
+    
+    // Phone
+    { id: 'contact.phoneHref', section: 'Liên hệ', label: 'Phone Link', type: 'text' },
+    { id: 'contact.phone.label', section: 'Liên hệ', label: 'Phone - Nhãn', type: 'text' },
+    { id: 'contact.phone.value', section: 'Liên hệ', label: 'Phone - Giá trị', type: 'text' },
+    { id: 'contact.phone.desc', section: 'Liên hệ', label: 'Phone - Mô tả', type: 'text' },
+    
+    // Zalo
+    { id: 'contact.zaloHref', section: 'Liên hệ', label: 'Zalo Link', type: 'text' },
+    { id: 'contact.zalo.label', section: 'Liên hệ', label: 'Zalo - Nhãn', type: 'text' },
+    { id: 'contact.zalo.value', section: 'Liên hệ', label: 'Zalo - Giá trị', type: 'text' },
+    { id: 'contact.zalo.desc', section: 'Liên hệ', label: 'Zalo - Mô tả', type: 'text' },
+    
+    // Office
+    { id: 'contact.office.label', section: 'Liên hệ', label: 'Office - Nhãn', type: 'text' },
+    { id: 'contact.office.value', section: 'Liên hệ', label: 'Office - Giá trị', type: 'text' },
+    { id: 'contact.office.desc', section: 'Liên hệ', label: 'Office - Mô tả', type: 'text' },
+    
+    // CTA
+    { id: 'contact.readyToStart', section: 'CTA', label: 'Sẵn sàng bắt đầu', type: 'text' },
+    { id: 'contact.freeTrial', section: 'CTA', label: 'Dùng thử miễn phí', type: 'text' },
+    
+    // Map
+    { id: 'contact.mapEmbed', section: 'Bản đồ', label: 'Google Maps Embed', type: 'textarea' },
   ],
   pricing: [
+    { id: 'pricing.badge', section: 'Header', label: 'Badge', type: 'text' },
     { id: 'pricing.title', section: 'Header', label: 'Tiêu đề', type: 'text' },
     { id: 'pricing.subtitle', section: 'Header', label: 'Phụ đề', type: 'text' },
-    { id: 'pricing.bgColor', section: 'Header', label: 'Màu nền', type: 'color' },
-    { id: 'pricing.titleColor', section: 'Header', label: 'Màu tiêu đề', type: 'color' },
-    { id: 'pricing.accentColor', section: 'Header', label: 'Màu nhấn', type: 'color' },
   ],
 };
 
