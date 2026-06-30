@@ -1,6 +1,7 @@
 // dotenv được load ở src/index.js (production entrypoint) hoặc bởi test runner.
 // Không import dotenv ở đây để app.js có thể được import độc lập trong test
 // mà không nuốt nhầm config production (vd PGSSLMODE=require của Neon).
+// TODO: Ensure backend routes are properly registered
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
