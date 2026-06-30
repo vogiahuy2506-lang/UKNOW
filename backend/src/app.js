@@ -32,6 +32,7 @@ import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 import publicPromotionRoutes from './routes/publicPromotion.routes.js';
 import landingCmsPublicRoutes from './routes/landingCmsPublic.routes.js';
 import leadPublicRoutes from './routes/leadPublic.routes.js';
+import publicRoutes from './routes/public.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
 import leadRoutes from './routes/lead.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
