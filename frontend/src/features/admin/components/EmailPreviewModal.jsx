@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FaTimes, FaEnvelope, FaDesktop, FaMobile, FaGlobe, FaCheck } from 'react-icons/fa';
-import { HiOutlineBell, HiOutlineMail, HiOutlineSupport } from 'react-icons/hi';
+import { FaTimes, FaDesktop, FaMobile, FaCheck } from 'react-icons/fa';
+import { HiOutlineBell, HiOutlineMail } from 'react-icons/hi';
 import { TYPE_CONFIG } from './NotificationTypeSelector';
 
 const SAMPLE_USER = {

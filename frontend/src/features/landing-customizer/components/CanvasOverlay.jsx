@@ -7,7 +7,6 @@ export default function CanvasOverlay({
   elementPositions = {},
   selectedId,
   canvasScale = 1,
-  onElementSelect,
   onPositionChange,
   onDragStart,
   onResizeStart,

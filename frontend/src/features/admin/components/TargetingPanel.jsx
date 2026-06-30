@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { FaUsers, FaSearch, FaTimes, FaCheck, FaUserCheck, FaEnvelope, FaChevronDown, FaChevronUp } from 'react-icons/fa';
-import { HiOutlineUserGroup, HiOutlineCheckCircle } from 'react-icons/hi';
+import { HiOutlineUserGroup } from 'react-icons/hi';
 import adminNotificationApiService from '../services/adminNotificationApi.service';
 
 const PLANS = [
@@ -16,7 +16,7 @@ const STATUSES = [
   { value: 'suspended', label: 'Bị khóa', color: 'red' }
 ];
 
-export default function TargetingPanel({ criteria, onChange, recipientCount, onCountChange }) {
+export default function TargetingPanel({ criteria, onChange, onCountChange }) {
   const [loading, setLoading] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
@@ -32,13 +32,13 @@ export default function TargetingPanel({ criteria, onChange, recipientCount, onC
     if (onCountChange) {
       fetchRecipientCount();
     }
-  }, [criteria, selectedUserIds]);
+  }, [criteria, selectedUserIds, onCountChange, fetchRecipientCount]);
 
   useEffect(() => {
     if (showUserSelector && allUsers.length === 0) {
       fetchAllUsers();
     }
-  }, [showUserSelector]);
+  }, [showUserSelector, allUsers.length]);
 
   const fetchAllUsers = async () => {
     setLoadingUsers(true);

@@ -1,7 +1,4 @@
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { useI18n } from '../../../i18n';
-import landingCustomizerApiService from '../services/landingCustomizerApi.service';
+import { useState, useEffect, useMemo } from 'react';
 
 const SECTIONS_BY_PAGE = {
   hero: [
@@ -136,11 +133,10 @@ const SECTIONS_BY_PAGE = {
 };
 
 export default function VisualEditorPanel({ page, overrides, onSave, isSaving }) {
-  const { t } = useI18n();
   const [localValues, setLocalValues] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  const sections = SECTIONS_BY_PAGE[page] || [];
+  const sections = useMemo(() => SECTIONS_BY_PAGE[page] || [], [page]);
 
   useEffect(() => {
     const values = {};

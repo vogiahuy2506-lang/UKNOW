@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 
 const EDITOR_OPTIONS = {
@@ -27,7 +27,7 @@ export default function CodeEditorPanel({ html, css, onHtmlChange, onCssChange, 
     setupTailwindAutocomplete(monaco);
   }, []);
 
-  const handleCssEditorDidMount = useCallback((editor, monaco) => {
+  const handleCssEditorDidMount = useCallback((editor) => {
     editorRef.current = editor;
   }, []);
 

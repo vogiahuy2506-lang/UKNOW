@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { FaDesktop, FaTablet, FaMobile, FaSync } from 'react-icons/fa';
 
 const DEVICES = [

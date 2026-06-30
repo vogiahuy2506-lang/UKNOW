@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 import PropertiesPanel from './PropertiesPanel';
@@ -202,14 +202,12 @@ const INJECT_SCRIPT = `
 `;
 
 export default function CanvasEditor() {
-  const { locale } = useI18n();
   const iframeRef = useRef(null);
   
   // State
   const [selectedPage, setSelectedPage] = useState('hero');
   const [selectedElement, setSelectedElement] = useState(null);
   const [editedValues, setEditedValues] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [device, setDevice] = useState('desktop');
   const [previewScale, setPreviewScale] = useState(1);
@@ -217,7 +215,7 @@ export default function CanvasEditor() {
   const lastLoaded = useRef({ page: null });
 
   // Load element definitions
-  const elements = ELEMENT_DEFS[selectedPage] || [];
+  const elements = useMemo(() => ELEMENT_DEFS[selectedPage] || [], [selectedPage]);
 
   // Load overrides
   useEffect(() => {

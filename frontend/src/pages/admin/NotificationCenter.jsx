@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineBell, HiOutlineMail, HiOutlineClock, HiOutlineUserGroup, HiOutlineMailOpen, HiOutlinePencil, HiOutlineEye } from 'react-icons/hi';
-import { FaBell, FaHistory, FaPlus, FaEye, FaCopy, FaRedo, FaClock, FaEnvelope } from 'react-icons/fa';
+import { FaBell, FaEye, FaCopy, FaRedo, FaClock, FaEnvelope } from 'react-icons/fa';
 import adminNotificationApiService from '../../features/admin/services/adminNotificationApi.service';
 import {
   NotificationTypeSelector,
   TargetingPanel,
   ScheduleSelector,
   NotificationEditor,
-  NotificationStatsCard,
   NotificationHistoryTable,
   EmailPreviewModal,
   EmailLogsModal
@@ -16,7 +15,6 @@ import {
 
 export default function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('history');
-  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
   // Notification form state
@@ -45,13 +43,7 @@ export default function NotificationCenter() {
   const [logsModal, setLogsModal] = useState({ isOpen: false, notificationId: null, title: '' });
   const [selectedNotification, setSelectedNotification] = useState(null);
 
-  // Load notifications on mount
-  useEffect(() => {
-    loadNotifications();
-    loadDashboardStats();
-  }, []);
-
-  const loadNotifications = async (page = 1) => {
+  const loadNotifications = useCallback(async (page = 1) => {
     setLoadingList(true);
     try {
       const response = await adminNotificationApiService.getNotifications({
@@ -69,6 +61,12 @@ export default function NotificationCenter() {
       setLoadingList(false);
     }
   };
+
+  // Load notifications on mount
+  useEffect(() => {
+    loadNotifications();
+    loadDashboardStats();
+  }, [loadNotifications]);
 
   const loadDashboardStats = async () => {
     try {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
@@ -11,30 +11,19 @@ import { createPortal } from 'react-dom';
  * 4. Edit xong save vào overrides
  */
 
-const ELEMENT_TYPES = {
-  text: 'Văn bản',
-  textarea: 'Đoạn văn',
-  color: 'Màu sắc',
-  image: 'Hình ảnh',
-  url: 'Đường dẫn',
-};
-
 export default function VisualCanvasEditor({
   page,
-  locale,
   overrides,
   onValueChange,
-  onSave,
   isSaving,
   previewRef,
   children,
 }) {
   const [selectedElement, setSelectedElement] = useState(null);
-  const [hoveredElement, setHoveredElement] = useState(null);
+  const [, setHoveredElement] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showPanel, setShowPanel] = useState(false);
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
-  const [activeSection, setActiveSection] = useState(null);
   const overlayRef = useRef(null);
 
   // Element map - định nghĩa các element có thể edit trên mỗi page
@@ -96,66 +85,22 @@ export default function VisualCanvasEditor({
     ],
   };
 
-  const elements = ELEMENT_MAP[page] || [];
+  const elements = useMemo(() => ELEMENT_MAP[page] || [], [page]);
 
-  // Handle mouse move for hover effect
-  const handleMouseMove = useCallback((e) => {
-    if (!overlayRef.current) return;
-    
-    const previewDoc = previewRef?.current?.contentDocument || document;
-    const target = e.target.closest('[data-edit]');
-    
-    if (target) {
-      const editId = target.dataset.edit;
-      const element = elements.find(el => el.id === editId);
-      if (element) {
-        setHoveredElement(element.id);
-      }
-    } else {
-      setHoveredElement(null);
-    }
-  }, [elements, previewRef]);
-
-  // Handle click on element
-  const handleClick = useCallback((e) => {
-    const target = e.target.closest('[data-edit]');
-    
-    if (target) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const editId = target.dataset.edit;
-      const element = elements.find(el => el.id === editId);
-      
-      if (element) {
-        setSelectedElement(element);
-        setEditValue(overrides[editId] || target.textContent || '');
-        
-        // Position panel near the element
-        const rect = target.getBoundingClientRect();
-        setPanelPosition({
-          x: Math.min(rect.right + 10, window.innerWidth - 320),
-          y: Math.max(rect.top - 10, 10),
-        });
-        setShowPanel(true);
-      }
-    }
-  }, [elements, overrides]);
-
-  // Close panel
-  const closePanel = () => {
-    setShowPanel(false);
-    setSelectedElement(null);
-    setEditValue('');
-  };
-
-  // Save value
-  const handleSave = () => {
+  // Handle save value
+  const handleSave = useCallback(() => {
     if (selectedElement) {
       onValueChange(selectedElement.id, editValue);
       closePanel();
     }
-  };
+  }, [selectedElement, editValue, onValueChange]);
+
+  // Close panel
+  const closePanel = useCallback(() => {
+    setShowPanel(false);
+    setSelectedElement(null);
+    setEditValue('');
+  }, []);
 
   // Handle keyboard
   useEffect(() => {
@@ -164,13 +109,14 @@ export default function VisualCanvasEditor({
         closePanel();
       }
       if (e.key === 'Enter' && e.ctrlKey && selectedElement) {
-        handleSave();
+        onValueChange(selectedElement.id, editValue);
+        closePanel();
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElement, editValue]);
+  }, [selectedElement, editValue, closePanel, onValueChange]);
 
   // Inject hover styles into preview
   useEffect(() => {
@@ -235,7 +181,10 @@ export default function VisualCanvasEditor({
     previewRef.current.contentDocument.addEventListener('click', handlePreviewClick);
     
     return () => {
-      previewRef.current?.contentDocument?.removeEventListener('click', handlePreviewClick);
+      const doc = previewRef.current?.contentDocument;
+      if (doc) {
+        doc.removeEventListener('click', handlePreviewClick);
+      }
     };
   }, [previewRef, elements, overrides]);
 

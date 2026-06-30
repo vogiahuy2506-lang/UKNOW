@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { FaClock, FaCalendarAlt, FaSyncAlt } from 'react-icons/fa';
 
 const SCHEDULE_TYPES = {

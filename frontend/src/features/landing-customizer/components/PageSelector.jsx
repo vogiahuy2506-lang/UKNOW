@@ -7,7 +7,7 @@ const PAGES = [
 ];
 
 export default function PageSelector({ selectedPage, onPageChange }) {
-  const { t } = useI18n();
+  useI18n();
 
   return (
     <div className="flex items-center gap-2 mb-6">

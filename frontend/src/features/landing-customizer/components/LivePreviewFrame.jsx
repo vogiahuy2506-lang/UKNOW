@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 const TAILWIND_CDN = 'https://cdn.tailwindcss.com';
 
@@ -42,13 +42,7 @@ export default function LivePreviewFrame({ html, css, previewKey, device = 'desk
   const [isLoading, setIsLoading] = useState(true);
   const [dimensions, setDimensions] = useState({ width: '100%', height: '600px' });
 
-  useEffect(() => {
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, [device]);
-
-  const updateDimensions = () => {
+  const updateDimensions = useCallback(() => {
     switch (device) {
       case 'mobile':
         setDimensions({ width: '375px', height: '667px' });
@@ -59,14 +53,9 @@ export default function LivePreviewFrame({ html, css, previewKey, device = 'desk
       default:
         setDimensions({ width: '100%', height: '100%' });
     }
-  };
+  }, [device]);
 
-  useEffect(() => {
-    setIsLoading(true);
-    updatePreview();
-  }, [html, css, previewKey, pageName]);
-
-  const updatePreview = () => {
+  const updatePreview = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
@@ -100,24 +89,24 @@ export default function LivePreviewFrame({ html, css, previewKey, device = 'desk
   </style>
 </head>
 <body>
-  ${displayHtml}
-  <script>
-    // Update device name
-    const deviceEl = document.getElementById('device-name');
-    if (deviceEl) deviceEl.textContent = '${displayDevice}';
-    
-    // Update page name
-    const pageEl = document.getElementById('page-name');
-    if (pageEl) pageEl.textContent = '${displayPage}';
-    
-    // Handle links to prevent navigation
-    document.addEventListener('click', function(e) {
-      const link = e.target.closest('a');
-      if (link) {
-        e.preventDefault();
-      }
-    });
-  </script>
+${displayHtml}
+<script>
+  // Update device name
+  const deviceEl = document.getElementById('device-name');
+  if (deviceEl) deviceEl.textContent = '${displayDevice}';
+  
+  // Update page name
+  const pageEl = document.getElementById('page-name');
+  if (pageEl) pageEl.textContent = '${displayPage}';
+  
+  // Handle links to prevent navigation
+  document.addEventListener('click', function(e) {
+    const link = e.target.closest('a');
+    if (link) {
+      e.preventDefault();
+    }
+  });
+</script>
 </body>
 </html>`;
 
@@ -128,7 +117,16 @@ export default function LivePreviewFrame({ html, css, previewKey, device = 'desk
     iframe.addEventListener('load', () => {
       setIsLoading(false);
     }, { once: true });
-  };
+  }, [html, css, device, pageName]);
+
+  useEffect(() => {
+    updateDimensions();
+  }, [updateDimensions]);
+
+  useEffect(() => {
+    setIsLoading(true);
+    updatePreview();
+  }, [updatePreview]);
 
   const hasContent = html && html.trim();
 

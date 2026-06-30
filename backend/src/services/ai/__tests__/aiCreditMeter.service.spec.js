@@ -54,7 +54,7 @@ describe('aiCreditMeter.service', () => {
   it('assertAvailable throws when credits exhausted', async () => {
     mockGetCreditUsageForCycle.mockResolvedValueOnce({ used: 10, cycle: {} });
     await expect(aiCreditMeter.assertAvailable(5)).rejects.toMatchObject({
-      status: 403,
+      status: 402,
       code: 'RESOURCE_LIMIT_EXCEEDED',
       resource: AI_CREDIT_RESOURCE,
       upgradeRequired: true,

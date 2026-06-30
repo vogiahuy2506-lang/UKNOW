@@ -2,8 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../../../services/api';
 
 let cachedOverrides = {};
-let cacheTime = 0;
-const CACHE_DURATION = 60000;
 
 export function useLandingOverrides(page) {
   const [overrides, setOverrides] = useState({});
@@ -129,7 +127,6 @@ export function useLandingOverrides(page) {
 
   const refetch = useCallback(() => {
     cachedOverrides[page] = null;
-    cacheTime = 0;
     return fetchOverrides();
   }, [page, fetchOverrides]);
 
@@ -150,5 +147,4 @@ export function invalidateOverridesCache(page) {
   } else {
     cachedOverrides = {};
   }
-  cacheTime = 0;
 }

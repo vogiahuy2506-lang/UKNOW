@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaTimes, FaEnvelope, FaCheck, FaEnvelopeOpen, FaTimesCircle, FaSync, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import adminNotificationApiService from '../services/adminNotificationApi.service';
 
@@ -18,13 +18,7 @@ export default function EmailLogsModal({ isOpen, onClose, notificationId, notifi
   const [stats, setStats] = useState(null);
   const [filterStatus, setFilterStatus] = useState('');
 
-  useEffect(() => {
-    if (isOpen && notificationId) {
-      loadLogs();
-    }
-  }, [isOpen, notificationId, pagination.page, filterStatus]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = {
@@ -54,6 +48,12 @@ export default function EmailLogsModal({ isOpen, onClose, notificationId, notifi
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen && notificationId) {
+      loadLogs();
+    }
+  }, [isOpen, notificationId, pagination.page, filterStatus, loadLogs]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';

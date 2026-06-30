@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useI18n } from '../../../i18n';
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 import PreviewFrame from './PreviewFrame';
 import IconPicker from './IconPicker';
@@ -143,13 +142,11 @@ const ELEMENT_DEFS = {
 };
 
 export default function LandingPageEditor() {
-  const { t, locale } = useI18n();
   const [selectedPage, setSelectedPage] = useState('hero');
   const [selectedLang, setSelectedLang] = useState('vi');
   const [overrides, setOverrides] = useState({});
   const [overridesEn, setOverridesEn] = useState({});
   const [editedValues, setEditedValues] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [device, setDevice] = useState('desktop');
@@ -158,7 +155,6 @@ export default function LandingPageEditor() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showEditPanel, setShowEditPanel] = useState(false);
-  const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
   const [hoveredElement, setHoveredElement] = useState(null);
   const [elements, setElements] = useState([]);
   
@@ -275,12 +271,7 @@ export default function LandingPageEditor() {
     if (selectedElement && showEditPanel) {
       setEditValue(editedValues[selectedElement.id] || '');
     }
-  }, [editedValues, selectedElement?.id]);
-
-  // Handle element hover in iframe
-  const handleElementHover = (elementId) => {
-    setHoveredElement(elementId);
-  };
+  }, [editedValues, selectedElement, showEditPanel]);
 
   // Handle save from edit panel
   const handlePanelSave = () => {
@@ -302,8 +293,9 @@ export default function LandingPageEditor() {
       if (e.key === 'Escape') {
         closeEditPanel();
       }
-      if (e.key === 'Enter' && e.ctrlKey && showEditPanel) {
-        handlePanelSave();
+      if (e.key === 'Enter' && e.ctrlKey && showEditPanel && selectedElement) {
+        handleValueChange(selectedElement.id, editValue);
+        setShowEditPanel(false);
       }
     };
     

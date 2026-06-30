@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 
-export default function useCanvasEditor({ page, locale = 'vi' }) {
+export default function useCanvasEditor({ page }) {
   const [selectedElementId, setSelectedElementId] = useState(null);
   const [elementPositions, setElementPositions] = useState({});
   const [isLoading, setIsLoading] = useState(false);
