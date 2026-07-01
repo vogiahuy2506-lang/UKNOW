@@ -131,9 +131,9 @@ jobs:
               -v /root/uknow/scripts/ssl-auto-provision.sh:/opt/uknow/ssl-auto-provision.sh:ro \
               "$BACKEND_IMAGE"
             docker image prune -f
-            echo "Chờ server khởi động..."
-            sleep 8
-            if curl --retry 5 --retry-delay 3 --retry-connrefused -sf http://localhost:5001/api/health > /dev/null; then
+            echo "Chờ server khởi động (DB recovery có thể mất ~30s)..."
+            sleep 15
+            if curl --retry 8 --retry-delay 5 --retry-connrefused -sf http://localhost:5001/api/health > /dev/null; then
               echo "Smoke test passed — backend healthy"
             else
               echo "Smoke test FAILED"

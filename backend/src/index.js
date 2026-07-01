@@ -21,27 +21,60 @@ let isShuttingDown = false;
 // Đăng ký processor trước khi start worker để tránh job không có handler.
 registerOutboundMessageProcessors();
 
-// Test database connection
+const STARTUP_DB_MAX_ATTEMPTS = Number.parseInt(process.env.STARTUP_DB_MAX_ATTEMPTS || '', 10)
+  || (process.env.NODE_ENV === 'production' ? 12 : 1);
+const STARTUP_DB_RETRY_MS = Number.parseInt(process.env.STARTUP_DB_RETRY_MS || '', 10) || 5000;
+
+function isTransientDbStartupError(error) {
+  const msg = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '');
+  return (
+    msg.includes('recovery mode')
+    || msg.includes('not yet accepting connections')
+    || msg.includes('connection refused')
+    || msg.includes('connection terminated')
+    || msg.includes('timeout')
+    || code === 'ECONNREFUSED'
+    || code === '57P03'
+  );
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Test database connection (retry khi Postgres đang recovery — hay gặp lúc deploy)
 const testDBConnection = async () => {
-  let client;
-  try {
-    client = await db.getClient();
-    const result = await client.query('SELECT NOW()');
-    console.log(
-      `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
-    );
-    if (process.env.SKIP_MIGRATIONS === 'true') {
-      console.log('[Migration] Skipped (SKIP_MIGRATIONS=true)');
-    } else {
-      await runMigrations(client);
+  for (let attempt = 1; attempt <= STARTUP_DB_MAX_ATTEMPTS; attempt++) {
+    let client;
+    try {
+      client = await db.getClient();
+      const result = await client.query('SELECT NOW()');
+      console.log(
+        `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
+      );
+      if (process.env.SKIP_MIGRATIONS === 'true') {
+        console.log('[Migration] Skipped (SKIP_MIGRATIONS=true)');
+      } else {
+        await runMigrations(client);
+      }
+      return;
+    } catch (error) {
+      const retryable = isTransientDbStartupError(error);
+      console.error(
+        `[Startup] Database/migration failed (attempt ${attempt}/${STARTUP_DB_MAX_ATTEMPTS}):`,
+        error.message
+      );
+      if (attempt < STARTUP_DB_MAX_ATTEMPTS && retryable) {
+        console.warn(`[Startup] Retrying DB connection in ${STARTUP_DB_RETRY_MS}ms...`);
+        await sleep(STARTUP_DB_RETRY_MS);
+        continue;
+      }
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+      return;
+    } finally {
+      if (client) client.release();
     }
-  } catch (error) {
-    console.error('[Startup] Database/migration failed:', error.message);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
-  } finally {
-    if (client) client.release();
   }
 };
 
