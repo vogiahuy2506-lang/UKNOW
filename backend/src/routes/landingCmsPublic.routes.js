@@ -1,7 +1,10 @@
 import express from 'express';
 import db from '../config/database.js';
+import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
 
 const router = express.Router();
+
+router.get('/landing-pages-by-host', (req, res) => landingPagePublicController.getPublishedByHost(req, res));
 
 router.get('/landing-pages/:slug', async (req, res) => {
   try {

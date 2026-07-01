@@ -199,8 +199,11 @@ export function createApp() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Zalo domain verification meta tag
-  app.get('/', (req, res) => {
+  // Zalo domain verification meta tag (skip khi request từ subdomain landing)
+  app.get('/', (req, res, next) => {
+    if (req.isCustomDomain && req.landingPage) {
+      return landingPagePublicController.getByDomain(req, res);
+    }
     return res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -230,6 +233,7 @@ export function createApp() {
 
   // Catch-all: serve landing page HTML khi request đến từ custom domain (*.founderai.biz)
   app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
     if (req.isCustomDomain && req.landingPage) {
       return landingPagePublicController.getByDomain(req, res);
     }

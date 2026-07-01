@@ -33,6 +33,8 @@ class LandingPagePublicService {
     /** HTML trong DB đã được chuẩn hóa khi admin Lưu (link tracking + lp-track.js; iframe form do admin dán). */
     const htmlContent = row.htmlContent || '';
     return {
+      id: row.id,
+      slug: row.slug,
       title: row.title || '',
       htmlContent,
     };

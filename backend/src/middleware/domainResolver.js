@@ -27,7 +27,7 @@ export const domainResolver = async (req, res, next) => {
         req.isCustomDomain = true;
         req.customDomainSlug = slug;
         req.landingPage = payload;
-        console.log(`[DomainResolver] ${host} → slug="${slug}" (id=${payload.id})`);
+        console.log(`[DomainResolver] ${host} → slug="${slug}" (id=${payload.id ?? 'n/a'})`);
       }
     }
 

@@ -96,15 +96,22 @@ class LandingPagePublicController {
     try {
       // If domain was resolved, req.landingPage contains the data
       if (req.landingPage) {
-        const data = await landingPagePublicService.getPublishedPayloadById(req.landingPage.id);
-        if (!data) {
+        let data = req.landingPage;
+        if (req.landingPage.id) {
+          const byId = await landingPagePublicService.getPublishedPayloadById(req.landingPage.id);
+          if (byId) data = byId;
+        }
+        if (!data?.htmlContent) {
           return res.status(404).json({
             success: false,
             message: 'Landing page not found or not published',
           });
         }
 
-        // Return as HTML document (not JSON) for direct serving
+        if (data.htmlContent.includes('<!DOCTYPE') || data.htmlContent.includes('<html')) {
+          return res.type('html').send(data.htmlContent);
+        }
+
         const html = `<!DOCTYPE html>
 <html lang="vi">
 <head>

@@ -558,6 +558,9 @@ export default function LandingPageFullEditor({
                     .{BASE_DOMAIN}
                   </span>
                 </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Đây là địa chỉ subdomain mặc định. Đổi tên ở đây rồi bấm Lưu để cấp lại <code className="bg-gray-100 px-1 rounded">tên-mới.{BASE_DOMAIN}</code>.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPageEditor.pageTitle')}</label>
@@ -618,6 +621,20 @@ export default function LandingPageFullEditor({
                                 ? 'Subdomain đã kích hoạt qua Cloudflare. HTTPS do Cloudflare Universal SSL xử lý.'
                                 : "Domain đã kích hoạt. SSL sẽ được cấp tự động qua Let's Encrypt."}
                             </p>
+                            {isCfManagedDomain && form.slug && (
+                              <p className="text-xs text-green-700 mt-2">
+                                Muốn đổi subdomain? Sửa <strong>Tên rút gọn</strong> phía trên rồi Lưu.
+                                {' '}Link dự phòng:{' '}
+                                <a
+                                  href={`https://${BASE_DOMAIN}/lp/${encodeURIComponent(form.slug)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline font-medium"
+                                >
+                                  {BASE_DOMAIN}/lp/{form.slug}
+                                </a>
+                              </p>
+                            )}
                           </div>
                           <a
                             href={`https://${cdInfo.hostname}`}
