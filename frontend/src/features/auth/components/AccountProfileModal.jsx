@@ -732,9 +732,16 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Plan & usage — only in self context */}
-            {isUserAdmin && (
+            {/* Plan & usage — self admin hoặc nhân viên (hiển thị gói owner) */}
+            {(isUserAdmin || isEmployeeCtx) && (
               <div>
+                {isEmployeeCtx && profileData?.activePlanId && (
+                  <p className="text-xs text-blue-600 mb-2">
+                    {t('accountProfileModal.ownerPlanCreditsHint', {
+                      name: activeContext?.ownerName || t('accountProfileModal.businessOwner'),
+                    })}
+                  </p>
+                )}
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.currentPlan')}</p>
                 <PlanSection data={profileData} t={t} />
               </div>

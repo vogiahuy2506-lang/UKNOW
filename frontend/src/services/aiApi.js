@@ -144,10 +144,24 @@ const aiApi = {
     return response.data;
   },
 
+  /**
+   * Sinh landing page HTML đầy đủ (Tailwind + nội dung thật, không {{placeholder}}).
+   * Fallback API template cũ chỉ khi có templateId hoặc file đính kèm.
+   */
   generateLandingPage: async (prompt, templateId = null, files = [], sessionId = null, userSummary = null) => {
-    const response = await api.post('/landing-templates/generate', { prompt, templateId, files, sessionId, userSummary }, {
-      timeout: 120000
-    });
+    const hasTemplate = templateId != null && templateId !== '';
+    const hasFiles = Array.isArray(files) && files.length > 0;
+    if (hasTemplate || hasFiles) {
+      const response = await api.post('/landing-templates/generate', {
+        prompt, templateId, files, sessionId, userSummary,
+      }, { timeout: 120000 });
+      return response.data;
+    }
+    const response = await api.post('/ai/generate-landing-html', {
+      prompt,
+      sessionId,
+      userSummary,
+    }, { timeout: 120000 });
     return response.data;
   },
 };

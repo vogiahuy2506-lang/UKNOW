@@ -2,12 +2,11 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const findProfileBase = jest.fn();
 const findProfilePlan = jest.fn();
-const findProfilePlanByUserId = jest.fn();
-const findProfilePlanByUserIdFallback = jest.fn();
 const findProfilePlanFallback = jest.fn();
 const findProfileUsageCounts = jest.fn();
 const getResourceUsage = jest.fn();
 const getCreditUsageForCycle = jest.fn();
+const resolveBillingUserId = jest.fn();
 
 jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   createLegacyEmployee: jest.fn(),
@@ -16,8 +15,8 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findProfileBase,
   findProfileBaseFallback: jest.fn(),
   findProfilePlan,
-  findProfilePlanByUserId,
-  findProfilePlanByUserIdFallback,
+  findProfilePlanByUserId: jest.fn(),
+  findProfilePlanByUserIdFallback: jest.fn(),
   findProfilePlanFallback,
   findProfileUsageCounts,
   findRoleAndLimits: jest.fn(),
@@ -29,6 +28,10 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   updateLegacyEmployeeStatus: jest.fn(),
   updatePasswordHash: jest.fn(),
   updateProfile: jest.fn(),
+}));
+
+jest.unstable_mockModule('../../utils/billingCycle.util.js', () => ({
+  resolveBillingUserId,
 }));
 
 jest.unstable_mockModule('../../services/payment/usageTracking.service.js', () => ({
@@ -46,12 +49,18 @@ describe('UserController.getProfile', () => {
   beforeEach(() => {
     findProfileBase.mockReset();
     findProfilePlan.mockReset();
-    findProfilePlanByUserId.mockReset();
-    findProfilePlanByUserIdFallback.mockReset();
     findProfilePlanFallback.mockReset();
     findProfileUsageCounts.mockReset();
     getResourceUsage.mockReset();
     getCreditUsageForCycle.mockReset();
+    resolveBillingUserId.mockReset();
+
+    resolveBillingUserId.mockImplementation(async (userId, options = {}) => {
+      if (options.ownerContextId != null && options.ownerContextId !== '') {
+        return Number(options.ownerContextId);
+      }
+      return userId;
+    });
 
     findProfileBase.mockResolvedValue({
       id: 42,
@@ -139,32 +148,41 @@ describe('UserController.getProfile', () => {
     });
   });
 
-  it('uses billing owner plan for AI credit limit when profile belongs to an employee', async () => {
-    findProfileBase.mockResolvedValue({
-      id: 99,
-      username: 'employee',
-      email: 'employee@test.local',
-      full_name: 'Employee User',
-      avatar_url: null,
-      phone: null,
-      status: 'active',
-      role: 'user',
-      active_plan_id: null,
-      subscription_expires_at: null,
-      max_campaigns: null,
-      max_zalo_accounts: null,
-      max_email_accounts: null,
-      max_email_templates: null,
-      max_zalo_templates: null,
-      max_landing_pages: null,
-      created_at: new Date('2026-06-01'),
-      last_login_at: null,
-      role_code: 'user',
-      role_name: 'Người dùng',
+  it('uses billing owner plan when employee works in owner context', async () => {
+    findProfileBase.mockImplementation(async (id) => {
+      if (Number(id) === 42) {
+        return {
+          id: 42,
+          username: 'owner',
+          email: 'owner@test.local',
+          active_plan_id: 7,
+          subscription_expires_at: new Date('2026-08-01'),
+        };
+      }
+      return {
+        id: 99,
+        username: 'employee',
+        email: 'employee@test.local',
+        full_name: 'Employee User',
+        avatar_url: null,
+        phone: null,
+        status: 'active',
+        role: 'user',
+        active_plan_id: null,
+        subscription_expires_at: null,
+        max_campaigns: null,
+        max_zalo_accounts: null,
+        max_email_accounts: null,
+        max_email_templates: null,
+        max_zalo_templates: null,
+        max_landing_pages: null,
+        created_at: new Date('2026-06-01'),
+        last_login_at: null,
+        role_code: 'user',
+        role_name: 'Người dùng',
+      };
     });
-    findProfilePlan.mockResolvedValue(null);
-    getCreditUsageForCycle.mockResolvedValue({ used: 8, cycle: { billingUserId: 42 } });
-    findProfilePlanByUserId.mockResolvedValue({
+    findProfilePlan.mockResolvedValue({
       plan_id: 7,
       plan_name: 'Starter',
       plan_code: 'starter',
@@ -179,10 +197,22 @@ describe('UserController.getProfile', () => {
       ai_credits_per_period: 10,
       grace_period_days: 0,
     });
+    getCreditUsageForCycle.mockResolvedValue({ used: 8, cycle: { billingUserId: 42 } });
 
-    await userController.getProfile({ user: { id: 99 } }, res);
+    await userController.getProfile({
+      user: {
+        id: 99,
+        activeContext: { type: 'employee', ownerId: 42 },
+      },
+    }, res);
 
-    expect(findProfilePlanByUserId).toHaveBeenCalledWith(42);
+    expect(resolveBillingUserId).toHaveBeenCalledWith(99, { ownerContextId: 42 });
+    expect(findProfilePlan).toHaveBeenCalledWith({
+      activePlanId: 7,
+      userId: 42,
+      email: 'owner@test.local',
+    });
+    expect(getCreditUsageForCycle).toHaveBeenCalledWith(99, null, { ownerContextId: 42 });
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.objectContaining({

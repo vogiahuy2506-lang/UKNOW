@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { EFFECTIVE_PLAN_ID_SQL } from '../../utils/billingCycle.util.js';
 
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
@@ -104,7 +105,7 @@ export async function findProfilePlanByUserId(userId) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS}
      FROM users u
-     JOIN plans p ON p.id = u.active_plan_id
+     JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
      WHERE u.id = $1`,
     [userId]
   );
@@ -115,7 +116,7 @@ export async function findProfilePlanByUserIdFallback(userId) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS_FALLBACK}
      FROM users u
-     JOIN plans p ON p.id = u.active_plan_id
+     JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
      WHERE u.id = $1`,
     [userId]
   );

@@ -4239,6 +4239,8 @@ export default {
     // Plan section
     noPlanAssigned: 'No service plan assigned to this account',
     contactAdmin: 'Contact administrator for support',
+    ownerPlanCreditsHint: 'AI limits from {name}\'s plan',
+    businessOwner: 'business owner',
     perMonth: '/month',
     maxEmployees: 'Max Employees',
     unlimited: 'Unlimited',

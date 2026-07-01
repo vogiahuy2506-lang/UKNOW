@@ -4290,6 +4290,8 @@ export default {
     // Plan section
     noPlanAssigned: 'Tài khoản chưa được gán gói dịch vụ',
     contactAdmin: 'Liên hệ quản trị viên để được hỗ trợ',
+    ownerPlanCreditsHint: 'Hạn mức AI từ gói của {name}',
+    businessOwner: 'chủ doanh nghiệp',
     perMonth: '/tháng',
     maxEmployees: 'Nhân viên tối đa',
     unlimited: 'Không giới hạn',

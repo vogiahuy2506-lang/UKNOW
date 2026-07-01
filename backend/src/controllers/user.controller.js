@@ -6,8 +6,6 @@ import {
   findProfileBase,
   findProfileBaseFallback,
   findProfilePlan,
-  findProfilePlanByUserId,
-  findProfilePlanByUserIdFallback,
   findProfilePlanFallback,
   findProfileUsageCounts,
   findRoleAndLimits,
@@ -21,6 +19,7 @@ import {
   updateProfile as updateProfileInDb,
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
+import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 
 const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 const EMPLOYEE_LIMIT_KEYS = {
@@ -135,16 +134,45 @@ class UserController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
       }
 
-      // 2. Resolve plan — active_plan_id first, then latest order by user_id OR user_email
+      const employeeCtx = req.user?.activeContext?.type === 'employee'
+        ? req.user.activeContext
+        : null;
+      const billingOptions = employeeCtx?.ownerId != null
+        ? { ownerContextId: employeeCtx.ownerId }
+        : {};
+      const billingUserId = await resolveBillingUserId(userId, billingOptions);
+
+      let billingRow = userRow;
+      if (String(billingUserId) !== String(userId)) {
+        try {
+          billingRow = await findProfileBase(billingUserId) || userRow;
+        } catch {
+          try {
+            billingRow = await findProfileBaseFallback(billingUserId) || userRow;
+          } catch {
+            billingRow = userRow;
+          }
+        }
+      }
+
+      // 2. Resolve plan — billing account (owner khi employee context, hoặc self)
       let planRow = null;
       try {
-        planRow = await findProfilePlan({ activePlanId: userRow.active_plan_id, userId, email: userRow.email });
+        planRow = await findProfilePlan({
+          activePlanId: billingRow.active_plan_id,
+          userId: billingUserId,
+          email: billingRow.email,
+        });
       } catch (err) {
-        console.error('[Profile] findProfilePlan failed', { userId, message: err.message });
+        console.error('[Profile] findProfilePlan failed', { userId, billingUserId, message: err.message });
         try {
-          planRow = await findProfilePlanFallback({ activePlanId: userRow.active_plan_id, userId, email: userRow.email });
+          planRow = await findProfilePlanFallback({
+            activePlanId: billingRow.active_plan_id,
+            userId: billingUserId,
+            email: billingRow.email,
+          });
         } catch (fallbackErr) {
-          console.error('[Profile] findProfilePlanFallback failed', { userId, message: fallbackErr.message });
+          console.error('[Profile] findProfilePlanFallback failed', { userId, billingUserId, message: fallbackErr.message });
         }
       }
 
@@ -165,34 +193,23 @@ class UserController {
 
       let aiCreditUsage = { used: 0 };
       try {
-        aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId);
+        aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId, null, billingOptions);
       } catch (err) {
         console.error('[Profile] getCreditUsageForCycle failed', { userId, message: err.message });
       }
 
-      const billingUserId = aiCreditUsage?.cycle?.billingUserId;
-      if (billingUserId && String(billingUserId) !== String(userId)) {
-        try {
-          planRow = await findProfilePlanByUserId(billingUserId);
-        } catch (err) {
-          console.error('[Profile] findProfilePlanByUserId failed', { userId, billingUserId, message: err.message });
-          try {
-            planRow = await findProfilePlanByUserIdFallback(billingUserId);
-          } catch (fallbackErr) {
-            console.error('[Profile] findProfilePlanByUserIdFallback failed', { userId, billingUserId, message: fallbackErr.message });
-          }
-        }
-      }
+      const profileRow = {
+        ...userRow,
+        ...(employeeCtx ? { subscription_expires_at: billingRow.subscription_expires_at } : {}),
+        ...(planRow || {}),
+        ...usageCounts,
+        ai_tokens_used: aiTokenUsage.used,
+        ai_credits_used: aiCreditUsage.used,
+      };
 
       res.json({
         success: true,
-        data: mapProfileResponse({
-          ...userRow,
-          ...(planRow || {}),
-          ...usageCounts,
-          ai_tokens_used: aiTokenUsage.used,
-          ai_credits_used: aiCreditUsage.used,
-        }),
+        data: mapProfileResponse(profileRow),
       });
     } catch (error) {
       console.error('Get profile error:', error);

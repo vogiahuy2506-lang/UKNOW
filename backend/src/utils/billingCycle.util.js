@@ -11,13 +11,31 @@ export const EFFECTIVE_PLAN_ID_SQL = `COALESCE(
    ORDER BY o.created_at DESC LIMIT 1)
 )`;
 
+/** Effective plan id for owner alias `o` in membership joins. */
+const OWNER_EFFECTIVE_PLAN_ID_SQL = `COALESCE(
+  o.active_plan_id,
+  (SELECT ord.plan_id FROM orders ord
+   WHERE ord.user_id = o.id OR ord.user_email = o.email
+   ORDER BY ord.created_at DESC LIMIT 1)
+)`;
+
+/**
+ * @typedef {{ ownerContextId?: number|string|null }} BillingResolveOptions
+ */
+
 /**
  * Nhân viên không có gói riêng → dùng gói của owner (membership active đầu tiên).
+ * Khi đang ở ngữ cảnh employee (X-Owner-Context), luôn bill theo owner đó.
  *
  * @param {number|string} userId
+ * @param {BillingResolveOptions} [options]
  * @returns {Promise<number|string|null>}
  */
-export async function resolveBillingUserId(userId) {
+export async function resolveBillingUserId(userId, { ownerContextId } = {}) {
+  if (ownerContextId != null && ownerContextId !== '') {
+    return Number(ownerContextId);
+  }
+
   const { rows } = await db.query(
     `SELECT active_plan_id FROM users WHERE id = $1 LIMIT 1`,
     [userId]
@@ -32,12 +50,43 @@ export async function resolveBillingUserId(userId) {
      JOIN users o ON o.id = um.owner_id
      WHERE um.employee_id = $1
        AND um.status = 'active'
-       AND o.active_plan_id IS NOT NULL
+       AND (${OWNER_EFFECTIVE_PLAN_ID_SQL}) IS NOT NULL
      ORDER BY um.created_at ASC
      LIMIT 1`,
     [userId]
   );
   return memberRows[0]?.owner_id ?? userId;
+}
+
+/**
+ * Tính cửa sổ chu kỳ [cycleStart, cycleEnd] chứa `now`, neo theo ngày hết hạn.
+ *
+ * subscription_expires_at là mốc kết thúc kỳ. Nếu expiry ở xa trong tương lai
+ * (> 1 chu kỳ so với now — ví dụ gói vừa mua/gia hạn hoặc admin set hạn xa),
+ * cần lùi cửa sổ theo từng `durationDays` cho tới khi chứa `now`. Nếu không,
+ * usage hôm nay sẽ nằm ngoài [cycleStart, cycleEnd] và không bao giờ được đếm.
+ *
+ * @param {Date|string|number} anchorEnd - mốc hết hạn (subscription_expires_at)
+ * @param {number} durationDays
+ * @param {Date} [now]
+ * @returns {{ cycleStart: Date, cycleEnd: Date }}
+ */
+export function computeBillingWindow(anchorEnd, durationDays, now = new Date()) {
+  const duration = Number(durationDays) || 30;
+  let cycleEnd = new Date(anchorEnd);
+  let cycleStart = new Date(cycleEnd);
+  cycleStart.setUTCDate(cycleStart.getUTCDate() - duration);
+
+  // Lùi về đúng chu kỳ chứa now (guard chống lặp vô hạn khi dữ liệu bất thường).
+  let guard = 0;
+  while (cycleStart.getTime() > now.getTime() && guard < 600) {
+    cycleEnd = cycleStart;
+    cycleStart = new Date(cycleEnd);
+    cycleStart.setUTCDate(cycleStart.getUTCDate() - duration);
+    guard += 1;
+  }
+
+  return { cycleStart, cycleEnd };
 }
 
 /**
@@ -52,7 +101,7 @@ export async function resolveBillingUserId(userId) {
  *   durationDays: number,
  * }>}
  */
-export async function getBillingCycle(userId) {
+export async function getBillingCycle(userId, options = {}) {
   const empty = {
     hasPlan: false,
     billingUserId: null,
@@ -63,7 +112,7 @@ export async function getBillingCycle(userId) {
 
   if (!userId) return empty;
 
-  const billingUserId = await resolveBillingUserId(userId);
+  const billingUserId = await resolveBillingUserId(userId, options);
   if (!billingUserId) return empty;
 
   const { rows } = await db.query(
@@ -82,9 +131,8 @@ export async function getBillingCycle(userId) {
   }
 
   const durationDays = Number(row.duration_days) || 30;
-  const cycleEnd = row.subscription_expires_at ? new Date(row.subscription_expires_at) : new Date();
-  const cycleStart = new Date(cycleEnd);
-  cycleStart.setUTCDate(cycleStart.getUTCDate() - durationDays);
+  const anchorEnd = row.subscription_expires_at ? new Date(row.subscription_expires_at) : new Date();
+  const { cycleStart, cycleEnd } = computeBillingWindow(anchorEnd, durationDays);
 
   return {
     hasPlan: true,

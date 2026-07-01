@@ -26,18 +26,22 @@ class AiCreditMeterService {
    *   used?: number,
    * }>}
    */
-  async resolveCreditContext(userId) {
+  async resolveCreditContext(userId, { ownerContextId } = {}) {
     if (!userId) return { skip: true };
 
     const role = await this._getUserRole(userId);
     if (isAdminRole(role)) return { skip: true };
 
-    const subscription = await getSubscriptionStatus(userId);
+    const billingOptions = ownerContextId != null && ownerContextId !== ''
+      ? { ownerContextId }
+      : {};
+
+    const subscription = await getSubscriptionStatus(userId, billingOptions);
     if (subscription.hasPlan && subscription.isExpired) {
       throw this._subscriptionExpired();
     }
 
-    const cycle = await getBillingCycle(userId);
+    const cycle = await getBillingCycle(userId, billingOptions);
     const billingUserId = cycle.billingUserId || userId;
     const limits = await usageTrackingService.getUserPlanLimits(billingUserId);
     const limit = Number(limits?.ai_credits_per_period) || 0;
@@ -53,8 +57,8 @@ class AiCreditMeterService {
   /**
    * Pre-flight check — does NOT charge. Call before running AI.
    */
-  async assertAvailable(userId) {
-    const ctx = await this.resolveCreditContext(userId);
+  async assertAvailable(userId, { ownerContextId } = {}) {
+    const ctx = await this.resolveCreditContext(userId, { ownerContextId });
     if (ctx.skip) return ctx;
     if (ctx.used >= ctx.limit) {
       throw this._exhausted({ used: ctx.used, limit: ctx.limit });

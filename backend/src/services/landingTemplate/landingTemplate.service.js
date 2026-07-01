@@ -228,13 +228,33 @@ QUAN TRỌNG:
       feature: 'landing_template',
     });
 
-    // 6. Parse response
+    // 6. Parse response + điền biến vào HTML (tránh {{headline}} hiển thị raw)
     const result = this._parseJson(text, finishReason);
+    if (result.html) {
+      result.html = this._substituteVariables(result.html, result.variables);
+    }
     return {
       ...result,
       templateId: templateId || null,
       templateName: template?.name || null,
     };
+  }
+
+  /**
+   * Thay {{variable}} trong HTML bằng giá trị từ object variables.
+   * @param {string} html
+   * @param {Record<string, string>|null|undefined} variables
+   * @returns {string}
+   */
+  _substituteVariables(html, variables = {}) {
+    let out = String(html || '');
+    const vars = variables && typeof variables === 'object' ? variables : {};
+    for (const [key, value] of Object.entries(vars)) {
+      if (!key) continue;
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      out = out.replace(new RegExp(`\\{\\{${escaped}\\}\\}`, 'g'), String(value ?? ''));
+    }
+    return out;
   }
 
   /**

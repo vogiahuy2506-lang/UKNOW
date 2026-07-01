@@ -22,7 +22,10 @@ export function assertAiCreditAvailable(feature) {
   return async (req, res, next) => {
     try {
       req.aiCreditFeature = feature;
-      req.aiCreditContext = await aiCreditMeter.assertAvailable(req.user?.id);
+      const ownerContextId = req.user?.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : null;
+      req.aiCreditContext = await aiCreditMeter.assertAvailable(req.user?.id, { ownerContextId });
       next();
     } catch (error) {
       const status = error.status || (error.code === 'RESOURCE_LIMIT_EXCEEDED' ? 402 : 403);

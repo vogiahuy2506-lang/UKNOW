@@ -1,39 +1,11 @@
 import db from '../config/database.js';
-import { EFFECTIVE_PLAN_ID_SQL } from './billingCycle.util.js';
-
-/**
- * Nhân viên không có gói riêng → dùng gói của owner (membership active đầu tiên).
- *
- * @param {number|string} userId
- * @returns {Promise<number|string|null>}
- */
-async function resolveBillingUserId(userId) {
-  const { rows } = await db.query(
-    `SELECT active_plan_id FROM users WHERE id = $1 LIMIT 1`,
-    [userId]
-  );
-  const row = rows[0];
-  if (!row) return null;
-  if (row.active_plan_id) return userId;
-
-  const { rows: memberRows } = await db.query(
-    `SELECT um.owner_id
-     FROM user_members um
-     JOIN users o ON o.id = um.owner_id
-     WHERE um.employee_id = $1
-       AND um.status = 'active'
-       AND o.active_plan_id IS NOT NULL
-     ORDER BY um.created_at ASC
-     LIMIT 1`,
-    [userId]
-  );
-  return memberRows[0]?.owner_id ?? userId;
-}
+import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from './billingCycle.util.js';
 
 /**
  * Trạng thái gói (hết hạn + ân hạn) của user hoặc owner nếu là nhân viên.
  *
  * @param {number|string|null|undefined} userId
+ * @param {{ ownerContextId?: number|string|null }} [options]
  * @returns {Promise<{
  *   hasPlan: boolean,
  *   expiresAt: Date|null,
@@ -43,7 +15,7 @@ async function resolveBillingUserId(userId) {
  *   isInGracePeriod: boolean,
  * }>}
  */
-export async function getSubscriptionStatus(userId) {
+export async function getSubscriptionStatus(userId, options = {}) {
   const empty = {
     hasPlan: false,
     expiresAt: null,
@@ -55,7 +27,7 @@ export async function getSubscriptionStatus(userId) {
 
   if (!userId) return empty;
 
-  const billingUserId = await resolveBillingUserId(userId);
+  const billingUserId = await resolveBillingUserId(userId, options);
   if (!billingUserId) return empty;
 
   const { rows } = await db.query(

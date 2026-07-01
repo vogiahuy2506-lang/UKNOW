@@ -87,7 +87,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
         {/* Header */}
         <div className="flex items-center gap-2 mb-3 text-slate-600">
           <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-          <span className="font-black text-[10px] uppercase tracking-widest">{t('landingPageCard.label')}</span>
+          <span className="font-black text-[10px] uppercase tracking-widest">{t('label')}</span>
           {page.templateName && (
             <span className="ml-auto text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
               {page.templateName}
@@ -96,7 +96,7 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
         </div>
 
         {/* Title */}
-        <p className="text-sm font-bold text-slate-800 mb-3">{page.title || t('landingPageCard.untitled')}</p>
+        <p className="text-sm font-bold text-slate-800 mb-3">{page.title || t('untitled')}</p>
 
         {/* View Mode Toggle */}
         <div className="flex items-center gap-1 mb-3 bg-white rounded-lg p-1 border border-slate-200">

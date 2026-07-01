@@ -83,8 +83,8 @@ class UsageTrackingService {
    * @param {number|string} userId
    * @param {object|null} [cycle] - optional pre-resolved billing cycle
    */
-  async getCreditUsageForCycle(userId, cycle = null) {
-    const resolvedCycle = cycle || await getBillingCycle(userId);
+  async getCreditUsageForCycle(userId, cycle = null, options = {}) {
+    const resolvedCycle = cycle || await getBillingCycle(userId, options);
     if (!resolvedCycle.hasPlan || !resolvedCycle.cycleStart) {
       return { used: 0, cycle: resolvedCycle };
     }
