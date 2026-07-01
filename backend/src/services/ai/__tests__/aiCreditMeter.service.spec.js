@@ -51,6 +51,19 @@ describe('aiCreditMeter.service', () => {
     expect(mockTrackUsage).not.toHaveBeenCalled();
   });
 
+  it('forceBillable charges admin accounts', async () => {
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ role: 'admin' }] });
+    mockGetUserPlanLimits.mockResolvedValueOnce({ ai_credits_per_period: 100 });
+    await aiCreditMeter.consume(1, { feature: 'test', forceBillable: true });
+    expect(mockTrackUsage).toHaveBeenCalled();
+  });
+
+  it('forceBillable tracks usage even on unlimited plans', async () => {
+    mockGetUserPlanLimits.mockResolvedValueOnce({ ai_credits_per_period: null });
+    await aiCreditMeter.consume(5, { feature: 'ai_chat', forceBillable: true });
+    expect(mockTrackUsage).toHaveBeenCalled();
+  });
+
   it('assertAvailable throws when credits exhausted', async () => {
     mockGetCreditUsageForCycle.mockResolvedValueOnce({ used: 10, cycle: {} });
     await expect(aiCreditMeter.assertAvailable(5)).rejects.toMatchObject({

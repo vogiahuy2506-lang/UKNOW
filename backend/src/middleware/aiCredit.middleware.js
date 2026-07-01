@@ -22,10 +22,15 @@ export function assertAiCreditAvailable(feature) {
   return async (req, res, next) => {
     try {
       req.aiCreditFeature = feature;
+      const forceBillable = Boolean(req.body?.forceBillable);
+      req.aiCreditForceBillable = forceBillable;
       const ownerContextId = req.user?.activeContext?.type === 'employee'
         ? req.user.activeContext.ownerId
         : null;
-      req.aiCreditContext = await aiCreditMeter.assertAvailable(req.user?.id, { ownerContextId });
+      req.aiCreditContext = await aiCreditMeter.assertAvailable(req.user?.id, {
+        ownerContextId,
+        forceBillable,
+      });
       next();
     } catch (error) {
       const status = error.status || (error.code === 'RESOURCE_LIMIT_EXCEEDED' ? 402 : 403);
@@ -44,6 +49,7 @@ export async function chargeAiCredit(req) {
   await aiCreditMeter.consume(req.user.id, {
     feature: req.aiCreditFeature,
     creditContext: req.aiCreditContext,
+    forceBillable: Boolean(req.aiCreditForceBillable),
   });
 }
 

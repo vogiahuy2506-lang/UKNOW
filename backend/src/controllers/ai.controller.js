@@ -621,7 +621,14 @@ class AiController {
    */
   async generateLandingHtml(req, res) {
     try {
-      const { prompt, title, sessionId, userSummary } = req.body;
+      const {
+        prompt,
+        title,
+        sessionId,
+        userSummary,
+        homepagePage,
+        locale,
+      } = req.body;
       if (!String(prompt || '').trim()) {
         return res.status(400).json({
           success: false,
@@ -629,9 +636,15 @@ class AiController {
         });
       }
 
+      const enrichedPrompt = this._buildHomepageHtmlPrompt({
+        prompt: String(prompt).trim(),
+        homepagePage,
+        locale,
+      });
+
       const data = await aiLandingPageService.generate({
         userId: req.user.id,
-        prompt: String(prompt).trim(),
+        prompt: enrichedPrompt,
         titleHint: title != null ? String(title) : '',
       });
 
@@ -952,6 +965,28 @@ class AiController {
       console.error('[ChatbotStudio] Clear conversation error:', error);
       return res.status(404).json({ success: false, message: error.message });
     }
+  }
+
+  _buildHomepageHtmlPrompt({ prompt, homepagePage, locale }) {
+    const page = String(homepagePage || '').trim().toLowerCase();
+    const lang = String(locale || 'vi').trim().toLowerCase() === 'en' ? 'en' : 'vi';
+
+    const pageContext = {
+      hero: 'Trang chủ Founder AI (nền tảng marketing automation + AI chatbot cho doanh nghiệp Việt Nam). Cần hero nổi bật, USP, social proof, CTA đăng ký/dùng thử.',
+      contact: 'Trang liên hệ Founder AI với form liên hệ, thông tin công ty, kênh hỗ trợ.',
+      pricing: 'Trang bảng giá Founder AI với các gói dịch vụ, so sánh tính năng, CTA chọn gói.',
+    }[page];
+
+    const parts = [prompt];
+    if (pageContext) {
+      parts.unshift(`Bối cảnh: ${pageContext}`);
+    }
+    parts.push(
+      lang === 'en'
+        ? 'Generate all visible user-facing text in English. Return a complete HTML page (Tailwind CDN) suitable for full-page display.'
+        : 'Tạo toàn bộ nội dung hiển thị bằng tiếng Việt. Trả về HTML đầy đủ (Tailwind CDN) để hiển thị full page.',
+    );
+    return parts.join('\n\n');
   }
 }
 

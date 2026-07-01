@@ -26,11 +26,11 @@ class AiCreditMeterService {
    *   used?: number,
    * }>}
    */
-  async resolveCreditContext(userId, { ownerContextId } = {}) {
+  async resolveCreditContext(userId, { ownerContextId, forceBillable = false } = {}) {
     if (!userId) return { skip: true };
 
     const role = await this._getUserRole(userId);
-    if (isAdminRole(role)) return { skip: true };
+    if (isAdminRole(role) && !forceBillable) return { skip: true };
 
     const billingOptions = ownerContextId != null && ownerContextId !== ''
       ? { ownerContextId }
@@ -45,21 +45,33 @@ class AiCreditMeterService {
     const billingUserId = cycle.billingUserId || userId;
     const limits = await usageTrackingService.getUserPlanLimits(billingUserId);
     const limit = Number(limits?.ai_credits_per_period) || 0;
+    const creditUsage = await usageTrackingService.getCreditUsageForCycle(billingUserId, cycle);
+    const used = Number(creditUsage.used) || 0;
+
     if (limit <= 0) {
+      if (forceBillable) {
+        return {
+          skip: false,
+          billingUserId,
+          cycle,
+          limit: 0,
+          used,
+          billOnly: true,
+        };
+      }
       return { skip: true, billingUserId, cycle, limit: 0, used: 0 };
     }
 
-    const creditUsage = await usageTrackingService.getCreditUsageForCycle(billingUserId, cycle);
-    const used = Number(creditUsage.used) || 0;
     return { skip: false, billingUserId, cycle, limit, used };
   }
 
   /**
    * Pre-flight check — does NOT charge. Call before running AI.
    */
-  async assertAvailable(userId, { ownerContextId } = {}) {
-    const ctx = await this.resolveCreditContext(userId, { ownerContextId });
+  async assertAvailable(userId, { ownerContextId, forceBillable = false } = {}) {
+    const ctx = await this.resolveCreditContext(userId, { ownerContextId, forceBillable });
     if (ctx.skip) return ctx;
+    if (ctx.billOnly) return ctx;
     if (ctx.used >= ctx.limit) {
       throw this._exhausted({ used: ctx.used, limit: ctx.limit });
     }
@@ -72,8 +84,8 @@ class AiCreditMeterService {
    * @param {number|string|null|undefined} userId
    * @param {{ feature?: string, creditContext?: object }} [options]
    */
-  async consume(userId, { feature, creditContext } = {}) {
-    const ctx = creditContext || await this.resolveCreditContext(userId);
+  async consume(userId, { feature, creditContext, forceBillable = false } = {}) {
+    const ctx = creditContext || await this.resolveCreditContext(userId, { forceBillable });
     if (ctx.skip) return;
 
     await usageTrackingService.trackUsage(ctx.billingUserId, AI_CREDIT_RESOURCE, 1, {

@@ -102,6 +102,33 @@ const landingCustomizerApiService = {
   deleteElementPosition(page, elementKey) {
     return api.delete(`/admin/landing-customizer/${page}/positions/${elementKey}`);
   },
+
+  getHtmlMode(page) {
+    return api.get(`/admin/landing-customizer/${page}/html-mode`);
+  },
+
+  saveHtmlMode(page, payload) {
+    return api.put(`/admin/landing-customizer/${page}/html-mode`, payload);
+  },
+
+  /**
+   * Sinh HTML landing bằng AI (trừ 1 AI credit mỗi lần — kể cả admin khi forceBillable).
+   *
+   * @param {{ prompt: string, title?: string, homepagePage?: string, locale?: string }} params
+   */
+  generateHomepageHtmlWithAi({ prompt, title, homepagePage, locale } = {}) {
+    return api.post(
+      '/ai/generate-landing-html',
+      {
+        prompt,
+        title,
+        homepagePage,
+        locale,
+        forceBillable: true,
+      },
+      { timeout: 120000 },
+    );
+  },
 };
 
 export default landingCustomizerApiService;

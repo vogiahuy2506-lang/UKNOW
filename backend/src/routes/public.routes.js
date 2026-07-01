@@ -18,6 +18,22 @@ router.get('/landing-overrides', async (req, res) => {
   }
 });
 
+router.get('/landing-page-html/:page', async (req, res) => {
+  try {
+    const { page } = req.params;
+    const locale = String(req.query.lang || req.query.locale || 'vi').trim().toLowerCase();
+    const data = await landingCustomizerService.getPublicFullPageHtml(page, locale);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error('[PublicLandingPageHtml]', error);
+    return res.status(status).json({
+      success: false,
+      message: error.message || 'Không thể tải HTML trang',
+    });
+  }
+});
+
 router.get('/landing-overrides/:page', async (req, res) => {
   try {
     const { page } = req.params;

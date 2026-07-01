@@ -134,6 +134,36 @@ class LandingCustomizerController {
       });
     }
   }
+
+  async getHtmlMode(req, res) {
+    try {
+      const { page } = req.params;
+      const data = await landingCustomizerService.getFullPageHtmlMode(page);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingCustomizerController.getHtmlMode]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải chế độ HTML',
+      });
+    }
+  }
+
+  async saveHtmlMode(req, res) {
+    try {
+      const { page } = req.params;
+      const data = await landingCustomizerService.saveFullPageHtmlMode(page, req.body || {});
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingCustomizerController.saveHtmlMode]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể lưu chế độ HTML',
+      });
+    }
+  }
 }
 
 export default new LandingCustomizerController();

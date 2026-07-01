@@ -21,6 +21,9 @@ router.put('/:id', landingCustomizerController.update.bind(landingCustomizerCont
 router.delete('/:id', landingCustomizerController.delete.bind(landingCustomizerController));
 router.post('/bulk', landingCustomizerController.bulkUpsert.bind(landingCustomizerController));
 
+router.get('/:page/html-mode', landingCustomizerController.getHtmlMode.bind(landingCustomizerController));
+router.put('/:page/html-mode', landingCustomizerController.saveHtmlMode.bind(landingCustomizerController));
+
 // Get source code of landing page components
 const SOURCE_FILES = {
   hero: path.resolve(__dirname, '../../../frontend/src/pages/public/HeroPage.jsx'),

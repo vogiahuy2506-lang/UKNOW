@@ -41,6 +41,7 @@ import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
+import LandingHtmlModeGate from './features/landing-customizer/components/LandingHtmlModeGate.jsx';
 import LpRendererPage from './pages/public/LpRendererPage';
 import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
@@ -212,12 +213,33 @@ function App() {
           } />
 
           {/* Trang chủ — fullscreen hero, không dùng LandingLayout */}
-          <Route path="/" element={<HeroPage />} />
+          <Route
+            path="/"
+            element={(
+              <LandingHtmlModeGate page="hero" title="Founder AI">
+                <HeroPage />
+              </LandingHtmlModeGate>
+            )}
+          />
 
           {/* Public pages — dùng video background + HeroNavbar */}
           <Route element={<PublicLayout />}>
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/contact" element={<ContactPage />} />
+            <Route
+              path="/pricing"
+              element={(
+                <LandingHtmlModeGate page="pricing" title="Bảng giá — Founder AI">
+                  <PricingPage />
+                </LandingHtmlModeGate>
+              )}
+            />
+            <Route
+              path="/contact"
+              element={(
+                <LandingHtmlModeGate page="contact" title="Liên hệ — Founder AI">
+                  <ContactPage />
+                </LandingHtmlModeGate>
+              )}
+            />
           </Route>
 
           {/* Thanh toán — video background, không có navbar/footer */}
