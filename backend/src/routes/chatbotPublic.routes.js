@@ -40,7 +40,7 @@ router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomCh
 router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotController.chatWithCustomChatbot.bind(chatbotController));
 
 // Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
-router.post('/custom-chatbot/id/:chatbotId/chat', chatbotController.chatWithCustomChatbotById.bind(chatbotController));
+router.post('/custom-chatbot/id/:chatbotId/chat', publicChatLimiter, chatbotController.chatWithCustomChatbotById.bind(chatbotController));
 
 // Get messages for polling agent replies
 router.get('/custom-chatbot/id/:chatbotId/messages', chatbotController.getChatMessages.bind(chatbotController));

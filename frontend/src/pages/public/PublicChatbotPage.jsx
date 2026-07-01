@@ -103,13 +103,18 @@ export default function PublicChatbotPage() {
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'Xin lỗi, đã có lỗi xảy ra.',
+          content: res.data?.message || 'Xin lỗi, đã có lỗi xảy ra.',
         }]);
       }
     } catch (err) {
+      const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''));
+      const serverMsg = err.response?.data?.message;
+      const fallback = isTimeout
+        ? 'AI đang xử lý quá lâu, vui lòng thử lại sau vài giây.'
+        : (serverMsg || 'Không thể kết nối với server. Vui lòng thử lại sau.');
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Không thể kết nối với server.',
+        content: fallback,
       }]);
     } finally {
       setIsTyping(false);

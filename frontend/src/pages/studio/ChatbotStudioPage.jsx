@@ -239,7 +239,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       }
     }
 
-    const userMessage = { role: 'user', content: input.trim(), created_at: new Date().toISOString() };
+    const userText = input.trim();
+    const userMessage = { role: 'user', content: userText, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setSending(true);
@@ -248,7 +249,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       // Save user message
       await chatbotApi.addChatbotStudioMessage(conv.id, {
         role: 'user',
-        content: input.trim(),
+        content: userText,
       });
 
       // Get chat history for context
@@ -256,7 +257,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       
       // Call AI
       const res = await chatbotApi.sendCustomChat({
-        history: [...history, { role: 'user', content: input }],
+        history: [...history, { role: 'user', content: userText }],
         chatbot_id: chatbot?.id,
         system_instruction: chatbot?.system_instruction,
         temperature: chatbot?.temperature || 0.7,
@@ -286,7 +287,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
         toast.error(res.data.message);
       }
     } catch (err) {
-      toast.error(err.message || 'Gửi thất bại');
+      const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''));
+      toast.error(isTimeout ? 'AI đang xử lý quá lâu, vui lòng thử lại' : (err.message || 'Gửi thất bại'));
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setSending(false);

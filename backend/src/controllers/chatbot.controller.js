@@ -7,6 +7,7 @@ import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import customChatService from '../services/ai/customChat.service.js';
+import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
 import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
@@ -17,6 +18,35 @@ const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả l�
 
 function isAiTokenLimitError(error) {
   return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
+}
+
+async function preparePublicChatCredit(ownerUserId) {
+  try {
+    const creditContext = await aiCreditMeter.assertAvailable(ownerUserId);
+    return { creditContext };
+  } catch (error) {
+    if (aiCreditMeter.isLimitError(error)) {
+      console.warn(`[CustomChatbot] Owner ${ownerUserId} out of AI credits (public chat)`);
+      return { blocked: true };
+    }
+    throw error;
+  }
+}
+
+async function chargePublicChatCredit(ownerUserId, creditContext, feature) {
+  await aiCreditMeter.consume(ownerUserId, { feature, creditContext });
+}
+
+function publicChatbotCreditBlockedResponse(extra = {}) {
+  return {
+    success: true,
+    data: {
+      role: 'assistant',
+      content: VISITOR_CHAT_UNAVAILABLE_MESSAGE,
+      created_at: new Date().toISOString(),
+      ...extra,
+    },
+  };
 }
 
 function publicChatbotFallback(extra = {}) {
@@ -1149,6 +1179,11 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
+      const creditPrep = await preparePublicChatCredit(chatbot.id_user);
+      if (creditPrep.blocked) {
+        return res.json(publicChatbotCreditBlockedResponse());
+      }
+
       const fullHistory = [
         ...(history || []),
         { role: 'user', content: message }
@@ -1164,6 +1199,8 @@ class ChatbotController {
       });
 
       const content = result.content;
+
+      await chargePublicChatCredit(chatbot.id_user, creditPrep.creditContext, 'chatbot_public_widget');
 
       return res.json({
         success: true,
@@ -1210,6 +1247,11 @@ class ChatbotController {
       chatbotUserId = chatbot.id_user;
 
       const { message, history, sessionId } = req.body;
+
+      const creditPrep = await preparePublicChatCredit(chatbotUserId);
+      if (creditPrep.blocked) {
+        return res.json(publicChatbotCreditBlockedResponse({ sessionId: sessionId || undefined }));
+      }
 
       if (!message?.trim()) {
         return res.status(400).json({ success: false, message: 'message is required' });
@@ -1293,6 +1335,8 @@ class ChatbotController {
           content: content,
         });
       }
+
+      await chargePublicChatCredit(chatbot.id_user, creditPrep.creditContext, 'chatbot_public_page');
 
       return res.json({
         success: true,

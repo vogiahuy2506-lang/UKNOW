@@ -1,6 +1,9 @@
 import api from '../../../services/api';
 import rootChatbotApi from '../../../services/chatbotApi';
 
+/** Gemini + RAG có thể mất 30–90s; đồng bộ với aiApi.chat (120s). */
+const AI_CHAT_TIMEOUT_MS = 120000;
+
 const chatbotApiService = {
   ...rootChatbotApi,
 
@@ -15,6 +18,7 @@ const chatbotApiService = {
   uploadCustomChatDocument(formData) {
     return api.post('/ai/custom-chat/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AI_CHAT_TIMEOUT_MS,
     });
   },
 
@@ -25,7 +29,7 @@ const chatbotApiService = {
   },
 
   sendCustomChat(payload) {
-    return api.post('/ai/custom-chat', payload);
+    return api.post('/ai/custom-chat', payload, { timeout: AI_CHAT_TIMEOUT_MS });
   },
 
   // Chatbot Studio Conversations
@@ -56,7 +60,9 @@ const chatbotApiService = {
   },
 
   sendPublicChatbotMessage(chatbotId, payload) {
-    return api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/chat`, payload);
+    return api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/chat`, payload, {
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
   },
 
   async initFacebookOAuth(payload) {
