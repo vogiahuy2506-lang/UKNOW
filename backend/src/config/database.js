@@ -4,15 +4,32 @@ const isNeon = process.env.DB_HOST?.includes('neon.tech');
  * Wrapper cho database operations với automatic retry cho Neon serverless.
  * Neon hay bị connection timeout khi connection cũ bị đóng.
  */
-async function withRetry(operation, maxRetries = 2, delayMs = 500) {
+function isConnectionError(error) {
+  const code = error?.code || error?.cause?.code;
+  const msg = String(error?.message || '').toLowerCase();
+  return (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNREFUSED' ||
+    code === '57P03' ||
+    msg.includes('connection terminated') ||
+    msg.includes('connection timeout') ||
+    msg.includes('connection closed') ||
+    msg.includes('recovery mode') ||
+    msg.includes('not yet accepting connections') ||
+    msg.includes('the database system is not yet accepting')
+  );
+}
+
+async function withRetry(operation, maxRetries = 6, delayMs = 1000) {
   let lastError;
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      // Chỉ retry nếu là connection error
-      if (!isNeon || !isConnectionError(error)) {
+      if (!isConnectionError(error)) {
         throw error;
       }
       console.warn(`[DB] Connection error, retry ${i + 1}/${maxRetries}:`, error.message);
@@ -22,20 +39,6 @@ async function withRetry(operation, maxRetries = 2, delayMs = 500) {
     }
   }
   throw lastError;
-}
-
-function isConnectionError(error) {
-  const code = error?.code || error?.cause?.code;
-  const msg = error?.message || '';
-  return (
-    code === 'ECONNRESET' ||
-    code === 'ETIMEDOUT' ||
-    code === 'ENOTFOUND' ||
-    code === 'ECONNREFUSED' ||
-    msg.includes('Connection terminated') ||
-    msg.includes('connection timeout') ||
-    msg.includes('Connection closed')
-  );
 }
 
 export { withRetry, isConnectionError, isNeon };
@@ -109,7 +112,7 @@ pool.on('error', (err) => {
 
 export default {
   query: (text, params) => withRetry(() => pool.query(text, params)),
-  getClient: () => pool.connect(),
+  getClient: () => withRetry(() => pool.connect()),
   pool,
   withRetry,
   isConnectionError
