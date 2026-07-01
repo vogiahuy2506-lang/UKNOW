@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { EFFECTIVE_PLAN_ID_SQL } from '../../utils/billingCycle.util.js';
 
 class UsageTrackingRepository {
   /**
@@ -76,9 +77,13 @@ class UsageTrackingRepository {
   async trackUsage(userId, resourceType, delta = 1, metadata = {}, client = null) {
     const queryable = client || db;
     const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     const usageMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+    const periodStart = usageMetadata.periodStart
+      ? new Date(usageMetadata.periodStart)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    const periodEnd = usageMetadata.periodEnd
+      ? new Date(usageMetadata.periodEnd)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
     const { rows } = await queryable.query(
       `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
@@ -123,7 +128,7 @@ class UsageTrackingRepository {
          p.ai_tokens_per_period,
          p.ai_credits_per_period
        FROM users u
-       JOIN plans p ON p.id = u.active_plan_id
+       JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
        WHERE u.id = $1`,
       [userId]
     );
@@ -137,7 +142,7 @@ class UsageTrackingRepository {
     const { rows } = await db.query(
       `SELECT p.features
        FROM users u
-       JOIN plans p ON p.id = u.active_plan_id
+       JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
        WHERE u.id = $1`,
       [userId]
     );

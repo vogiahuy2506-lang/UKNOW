@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
 import * as planRepository from '../../repositories/payment/plan.repository.js';
 import { getBillingCycle } from '../../utils/billingCycle.util.js';
+import { getSubscriptionStatus } from '../../utils/subscriptionStatus.util.js';
 
 async function acquireUsageTrackingLock(client, userId, resourceType) {
   await client.query(
@@ -84,15 +85,22 @@ class UsageTrackingService {
    */
   async getCreditUsageForCycle(userId, cycle = null) {
     const resolvedCycle = cycle || await getBillingCycle(userId);
-    if (!resolvedCycle.hasPlan || !resolvedCycle.cycleStart || !resolvedCycle.cycleEnd) {
+    if (!resolvedCycle.hasPlan || !resolvedCycle.cycleStart) {
       return { used: 0, cycle: resolvedCycle };
     }
     const billingUserId = resolvedCycle.billingUserId || userId;
+    const subscription = await getSubscriptionStatus(userId);
+    const rangeEnd = subscription.isExpired
+      ? resolvedCycle.cycleEnd
+      : new Date();
+    if (!rangeEnd) {
+      return { used: 0, cycle: resolvedCycle };
+    }
     const used = await usageTrackingRepository.getUsageInRange(
       billingUserId,
       'ai_credit',
       resolvedCycle.cycleStart,
-      resolvedCycle.cycleEnd
+      rangeEnd
     );
     return { used, cycle: resolvedCycle };
   }
