@@ -5,7 +5,7 @@ const mockEmbedText = jest.fn();
 const mockSearchChunks = jest.fn();
 const mockSearchSimilarChunks = jest.fn();
 
-jest.mock('../../utils/embeddingClient.util.js', () => ({
+jest.mock('../../../utils/embeddingClient.util.js', () => ({
   embedText: (...args) => mockEmbedText(...args),
 }));
 
