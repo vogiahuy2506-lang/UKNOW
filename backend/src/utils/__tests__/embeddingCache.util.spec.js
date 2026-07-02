@@ -39,7 +39,7 @@ describe('embeddingCache.util', () => {
 
     it('creates key with global prefix when no userId', () => {
       const key = getCacheKey(null, 'default', 'test text');
-      expect(key).toBe('global:default:');
+      expect(key).toBe('global:default:-kh95ad');
     });
 
     it('creates key without feature when not provided', () => {

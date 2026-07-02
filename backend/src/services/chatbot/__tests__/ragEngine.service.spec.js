@@ -1,20 +1,21 @@
-import { describe, expect, it, vi, beforeEach } from '@jest/globals';
+import { describe, expect, it, beforeEach } from '@jest/globals';
+import { jest } from '@jest/globals';
 
-const mockEmbedText = vi.fn();
-const mockSearchChunks = vi.fn();
-const mockSearchSimilarChunks = vi.fn();
+const mockEmbedText = jest.fn();
+const mockSearchChunks = jest.fn();
+const mockSearchSimilarChunks = jest.fn();
 
-vi.mock('../../utils/embeddingClient.util.js', () => ({
+jest.mock('../../utils/embeddingClient.util.js', () => ({
   embedText: (...args) => mockEmbedText(...args),
 }));
 
-vi.mock('../../repositories/ai/knowledgeBase.repository.js', () => ({
+jest.mock('../../repositories/ai/knowledgeBase.repository.js', () => ({
   default: {
     searchChunks: (...args) => mockSearchChunks(...args),
   },
 }));
 
-vi.mock('../../repositories/ai/businessProfile.repository.js', () => ({
+jest.mock('../../repositories/ai/businessProfile.repository.js', () => ({
   default: {
     searchSimilarChunks: (...args) => mockSearchSimilarChunks(...args),
   },
@@ -24,8 +25,10 @@ describe('ragEngine.service', () => {
   let ragEngine;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    vi.resetModules();
+    mockEmbedText.mockClear();
+    mockSearchChunks.mockClear();
+    mockSearchSimilarChunks.mockClear();
+    jest.resetModules();
 
     mockEmbedText.mockResolvedValue([0.1, 0.2, 0.3]);
     mockSearchChunks.mockResolvedValue([
