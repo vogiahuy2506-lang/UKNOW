@@ -1,30 +1,29 @@
-import { describe, expect, it, beforeEach } from '@jest/globals';
-import { jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockEmbedText = jest.fn();
 const mockSearchChunks = jest.fn();
 const mockSearchSimilarChunks = jest.fn();
 
-jest.mock('../../../utils/embeddingClient.util.js', () => ({
+jest.unstable_mockModule('../../../utils/embeddingClient.util.js', () => ({
   embedText: (...args) => mockEmbedText(...args),
 }));
 
-jest.mock('../../repositories/ai/knowledgeBase.repository.js', () => ({
+jest.unstable_mockModule('../../../repositories/ai/knowledgeBase.repository.js', () => ({
   default: {
     searchChunks: (...args) => mockSearchChunks(...args),
   },
 }));
 
-jest.mock('../../repositories/ai/businessProfile.repository.js', () => ({
+jest.unstable_mockModule('../../../repositories/ai/businessProfile.repository.js', () => ({
   default: {
     searchSimilarChunks: (...args) => mockSearchSimilarChunks(...args),
   },
 }));
 
-describe('ragEngine.service', () => {
-  let ragEngine;
+const { default: ragEngine } = await import('../ragEngine.service.js');
 
-  beforeEach(async () => {
+describe('ragEngine.service', () => {
+  beforeEach(() => {
     mockEmbedText.mockClear();
     mockSearchChunks.mockClear();
     mockSearchSimilarChunks.mockClear();
@@ -37,13 +36,11 @@ describe('ragEngine.service', () => {
     mockSearchSimilarChunks.mockResolvedValue([
       { chunk_text: 'Profile chunk 1', similarity: 0.7 },
     ]);
-
-    ragEngine = (await import('./ragEngine.service.js')).default;
   });
 
   describe('buildContext', () => {
     it('embeds query and searches both KB and profile', async () => {
-      const context = await ragEngine.buildContext(1, 'test query');
+      await ragEngine.buildContext(1, 'test query');
 
       expect(mockEmbedText).toHaveBeenCalledWith('test query', expect.objectContaining({
         feature: 'embedding_rag_query',
