@@ -160,7 +160,7 @@ export default function PublicChatbotPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
+    <div className="h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
       {/* Header */}
       <div
         className="shadow-lg"
@@ -213,7 +213,7 @@ export default function PublicChatbotPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 chat-messages-scroll">
         <div className="max-w-lg mx-auto flex flex-col gap-3">
           {messages.map((msg, idx) => (
             <div

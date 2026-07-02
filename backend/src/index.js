@@ -7,6 +7,8 @@ import { createApp } from './app.js';
 import { initScheduler } from './utils/scheduler.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
+import kbDocumentQueue from './services/queue/kbDocumentQueue.service.js';
+import knowledgeBaseService from './services/chatbot/knowledgeBase.service.js';
 import { runMigrations } from './utils/migrationRunner.util.js';
 import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
@@ -20,6 +22,12 @@ let isShuttingDown = false;
 
 // Đăng ký processor trước khi start worker để tránh job không có handler.
 registerOutboundMessageProcessors();
+
+// Register KB document processing processor
+kbDocumentQueue.registerProcessor('kb.document.process', async (payload) => {
+  const { docId, kbId, userId, options } = payload;
+  return knowledgeBaseService.processDocument(docId, kbId, userId, options);
+});
 
 const STARTUP_DB_MAX_ATTEMPTS = Number.parseInt(process.env.STARTUP_DB_MAX_ATTEMPTS || '', 10)
   || (process.env.NODE_ENV === 'production' ? 12 : 1);
@@ -103,6 +111,7 @@ const gracefulShutdown = async (signal) => {
   console.info(`[Server] Nhận tín hiệu ${signal}, đang shutdown...`);
   try {
     await outboundMessageQueueService.close();
+    await kbDocumentQueue.close();
   } catch (error) {
     console.error(`[Server] Lỗi khi đóng BullMQ: ${error?.message || error}`);
   }
@@ -166,6 +175,7 @@ app.listen(PORT, async () => {
   setupCleanupTask();
   initScheduler();
   await outboundMessageQueueService.startWorker();
+  await kbDocumentQueue.startWorker();
   await restoreZaloSessionsOnStartup();
   console.log(`Cleanup task scheduled`);
 

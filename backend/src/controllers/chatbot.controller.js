@@ -190,8 +190,8 @@ class ChatbotController {
         mime_type: file.mimetype,
       });
 
-      // Process asynchronously
-      knowledgeBaseService.processDocument(doc.id, kbId, req.user.id, {
+      // Process asynchronously via queue (non-blocking)
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {
@@ -223,7 +223,7 @@ class ChatbotController {
         content_text: content,
       });
 
-      knowledgeBaseService.processDocument(doc.id, kbId, req.user.id, {
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {
@@ -304,7 +304,7 @@ class ChatbotController {
         content_text: content || `⚠️ Failed to extract content from ${url}. Status: ${scrapeStatus}`,
       });
 
-      knowledgeBaseService.processDocument(doc.id, kbId, req.user.id, {
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {

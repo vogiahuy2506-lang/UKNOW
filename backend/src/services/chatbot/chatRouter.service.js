@@ -28,6 +28,8 @@ const MAX_HISTORY_MESSAGES = 20;
 class ChatRouterService {
   /**
    * Route an incoming message through the unified AI pipeline.
+   * Optimized: parallelizes independent operations (history, subAssistant, profileContext).
+   *
    * @param {object} params
    * @param {string} params.channel - 'web' | 'zalo_oa' | 'facebook' | 'zalo_personal'
    * @param {number} params.userId
@@ -53,30 +55,24 @@ class ChatRouterService {
       return { type: 'text', content: creditPrep.visitorMessage };
     }
 
-    // 2. Get sub-assistant info
-    let subAssistant = null;
-    if (settings.id_sub_assistant) {
-      subAssistant = await subAssistantService.getById(settings.id_sub_assistant, userId);
-    }
+    // 2. PARALLEL: Get history, subAssistant, and profileContext (all independent)
+    const [history, subAssistant, profileContext] = await Promise.all([
+      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES),
+      settings.id_sub_assistant
+        ? subAssistantService.getById(settings.id_sub_assistant, userId)
+        : Promise.resolve(null),
+      businessProfileService.getFormattedProfileForPrompt(userId).catch(() => ''),
+    ]);
 
-    // 3. Get conversation history for context
-    const history = await this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES);
-
-    // 4. Build RAG context from KB (use sub-assistant's linked KB or all KBs)
+    // 3. Get linked KB id (depends on subAssistant, but fast)
     const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
+
+    // 4. Build RAG context (uses cached embeddings, ~100-200ms typically)
     const ragContext = await ragEngineService.buildContext(userId, message, {
       kbId: linkedKbId,
     });
 
-    // 5. Get business profile as fallback context
-    let profileContext = '';
-    try {
-      profileContext = await businessProfileService.getFormattedProfileForPrompt(userId);
-    } catch (e) {
-      console.warn('[ChatRouter] No business profile context:', e.message);
-    }
-
-    // 6. Build system prompt
+    // 5. Build system prompt
     const isFirstMessage = history.length === 0;
     const systemPrompt = this._buildSystemPrompt({
       subAssistant,
@@ -122,6 +118,8 @@ class ChatRouterService {
 
   /**
    * Route message with pre-fetched chatbot settings (for Zalo per-account settings).
+   * Optimized: parallelizes independent operations.
+   *
    * @param {object} params
    * @param {string} params.channel - 'zalo_personal'
    * @param {number} params.userId
@@ -147,29 +145,24 @@ class ChatRouterService {
       return { type: 'text', content: creditPrep.visitorMessage };
     }
 
-    // Get sub-assistant info if configured
-    let subAssistant = null;
-    if (chatbotSettings.id_sub_assistant) {
-      subAssistant = await subAssistantService.getById(chatbotSettings.id_sub_assistant, userId);
-    }
+    // PARALLEL: Get history, subAssistant, and profileContext (all independent)
+    const [history, subAssistant, profileContext] = await Promise.all([
+      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES),
+      chatbotSettings.id_sub_assistant
+        ? subAssistantService.getById(chatbotSettings.id_sub_assistant, userId)
+        : Promise.resolve(null),
+      businessProfileService.getFormattedProfileForPrompt(userId).catch(() => ''),
+    ]);
 
-    // Get conversation history for context
-    const history = await this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES);
     console.log(`[ChatRouter] Got ${history.length} history messages for conversationId=${conversationId}`);
 
-    // Build RAG context from KB
+    // Get linked KB id (depends on subAssistant, but fast)
     const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
+
+    // Build RAG context (uses cached embeddings, ~100-200ms typically)
     const ragContext = await ragEngineService.buildContext(userId, message, {
       kbId: linkedKbId,
     });
-
-    // Get business profile as fallback context
-    let profileContext = '';
-    try {
-      profileContext = await businessProfileService.getFormattedProfileForPrompt(userId);
-    } catch (e) {
-      console.warn('[ChatRouter] No business profile context:', e.message);
-    }
 
     // Build system prompt with per-account settings
     const isFirstMessage = history.length === 0;

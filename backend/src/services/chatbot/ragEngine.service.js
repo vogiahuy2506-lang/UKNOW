@@ -28,22 +28,27 @@ class RagEngineService {
       minSimilarity = MIN_SIMILARITY,
     } = options;
 
-    let kbContext = '';
-    let profileContext = '';
-
     try {
-      // 1. Embed user query
+      // 1. Embed user query (single call)
       const queryEmbedding = await embedText(userQuery, {
         userId,
         feature: 'embedding_rag_query',
       });
 
-      // 2. Search KB chunks
-      const kbChunks = await knowledgeBaseRepository.searchChunks(
-        userId, queryEmbedding,
-        { kbId, limit: maxKbChunks, minSimilarity }
-      );
+      // 2. Search KB chunks + business profile chunks in PARALLEL
+      // Both searches only depend on queryEmbedding, so they can run concurrently
+      const [kbChunks, profileChunks] = await Promise.all([
+        knowledgeBaseRepository.searchChunks(
+          userId, queryEmbedding,
+          { kbId, limit: maxKbChunks, minSimilarity }
+        ),
+        businessProfileRepository.searchSimilarChunks(
+          userId, queryEmbedding, maxProfileChunks
+        ),
+      ]);
 
+      // 3. Format KB context
+      let kbContext = '';
       if (kbChunks.length > 0) {
         const sources = [...new Set(kbChunks.map(c => c.metadata?.source || 'Document'))];
         kbContext = [
@@ -55,11 +60,8 @@ class RagEngineService {
         ].join('\n');
       }
 
-      // 3. Search business profile chunks (always included as secondary context)
-      const profileChunks = await businessProfileRepository.searchSimilarChunks(
-        userId, queryEmbedding, maxProfileChunks
-      );
-
+      // 4. Format profile context
+      let profileContext = '';
       if (profileChunks.length > 0) {
         profileContext = [
           `=== BUSINESS PROFILE CONTEXT ===`,
@@ -68,15 +70,77 @@ class RagEngineService {
             .map(c => `- ${c.chunk_text}`),
         ].join('\n');
       }
+
+      const parts = [];
+      if (kbContext) parts.push(kbContext);
+      if (profileContext) parts.push(profileContext);
+
+      return parts.join('\n\n');
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context, continuing without RAG:', e.message);
+      return '';
     }
+  }
 
-    const parts = [];
-    if (kbContext) parts.push(kbContext);
-    if (profileContext) parts.push(profileContext);
+  /**
+   * Build RAG context with a pre-computed embedding (avoid re-embedding same query).
+   * Use this when embedding was already computed externally.
+   *
+   * @param {number} userId
+   * @param {number[]} queryEmbedding - pre-computed embedding vector
+   * @param {object} options
+   * @returns {Promise<string>}
+   */
+  async buildContextWithEmbedding(userId, queryEmbedding, options = {}) {
+    const {
+      kbId = null,
+      maxKbChunks = MAX_KB_CHUNKS,
+      maxProfileChunks = MAX_PROFILE_CHUNKS,
+      minSimilarity = MIN_SIMILARITY,
+    } = options;
 
-    return parts.join('\n\n');
+    try {
+      const [kbChunks, profileChunks] = await Promise.all([
+        knowledgeBaseRepository.searchChunks(
+          userId, queryEmbedding,
+          { kbId, limit: maxKbChunks, minSimilarity }
+        ),
+        businessProfileRepository.searchSimilarChunks(
+          userId, queryEmbedding, maxProfileChunks
+        ),
+      ]);
+
+      let kbContext = '';
+      if (kbChunks.length > 0) {
+        const sources = [...new Set(kbChunks.map(c => c.metadata?.source || 'Document'))];
+        kbContext = [
+          `=== KNOWLEDGE BASE (trained data) ===`,
+          `Sources: ${sources.join(', ')}`,
+          '',
+          ...kbChunks.map(c => `[${(c.similarity * 100).toFixed(0)}%] ${c.chunk_text}`),
+          '',
+        ].join('\n');
+      }
+
+      let profileContext = '';
+      if (profileChunks.length > 0) {
+        profileContext = [
+          `=== BUSINESS PROFILE CONTEXT ===`,
+          ...profileChunks
+            .filter(c => c.similarity > minSimilarity)
+            .map(c => `- ${c.chunk_text}`),
+        ].join('\n');
+      }
+
+      const parts = [];
+      if (kbContext) parts.push(kbContext);
+      if (profileContext) parts.push(profileContext);
+
+      return parts.join('\n\n');
+    } catch (e) {
+      console.warn('[RAG Engine] Failed to build context with embedding:', e.message);
+      return '';
+    }
   }
 
   /**
