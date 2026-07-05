@@ -37,7 +37,8 @@ router.get('/landing-page-html/:page', async (req, res) => {
 router.get('/landing-overrides/:page', async (req, res) => {
   try {
     const { page } = req.params;
-    const overrides = await landingCustomizerService.getOverridesByPage(page);
+    const result = await landingCustomizerService.getOverridesByPage(page);
+    const overrides = Array.isArray(result) ? result : (result.raw || []);
     const map = {};
     for (const override of overrides) {
       if (!map[override.section]) {
