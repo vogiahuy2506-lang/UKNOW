@@ -88,6 +88,10 @@ class LandingPageAdminService {
     }
 
     const slug = String(body?.slug || '').trim().toLowerCase();
+    const domainType = body?.domainType === 'custom' ? 'custom' : 'system';
+    const domainSubtype = domainType === 'custom'
+      ? (body?.domainSubtype === 'apex' ? 'apex' : 'subdomain')
+      : null;
     this.assertNotReservedSlug(slug);
     if (!landingPageRepository.isValidSlug(slug)) {
       const err = new Error('Slug không hợp lệ (chữ thường, số, dấu - và _; bắt đầu bằng chữ hoặc số)');
@@ -122,6 +126,8 @@ class LandingPageAdminService {
         htmlContent,
         isPublished: Boolean(body?.isPublished),
         idUser: userId,
+        domainType,
+        domainSubtype,
       }, client);
       await client.query('COMMIT');
     } catch (error) {
@@ -131,15 +137,19 @@ class LandingPageAdminService {
       client.release();
     }
 
-    // Tự động cấp subdomain slug.founderai.biz qua Cloudflare (lỗi CF không làm fail)
-    const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
-    return {
-      ...lp,
-      customDomain: domainResult.hostname,
-      cfManaged: domainResult.cfManaged,
-      customDomainProvisioned: domainResult.ok === true,
-      customDomainMessage: domainResult.message || null,
-    };
+    // Tự động cấp subdomain slug.founderai.biz qua Cloudflare (chỉ khi user chọn system domain).
+    // Lỗi CF không làm fail toàn bộ request.
+    if (domainType === 'system') {
+      const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
+      return {
+        ...lp,
+        customDomain: domainResult.hostname,
+        cfManaged: domainResult.cfManaged,
+        customDomainProvisioned: domainResult.ok === true,
+        customDomainMessage: domainResult.message || null,
+      };
+    }
+    return lp;
   }
 
   /**
@@ -180,16 +190,48 @@ class LandingPageAdminService {
       frontendOrigin: resolveFrontendOriginFromEnv(),
       apiBase: resolvePublicApiBaseFromEnv(),
     });
+
+    // domainType / domainSubtype chỉ thay đổi khi user gửi lên rõ ràng.
+    const incomingType = body?.domainType;
+    const nextDomainType = incomingType === 'custom' || incomingType === 'system'
+      ? incomingType
+      : (current.domainType || 'system');
+    const nextDomainSubtype = nextDomainType === 'custom'
+      ? (body?.domainSubtype === 'apex' ? 'apex' : 'subdomain')
+      : null;
+    const typeChanged = nextDomainType !== (current.domainType || 'system');
+
     const updated = await landingPageRepository.updateById(id, {
       slug,
       title: body?.title,
       htmlContent,
       isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
       idUser: current.idUser,
+      domainType: nextDomainType,
+      domainSubtype: nextDomainSubtype,
     });
 
-    // Nếu slug thay đổi → xóa subdomain cũ, cấp subdomain mới (lỗi CF không fail request)
-    if (slug !== current.slug) {
+    // Đồng bộ DNS:
+    //  - system → custom : xóa CF subdomain cũ (nếu có) để giải phóng DNS, user sẽ tự cấu hình hostname mới.
+    //  - custom → system : xóa custom hostname cũ (nếu có), cấp lại slug.founderai.biz qua CF.
+    //  - system → system (slug đổi): giữ behavior cũ (removeSubdomain + autoProvision).
+    if (typeChanged) {
+      if (nextDomainType === 'custom') {
+        // Chuyển sang custom: gỡ CF subdomain miễn phí, để user nhập hostname riêng.
+        await landingPageDomainService.removeSubdomain(id).catch((e) =>
+          console.warn('[LandingPageAdmin.update] removeSubdomain on switch→custom failed:', e.message)
+        );
+      } else {
+        // Chuyển về system: gỡ custom hostname (nếu có) rồi cấp slug.founderai.biz.
+        await landingPageDomainService.removeSubdomain(id).catch((e) =>
+          console.warn('[LandingPageAdmin.update] removeSubdomain on switch→system failed:', e.message)
+        );
+        await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
+          console.warn('[LandingPageAdmin.update] autoProvisionSubdomain on switch→system failed:', e.message)
+        );
+      }
+    } else if (slug !== current.slug) {
+      // System → system mà slug đổi: giữ behavior cũ.
       await landingPageDomainService.removeSubdomain(id).catch((e) =>
         console.warn('[LandingPageAdmin.update] removeSubdomain failed:', e.message)
       );

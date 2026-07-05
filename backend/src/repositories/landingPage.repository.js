@@ -185,6 +185,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         domain_type AS "domainType",
+         domain_subtype AS "domainSubtype",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_pages
@@ -215,6 +217,7 @@ class LandingPageRepository {
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
          lp.domain_type AS "domainType",
+         lp.domain_subtype AS "domainSubtype",
          ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
          ld.status AS "customDomainStatus"
@@ -235,8 +238,13 @@ class LandingPageRepository {
   async insert(payload, client = null) {
     const queryable = client || db;
     const result = await queryable.query(
-      `INSERT INTO landing_pages (slug, title, html_content, is_published, id_user, created_at, updated_at)
-       VALUES (LOWER(TRIM($1)), $2, $3, COALESCE($4, false), $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO landing_pages
+         (slug, title, html_content, is_published, id_user, domain_type, domain_subtype, created_at, updated_at)
+       VALUES
+         (LOWER(TRIM($1)), $2, $3, COALESCE($4, false), $5,
+          COALESCE($6, 'system'),
+          CASE WHEN $6 = 'custom' THEN $7 ELSE NULL END,
+          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING
          id,
          slug,
@@ -244,6 +252,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         domain_type AS "domainType",
+         domain_subtype AS "domainSubtype",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -252,6 +262,8 @@ class LandingPageRepository {
         String(payload.htmlContent ?? ''),
         Boolean(payload.isPublished),
         payload.idUser ?? null,
+        payload.domainType === 'custom' ? 'custom' : 'system',
+        payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
       ]
     );
     return result.rows[0];
@@ -270,6 +282,12 @@ class LandingPageRepository {
          html_content = $4,
          is_published = $5,
          id_user = COALESCE($6, id_user),
+         domain_type = COALESCE($7, domain_type),
+         domain_subtype = CASE
+           WHEN $7 = 'custom' THEN $8
+           WHEN $7 = 'system' THEN NULL
+           ELSE domain_subtype
+         END,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING
@@ -279,6 +297,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         domain_type AS "domainType",
+         domain_subtype AS "domainSubtype",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -288,6 +308,8 @@ class LandingPageRepository {
         String(payload.htmlContent ?? ''),
         Boolean(payload.isPublished),
         payload.idUser ?? null,
+        payload.domainType === 'custom' || payload.domainType === 'system' ? payload.domainType : null,
+        payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
       ]
     );
     return result.rows[0] || null;

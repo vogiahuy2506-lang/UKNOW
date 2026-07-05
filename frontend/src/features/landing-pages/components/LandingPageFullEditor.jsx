@@ -446,7 +446,15 @@ export default function LandingPageFullEditor({
     && isCfManagedDomain
   );
   const showCustomDomainForm = !isAutoSubdomainPending || showCustomDomainFormForAutoPending;
-  const publicUrl = slug ? `https://${slug}.${BASE_DOMAIN}` : '';
+  const isCustomDomainMode = form.domainType === 'custom';
+  const headerDomain = (() => {
+    if (!slug) return null;
+    if (isCustomDomainMode) return slug;
+    return `${slug}.${BASE_DOMAIN}`;
+  })();
+  const publicUrl = isCustomDomainMode
+    ? (slug ? `https://${slug}` : '')
+    : (slug ? `https://${slug}.${BASE_DOMAIN}` : '');
 
   const overlay = (
     <div
@@ -459,9 +467,9 @@ export default function LandingPageFullEditor({
           <h2 className="text-lg font-semibold text-gray-900">
             {editingId ? t('landingPageEditor.editLanding') : t('landingPageEditor.createLanding')}
           </h2>
-          {slug && (
+          {headerDomain && (
             <code className="text-sm bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono">
-              {slug}.{BASE_DOMAIN}
+              {headerDomain}
             </code>
           )}
         </div>
@@ -543,26 +551,132 @@ export default function LandingPageFullEditor({
         >
           <div className="shrink-0 p-4 space-y-3 border-b border-gray-100 bg-white overflow-y-auto max-h-[55vh] lg:max-h-[55%]">
 
+            {/* Domain Type Selector */}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <HiOutlineGlobeAlt className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-medium text-gray-800">
+                  {t('landingPageEditor.domainTypeLabel') || 'Loại domain'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className={`flex items-start gap-2 cursor-pointer rounded-lg border p-3 transition-colors ${
+                  form.domainType !== 'custom'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="domainType"
+                    value="system"
+                    checked={form.domainType !== 'custom'}
+                    onChange={() => setForm((p) => ({ ...p, domainType: 'system', domainSubtype: 'subdomain' }))}
+                    className="accent-blue-600 mt-0.5"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-800">
+                      {t('landingPageEditor.domainTypeSystem') || 'Dùng subdomain miễn phí'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {t('landingPageEditor.domainTypeSystemHint') || 'Tự động cấp slug.founderai.biz qua Cloudflare. SSL do Cloudflare Universal xử lý.'}
+                    </div>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-2 cursor-pointer rounded-lg border p-3 transition-colors ${
+                  form.domainType === 'custom'
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="domainType"
+                    value="custom"
+                    checked={form.domainType === 'custom'}
+                    onChange={() => setForm((p) => ({ ...p, domainType: 'custom' }))}
+                    className="accent-purple-600 mt-0.5"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-800">
+                      {t('landingPageEditor.domainTypeCustom') || 'Dùng domain riêng của tôi'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {t('landingPageEditor.domainTypeCustomHint') || 'Gắn subdomain hoặc apex của bạn. Tự thêm CNAME/A tại DNS provider.'}
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Basic Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPagesAdmin.slug')}</label>
-                <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-                  <input
-                    className="flex-1 px-3 py-2 text-sm font-mono outline-none min-w-0"
-                    value={form.slug}
-                    onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '') }))}
-                    placeholder="your-slug"
-                  />
-                  <span className="px-3 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
-                    .{BASE_DOMAIN}
-                  </span>
+              {form.domainType !== 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPagesAdmin.slug')}</label>
+                  <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+                    <input
+                      className="flex-1 px-3 py-2 text-sm font-mono outline-none min-w-0"
+                      value={form.slug}
+                      onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '') }))}
+                      placeholder="your-slug"
+                    />
+                    <span className="px-3 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
+                      .{BASE_DOMAIN}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Đây là địa chỉ subdomain mặc định. Đổi tên ở đây rồi bấm Lưu để cấp lại <code className="bg-gray-100 px-1 rounded">tên-mới.{BASE_DOMAIN}</code>.
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Đây là địa chỉ subdomain mặc định. Đổi tên ở đây rồi bấm Lưu để cấp lại <code className="bg-gray-100 px-1 rounded">tên-mới.{BASE_DOMAIN}</code>.
-                </p>
-              </div>
-              <div>
+              )}
+              {form.domainType === 'custom' && (
+                <div className={form.domainType === 'custom' ? 'sm:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('landingPageEditor.customHostname') || 'Hostname domain riêng'}
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                      value={form.slug}
+                      onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '').toLowerCase() }))}
+                      placeholder={form.domainSubtype === 'apex' ? 'yoursite.com' : 'lp.yoursite.com'}
+                    />
+                    <div className="flex flex-wrap gap-3 p-2 bg-white border border-gray-200 rounded-lg">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="domainSubtype"
+                          value="subdomain"
+                          checked={form.domainSubtype !== 'apex'}
+                          onChange={() => setForm((p) => ({ ...p, domainSubtype: 'subdomain' }))}
+                          className="accent-purple-600"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <span className="font-medium">Subdomain</span>
+                          <span className="text-gray-500 ml-1">(CNAME → {BASE_DOMAIN})</span>
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="domainSubtype"
+                          value="apex"
+                          checked={form.domainSubtype === 'apex'}
+                          onChange={() => setForm((p) => ({ ...p, domainSubtype: 'apex' }))}
+                          className="accent-purple-600"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <span className="font-medium">Apex</span>
+                          <span className="text-gray-500 ml-1">(A record → IP platform)</span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Nhập hostname bạn muốn gắn vào landing. Sau khi Lưu và Công bố, hệ thống sẽ verify DNS rồi cấp SSL tự động.
+                  </p>
+                </div>
+              )}
+              <div className={form.domainType === 'custom' ? 'sm:col-span-2' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPageEditor.pageTitle')}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -587,15 +701,32 @@ export default function LandingPageFullEditor({
             <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={true}>
               <div className="space-y-4">
                 {/* Quick Help */}
-                <div className="flex items-start gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                  <HiOutlineQuestionMarkCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
+                <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${
+                  isCustomDomainMode ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-gray-700'
+                }`}>
+                  <HiOutlineQuestionMarkCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                    isCustomDomainMode ? 'text-purple-500' : 'text-blue-500'
+                  }`} />
                   <div className="space-y-1">
-                    <p>
-                      Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> hoặc subdomain <code className="bg-blue-100 px-1 rounded">lp.yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
-                    </p>
-                    <p className="text-blue-700 font-medium">
-                      Thêm bản ghi CNAME trỏ về {BASE_DOMAIN}.
-                    </p>
+                    {isCustomDomainMode ? (
+                      <>
+                        <p>
+                          Bạn đang dùng <strong>domain riêng</strong>. Hệ thống sẽ kiểm tra DNS rồi cấp SSL tự động qua Let's Encrypt.
+                        </p>
+                        <p>
+                          {form.domainSubtype === 'apex'
+                            ? <>Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain, trỏ về IP platform.</>
+                            : <>Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain, trỏ về <strong>{BASE_DOMAIN}</strong>.</>}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          Bạn đang dùng <strong>subdomain miễn phí</strong> dạng <code className={`px-1 rounded ${isCustomDomainMode ? 'bg-purple-100' : 'bg-blue-100'}`}>slug.{BASE_DOMAIN}</code>. Hệ thống tự cấp qua Cloudflare, SSL do Cloudflare Universal xử lý.
+                        </p>
+                        <p>Đổi tên subdomain bằng cách sửa <strong>Tên rút gọn</strong> phía trên rồi Lưu.</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -609,19 +740,17 @@ export default function LandingPageFullEditor({
                   </div>
                 ) : (
                   <>
-                    {/* Domain Already Active */}
-                    {cdInfo?.status === 'active' && (
-                        <div className="space-y-3">
+                    {/* === SYSTEM MODE (miễn phí) === */}
+                    {!isCustomDomainMode && cdInfo?.configured && cdInfo?.status === 'active' && isCfManagedDomain && (
+                      <div className="space-y-3">
                         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
                           <HiOutlineCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-semibold text-green-800 text-lg">{cdInfo.hostname}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-green-800 text-lg break-all">{cdInfo.hostname}</p>
                             <p className="text-sm text-green-600">
-                              {isCfManagedDomain
-                                ? 'Subdomain đã kích hoạt qua Cloudflare. HTTPS do Cloudflare Universal SSL xử lý.'
-                                : "Domain đã kích hoạt. SSL sẽ được cấp tự động qua Let's Encrypt."}
+                              Subdomain đã kích hoạt qua Cloudflare. HTTPS do Cloudflare Universal SSL xử lý.
                             </p>
-                            {isCfManagedDomain && form.slug && (
+                            {form.slug && (
                               <p className="text-xs text-green-700 mt-2">
                                 Muốn đổi subdomain? Sửa <strong>Tên rút gọn</strong> phía trên rồi Lưu.
                                 {' '}Link dự phòng:{' '}
@@ -645,225 +774,282 @@ export default function LandingPageFullEditor({
                             Mở domain
                           </a>
                         </div>
-                        {!isCfManagedDomain && (
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary"
-                              disabled={cdBusy}
-                              onClick={provisionSsl}
-                            >
-                              {cdBusy ? 'Đang xử lý...' : 'Cấp SSL ngay'}
-                            </button>
-                            <button
-                              type="button"
-                              className="text-sm text-red-600 hover:text-red-700 hover:underline"
-                              onClick={removeCustomDomain}
-                            >
-                              Xóa domain này
-                            </button>
-                          </div>
-                        )}
+                        <div className="pt-2 border-t border-gray-100">
+                          <button
+                            type="button"
+                            className="text-sm text-purple-600 hover:text-purple-700 hover:underline"
+                            disabled={cdBusy}
+                            onClick={() => {
+                              setCdHostnameDraft('');
+                              setCdIsApexDomain(false);
+                              setShowCustomDomainFormForAutoPending(true);
+                              setForm((p) => ({ ...p, domainType: 'custom', domainSubtype: 'subdomain' }));
+                            }}
+                          >
+                            + Chuyển sang dùng domain riêng
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {/* No Domain Configured - Main UX */}
-                    {(!cdInfo?.configured || cdInfo?.status !== 'active') && (
-                      <div className="space-y-4">
-                        {isAutoSubdomainPending && (
-                          <div className="border border-amber-200 rounded-lg overflow-hidden">
-                            <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
-                              <p className="font-medium text-amber-800">
-                                Subdomain hệ thống chưa được cấp
+                    {/* === CUSTOM MODE (active) === */}
+                    {isCustomDomainMode && cdInfo?.configured && cdInfo?.status === 'active' && !isCfManagedDomain && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <HiOutlineCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-green-800 text-lg break-all">{cdInfo.hostname}</p>
+                            <p className="text-sm text-green-600">
+                              Domain đã kích hoạt. SSL được cấp tự động qua Let's Encrypt.
+                            </p>
+                            {form.slug && (
+                              <p className="text-xs text-green-700 mt-2">
+                                {cdInfo.isApexDomain ? 'Apex domain' : 'Subdomain'} ·{' '}
+                                {cdInfo.isApexDomain ? 'A record' : 'CNAME record'} đã trỏ về platform.
                               </p>
-                            </div>
-                            <div className="p-4 space-y-3">
-                              <div className="flex items-start gap-3">
-                                <HiOutlineGlobeAlt className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="font-mono font-semibold text-gray-900 break-all">{cdInfo.hostname}</p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {cdInfo.instructions || 'Hệ thống sẽ tạo CNAME proxied trong Cloudflare cho subdomain này.'}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-700">
-                                <strong> Lưu ý:</strong> Việc cấp subdomain qua Cloudflare có thể mất <strong>30 phút - 24 giờ</strong>. Bạn có thể đóng trang này và quay lại sau.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary w-full flex items-center justify-center gap-2"
-                                disabled={cdBusy}
-                                onClick={verifyCustomDomain}
-                              >
-                                <HiOutlineRefresh className={`w-4 h-4 ${cdBusy ? 'animate-spin' : ''}`} />
-                                {cdBusy ? 'Đang thử lại...' : 'Thử lại cấp subdomain'}
-                              </button>
-                              {!showCustomDomainFormForAutoPending && (
-                                <button
-                                  type="button"
-                                  className="btn btn-outline w-full"
-                                  disabled={cdBusy}
-                                  onClick={() => {
-                                    setCdHostnameDraft('');
-                                    setCdIsApexDomain(false);
-                                    setShowCustomDomainFormForAutoPending(true);
-                                  }}
-                                >
-                                  Dùng domain riêng
-                                </button>
+                            )}
+                          </div>
+                          <a
+                            href={`https://${cdInfo.hostname}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline"
+                          >
+                            Mở domain
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            disabled={cdBusy}
+                            onClick={provisionSsl}
+                          >
+                            {cdBusy ? 'Đang xử lý...' : 'Cấp SSL ngay'}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-sm text-red-600 hover:text-red-700 hover:underline"
+                            onClick={removeCustomDomain}
+                          >
+                            Xóa domain này
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* === CUSTOM MODE (pending) === */}
+                    {isCustomDomainMode && cdInfo?.configured && cdInfo?.status === 'pending_verification' && !isCfManagedDomain && (
+                      <div className="border border-amber-200 rounded-lg overflow-hidden">
+                        <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
+                          <p className="font-medium text-amber-800">
+                            Cần thêm bản ghi DNS
+                          </p>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          <p className="text-sm text-gray-600">
+                            Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} tại nhà cung cấp domain của bạn:
+                          </p>
+                          <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
+                            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                              <span className="text-gray-500">Type:</span><span>{cdInfo?.isApexDomain ? 'A' : 'CNAME'}</span>
+                              {cdInfo?.isApexDomain ? (
+                                <>
+                                  <span className="text-gray-500">Name:</span><span>@</span>
+                                  <span className="text-gray-500">Value:</span><span className="text-yellow-300">{cdInfo.apexFixedIp || '103.110.87.210'}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-gray-500">Name:</span><span>{(() => { const p = cdInfo.hostname.split('.'); return p.length > 2 ? p.slice(0, -2).join('.') || '@' : 'www'; })()}</span>
+                                  <span className="text-gray-500">Value:</span><span className="break-all text-yellow-300">{cdInfo.cnameTarget || BASE_DOMAIN}</span>
+                                </>
                               )}
                             </div>
                           </div>
-                        )}
-
-                        {showCustomDomainForm && (
-                          <>
-                            {/* Domain Input + Add Button */}
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <input
-                                className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-base font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20"
-                                placeholder="yoursite.com"
-                                value={cdHostnameDraft}
-                                onChange={(e) => setCdHostnameDraft(e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-primary py-3 px-6 text-base font-medium whitespace-nowrap"
-                                disabled={!cdHostnameDraft.trim() || cdBusy}
-                                onClick={saveCustomDomainHostname}
-                              >
-                                {cdBusy ? 'Đang xử lý...' : 'Thêm Domain'}
-                              </button>
-                            </div>
-
-                            {/* Apex vs Subdomain Selection */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <span className="text-sm font-medium text-gray-700 shrink-0">Loại domain:</span>
-                              <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="apexType"
-                                    value="subdomain"
-                                    checked={!cdIsApexDomain}
-                                    onChange={() => setCdIsApexDomain(false)}
-                                    className="accent-blue-600 w-4 h-4"
-                                  />
-                                  <span className="text-sm text-gray-700">
-                                    <span className="font-medium">Subdomain</span>
-                                    <span className="text-gray-500 ml-1">(ví dụ: www.yoursite.com, lp.yoursite.com)</span>
-                                  </span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="apexType"
-                                    value="apex"
-                                    checked={cdIsApexDomain}
-                                    onChange={() => setCdIsApexDomain(true)}
-                                    className="accent-blue-600 w-4 h-4"
-                                  />
-                                  <span className="text-sm text-gray-700">
-                                    <span className="font-medium">Domain gốc (Apex)</span>
-                                    <span className="text-gray-500 ml-1">(ví dụ: yoursite.com)</span>
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-
-                            {/* DNS Instructions based on selection */}
-                            {!cdInfo?.configured && cdHostnameDraft.trim() && (
-                              <div className={`text-xs rounded p-2 border ${
-                                cdIsApexDomain 
-                                  ? 'bg-purple-50 border-purple-100 text-purple-700' 
-                                  : 'bg-blue-50 border-blue-100 text-blue-700'
-                              }`}>
-                                {cdIsApexDomain ? (
-                                  <>
-                                    Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain, trỏ về IP <strong>{cdInfo?.apexFixedIp || '103.110.87.210'}</strong>.
-                                    SSL sẽ được cấp tự động qua Let's Encrypt.
-                                  </>
-                                ) : (
-                                  <>
-                                    Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain, trỏ về <strong>{BASE_DOMAIN}</strong>.
-                                    SSL sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Manual DNS Instructions - Only show if domain is pending */}
-                        {cdInfo?.configured && cdInfo?.status === 'pending_verification' && !isCfManagedDomain && (
-                          <div className="border border-amber-200 rounded-lg overflow-hidden">
-                            <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
-                              <p className="font-medium text-amber-800">
-                                Cần thêm bản ghi DNS
-                              </p>
-                            </div>
-                            <div className="p-4 space-y-4">
-                              <p className="text-sm text-gray-600">
-                                Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} tại nhà cung cấp domain của bạn:
-                              </p>
-                              <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
-                                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                                  <span className="text-gray-500">Type:</span><span>{cdInfo?.isApexDomain ? 'A' : 'CNAME'}</span>
-                                  {cdInfo?.isApexDomain ? (
-                                    <>
-                                      <span className="text-gray-500">Name:</span><span>@</span>
-                                      <span className="text-gray-500">Value:</span><span className="text-yellow-300">{cdInfo.apexFixedIp || '103.110.87.210'}</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-gray-500">Name:</span><span>{(() => { const p = cdInfo.hostname.split('.'); return p.length > 2 ? p.slice(0, -2).join('.') || '@' : 'www'; })()}</span>
-                                      <span className="text-gray-500">Value:</span><span className="break-all text-yellow-300">{cdInfo.cnameTarget || BASE_DOMAIN}</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                                <p className="text-sm text-blue-800">
-                                  <strong>Hướng dẫn:</strong>
-                                </p>
-                                <ol className="text-sm text-blue-700 mt-2 space-y-1 list-decimal list-inside">
-                                  <li>Đăng nhập trang quản lý DNS của domain <strong>{cdInfo.hostname}</strong></li>
-                                  <li>Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} như bảng trên</li>
-                                  <li>Bấm "Kiểm tra lại" hoặc đợi để hệ thống tự động kích hoạt</li>
-                                </ol>
-                                <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-                                  <strong> Lưu ý:</strong> DNS propagation có thể mất từ <strong>30 phút đến 24 giờ</strong>. Nếu chưa hoạt động, hãy quay lại kiểm tra sau.
-                                </div>
-                              </div>
-                              <div className="bg-purple-50 border border-purple-200 rounded p-3 text-sm text-purple-700">
-                                <strong>SSL tự động:</strong> SSL certificate sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary w-full"
-                                disabled={cdBusy}
-                                onClick={verifyCustomDomain}
-                              >
-                                {cdBusy ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
-                              </button>
+                          <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                            <p className="text-sm text-blue-800">
+                              <strong>Hướng dẫn:</strong>
+                            </p>
+                            <ol className="text-sm text-blue-700 mt-2 space-y-1 list-decimal list-inside">
+                              <li>Đăng nhập trang quản lý DNS của domain <strong>{cdInfo.hostname}</strong></li>
+                              <li>Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} như bảng trên</li>
+                              <li>Bấm "Kiểm tra lại" hoặc đợi để hệ thống tự động kích hoạt</li>
+                            </ol>
+                            <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                              <strong> Lưu ý:</strong> DNS propagation có thể mất từ <strong>30 phút đến 24 giờ</strong>. Nếu chưa hoạt động, hãy quay lại kiểm tra sau.
                             </div>
                           </div>
-                        )}
-
-                        {/* Remove Domain */}
-                        {cdInfo?.configured && !isCfManagedDomain && (
-                          <div className="pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              className="text-sm text-gray-500 hover:text-red-600"
+                              className="btn btn-primary flex-1"
+                              disabled={cdBusy}
+                              onClick={verifyCustomDomain}
+                            >
+                              {cdBusy ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
+                            </button>
+                            <button
+                              type="button"
+                              className="text-sm text-red-600 hover:text-red-700 hover:underline px-3"
                               onClick={removeCustomDomain}
                             >
-                              Hủy bỏ cấu hình domain
+                              Hủy
                             </button>
                           </div>
-                        )}
+                        </div>
                       </div>
+                    )}
+
+                    {/* === AUTO-PROVISION PENDING (system, chưa cấp được qua CF) === */}
+                    {!isCustomDomainMode && isAutoSubdomainPending && (
+                      <div className="border border-amber-200 rounded-lg overflow-hidden">
+                        <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
+                          <p className="font-medium text-amber-800">
+                            Subdomain hệ thống chưa được cấp
+                          </p>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <HiOutlineGlobeAlt className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-mono font-semibold text-gray-900 break-all">{cdInfo.hostname}</p>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {cdInfo.instructions || 'Hệ thống sẽ tạo CNAME proxied trong Cloudflare cho subdomain này.'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-700">
+                            <strong> Lưu ý:</strong> Việc cấp subdomain qua Cloudflare có thể mất <strong>30 phút - 24 giờ</strong>. Bạn có thể đóng trang này và quay lại sau.
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary w-full flex items-center justify-center gap-2"
+                            disabled={cdBusy}
+                            onClick={verifyCustomDomain}
+                          >
+                            <HiOutlineRefresh className={`w-4 h-4 ${cdBusy ? 'animate-spin' : ''}`} />
+                            {cdBusy ? 'Đang thử lại...' : 'Thử lại cấp subdomain'}
+                          </button>
+                          {!showCustomDomainFormForAutoPending && (
+                            <button
+                              type="button"
+                              className="btn btn-outline w-full"
+                              disabled={cdBusy}
+                              onClick={() => {
+                                setCdHostnameDraft('');
+                                setCdIsApexDomain(false);
+                                setShowCustomDomainFormForAutoPending(true);
+                                setForm((p) => ({ ...p, domainType: 'custom', domainSubtype: 'subdomain' }));
+                              }}
+                            >
+                              Dùng domain riêng
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* === CUSTOM DOMAIN FORM (luôn hiển thị khi đang ở custom mode và chưa có active row) === */}
+                    {isCustomDomainMode && (!cdInfo?.configured || cdInfo?.status !== 'active') && !isAutoSubdomainPending && (
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-base font-mono focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20"
+                            placeholder={form.domainSubtype === 'apex' ? 'yoursite.com' : 'lp.yoursite.com'}
+                            value={cdHostnameDraft}
+                            onChange={(e) => setCdHostnameDraft(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary py-3 px-6 text-base font-medium whitespace-nowrap"
+                            disabled={!cdHostnameDraft.trim() || cdBusy}
+                            onClick={saveCustomDomainHostname}
+                          >
+                            {cdBusy ? 'Đang xử lý...' : 'Thêm Domain'}
+                          </button>
+                        </div>
+
+                        {/* Apex vs Subdomain Selection */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <span className="text-sm font-medium text-gray-700 shrink-0">Loại domain:</span>
+                          <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="apexType"
+                                value="subdomain"
+                                checked={!cdIsApexDomain}
+                                onChange={() => setCdIsApexDomain(false)}
+                                className="accent-blue-600 w-4 h-4"
+                              />
+                              <span className="text-sm text-gray-700">
+                                <span className="font-medium">Subdomain</span>
+                                <span className="text-gray-500 ml-1">(CNAME → {BASE_DOMAIN})</span>
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="apexType"
+                                value="apex"
+                                checked={cdIsApexDomain}
+                                onChange={() => setCdIsApexDomain(true)}
+                                className="accent-blue-600 w-4 h-4"
+                              />
+                              <span className="text-sm text-gray-700">
+                                <span className="font-medium">Domain gốc (Apex)</span>
+                                <span className="text-gray-500 ml-1">(A record → IP platform)</span>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* DNS Instructions based on selection */}
+                        {cdHostnameDraft.trim() && (
+                          <div className={`text-xs rounded p-2 border ${
+                            cdIsApexDomain
+                              ? 'bg-purple-50 border-purple-100 text-purple-700'
+                              : 'bg-blue-50 border-blue-100 text-blue-700'
+                          }`}>
+                            {cdIsApexDomain ? (
+                              <>
+                                Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain, trỏ về IP <strong>{cdInfo?.apexFixedIp || '103.110.87.210'}</strong>.
+                                SSL sẽ được cấp tự động qua Let's Encrypt.
+                              </>
+                            ) : (
+                              <>
+                                Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain, trỏ về <strong>{BASE_DOMAIN}</strong>.
+                                SSL sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-gray-100">
+                          <button
+                            type="button"
+                            className="text-sm text-gray-500 hover:text-gray-700 hover:underline"
+                            onClick={() => {
+                              setCdHostnameDraft('');
+                              setCdIsApexDomain(false);
+                              setShowCustomDomainFormForAutoPending(false);
+                              setForm((p) => ({ ...p, domainType: 'system', domainSubtype: 'subdomain' }));
+                              if (form.slug) {
+                                setCdHostnameDraft(`${form.slug}.${BASE_DOMAIN}`);
+                              }
+                            }}
+                          >
+                            ← Quay lại dùng subdomain miễn phí
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* === Fallback: system mode nhưng chưa có row nào (lần đầu save) === */}
+                    {!isCustomDomainMode && !cdInfo?.configured && !isAutoSubdomainPending && (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        Subdomain miễn phí sẽ được tự động cấp ngay khi bạn bấm Lưu ở trên cùng.
+                      </p>
                     )}
                   </>
                 )}

@@ -4217,6 +4217,12 @@ export default {
     deleteFailed: 'Xóa thất bại',
     tabSettings: 'Cài đặt',
     resizePanels: 'Kéo để co giãn phần cài đặt và xem trước',
+    domainTypeLabel: 'Loại domain',
+    domainTypeSystem: 'Dùng subdomain miễn phí',
+    domainTypeSystemHint: 'Tự động cấp slug.founderai.biz qua Cloudflare. SSL do Cloudflare Universal xử lý.',
+    domainTypeCustom: 'Dùng domain riêng của tôi',
+    domainTypeCustomHint: 'Gắn subdomain hoặc apex của bạn. Tự thêm CNAME/A tại DNS provider.',
+    customHostname: 'Hostname domain riêng',
   },
 
   // Account Profile

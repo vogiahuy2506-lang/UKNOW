@@ -22,6 +22,8 @@ const emptyForm = () => ({
   title: '',
   htmlContent: '',
   isPublished: false,
+  domainType: 'system',
+  domainSubtype: 'subdomain',
 });
 
 export default function LandingPagesAdminPage() {
@@ -49,6 +51,8 @@ export default function LandingPagesAdminPage() {
         return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><script src="https://cdn.tailwindcss.com"></script><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`;
       })(),
       isPublished: false,
+      domainType: 'system',
+      domainSubtype: 'subdomain',
     });
     setModalOpen(true);
     window.history.replaceState({}, '');
@@ -86,6 +90,7 @@ export default function LandingPagesAdminPage() {
   const tableRows = useMemo(() => {
     return rows.map((r) => {
       const st = statsBySlug.get(r.slug) || {};
+      const isCustom = r.domainType === 'custom' || Boolean(r.customDomainHostname);
       const domain = r.customDomainHostname || `${r.slug}.${BASE_DOMAIN}`;
       return {
         ...r,
@@ -93,7 +98,7 @@ export default function LandingPagesAdminPage() {
         clickCount: Number(st.clickCount || 0),
         submitCount: Number(st.submitCount || 0),
         displayDomain: domain,
-        isCustomDomain: Boolean(r.customDomainHostname),
+        isCustomDomain: isCustom,
         isApexDomain: Boolean(r.customDomainIsApex),
       };
     });
@@ -168,6 +173,8 @@ export default function LandingPagesAdminPage() {
         title: full.title || '',
         htmlContent: full.htmlContent || '',
         isPublished: Boolean(full.isPublished),
+        domainType: full.domainType === 'custom' ? 'custom' : 'system',
+        domainSubtype: full.domainSubtype === 'apex' ? 'apex' : 'subdomain',
       });
       setModalOpen(true);
     } catch (e) {
@@ -195,6 +202,8 @@ export default function LandingPagesAdminPage() {
           title: form.title,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
+          domainType: form.domainType,
+          domainSubtype: form.domainSubtype,
         });
         toast.success(t('landingPagesAdmin.updated'));
       } else {
@@ -203,6 +212,8 @@ export default function LandingPagesAdminPage() {
           title: form.title,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
+          domainType: form.domainType,
+          domainSubtype: form.domainSubtype,
         });
         toast.success(t('landingPagesAdmin.created'));
         if (created?.customDomainProvisioned === false) {

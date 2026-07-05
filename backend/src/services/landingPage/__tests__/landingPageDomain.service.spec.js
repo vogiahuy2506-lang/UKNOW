@@ -12,6 +12,8 @@ const mockDomainRepo = {
 
 const mockLandingPageRepo = {
   findByIdInScope: jest.fn(),
+  findById: jest.fn(),
+  updateById: jest.fn(),
 };
 
 const mockCloudflareService = {
@@ -71,6 +73,17 @@ describe('landingPageDomain.service SSL provisioning calls', () => {
     delete process.env.SSL_PROVISION_SCRIPT;
 
     mockLandingPageRepo.findByIdInScope.mockResolvedValue({ id: landingPageId, isPublished: true });
+    mockLandingPageRepo.findById.mockResolvedValue({
+      id: landingPageId,
+      slug: 'launch',
+      title: 'Test',
+      htmlContent: '',
+      isPublished: true,
+      idUser: 1,
+      domainType: 'system',
+      domainSubtype: null,
+    });
+    mockLandingPageRepo.updateById.mockResolvedValue({});
     mockDomainRepo.findByLandingPageId.mockResolvedValue(activeDomainRow);
     mockDomainRepo.findByHostnameLower.mockResolvedValue(null);
     mockDomainRepo.countPendingOrActiveInScope.mockResolvedValue(0);
