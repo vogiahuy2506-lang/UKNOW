@@ -1347,38 +1347,6 @@ export default function LandingPageFullEditor({
                   </div>
                 ) : (
                   <>
-                    {/* Input slug CHUNG — luôn hiển thị ở cả 2 tab */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Slug (chỉ Subdomain miễn phí — Tự sinh từ hostname nếu để trống)
-                      </label>
-                      <div className="flex items-stretch rounded-lg border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
-                        <input
-                          className="flex-1 px-2 py-2 text-sm font-mono outline-none min-w-0"
-                          value={form.slug || ''}
-                          onChange={(e) => setForm((p) => ({
-                            ...p,
-                            slug: e.target.value
-                              .replace(/^\/+/, '')
-                              .replace(/[^a-z0-9_-]/gi, '')
-                              .toLowerCase()
-                          }))}
-                          placeholder="tự-động-điền"
-                          disabled={cdBusy}
-                          spellCheck={false}
-                          autoCapitalize="off"
-                          autoCorrect="off"
-                        />
-                        <span className="px-2 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
-                          .{BASE_DOMAIN}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        Tab <strong>Subdomain</strong>: dùng làm link miễn phí <code>{BASE_DOMAIN}/lp/&lt;slug&gt;</code>. Để trống = tự sinh từ hostname.
-                        Tab <strong>Tên miền riêng</strong>: không bắt buộc.
-                      </p>
-                    </div>
-
                     {/* Tab chuyển đổi nhanh: Subdomain miễn phí ↔ Tên miền riêng */}
                     <DomainSourceSwitch
                       value={isCustomDomainMode ? 'custom' : 'system'}
