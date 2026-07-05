@@ -370,6 +370,7 @@ function SubdomainCard({
   isPending,
   isLoading,
   busy,
+  onChangeSlug,
   onApply,
   onRetry,
 }) {
@@ -442,24 +443,29 @@ function SubdomainCard({
         </>
       }
     >
-      {/* Preview URL (read-only — slug được nhập ở trên) */}
+      {/* Input slug — nhập trực tiếp trong card */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
-          URL subdomain miễn phí
+          Slug subdomain miễn phí
         </label>
-        <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
-          <span className="px-2 py-2 text-sm text-gray-500 border-r border-gray-200 font-mono shrink-0">
-            https://
-          </span>
-          <span className="flex-1 px-2 py-2 text-sm font-mono text-gray-700 truncate min-w-0">
-            {slug || <span className="text-gray-400 italic">your-slug</span>}
-          </span>
-          <span className="px-2 py-2 text-sm text-gray-500 border-l border-gray-200 font-mono flex-shrink-0">
+        <div className="flex items-stretch rounded-lg border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
+          <input
+            type="text"
+            className="flex-1 px-2 py-2 text-sm font-mono outline-none min-w-0 disabled:bg-gray-50 disabled:text-gray-500"
+            value={slug || ''}
+            onChange={(e) => onChangeSlug?.(e.target.value)}
+            placeholder="your-slug"
+            disabled={busy || isLoading}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+          <span className="px-2 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
             .{BASE_DOMAIN}
           </span>
         </div>
         <p className="text-[11px] text-gray-500 mt-1">
-          Slug được nhập ở ô <strong>Slug</strong> phía trên. Bấm <strong>Áp dụng</strong> để tạo subdomain.
+          Nhập slug rồi bấm <strong>Áp dụng</strong> để cấp subdomain. Để trống hệ thống sẽ tự sinh.
         </p>
       </div>
 
@@ -1373,6 +1379,7 @@ export default function LandingPageFullEditor({
                         isPending={isAutoSubdomainPending}
                         isLoading={false}
                         busy={cdBusy}
+                        onChangeSlug={(v) => setForm((p) => ({ ...p, slug: v }))}
                         onApply={applySystemSubdomain}
                         onRetry={verifyCustomDomain}
                       />
