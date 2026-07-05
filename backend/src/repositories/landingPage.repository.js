@@ -43,10 +43,11 @@ class LandingPageRepository {
   }
 
   /**
-   * @param {string} slug
+   * @param {string|null} slug - null/empty/undefined cũng OK (slug không bắt buộc)
    * @returns {boolean}
    */
   isValidSlug(slug) {
+    if (slug === null || slug === undefined || slug === '') return true;
     return typeof slug === 'string' && SLUG_RE.test(slug);
   }
 
@@ -71,6 +72,34 @@ class LandingPageRepository {
        WHERE slug = $1 AND is_published = TRUE
        LIMIT 1`,
       [s]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Lấy landing đã publish theo ID — dùng khi landing không có slug
+   * nhưng đang được trỏ tới bằng custom hostname.
+   *
+   * @param {number|string} id
+   * @returns {Promise<object|null>}
+   */
+  async findPublishedById(id) {
+    const numericId = Number.parseInt(id, 10);
+    if (!Number.isFinite(numericId)) return null;
+    const result = await db.query(
+      `SELECT
+         id,
+         slug,
+         title,
+         html_content AS "htmlContent",
+         is_published AS "isPublished",
+         id_user AS "idUser",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"
+       FROM landing_pages
+       WHERE id = $1 AND is_published = TRUE
+       LIMIT 1`,
+      [numericId]
     );
     return result.rows[0] || null;
   }
@@ -241,7 +270,7 @@ class LandingPageRepository {
       `INSERT INTO landing_pages
          (slug, title, html_content, is_published, id_user, domain_type, domain_subtype, created_at, updated_at)
        VALUES
-         (LOWER(TRIM($1)), $2, $3, COALESCE($4, false), $5,
+         (NULLIF(LOWER(TRIM($1)), ''), $2, $3, COALESCE($4, false), $5,
           COALESCE($6, 'system'),
           CASE WHEN $6 = 'custom' THEN $7 ELSE NULL END,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -277,7 +306,7 @@ class LandingPageRepository {
   async updateById(id, payload) {
     const result = await db.query(
       `UPDATE landing_pages SET
-         slug = LOWER(TRIM($2)),
+         slug = NULLIF(LOWER(TRIM($2)), ''),
          title = $3,
          html_content = $4,
          is_published = $5,

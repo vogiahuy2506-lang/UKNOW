@@ -61,9 +61,24 @@ class KBDocumentQueueService {
   }
 
   /**
+   * Kiểm tra trạng thái bật BullMQ theo biến môi trường.
+   *
+   * @returns {boolean}
+   */
+  isQueueFeatureEnabled() {
+    const normalized = String(process.env.BULLMQ_ENABLED ?? '').trim().toLowerCase();
+    if (!normalized) return true;
+    return !['0', 'false', 'no', 'off'].includes(normalized);
+  }
+
+  /**
    * Initialize queue infrastructure if not already started.
    */
   async ensureQueueInfra() {
+    if (!this.isQueueFeatureEnabled()) {
+      console.warn('[KBQueue] BULLMQ_ENABLED=false — KB document queue bị tắt.');
+      return;
+    }
     if (this.queue && this.queueEvents) return;
 
     const redisConfig = this.buildRedisConfig();
@@ -88,6 +103,10 @@ class KBDocumentQueueService {
    * Separate worker with lower concurrency to not compete with message sending.
    */
   async startWorker() {
+    if (!this.isQueueFeatureEnabled()) {
+      console.warn('[KBQueue] BULLMQ_ENABLED=false — worker không khởi động.');
+      return false;
+    }
     if (this.workerStarted) return true;
 
     try {

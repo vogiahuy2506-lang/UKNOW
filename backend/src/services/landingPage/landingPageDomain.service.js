@@ -435,8 +435,29 @@ class LandingPageDomainService {
     // Skip apex domain - nó phải trỏ về WordPress, không phải landing page
     if (h === 'founderai.biz' || h === 'www.founderai.biz') return null;
     const row = await landingPageDomainRepository.findActiveByHostname(h);
-    if (!row?.landingSlug) return null;
-    return String(row.landingSlug).trim().toLowerCase();
+    if (!row) return null;
+    if (row.landingSlug) {
+      return String(row.landingSlug).trim().toLowerCase();
+    }
+    return null;
+  }
+
+  /**
+   * Public: resolve hostname → landingPageId (dùng cho landing không có slug
+   * nhưng vẫn được phục vụ qua custom hostname).
+   *
+   * @param {string} hostname
+   * @returns {Promise<{ id: number, slug: string|null }|null>}
+   */
+  async getPublishedLandingIdForHost(hostname) {
+    const h = String(hostname || '').trim().toLowerCase();
+    if (!h) return null;
+    if (h === 'founderai.biz' || h === 'www.founderai.biz') return null;
+    const row = await landingPageDomainRepository.findActiveByHostname(h);
+    if (!row) return null;
+    const id = row.landingPageId ? Number.parseInt(row.landingPageId, 10) : null;
+    if (!Number.isFinite(id)) return null;
+    return { id, slug: row.landingSlug ? String(row.landingSlug).trim().toLowerCase() : null };
   }
 
   /**
