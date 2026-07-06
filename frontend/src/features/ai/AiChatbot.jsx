@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useNavigate, Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
@@ -1091,12 +1091,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  const emitWizardAnswer = useCallback(async (payload, readableText) => {
+  const emitWizardAnswer = async (payload, readableText) => {
     await sendChatMessage(buildWizardMarkerText(payload, readableText));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, locale, selectedAiModel, messages, aiBillingBlock]);
+  };
 
-  const handleWizardSenderSelect = useCallback(async (account, channel = null) => {
+  const handleWizardSenderSelect = async (account, channel = null) => {
     const selectedChannel = channel || wizardContext.channel || 'zalo';
     await emitWizardAnswer(
       {
@@ -1109,9 +1108,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         ? `Tôi chọn email sender "${account.name || account.email || account.id}".`
         : `Tôi chọn tài khoản Zalo "${account.name || account.displayName || account.id}".`
     );
-  }, [emitWizardAnswer, wizardContext.channel]);
+  };
 
-  const handleWizardSenderOther = useCallback(async (channel) => {
+  const handleWizardSenderOther = async (channel) => {
     const selectedChannel = channel || wizardContext.channel || 'zalo';
     const marker = buildWizardMarkerText(
       { gate: 'senderAccount', channel: selectedChannel, other: true },
@@ -1127,10 +1126,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       content: t('aiChatbot.wizardZaloQrPrompt') || 'Quét QR để kết nối tài khoản Zalo rồi mình sẽ tiếp tục.',
       data: { channel: selectedChannel },
     }]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sendChatMessage, t, wizardContext.channel]);
+  };
 
-  const handleWizardGroupsSubmit = useCallback(async (groupIds, groups = []) => {
+  const handleWizardGroupsSubmit = async (groupIds, groups = []) => {
     const labels = groups
       .filter((group) => groupIds.includes(group.groupId || group.group_id || group.id))
       .map((group) => group.groupName || group.group_name || group.name)
@@ -1139,7 +1137,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       { gate: 'zaloGroups', accountId: wizardContext.senderAccountId, groupIds },
       `Tôi chọn ${groupIds.length} nhóm Zalo${labels.length ? `: ${labels.join(', ')}` : ''}.`
     );
-  }, [emitWizardAnswer, wizardContext.senderAccountId]);
+  };
 
   const requestContentPlan = async (userPrompt) => {
     const text = locale === 'en'
