@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 const ROUTES = [
-  { path: '/app', heading: /Báo cáo/i },
+  { path: '/app', heading: /Tôi có thể giúp gì cho bạn/i },
+  { path: '/app/reports', heading: /Báo cáo/i },
   { path: '/app/campaigns', heading: /Chiến dịch/i },
   { path: '/app/customers', heading: /Khách hàng/i },
   { path: '/app/courses', heading: /Quản lý khóa học/i },
