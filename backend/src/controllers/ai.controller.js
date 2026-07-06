@@ -127,6 +127,7 @@ class AiController {
         locale: locale || 'vi',
         model,
       });
+      const { wizardShortCircuit, ...publicResponse } = response || {};
 
       // Persist session + messages (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
@@ -142,16 +143,18 @@ class AiController {
           sessionTitle = session.title;
         }
 
-        await aiSessionRepo.saveMessages(finalSessionId, userContent, response);
+        await aiSessionRepo.saveMessages(finalSessionId, userContent, publicResponse);
       } catch (dbErr) {
         console.warn('[AI] Không lưu được session:', dbErr.message);
       }
 
-      await chargeAiCredit(req);
+      if (!wizardShortCircuit) {
+        await chargeAiCredit(req);
+      }
 
       return res.json({
         success: true,
-        data: { ...response, sessionId: finalSessionId, sessionTitle },
+        data: { ...publicResponse, sessionId: finalSessionId, sessionTitle },
       });
     } catch (error) {
       console.error('AI chat error:', error);

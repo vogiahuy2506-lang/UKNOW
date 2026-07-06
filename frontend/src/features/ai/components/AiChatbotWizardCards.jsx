@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -160,6 +160,21 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, t }) => {
   const [sessionKey, setSessionKey] = useState('');
   const [status, setStatus] = useState('idle');
   const [loading, setLoading] = useState(false);
+  const onConnectedRef = useRef(onConnected);
+  const channelRef = useRef(channel);
+  const tRef = useRef(t);
+
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+  }, [onConnected]);
+
+  useEffect(() => {
+    channelRef.current = channel;
+  }, [channel]);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   const createQr = async () => {
     setLoading(true);
@@ -197,16 +212,16 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, t }) => {
         if (nextStatus === 'connected' || payload.account?.id || payload.accountId) {
           if (timer) window.clearInterval(timer);
           setStatus('connected');
-          onConnected({
+          onConnectedRef.current({
             id: payload.account?.id || payload.accountId,
             name: payload.account?.displayName || payload.account?.display_name || payload.displayName || payload.zaloName || 'Zalo',
-          }, channel);
+          }, channelRef.current);
           return;
         }
         if (nextStatus === 'failed') {
           if (timer) window.clearInterval(timer);
           setStatus('failed');
-          toast.error(payload.message || t('aiChatbot.wizardQrFailed') || 'Không tạo được QR Zalo.');
+          toast.error(payload.message || tRef.current('aiChatbot.wizardQrFailed') || 'Không tạo được QR Zalo.');
           return;
         } else if (nextStatus && !['pending', 'scanned', 'waiting'].includes(nextStatus)) {
           setStatus(nextStatus);
@@ -228,7 +243,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, t }) => {
       disposed = true;
       if (timer) window.clearInterval(timer);
     };
-  }, [channel, onConnected, sessionKey, t]);
+  }, [sessionKey]);
 
   return (
     <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">

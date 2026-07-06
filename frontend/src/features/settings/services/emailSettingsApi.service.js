@@ -5,6 +5,10 @@ const emailSettingsApiService = {
     return api.get('/email-settings');
   },
 
+  getActiveSettings() {
+    return api.get('/email-settings/active');
+  },
+
   getEmailSetting(emailSettingId) {
     return api.get(`/email-settings/${emailSettingId}`);
   },
