@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -357,7 +358,10 @@ class UnifiedInboxRepository {
       // Determine display name - for groups, show group name prominently
       let displayName = row.visitor_name;
       const isGroup = visitorInfo.is_group === true;
-      const groupNameOverride = row.group_name_override || null;
+      const groupNameOverride = row.group_name_override
+        && !isPlaceholderGroupName(row.group_name_override, visitorInfo.group_id || row.external_id)
+        ? row.group_name_override
+        : null;
 
       // For webchat: show "Chatbot Name - ID" instead of visitor_name
       if (row.conversation_type === 'webchat') {

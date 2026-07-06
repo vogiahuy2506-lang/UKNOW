@@ -10,6 +10,11 @@
  */
 import db from '../../config/database.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
+import campaignZaloSenderService from '../campaign/campaignZaloSender.service.js';
+import {
+  extractGroupNameFromApiResult,
+  isPlaceholderGroupName,
+} from '../../utils/zaloGroupName.util.js';
 
 class ZaloPersonalSyncService {
   /**
@@ -75,12 +80,15 @@ class ZaloPersonalSyncService {
       for (const groupId of groupIds.slice(0, maxGroups)) {
         try {
           const groupInfo = await api.getGroupInfo(groupId);
-          const info = groupInfo?.gridInfoMap?.[groupId];
-          if (info) {
+          const info = groupInfo?.gridInfoMap?.[groupId]
+            || groupInfo?.groupInfoMap?.[groupId]
+            || groupInfo;
+          const groupName = extractGroupNameFromApiResult(groupInfo, groupId);
+          if (info || groupName) {
             groups.push({
               groupId,
-              groupName: info.groupName || `Nhóm ${groupId}`,
-              memberCount: info.memVerList?.length || 0,
+              groupName,
+              memberCount: info?.memVerList?.length || 0,
             });
           }
         } catch (groupErr) {
@@ -88,10 +96,31 @@ class ZaloPersonalSyncService {
         }
       }
 
-      const persisted = await this.persistGroups(accountId, groups);
-      const conversationsUpdated = await this.backfillGroupConversationNames(accountId, groups);
+      const enrichedGroups = await campaignZaloSenderService.enrichGroupNames(
+        api,
+        groups.map((group) => ({
+          groupId: group.groupId,
+          groupName: group.groupName,
+          version: '',
+        }))
+      );
 
-      return { synced: groups.length, persisted, conversationsUpdated, groups, totalGroups: groupIds.length };
+      const resolvedGroups = enrichedGroups.map((group, index) => ({
+        groupId: group.groupId,
+        groupName: group.groupName,
+        memberCount: groups[index]?.memberCount || 0,
+      }));
+
+      const persisted = await this.persistGroups(accountId, resolvedGroups);
+      const conversationsUpdated = await this.backfillGroupConversationNames(accountId, resolvedGroups);
+
+      return {
+        synced: resolvedGroups.length,
+        persisted,
+        conversationsUpdated,
+        groups: resolvedGroups,
+        totalGroups: groupIds.length,
+      };
     } catch (error) {
       console.error('[ZaloSync] Error syncing groups:', error.message, error.stack);
       throw error;
@@ -104,7 +133,7 @@ class ZaloPersonalSyncService {
     for (const group of groups) {
       const groupId = String(group.groupId || '').trim();
       const groupName = String(group.groupName || '').trim();
-      if (!groupId || !groupName) continue;
+      if (!groupId || !groupName || isPlaceholderGroupName(groupName, groupId)) continue;
 
       const updateResult = await db.query(
         `UPDATE zalo_groups
@@ -133,7 +162,7 @@ class ZaloPersonalSyncService {
     for (const group of groups) {
       const groupId = String(group.groupId || '').trim();
       const groupName = String(group.groupName || '').trim();
-      if (!groupId || !groupName || groupName === 'Nhóm' || groupName.startsWith('Nhóm group_')) continue;
+      if (!groupId || !groupName || isPlaceholderGroupName(groupName, groupId)) continue;
 
       const result = await db.query(
         `UPDATE zalo_personal_conversations
@@ -388,6 +417,8 @@ class ZaloPersonalSyncService {
     // Sync groups
     try {
       results.groups = await this.syncGroups(accountId, userId);
+      const { default: zaloInboxService } = await import('./zaloInbox.service.js');
+      await zaloInboxService.backfillConversationNames(userId, accountId, accountId);
     } catch (e) {
       results.errors.push({ type: 'groups', error: e.message });
     }
@@ -431,7 +462,7 @@ class ZaloPersonalSyncService {
 
       return {
         groupId,
-        groupName: groupInfo.groupName || groupInfo.name || null,
+        groupName: extractGroupNameFromApiResult(result, groupId) || null,
         members,
         memberCount: members.length,
       };

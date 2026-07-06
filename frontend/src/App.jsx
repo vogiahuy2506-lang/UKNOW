@@ -17,6 +17,7 @@ import PublicLayout from './layouts/PublicLayout';
 // Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import AiHomePage from './pages/AiHomePage';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
@@ -279,7 +280,8 @@ function App() {
               <MainLayout />
             </ProtectedRoute>
           }>
-            <Route index element={<Dashboard />} />
+            <Route index element={<AiHomePage />} />
+            <Route path="reports" element={<Dashboard />} />
 
             {/* Campaigns */}
             <Route path="campaigns" element={<Campaigns />} />

@@ -15,6 +15,11 @@
 import zaloPersonalRepository from '../../../repositories/chatbot/zaloPersonal.repository.js';
 import zaloAccountSessionService from '../../zalo/zaloAccountSession.service.js';
 import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
+import {
+  buildPlaceholderGroupName,
+  extractGroupNameFromApiResult,
+  normalizeZaloGroupId,
+} from '../../../utils/zaloGroupName.util.js';
 
 /**
  * Extract attachments from raw message data
@@ -360,22 +365,22 @@ class ZaloPersonalAdapter {
     // detectedGroupId is the actual group ID from raw data
     const groupId = msgData.groupId || null;
     const isGroup = msgData.isGroup === true;
+    const { bare, prefixed } = normalizeZaloGroupId(groupId);
 
     // For group messages, resolve group name if not provided
     let groupName = msgData.groupName || null;
-    if (isGroup && !groupName && groupId) {
+    if (isGroup && !groupName && bare) {
       try {
-        // Get session to call API for group name
         const session = await this.getSessionByAccountId(msgData.zaloSettingId);
         if (session?.api) {
-          const info = await session.api.getGroupInfo(groupId);
-          if (info?.name) {
-            groupName = info.name;
-            console.log(`[ZaloPersonalAdapter] Resolved group name: ${groupId} -> ${groupName}`);
+          const info = await session.api.getGroupInfo(bare);
+          groupName = extractGroupNameFromApiResult(info, bare) || null;
+          if (groupName) {
+            console.log(`[ZaloPersonalAdapter] Resolved group name: ${bare} -> ${groupName}`);
           }
         }
       } catch (err) {
-        console.warn(`[ZaloPersonalAdapter] Failed to resolve group name for ${groupId}:`, err.message);
+        console.warn(`[ZaloPersonalAdapter] Failed to resolve group name for ${bare}:`, err.message);
       }
     }
 
@@ -383,14 +388,8 @@ class ZaloPersonalAdapter {
     // Otherwise fall back to raw data group name
     const finalGroupName = resolvedGroupName || groupName;
 
-    // Determine externalId based on source:
-    // - Group: use groupId only — all members share one conversation
-    // - Personal: use senderId
-    // IMPORTANT: senderId is NOT included in group externalId
-    // because all messages from all members must go to the SAME conversation.
-    // Sender info is stored in visitorInfo.sender_id and message.metadata.
     const externalId = isGroup
-      ? `group_${groupId}`
+      ? prefixed
       : String(msgData.fromUid);
 
     // Determine display name:
@@ -398,7 +397,7 @@ class ZaloPersonalAdapter {
     // - Personal: show sender name
     let displayName;
     if (isGroup) {
-      displayName = finalGroupName || groupName || `Nhóm ${groupId}`;
+      displayName = finalGroupName || groupName || buildPlaceholderGroupName(bare);
     } else {
       displayName = msgData.senderName || null;
     }

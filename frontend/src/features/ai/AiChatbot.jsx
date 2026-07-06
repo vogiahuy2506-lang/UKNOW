@@ -20,11 +20,17 @@ import {
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
   AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
 } from './components/AiChatbotCards';
+import {
+  AskSenderAccountCard,
+  EmailSetupGuideCard,
+  ZaloGroupPickerCard,
+  ZaloQrLoginCard,
+} from './components/AiChatbotWizardCards';
 import ConfirmModal from '../inbox/ConfirmModal';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 
-const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo']);
+const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
 
 const normalizeChannel = (channel) => {
@@ -32,6 +38,117 @@ const normalizeChannel = (channel) => {
   if (lower === 'zalo_personal') return 'zalo';
   if (lower === 'zalo_group') return 'zalo_group';
   return lower;
+};
+
+const parseWizardMarker = (content = '') => {
+  const firstLine = String(content || '').split('\n')[0]?.trim();
+  const match = firstLine?.match(/^\[wizard\](\{.*\})/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+};
+
+const parseScheduleValue = (value) => {
+  const raw = String(value || '').trim();
+  if (raw.startsWith('drip_')) return { mode: 'drip', days: Number(raw.replace('drip_', '')) || 3 };
+  if (raw.startsWith('recurring_')) return { mode: 'recurring', days: Number(raw.replace('recurring_', '')) || 7 };
+  return { mode: raw || 'once' };
+};
+
+const buildWizardMarkerText = (payload, readableText) => `[wizard]${JSON.stringify(payload)}\n${readableText}`;
+
+const deriveWizardContext = (items = []) => {
+  const context = {
+    channel: null,
+    senderAccountId: null,
+    senderAccountName: null,
+    dataSource: null,
+    zaloGroupIds: [],
+    schedule: null,
+    planApproved: false,
+  };
+  items.forEach((message) => {
+    if (message?.role !== 'user') return;
+    const marker = parseWizardMarker(message.content);
+    if (!marker) return;
+    if (marker.gate === 'channel') {
+      context.channel = normalizeChannel(marker.channel || marker.value);
+      context.senderAccountId = null;
+      context.senderAccountName = null;
+      context.dataSource = null;
+      context.zaloGroupIds = [];
+      context.schedule = null;
+      context.planApproved = false;
+    } else if (marker.gate === 'senderAccount') {
+      context.channel = normalizeChannel(marker.channel) || context.channel;
+      context.senderAccountId = marker.accountId ?? null;
+      context.senderAccountName = marker.accountName || null;
+    } else if (marker.gate === 'dataSource') {
+      context.dataSource = marker.value || marker.dataSource || null;
+    } else if (marker.gate === 'zaloGroups') {
+      context.senderAccountId = marker.accountId ?? context.senderAccountId;
+      context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
+    } else if (marker.gate === 'schedule') {
+      context.schedule = { mode: marker.mode || marker.value || 'once', days: marker.days };
+    } else if (marker.gate === 'planApproved') {
+      context.planApproved = true;
+    }
+  });
+  return context;
+};
+
+const applyWizardSelectionsToScript = (script, context = {}) => {
+  if (!script) return script;
+  const senderId = context.senderAccountId != null ? Number(context.senderAccountId) : null;
+  const groupIds = Array.isArray(context.zaloGroupIds) ? context.zaloGroupIds : [];
+  if (!senderId && groupIds.length === 0 && !context.dataSource) return script;
+
+  const next = {
+    ...script,
+    campaignType: context.channel || script.campaignType,
+    wizardContext: context,
+    nodes: Array.isArray(script.nodes)
+      ? script.nodes.map((node) => {
+        const config = { ...(node.config || {}) };
+        if (senderId) {
+          if (node.nodeSubtype === 'send_email') config.fromEmailId = config.fromEmailId || senderId;
+          if (node.nodeSubtype === 'select_zalo_account' || node.nodeSubtype === 'send_zalo_personal' || node.nodeSubtype === 'send_zalo_group') {
+            config.zaloAccountId = config.zaloAccountId || senderId;
+          }
+        }
+        if (node.nodeSubtype === 'get_all_groups' && groupIds.length > 0) {
+          config.zaloSelectedGroupIds = groupIds;
+        }
+        if (context.dataSource === 'sheet' && node.nodeSubtype === 'interested_customers') {
+          return {
+            ...node,
+            nodeSubtype: 'read_sheet',
+            nodeName: 'Danh sách từ Sheet',
+            nodeDescription: 'Danh sách lấy từ Google Sheet - cần dán URL trong Campaign Builder nếu chưa có.',
+            config: { sheetUrl: '', sheetName: 'Sheet1', headerRow: 1, dataStartRow: 2 },
+          };
+        }
+        if (context.dataSource === 'landing' && node.nodeSubtype === 'interested_customers') {
+          return {
+            ...node,
+            nodeSubtype: 'read_landing_leads',
+            nodeName: 'Lead từ Landing Page',
+            nodeDescription: 'Danh sách đăng ký từ Landing Page.',
+            config: { landingLeadsSlugs: [] },
+          };
+        }
+        return { ...node, config };
+      })
+      : script.nodes,
+  };
+
+  if (context.dataSource && Array.isArray(next.nodes) && context.channel !== 'zalo_group') {
+    next.wizardDataSource = context.dataSource;
+  }
+  return next;
 };
 
 const parseHourFromSendTime = (sendTime) => {
@@ -131,7 +248,7 @@ const normalizeContentPlanData = (rawData) => {
   };
 };
 
-const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd }) => {
+const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd, variant = 'panel' }) => {
   const { t, locale } = useI18n();
   const { user, fetchAiCredits, aiCredits, billingStatus } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
@@ -164,6 +281,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   const [generatingDay, setGeneratingDay] = useState(null);
   const [contentPlanWorkflow, setContentPlanWorkflow] = useState(null);
+  const [wizardContext, setWizardContext] = useState(() => deriveWizardContext([]));
   
   // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
@@ -344,7 +462,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
@@ -391,6 +509,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setPendingLandingData(null);
     setCurrentScript(null);
     setContentPlanWorkflow(null);
+    setWizardContext(deriveWizardContext([]));
     setGeneratingDay(null);
   };
 
@@ -446,6 +565,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ scroll khi messages đổi; isOpen chỉ là guard
+  }, [messages]);
+
+  useEffect(() => {
+    setWizardContext(deriveWizardContext(messages));
   }, [messages]);
 
   useEffect(() => {
@@ -566,7 +689,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       : ((firstSlot.day - 1) * 24);
 
     const channel = normalizeChannel(plan.days?.[0]?.channel || ordered[0]?.channel || 'zalo');
-    const campaignName = `${channel === 'email' ? 'Email' : 'Zalo'} Auto Plan ${new Date().toLocaleDateString('vi-VN')}`;
+    const campaignName = channel === 'email'
+      ? `Email Auto Plan ${new Date().toLocaleDateString('vi-VN')}`
+      : channel === 'zalo_group'
+        ? `Zalo nhóm Auto Plan ${new Date().toLocaleDateString('vi-VN')}`
+        : `Zalo Auto Plan ${new Date().toLocaleDateString('vi-VN')}`;
     const description = workflow?.sourcePrompt
       ? `AI content-plan draft: ${workflow.sourcePrompt}`
       : 'AI content-plan draft';
@@ -615,6 +742,55 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           { sourceNodeId: 'n1', targetNodeId: 'n2' },
           { sourceNodeId: 'n2', targetNodeId: 'n3' },
           { sourceNodeId: 'n3', targetNodeId: 'n4' },
+        ],
+      };
+    }
+
+    if (channel === 'zalo_group') {
+      const zaloGroupTemplateSteps = ordered.map((slot, idx) => ({
+        templateId: Number(slot.templateId),
+        message: slot.bodyText || slot.summary || `Tin nhắn nhóm ${idx + 1}`,
+        delayValue: getSlotDelayHours(slot, slot.day, slot.slotIndex, baseHour),
+        delayUnit: 'hours',
+        delayFrom: 'start',
+        enableLinkTracking: true,
+        templateMappings: [],
+      }));
+
+      return {
+        campaignName,
+        description,
+        campaignType: 'zalo_group',
+        isAiDraft: true,
+        nodes: [
+          { tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', nodeDescription: '', positionX: 100, positionY: 200, config: {} },
+          { tempId: 'n2', nodeType: 'action', nodeSubtype: 'select_zalo_account', nodeName: 'Chọn tài khoản Zalo', nodeDescription: '', positionX: 300, positionY: 200, config: { zaloAccountId: null } },
+          { tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', nodeName: 'Danh sách nhóm', nodeDescription: 'Lấy tất cả nhóm Zalo', positionX: 500, positionY: 200, config: { zaloAccountNodeId: 'n2' } },
+          {
+            tempId: 'n4',
+            nodeType: 'action',
+            nodeSubtype: 'send_zalo_group',
+            nodeName: 'Chuỗi Zalo nhóm theo ngày',
+            nodeDescription: `Tự động tạo từ content plan ${ordered.length} template`,
+            positionX: 750,
+            positionY: 200,
+            config: {
+              zaloAccountId: null,
+              zaloGroupSource: 'node',
+              zaloGroupNodeId: 'n3',
+              zaloGroupField: 'groupId',
+              zaloGroupSendMode: 'schedule',
+              saveMessageLog: true,
+              zaloGroupTemplateSteps,
+            },
+          },
+          { tempId: 'n5', nodeType: 'end', nodeSubtype: 'end', nodeName: 'Kết thúc', nodeDescription: '', positionX: 1000, positionY: 200, config: {} },
+        ],
+        connections: [
+          { sourceNodeId: 'n1', targetNodeId: 'n2' },
+          { sourceNodeId: 'n2', targetNodeId: 'n3' },
+          { sourceNodeId: 'n3', targetNodeId: 'n4' },
+          { sourceNodeId: 'n4', targetNodeId: 'n5' },
         ],
       };
     }
@@ -669,7 +845,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const createCampaignDraftFromPlan = async () => {
     if (!contentPlanWorkflow?.awaitingCampaignConfirm || contentPlanWorkflow?.isCreatingCampaign) return;
 
-    const script = buildCampaignScriptFromSavedTemplates(contentPlanWorkflow);
+    const script = applyWizardSelectionsToScript(buildCampaignScriptFromSavedTemplates(contentPlanWorkflow), wizardContext);
     if (!script) {
       toast.error('Chưa có template đã lưu để tạo chiến dịch.');
       return;
@@ -723,7 +899,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     await handleGenerateDayTemplate(dayItem);
   };
 
-  const handleSend = async () => {
+  const sendChatMessage = async (trimmedInput, messageFiles = []) => {
     if (isSendingRef.current) return;
     if (aiBillingBlock) {
       notifyAiRequestError({
@@ -740,33 +916,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       });
       return;
     }
-    const trimmedInput = inputText.trim();
-    if (!trimmedInput && !uploadedFiles.length) return;
-
-    if (trimmedInput && uploadedFiles.length === 0 && shouldHandlePlanConfirmationByText(trimmedInput)) {
-      isSendingRef.current = true;
-      setInputText('');
-      setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
-      try {
-        await handlePlanConfirmationByText();
-      } finally {
-        isSendingRef.current = false;
-      }
-      return;
-    }
+    if (!trimmedInput && !messageFiles.length) return;
 
     isSendingRef.current = true;
 
-    // Background-safe session tracking
     let mySessionId = currentSessionId;
     const update = makeUpdater(mySessionId, [...messages]);
     if (mySessionId) markTabPending(mySessionId);
 
-    const userMsg = { role: 'user', content: trimmedInput, files: [...uploadedFiles] };
+    const userMsg = { role: 'user', content: trimmedInput, files: [...messageFiles] };
     const newHistory = [...messages, userMsg];
     update(newHistory);
-    setInputText('');
-    setUploadedFiles([]);
     setIsTyping(true);
 
     try {
@@ -774,7 +934,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       if (response.success) {
         refreshAiCredits();
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
-        // Cập nhật session state
         if (returnedSessionId && !currentSessionId) {
           mySessionId = returnedSessionId;
           markTabPending(mySessionId);
@@ -784,7 +943,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           setSessions(prev => prev.map(s => s.id === returnedSessionId ? { ...s, updated_at: new Date().toISOString() } : s));
         }
 
-        // Xử lý ask_campaign_details - hỏi gộp tất cả câu hỏi 1 lần
         if (type === 'ask_campaign_details' && data) {
           setPendingCampaignPrompt(trimmedInput);
           setPendingCampaignData(data);
@@ -792,7 +950,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        // Xử lý ask_landing_details - hỏi gộp thông tin để tạo landing page
         if (type === 'ask_landing_details' && data) {
           setPendingLandingPrompt(trimmedInput);
           setPendingLandingData(data);
@@ -800,7 +957,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        // Xử lý ask_campaign_type - hỏi user chọn kênh (legacy)
         if (type === 'ask_campaign_type' && data) {
           setPendingCampaignPrompt(trimmedInput);
           setPendingCampaignData(data);
@@ -808,9 +964,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        // Xử lý ask_audience - skip, AI sẽ trả trực tiếp confirm_create
         if (type === 'ask_audience' && data) {
           setPendingCampaignData(prev => prev ? { ...prev, ...data } : data);
+          update(prev => [...prev, { role: 'assistant', content, type, data }]);
+          return;
+        }
+
+        if (['ask_sender_account', 'email_setup_guide', 'zalo_group_picker'].includes(type) && data) {
+          setPendingCampaignPrompt(null);
+          setPendingCampaignData(null);
           update(prev => [...prev, { role: 'assistant', content, type, data }]);
           return;
         }
@@ -823,7 +985,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           if (channels.size !== 1 || !PLAN_SUPPORTED_CHANNELS.has([...channels][0])) {
             update((prev) => [...prev, {
               role: 'assistant',
-              content: 'Flow tạo template theo ngày hiện hỗ trợ Email hoặc Zalo cá nhân (một kênh duy nhất). Mình sẽ chuyển bạn sang flow tạo campaign thường để xử lý trường hợp mixed/zalo nhóm.',
+              content: t('aiChatbot.contentPlanUnsupportedChannel'),
             }]);
             return;
           }
@@ -843,6 +1005,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             isCreatingCampaign: false,
             isGeneratingAll: false,
             allDraftsRequested: false,
+            requiresApproval: data.requiresApproval !== false,
             status: 'waiting_day_confirm',
           });
           setPendingCampaignPrompt(null);
@@ -857,19 +1020,20 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             role: 'assistant',
             type: 'content_plan_actions',
             data: { firstDay: normalizedPlan.days[0]?.day || null },
-            content: 'Bạn muốn bắt đầu tạo nháp Ngày 1, hay tạo nháp tất cả các ngày để xem một lượt?',
+            content: data.requiresApproval === false
+              ? 'Bạn muốn bắt đầu tạo nháp Ngày 1?'
+              : 'Nếu kế hoạch ổn, bấm Đồng ý để mình tạo template Ngày 1.',
           }]);
           return;
         }
 
-        // Xử lý confirm_create - hiển thị summary và hỏi xác nhận
         if (type === 'confirm_create' && data) {
-          setCurrentScript(data);
-          update(prev => [...prev, { role: 'assistant', content, type, data }]);
+          const mergedScript = applyWizardSelectionsToScript(data, wizardContext);
+          setCurrentScript(mergedScript);
+          update(prev => [...prev, { role: 'assistant', content, type, data: mergedScript }]);
           return;
         }
 
-        // Xử lý create_and_run - tự động tạo và chạy campaign
         if (type === 'create_and_run' && data) {
           setCreatingCampaign(true);
           const scriptData = { ...data, isAiDraft: false, autoRun: true };
@@ -909,7 +1073,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        // Xử lý các type khác như bình thường
         update(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
@@ -926,6 +1089,84 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       isSendingRef.current = false;
       clearTabPending(mySessionId);
     }
+  };
+
+  const emitWizardAnswer = async (payload, readableText) => {
+    await sendChatMessage(buildWizardMarkerText(payload, readableText));
+  };
+
+  const handleWizardSenderSelect = async (account, channel = null) => {
+    const selectedChannel = channel || wizardContext.channel || 'zalo';
+    await emitWizardAnswer(
+      {
+        gate: 'senderAccount',
+        channel: selectedChannel,
+        accountId: account.id,
+        accountName: account.name || account.displayName || account.email || `#${account.id}`,
+      },
+      selectedChannel === 'email'
+        ? `Tôi chọn email sender "${account.name || account.email || account.id}".`
+        : `Tôi chọn tài khoản Zalo "${account.name || account.displayName || account.id}".`
+    );
+  };
+
+  const handleWizardSenderOther = async (channel) => {
+    const selectedChannel = channel || wizardContext.channel || 'zalo';
+    const marker = buildWizardMarkerText(
+      { gate: 'senderAccount', channel: selectedChannel, other: true },
+      selectedChannel === 'email' ? 'Tôi muốn dùng email sender khác.' : 'Tôi muốn kết nối tài khoản Zalo khác.'
+    );
+    if (selectedChannel === 'email') {
+      await sendChatMessage(marker);
+      return;
+    }
+    setMessages((prev) => [...prev, { role: 'user', content: marker }, {
+      role: 'assistant',
+      type: 'zalo_qr_login',
+      content: t('aiChatbot.wizardZaloQrPrompt') || 'Quét QR để kết nối tài khoản Zalo rồi mình sẽ tiếp tục.',
+      data: { channel: selectedChannel },
+    }]);
+  };
+
+  const handleWizardGroupsSubmit = async (groupIds, groups = []) => {
+    const labels = groups
+      .filter((group) => groupIds.includes(group.groupId || group.group_id || group.id))
+      .map((group) => group.groupName || group.group_name || group.name)
+      .filter(Boolean);
+    await emitWizardAnswer(
+      { gate: 'zaloGroups', accountId: wizardContext.senderAccountId, groupIds },
+      `Tôi chọn ${groupIds.length} nhóm Zalo${labels.length ? `: ${labels.join(', ')}` : ''}.`
+    );
+  };
+
+  const requestContentPlan = async (userPrompt) => {
+    const text = locale === 'en'
+      ? `Return content_plan JSON only (day-by-day overview, no full message bodies) for: ${userPrompt}`
+      : `Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: ${userPrompt}`;
+    await sendChatMessage(text);
+  };
+
+  const handleSend = async () => {
+    if (isSendingRef.current) return;
+    const trimmedInput = inputText.trim();
+    if (!trimmedInput && !uploadedFiles.length) return;
+
+    if (trimmedInput && uploadedFiles.length === 0 && shouldHandlePlanConfirmationByText(trimmedInput)) {
+      isSendingRef.current = true;
+      setInputText('');
+      setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
+      try {
+        await handlePlanConfirmationByText();
+      } finally {
+        isSendingRef.current = false;
+      }
+      return;
+    }
+
+    const files = [...uploadedFiles];
+    setInputText('');
+    setUploadedFiles([]);
+    await sendChatMessage(trimmedInput, files);
   };
 
   const handleEditTemplate = (draft) => {
@@ -1062,7 +1303,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     try {
       for (let index = 0; index < slotsToProcess.length; index += 1) {
         const { slot, slotOrder, slotKey } = slotsToProcess[index];
-        const channelLabel = slot.channel === 'email' ? 'Email' : 'Zalo cá nhân';
+        const channelLabel = slot.channel === 'email'
+          ? 'Email'
+          : slot.channel === 'zalo_group'
+            ? 'Zalo nhóm'
+            : 'Zalo cá nhân';
         const slotPromptParts = [
           `Tạo chi tiết template cho ngày ${day}, slot ${slotOrder} (${channelLabel}).`,
           `Mục tiêu ngày: ${dayItem.goal || slot.goal || ''}`,
@@ -1100,7 +1345,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }
         const draftChannel = normalizeChannel(data.channel || dayItem.channel || slot.channel);
         if (!PLAN_SUPPORTED_CHANNELS.has(draftChannel)) {
-          throw new Error('Wizard theo ngày hiện chỉ hỗ trợ Email và Zalo cá nhân.');
+          throw new Error(t('aiChatbot.contentPlanUnsupportedChannel'));
         }
 
         const draftData = {
@@ -1189,6 +1434,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
+  const handleWizardPlanApproved = async () => {
+    if (!contentPlanWorkflow?.plan) return;
+    const day = Number(contentPlanWorkflow.pendingDay || contentPlanWorkflow.plan.days?.[0]?.day);
+    const dayItem = contentPlanWorkflow.plan.days?.find((item) => Number(item.day) === day);
+    if (!dayItem) return;
+    const marker = buildWizardMarkerText({ gate: 'planApproved', value: true }, 'Đồng ý với kế hoạch này.');
+    setMessages((prev) => [...prev, { role: 'user', content: marker }]);
+    await handleGenerateDayTemplate(dayItem);
+  };
+
   const handleGenerateAllPlanTemplates = async () => {
     if (!contentPlanWorkflow?.plan || generatingDay !== null || contentPlanWorkflow?.isGeneratingAll) return;
 
@@ -1259,6 +1514,36 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
    * summaryText: chuỗi mô tả lựa chọn, answers: { channel, productCount, sendingStyle, audienceCount }
    */
   const handleCampaignDetailsSubmit = async (summaryText, answers) => {
+    const wizardQuestion = pendingCampaignData?.questions?.find((q) => q.wizardGate);
+    if (wizardQuestion) {
+      if (wizardQuestion.wizardGate === 'channel') {
+        await emitWizardAnswer(
+          { gate: 'channel', channel: answers.channel },
+          summaryText
+        );
+        return;
+      }
+      if (wizardQuestion.wizardGate === 'dataSource') {
+        await emitWizardAnswer(
+          { gate: 'dataSource', value: answers.dataSource },
+          summaryText
+        );
+        return;
+      }
+      if (wizardQuestion.wizardGate === 'schedule') {
+        const schedule = parseScheduleValue(answers.schedule);
+        await emitWizardAnswer(
+          { gate: 'schedule', value: schedule.mode, mode: schedule.mode, days: schedule.days },
+          summaryText
+        );
+        return;
+      }
+      if (wizardQuestion.wizardGate === 'planApproved') {
+        await handleWizardPlanApproved();
+        return;
+      }
+    }
+
     if (!pendingCampaignPrompt) return;
     setIsTyping(true);
     const mySessionId = currentSessionId;
@@ -1595,20 +1880,108 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }]);
   };
 
+  const isFullscreen = variant === 'fullscreen';
+  const showHomeHero = isFullscreen
+    && messages.length <= 1
+    && !isTyping
+    && !currentSessionId;
+
+  const renderInputSection = ({ centered = false } = {}) => (
+    <div className={centered ? 'w-full' : `flex-shrink-0 ${isFullscreen ? 'px-4 pb-6 bg-gray-50' : 'px-4 pt-3 pb-4 border-t border-slate-100 bg-white'}`}>
+      <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
+        {!centered && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <HiOutlineCog className="h-4 w-4 text-slate-400" />
+            <span className="text-[11px] font-bold uppercase text-slate-400">Gemini</span>
+            <select
+              value={selectedAiModel}
+              disabled={modelLoading || allowedModels.length === 0}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-700 outline-none"
+            >
+              {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
+                <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white border-slate-200' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40' : centered ? '' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+              {uploadedFiles.map(f => {
+                const { bg, text } = fileChipMeta(f);
+                return (
+                  <div key={f.tempId} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-1.5 py-1`}>
+                    {f.previewUrl
+                      ? <img src={f.previewUrl} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
+                      : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
+                    }
+                    <span className="truncate max-w-[100px] text-xs font-medium text-slate-700 ml-1">{f.originalName}</span>
+                    <button onClick={() => setUploadedFiles(p => p.filter(x => x.tempId !== f.tempId))}
+                      className="p-0.5 ml-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0">
+                      <HiOutlineX className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
+            placeholder={aiBillingBlock
+              ? t('aiChatbot.inputBlockedPlaceholder')
+              : (isDragging ? t('aiChatbot.dropFilePlaceholder') : (centered ? t('aiChatbot.homeAskAnything') : t('aiChatbot.inputPlaceholder')))}
+            rows={centered ? 1 : 2}
+            disabled={Boolean(aiBillingBlock)}
+            className={`w-full bg-transparent outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400 disabled:opacity-60 ${centered ? 'px-5 py-4 text-base' : 'px-3.5 pt-3 pb-1 text-sm'}`}
+            style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
+          />
+          <div className={`flex items-center justify-between ${centered ? 'px-3 pb-3' : 'px-2 pb-2'}`}>
+            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all disabled:opacity-50">
+              {isUploading
+                ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                : <HiOutlinePaperClip className="w-3.5 h-3.5" />}
+              {!centered && <span>{t('aiChatbot.attach')}</span>}
+            </button>
+            <div className="flex items-center gap-2">
+              {!centered && <span className="text-[10px] text-slate-300">{t('aiChatbot.enterToSend')}</span>}
+              <button onClick={handleSend} disabled={Boolean(aiBillingBlock) || (!inputText.trim() && !uploadedFiles.length)}
+                className={`flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all ${centered ? 'w-9 h-9' : 'w-8 h-8'}`}>
+                <HiOutlineChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+        {!centered && <p className="mt-2 text-[10px] text-center text-slate-400">{t('aiChatbot.poweredBy')}</p>}
+      </div>
+    </div>
+  );
+
   return (
     <div
-      className={`fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl z-40 flex flex-col overflow-hidden ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
-      style={{
-        width: isMobile ? '100%' : `${panelWidth}px`,
-        transition: isResizingPanel ? 'none' : 'transform 0.3s ease-in-out',
-      }}
+      className={
+        isFullscreen
+          ? 'relative w-full h-full min-h-0 bg-gray-50 flex flex-col overflow-hidden'
+          : `fixed top-0 right-0 h-full bg-white border-l border-slate-200 shadow-2xl z-40 flex flex-col overflow-hidden ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`
+      }
+      style={
+        isFullscreen
+          ? undefined
+          : {
+            width: isMobile ? '100%' : `${panelWidth}px`,
+            transition: isResizingPanel ? 'none' : 'transform 0.3s ease-in-out',
+          }
+      }
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag handle — chỉ trên desktop */}
-      {!isMobile && isOpen && (
+      {/* Drag handle — chỉ trên desktop panel */}
+      {!isFullscreen && !isMobile && isOpen && (
         <div
           className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-50 transition-colors ${isResizingPanel ? 'bg-orange-300' : 'hover:bg-orange-200'}`}
           onMouseDown={handlePanelResizeStart}
@@ -1622,23 +1995,39 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </div>
       )}
       {/* Header */}
-      <div className="flex-shrink-0 h-16 border-b border-slate-100 flex items-center justify-between px-5">
+      <div className={`flex-shrink-0 border-b border-slate-100 flex items-center justify-between ${isFullscreen ? 'h-14 px-4 bg-white/80 backdrop-blur-sm' : 'h-16 px-5'}`}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <HiOutlineSparkles className="w-5 h-5 text-white" />
+          <div className={`${isFullscreen ? 'w-7 h-7 rounded-lg' : 'w-8 h-8 rounded-lg'} bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20`}>
+            <HiOutlineSparkles className={`${isFullscreen ? 'w-4 h-4' : 'w-5 h-5'} text-white`} />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">{t('aiChatbot.title')}</h3>
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('aiChatbot.ready')}</span>
-            </div>
+            <h3 className={`font-bold text-slate-800 ${isFullscreen ? 'text-base' : 'text-sm'}`}>{t('aiChatbot.title')}</h3>
+            {!isFullscreen && (
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('aiChatbot.ready')}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
-            <HiOutlineArrowRight className="w-5 h-5" />
-          </button>
+          {isFullscreen && (
+            <select
+              value={selectedAiModel}
+              disabled={modelLoading || allowedModels.length === 0}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="hidden sm:block rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none"
+            >
+              {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
+                <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
+              ))}
+            </select>
+          )}
+          {!isFullscreen && (
+            <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
+              <HiOutlineArrowRight className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1733,7 +2122,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       )}
 
       {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
-      {!isSuperAdmin && (
+      {!isSuperAdmin && !showHomeHero && (
         <div className={`flex-shrink-0 mx-4 mt-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 ${hasProfile ? 'bg-slate-50 border border-slate-200' : 'bg-orange-50 border border-orange-200'}`}>
           <HiOutlineSparkles className={`w-3.5 h-3.5 shrink-0 ${hasProfile ? 'text-slate-400' : 'text-orange-500'}`} />
           <p className={`flex-1 text-xs ${hasProfile ? 'text-slate-500' : 'text-orange-700 font-medium'}`}>
@@ -1741,7 +2130,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           </p>
           <Link
             to="/app/settings/ai-profile"
-            onClick={onToggle}
+            onClick={() => { if (!isFullscreen) onToggle?.(); }}
             className={`shrink-0 text-xs font-semibold whitespace-nowrap ${hasProfile ? 'text-slate-500 hover:text-orange-500' : 'text-orange-600 hover:text-orange-700'}`}
           >
             {hasProfile ? t('aiChatbot.view') : t('aiChatbot.setup')}
@@ -1749,8 +2138,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </div>
       )}
 
-      {/* Quick Actions */}
-      {!isSuperAdmin && (
+      {/* Quick Actions — chỉ hiện ở panel mode */}
+      {!isFullscreen && !isSuperAdmin && (
         <div className="flex-shrink-0 mx-4 mt-3">
           <button
             onClick={() => setQuickActionsOpen(o => !o)}
@@ -1811,8 +2200,48 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </div>
       )}
 
+      {showHomeHero ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-10">
+          <h1 className="text-3xl sm:text-4xl font-semibold text-slate-800 mb-8 text-center tracking-tight">
+            {t('aiChatbot.homeHeadline')}
+          </h1>
+          <div className="w-full max-w-3xl">
+            {renderInputSection({ centered: true })}
+          </div>
+          {!isSuperAdmin && (
+            <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-3xl w-full">
+              <button
+                type="button"
+                onClick={() => setInputText('Lập kịch bản chiến dịch marketing cho [tên sản phẩm/dịch vụ], gửi qua Email và Zalo')}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+              >
+                {t('aiChatbot.homeSuggestionCampaign')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputText('Viết template email chào mừng khách hàng mới')}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+              >
+                {t('aiChatbot.homeSuggestionEmail')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+                  setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
+                }}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+              >
+                {t('aiChatbot.homeSuggestionLanding')}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 chat-messages-scroll">
+      <div className={`flex-1 overflow-y-auto space-y-5 chat-messages-scroll ${isFullscreen ? 'px-4 py-6' : 'p-5'}`}>
+        <div className={isFullscreen ? 'max-w-3xl mx-auto w-full space-y-5' : 'space-y-5'}>
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[92%] min-w-0 break-words ${msg.role === 'user' ? 'bg-slate-100 rounded-2xl px-4 py-3' : ''}`}>
@@ -1854,6 +2283,47 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskCampaignDetailsCard
                   data={msg.data}
                   onSubmit={handleCampaignDetailsSubmit}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'ask_sender_account' && msg.data && (
+                <AskSenderAccountCard
+                  data={msg.data}
+                  onSelect={(account) => handleWizardSenderSelect(account, msg.data.channel)}
+                  onOther={() => handleWizardSenderOther(msg.data.channel)}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'email_setup_guide' && msg.data && (
+                <EmailSetupGuideCard
+                  data={msg.data}
+                  onSelectAccount={(account) => handleWizardSenderSelect(account, 'email')}
+                  onAccountsFound={(accounts) => {
+                    setMessages((prev) => [...prev, {
+                      role: 'assistant',
+                      content: t('aiChatbot.wizardChooseEmailSender') || 'Bạn chọn email sender sẽ dùng cho chiến dịch nhé.',
+                      type: 'ask_sender_account',
+                      data: { channel: 'email', accounts, allowOther: true, noUsableAccount: false },
+                    }]);
+                  }}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'zalo_qr_login' && (
+                <ZaloQrLoginCard
+                  channel={msg.data?.channel || wizardContext.channel || 'zalo'}
+                  onConnected={(account, channel) => handleWizardSenderSelect(account, channel)}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'zalo_group_picker' && msg.data && (
+                <ZaloGroupPickerCard
+                  data={msg.data}
+                  onSubmit={handleWizardGroupsSubmit}
                   t={t}
                 />
               )}
@@ -1915,6 +2385,22 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   workflow={contentPlanWorkflow}
                   t={t}
                 />
+              )}
+
+              {msg.type === 'suggest_content_plan' && msg.data?.userPrompt && (
+                <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
+                  <p className="mb-2 text-xs leading-relaxed text-orange-800">
+                    {t('aiChatbot.suggestContentPlanHint')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => requestContentPlan(msg.data.userPrompt)}
+                    disabled={isTyping}
+                    className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {t('aiChatbot.suggestContentPlanButton')}
+                  </button>
+                </div>
               )}
 
               {msg.type === 'content_plan_actions' && (
@@ -2025,79 +2511,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           </div>
         )}
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-slate-100 bg-white">
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <HiOutlineCog className="h-4 w-4 text-slate-400" />
-          <span className="text-[11px] font-bold uppercase text-slate-400">Gemini</span>
-          <select
-            value={selectedAiModel}
-            disabled={modelLoading || allowedModels.length === 0}
-            onChange={(e) => handleModelChange(e.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-700 outline-none"
-          >
-            {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
-              <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
-            ))}
-          </select>
-        </div>
-        <div className={`rounded-2xl border transition-all outline-none ${isDragging ? 'border-orange-300 bg-orange-50/40' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
-          {/* File chips */}
-          {uploadedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-              {uploadedFiles.map(f => {
-                const { bg, text } = fileChipMeta(f);
-                return (
-                  <div key={f.tempId} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-1.5 py-1`}>
-                    {f.previewUrl
-                      ? <img src={f.previewUrl} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
-                      : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
-                    }
-                    <span className="truncate max-w-[100px] text-xs font-medium text-slate-700 ml-1">{f.originalName}</span>
-                    <button onClick={() => setUploadedFiles(p => p.filter(x => x.tempId !== f.tempId))}
-                      className="p-0.5 ml-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0">
-                      <HiOutlineX className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {/* Textarea */}
-          <textarea
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
-            placeholder={aiBillingBlock
-              ? t('aiChatbot.inputBlockedPlaceholder')
-              : (isDragging ? t('aiChatbot.dropFilePlaceholder') : t('aiChatbot.inputPlaceholder'))}
-            rows={2}
-            disabled={Boolean(aiBillingBlock)}
-            className="w-full bg-transparent px-3.5 pt-3 pb-1 text-sm outline-none focus:outline-none focus:ring-0 resize-none text-slate-800 placeholder-slate-400 disabled:opacity-60"
-            style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
-          />
-          {/* Toolbar */}
-          <div className="flex items-center justify-between px-2 pb-2">
-            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all disabled:opacity-50">
-              {isUploading
-                ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
-                : <HiOutlinePaperClip className="w-3.5 h-3.5" />}
-              <span>{t('aiChatbot.attach')}</span>
-            </button>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-300">{t('aiChatbot.enterToSend')}</span>
-              <button onClick={handleSend} disabled={Boolean(aiBillingBlock) || (!inputText.trim() && !uploadedFiles.length)}
-                className="w-8 h-8 flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all">
-                <HiOutlineChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-        <p className="mt-2 text-[10px] text-center text-slate-400">{t('aiChatbot.poweredBy')}</p>
-      </div>
+      {renderInputSection()}
+        </>
+      )}
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"
         accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" />

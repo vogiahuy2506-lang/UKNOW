@@ -37,6 +37,8 @@ const MainLayout = () => {
 
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
 
+  const isAiHomePage = location.pathname === '/app' || location.pathname === '/app/';
+
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchAiCredits().catch(() => {});
@@ -128,7 +130,7 @@ const MainLayout = () => {
   }, [aiPanelOpen]);
 
   const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
-  const desktopMainClassName = isFullLayout || isInboxPage
+  const desktopMainClassName = isFullLayout || isInboxPage || isAiHomePage
     ? 'h-full flex-1 min-h-0 overflow-hidden p-0'
     : 'flex-1 min-h-0 p-6 overflow-auto';
 
@@ -137,7 +139,7 @@ const MainLayout = () => {
   }, [effectiveSidebarWidth]);
 
   if (isMobile) {
-    const mainClassName = isFullLayout || isInboxPage
+    const mainClassName = isFullLayout || isInboxPage || isAiHomePage
       ? 'h-full flex-1 min-h-0 overflow-hidden p-0'
       : 'flex-1 min-h-0 p-4 overflow-auto';
 
@@ -171,7 +173,7 @@ const MainLayout = () => {
         <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         
         {/* AI Toggle Trigger (Mobile) */}
-        {!aiPanelOpen && (
+        {!aiPanelOpen && !isAiHomePage && (
           <button 
             onClick={() => setAiPanelOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-2xl z-30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
@@ -219,7 +221,8 @@ const MainLayout = () => {
         </main>
       </div>
 
-      {/* AI Side Panel */}
+      {/* AI Side Panel — ẩn trên trang AI home (đã có chat full-screen) */}
+      {!isAiHomePage && (
       <AiChatbot
         isOpen={aiPanelOpen}
         onToggle={() => setAiPanelOpen(false)}
@@ -228,9 +231,10 @@ const MainLayout = () => {
         onResizeStart={() => setIsPanelResizing(true)}
         onResizeEnd={() => { setIsPanelResizing(false); window.dispatchEvent(new Event('resize')); }}
       />
+      )}
 
-      {/* AI Toggle Bar (Desktop) — hidden on chatbot studio (has its own 3-column layout) */}
-      {!aiPanelOpen && !isChatbotStudio && (
+      {/* AI Toggle Bar (Desktop) — hidden on chatbot studio & AI home */}
+      {!aiPanelOpen && !isChatbotStudio && !isAiHomePage && (
         <div className="fixed top-0 right-0 h-full w-1 z-50 group">
           <button 
             onClick={() => setAiPanelOpen(true)}

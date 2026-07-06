@@ -133,10 +133,15 @@ const superAdminMenuItems = (t) => [
 // permission: [...]  → employee thấy nếu có ÍT NHẤT 1 trong các permission này
 const userMenuItems = (t) => [
   {
-    name: t('nav.dashboard'),
+    name: t('nav.aiAssistant'),
     path: '/app',
-    icon: HiOutlineHome,
+    icon: HiOutlineSparkles,
     end: true,
+  },
+  {
+    name: t('nav.dashboard'),
+    path: '/app/reports',
+    icon: HiOutlineHome,
   },
   {
     name: t('nav.aiChatbot'),

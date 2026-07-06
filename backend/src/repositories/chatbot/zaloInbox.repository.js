@@ -245,6 +245,34 @@ class ZaloInboxRepository {
   }
 
   /**
+   * Look up a synced group name from zalo_groups.
+   *
+   * @param {number} zaloSettingId
+   * @param {string} groupId
+   * @returns {Promise<string|null>}
+   */
+  async findGroupNameById(zaloSettingId, groupId) {
+    const bare = String(groupId || '').trim().replace(/^group_/, '');
+    if (!bare) return null;
+
+    const result = await db.query(
+      `SELECT group_name
+       FROM zalo_groups
+       WHERE id_zalo_setting = $1
+         AND (
+           group_id = $2
+           OR group_id = $3
+           OR CONCAT('group_', group_id) = $3
+         )
+       ORDER BY updated_at DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [zaloSettingId, bare, `group_${bare}`]
+    );
+
+    return result.rows[0]?.group_name || null;
+  }
+
+  /**
    * Get a single Zalo account by ID (for listener registration).
    *
    * @param {number} accountId
