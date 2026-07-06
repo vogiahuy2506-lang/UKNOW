@@ -368,8 +368,9 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const [emailTemplateName, setEmailTemplateName] = useState('');
   if (!data?.questions?.length) return null;
 
+  const isWizardQuestion = data.questions.some((q) => q.wizardGate);
   const isEmailChannel = answers.channel === 'email';
-  const emailChoiceRequired = isEmailChannel;
+  const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
 
   const allAnswered =

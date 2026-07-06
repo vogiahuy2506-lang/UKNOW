@@ -5,6 +5,8 @@ const extractGeminiUsage = jest.fn();
 const attachGoogleUrlParts = jest.fn();
 const reserve = jest.fn();
 const record = jest.fn();
+const getZaloAccountsFull = jest.fn();
+const getActiveEmailSenders = jest.fn();
 
 jest.unstable_mockModule('axios', () => ({
   default: {
@@ -51,7 +53,10 @@ jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', () => ({
-  default: {},
+  default: {
+    getZaloAccountsFull,
+    getActiveEmailSenders,
+  },
 }));
 
 jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
@@ -74,6 +79,10 @@ describe('aiCampaign.service', () => {
     attachGoogleUrlParts.mockReset();
     reserve.mockReset();
     record.mockReset();
+    getZaloAccountsFull.mockReset();
+    getActiveEmailSenders.mockReset();
+    getZaloAccountsFull.mockResolvedValue([]);
+    getActiveEmailSenders.mockResolvedValue([]);
   });
 
   it('passes userId into smart chat quota reservation and usage recording', async () => {
@@ -106,5 +115,55 @@ describe('aiCampaign.service', () => {
       feature: 'smart_chat',
       model: expect.any(String),
     });
+  });
+
+  it('converts inline multi-day draft text into suggest_content_plan', () => {
+    const response = aiCampaignService._guardContentPlanResponse(
+      {
+        type: 'text',
+        content: 'Tin nhắn 1: Chào bạn\nTin nhắn 2: Ưu đãi đặc biệt',
+      },
+      [{ role: 'user', content: 'Soạn chiến dịch 5 tin nhắn Zalo trong 5 ngày kêu gọi đăng ký' }]
+    );
+
+    expect(response.type).toBe('suggest_content_plan');
+    expect(response.data.userPrompt).toContain('5 tin nhắn Zalo');
+  });
+
+  it('short-circuits wizard marker replies without calling Gemini or reserving quota', async () => {
+    const response = await aiCampaignService.processSmartChat({
+      userId: 42,
+      history: [
+        { role: 'user', content: 'Tạo chiến dịch email chăm sóc khách hàng' },
+        { role: 'assistant', type: 'ask_campaign_details', content: 'Chọn kênh', data: { questions: [] } },
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nTôi chọn Email.' },
+      ],
+      locale: 'vi',
+    });
+
+    expect(response.type).toBe('email_setup_guide');
+    expect(response.wizardShortCircuit).toBe(true);
+    expect(axiosPost).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('forces wizard gates when Gemini returns a campaign response for a loose campaign prompt', () => {
+    const guarded = aiCampaignService._guardWizardGates(
+      {
+        type: 'content_plan',
+        content: 'Kế hoạch 5 ngày',
+        data: {
+          totalDays: 5,
+          days: [{ day: 1, channel: 'zalo', slots: [{ channel: 'zalo', summary: 'Chào mừng' }] }],
+        },
+      },
+      [{ role: 'user', content: 'Tạo cho tôi kịch bản 5 ngày chăm sóc khách mới qua Zalo cá nhân' }],
+      { zaloAccounts: [{ id: 9, displayName: 'Zalo A', status: 'connected', isActive: true }] },
+      'vi'
+    );
+
+    expect(guarded.type).toBe('ask_sender_account');
+    expect(guarded.data.channel).toBe('zalo');
   });
 });

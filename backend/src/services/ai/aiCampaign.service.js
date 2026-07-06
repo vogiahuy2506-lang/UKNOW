@@ -10,6 +10,14 @@ import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import {
+  evaluateNextGate,
+  extractWizardState,
+  isPlanTemplateDraftRequest,
+  isWizardMarkerMessage,
+  normalizeChannel,
+  shouldGuardCampaignResponse,
+} from './aiCampaignWizard.service.js';
 
 class AiCampaignService {
   /**
@@ -71,6 +79,39 @@ class AiCampaignService {
       }));
     } catch (e) {
       console.warn('[AI] Không lấy được Zalo accounts:', e.message);
+      return [];
+    }
+  }
+
+  async getZaloAccountsFull(userId) {
+    try {
+      const rows = await aiCampaignRepository.getZaloAccountsFull(userId);
+      return rows.map(r => ({
+        id: r.id,
+        displayName: r.display_name,
+        zaloName: r.zalo_name,
+        status: r.status,
+        isActive: r.is_active,
+        isDefault: r.is_default,
+      }));
+    } catch (e) {
+      console.warn('[AI] Không lấy được full Zalo accounts:', e.message);
+      return [];
+    }
+  }
+
+  async getActiveEmailSenders(userId) {
+    try {
+      const rows = await aiCampaignRepository.getActiveEmailSenders(userId);
+      return rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        replyTo: r.reply_to,
+        status: r.status,
+      }));
+    } catch (e) {
+      console.warn('[AI] Không lấy được email senders:', e.message);
       return [];
     }
   }
@@ -578,6 +619,70 @@ D. ZALO NHÓM:
     return response;
   }
 
+  _isMultiDaySeriesRequest(text = '') {
+    const normalized = String(text || '').toLowerCase();
+    return /\d+\s*(tin nhắn|tin|email|ngày|ngay|message|messages|day|days)/i.test(normalized)
+      && /(zalo|email|chiến dịch|chien dich|campaign|chăm sóc|cham soc|drip|đăng ký|dang ky|kêu gọi|keu goi|nhóm zalo|zalo nhóm|zalo group)/i.test(normalized);
+  }
+
+  _looksLikeInlineSeriesDraft(content = '') {
+    const matches = String(content || '').match(/tin nhắn\s*\d+|ngày\s*\d+|email\s*\d+|message\s*\d+|day\s*\d+/gi) || [];
+    return matches.length >= 2;
+  }
+
+  _guardContentPlanResponse(response, history = []) {
+    if (response?.type === 'content_plan') return response;
+
+    const lastUserText = this._lastUserMessageContent(history);
+    if (!this._isMultiDaySeriesRequest(lastUserText)) return response;
+
+    if (response?.type === 'text' && this._looksLikeInlineSeriesDraft(response.content)) {
+      return {
+        type: 'suggest_content_plan',
+        content: response.content,
+        data: { userPrompt: lastUserText },
+        missing_fields: [],
+      };
+    }
+    return response;
+  }
+
+  async _getWizardResources(userId) {
+    if (!userId) return { zaloAccounts: [], emailSenders: [] };
+    const [zaloAccounts, emailSenders] = await Promise.all([
+      this.getZaloAccountsFull(userId),
+      this.getActiveEmailSenders(userId),
+    ]);
+    return { zaloAccounts, emailSenders };
+  }
+
+  _guardWizardGates(response, history = [], resources = {}, locale = 'vi') {
+    const lastUserText = this._lastUserMessageContent(history);
+    if (isPlanTemplateDraftRequest(lastUserText)) return response;
+    if (!shouldGuardCampaignResponse(response)) return response;
+
+    const state = extractWizardState(history);
+    state.isCampaignFlow = true;
+    state.channel ||= normalizeChannel(
+      response?.data?.campaignType
+      || response?.data?.channel
+      || response?.data?.days?.[0]?.channel
+      || response?.data?.days?.[0]?.slots?.[0]?.channel
+    );
+
+    const nextGate = evaluateNextGate(state, resources, locale);
+    if (!nextGate && response?.type === 'content_plan') {
+      return {
+        ...response,
+        data: {
+          ...(response.data || {}),
+          requiresApproval: true,
+        },
+      };
+    }
+    return nextGate?.response || response;
+  }
+
   async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
     let contextBlock = '';
 
@@ -612,6 +717,14 @@ QUY TẮC:
 }`;
 
       return this._runChat(adminSystemPrompt, history, files, userId, model);
+    }
+
+    const wizardResources = await this._getWizardResources(userId);
+    const lastUserText = this._lastUserMessageContent(history);
+    if (isWizardMarkerMessage(lastUserText)) {
+      const state = extractWizardState(history);
+      const nextGate = evaluateNextGate(state, wizardResources, locale);
+      if (nextGate?.response) return { ...nextGate.response, wizardShortCircuit: true };
     }
 
     // Thu thập existing resources cho non-admin users
@@ -1178,7 +1291,15 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
     const response = await this._runChat(systemPrompt, history, files, userId, model);
-    return this._guardCampaignDataSourceResponse(response, history, locale);
+    return this._guardWizardGates(
+      this._guardContentPlanResponse(
+        this._guardCampaignDataSourceResponse(response, history, locale),
+        history
+      ),
+      history,
+      wizardResources,
+      locale
+    );
   }
 
   /**

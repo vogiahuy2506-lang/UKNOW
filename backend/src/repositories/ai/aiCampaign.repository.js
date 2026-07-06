@@ -35,6 +35,28 @@ class AiCampaignRepository {
     return result.rows;
   }
 
+  async getZaloAccountsFull(userId) {
+    const result = await db.query(
+      `SELECT id, display_name, zalo_name, status, is_active, is_default
+       FROM zalo_settings
+       WHERE id_user = $1
+       ORDER BY is_default DESC, created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  }
+
+  async getActiveEmailSenders(userId) {
+    const result = await db.query(
+      `SELECT id, name, email, reply_to, status
+       FROM email_settings
+       WHERE id_user = $1 AND status = 'active'
+       ORDER BY name`,
+      [userId]
+    );
+    return result.rows;
+  }
+
   async getZaloTemplates(userId) {
     const result = await db.query(
       `SELECT id, template_name, template_code, body_text, category
