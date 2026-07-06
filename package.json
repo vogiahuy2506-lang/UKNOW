@@ -11,6 +11,7 @@
     "e2e:install": "cd e2e && npm install && npx playwright install chromium"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "puppeteer": "^25.2.1"
   }
 }
