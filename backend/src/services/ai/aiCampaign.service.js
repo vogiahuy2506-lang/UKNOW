@@ -13,6 +13,9 @@ import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import {
   evaluateNextGate,
   extractWizardState,
+  findOriginalCampaignPrompt,
+  buildCampaignPromptWithWizardState,
+  parseWizardMarker,
   isPlanTemplateDraftRequest,
   isWizardMarkerMessage,
   normalizeChannel,
@@ -597,9 +600,27 @@ D. ZALO NHÓM:
             id: 'dataSource',
             label: isEnglish ? 'Where should the customer list come from?' : 'Lấy danh sách khách từ đâu?',
             options: [
-              { value: 'db', label: isEnglish ? 'Customers already in the system' : 'Khách hàng có sẵn trong hệ thống' },
-              { value: 'sheet', label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet' },
-              { value: 'landing', label: isEnglish ? 'Landing page leads' : 'Danh sách đăng ký từ Landing Page' },
+              {
+                value: 'db',
+                label: isEnglish ? 'Saved customer list' : 'Danh sách khách hàng',
+                description: isEnglish
+                  ? 'People already in your account (from past campaigns, courses, or CRM)'
+                  : 'Khách đã có trong tài khoản (từ chiến dịch cũ, khóa học, CRM)',
+              },
+              {
+                value: 'sheet',
+                label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet',
+                description: isEnglish
+                  ? 'A spreadsheet file or Google Sheet link you provide'
+                  : 'File hoặc link bảng tính bạn tự cung cấp',
+              },
+              {
+                value: 'landing',
+                label: isEnglish ? 'Landing page sign-ups' : 'Đăng ký từ Landing Page',
+                description: isEnglish
+                  ? 'People who submitted the form on your landing page (name, phone, email)'
+                  : 'Người điền form trên trang landing (tên, SĐT, email)',
+              },
             ],
           },
         ],
@@ -723,8 +744,22 @@ QUY TẮC:
     const lastUserText = this._lastUserMessageContent(history);
     if (isWizardMarkerMessage(lastUserText)) {
       const state = extractWizardState(history);
+      const marker = parseWizardMarker(lastUserText);
       const nextGate = evaluateNextGate(state, wizardResources, locale);
       if (nextGate?.response) return { ...nextGate.response, wizardShortCircuit: true };
+
+      if (marker?.gate === 'schedule' && state.schedule?.mode === 'drip') {
+        const basePrompt = findOriginalCampaignPrompt(history);
+        return {
+          type: 'suggest_content_plan',
+          content: locale === 'en'
+            ? 'Next I will draft a day-by-day sending plan for you.'
+            : 'Tiếp theo mình sẽ lên kế hoạch gửi theo từng ngày cho bạn.',
+          data: { userPrompt: buildCampaignPromptWithWizardState(state, basePrompt, locale) },
+          missing_fields: [],
+          wizardShortCircuit: true,
+        };
+      }
     }
 
     // Thu thập existing resources cho non-admin users

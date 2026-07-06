@@ -30,7 +30,7 @@ const countUsableZaloAccounts = (accounts = []) => (
   (Array.isArray(accounts) ? accounts : []).filter(isUsableZaloAccount).length
 );
 
-const parseWizardMarker = (content = '') => {
+export function parseWizardMarker(content = '') {
   const firstLine = String(content || '').split('\n')[0]?.trim();
   const match = firstLine?.match(WIZARD_MARKER_RE);
   if (!match) return null;
@@ -40,7 +40,7 @@ const parseWizardMarker = (content = '') => {
   } catch {
     return null;
   }
-};
+}
 
 const inferChannelFromText = (text = '') => {
   const normalized = String(text || '').toLowerCase();
@@ -58,7 +58,7 @@ const inferDataSourceFromText = (text = '') => {
     return 'sheet';
   }
   if (/landing page|landing|lead/.test(normalized)) return 'landing';
-  if (/database|db|crm|khách hàng trong hệ thống|khach hang trong he thong|khách hàng có sẵn|khach hang co san/.test(normalized)) {
+  if (/danh sách khách hàng|danh sach khach hang|khách hàng trong hệ thống|khach hang trong he thong|khách hàng có sẵn|khach hang co san|database|db|crm/.test(normalized)) {
     return 'db';
   }
   return null;
@@ -175,6 +175,7 @@ export function extractWizardState(history = []) {
       state.schedule = {
         mode: marker.mode || marker.value || 'once',
         days: marker.days ? Number(marker.days) : undefined,
+        slotsPerDay: marker.slotsPerDay ? Number(marker.slotsPerDay) : 1,
       };
     } else if (marker.gate === 'planApproved') {
       state.planApproved = true;
@@ -214,19 +215,37 @@ export function buildDataSourceQuestion(locale = 'vi') {
   return {
     type: 'ask_campaign_details',
     content: isEnglish
-      ? 'Where should the recipient list come from?'
-      : 'Bạn chọn giúp tôi nguồn danh sách người nhận nhé.',
+      ? 'Who should receive this campaign? Pick where the recipient list comes from.'
+      : 'Bạn muốn gửi cho ai? Chọn nguồn danh sách người nhận nhé.',
     missing_fields: [],
     data: {
       questions: [
         {
           id: 'dataSource',
-          label: isEnglish ? 'Recipient source' : 'Lấy danh sách người nhận từ đâu?',
+          label: isEnglish ? 'Recipient list source' : 'Danh sách người nhận lấy từ đâu?',
           wizardGate: 'dataSource',
           options: [
-            { value: 'db', label: isEnglish ? 'Customers in the system' : 'Khách hàng trong hệ thống' },
-            { value: 'sheet', label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet' },
-            { value: 'landing', label: isEnglish ? 'Landing page leads' : 'Lead từ Landing Page' },
+            {
+              value: 'db',
+              label: isEnglish ? 'Saved customer list' : 'Danh sách khách hàng',
+              description: isEnglish
+                ? 'People already in your account (from past campaigns, courses, or CRM)'
+                : 'Khách đã có trong tài khoản (từ chiến dịch cũ, khóa học, CRM)',
+            },
+            {
+              value: 'sheet',
+              label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet',
+              description: isEnglish
+                ? 'A spreadsheet file or Google Sheet link you provide'
+                : 'File hoặc link bảng tính bạn tự cung cấp',
+            },
+            {
+              value: 'landing',
+              label: isEnglish ? 'Landing page sign-ups' : 'Đăng ký từ Landing Page',
+              description: isEnglish
+                ? 'People who submitted the form on your landing page (name, phone, email)'
+                : 'Người điền form trên trang landing (tên, SĐT, email)',
+            },
           ],
         },
       ],
@@ -248,15 +267,49 @@ export function buildScheduleQuestion(locale = 'vi') {
           id: 'schedule',
           label: isEnglish ? 'Schedule' : 'Lịch gửi',
           wizardGate: 'schedule',
+          inputType: 'schedule',
           options: [
             { value: 'once', label: isEnglish ? 'Send once' : 'Gửi một lần' },
-            { value: 'drip_3', label: isEnglish ? '3-day sequence' : 'Chuỗi 3 ngày' },
-            { value: 'drip_5', label: isEnglish ? '5-day sequence' : 'Chuỗi 5 ngày' },
+            {
+              value: 'drip',
+              label: isEnglish ? 'Multi-day sequence' : 'Chuỗi nhiều ngày',
+              description: isEnglish
+                ? 'Pick number of days and messages per day'
+                : 'Tự chọn số ngày và số tin mỗi ngày',
+            },
           ],
+          defaults: { days: 3, slotsPerDay: 1 },
         },
       ],
     },
   };
+}
+
+export function buildCampaignPromptWithWizardState(state, basePrompt = '', locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const parts = [String(basePrompt || '').trim()].filter(Boolean);
+  if (state?.schedule?.mode === 'drip') {
+    const days = Number(state.schedule.days) || 3;
+    const slotsPerDay = Number(state.schedule.slotsPerDay) || 1;
+    parts.push(isEnglish
+      ? `Schedule: ${days}-day sequence, ${slotsPerDay} message(s) per day.`
+      : `Lịch gửi: chuỗi ${days} ngày, mỗi ngày ${slotsPerDay} tin.`);
+  } else if (state?.schedule?.mode === 'once') {
+    parts.push(isEnglish ? 'Schedule: send once.' : 'Lịch gửi: gửi một lần.');
+  }
+  return parts.join('\n');
+}
+
+export function findOriginalCampaignPrompt(history = []) {
+  const messages = Array.isArray(history) ? history : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== 'user') continue;
+    const content = message?.content || '';
+    if (parseWizardMarker(content)) continue;
+    if (isCampaignRequestText(content)) return content;
+  }
+  return '';
 }
 
 export function buildSenderAccountQuestion(channel, resources = {}, locale = 'vi') {

@@ -301,6 +301,103 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
   );
 };
 
+export const ContentPlanActionsCard = ({
+  data,
+  workflow,
+  onApprove,
+  onRevise,
+  onGenerateAll,
+  t,
+}) => {
+  const [reviseOpen, setReviseOpen] = useState(false);
+  const [reviseText, setReviseText] = useState('');
+  const [submittingRevise, setSubmittingRevise] = useState(false);
+  const firstDay = Number(data?.firstDay || workflow?.pendingDay);
+  const busy = workflow?.generatingDay !== null || Boolean(workflow?.isGeneratingAll) || submittingRevise;
+
+  const handleReviseSubmit = async () => {
+    const trimmed = reviseText.trim();
+    if (!trimmed) {
+      toast.error(t('aiChatbot.planReviseEmpty') || 'Bạn ghi góp ý cần chỉnh trước nhé.');
+      return;
+    }
+    setSubmittingRevise(true);
+    try {
+      await onRevise(trimmed);
+      setReviseOpen(false);
+      setReviseText('');
+    } finally {
+      setSubmittingRevise(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onApprove}
+          disabled={busy || !firstDay}
+          className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {t('aiChatbot.planApproveStartDay') || 'Đồng ý — tạo template Ngày 1'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setReviseOpen((open) => !open)}
+          disabled={busy}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {t('aiChatbot.planReviseButton') || 'Chỉnh lại kế hoạch'}
+        </button>
+        <button
+          type="button"
+          onClick={onGenerateAll}
+          disabled={busy}
+          className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {workflow?.isGeneratingAll
+            ? (t('aiChatbot.planGeneratingAll') || 'Đang tạo tất cả...')
+            : (t('aiChatbot.planGenerateAllDays') || 'Tạo 1 lúc tất cả các ngày')}
+        </button>
+      </div>
+
+      {reviseOpen && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-xs font-semibold text-slate-600">
+            {t('aiChatbot.planReviseHint') || 'Ghi ngắn gọn phần cần đổi (ngày nào, giờ gửi, nội dung, số tin...):'}
+          </p>
+          <textarea
+            value={reviseText}
+            onChange={(event) => setReviseText(event.target.value)}
+            rows={3}
+            placeholder={t('aiChatbot.planRevisePlaceholder') || 'Ví dụ: Ngày 2 gửi 9h thay vì 8h, Ngày 4 nhắc ưu đãi thay vì chào hỏi...'}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleReviseSubmit}
+              disabled={busy}
+              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white transition-all hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t('aiChatbot.planReviseSubmit') || 'Gửi góp ý chỉnh kế hoạch'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setReviseOpen(false); setReviseText(''); }}
+              disabled={busy}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-all hover:bg-slate-50"
+            >
+              {t('common.cancel') || 'Hủy'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Ask-more card
 export const AskMoreCard = ({ missingFields, t }) => (
   <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -373,17 +470,44 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
 
+  const isScheduleQuestion = (question) => question.wizardGate === 'schedule' || question.inputType === 'schedule';
+
+  const isQuestionAnswered = (question) => {
+    if (isScheduleQuestion(question)) {
+      if (!answers[question.id]) return false;
+      if (answers[question.id] === 'drip') {
+        const days = Number(answers.scheduleDays);
+        const slotsPerDay = Number(answers.scheduleSlotsPerDay);
+        return days >= 1 && days <= 30 && slotsPerDay >= 1 && slotsPerDay <= 5;
+      }
+      return true;
+    }
+    return Boolean(answers[question.id]);
+  };
+
   const allAnswered =
-    data.questions.every(q => answers[q.id]) &&
+    data.questions.every(isQuestionAnswered) &&
     (!emailChoiceRequired || emailChoice !== null) &&
     (!emailTemplateRequired || emailTemplateName.trim().length > 0);
 
-  const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
+  const pick = (qId, val) => setAnswers((prev) => {
+    const next = { ...prev, [qId]: val };
+    if (qId === 'schedule' && val === 'drip') {
+      const scheduleQuestion = data.questions.find((question) => question.id === 'schedule');
+      next.scheduleDays = prev.scheduleDays || String(scheduleQuestion?.defaults?.days || 3);
+      next.scheduleSlotsPerDay = prev.scheduleSlotsPerDay || String(scheduleQuestion?.defaults?.slotsPerDay || 1);
+    }
+    return next;
+  });
 
   const handleSubmit = () => {
     if (!allAnswered) return;
-    const lines = data.questions.map(q => {
-      const opt = q.options.find(o => o.value === answers[q.id]);
+    const lines = data.questions.map((q) => {
+      if (isScheduleQuestion(q)) {
+        if (answers[q.id] === 'once') return `${q.label}: Gửi một lần`;
+        return `${q.label}: ${answers.scheduleDays} ngày, mỗi ngày ${answers.scheduleSlotsPerDay} tin`;
+      }
+      const opt = q.options.find((o) => o.value === answers[q.id]);
       return `${q.label} ${opt?.label || answers[q.id]}`;
     });
     if (isEmailChannel) {
@@ -409,24 +533,63 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         <p className="text-sm font-bold text-slate-800">{data.campaignName}</p>
       )}
 
-      {data.questions.map(q => (
+      {data.questions.map((q) => (
         <div key={q.id}>
           <p className="text-xs font-semibold text-slate-600 mb-2">{q.label}</p>
           <div className="flex flex-wrap gap-2">
-            {q.options.map(opt => (
+            {q.options.map((opt) => (
               <button
                 key={opt.value}
+                type="button"
                 onClick={() => pick(q.id, opt.value)}
-                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                className={`max-w-full px-3 py-2 rounded-xl text-left text-xs font-medium border transition-all ${
                   answers[q.id] === opt.value
                     ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
                 }`}
               >
-                {opt.label}
+                <span className="font-semibold">{opt.label}</span>
+                {opt.description && (
+                  <span className={`mt-0.5 block text-[10px] leading-snug ${
+                    answers[q.id] === opt.value ? 'text-orange-50' : 'text-slate-500'
+                  }`}
+                  >
+                    {opt.description}
+                  </span>
+                )}
               </button>
             ))}
           </div>
+          {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  {t('aiChatbot.wizardScheduleDays') || 'Số ngày'}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={answers.scheduleDays || ''}
+                  onChange={(event) => setAnswers((prev) => ({ ...prev, scheduleDays: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  {t('aiChatbot.wizardScheduleSlotsPerDay') || 'Số tin mỗi ngày'}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={answers.scheduleSlotsPerDay || ''}
+                  onChange={(event) => setAnswers((prev) => ({ ...prev, scheduleSlotsPerDay: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+                />
+              </label>
+            </div>
+          )}
         </div>
       ))}
 

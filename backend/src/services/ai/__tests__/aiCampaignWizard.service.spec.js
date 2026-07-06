@@ -120,6 +120,6 @@ describe('aiCampaignWizard.service', () => {
 
     expect(gate.gate).toBe('schedule');
     expect(gate.response.content).toMatch(/lặp định kỳ|recurring/i);
-    expect(gate.response.data.questions[0].options.map((o) => o.value)).toEqual(['once', 'drip_3', 'drip_5']);
+    expect(gate.response.data.questions[0].options.map((o) => o.value)).toEqual(['once', 'drip']);
   });
 });

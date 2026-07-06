@@ -16,7 +16,7 @@ import aiApi from '../../services/aiApi';
 import api from '../../services/api';
 import LandingPageCard from './components/LandingPageCard';
 import {
-  AiContent, TemplateDraftCard, ContentPlanCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
+  AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
   AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
 } from './components/AiChatbotCards';
@@ -51,14 +51,130 @@ const parseWizardMarker = (content = '') => {
   }
 };
 
-const parseScheduleValue = (value) => {
+const parseScheduleValue = (value, answers = {}) => {
   const raw = String(value || '').trim();
-  if (raw.startsWith('drip_')) return { mode: 'drip', days: Number(raw.replace('drip_', '')) || 3 };
+  if (!raw || raw === 'once') return { mode: 'once' };
+  if (raw === 'drip' || raw.startsWith('drip_')) {
+    const days = raw.startsWith('drip_')
+      ? Number(raw.replace('drip_', '')) || 3
+      : Number(answers.scheduleDays) || 3;
+    const slotsPerDay = Number(answers.scheduleSlotsPerDay) || 1;
+    return {
+      mode: 'drip',
+      days: Math.min(30, Math.max(1, days)),
+      slotsPerDay: Math.min(5, Math.max(1, slotsPerDay)),
+    };
+  }
   if (raw.startsWith('recurring_')) return { mode: 'recurring', days: Number(raw.replace('recurring_', '')) || 7 };
   return { mode: raw || 'once' };
 };
 
+const WIZARD_ASSISTANT_TYPES = new Set([
+  'ask_campaign_details',
+  'ask_sender_account',
+  'email_setup_guide',
+  'zalo_qr_login',
+  'zalo_group_picker',
+]);
+
+const stripWizardCards = (items = []) => {
+  const next = [...items];
+  while (next.length > 0) {
+    const last = next[next.length - 1];
+    if (last?.role === 'assistant' && WIZARD_ASSISTANT_TYPES.has(last.type)) {
+      next.pop();
+      continue;
+    }
+    break;
+  }
+  return next;
+};
+
+const isSilentWizardUserMessage = (message) => (
+  message?.role === 'user' && (message?.silent || Boolean(parseWizardMarker(message?.content)))
+);
+
+const appendWizardAssistantMessage = (items, message) => (
+  [...stripWizardCards(items), message]
+);
+
 const buildWizardMarkerText = (payload, readableText) => `[wizard]${JSON.stringify(payload)}\n${readableText}`;
+
+const WIZARD_CHANNEL_LABELS = {
+  email: { vi: 'Email', en: 'Email' },
+  zalo: { vi: 'Zalo cá nhân', en: 'Zalo personal' },
+  zalo_group: { vi: 'Zalo nhóm', en: 'Zalo groups' },
+};
+
+const WIZARD_DATA_SOURCE_LABELS = {
+  landing: { vi: 'Đăng ký từ Landing Page', en: 'Landing page sign-ups' },
+  sheet: { vi: 'File Excel / Google Sheet', en: 'Excel / Google Sheet' },
+  db: { vi: 'Danh sách khách hàng', en: 'Saved customer list' },
+};
+
+const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
+  const marker = parseWizardMarker(content);
+  if (!marker) return content;
+
+  const lang = locale === 'en' ? 'en' : 'vi';
+  const channelKey = normalizeChannel(marker.channel || marker.value) || marker.channel || marker.value;
+  const channelLabel = WIZARD_CHANNEL_LABELS[channelKey]?.[lang] || channelKey || '';
+
+  switch (marker.gate) {
+    case 'channel':
+      return t('aiChatbot.wizardDisplayPickedChannel', { channel: channelLabel })
+        || `Đã chọn kênh ${channelLabel}.`;
+    case 'senderAccount':
+      if (marker.other) {
+        return marker.channel === 'email'
+          ? (t('aiChatbot.wizardDisplayOtherEmail') || 'Tôi muốn thêm email sender khác.')
+          : (t('aiChatbot.wizardDisplayOtherZalo') || 'Tôi muốn kết nối tài khoản Zalo khác.');
+      }
+      {
+        const name = marker.accountName || `#${marker.accountId}`;
+        if (marker.viaQr) {
+          return t('aiChatbot.wizardDisplayLoggedInZalo', { name })
+            || `Đã đăng nhập bằng tài khoản Zalo «${name}».`;
+        }
+        if (marker.channel === 'email') {
+          return t('aiChatbot.wizardDisplayPickedEmailSender', { name })
+            || `Đã chọn email sender «${name}».`;
+        }
+        return t('aiChatbot.wizardDisplayPickedZaloAccount', { name })
+          || `Đã chọn tài khoản Zalo «${name}».`;
+      }
+    case 'dataSource': {
+      const sourceKey = marker.value || marker.dataSource;
+      const sourceLabel = WIZARD_DATA_SOURCE_LABELS[sourceKey]?.[lang] || sourceKey;
+      return t('aiChatbot.wizardDisplayPickedDataSource', { source: sourceLabel })
+        || `Đã chọn nguồn khách: ${sourceLabel}.`;
+    }
+    case 'schedule': {
+      const mode = marker.mode || marker.value || 'once';
+      const days = Number(marker.days);
+      const slotsPerDay = Number(marker.slotsPerDay) || 1;
+      if (mode === 'drip' && days > 0) {
+        if (slotsPerDay > 1) {
+          return t('aiChatbot.wizardDisplayPickedDripScheduleDetail', { days, slots: slotsPerDay })
+            || `Đã chọn chuỗi ${days} ngày, mỗi ngày ${slotsPerDay} tin.`;
+        }
+        return t('aiChatbot.wizardDisplayPickedDripSchedule', { days })
+          || `Đã chọn chuỗi gửi ${days} ngày.`;
+      }
+      return t('aiChatbot.wizardDisplayPickedOnceSchedule')
+        || 'Đã chọn gửi một lần.';
+    }
+    case 'zaloGroups':
+      return t('aiChatbot.wizardDisplayPickedGroups', { count: marker.groupIds?.length || 0 })
+        || `Đã chọn ${marker.groupIds?.length || 0} nhóm Zalo.`;
+    case 'planApproved':
+      return t('aiChatbot.wizardDisplayPlanApproved') || 'Đã đồng ý với kế hoạch này.';
+    default: {
+      const readable = String(content).split('\n').slice(1).join('\n').trim();
+      return readable || content;
+    }
+  }
+};
 
 const deriveWizardContext = (items = []) => {
   const context = {
@@ -92,7 +208,11 @@ const deriveWizardContext = (items = []) => {
       context.senderAccountId = marker.accountId ?? context.senderAccountId;
       context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
     } else if (marker.gate === 'schedule') {
-      context.schedule = { mode: marker.mode || marker.value || 'once', days: marker.days };
+      context.schedule = {
+        mode: marker.mode || marker.value || 'once',
+        days: marker.days,
+        slotsPerDay: marker.slotsPerDay ? Number(marker.slotsPerDay) : 1,
+      };
     } else if (marker.gate === 'planApproved') {
       context.planApproved = true;
     }
@@ -924,7 +1044,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const update = makeUpdater(mySessionId, [...messages]);
     if (mySessionId) markTabPending(mySessionId);
 
-    const userMsg = { role: 'user', content: trimmedInput, files: [...messageFiles] };
+    const userMsg = {
+      role: 'user',
+      content: trimmedInput,
+      files: [...messageFiles],
+      silent: Boolean(parseWizardMarker(trimmedInput)),
+    };
     const newHistory = [...messages, userMsg];
     update(newHistory);
     setIsTyping(true);
@@ -946,7 +1071,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type === 'ask_campaign_details' && data) {
           setPendingCampaignPrompt(trimmedInput);
           setPendingCampaignData(data);
-          update(prev => [...prev, { role: 'assistant', content, type, data }]);
+          update(prev => appendWizardAssistantMessage(prev, { role: 'assistant', content, type, data }));
           return;
         }
 
@@ -973,7 +1098,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (['ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker'].includes(type)) {
           setPendingCampaignPrompt(null);
           setPendingCampaignData(null);
-          update(prev => [...prev, { role: 'assistant', content, type, data: data || {} }]);
+          update(prev => appendWizardAssistantMessage(prev, { role: 'assistant', content, type, data: data || {} }));
           return;
         }
 
@@ -1021,9 +1146,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             type: 'content_plan_actions',
             data: { firstDay: normalizedPlan.days[0]?.day || null },
             content: data.requiresApproval === false
-              ? 'Bạn muốn bắt đầu tạo nháp Ngày 1?'
-              : 'Nếu kế hoạch ổn, bấm Đồng ý để mình tạo template Ngày 1.',
+              ? (t('aiChatbot.planStartDayHint') || 'Bạn muốn bắt đầu tạo nháp Ngày 1?')
+              : (t('aiChatbot.planApprovalHint') || 'Xem kế hoạch bên trên. Nếu ổn bấm Đồng ý; nếu cần sửa bấm Chỉnh lại kế hoạch.'),
           }]);
+          return;
+        }
+
+        if (type === 'suggest_content_plan' && data) {
+          setPendingCampaignPrompt(null);
+          setPendingCampaignData(null);
+          update(prev => appendWizardAssistantMessage(prev, { role: 'assistant', content, type, data }));
           return;
         }
 
@@ -1095,7 +1227,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     await sendChatMessage(buildWizardMarkerText(payload, readableText));
   };
 
-  const handleWizardSenderSelect = async (account, channel = null) => {
+  const handleWizardSenderSelect = async (account, channel = null, options = {}) => {
+    const { viaQr = false } = options;
     const selectedChannel = channel || wizardContext.channel || 'zalo';
     await emitWizardAnswer(
       {
@@ -1103,6 +1236,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         channel: selectedChannel,
         accountId: account.id,
         accountName: account.name || account.displayName || account.email || `#${account.id}`,
+        ...(viaQr ? { viaQr: true } : {}),
       },
       selectedChannel === 'email'
         ? `Tôi chọn email sender "${account.name || account.email || account.id}".`
@@ -1120,12 +1254,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       await sendChatMessage(marker);
       return;
     }
-    setMessages((prev) => [...prev, { role: 'user', content: marker }, {
-      role: 'assistant',
-      type: 'zalo_qr_login',
-      content: t('aiChatbot.wizardZaloQrPrompt') || 'Quét QR để kết nối tài khoản Zalo rồi mình sẽ tiếp tục.',
-      data: { channel: selectedChannel },
-    }]);
+    setMessages((prev) => [
+      ...stripWizardCards(prev),
+      { role: 'user', content: marker, silent: true },
+      {
+        role: 'assistant',
+        type: 'zalo_qr_login',
+        content: t('aiChatbot.wizardZaloQrPrompt') || 'Quét QR để kết nối tài khoản Zalo rồi mình sẽ tiếp tục.',
+        data: { channel: selectedChannel },
+      },
+    ]);
   };
 
   const handleWizardGroupsSubmit = async (groupIds, groups = []) => {
@@ -1434,14 +1572,31 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  const handleWizardPlanApproved = async () => {
+  const handleApproveContentPlan = async () => {
     if (!contentPlanWorkflow?.plan) return;
     const day = Number(contentPlanWorkflow.pendingDay || contentPlanWorkflow.plan.days?.[0]?.day);
     const dayItem = contentPlanWorkflow.plan.days?.find((item) => Number(item.day) === day);
     if (!dayItem) return;
     const marker = buildWizardMarkerText({ gate: 'planApproved', value: true }, 'Đồng ý với kế hoạch này.');
-    setMessages((prev) => [...prev, { role: 'user', content: marker }]);
+    setMessages((prev) => [...prev, { role: 'user', content: marker, silent: true }]);
+    setContentPlanWorkflow((prev) => (prev ? { ...prev, planApproved: true } : prev));
     await handleGenerateDayTemplate(dayItem);
+  };
+
+  const handleReviseContentPlan = async (feedback) => {
+    const trimmed = String(feedback || '').trim();
+    if (!trimmed) return;
+    const basePrompt = contentPlanWorkflow?.sourcePrompt || '';
+    setContentPlanWorkflow(null);
+    setMessages((prev) => prev.filter((msg) => !['content_plan', 'content_plan_actions'].includes(msg.type)));
+    const revisionPrompt = basePrompt
+      ? `${basePrompt}\n\nGóp ý chỉnh kế hoạch: ${trimmed}`
+      : `Hãy chỉnh lại content_plan theo góp ý: ${trimmed}`;
+    await requestContentPlan(revisionPrompt);
+  };
+
+  const handleWizardPlanApproved = async () => {
+    await handleApproveContentPlan();
   };
 
   const handleGenerateAllPlanTemplates = async () => {
@@ -1531,9 +1686,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         return;
       }
       if (wizardQuestion.wizardGate === 'schedule') {
-        const schedule = parseScheduleValue(answers.schedule);
+        const schedule = parseScheduleValue(answers.schedule, answers);
         await emitWizardAnswer(
-          { gate: 'schedule', value: schedule.mode, mode: schedule.mode, days: schedule.days },
+          {
+            gate: 'schedule',
+            value: schedule.mode,
+            mode: schedule.mode,
+            days: schedule.days,
+            slotsPerDay: schedule.slotsPerDay,
+          },
           summaryText
         );
         return;
@@ -2242,7 +2403,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       {/* Messages */}
       <div className={`flex-1 overflow-y-auto space-y-5 chat-messages-scroll ${isFullscreen ? 'px-4 py-6' : 'p-5'}`}>
         <div className={isFullscreen ? 'max-w-3xl mx-auto w-full space-y-5' : 'space-y-5'}>
-        {messages.map((msg, idx) => (
+        {messages.map((msg, idx) => {
+          if (isSilentWizardUserMessage(msg)) return null;
+          return (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[92%] min-w-0 break-words ${msg.role === 'user' ? 'bg-slate-100 rounded-2xl px-4 py-3' : ''}`}>
               {msg.role === 'assistant' && (
@@ -2253,7 +2416,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI</span>
                 </div>
               )}
-              <AiContent text={msg.content} />
+              <AiContent text={msg.role === 'user' ? formatUserMessageForDisplay(msg.content, t, locale) : msg.content} />
 
               {/* Files */}
               {msg.files?.length > 0 && (
@@ -2315,7 +2478,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'zalo_qr_login' && (
                 <ZaloQrLoginCard
                   channel={msg.data?.channel || wizardContext.channel || 'zalo'}
-                  onConnected={(account, channel) => handleWizardSenderSelect(account, channel)}
+                  onConnected={(account, channel) => handleWizardSenderSelect(account, channel, { viaQr: true })}
                   t={t}
                 />
               )}
@@ -2404,29 +2567,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
 
               {msg.type === 'content_plan_actions' && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const day = Number(msg.data?.firstDay || contentPlanWorkflow?.pendingDay);
-                      if (!day) return;
-                      const dayItem = contentPlanWorkflow?.plan?.days?.find((d) => Number(d.day) === day);
-                      if (dayItem) handleGenerateDayTemplate(dayItem);
-                    }}
-                    disabled={generatingDay !== null || Boolean(contentPlanWorkflow?.isGeneratingAll)}
-                    className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Bắt đầu tạo Ngày 1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleGenerateAllPlanTemplates}
-                    disabled={generatingDay !== null || Boolean(contentPlanWorkflow?.isGeneratingAll)}
-                    className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {contentPlanWorkflow?.isGeneratingAll ? 'Đang tạo tất cả...' : 'Tạo 1 lúc tất cả các ngày'}
-                  </button>
-                </div>
+                <ContentPlanActionsCard
+                  data={msg.data}
+                  workflow={contentPlanWorkflow}
+                  onApprove={handleApproveContentPlan}
+                  onRevise={handleReviseContentPlan}
+                  onGenerateAll={handleGenerateAllPlanTemplates}
+                  t={t}
+                />
               )}
 
               {msg.type === 'confirm_next_day' && (
@@ -2499,7 +2647,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {isTyping && (
           <div className="flex justify-start">
