@@ -3,6 +3,13 @@ import { useI18n } from '../../i18n';
 import ConfirmModal from './ConfirmModal';
 import { getMessagePreviewText } from './utils/normalizeMessageContent';
 
+const isPlaceholderGroupName = (name) => {
+  const value = String(name || '').trim();
+  if (!value || value === 'Nhóm') return true;
+  if (value.startsWith('Nhóm group_')) return true;
+  return /^Nhóm \d+$/.test(value);
+};
+
 const CHANNEL_LABELS = (t) => ({
   web: { label: t('inbox.webChat'), icon: '💬', bg: 'bg-blue-500', text: 'text-blue-500' },
   zalo_oa: { label: t('inbox.zaloOA'), icon: '📱', bg: 'bg-red-500', text: 'text-red-500' },
@@ -28,10 +35,10 @@ const getDisplayName = (conv) => {
   
   if (visitorInfo.is_group) {
     const groupName = visitorInfo.group_name || visitorInfo.groupName || conv.groupName || conv.group_name;
-    if (groupName && groupName !== 'Nhóm') {
+    if (groupName && !isPlaceholderGroupName(groupName)) {
       return groupName;
     }
-    if (conv.visitorName && !String(conv.visitorName).startsWith('Nhóm ')) {
+    if (conv.visitorName && !isPlaceholderGroupName(conv.visitorName)) {
       return conv.visitorName;
     }
     const groupId = visitorInfo.group_id || visitorInfo.groupId || '';

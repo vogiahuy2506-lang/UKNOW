@@ -25,6 +25,12 @@ import {
   markAccountRegistered,
   isAccountRegistered
 } from '../zalo/zaloAccountRegistry.service.js';
+import {
+  buildPlaceholderGroupName,
+  extractGroupNameFromApiResult,
+  isPlaceholderGroupName,
+  normalizeZaloGroupId,
+} from '../../utils/zaloGroupName.util.js';
 
 class ZaloPersonalInboxService {
   constructor() {
@@ -48,9 +54,18 @@ class ZaloPersonalInboxService {
    * Lấy tên nhóm từ Zalo API (có cache)
    */
   async getGroupName(accountId, groupId) {
-    const cacheKey = `group_${accountId}_${groupId}`;
+    const { bare, raw } = normalizeZaloGroupId(groupId);
+    if (!bare) return null;
+
+    const cacheKey = `group_${accountId}_${bare}`;
     if (this._groupNameCache.has(cacheKey)) {
       return this._groupNameCache.get(cacheKey);
+    }
+
+    const dbName = await zaloInboxRepository.findGroupNameById(accountId, bare);
+    if (dbName && !isPlaceholderGroupName(dbName, bare)) {
+      this._groupNameCache.set(cacheKey, dbName);
+      return dbName;
     }
 
     const api = zaloAccountSessionService.getAccountApi(accountId);
@@ -59,50 +74,24 @@ class ZaloPersonalInboxService {
       return null;
     }
 
-    try {
-      console.log(`[ZaloInbox] getGroupName: Calling API for group ${groupId}`);
-      const result = await api.getGroupInfo(groupId);
-      console.log(`[ZaloInbox] getGroupName result:`, JSON.stringify(result)?.substring(0, 200));
-      
-      // Try different response formats
-      let groupName = null;
-      
-      // Format 1: { gridInfoMap: { [groupId]: { name: "..." } } } - ACTUAL FORMAT FROM API
-      if (result?.gridInfoMap?.[groupId]?.name) {
-        groupName = result.gridInfoMap[groupId].name;
+    const apiIds = [...new Set([bare, raw].filter(Boolean))];
+    for (const apiId of apiIds) {
+      try {
+        console.log(`[ZaloInbox] getGroupName: Calling API for group ${apiId}`);
+        const result = await api.getGroupInfo(apiId);
+        const groupName = extractGroupNameFromApiResult(result, apiId);
+        if (groupName && !isPlaceholderGroupName(groupName, apiId)) {
+          this._groupNameCache.set(cacheKey, groupName);
+          console.log(`[ZaloInbox] getGroupName(${apiId}) = "${groupName}"`);
+          return groupName;
+        }
+        console.warn(`[ZaloInbox] getGroupName: No name found in result for ${apiId}`);
+      } catch (err) {
+        console.warn(`[ZaloInbox] getGroupName failed for ${apiId}:`, err.message);
       }
-      // Format 2: { gridInfoMap: { [groupId]: { groupName: "..." } } }
-      else if (result?.gridInfoMap?.[groupId]?.groupName) {
-        groupName = result.gridInfoMap[groupId].groupName;
-      }
-      // Format 3: { groupName: "..." }
-      else if (result?.groupName) {
-        groupName = result.groupName;
-      }
-      // Format 4: { name: "..." }
-      else if (result?.name) {
-        groupName = result.name;
-      }
-      // Format 5: { data: { groupName: "..." } }
-      else if (result?.data?.groupName) {
-        groupName = result.data.groupName;
-      }
-      // Format 6: { data: { name: "..." } }
-      else if (result?.data?.name) {
-        groupName = result.data.name;
-      }
-
-      if (groupName) {
-        this._groupNameCache.set(cacheKey, groupName);
-        console.log(`[ZaloInbox] getGroupName(${groupId}) = "${groupName}"`);
-      } else {
-        console.warn(`[ZaloInbox] getGroupName: No name found in result for ${groupId}`);
-      }
-      return groupName;
-    } catch (err) {
-      console.warn(`[ZaloInbox] getGroupName failed for ${groupId}:`, err.message);
-      return null;
     }
+
+    return null;
   }
 
   /**
@@ -422,9 +411,7 @@ class ZaloPersonalInboxService {
         if (resolvedGroupName || groupName) {
           displayName = resolvedGroupName || groupName;
         } else {
-          // Format: "Nhóm" + last 8 chars of group ID
-          const shortId = (groupId || '').replace('group_', '').slice(-8);
-          displayName = `Nhóm ${shortId}`;
+          displayName = buildPlaceholderGroupName(groupId);
         }
       } else {
         displayName = resolvedSenderName || senderName || `User ${senderId}`;
@@ -615,7 +602,7 @@ class ZaloPersonalInboxService {
       let newName = null;
       if (isExistingGroup) {
         // For groups: update if current name is just "Nhóm X" (not real name) and we have resolved name
-        if (visitorName && conv.visitor_name !== visitorName && conv.visitor_name?.startsWith('Nhóm ')) {
+        if (visitorName && conv.visitor_name !== visitorName && isPlaceholderGroupName(conv.visitor_name, visitorInfo?.group_id || conv.external_id)) {
           newName = visitorName;
           console.log(`[ZaloInbox] Updating group conversation name: ${conv.visitor_name} -> ${visitorName}`);
         }
@@ -679,10 +666,8 @@ class ZaloPersonalInboxService {
             displayName = groupName;
             updatedVisitorInfo.group_name = groupName;
           } else {
-            // Fallback: use "Nhóm" + short ID
-            const shortId = (groupId || '').replace('group_', '').slice(-8);
-            displayName = `Nhóm ${shortId}`;
-            updatedVisitorInfo.group_name = displayName;
+            displayName = buildPlaceholderGroupName(groupId);
+            updatedVisitorInfo.group_name = null;
           }
         } else {
           // For personal, use getUserProfile
