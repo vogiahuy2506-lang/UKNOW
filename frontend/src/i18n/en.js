@@ -2609,6 +2609,8 @@ export default {
     wizardSenderTitle: 'Sender account',
     wizardNoEmailSender: 'No active email sender yet.',
     wizardNoZaloAccount: 'No connected Zalo account yet.',
+    wizardZaloAllDisconnected: 'All Zalo accounts are disconnected. Scan the QR code to reconnect.',
+    wizardZaloReconnectQr: 'Reconnect with QR',
     wizardOtherAccount: 'Other',
     wizardEmailSetupTitle: 'Email setup',
     wizardOpenSettings: 'Open Settings',

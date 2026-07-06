@@ -71,6 +71,41 @@ describe('aiCampaignWizard.service', () => {
     expect(gate.response.type).toBe('ask_campaign_details');
   });
 
+  it('shows Zalo QR reconnect when all accounts are disconnected', () => {
+    const state = extractWizardState([
+      { role: 'user', content: 'Tạo chiến dịch Zalo cá nhân chăm sóc lead landing page' },
+    ]);
+
+    const gate = evaluateNextGate(state, {
+      zaloAccounts: [
+        { id: 1, displayName: 'SIM1', status: 'disconnected', isActive: true },
+        { id: 2, displayName: 'Account 2', status: 'disconnected', isActive: true },
+      ],
+    });
+
+    expect(gate.gate).toBe('senderAccount');
+    expect(gate.response.type).toBe('zalo_qr_login');
+    expect(gate.response.content).toMatch(/mất kết nối|disconnected/i);
+  });
+
+  it('still asks sender picker when at least one Zalo account is connected', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+    ]);
+
+    const gate = evaluateNextGate(state, {
+      zaloAccounts: [
+        { id: 1, displayName: 'Offline', status: 'disconnected', isActive: true },
+        { id: 2, displayName: 'Online', status: 'connected', isActive: true },
+      ],
+    });
+
+    expect(gate.gate).toBe('senderAccount');
+    expect(gate.response.type).toBe('ask_sender_account');
+    expect(gate.response.data.accounts).toHaveLength(2);
+    expect(gate.response.data.accounts.filter((account) => account.usable)).toHaveLength(1);
+  });
+
   it('re-asks schedule when free-text infers recurring (not yet supported)', () => {
     const state = extractWizardState([
       { role: 'user', content: 'Tạo chiến dịch email gửi mỗi 7 ngày cho khách trong DB' },

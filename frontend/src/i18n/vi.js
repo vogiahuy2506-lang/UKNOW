@@ -2669,6 +2669,8 @@ export default {
     wizardSenderTitle: 'Tài khoản gửi',
     wizardNoEmailSender: 'Chưa có email sender active.',
     wizardNoZaloAccount: 'Chưa có tài khoản Zalo connected.',
+    wizardZaloAllDisconnected: 'Tất cả tài khoản Zalo đang mất kết nối. Bạn quét mã QR để kết nối lại nhé.',
+    wizardZaloReconnectQr: 'Kết nối lại bằng QR',
     wizardOtherAccount: 'Khác',
     wizardEmailSetupTitle: 'Thiết lập email',
     wizardOpenSettings: 'Mở Settings',

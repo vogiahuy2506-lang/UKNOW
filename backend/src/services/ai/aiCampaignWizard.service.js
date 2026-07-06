@@ -20,8 +20,14 @@ export const normalizeChannel = (value = '') => {
   return ['email', 'zalo'].includes(raw) ? raw : null;
 };
 
-const isUsableZaloAccount = (account) => (
+export const isUsableZaloAccount = (account) => (
   account?.status === 'connected' && account?.isActive !== false && account?.is_active !== false
+);
+
+const isZaloChannel = (channel) => channel === 'zalo' || channel === 'zalo_group';
+
+const countUsableZaloAccounts = (accounts = []) => (
+  (Array.isArray(accounts) ? accounts : []).filter(isUsableZaloAccount).length
 );
 
 const parseWizardMarker = (content = '') => {
@@ -283,6 +289,22 @@ export function buildSenderAccountQuestion(channel, resources = {}, locale = 'vi
   };
 }
 
+export function buildZaloReconnectGuide(channel = 'zalo', locale = 'vi', { hasDisconnectedAccounts = false } = {}) {
+  const isEnglish = locale === 'en';
+  return {
+    type: 'zalo_qr_login',
+    content: hasDisconnectedAccounts
+      ? (isEnglish
+        ? 'All Zalo accounts are disconnected. Scan the QR code below on your phone to reconnect, then we will continue.'
+        : 'Tất cả tài khoản Zalo đang mất kết nối. Bạn quét mã QR bên dưới bằng điện thoại để kết nối lại, sau đó mình sẽ tiếp tục nhé.')
+      : (isEnglish
+        ? 'Scan the QR code below to connect a Zalo account, then we will continue.'
+        : 'Bạn quét mã QR bên dưới để kết nối tài khoản Zalo, rồi mình sẽ tiếp tục nhé.'),
+    missing_fields: [],
+    data: { channel },
+  };
+}
+
 export function buildEmailSetupGuide(locale = 'vi') {
   const isEnglish = locale === 'en';
   return {
@@ -330,10 +352,25 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     if (state.channel === 'email' && accounts.length === 0) {
       return { gate: 'senderAccount', response: buildEmailSetupGuide(locale) };
     }
+    if (isZaloChannel(state.channel)) {
+      const usableZaloCount = countUsableZaloAccounts(accounts);
+      if (state.senderOtherRequested || accounts.length === 0 || usableZaloCount === 0) {
+        return {
+          gate: 'senderAccount',
+          response: buildZaloReconnectGuide(state.channel, locale, { hasDisconnectedAccounts: accounts.length > 0 }),
+        };
+      }
+    }
     return { gate: 'senderAccount', response: buildSenderAccountQuestion(state.channel, resources, locale) };
   }
 
   if (!selectedUsable) {
+    if (isZaloChannel(state.channel)) {
+      return {
+        gate: 'senderAccount',
+        response: buildZaloReconnectGuide(state.channel, locale, { hasDisconnectedAccounts: true }),
+      };
+    }
     return { gate: 'senderAccount', response: buildSenderAccountQuestion(state.channel, resources, locale) };
   }
 

@@ -32,6 +32,7 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
   const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
   const channel = data?.channel || 'zalo';
   const isEmail = channel === 'email';
+  const noUsableAccount = Boolean(data?.noUsableAccount);
 
   return (
     <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
@@ -41,6 +42,12 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
           {t('aiChatbot.wizardSenderTitle') || 'Tài khoản gửi'}
         </span>
       </div>
+
+      {!isEmail && noUsableAccount && accounts.length > 0 && (
+        <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {t('aiChatbot.wizardZaloAllDisconnected') || 'Tất cả tài khoản Zalo đang mất kết nối. Bạn quét mã QR để kết nối lại nhé.'}
+        </p>
+      )}
 
       <div className="space-y-2">
         {accounts.map((account) => {
@@ -81,9 +88,15 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
       <button
         type="button"
         onClick={onOther}
-        className="mt-3 w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-black text-orange-700 transition-all hover:bg-orange-100"
+        className={`mt-3 w-full rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+          !isEmail && noUsableAccount
+            ? 'border-blue-300 bg-blue-600 text-white hover:bg-blue-700'
+            : 'border-orange-200 bg-white text-orange-700 hover:bg-orange-100'
+        }`}
       >
-        {t('aiChatbot.wizardOtherAccount') || 'Khác'}
+        {!isEmail && noUsableAccount
+          ? (t('aiChatbot.wizardZaloReconnectQr') || 'Kết nối lại bằng QR')
+          : (t('aiChatbot.wizardOtherAccount') || 'Khác')}
       </button>
     </div>
   );

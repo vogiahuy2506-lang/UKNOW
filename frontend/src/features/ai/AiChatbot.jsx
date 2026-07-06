@@ -462,7 +462,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
@@ -970,10 +970,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        if (['ask_sender_account', 'email_setup_guide', 'zalo_group_picker'].includes(type) && data) {
+        if (['ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker'].includes(type)) {
           setPendingCampaignPrompt(null);
           setPendingCampaignData(null);
-          update(prev => [...prev, { role: 'assistant', content, type, data }]);
+          update(prev => [...prev, { role: 'assistant', content, type, data: data || {} }]);
           return;
         }
 
