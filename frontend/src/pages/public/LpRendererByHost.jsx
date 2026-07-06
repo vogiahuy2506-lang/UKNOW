@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchPublishedLandingByHost } from '../../features/landing-pages/services/landingPagePublicApi.service.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
+import { ensureTailwindCdnAndViewport } from './LpRendererPage.jsx';
 
 /**
  * Khi mở SPA trên hostname custom (www.*) — tải HTML theo `Host`, không dùng route `/lp/:slug`.
@@ -68,7 +69,7 @@ export default function LpRendererByHost() {
       title={title || slug || host}
       className="w-full min-h-screen border-0 block"
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-      srcDoc={html}
+      srcDoc={ensureTailwindCdnAndViewport(html)}
     />
   );
 }
