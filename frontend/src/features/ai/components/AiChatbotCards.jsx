@@ -346,7 +346,7 @@ export const ContentPlanActionsCard = ({
           type="button"
           onClick={() => setReviseOpen((open) => !open)}
           disabled={busy}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {t('aiChatbot.planReviseButton') || 'Chỉnh lại kế hoạch'}
         </button>
@@ -361,6 +361,12 @@ export const ContentPlanActionsCard = ({
             : (t('aiChatbot.planGenerateAllDays') || 'Tạo 1 lúc tất cả các ngày')}
         </button>
       </div>
+
+      {!reviseOpen && (
+        <p className="text-[11px] text-slate-500">
+          {t('aiChatbot.planReviseTeaser') || 'Kế hoạch chưa ổn? Bấm «Chỉnh lại kế hoạch» để ghi góp ý.'}
+        </p>
+      )}
 
       {reviseOpen && (
         <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -500,6 +506,25 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
     return next;
   });
 
+  const scheduleQuestion = data.questions.find((q) => isScheduleQuestion(q));
+  const dripDays = Number(answers.scheduleDays);
+  const dripSlotsPerDay = Number(answers.scheduleSlotsPerDay);
+  const isDripSchedule = scheduleQuestion && answers[scheduleQuestion.id] === 'drip';
+
+  const submitLabel = (() => {
+    if (!allAnswered) return t('aiChatbot.selectAllAbove');
+    if (isDripSchedule && dripDays >= 1 && dripSlotsPerDay >= 1) {
+      return t('aiChatbot.wizardScheduleContinueDrip', {
+        days: dripDays,
+        slots: dripSlotsPerDay,
+      }) || `Tiếp tục — ${dripDays} ngày, ${dripSlotsPerDay} tin/ngày`;
+    }
+    if (scheduleQuestion && answers[scheduleQuestion.id] === 'once') {
+      return t('aiChatbot.wizardScheduleContinueOnce') || 'Tiếp tục — Gửi một lần';
+    }
+    return t('aiChatbot.createCampaignWithOptions');
+  })();
+
   const handleSubmit = () => {
     if (!allAnswered) return;
     const lines = data.questions.map((q) => {
@@ -561,7 +586,11 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
             ))}
           </div>
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
-            <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
+              <p className="mb-2 text-xs font-semibold text-orange-800">
+                {t('aiChatbot.wizardScheduleDripHint') || 'Chọn số ngày và số tin mỗi ngày cho chuỗi gửi:'}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="mb-1 block text-[11px] font-semibold text-slate-600">
                   {t('aiChatbot.wizardScheduleDays') || 'Số ngày'}
@@ -588,6 +617,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
                 />
               </label>
+              </div>
             </div>
           )}
         </div>
@@ -631,7 +661,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         disabled={!allAnswered}
         className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-orange-500 hover:bg-orange-600 text-white"
       >
-        {allAnswered ? '✓ ' + t('aiChatbot.createCampaignWithOptions') : t('aiChatbot.selectAllAbove')}
+        {allAnswered ? `✓ ${submitLabel}` : submitLabel}
       </button>
     </div>
   );

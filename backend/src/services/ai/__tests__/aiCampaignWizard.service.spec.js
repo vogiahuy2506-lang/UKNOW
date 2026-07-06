@@ -58,6 +58,33 @@ describe('aiCampaignWizard.service', () => {
     });
   });
 
+  it('re-asks schedule when drip is missing day count', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nSales' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+      { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip"}\nLịch gửi Chuỗi nhiều ngày' },
+    ]);
+
+    const gate = evaluateNextGate(state, {});
+
+    expect(gate.gate).toBe('schedule');
+    expect(gate.response.data.questions[0].options.map((opt) => opt.value)).toEqual(['once', 'drip']);
+  });
+
+  it('accepts drip schedule when day count is provided', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nSales' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+      { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":5,"slotsPerDay":2}\nLịch gửi: 5 ngày, mỗi ngày 2 tin' },
+    ]);
+
+    const gate = evaluateNextGate(state, {});
+
+    expect(gate).toBeNull();
+  });
+
   it('asks schedule after datasource for personal channels', () => {
     const state = extractWizardState([
       { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },

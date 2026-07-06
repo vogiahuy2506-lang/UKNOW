@@ -171,7 +171,7 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
       return t('aiChatbot.wizardDisplayPlanApproved') || 'Đã đồng ý với kế hoạch này.';
     default: {
       const readable = String(content).split('\n').slice(1).join('\n').trim();
-      return readable || content;
+      return readable || '';
     }
   }
 };
@@ -582,11 +582,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
           return { role: m.role, content: m.content, type: m.type, data: m.data };
+        }
+        if (m.role === 'user' && parseWizardMarker(m.content)) {
+          return { role: m.role, content: m.content, silent: true };
         }
         return { role: m.role, content: m.content };
       });
@@ -612,6 +615,34 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null);
         setContentPlanWorkflow(null);
+      } else if (['content_plan', 'content_plan_actions'].includes(lastAssistant?.type)) {
+        const contentPlanMsg = [...dbMessages].reverse().find((m) => m.type === 'content_plan' && m.data);
+        if (contentPlanMsg?.data) {
+          const normalizedPlan = normalizeContentPlanData(contentPlanMsg.data);
+          setContentPlanWorkflow({
+            sourcePrompt: lastUserMsg?.content || '',
+            plan: normalizedPlan,
+            pendingDay: normalizedPlan.days[0]?.day || null,
+            completedDays: [],
+            savedTemplates: [],
+            draftTemplates: [],
+            savedCountByDay: {},
+            generatingDay: null,
+            failedDay: null,
+            awaitingDayConfirm: true,
+            awaitingCampaignConfirm: false,
+            isCreatingCampaign: false,
+            isGeneratingAll: false,
+            allDraftsRequested: false,
+            requiresApproval: contentPlanMsg.data.requiresApproval !== false,
+            planApproved: false,
+            status: 'waiting_day_confirm',
+          });
+        } else {
+          setContentPlanWorkflow(null);
+        }
+        setPendingCampaignPrompt(null); setPendingCampaignData(null);
+        setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
       } else {
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
@@ -1019,7 +1050,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     await handleGenerateDayTemplate(dayItem);
   };
 
-  const sendChatMessage = async (trimmedInput, messageFiles = []) => {
+  const sendChatMessage = async (trimmedInput, messageFiles = [], options = {}) => {
+    const { silentUser = false } = options;
     if (isSendingRef.current) return;
     if (aiBillingBlock) {
       notifyAiRequestError({
@@ -1044,13 +1076,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const update = makeUpdater(mySessionId, [...messages]);
     if (mySessionId) markTabPending(mySessionId);
 
+    const wizardMarker = parseWizardMarker(trimmedInput);
     const userMsg = {
       role: 'user',
       content: trimmedInput,
       files: [...messageFiles],
-      silent: Boolean(parseWizardMarker(trimmedInput)),
+      silent: silentUser || Boolean(wizardMarker),
     };
-    const newHistory = [...messages, userMsg];
+    const newHistory = [...(wizardMarker ? stripWizardCards(messages) : messages), userMsg];
     update(newHistory);
     setIsTyping(true);
 
@@ -1281,7 +1314,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const text = locale === 'en'
       ? `Return content_plan JSON only (day-by-day overview, no full message bodies) for: ${userPrompt}`
       : `Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: ${userPrompt}`;
-    await sendChatMessage(text);
+    await sendChatMessage(text, [], { silentUser: true });
   };
 
   const handleSend = async () => {
@@ -2041,6 +2074,24 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }]);
   };
 
+  const getLastContentPlanMessageIndex = () => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.type === 'content_plan') return i;
+    }
+    return -1;
+  };
+
+  const shouldShowContentPlanActions = (messageIndex) => {
+    if (getLastContentPlanMessageIndex() !== messageIndex) return false;
+    if (!contentPlanWorkflow) return false;
+    if (contentPlanWorkflow.requiresApproval === false) return false;
+    if (!contentPlanWorkflow.awaitingDayConfirm) return false;
+    if (contentPlanWorkflow.planApproved) return false;
+    if (contentPlanWorkflow.isGeneratingAll) return false;
+    if (generatingDay !== null) return false;
+    return contentPlanWorkflow.status === 'waiting_day_confirm';
+  };
+
   const isFullscreen = variant === 'fullscreen';
   const showHomeHero = isFullscreen
     && messages.length <= 1
@@ -2405,6 +2456,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         <div className={isFullscreen ? 'max-w-3xl mx-auto w-full space-y-5' : 'space-y-5'}>
         {messages.map((msg, idx) => {
           if (isSilentWizardUserMessage(msg)) return null;
+          const userDisplayText = msg.role === 'user'
+            ? formatUserMessageForDisplay(msg.content, t, locale)
+            : msg.content;
+          if (msg.role === 'user' && !String(userDisplayText || '').trim()) return null;
           return (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[92%] min-w-0 break-words ${msg.role === 'user' ? 'bg-slate-100 rounded-2xl px-4 py-3' : ''}`}>
@@ -2416,7 +2471,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI</span>
                 </div>
               )}
-              <AiContent text={msg.role === 'user' ? formatUserMessageForDisplay(msg.content, t, locale) : msg.content} />
+              <AiContent text={userDisplayText} />
 
               {/* Files */}
               {msg.files?.length > 0 && (
@@ -2543,11 +2598,28 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
               {/* Content plan overview */}
               {msg.type === 'content_plan' && msg.data && (
-                <ContentPlanCard
-                  data={msg.data}
-                  workflow={contentPlanWorkflow}
-                  t={t}
-                />
+                <>
+                  <ContentPlanCard
+                    data={msg.data}
+                    workflow={contentPlanWorkflow}
+                    t={t}
+                  />
+                  {shouldShowContentPlanActions(idx) && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="mb-3 text-xs leading-relaxed text-slate-600">
+                        {t('aiChatbot.planApprovalHint')}
+                      </p>
+                      <ContentPlanActionsCard
+                        data={{ firstDay: msg.data?.days?.[0]?.day || contentPlanWorkflow?.pendingDay }}
+                        workflow={contentPlanWorkflow}
+                        onApprove={handleApproveContentPlan}
+                        onRevise={handleReviseContentPlan}
+                        onGenerateAll={handleGenerateAllPlanTemplates}
+                        t={t}
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               {msg.type === 'suggest_content_plan' && msg.data?.userPrompt && (
@@ -2566,7 +2638,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 </div>
               )}
 
-              {msg.type === 'content_plan_actions' && (
+              {msg.type === 'content_plan_actions' && !shouldShowContentPlanActions(getLastContentPlanMessageIndex()) && (
                 <ContentPlanActionsCard
                   data={msg.data}
                   workflow={contentPlanWorkflow}

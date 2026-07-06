@@ -26,6 +26,20 @@ export const isUsableZaloAccount = (account) => (
 
 const isZaloChannel = (channel) => channel === 'zalo' || channel === 'zalo_group';
 
+const isValidDripSchedule = (schedule) => {
+  if (!schedule || schedule.mode !== 'drip') return true;
+  const days = Number(schedule.days);
+  const slotsPerDay = Number(schedule.slotsPerDay);
+  return Number.isFinite(days) && days >= 1 && days <= 30
+    && Number.isFinite(slotsPerDay) && slotsPerDay >= 1 && slotsPerDay <= 5;
+};
+
+const isValidWizardSchedule = (schedule) => (
+  Boolean(schedule)
+  && schedule.mode !== 'recurring'
+  && isValidDripSchedule(schedule)
+);
+
 const countUsableZaloAccounts = (accounts = []) => (
   (Array.isArray(accounts) ? accounts : []).filter(isUsableZaloAccount).length
 );
@@ -172,10 +186,13 @@ export function extractWizardState(history = []) {
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
       state.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
     } else if (marker.gate === 'schedule') {
+      const mode = marker.mode || marker.value || 'once';
       state.schedule = {
-        mode: marker.mode || marker.value || 'once',
-        days: marker.days ? Number(marker.days) : undefined,
-        slotsPerDay: marker.slotsPerDay ? Number(marker.slotsPerDay) : 1,
+        mode,
+        days: marker.days != null && marker.days !== '' ? Number(marker.days) : undefined,
+        slotsPerDay: marker.slotsPerDay != null && marker.slotsPerDay !== ''
+          ? Number(marker.slotsPerDay)
+          : undefined,
       };
     } else if (marker.gate === 'planApproved') {
       state.planApproved = true;
@@ -435,7 +452,7 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'dataSource', response: buildDataSourceQuestion(locale) };
   }
 
-  const hasValidSchedule = state.schedule && state.schedule.mode !== 'recurring';
+  const hasValidSchedule = isValidWizardSchedule(state.schedule);
   if (!hasValidSchedule) {
     const response = buildScheduleQuestion(locale);
     if (state.schedule?.mode === 'recurring') {
