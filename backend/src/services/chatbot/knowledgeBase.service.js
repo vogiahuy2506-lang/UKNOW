@@ -2,6 +2,7 @@ import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.reposit
 import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import uploadController from '../../controllers/upload.controller.js';
+import kbDocumentQueue from '../queue/kbDocumentQueue.service.js';
 
 const DEFAULT_CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
@@ -76,6 +77,8 @@ function chunkBySentence(text, chunkSize) {
 class KnowledgeBaseService {
   /**
    * Process a document: extract text → chunk → embed → store.
+   * This is the core processing logic used by both direct calls and queue workers.
+   *
    * @param {number} docId
    * @param {number} kbId
    * @param {number} userId
@@ -108,7 +111,7 @@ class KnowledgeBaseService {
 
       const chunks = this._buildChunks(text, options.chunkSize || DEFAULT_CHUNK_SIZE, options.chunkingMode);
 
-      // Embed all chunks
+      // Embed all chunks (uses cache for repeated chunks)
       let embeddings;
       try {
         embeddings = await embedTexts(chunks.map(c => c.text), {
@@ -137,7 +140,12 @@ class KnowledgeBaseService {
         content_text: text.slice(0, 10000),
       });
 
+      // Clear embedding cache for this user after document update
+      const { clearUserCache } = await import('../../utils/embeddingCache.util.js');
+      clearUserCache(userId);
+
       console.log(`[KB] Processed doc ${docId}: ${chunkCount} chunks stored`);
+      return { docId, chunkCount, status: 'ready' };
     } catch (err) {
       await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
         status: 'error',
@@ -145,6 +153,74 @@ class KnowledgeBaseService {
       });
       throw err;
     }
+  }
+
+  /**
+   * Enqueue document processing to queue (non-blocking).
+   * Falls back to direct processing if queue is not available.
+   *
+   * @param {number} docId
+   * @param {number} kbId
+   * @param {number} userId
+   * @param {object} options
+   * @returns {Promise<{enqueued: boolean, jobId: string|null}>}
+   */
+  async enqueueDocumentProcessing(docId, kbId, userId, options = {}) {
+    // First, update status to 'queued'
+    await knowledgeBaseRepository.updateDocumentStatus(docId, userId, { status: 'queued' });
+
+    const result = await kbDocumentQueue.enqueueProcessDocument({
+      docId,
+      kbId,
+      userId,
+      options,
+    });
+
+    if (!result.enqueued) {
+      // Fallback: process directly
+      console.warn(`[KB] Queue not available, processing doc ${docId} directly`);
+      try {
+        await this.processDocument(docId, kbId, userId, options);
+        return { enqueued: false, jobId: null, processedDirectly: true };
+      } catch (err) {
+        throw err;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get processing status for a document.
+   * @param {number} docId
+   * @param {number} userId
+   * @param {string|number} [jobId] - optional BullMQ job ID
+   * @returns {Promise<object>}
+   */
+  async getDocumentStatus(docId, userId, jobId = null) {
+    const doc = await knowledgeBaseRepository.findDocumentById(docId, userId);
+    if (!doc) throw new Error('Document not found');
+
+    const status = {
+      docId,
+      status: doc.status,
+      chunkCount: doc.chunk_count,
+      errorMessage: doc.error_message,
+      updatedAt: doc.updated_at,
+    };
+
+    // If jobId provided, get queue status
+    if (jobId && doc.status === 'queued') {
+      const queueStatus = await kbDocumentQueue.getJobStatus(jobId);
+      if (queueStatus) {
+        status.jobId = jobId;
+        status.queueStatus = queueStatus.status;
+        status.progress = queueStatus.progress;
+        status.attempts = queueStatus.attemptsMade;
+      }
+    }
+
+    return status;
   }
 
   _buildChunks(text, chunkSize, chunkingMode) {

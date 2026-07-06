@@ -435,8 +435,29 @@ class LandingPageDomainService {
     // Skip apex domain - nó phải trỏ về WordPress, không phải landing page
     if (h === 'founderai.biz' || h === 'www.founderai.biz') return null;
     const row = await landingPageDomainRepository.findActiveByHostname(h);
-    if (!row?.landingSlug) return null;
-    return String(row.landingSlug).trim().toLowerCase();
+    if (!row) return null;
+    if (row.landingSlug) {
+      return String(row.landingSlug).trim().toLowerCase();
+    }
+    return null;
+  }
+
+  /**
+   * Public: resolve hostname → landingPageId (dùng cho landing không có slug
+   * nhưng vẫn được phục vụ qua custom hostname).
+   *
+   * @param {string} hostname
+   * @returns {Promise<{ id: number, slug: string|null }|null>}
+   */
+  async getPublishedLandingIdForHost(hostname) {
+    const h = String(hostname || '').trim().toLowerCase();
+    if (!h) return null;
+    if (h === 'founderai.biz' || h === 'www.founderai.biz') return null;
+    const row = await landingPageDomainRepository.findActiveByHostname(h);
+    if (!row) return null;
+    const id = row.landingPageId ? Number.parseInt(row.landingPageId, 10) : null;
+    if (!Number.isFinite(id)) return null;
+    return { id, slug: row.landingSlug ? String(row.landingSlug).trim().toLowerCase() : null };
   }
 
   /**
@@ -462,6 +483,9 @@ class LandingPageDomainService {
    * 2. Backend verify DNS (CNAME/A record)
    * 3. Nếu DNS OK → status = active, trigger SSL provisioning
    * 4. Nếu DNS chưa OK → status = pending_verification
+   *
+   * Nếu trước đó landing đang dùng CF-managed subdomain (slug.founderai.biz),
+   * ta cần xóa DNS record cũ trên Cloudflare để tránh orphan record.
    *
    * @param {number} landingPageId
    * @param {string} hostname
@@ -511,6 +535,17 @@ class LandingPageDomainService {
       throw err;
     }
 
+    // Nếu trước đó là CF-managed subdomain, dọn DNS cũ trước khi tạo row custom.
+    // removeSubdomain() gọi cloudflareService.deleteDnsRecord() nếu có cfZoneId/cfRecordId,
+    // sau đó xóa row landing_page_domains.
+    if (existing && existing.cfManaged) {
+      try {
+        await this.removeSubdomain(landingPageId);
+      } catch (e) {
+        console.warn(`[LandingPageDomainService.setHostname] removeSubdomain failed: ${e.message}`);
+      }
+    }
+
     const token = crypto.randomBytes(18).toString('hex');
     const target = cnameTarget();
 
@@ -537,6 +572,21 @@ class LandingPageDomainService {
         isApexDomain: isApex,
       });
       await getClearCacheFn();
+
+      // Đồng bộ landing_pages.domain_type = custom để query nhanh.
+      try {
+        await landingPageRepository.updateById(landingPageId, {
+          slug: lp.slug,
+          title: lp.title,
+          htmlContent: lp.htmlContent,
+          isPublished: lp.isPublished,
+          idUser: lp.idUser,
+          domainType: 'custom',
+          domainSubtype: isApex ? 'apex' : 'subdomain',
+        });
+      } catch (e) {
+        console.warn(`[LandingPageDomainService.setHostname] update domain_type failed: ${e.message}`);
+      }
 
       // If verified, trigger SSL provisioning via Certbot
       if (isVerified) {
@@ -730,6 +780,27 @@ class LandingPageDomainService {
     // SSL certificate sẽ được cleanup bởi certbot renewal hooks hoặc manual
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
     await getClearCacheFn();
+
+    // Reset landing_pages về system nếu trước đó là custom (chỉ set khi row không phải CF-managed).
+    if (!row.cfManaged) {
+      try {
+        const lp = await landingPageRepository.findById(landingPageId);
+        if (lp && lp.domainType === 'custom') {
+          await landingPageRepository.updateById(landingPageId, {
+            slug: lp.slug,
+            title: lp.title,
+            htmlContent: lp.htmlContent,
+            isPublished: lp.isPublished,
+            idUser: lp.idUser,
+            domainType: 'system',
+            domainSubtype: null,
+          });
+        }
+      } catch (e) {
+        console.warn(`[LandingPageDomainService.remove] reset domain_type failed: ${e.message}`);
+      }
+    }
+
     return { ok: true };
   }
 

@@ -4177,6 +4177,12 @@ export default {
     generate: 'Generate HTML',
     tabSettings: 'Settings',
     resizePanels: 'Resize editor and preview panels',
+    domainTypeLabel: 'Domain type',
+    domainTypeSystem: 'Use free subdomain',
+    domainTypeSystemHint: 'Automatically provision slug.founderai.biz via Cloudflare. SSL handled by Cloudflare Universal.',
+    domainTypeCustom: 'Use my own domain',
+    domainTypeCustomHint: 'Attach your subdomain or apex. Add CNAME/A record at your DNS provider.',
+    customHostname: 'Custom domain hostname',
   },
 
   // Account Profile

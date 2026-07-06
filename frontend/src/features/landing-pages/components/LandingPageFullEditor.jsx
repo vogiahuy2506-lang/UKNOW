@@ -5,7 +5,9 @@ import {
   HiOutlineTemplate,
   HiOutlineViewGrid, HiOutlineGlobeAlt, HiOutlineChevronDown, HiOutlineChevronRight,
   HiOutlineClipboard, HiOutlineTrash, HiOutlineCheck, HiOutlineExternalLink,
-  HiOutlineQuestionMarkCircle, HiOutlineCode, HiOutlineX, HiOutlineRefresh
+  HiOutlineQuestionMarkCircle, HiOutlineCode, HiOutlineX, HiOutlineRefresh,
+  HiOutlinePencilAlt, HiOutlineArrowRight, HiOutlineArrowLeft, HiOutlineShieldCheck,
+  HiOutlineLink, HiOutlineCheckCircle, HiOutlineClock,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
@@ -17,6 +19,7 @@ import {
   postLandingCustomDomainVerify,
   postLandingCustomDomainProvisionSsl,
   putLandingCustomDomain,
+  updateLandingPageAdmin,
 } from '../services/landingPagesAdminApi.service.js';
 import { getLandingManualInsertSnippets } from '../utils/injectLandingEnhancements.js';
 import SaveTemplateModal from './SaveTemplateModal.jsx';
@@ -99,6 +102,700 @@ function SectionCard({ title, icon: Icon, children, defaultOpen = false }) {
   );
 }
 
+const TONE_STYLES = {
+  success: {
+    wrapper: 'border-green-200 bg-green-50/40',
+    headerBg: 'bg-green-50 border-green-100',
+    iconWrap: 'bg-green-100 text-green-700',
+    badge: 'bg-green-100 text-green-700',
+    hostname: 'text-green-900',
+  },
+  info: {
+    wrapper: 'border-purple-200 bg-purple-50/30',
+    headerBg: 'bg-purple-50 border-purple-100',
+    iconWrap: 'bg-purple-100 text-purple-700',
+    badge: 'bg-purple-100 text-purple-700',
+    hostname: 'text-purple-900',
+  },
+  warning: {
+    wrapper: 'border-amber-200 bg-amber-50/30',
+    headerBg: 'bg-amber-50 border-amber-100',
+    iconWrap: 'bg-amber-100 text-amber-700',
+    badge: 'bg-amber-100 text-amber-700',
+    hostname: 'text-amber-900',
+  },
+};
+
+const BADGE_TONE = {
+  success: 'bg-green-100 text-green-700',
+  info: 'bg-blue-100 text-blue-700',
+  warning: 'bg-amber-100 text-amber-700',
+  danger: 'bg-red-100 text-red-700',
+};
+
+function DomainActionButton({ action, variant = 'secondary' }) {
+  const { icon: Icon, label, onClick, href, external, disabled, spinning } = action;
+  const baseClass =
+    'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed';
+
+  const variantClass = (() => {
+    if (variant === 'primary') {
+      return 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700';
+    }
+    if (variant === 'danger') {
+      return 'bg-white border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300';
+    }
+    return 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400';
+  })();
+
+  const content = (
+    <>
+      {Icon && <Icon className={`w-3.5 h-3.5 ${spinning ? 'animate-spin' : ''}`} />}
+      {label}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={external ? '_blank' : undefined}
+        rel={external ? 'noopener noreferrer' : undefined}
+        className={`${baseClass} ${variantClass}`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseClass} ${variantClass}`}
+    >
+      {content}
+    </button>
+  );
+}
+
+function DomainActionBar({ primaryActions = [], secondaryActions = [], dangerActions = [] }) {
+  if (!primaryActions.length && !secondaryActions.length && !dangerActions.length) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-gray-100 bg-gray-50/60">
+      <div className="flex items-center gap-2 flex-wrap">
+        {primaryActions.map((a) => (
+          <DomainActionButton key={a.key} action={a} variant="primary" />
+        ))}
+        {secondaryActions.map((a) => (
+          <DomainActionButton key={a.key} action={a} variant="secondary" />
+        ))}
+      </div>
+      {dangerActions.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {dangerActions.map((a) => (
+            <DomainActionButton key={a.key} action={a} variant="danger" />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DomainActionCard({
+  tone = 'info',
+  icon: Icon,
+  badge,
+  badgeTone = 'info',
+  hostname,
+  editableHostname, // { value, onChange, suffix, placeholder } — chỉnh hostname ngay tại header
+  editable = false,
+  description,
+  meta,
+  bodyExtras,
+  primaryActions = [],
+  secondaryActions = [],
+  dangerActions = [],
+}) {
+  const styles = TONE_STYLES[tone] || TONE_STYLES.info;
+  const badgeClass = BADGE_TONE[badgeTone] || BADGE_TONE.info;
+
+  return (
+    <div className={`border rounded-lg overflow-hidden ${styles.wrapper}`}>
+      <div className={`flex items-center gap-2 px-3 py-2.5 border-b ${styles.headerBg}`}>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${styles.iconWrap}`}>
+          {Icon && <Icon className="w-4 h-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          {badge && (
+            <span className={`inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wide ${badgeClass}`}>
+              {badge}
+            </span>
+          )}
+          {editableHostname ? (
+            <div className="mt-0.5 flex items-center rounded-md border border-gray-300 bg-white overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+              <input
+                className="flex-1 px-2 py-1 text-sm font-mono outline-none min-w-0"
+                value={editableHostname.value}
+                onChange={(e) => editableHostname.onChange(e.target.value.replace(/^\/+/, ''))}
+                placeholder={editableHostname.placeholder || 'your-slug'}
+              />
+              {editableHostname.suffix && (
+                <span className="px-2 py-1 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
+                  {editableHostname.suffix}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className={`font-mono font-semibold text-sm break-all ${styles.hostname} ${editable ? 'mt-0.5' : ''}`}>
+              {hostname}
+            </p>
+          )}
+        </div>
+      </div>
+      {(description || meta || bodyExtras) && (
+        <div className="px-3 py-3 space-y-2">
+          {description && <p className="text-xs text-gray-600">{description}</p>}
+          {meta && <div className="text-xs text-gray-500">{meta}</div>}
+          {bodyExtras}
+        </div>
+      )}
+      {(primaryActions.length > 0 || secondaryActions.length > 0 || dangerActions.length > 0) && (
+        <DomainActionBar
+          primaryActions={primaryActions}
+          secondaryActions={secondaryActions}
+          dangerActions={dangerActions}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Segmented switch để đổi giữa "subdomain hệ thống" và "tên miền riêng".
+ * Click đúp vào tab hiện tại sẽ không có tác dụng — chỉ chuyển khi user chọn tab khác.
+ */
+function DomainSourceSwitch({ value, onChange, disabled }) {
+  const options = [
+    { id: 'system', label: 'Subdomain miễn phí', icon: HiOutlineGlobeAlt },
+    { id: 'custom', label: 'Tên miền riêng', icon: HiOutlineShieldCheck },
+  ];
+  return (
+    <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-100 p-0.5">
+      {options.map((opt) => {
+        const active = value === opt.id;
+        const Icon = opt.icon;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(opt.id)}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              active
+                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'
+            }`}
+          >
+            <Icon className={`w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Wrapper giống nhau cho mọi "phần" domain. Hai phần Subdomain miễn phí và Tên miền riêng
+ * dùng cùng skeleton → đảm bảo 2 cột luôn cân nhau.
+ */
+function DomainColumn({
+  icon: Icon,
+  title,
+  badge,
+  badgeTone = 'info',
+  headerTone = 'gray',
+  children,
+  footer,
+}) {
+  const headerTones = {
+    gray: 'bg-gray-50 text-gray-700',
+    blue: 'bg-blue-50 text-blue-700',
+    green: 'bg-green-50 text-green-700',
+    amber: 'bg-amber-50 text-amber-700',
+    purple: 'bg-purple-50 text-purple-700',
+  };
+  const badgeClass = BADGE_TONE[badgeTone] || BADGE_TONE.info;
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col h-full">
+      <div className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-200 ${headerTones[headerTone] || headerTones.gray}`}>
+        <div className="w-7 h-7 rounded-lg bg-white/70 flex items-center justify-center">
+          {Icon && <Icon className="w-4 h-4" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate">{title}</p>
+        </div>
+      </div>
+      <div className="flex-1 p-3 space-y-3">{children}</div>
+      {footer && (
+        <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-end gap-2">
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Card "Subdomain miễn phí" — luôn hiển thị, luôn có thể đổi slug.
+ *
+ * Props:
+ *  - slug: form.slug hiện tại
+ *  - originalSlug: slug đang active trên server (chỉ enable nút Áp dụng khi khác)
+ *  - activeHostname: subdomain đã active (vd: "lp.mybrand.founderai.biz")
+ *  - isActive / isPending / isLoading: trạng thái hiện tại
+ *  - busy: disable inputs
+ *  - onChangeSlug(slug)
+ *  - onApply() — gọi API đổi subdomain
+ *  - onRetry() — thử lại khi pending
+ */
+function SubdomainCard({
+  slug,
+  originalSlug,
+  activeHostname,
+  isActive,
+  isPending,
+  isLoading,
+  busy,
+  onChangeSlug,
+  onApply,
+  onRetry,
+}) {
+  const slugChanged = String(slug || '').trim() !== String(originalSlug || '').trim();
+  const finalHostname = `${slug || ''}.${BASE_DOMAIN}`;
+
+  let badge, badgeTone, headerTone, statusText;
+  if (isLoading) {
+    badge = 'Đang tải';
+    badgeTone = 'info';
+    headerTone = 'gray';
+    statusText = 'Đang tải trạng thái…';
+  } else if (isPending) {
+    badge = 'Đang cấp';
+    badgeTone = 'warning';
+    headerTone = 'amber';
+    statusText = 'Hệ thống đang tạo subdomain trên Cloudflare…';
+  } else if (isActive) {
+    badge = 'Hoạt động';
+    badgeTone = 'success';
+    headerTone = 'green';
+    statusText = null;
+  } else {
+    badge = 'Chưa cấu hình';
+    badgeTone = 'info';
+    headerTone = 'gray';
+    statusText = 'Subdomain sẽ được cấp tự động ngay khi bạn bấm Áp dụng.';
+  }
+
+  return (
+    <DomainColumn
+      icon={HiOutlineGlobeAlt}
+      title="Subdomain miễn phí (hệ thống cấp)"
+      badge={badge}
+      badgeTone={badgeTone}
+      headerTone={headerTone}
+      footer={
+        <>
+          {isActive && (
+            <a
+              href={`https://${finalHostname}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded border border-blue-200 transition-colors"
+            >
+              <HiOutlineExternalLink className="w-3.5 h-3.5" />
+              Mở
+            </a>
+          )}
+          {isPending && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded border border-amber-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineRefresh className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />
+              Thử lại
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={busy || isLoading || !slugChanged || !slug.trim()}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+          >
+            <HiOutlineCheck className="w-3.5 h-3.5" />
+            {busy ? 'Đang áp dụng…' : 'Áp dụng'}
+          </button>
+        </>
+      }
+    >
+      {/* Input slug — nhập trực tiếp trong card */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          Slug subdomain miễn phí
+        </label>
+        <div className="flex items-stretch rounded-lg border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
+          <input
+            type="text"
+            className="flex-1 px-2 py-2 text-sm font-mono outline-none min-w-0 disabled:bg-gray-50 disabled:text-gray-500"
+            value={slug || ''}
+            onChange={(e) => onChangeSlug?.(e.target.value)}
+            placeholder="your-slug"
+            disabled={busy || isLoading}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+          <span className="px-2 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
+            .{BASE_DOMAIN}
+          </span>
+        </div>
+        <p className="text-[11px] text-gray-500 mt-1">
+          Nhập slug rồi bấm <strong>Áp dụng</strong> để cấp subdomain. Để trống hệ thống sẽ tự sinh.
+        </p>
+      </div>
+
+      {/* Status text */}
+      {statusText && (
+        <div className={`text-xs px-2.5 py-1.5 rounded flex items-start gap-1.5 ${
+          isPending ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                    : 'bg-gray-50 text-gray-600 border border-gray-100'
+        }`}>
+          {isPending ? <HiOutlineClock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                     : <HiOutlineQuestionMarkCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+          <span>{statusText}</span>
+        </div>
+      )}
+
+      {/* Hostname đang active (chỉ khi active và khác với input) */}
+      {isActive && activeHostname && activeHostname !== finalHostname && (
+        <div className="text-xs text-gray-500">
+          Đang hoạt động tại:{' '}
+          <a
+            href={`https://${activeHostname}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline font-mono text-gray-700 hover:text-blue-600"
+          >
+            {activeHostname}
+          </a>
+        </div>
+      )}
+
+      {/* Backup link */}
+      {isActive && slug && (
+        <div className="text-xs text-gray-500 border-t border-gray-100 pt-2">
+          <span className="text-gray-400">Link dự phòng (luôn hoạt động): </span>
+          <a
+            href={`https://${BASE_DOMAIN}/lp/${encodeURIComponent(slug)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline font-mono text-gray-700 hover:text-blue-600"
+          >
+            {BASE_DOMAIN}/lp/{slug}
+          </a>
+        </div>
+      )}
+    </DomainColumn>
+  );
+}
+
+/**
+ * Card "Tên miền riêng" — luôn hiển thị, hiển thị theo 3 trạng thái:
+ *   - active: đang hoạt động
+ *   - pending: đang chờ DNS
+ *   - none: chưa cấu hình → hiện form nhập
+ *
+ * Props:
+ *  - cdInfo: object từ API getCustomDomain
+ *  - hostnameDraft / onChangeHostnameDraft: input form nhập
+ *  - isApexDomain / onToggleApex: chọn loại domain
+ *  - busy: disable inputs
+ *  - onSave() — gọi API PUT custom-domain
+ *  - onVerify() — gọi API verify
+ *  - onProvisionSsl() — gọi API provision-ssl
+ *  - onRemove() — xóa custom domain
+ *  - onUseSystem() — chuyển sang dùng subdomain miễn phí
+ */
+function CustomDomainCard({
+  cdInfo,
+  hostnameDraft,
+  onChangeHostnameDraft,
+  isApexDomain,
+  onToggleApex,
+  busy,
+  onSave,
+  onVerify,
+  onProvisionSsl,
+  onRemove,
+  onUseSystem,
+  pendingCreate = false,
+}) {
+  const configured = cdInfo?.configured;
+  const status = cdInfo?.status;
+  const isActive = configured && status === 'active' && !cdInfo?.cfManaged;
+  const isPending = configured && status === 'pending_verification' && !cdInfo?.cfManaged;
+
+  // Xác định loại domain đã lưu: 'sub' | 'apex' | null
+  const savedApex = cdInfo?.apex === true || cdInfo?.domainSubtype === 'apex';
+  const savedSubtype = cdInfo?.domainSubtype;
+  const isApexSaved =
+    Boolean(savedApex) ||
+    (savedSubtype === 'apex') ||
+    (savedSubtype !== 'subdomain' && Boolean(cdInfo?.hostname) && (cdInfo?.hostname || '').split('.').length <= 2);
+
+  // Tiêu đề card phân biệt Sub vs Apex
+  const cardTitle = (isActive || isPending || configured)
+    ? (isApexSaved ? 'Tên miền riêng — Apex' : 'Tên miền riêng — Sub')
+    : (isApexDomain ? 'Tên miền riêng — Apex' : 'Tên miền riêng — Sub');
+
+  let badge, badgeTone, headerTone;
+  if (isActive) {
+    badge = 'Hoạt động';
+    badgeTone = 'success';
+    headerTone = 'green';
+  } else if (isPending) {
+    badge = 'Chờ DNS';
+    badgeTone = 'warning';
+    headerTone = 'amber';
+  } else if (configured) {
+    badge = 'Đang xử lý';
+    badgeTone = 'info';
+    headerTone = 'blue';
+  } else {
+    badge = 'Chưa cấu hình';
+    badgeTone = 'info';
+    headerTone = 'purple';
+  }
+
+  // === ACTIVE ===
+  if (isActive) {
+    return (
+      <DomainColumn
+        icon={HiOutlineShieldCheck}
+        title={cardTitle}
+        badge={badge}
+        badgeTone={badgeTone}
+        headerTone={headerTone}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={onUseSystem}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineArrowLeft className="w-3.5 h-3.5" />
+              Dùng subdomain miễn phí
+            </button>
+            <button
+              type="button"
+              onClick={onProvisionSsl}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded border border-blue-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineShieldCheck className="w-3.5 h-3.5" />
+              {busy ? 'Đang cấp…' : 'Cấp SSL'}
+            </button>
+            <a
+              href={`https://${cdInfo.hostname}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded border border-blue-200 transition-colors"
+            >
+              <HiOutlineExternalLink className="w-3.5 h-3.5" />
+              Mở
+            </a>
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded border border-red-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineTrash className="w-3.5 h-3.5" />
+              Xóa
+            </button>
+          </>
+        }
+      >
+        <div>
+          <p className="font-mono font-semibold text-sm break-all text-gray-900">{cdInfo.hostname}</p>
+          <p className="text-[11px] text-gray-500 mt-1">
+            {cdInfo.isApexDomain ? 'Tên miền chính.' : 'Tên con của website bạn.'} HTTPS đã được cấp.
+          </p>
+        </div>
+      </DomainColumn>
+    );
+  }
+
+  // === PENDING (chờ DNS) ===
+  if (isPending) {
+    const isApex = cdInfo?.isApexDomain;
+    const hostnameParts = String(cdInfo.hostname || '').split('.');
+    const recordName = isApex
+      ? '@'
+      : (hostnameParts.length > 2 ? hostnameParts.slice(0, -2).join('.') || 'www' : 'www');
+    const cnameTarget = cdInfo.cnameTarget || BASE_DOMAIN;
+    const apexIp = cdInfo.apexFixedIp || '103.110.87.210';
+    return (
+      <DomainColumn
+        icon={HiOutlineLink}
+        title={cardTitle}
+        badge={badge}
+        badgeTone={badgeTone}
+        headerTone={headerTone}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={onUseSystem}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineArrowLeft className="w-3.5 h-3.5" />
+              Dùng subdomain miễn phí
+            </button>
+            <button
+              type="button"
+              onClick={onVerify}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded border border-amber-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineRefresh className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />
+              {busy ? 'Đang kiểm tra…' : 'Kiểm tra lại'}
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded border border-red-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineX className="w-3.5 h-3.5" />
+              Hủy
+            </button>
+          </>
+        }
+      >
+        <div>
+          <p className="text-xs text-gray-600 mb-1.5">
+            Vào trang quản lý tên miền, thêm <strong>1 dòng</strong> sau:
+          </p>
+          <div className="bg-gray-900 rounded-md p-2.5 font-mono text-xs text-green-400 space-y-1">
+            <div><span className="text-gray-500">Loại: </span><span>{isApex ? 'A' : 'CNAME'}</span></div>
+            <div><span className="text-gray-500">Tên: </span><span>{recordName}</span></div>
+            <div>
+              <span className="text-gray-500">Trỏ về: </span>
+              <span className="text-yellow-300 break-all">{isApex ? apexIp : cnameTarget}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1.5">
+            Sau khi lưu, DNS cần khoảng <strong>30 phút - 24 giờ</strong> để cập nhật. Có thể đóng trang và quay lại.
+          </p>
+        </div>
+      </DomainColumn>
+    );
+  }
+
+  // === NONE (chưa cấu hình) — form nhập ===
+  return (
+    <DomainColumn
+      icon={HiOutlineShieldCheck}
+      title={cardTitle}
+      badge={badge}
+      badgeTone={badgeTone}
+      headerTone={headerTone}
+      footer={
+        <>
+          {configured && (
+            <button
+              type="button"
+              onClick={onUseSystem}
+              disabled={busy}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-50 transition-colors"
+            >
+              <HiOutlineArrowLeft className="w-3.5 h-3.5" />
+              Dùng subdomain miễn phí
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy || !hostnameDraft.trim()}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+          >
+            <HiOutlineCheck className="w-3.5 h-3.5" />
+            {busy ? 'Đang lưu…' : (pendingCreate ? 'Tạo landing + cấu hình domain' : 'Thêm domain')}
+          </button>
+        </>
+      }
+    >
+      <p className="text-xs text-gray-600">
+        Dùng tên miền <strong>của bạn</strong>. Sau khi lưu, hệ thống sẽ kiểm tra DNS rồi cấp HTTPS.
+      </p>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          Nhập tên miền của bạn
+        </label>
+        <input
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+          placeholder={isApexDomain ? 'example.com' : 'lp.example.com'}
+          value={hostnameDraft}
+          onChange={(e) => onChangeHostnameDraft(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onToggleApex(false)}
+          className={`text-left rounded-lg border p-2 transition-colors ${
+            !isApexDomain
+              ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200'
+              : 'border-gray-200 bg-white hover:border-gray-300'
+          }`}
+        >
+          <div className="text-xs font-medium text-gray-800 flex items-center gap-1">
+            Tên con
+            {!isApexDomain && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-purple-600" />}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-0.5">vd: lp.your.com</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleApex(true)}
+          className={`text-left rounded-lg border p-2 transition-colors ${
+            isApexDomain
+              ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200'
+              : 'border-gray-200 bg-white hover:border-gray-300'
+          }`}
+        >
+          <div className="text-xs font-medium text-gray-800 flex items-center gap-1">
+            Tên miền chính
+            {isApexDomain && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-purple-600" />}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-0.5">vd: your.com</div>
+        </button>
+      </div>
+    </DomainColumn>
+  );
+}
+
 export default function LandingPageFullEditor({
   open,
   editingId,
@@ -109,6 +806,7 @@ export default function LandingPageFullEditor({
   links,
   onClose,
   onSave,
+  onCreatePageWithCustomDomain,
 }) {
   const { t } = useI18n();
   const snippetContext = useMemo(() => {
@@ -402,6 +1100,36 @@ export default function LandingPageFullEditor({
     }
   };
 
+  // Tạo landing page mới + cấu hình custom domain ngay trong 1 lần submit.
+  // Cần parent cung cấp onCreatePageWithCustomDomain(form, hostname, isApex)
+  //  → trả về Promise<{ id: number, cdInfo: object }>
+  const createPageWithCustomDomain = async () => {
+    const h = String(cdHostnameDraft || '').trim().toLowerCase();
+    if (!h) {
+      toast.error(t('landingPageEditor.hostnameFormat'));
+      return;
+    }
+    setCdBusy(true);
+    try {
+      const result = await onCreatePageWithCustomDomain(
+        { title: form.title || h, slug: form.slug || '', htmlContent: form.htmlContent || '', isPublished: Boolean(form.isPublished) },
+        h,
+        cdIsApexDomain
+      );
+      setCdInfo(result?.cdInfo ?? null);
+      setShowCustomDomainFormForAutoPending(false);
+      toast.success(
+        cdIsApexDomain
+          ? 'Đã tạo landing + cấu hình apex domain. DNS cần khoảng 5-30 phút để xác thực.'
+          : 'Đã tạo landing + cấu hình subdomain. DNS cần khoảng 30 phút - 24 giờ để xác thực.'
+      );
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || 'Không tạo được landing page');
+    } finally {
+      setCdBusy(false);
+    }
+  };
+
   const verifyCustomDomain = useDebouncedCallback(_verifyCustomDomain, 1000);
 
   const removeCustomDomain = async () => {
@@ -436,6 +1164,43 @@ export default function LandingPageFullEditor({
     }
   };
 
+  /**
+   * Đổi subdomain miễn phí từ trong card (không cần bấm Lưu ở trên cùng).
+   * Gọi PUT /admin/landing-pages/:id với body { slug }.
+   * Server sẽ xóa CF subdomain cũ và cấp subdomain mới.
+   */
+  const applySystemSubdomain = async () => {
+    if (!editingId) return;
+    let newSlug = String(form.slug || '').trim().toLowerCase().replace(/^\/+/, '');
+    if (!newSlug) {
+      // Tự sinh từ hostname đang có (vd: lp.mybrand.founderai.biz → lp-mybrand) hoặc từ id.
+      const fromHost = (cdInfo?.hostname || '').split('.')[0];
+      newSlug = fromHost && fromHost !== 'www'
+        ? fromHost.replace(/[^a-z0-9_-]/gi, '')
+        : `lp${editingId}`;
+    }
+    if (!newSlug) {
+      toast.error('Không thể sinh slug tự động. Vui lòng nhập slug ở ô bên trên.');
+      return;
+    }
+    setForm((p) => ({ ...p, slug: newSlug }));
+    setCdBusy(true);
+    try {
+      const res = await updateLandingPageAdmin(editingId, {
+        slug: newSlug,
+        domainType: 'system',
+        domainSubtype: 'subdomain',
+      });
+      if (!res?.success) throw new Error(res?.message || 'Không đổi được subdomain');
+      setCdInfo((prev) => ({ ...(prev || {}), hostname: `${newSlug}.${BASE_DOMAIN}`, configured: true, status: 'active', cfManaged: true }));
+      toast.success(`Đã cấp lại subdomain ${newSlug}.${BASE_DOMAIN}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || 'Không đổi được subdomain');
+    } finally {
+      setCdBusy(false);
+    }
+  };
+
   if (!open) return null;
 
   const slug = String(form.slug || '').trim().toLowerCase();
@@ -446,7 +1211,20 @@ export default function LandingPageFullEditor({
     && isCfManagedDomain
   );
   const showCustomDomainForm = !isAutoSubdomainPending || showCustomDomainFormForAutoPending;
-  const publicUrl = slug ? `https://${slug}.${BASE_DOMAIN}` : '';
+  // Khi page đang dùng subdomain miễn phí (cfManaged=true), KHÔNG ép buộc tab Custom tắt.
+  // User phải có khả năng bấm sang tab Custom để cấu hình domain mới.
+  const isCustomDomainMode = form.domainType === 'custom';
+  const headerDomain = (() => {
+    if (isCustomDomainMode && cdInfo?.configured && cdInfo?.hostname) {
+      return cdInfo.hostname;
+    }
+    if (!slug) return null;
+    if (isCustomDomainMode) return cdHostnameDraft?.trim() || slug;
+    return `${slug}.${BASE_DOMAIN}`;
+  })();
+  const publicUrl = isCustomDomainMode
+    ? (slug ? `https://${slug}` : '')
+    : (slug ? `https://${slug}.${BASE_DOMAIN}` : '');
 
   const overlay = (
     <div
@@ -459,9 +1237,9 @@ export default function LandingPageFullEditor({
           <h2 className="text-lg font-semibold text-gray-900">
             {editingId ? t('landingPageEditor.editLanding') : t('landingPageEditor.createLanding')}
           </h2>
-          {slug && (
+          {headerDomain && (
             <code className="text-sm bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono">
-              {slug}.{BASE_DOMAIN}
+              {headerDomain}
             </code>
           )}
         </div>
@@ -543,25 +1321,8 @@ export default function LandingPageFullEditor({
         >
           <div className="shrink-0 p-4 space-y-3 border-b border-gray-100 bg-white overflow-y-auto max-h-[55vh] lg:max-h-[55%]">
 
-            {/* Basic Info */}
+            {/* Basic Info - Title. Slug (subdomain miễn phí) sẽ hiển thị và chỉnh được ngay trong card Custom Domain. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPagesAdmin.slug')}</label>
-                <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-                  <input
-                    className="flex-1 px-3 py-2 text-sm font-mono outline-none min-w-0"
-                    value={form.slug}
-                    onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.replace(/^\/+/, '') }))}
-                    placeholder="your-slug"
-                  />
-                  <span className="px-3 py-2 text-sm text-gray-500 bg-gray-50 border-l border-gray-300 font-mono flex-shrink-0">
-                    .{BASE_DOMAIN}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Đây là địa chỉ subdomain mặc định. Đổi tên ở đây rồi bấm Lưu để cấp lại <code className="bg-gray-100 px-1 rounded">tên-mới.{BASE_DOMAIN}</code>.
-                </p>
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('landingPageEditor.pageTitle')}</label>
                 <input
@@ -586,284 +1347,63 @@ export default function LandingPageFullEditor({
             {/* Custom Domain Section */}
             <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={true}>
               <div className="space-y-4">
-                {/* Quick Help */}
-                <div className="flex items-start gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                  <HiOutlineQuestionMarkCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
-                  <div className="space-y-1">
-                    <p>
-                      Sử dụng domain riêng như <code className="bg-blue-100 px-1 rounded">yoursite.com</code> hoặc subdomain <code className="bg-blue-100 px-1 rounded">lp.yoursite.com</code> thay vì <code className="bg-blue-100 px-1 rounded">slug.{BASE_DOMAIN}</code>.
-                    </p>
-                    <p className="text-blue-700 font-medium">
-                      Thêm bản ghi CNAME trỏ về {BASE_DOMAIN}.
-                    </p>
-                  </div>
-                </div>
-
-                {!editingId ? (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Lưu landing page trước để cấu hình custom domain
-                  </p>
-                ) : cdLoading ? (
+                {cdLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                   </div>
                 ) : (
                   <>
-                    {/* Domain Already Active */}
-                    {cdInfo?.status === 'active' && (
-                        <div className="space-y-3">
-                        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-                          <HiOutlineCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-semibold text-green-800 text-lg">{cdInfo.hostname}</p>
-                            <p className="text-sm text-green-600">
-                              {isCfManagedDomain
-                                ? 'Subdomain đã kích hoạt qua Cloudflare. HTTPS do Cloudflare Universal SSL xử lý.'
-                                : "Domain đã kích hoạt. SSL sẽ được cấp tự động qua Let's Encrypt."}
-                            </p>
-                            {isCfManagedDomain && form.slug && (
-                              <p className="text-xs text-green-700 mt-2">
-                                Muốn đổi subdomain? Sửa <strong>Tên rút gọn</strong> phía trên rồi Lưu.
-                                {' '}Link dự phòng:{' '}
-                                <a
-                                  href={`https://${BASE_DOMAIN}/lp/${encodeURIComponent(form.slug)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="underline font-medium"
-                                >
-                                  {BASE_DOMAIN}/lp/{form.slug}
-                                </a>
-                              </p>
-                            )}
-                          </div>
-                          <a
-                            href={`https://${cdInfo.hostname}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-outline"
-                          >
-                            Mở domain
-                          </a>
-                        </div>
-                        {!isCfManagedDomain && (
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary"
-                              disabled={cdBusy}
-                              onClick={provisionSsl}
-                            >
-                              {cdBusy ? 'Đang xử lý...' : 'Cấp SSL ngay'}
-                            </button>
-                            <button
-                              type="button"
-                              className="text-sm text-red-600 hover:text-red-700 hover:underline"
-                              onClick={removeCustomDomain}
-                            >
-                              Xóa domain này
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    {/* Tab chuyển đổi nhanh: Subdomain miễn phí ↔ Tên miền riêng */}
+                    <DomainSourceSwitch
+                      value={isCustomDomainMode ? 'custom' : 'system'}
+                      disabled={cdBusy}
+                      onChange={(next) => {
+                        if (next === 'custom' && !isCustomDomainMode) {
+                          setCdHostnameDraft('');
+                          setCdIsApexDomain(false);
+                          setForm((p) => ({ ...p, domainType: 'custom', domainSubtype: 'subdomain' }));
+                        } else if (next === 'system' && isCustomDomainMode) {
+                          setCdHostnameDraft('');
+                          setForm((p) => ({ ...p, domainType: 'system', domainSubtype: 'subdomain' }));
+                        }
+                      }}
+                    />
+
+                    {/* === SUBDOMAIN MIỄN PHÍ (chế độ system) === */}
+                    {!isCustomDomainMode && (
+                      <SubdomainCard
+                        slug={form.slug || ''}
+                        originalSlug={form.slug || ''}
+                        activeHostname={cdInfo?.hostname}
+                        isActive={Boolean(cdInfo?.configured && cdInfo?.status === 'active' && isCfManagedDomain)}
+                        isPending={isAutoSubdomainPending}
+                        isLoading={false}
+                        busy={cdBusy}
+                        onChangeSlug={(v) => setForm((p) => ({ ...p, slug: v }))}
+                        onApply={applySystemSubdomain}
+                        onRetry={verifyCustomDomain}
+                      />
                     )}
 
-                    {/* No Domain Configured - Main UX */}
-                    {(!cdInfo?.configured || cdInfo?.status !== 'active') && (
-                      <div className="space-y-4">
-                        {isAutoSubdomainPending && (
-                          <div className="border border-amber-200 rounded-lg overflow-hidden">
-                            <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
-                              <p className="font-medium text-amber-800">
-                                Subdomain hệ thống chưa được cấp
-                              </p>
-                            </div>
-                            <div className="p-4 space-y-3">
-                              <div className="flex items-start gap-3">
-                                <HiOutlineGlobeAlt className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="font-mono font-semibold text-gray-900 break-all">{cdInfo.hostname}</p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {cdInfo.instructions || 'Hệ thống sẽ tạo CNAME proxied trong Cloudflare cho subdomain này.'}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-700">
-                                <strong> Lưu ý:</strong> Việc cấp subdomain qua Cloudflare có thể mất <strong>30 phút - 24 giờ</strong>. Bạn có thể đóng trang này và quay lại sau.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary w-full flex items-center justify-center gap-2"
-                                disabled={cdBusy}
-                                onClick={verifyCustomDomain}
-                              >
-                                <HiOutlineRefresh className={`w-4 h-4 ${cdBusy ? 'animate-spin' : ''}`} />
-                                {cdBusy ? 'Đang thử lại...' : 'Thử lại cấp subdomain'}
-                              </button>
-                              {!showCustomDomainFormForAutoPending && (
-                                <button
-                                  type="button"
-                                  className="btn btn-outline w-full"
-                                  disabled={cdBusy}
-                                  onClick={() => {
-                                    setCdHostnameDraft('');
-                                    setCdIsApexDomain(false);
-                                    setShowCustomDomainFormForAutoPending(true);
-                                  }}
-                                >
-                                  Dùng domain riêng
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {showCustomDomainForm && (
-                          <>
-                            {/* Domain Input + Add Button */}
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <input
-                                className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-base font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20"
-                                placeholder="yoursite.com"
-                                value={cdHostnameDraft}
-                                onChange={(e) => setCdHostnameDraft(e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-primary py-3 px-6 text-base font-medium whitespace-nowrap"
-                                disabled={!cdHostnameDraft.trim() || cdBusy}
-                                onClick={saveCustomDomainHostname}
-                              >
-                                {cdBusy ? 'Đang xử lý...' : 'Thêm Domain'}
-                              </button>
-                            </div>
-
-                            {/* Apex vs Subdomain Selection */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <span className="text-sm font-medium text-gray-700 shrink-0">Loại domain:</span>
-                              <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="apexType"
-                                    value="subdomain"
-                                    checked={!cdIsApexDomain}
-                                    onChange={() => setCdIsApexDomain(false)}
-                                    className="accent-blue-600 w-4 h-4"
-                                  />
-                                  <span className="text-sm text-gray-700">
-                                    <span className="font-medium">Subdomain</span>
-                                    <span className="text-gray-500 ml-1">(ví dụ: www.yoursite.com, lp.yoursite.com)</span>
-                                  </span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="apexType"
-                                    value="apex"
-                                    checked={cdIsApexDomain}
-                                    onChange={() => setCdIsApexDomain(true)}
-                                    className="accent-blue-600 w-4 h-4"
-                                  />
-                                  <span className="text-sm text-gray-700">
-                                    <span className="font-medium">Domain gốc (Apex)</span>
-                                    <span className="text-gray-500 ml-1">(ví dụ: yoursite.com)</span>
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-
-                            {/* DNS Instructions based on selection */}
-                            {!cdInfo?.configured && cdHostnameDraft.trim() && (
-                              <div className={`text-xs rounded p-2 border ${
-                                cdIsApexDomain 
-                                  ? 'bg-purple-50 border-purple-100 text-purple-700' 
-                                  : 'bg-blue-50 border-blue-100 text-blue-700'
-                              }`}>
-                                {cdIsApexDomain ? (
-                                  <>
-                                    Thêm bản ghi <strong>A</strong> tại nhà cung cấp domain, trỏ về IP <strong>{cdInfo?.apexFixedIp || '103.110.87.210'}</strong>.
-                                    SSL sẽ được cấp tự động qua Let's Encrypt.
-                                  </>
-                                ) : (
-                                  <>
-                                    Thêm bản ghi <strong>CNAME</strong> tại nhà cung cấp domain, trỏ về <strong>{BASE_DOMAIN}</strong>.
-                                    SSL sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Manual DNS Instructions - Only show if domain is pending */}
-                        {cdInfo?.configured && cdInfo?.status === 'pending_verification' && !isCfManagedDomain && (
-                          <div className="border border-amber-200 rounded-lg overflow-hidden">
-                            <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
-                              <p className="font-medium text-amber-800">
-                                Cần thêm bản ghi DNS
-                              </p>
-                            </div>
-                            <div className="p-4 space-y-4">
-                              <p className="text-sm text-gray-600">
-                                Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} tại nhà cung cấp domain của bạn:
-                              </p>
-                              <div className="bg-gray-900 rounded-lg p-3 font-mono text-sm text-green-400">
-                                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                                  <span className="text-gray-500">Type:</span><span>{cdInfo?.isApexDomain ? 'A' : 'CNAME'}</span>
-                                  {cdInfo?.isApexDomain ? (
-                                    <>
-                                      <span className="text-gray-500">Name:</span><span>@</span>
-                                      <span className="text-gray-500">Value:</span><span className="text-yellow-300">{cdInfo.apexFixedIp || '103.110.87.210'}</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-gray-500">Name:</span><span>{(() => { const p = cdInfo.hostname.split('.'); return p.length > 2 ? p.slice(0, -2).join('.') || '@' : 'www'; })()}</span>
-                                      <span className="text-gray-500">Value:</span><span className="break-all text-yellow-300">{cdInfo.cnameTarget || BASE_DOMAIN}</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                                <p className="text-sm text-blue-800">
-                                  <strong>Hướng dẫn:</strong>
-                                </p>
-                                <ol className="text-sm text-blue-700 mt-2 space-y-1 list-decimal list-inside">
-                                  <li>Đăng nhập trang quản lý DNS của domain <strong>{cdInfo.hostname}</strong></li>
-                                  <li>Thêm bản ghi {cdInfo?.isApexDomain ? 'A' : 'CNAME'} như bảng trên</li>
-                                  <li>Bấm "Kiểm tra lại" hoặc đợi để hệ thống tự động kích hoạt</li>
-                                </ol>
-                                <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-                                  <strong> Lưu ý:</strong> DNS propagation có thể mất từ <strong>30 phút đến 24 giờ</strong>. Nếu chưa hoạt động, hãy quay lại kiểm tra sau.
-                                </div>
-                              </div>
-                              <div className="bg-purple-50 border border-purple-200 rounded p-3 text-sm text-purple-700">
-                                <strong>SSL tự động:</strong> SSL certificate sẽ được cấp tự động qua Let's Encrypt sau khi DNS được xác nhận.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary w-full"
-                                disabled={cdBusy}
-                                onClick={verifyCustomDomain}
-                              >
-                                {cdBusy ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Remove Domain */}
-                        {cdInfo?.configured && !isCfManagedDomain && (
-                          <div className="pt-2 border-t border-gray-100">
-                            <button
-                              type="button"
-                              className="text-sm text-gray-500 hover:text-red-600"
-                              onClick={removeCustomDomain}
-                            >
-                              Hủy bỏ cấu hình domain
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    {/* === TÊN MIỀN RIÊNG (chế độ custom) === */}
+                    {isCustomDomainMode && (
+                      <CustomDomainCard
+                        cdInfo={cdInfo}
+                        hostnameDraft={cdHostnameDraft}
+                        onChangeHostnameDraft={setCdHostnameDraft}
+                        isApexDomain={cdIsApexDomain}
+                        onToggleApex={setCdIsApexDomain}
+                        busy={cdBusy}
+                        onSave={editingId ? saveCustomDomainHostname : createPageWithCustomDomain}
+                        onVerify={verifyCustomDomain}
+                        onProvisionSsl={provisionSsl}
+                        onRemove={removeCustomDomain}
+                        pendingCreate={!editingId}
+                        onUseSystem={() => {
+                          setCdHostnameDraft('');
+                          setForm((p) => ({ ...p, domainType: 'system', domainSubtype: 'subdomain' }));
+                        }}
+                      />
                     )}
                   </>
                 )}

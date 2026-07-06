@@ -3,12 +3,27 @@ import { useParams } from 'react-router-dom';
 import { fetchPublishedLandingHtml } from '../../features/landing-pages/services/landingPagePublicApi.service.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
 
-function ensureTailwindCdn(html) {
-  if (!html || html.includes('cdn.tailwindcss.com')) return html;
-  return html.replace(
-    /<head([^>]*)>/i,
-    `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`,
-  );
+export function ensureTailwindCdnAndViewport(html) {
+  if (!html) return html;
+  let result = html;
+
+  // Ensure viewport meta tag (critical for responsive layout on mobile)
+  if (!result.includes('name="viewport"')) {
+    result = result.replace(
+      /<head([^>]*)>/i,
+      `<head$1>\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">`,
+    );
+  }
+
+  // Inject Tailwind CDN if not present
+  if (!result.includes('cdn.tailwindcss.com')) {
+    result = result.replace(
+      /<head([^>]*)>/i,
+      `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`,
+    );
+  }
+
+  return result;
 }
 
 /**
@@ -77,7 +92,7 @@ export default function LpRendererPage() {
       title={title || slug}
       className="w-full min-h-screen border-0 block"
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-      srcDoc={ensureTailwindCdn(html)}
+      srcDoc={ensureTailwindCdnAndViewport(html)}
     />
   );
 }

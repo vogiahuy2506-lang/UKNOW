@@ -2240,7 +2240,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       ) : (
         <>
       {/* Messages */}
-      <div className={`flex-1 overflow-y-auto space-y-5 ${isFullscreen ? 'px-4 py-6' : 'p-5'}`}>
+      <div className={`flex-1 overflow-y-auto space-y-5 chat-messages-scroll ${isFullscreen ? 'px-4 py-6' : 'p-5'}`}>
         <div className={isFullscreen ? 'max-w-3xl mx-auto w-full space-y-5' : 'space-y-5'}>
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

@@ -1,5 +1,6 @@
 import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
 import landingPagePublicService from '../services/landingPage/landingPagePublic.service.js';
+import landingPageRepository from '../repositories/landingPage.repository.js';
 
 /**
  * Middleware: resolve custom hostname → landing page slug → attach to req.
@@ -10,9 +11,9 @@ export const domainResolver = async (req, res, next) => {
     const host = (req.headers.host || '').split(':')[0].toLowerCase();
     if (!host) return next();
 
-    let slug;
+    let resolved;
     try {
-      slug = await landingPageDomainService.getPublishedSlugForHost(host);
+      resolved = await landingPageDomainService.getPublishedLandingIdForHost(host);
     } catch (err) {
       if (err?.message?.includes('is_apex_domain') || err?.message?.includes('does not exist')) {
         console.warn(`[DomainResolver] Migration missing for is_apex_domain column, skipping: ${err.message}`);
@@ -21,13 +22,22 @@ export const domainResolver = async (req, res, next) => {
       throw err;
     }
 
-    if (slug) {
-      const payload = await landingPagePublicService.getPublishedPayload(slug);
+    if (resolved) {
+      // Nếu landing có slug → dùng getPublishedPayload(slug) (logic cũ).
+      // Nếu không có slug → dùng id để load payload, đảm bảo landing không slug
+      // vẫn được phục vụ qua custom hostname.
+      let payload = null;
+      if (resolved.slug) {
+        payload = await landingPagePublicService.getPublishedPayload(resolved.slug);
+      } else {
+        payload = await landingPageRepository.findPublishedById(resolved.id);
+      }
       if (payload) {
         req.isCustomDomain = true;
-        req.customDomainSlug = slug;
+        req.customDomainSlug = resolved.slug || null;
+        req.customDomainLandingId = resolved.id;
         req.landingPage = payload;
-        console.log(`[DomainResolver] ${host} → slug="${slug}" (id=${payload.id ?? 'n/a'})`);
+        console.log(`[DomainResolver] ${host} → landing id=${resolved.id} slug="${resolved.slug || ''}"`);
       }
     }
 

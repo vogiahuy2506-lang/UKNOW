@@ -8,6 +8,7 @@ import {
   deleteLandingPageAdmin,
   fetchLandingPagesAdminList,
   fetchLandingPageAdminById,
+  putLandingCustomDomain,
   updateLandingPageAdmin,
   fetchLandingPagesDashboardStats,
 } from '../../features/landing-pages/services/landingPagesAdminApi.service.js';
@@ -17,11 +18,26 @@ import { normalizeLandingLpTrackApiBase } from '../../features/landing-pages/uti
 
 const BASE_DOMAIN = 'founderai.biz';
 
+/**
+ * Tự sinh slug từ hostname kiểu subdomain.
+ * VD: lp.example.com → 'lp' ; landing2.shop.example.com → 'landing2-shop' (fallback).
+ * Trả về null nếu không thể sinh slug hợp lệ.
+ */
+function deriveSubSlugFromHostname(hostname) {
+  const h = String(hostname || '').trim().toLowerCase().replace(/^https?:\/\//, '');
+  if (!h) return null;
+  const firstLabel = h.split('.')[0];
+  const cleaned = firstLabel.replace(/[^a-z0-9_-]/gi, '');
+  return cleaned || null;
+}
+
 const emptyForm = () => ({
   slug: '',
   title: '',
   htmlContent: '',
   isPublished: false,
+  domainType: 'system',
+  domainSubtype: 'subdomain',
 });
 
 export default function LandingPagesAdminPage() {
@@ -49,6 +65,8 @@ export default function LandingPagesAdminPage() {
         return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><script src="https://cdn.tailwindcss.com"></script><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`;
       })(),
       isPublished: false,
+      domainType: 'system',
+      domainSubtype: 'subdomain',
     });
     setModalOpen(true);
     window.history.replaceState({}, '');
@@ -86,6 +104,7 @@ export default function LandingPagesAdminPage() {
   const tableRows = useMemo(() => {
     return rows.map((r) => {
       const st = statsBySlug.get(r.slug) || {};
+      const isCustom = r.domainType === 'custom' || Boolean(r.customDomainHostname);
       const domain = r.customDomainHostname || `${r.slug}.${BASE_DOMAIN}`;
       return {
         ...r,
@@ -93,7 +112,7 @@ export default function LandingPagesAdminPage() {
         clickCount: Number(st.clickCount || 0),
         submitCount: Number(st.submitCount || 0),
         displayDomain: domain,
-        isCustomDomain: Boolean(r.customDomainHostname),
+        isCustomDomain: isCustom,
         isApexDomain: Boolean(r.customDomainIsApex),
       };
     });
@@ -168,6 +187,8 @@ export default function LandingPagesAdminPage() {
         title: full.title || '',
         htmlContent: full.htmlContent || '',
         isPublished: Boolean(full.isPublished),
+        domainType: full.domainType === 'custom' ? 'custom' : 'system',
+        domainSubtype: full.domainSubtype === 'apex' ? 'apex' : 'subdomain',
       });
       setModalOpen(true);
     } catch (e) {
@@ -183,26 +204,30 @@ export default function LandingPagesAdminPage() {
 
   const save = async () => {
     const slug = String(form.slug || '').trim().toLowerCase();
-    if (!slug) {
-      toast.error(t('landingPagesAdmin.slugRequired'));
+    if (!form.title || !form.title.trim()) {
+      toast.error('Vui lòng nhập tên landing page.');
       return;
     }
     setSaving(true);
     try {
       if (editingId) {
         await updateLandingPageAdmin(editingId, {
-          slug,
+          slug: slug || null,
           title: form.title,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
+          domainType: form.domainType,
+          domainSubtype: form.domainSubtype,
         });
         toast.success(t('landingPagesAdmin.updated'));
       } else {
         const created = await createLandingPageAdmin({
-          slug,
+          slug: slug || null,
           title: form.title,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
+          domainType: form.domainType,
+          domainSubtype: form.domainSubtype,
         });
         toast.success(t('landingPagesAdmin.created'));
         if (created?.customDomainProvisioned === false) {
@@ -218,6 +243,45 @@ export default function LandingPagesAdminPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCreateWithCustomDomain = async (payload, hostname, isApex) => {
+    if (!hostname) {
+      toast.error('Vui lòng nhập hostname.');
+      throw new Error('Hostname is required');
+    }
+    const title = String(payload.title || '').trim();
+    if (!title) {
+      toast.error('Vui lòng nhập tên landing page.');
+      throw new Error('Title is required');
+    }
+    // Tự sinh slug nếu để trống:
+    //  - Apex (example.com) → slug = null (chỉ dùng hostname, không có subdomain miễn phí).
+    //  - Sub (lp.example.com) → lấy label đầu tiên (lp). Nếu rỗng thì bỏ slug.
+    let slug = String(payload.slug || '').trim();
+    if (!slug) {
+      slug = isApex ? null : deriveSubSlugFromHostname(hostname);
+    }
+    const created = await createLandingPageAdmin({
+      slug,
+      title,
+      htmlContent: payload.htmlContent,
+      isPublished: payload.isPublished,
+      domainType: 'custom',
+      domainSubtype: isApex ? 'apex' : 'subdomain',
+    });
+    const newId = created?.id ?? created?.data?.id;
+    if (!newId) throw new Error('Không có id từ create');
+    const cd = await putLandingCustomDomain(newId, hostname, isApex);
+    setEditingId(newId);
+    setForm((p) => ({
+      ...p,
+      id: newId,
+      slug: slug || '',
+      domainType: 'custom',
+      domainSubtype: isApex ? 'apex' : 'subdomain',
+    }));
+    return { id: newId, cdInfo: cd?.data ?? null };
   };
 
   const remove = async (row) => {
@@ -382,6 +446,7 @@ export default function LandingPagesAdminPage() {
         links={{ preview: previewExternalUrl }}
         onClose={closeModal}
         onSave={save}
+        onCreatePageWithCustomDomain={handleCreateWithCustomDomain}
       />
     </div>
   );

@@ -5,6 +5,7 @@
  */
 
 import aiUsageMeter from '../services/ai/aiUsageMeter.service.js';
+import { getFromCache, setToCache, getCacheKey, getCacheStats } from './embeddingCache.util.js';
 
 const DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-001';
 const DEFAULT_EMBEDDING_DIM = 768;
@@ -46,12 +47,31 @@ async function recordEmbeddingUsage(userId, data, text, { feature, model } = {})
 /**
  * Embed một đoạn text thành vector.
  * Sử dụng gemini-embedding-001 cho text-only, output 768chiều.
+ * Kết quả được cache theo userId + feature + text hash.
  *
  * @param {string} text
  * @param {{ userId?: number|string, feature?: string, model?: string }} [options]
  * @returns {Promise<number[]>} vector
  */
 export async function embedText(text, options = {}) {
+  const cacheKey = getCacheKey(options.userId, options.feature, text);
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const result = await embedTextRaw(text, options);
+  setToCache(cacheKey, result);
+  return result;
+}
+
+/**
+ * Embed text trực tiếp (không cache).
+ * @param {string} text
+ * @param {object} options
+ * @returns {Promise<number[]>}
+ */
+async function embedTextRaw(text, options = {}) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) throw Object.assign(new Error('Thiếu GEMINI_API_KEY'), { status: 500 });
 
@@ -65,7 +85,6 @@ export async function embedText(text, options = {}) {
     content: { parts: [{ text }] },
   };
 
-  // gemini-embedding-001 hỗ trợ task_type và output_dimensionality
   if (model === 'gemini-embedding-001') {
     requestBody.task_type = 'RETRIEVAL_DOCUMENT';
     requestBody.output_dimensionality = outputDim;
@@ -94,7 +113,6 @@ export async function embedText(text, options = {}) {
 
   await recordEmbeddingUsage(options.userId, data, text, { feature: options.feature, model });
 
-  // Đảm bảo vector có đúng số chiều (pad hoặc truncate nếu cần)
   const targetDim = outputDim;
   let result = values;
   if (result.length > targetDim) {
@@ -108,11 +126,44 @@ export async function embedText(text, options = {}) {
 
 /**
  * Embed nhiều đoạn text song song (batch).
+ * Sử dụng cache để tránh embed lại text đã được cache.
  *
  * @param {string[]} texts
  * @param {{ userId?: number|string, feature?: string, model?: string }} [options]
  * @returns {Promise<number[][]>}
  */
 export async function embedTexts(texts, options = {}) {
-  return Promise.all(texts.map((text) => embedText(text, options)));
+  const results = [];
+  const uncachedIndices = [];
+  const cacheKeys = [];
+
+  for (let i = 0; i < texts.length; i++) {
+    const cacheKey = getCacheKey(options.userId, options.feature, texts[i]);
+    cacheKeys.push(cacheKey);
+    const cached = getFromCache(cacheKey);
+
+    if (cached) {
+      results[i] = cached;
+    } else {
+      results[i] = null;
+      uncachedIndices.push(i);
+    }
+  }
+
+  if (uncachedIndices.length > 0) {
+    const embedPromises = uncachedIndices.map(async (i) => {
+      const result = await embedTextRaw(texts[i], options);
+      setToCache(cacheKeys[i], result);
+      return { index: i, result };
+    });
+
+    const embedded = await Promise.all(embedPromises);
+    for (const { index, result } of embedded) {
+      results[index] = result;
+    }
+  }
+
+  return results;
 }
+
+export { getCacheStats };

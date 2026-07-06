@@ -174,14 +174,32 @@ class KnowledgeBaseRepository {
 
   async insertChunksBatched(docId, kbId, userId, chunks) {
     if (!chunks.length) return;
+
+    // Use multi-row INSERT for better performance (single transaction instead of N queries)
+    const values = [];
+    const params = [];
+    let paramIndex = 1;
+
     for (let i = 0; i < chunks.length; i++) {
       const c = chunks[i];
-      await db.query(
-        `INSERT INTO kb_chunks (id_document, id_kb, id_user, embedding, chunk_text, metadata, chunk_index)
-         VALUES ($1, $2, $3, $4::vector, $5, $6::jsonb, $7)`,
-        [docId, kbId, userId, JSON.stringify(c.embedding), c.text, JSON.stringify(c.metadata || {}), i]
+      values.push(
+        `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}::vector, $${paramIndex + 4}, $${paramIndex + 5}::jsonb, $${paramIndex + 6})`
       );
+      params.push(
+        docId, kbId, userId,
+        JSON.stringify(c.embedding),
+        c.text,
+        JSON.stringify(c.metadata || {}),
+        i
+      );
+      paramIndex += 7;
     }
+
+    await db.query(
+      `INSERT INTO kb_chunks (id_document, id_kb, id_user, embedding, chunk_text, metadata, chunk_index)
+       VALUES ${values.join(', ')}`,
+      params
+    );
   }
 
   /**
