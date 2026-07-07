@@ -828,8 +828,30 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       toast(t('aiChatbot.planDayTemplatesReady') || 'Ngày này đã có đủ template.');
       return;
     }
-    setTemplatePickerContext({ dayItem, slots: pendingSlots });
+    setTemplatePickerContext({ mode: 'pick', dayItem, slots: pendingSlots });
   };
+
+  const openTemplatePickerForDraft = (draft) => {
+    if (!draft?._planSlotKey || generatingDay !== null) return;
+    setTemplatePickerContext({ mode: 'replace', draft });
+  };
+
+  const buildLibraryDraftFromTemplate = (tpl, draftMeta, apiChannel) => ({
+    templateName: tpl.templateName || tpl.name || `Template #${tpl.id}`,
+    subject: tpl.subject || '',
+    bodyHtml: tpl.bodyHtml || '',
+    bodyText: tpl.bodyText || tpl.message || '',
+    channel: draftMeta.channel || apiChannel,
+    _planTemplate: draftMeta._planTemplate,
+    _planDay: draftMeta._planDay,
+    _planSlotId: draftMeta._planSlotId,
+    _planSlotKey: draftMeta._planSlotKey,
+    _planSlotIndex: draftMeta._planSlotIndex,
+    _planSendTime: draftMeta._planSendTime,
+    _planSummary: draftMeta._planSummary,
+    _fromLibrary: true,
+    _libraryTemplateId: tpl.id,
+  });
 
   const handleTemplatePickerClose = () => {
     setTemplatePickerContext(null);
@@ -837,7 +859,56 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const handleTemplatePickerSelect = async (templateSummary) => {
     const context = templatePickerContext;
-    if (!context?.slots?.length || !templateSummary?.id) return;
+    if (!templateSummary?.id) return;
+
+    if (context?.mode === 'replace' && context.draft) {
+      const draftMeta = context.draft;
+      const draftChannel = normalizeChannel(draftMeta.channel);
+      const apiChannel = draftChannel === 'email' ? 'email' : 'zalo';
+      const endpoint = apiChannel === 'email' ? '/email-templates' : '/zalo-templates';
+
+      try {
+        const detailRes = await api.get(`${endpoint}/${templateSummary.id}`);
+        const tpl = detailRes.data?.data;
+        if (!tpl) throw new Error('Template not found');
+
+        const draftData = buildLibraryDraftFromTemplate(tpl, draftMeta, apiChannel);
+        const slotKey = String(draftMeta._planSlotKey);
+
+        setMessages((prev) => prev.map((msg) => (
+          msg.type === 'template_draft' && String(msg.data?._planSlotKey) === slotKey
+            ? {
+              ...msg,
+              content: t('aiChatbot.existingTemplateFilled', {
+                name: draftData.templateName,
+              }) || `Đã điền template «${draftData.templateName}» vào nháp bên dưới.`,
+              data: draftData,
+            }
+            : msg
+        )));
+
+        setContentPlanWorkflow((prev) => {
+          if (!prev) return prev;
+          const draftTemplates = prev.draftTemplates.some((item) => String(item._planSlotKey) === slotKey)
+            ? prev.draftTemplates.map((item) => (
+              String(item._planSlotKey) === slotKey ? draftData : item
+            ))
+            : [...prev.draftTemplates, draftData];
+          return {
+            ...prev,
+            draftTemplates,
+            status: 'waiting_template_save',
+          };
+        });
+
+        setTemplatePickerContext(null);
+      } catch (err) {
+        toast.error(err.response?.data?.message || err.message || t('aiChatbot.templateLoadFailed') || 'Không tải được template.');
+      }
+      return;
+    }
+
+    if (!context?.slots?.length) return;
 
     const { dayItem, slots } = context;
     const { slot, slotOrder, slotKey } = slots[0];
@@ -851,11 +922,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const tpl = detailRes.data?.data;
       if (!tpl) throw new Error('Template not found');
 
-      const draftData = {
-        templateName: tpl.templateName || tpl.name || `Template #${tpl.id}`,
-        subject: tpl.subject || '',
-        bodyHtml: tpl.bodyHtml || '',
-        bodyText: tpl.bodyText || tpl.message || '',
+      const draftData = buildLibraryDraftFromTemplate(tpl, {
         channel: apiChannel,
         _planTemplate: true,
         _planDay: day,
@@ -864,9 +931,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         _planSlotIndex: slotOrder,
         _planSendTime: slot.sendTime || null,
         _planSummary: slot.summary || dayItem.summary || '',
-        _fromLibrary: true,
-        _libraryTemplateId: tpl.id,
-      };
+      }, apiChannel);
 
       const assistantMsg = {
         role: 'assistant',
@@ -894,7 +959,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       const remainingSlots = slots.slice(1);
       if (remainingSlots.length > 0) {
-        setTemplatePickerContext({ dayItem, slots: remainingSlots });
+        setTemplatePickerContext({ mode: 'pick', dayItem, slots: remainingSlots });
       } else {
         setTemplatePickerContext(null);
       }
@@ -2215,6 +2280,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const templatePickerChannel = (() => {
+    if (templatePickerContext?.mode === 'replace' && templatePickerContext.draft) {
+      return templatePickerContext.draft.channel === 'email' ? 'email' : 'zalo';
+    }
     const dayItem = templatePickerContext?.dayItem;
     if (!dayItem) return 'zalo';
     const channel = normalizeChannel(dayItem.channel || dayItem.slots?.[0]?.channel);
@@ -2222,6 +2290,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   })();
 
   const templatePickerSlotLabel = (() => {
+    if (templatePickerContext?.mode === 'replace' && templatePickerContext.draft) {
+      const day = templatePickerContext.draft._planDay;
+      const slot = templatePickerContext.draft._planSlotIndex;
+      if (!day) return '';
+      return t('aiChatbot.pickTemplateForDaySlot', {
+        day,
+        slot: slot || 1,
+      }) || `Ngày ${day} • tin #${slot || 1}`;
+    }
     const slot = templatePickerContext?.slots?.[0];
     const day = templatePickerContext?.dayItem?.day;
     if (!slot || !day) return '';
@@ -2842,6 +2919,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   draft={msg.data}
                   onSave={(savedTemplate) => handlePlanTemplateSaved(msg.data, savedTemplate)}
                   onEdit={handleEditTemplate}
+                  onUseExisting={msg.data?._planTemplate ? openTemplatePickerForDraft : undefined}
                   autoSaveCategory={msg.data?._planTemplate && !msg.data?._fromLibrary ? 'AI Generated' : null}
                   fromLibrary={Boolean(msg.data?._fromLibrary)}
                   t={t}

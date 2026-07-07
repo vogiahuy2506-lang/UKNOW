@@ -82,7 +82,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 };
 
 // Template preview card
-export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory = null, fromLibrary = false }) => {
+export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -172,43 +172,54 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory =
         {showCategoryPicker ? (
           <CategoryPicker onSelect={handleSave} onCancel={() => setShowCategoryPicker(false)} t={t} />
         ) : (
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => {
-                if (saved) return;
-                if (isLibraryTemplate) {
-                  handleSave();
-                  return;
-                }
-                if (autoSaveCategory) {
-                  handleSave(autoSaveCategory);
-                } else {
-                  setShowCategoryPicker(true);
-                }
-              }}
-              disabled={saving || saved}
-              className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
-                saved
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                  : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
-              }`}
-            >
-              <HiOutlineCheck className="w-4 h-4" />
-              {saved
-                ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
-                : (saving
-                  ? (t('aiChatbot.saving') || 'Đang lưu...')
-                  : (isLibraryTemplate
-                    ? (t('aiChatbot.confirmUseTemplate') || 'Xác nhận dùng template này')
-                    : (t('aiChatbot.saveToLibrary') || 'Lưu vào thư viện')))}
-            </button>
-            <button
-              onClick={() => onEdit?.(draft)}
-              className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
-              {t('aiChatbot.edit')}
-            </button>
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (saved) return;
+                  if (isLibraryTemplate) {
+                    handleSave();
+                    return;
+                  }
+                  if (autoSaveCategory) {
+                    handleSave(autoSaveCategory);
+                  } else {
+                    setShowCategoryPicker(true);
+                  }
+                }}
+                disabled={saving || saved}
+                className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
+                  saved
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                    : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
+                }`}
+              >
+                <HiOutlineCheck className="w-4 h-4" />
+                {saved
+                  ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
+                  : (saving
+                    ? (t('aiChatbot.saving') || 'Đang lưu...')
+                    : (isLibraryTemplate
+                      ? (t('aiChatbot.confirmUseTemplate') || 'Xác nhận dùng template này')
+                      : (t('aiChatbot.saveToLibrary') || 'Lưu vào thư viện')))}
+              </button>
+              <button
+                onClick={() => onEdit?.(draft)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
+                {t('aiChatbot.edit')}
+              </button>
+            </div>
+            {typeof onUseExisting === 'function' && !saved && (
+              <button
+                type="button"
+                onClick={() => onUseExisting(draft)}
+                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50"
+              >
+                {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
+              </button>
+            )}
           </div>
         )}
       </div>

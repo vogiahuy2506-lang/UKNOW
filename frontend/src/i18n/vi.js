@@ -2688,6 +2688,7 @@ export default {
     searchTemplatePlaceholder: 'Tìm theo tên template...',
     noTemplates: 'Chưa có template nào trong thư viện.',
     existingTemplatePicked: 'Đã chọn template «{name}» cho Ngày {day}. Xác nhận để tiếp tục.',
+    existingTemplateFilled: 'Đã điền template «{name}» vào nháp bên dưới.',
     pickTemplateForDaySlot: 'Ngày {day} • tin #{slot}',
     planDayTemplatesReady: 'Ngày này đã có đủ template.',
     templateLoadFailed: 'Không tải được template.',

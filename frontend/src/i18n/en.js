@@ -2628,6 +2628,7 @@ export default {
     searchTemplatePlaceholder: 'Search by template name...',
     noTemplates: 'No templates in your library yet.',
     existingTemplatePicked: 'Selected «{name}» for Day {day}. Confirm to continue.',
+    existingTemplateFilled: 'Filled draft below with template «{name}».',
     pickTemplateForDaySlot: 'Day {day} • message #{slot}',
     planDayTemplatesReady: 'This day already has all templates.',
     templateLoadFailed: 'Could not load template.',
