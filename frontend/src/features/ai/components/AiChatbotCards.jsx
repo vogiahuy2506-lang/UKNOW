@@ -216,7 +216,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory =
   );
 };
 
-export const ContentPlanCard = ({ data, workflow, t }) => {
+export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => {
   const days = Array.isArray(data?.days) ? data.days : [];
   const totalDays = data?.totalDays || days.length;
   if (!days.length) return null;
@@ -227,9 +227,14 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
       : <HiOutlineChat className="w-4 h-4 text-blue-500" />
   );
 
-  const channelLabel = (channel) => (
-    channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate')
-  );
+  const channelLabel = (channel) => {
+    if (approvalMode) {
+      if (channel === 'email') return t('aiChatbot.channelEmail') || 'Email';
+      if (channel === 'zalo_group') return t('aiChatbot.channelZaloGroup') || 'Zalo nhóm';
+      return t('aiChatbot.channelZaloPersonal') || 'Zalo cá nhân';
+    }
+    return channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate');
+  };
 
   const isDayCompleted = (day) => workflow?.completedDays?.includes(day);
   const getSavedCount = (day) => Number(workflow?.savedCountByDay?.[String(day)] || 0);
@@ -244,9 +249,16 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
     <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-100">
         <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
-        <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
-          {t('aiChatbot.contentPlanTitle', { count: totalDays })}
-        </span>
+        <div className="min-w-0">
+          <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
+            {t('aiChatbot.contentPlanTitle', { count: totalDays })}
+          </span>
+          {approvalMode && (
+            <p className="mt-0.5 text-[11px] font-medium text-blue-700/80">
+              {t('aiChatbot.contentPlanApprovalSubtitle')}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
@@ -288,6 +300,7 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
                     </div>
                   )}
                 </div>
+                {!approvalMode && (
                 <span className={`shrink-0 inline-flex items-center rounded-xl px-3 py-2 text-xs font-black ${
                   completed
                     ? 'bg-emerald-100 text-emerald-700'
@@ -312,8 +325,9 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
                           ? 'Sẵn sàng'
                           : 'Chờ'}
                 </span>
+                )}
               </div>
-              {waiting && (
+              {!approvalMode && waiting && (
                 <p className="mt-2 text-[11px] text-slate-400">
                   Hãy hoàn tất Ngày {pendingDay} trước.
                 </p>
@@ -329,6 +343,7 @@ export const ContentPlanCard = ({ data, workflow, t }) => {
 export const ContentPlanActionsCard = ({
   data,
   workflow,
+  approvalMode = false,
   onApprove,
   onRevise,
   onGenerateAll,
@@ -366,7 +381,9 @@ export const ContentPlanActionsCard = ({
           disabled={busy || !firstDay}
           className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {t('aiChatbot.planApproveStartDay') || 'Đồng ý — tạo template Ngày 1'}
+          {approvalMode
+            ? (t('aiChatbot.planApproveButton') || 'Đồng ý với kế hoạch')
+            : (t('aiChatbot.planApproveStartDay') || 'Đồng ý — tạo template Ngày 1')}
         </button>
         <button
           type="button"
@@ -376,6 +393,7 @@ export const ContentPlanActionsCard = ({
         >
           {t('aiChatbot.planReviseButton') || 'Chỉnh lại kế hoạch'}
         </button>
+        {!approvalMode && (
         <button
           type="button"
           onClick={onUseExisting}
@@ -384,6 +402,7 @@ export const ContentPlanActionsCard = ({
         >
           {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
         </button>
+        )}
         <button
           type="button"
           onClick={onGenerateAll}
@@ -392,13 +411,17 @@ export const ContentPlanActionsCard = ({
         >
           {workflow?.isGeneratingAll
             ? (t('aiChatbot.planGeneratingAll') || 'Đang tạo tất cả...')
-            : (t('aiChatbot.planGenerateAllDays') || 'Tạo 1 lúc tất cả các ngày')}
+            : (approvalMode
+              ? (t('aiChatbot.planApproveGenerateAll') || 'Đồng ý & soạn template tất cả ngày')
+              : (t('aiChatbot.planGenerateAllDays') || 'Tạo 1 lúc tất cả các ngày'))}
         </button>
       </div>
 
       {!reviseOpen && (
         <p className="text-[11px] text-slate-500">
-          {t('aiChatbot.planReviseTeaser') || 'Kế hoạch chưa ổn? Bấm «Chỉnh lại kế hoạch» để ghi góp ý.'}
+          {approvalMode
+            ? (t('aiChatbot.planApprovalNextStep') || 'Sau khi đồng ý, AI sẽ soạn nội dung tin nhắn từng ngày để bạn xem và lưu template.')
+            : (t('aiChatbot.planReviseTeaser') || 'Kế hoạch chưa ổn? Bấm «Chỉnh lại kế hoạch» để ghi góp ý.')}
         </p>
       )}
 

@@ -2201,6 +2201,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     return contentPlanWorkflow.status === 'waiting_day_confirm';
   };
 
+  const isPlanApprovalMode = Boolean(
+    contentPlanWorkflow
+    && contentPlanWorkflow.requiresApproval !== false
+    && !contentPlanWorkflow.planApproved
+    && contentPlanWorkflow.status === 'waiting_day_confirm'
+  );
+
   const openTemplatePickerForPendingDay = () => {
     const day = Number(contentPlanWorkflow?.pendingDay);
     const dayItem = contentPlanWorkflow?.plan?.days?.find((item) => Number(item.day) === day);
@@ -2734,6 +2741,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   <ContentPlanCard
                     data={msg.data}
                     workflow={contentPlanWorkflow}
+                    approvalMode={isPlanApprovalMode}
                     t={t}
                   />
                   {shouldShowContentPlanActions(idx) && (
@@ -2744,6 +2752,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                       <ContentPlanActionsCard
                         data={{ firstDay: msg.data?.days?.[0]?.day || contentPlanWorkflow?.pendingDay }}
                         workflow={contentPlanWorkflow}
+                        approvalMode={isPlanApprovalMode}
                         onApprove={handleApproveContentPlan}
                         onRevise={handleReviseContentPlan}
                         onGenerateAll={handleGenerateAllPlanTemplates}
