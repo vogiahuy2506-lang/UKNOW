@@ -18,7 +18,7 @@ import LandingPageCard from './components/LandingPageCard';
 import {
   AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
-  AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal,
+  AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal, TemplatePickerModal,
 } from './components/AiChatbotCards';
 import {
   AskSenderAccountCard,
@@ -394,6 +394,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [currentScript, setCurrentScript] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
+  const [templatePickerContext, setTemplatePickerContext] = useState(null);
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [pendingLandingData, setPendingLandingData] = useState(null);
@@ -802,6 +803,104 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         return slots.length > 0 && slots.every((slot, index) => savedKeys.has(getPlanSlotKey(day, slot, index)));
       })
       .map((dayItem) => dayItem.day);
+  };
+
+  const getPendingPlanSlotsForDay = (dayItem) => {
+    if (!dayItem || !contentPlanWorkflow?.plan) return [];
+    const day = Number(dayItem.day);
+    if (!Number.isFinite(day)) return [];
+    const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
+    const savedKeys = new Set((contentPlanWorkflow.savedTemplates || []).map((item) => String(item.slotId)));
+    const draftedKeys = new Set((contentPlanWorkflow.draftTemplates || []).map((item) => String(item._planSlotKey)));
+    return slots
+      .map((slot, index) => {
+        const slotOrder = Number(slot.slotIndex) || index + 1;
+        const slotKey = getPlanSlotKey(day, slot, index);
+        return { slot, index, slotOrder, slotKey };
+      })
+      .filter(({ slotKey }) => !savedKeys.has(slotKey) && !draftedKeys.has(slotKey));
+  };
+
+  const openTemplatePickerForDay = (dayItem) => {
+    if (!dayItem || generatingDay !== null) return;
+    const pendingSlots = getPendingPlanSlotsForDay(dayItem);
+    if (!pendingSlots.length) {
+      toast(t('aiChatbot.planDayTemplatesReady') || 'Ngày này đã có đủ template.');
+      return;
+    }
+    setTemplatePickerContext({ dayItem, slots: pendingSlots });
+  };
+
+  const handleTemplatePickerClose = () => {
+    setTemplatePickerContext(null);
+  };
+
+  const handleTemplatePickerSelect = async (templateSummary) => {
+    const context = templatePickerContext;
+    if (!context?.slots?.length || !templateSummary?.id) return;
+
+    const { dayItem, slots } = context;
+    const { slot, slotOrder, slotKey } = slots[0];
+    const day = Number(dayItem.day);
+    const draftChannel = normalizeChannel(dayItem.channel || slot.channel);
+    const apiChannel = draftChannel === 'email' ? 'email' : 'zalo';
+    const endpoint = apiChannel === 'email' ? '/email-templates' : '/zalo-templates';
+
+    try {
+      const detailRes = await api.get(`${endpoint}/${templateSummary.id}`);
+      const tpl = detailRes.data?.data;
+      if (!tpl) throw new Error('Template not found');
+
+      const draftData = {
+        templateName: tpl.templateName || tpl.name || `Template #${tpl.id}`,
+        subject: tpl.subject || '',
+        bodyHtml: tpl.bodyHtml || '',
+        bodyText: tpl.bodyText || tpl.message || '',
+        channel: apiChannel,
+        _planTemplate: true,
+        _planDay: day,
+        _planSlotId: slotKey,
+        _planSlotKey: slotKey,
+        _planSlotIndex: slotOrder,
+        _planSendTime: slot.sendTime || null,
+        _planSummary: slot.summary || dayItem.summary || '',
+        _fromLibrary: true,
+        _libraryTemplateId: tpl.id,
+      };
+
+      const assistantMsg = {
+        role: 'assistant',
+        content: t('aiChatbot.existingTemplatePicked', {
+          name: draftData.templateName,
+          day,
+        }) || `Đã chọn template «${draftData.templateName}» cho Ngày ${day}. Xác nhận để tiếp tục.`,
+        type: 'template_draft',
+        data: draftData,
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+      setContentPlanWorkflow((prev) => {
+        if (!prev) return prev;
+        const exists = prev.draftTemplates.some((item) => String(item._planSlotKey) === String(slotKey));
+        return {
+          ...prev,
+          draftTemplates: exists ? prev.draftTemplates : [...prev.draftTemplates, draftData],
+          generatingDay: null,
+          failedDay: null,
+          awaitingDayConfirm: false,
+          status: 'waiting_template_save',
+        };
+      });
+
+      const remainingSlots = slots.slice(1);
+      if (remainingSlots.length > 0) {
+        setTemplatePickerContext({ dayItem, slots: remainingSlots });
+      } else {
+        setTemplatePickerContext(null);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || t('aiChatbot.templateLoadFailed') || 'Không tải được template.');
+    }
   };
 
   const getSlotDelayHours = (slot, day, slotIndex, baseHour) => {
@@ -2092,6 +2191,29 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     return contentPlanWorkflow.status === 'waiting_day_confirm';
   };
 
+  const openTemplatePickerForPendingDay = () => {
+    const day = Number(contentPlanWorkflow?.pendingDay);
+    const dayItem = contentPlanWorkflow?.plan?.days?.find((item) => Number(item.day) === day);
+    if (dayItem) openTemplatePickerForDay(dayItem);
+  };
+
+  const templatePickerChannel = (() => {
+    const dayItem = templatePickerContext?.dayItem;
+    if (!dayItem) return 'zalo';
+    const channel = normalizeChannel(dayItem.channel || dayItem.slots?.[0]?.channel);
+    return channel === 'email' ? 'email' : 'zalo';
+  })();
+
+  const templatePickerSlotLabel = (() => {
+    const slot = templatePickerContext?.slots?.[0];
+    const day = templatePickerContext?.dayItem?.day;
+    if (!slot || !day) return '';
+    return t('aiChatbot.pickTemplateForDaySlot', {
+      day,
+      slot: slot.slotOrder,
+    }) || `Ngày ${day} • tin #${slot.slotOrder}`;
+  })();
+
   const isFullscreen = variant === 'fullscreen';
   const showHomeHero = isFullscreen
     && messages.length <= 1
@@ -2615,6 +2737,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                         onApprove={handleApproveContentPlan}
                         onRevise={handleReviseContentPlan}
                         onGenerateAll={handleGenerateAllPlanTemplates}
+                        onUseExisting={openTemplatePickerForPendingDay}
                         t={t}
                       />
                     </div>
@@ -2645,12 +2768,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onApprove={handleApproveContentPlan}
                   onRevise={handleReviseContentPlan}
                   onGenerateAll={handleGenerateAllPlanTemplates}
+                  onUseExisting={openTemplatePickerForPendingDay}
                   t={t}
                 />
               )}
 
               {msg.type === 'confirm_next_day' && (
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -2663,6 +2787,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {msg.data?.retry ? `Thử lại Ngày ${msg.data?.day}` : `Tạo template Ngày ${msg.data?.day}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const day = Number(msg.data?.day || contentPlanWorkflow?.pendingDay);
+                      if (!day) return;
+                      const dayItem = contentPlanWorkflow?.plan?.days?.find((d) => d.day === day);
+                      if (dayItem) openTemplatePickerForDay(dayItem);
+                    }}
+                    disabled={generatingDay !== null}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
                   </button>
                 </div>
               )}
@@ -2686,7 +2823,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   draft={msg.data}
                   onSave={(savedTemplate) => handlePlanTemplateSaved(msg.data, savedTemplate)}
                   onEdit={handleEditTemplate}
-                  autoSaveCategory={msg.data?._planTemplate ? 'AI Generated' : null}
+                  autoSaveCategory={msg.data?._planTemplate && !msg.data?._fromLibrary ? 'AI Generated' : null}
+                  fromLibrary={Boolean(msg.data?._fromLibrary)}
                   t={t}
                 />
               )}
@@ -2750,6 +2888,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           setSelectedScriptForPush(null);
         }}
         onSelect={handleSelectCampaign}
+        t={t}
+      />
+
+      <TemplatePickerModal
+        isOpen={Boolean(templatePickerContext)}
+        onClose={handleTemplatePickerClose}
+        onSelect={handleTemplatePickerSelect}
+        channel={templatePickerChannel}
+        slotLabel={templatePickerSlotLabel}
         t={t}
       />
 

@@ -82,7 +82,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 };
 
 // Template preview card
-export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory = null }) => {
+export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory = null, fromLibrary = false }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -92,7 +92,22 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory =
     setShowCategoryPicker(false);
   }, [draft?.templateName, draft?.subject, draft?.bodyHtml, draft?.bodyText, draft?.channel, draft?._planSlotKey]);
 
+  const isLibraryTemplate = fromLibrary || Boolean(draft?._fromLibrary);
+  const libraryTemplateId = draft?._libraryTemplateId;
+
   const handleSave = async (category) => {
+    if (isLibraryTemplate && libraryTemplateId) {
+      setSaved(true);
+      onSave?.({
+        id: libraryTemplateId,
+        templateName: draft.templateName,
+        subject: draft.subject || '',
+        bodyHtml: draft.bodyHtml || '',
+        bodyText: draft.bodyText || '',
+      });
+      toast.success(t('aiChatbot.templateLinked') || 'Đã gắn template vào kế hoạch.');
+      return;
+    }
     setSaving(true);
     setShowCategoryPicker(false);
     try {
@@ -161,6 +176,10 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory =
             <button
               onClick={() => {
                 if (saved) return;
+                if (isLibraryTemplate) {
+                  handleSave();
+                  return;
+                }
                 if (autoSaveCategory) {
                   handleSave(autoSaveCategory);
                 } else {
@@ -175,7 +194,13 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, t, autoSaveCategory =
               }`}
             >
               <HiOutlineCheck className="w-4 h-4" />
-              {saved ? t('aiChatbot.savedToLibrary') : (saving ? t('aiChatbot.saving') : t('aiChatbot.saveToLibrary'))}
+              {saved
+                ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
+                : (saving
+                  ? (t('aiChatbot.saving') || 'Đang lưu...')
+                  : (isLibraryTemplate
+                    ? (t('aiChatbot.confirmUseTemplate') || 'Xác nhận dùng template này')
+                    : (t('aiChatbot.saveToLibrary') || 'Lưu vào thư viện')))}
             </button>
             <button
               onClick={() => onEdit?.(draft)}
@@ -307,6 +332,7 @@ export const ContentPlanActionsCard = ({
   onApprove,
   onRevise,
   onGenerateAll,
+  onUseExisting,
   t,
 }) => {
   const [reviseOpen, setReviseOpen] = useState(false);
@@ -349,6 +375,14 @@ export const ContentPlanActionsCard = ({
           className="rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {t('aiChatbot.planReviseButton') || 'Chỉnh lại kế hoạch'}
+        </button>
+        <button
+          type="button"
+          onClick={onUseExisting}
+          disabled={busy || !firstDay || typeof onUseExisting !== 'function'}
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
         </button>
         <button
           type="button"
@@ -623,7 +657,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         </div>
       ))}
 
-      {isEmailChannel && (
+      {isEmailChannel && !isWizardQuestion && (
         <div>
           <p className="text-xs font-semibold text-slate-600 mb-2">{t('aiChatbot.emailContent')}</p>
           <div className="flex flex-wrap gap-2">
@@ -1227,6 +1261,94 @@ export const AutoCreatedSuccessCard = ({ result, onView, t }) => (
     )}
   </div>
 );
+
+// Template library picker for content-plan days
+export const TemplatePickerModal = ({ isOpen, onClose, onSelect, channel = 'zalo', slotLabel = '', t }) => {
+  const [templates, setTemplates] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const templateChannel = channel === 'email' ? 'email' : 'zalo';
+  const endpoint = templateChannel === 'email' ? '/email-templates' : '/zalo-templates';
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoadingTemplates(true);
+    api.get(endpoint, { params: { limit: 100 } })
+      .then((res) => setTemplates(res.data?.data?.items || res.data?.data || []))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTemplates(false));
+  }, [isOpen, endpoint]);
+
+  const filtered = templates.filter((item) => {
+    const name = String(item.templateName || item.name || '').toLowerCase();
+    return name.includes(searchTerm.toLowerCase());
+  });
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="flex max-h-[70vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 p-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <HiOutlineFolderOpen className="h-5 w-5 shrink-0 text-orange-500" />
+              <h3 className="font-bold text-slate-800">{t('aiChatbot.selectTemplate') || 'Chọn template'}</h3>
+            </div>
+            {slotLabel && (
+              <p className="mt-1 truncate text-[11px] text-slate-500">{slotLabel}</p>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-50">
+            <HiOutlineX className="h-5 w-5 text-slate-400" />
+          </button>
+        </div>
+        <div className="border-b border-slate-100 p-4">
+          <input
+            type="text"
+            placeholder={t('aiChatbot.searchTemplatePlaceholder') || 'Tìm theo tên template...'}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {loadingTemplates ? (
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500/30 border-t-orange-500" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">{t('aiChatbot.noTemplates') || 'Chưa có template nào.'}</p>
+          ) : (
+            <div className="space-y-1">
+              {filtered.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-slate-50"
+                >
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                    templateChannel === 'email' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                  }`}
+                  >
+                    {templateChannel === 'email' ? 'E' : 'Z'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-800">{item.templateName || item.name}</p>
+                    {item.subject && (
+                      <p className="truncate text-[10px] text-slate-400">{item.subject}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Campaign picker modal
 export const CampaignPickerModal = ({ isOpen, onClose, onSelect, t }) => {
