@@ -38,6 +38,7 @@ const MainLayout = () => {
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
 
   const isAiHomePage = location.pathname === '/app' || location.pathname === '/app/';
+  const showAiSidePanel = aiPanelOpen && !isAiHomePage;
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -48,6 +49,13 @@ const MainLayout = () => {
   useEffect(() => {
     setMobileDrawerOpen(false);
   }, [location.pathname]);
+
+  // Trang Trợ lý AI đã có chat full-screen — tự thu side panel để không bị lấn layout
+  useEffect(() => {
+    if (isAiHomePage && aiPanelOpen) {
+      setAiPanelOpen(false);
+    }
+  }, [isAiHomePage, aiPanelOpen, setAiPanelOpen]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -127,7 +135,7 @@ const MainLayout = () => {
   useEffect(() => {
     const t = setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
     return () => clearTimeout(t);
-  }, [aiPanelOpen]);
+  }, [showAiSidePanel]);
 
   const effectiveSidebarWidth = sidebarOpen ? sidebarWidth : 80;
   const desktopMainClassName = isFullLayout || isInboxPage || isAiHomePage
@@ -170,8 +178,10 @@ const MainLayout = () => {
             <Outlet />
           </main>
         </div>
-        <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
-        
+        {!isAiHomePage && (
+          <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
+        )}
+
         {/* AI Toggle Trigger (Mobile) */}
         {!aiPanelOpen && !isAiHomePage && (
           <button 
@@ -209,10 +219,10 @@ const MainLayout = () => {
       )}
 
       <div
-        className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}${aiPanelOpen && !isMobile ? ' ai-panel-open' : ''}`}
+        className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}${showAiSidePanel && !isMobile ? ' ai-panel-open' : ''}`}
         style={{
           marginLeft: `${effectiveSidebarWidth}px`,
-          marginRight: aiPanelOpen && !isMobile ? `${aiPanelWidth}px` : '0px',
+          marginRight: showAiSidePanel && !isMobile ? `${aiPanelWidth}px` : '0px',
         }}
       >
         <main ref={mainContentRef} className={desktopMainClassName}>
