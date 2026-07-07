@@ -8,6 +8,7 @@ import {
   HiOutlineRefresh,
   HiOutlineUserGroup,
   HiOutlineChat,
+  HiOutlineArrowLeft,
 } from 'react-icons/hi';
 import campaignBuilderApiService from '../../campaigns/services/campaignBuilderApi.service';
 import emailSettingsApiService from '../../settings/services/emailSettingsApi.service';
@@ -27,6 +28,8 @@ const normalizeEmailSettings = (response) => {
   if (Array.isArray(data.items)) return data.items;
   return [];
 };
+
+const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'digiso.vn';
 
 export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
   const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
@@ -104,6 +107,13 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
 
 export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t }) => {
   const [checking, setChecking] = useState(false);
+  const [quickMode, setQuickMode] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [quickForm, setQuickForm] = useState({
+    name: '',
+    replyTo: '',
+    platformPrefix: '',
+  });
 
   const handleCompleted = async () => {
     setChecking(true);
@@ -138,6 +148,50 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t 
     }
   };
 
+  const updateQuickForm = (key, value) => {
+    setQuickForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCreateQuickSender = async () => {
+    const name = String(quickForm.name || '').trim();
+    const replyTo = String(quickForm.replyTo || '').trim();
+    const platformPrefix = String(quickForm.platformPrefix || '').trim().toLowerCase();
+
+    if (!name || !replyTo || !platformPrefix) {
+      toast.error(t('aiChatbot.wizardQuickEmailMissing') || 'Bạn nhập đủ 3 ô để tạo email gửi nhanh nhé.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+      toast.error(t('aiChatbot.wizardQuickEmailInvalidReplyTo') || 'Email Reply-To chưa hợp lệ.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(platformPrefix)) {
+      toast.error(t('aiChatbot.wizardQuickEmailInvalidPrefix') || 'Prefix chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const response = await emailSettingsApiService.createEmailSetting({
+        name,
+        replyTo,
+        emailMode: 'platform',
+        platformPrefix,
+      });
+      const created = response?.data?.data || {};
+      toast.success(t('aiChatbot.wizardQuickEmailCreated') || 'Đã tạo email sender. Mình tiếp tục chiến dịch nhé.');
+      onSelectAccount?.({
+        id: created.id,
+        name: created.name || name,
+        email: created.email || `${platformPrefix}@${PLATFORM_DOMAIN}`,
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('aiChatbot.wizardQuickEmailCreateFailed') || 'Không tạo được email sender.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -146,7 +200,20 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t 
           {t('aiChatbot.wizardEmailSetupTitle') || 'Thiết lập email'}
         </span>
       </div>
+      <p className="mb-3 text-xs text-slate-600">
+        {t('aiChatbot.wizardEmailSetupHint') || 'Bạn có thể tạo nhanh email gửi ngay tại đây, không cần vào Settings.'}
+      </p>
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setQuickMode((prev) => !prev)}
+          className="inline-flex items-center gap-1 rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-black text-orange-700 hover:bg-orange-100"
+        >
+          <HiOutlineCheck className="h-4 w-4" />
+          {quickMode
+            ? (t('aiChatbot.wizardHideQuickEmail') || 'Ẩn tạo nhanh')
+            : (t('aiChatbot.wizardQuickEmailSetup') || 'Tạo nhanh trong chat')}
+        </button>
         <Link
           to={data?.settingsPath || '/app/settings/channels'}
           className="inline-flex items-center gap-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white hover:bg-orange-600"
@@ -164,11 +231,64 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t 
           {checking ? (t('common.loading') || 'Loading...') : (t('aiChatbot.wizardCompleted') || 'Đã hoàn thành')}
         </button>
       </div>
+
+      {quickMode && (
+        <div className="mt-3 space-y-3 rounded-xl border border-orange-200 bg-white p-3">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-slate-600">{t('aiChatbot.wizardQuickSenderName') || 'Tên người gửi'}</p>
+            <input
+              type="text"
+              value={quickForm.name}
+              onChange={(event) => updateQuickForm('name', event.target.value)}
+              placeholder={t('aiChatbot.wizardQuickSenderNamePlaceholder') || 'Ví dụ: Founder AI'}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-orange-400"
+            />
+          </div>
+
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-slate-600">{t('aiChatbot.wizardQuickReplyTo') || 'Email Reply-To'}</p>
+            <input
+              type="email"
+              value={quickForm.replyTo}
+              onChange={(event) => updateQuickForm('replyTo', event.target.value)}
+              placeholder={t('aiChatbot.wizardQuickReplyToPlaceholder') || 'Ví dụ: hello@congty.com'}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-orange-400"
+            />
+          </div>
+
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-slate-600">
+              {t('aiChatbot.wizardQuickFromPrefix') || 'Địa chỉ gửi (prefix)'}
+            </p>
+            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <input
+                type="text"
+                value={quickForm.platformPrefix}
+                onChange={(event) => updateQuickForm('platformPrefix', event.target.value.replace(/[^a-zA-Z0-9._-]/g, ''))}
+                placeholder={t('aiChatbot.wizardQuickFromPrefixPlaceholder') || 'no-reply'}
+                className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
+              />
+              <span className="ml-2 shrink-0 text-xs text-slate-500">@{PLATFORM_DOMAIN}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCreateQuickSender}
+            disabled={creating}
+            className="w-full rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:opacity-60"
+          >
+            {creating
+              ? (t('aiChatbot.wizardQuickCreating') || 'Đang tạo...')
+              : (t('aiChatbot.wizardQuickCreateAndContinue') || 'Tạo email gửi & tiếp tục')}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, t }) => {
+export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccounts, t }) => {
   const [qr, setQr] = useState(null);
   const [sessionKey, setSessionKey] = useState('');
   const [status, setStatus] = useState('idle');
@@ -289,6 +409,16 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, t }) => {
           {t('aiChatbot.wizardNewQr') || 'Tạo mã mới'}
         </button>
       </div>
+      {typeof onBackToAccounts === 'function' && (
+        <button
+          type="button"
+          onClick={() => onBackToAccounts(channel)}
+          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black text-blue-700 transition-all hover:bg-blue-100"
+        >
+          <HiOutlineArrowLeft className="h-4 w-4" />
+          {t('aiChatbot.wizardBackToZaloAccounts') || 'Chọn tài khoản có sẵn'}
+        </button>
+      )}
     </div>
   );
 };

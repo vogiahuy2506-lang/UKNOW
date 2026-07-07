@@ -29,6 +29,7 @@ import {
 import ConfirmModal from '../inbox/ConfirmModal';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
+import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -1464,6 +1465,48 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     ]);
   };
 
+  const mapZaloAccountsForPicker = (rawAccounts = []) => {
+    const list = Array.isArray(rawAccounts) ? rawAccounts : [];
+    return list.map((account) => ({
+      id: account.id,
+      name: account.displayName || account.display_name || account.zaloName || account.zalo_name || `Zalo #${account.id}`,
+      email: null,
+      status: account.status || 'unknown',
+      isDefault: Boolean(account.isDefault ?? account.is_default),
+      usable: account.status === 'connected'
+        && account.isActive !== false
+        && account.is_active !== false,
+    }));
+  };
+
+  const handleWizardZaloBackToAccounts = async (channel) => {
+    const selectedChannel = channel || wizardContext.channel || 'zalo';
+    try {
+      const response = await zaloSettingsApiService.listAccounts();
+      const payload = response?.data?.data ?? response?.data ?? [];
+      const rawList = Array.isArray(payload) ? payload : (payload.items || []);
+      const accounts = mapZaloAccountsForPicker(rawList);
+      const usableCount = accounts.filter((account) => account.usable).length;
+
+      setMessages((prev) => [
+        ...stripWizardCards(prev),
+        {
+          role: 'assistant',
+          content: t('aiChatbot.wizardChooseZaloAccount') || 'Bạn chọn tài khoản Zalo sẽ dùng cho chiến dịch nhé.',
+          type: 'ask_sender_account',
+          data: {
+            channel: selectedChannel,
+            accounts,
+            allowOther: true,
+            noUsableAccount: usableCount === 0,
+          },
+        },
+      ]);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('aiChatbot.wizardZaloAccountLoadFailed') || 'Không tải được danh sách tài khoản Zalo.');
+    }
+  };
+
   const handleWizardGroupsSubmit = async (groupIds, groups = []) => {
     const labels = groups
       .filter((group) => groupIds.includes(group.groupId || group.group_id || group.id))
@@ -2750,6 +2793,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <ZaloQrLoginCard
                   channel={msg.data?.channel || wizardContext.channel || 'zalo'}
                   onConnected={(account, channel) => handleWizardSenderSelect(account, channel, { viaQr: true })}
+                  onBackToAccounts={handleWizardZaloBackToAccounts}
                   t={t}
                 />
               )}
