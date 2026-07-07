@@ -2674,6 +2674,7 @@ export default {
     planReviseHint: 'Ghi ngắn gọn phần cần đổi (ngày nào, giờ gửi, nội dung, số tin...):',
     planRevisePlaceholder: 'Ví dụ: Ngày 2 gửi 9h thay vì 8h, Ngày 4 nhắc ưu đãi thay vì chào hỏi...',
     planReviseSubmit: 'Gửi góp ý chỉnh kế hoạch',
+    planReviseUserMessage: 'Góp ý chỉnh kế hoạch: {feedback}',
     confirmUseTemplate: 'Xác nhận dùng template này',
     templateLinked: 'Đã gắn template vào kế hoạch.',
     selectTemplate: 'Chọn template',

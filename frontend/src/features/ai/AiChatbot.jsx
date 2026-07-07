@@ -1150,7 +1150,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const sendChatMessage = async (trimmedInput, messageFiles = [], options = {}) => {
-    const { silentUser = false } = options;
+    const { silentUser = false, historyBase = null } = options;
     if (isSendingRef.current) return;
     if (aiBillingBlock) {
       notifyAiRequestError({
@@ -1172,7 +1172,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     isSendingRef.current = true;
 
     let mySessionId = currentSessionId;
-    const update = makeUpdater(mySessionId, [...messages]);
+    const baseMessages = historyBase ?? messages;
+    const update = makeUpdater(mySessionId, [...baseMessages]);
     if (mySessionId) markTabPending(mySessionId);
 
     const wizardMarker = parseWizardMarker(trimmedInput);
@@ -1182,7 +1183,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       files: [...messageFiles],
       silent: silentUser || Boolean(wizardMarker),
     };
-    const newHistory = [...(wizardMarker ? stripWizardCards(messages) : messages), userMsg];
+    const newHistory = [...(wizardMarker ? stripWizardCards(baseMessages) : baseMessages), userMsg];
     update(newHistory);
     setIsTyping(true);
 
@@ -1409,11 +1410,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     );
   };
 
-  const requestContentPlan = async (userPrompt) => {
+  const requestContentPlan = async (userPrompt, historyBase = null) => {
     const text = locale === 'en'
       ? `Return content_plan JSON only (day-by-day overview, no full message bodies) for: ${userPrompt}`
       : `Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: ${userPrompt}`;
-    await sendChatMessage(text, [], { silentUser: true });
+    await sendChatMessage(text, [], { silentUser: true, historyBase });
   };
 
   const handleSend = async () => {
@@ -1719,12 +1720,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const trimmed = String(feedback || '').trim();
     if (!trimmed) return;
     const basePrompt = contentPlanWorkflow?.sourcePrompt || '';
+    const filtered = messages.filter((msg) => !['content_plan', 'content_plan_actions'].includes(msg.type));
+    const feedbackContent = t('aiChatbot.planReviseUserMessage', { feedback: trimmed })
+      || `Góp ý chỉnh kế hoạch: ${trimmed}`;
+    const visibleUserMsg = { role: 'user', content: feedbackContent };
+    const historyWithFeedback = [...filtered, visibleUserMsg];
+
+    setMessages(historyWithFeedback);
     setContentPlanWorkflow(null);
-    setMessages((prev) => prev.filter((msg) => !['content_plan', 'content_plan_actions'].includes(msg.type)));
+    setPendingCampaignData(null);
+    setPendingCampaignPrompt(null);
+
     const revisionPrompt = basePrompt
       ? `${basePrompt}\n\nGóp ý chỉnh kế hoạch: ${trimmed}`
       : `Hãy chỉnh lại content_plan theo góp ý: ${trimmed}`;
-    await requestContentPlan(revisionPrompt);
+    await requestContentPlan(revisionPrompt, historyWithFeedback);
   };
 
   const handleWizardPlanApproved = async () => {

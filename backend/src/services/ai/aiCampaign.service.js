@@ -701,6 +701,15 @@ D. ZALO NHÓM:
         },
       };
     }
+    if (response?.type === 'content_plan' && nextGate?.gate === 'planApproved') {
+      return {
+        ...response,
+        data: {
+          ...(response.data || {}),
+          requiresApproval: true,
+        },
+      };
+    }
     return nextGate?.response || response;
   }
 

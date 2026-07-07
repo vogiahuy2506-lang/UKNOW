@@ -106,6 +106,11 @@ const isPlanTemplatePrompt = (text = '') => (
   /tạo chi tiết template cho ngày|tao chi tiet template cho ngay/i.test(String(text || ''))
 );
 
+export const isContentPlanRevisionText = (text = '') => {
+  const value = String(text || '');
+  return /góp ý chỉnh kế hoạch|chỉnh lại content_plan|plan revision:/i.test(value);
+};
+
 const getAssistantData = (message) => message?.data || null;
 
 export function extractWizardState(history = []) {
@@ -128,6 +133,11 @@ export function extractWizardState(history = []) {
   messages.forEach((message, index) => {
     const content = message?.content || '';
     const marker = message?.role === 'user' ? parseWizardMarker(content) : null;
+
+    if (message?.role === 'user' && isContentPlanRevisionText(content)) {
+      state.hasContentPlan = false;
+      state.planApproved = false;
+    }
 
     if (message?.role === 'user' && isCampaignRequestText(content)) {
       state.isCampaignFlow = true;

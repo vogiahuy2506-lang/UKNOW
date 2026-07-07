@@ -166,4 +166,35 @@ describe('aiCampaign.service', () => {
     expect(guarded.type).toBe('ask_sender_account');
     expect(guarded.data.channel).toBe('zalo');
   });
+
+  it('returns revised content_plan instead of planApproved gate after revision feedback', () => {
+    const contentPlanResponse = {
+      type: 'content_plan',
+      content: 'Kế hoạch 4 ngày',
+      data: {
+        totalDays: 4,
+        days: [{ day: 1, channel: 'zalo', slots: [{ channel: 'zalo', summary: 'Chào' }] }],
+        requiresApproval: true,
+      },
+    };
+    const history = [
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":12}\nTK 12' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+      { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":5,"slotsPerDay":1}\n5 ngày' },
+      {
+        role: 'assistant',
+        type: 'content_plan',
+        content: 'Kế hoạch 5 ngày',
+        data: { totalDays: 5, days: [{ day: 1, channel: 'zalo', slots: [{ channel: 'zalo', summary: 'Chào' }] }] },
+      },
+      { role: 'user', content: 'Góp ý chỉnh kế hoạch: chỉ 4 ngày thôi' },
+    ];
+
+    const guarded = aiCampaignService._guardWizardGates(contentPlanResponse, history, {}, 'vi');
+
+    expect(guarded.type).toBe('content_plan');
+    expect(guarded.data.totalDays).toBe(4);
+    expect(guarded.data.requiresApproval).toBe(true);
+  });
 });

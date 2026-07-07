@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   evaluateNextGate,
   extractWizardState,
+  isContentPlanRevisionText,
 } from '../aiCampaignWizard.service.js';
 
 describe('aiCampaignWizard.service', () => {
@@ -131,6 +132,27 @@ describe('aiCampaignWizard.service', () => {
     expect(gate.response.type).toBe('ask_sender_account');
     expect(gate.response.data.accounts).toHaveLength(2);
     expect(gate.response.data.accounts.filter((account) => account.usable)).toHaveLength(1);
+  });
+
+  it('clears stale content plan state when user sends revision feedback', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":12}\nTK 12' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+      { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":5,"slotsPerDay":1}\n5 ngày' },
+      {
+        role: 'assistant',
+        type: 'content_plan',
+        content: 'Kế hoạch 5 ngày',
+        data: { totalDays: 5, days: [{ day: 1, channel: 'zalo', slots: [{ channel: 'zalo', summary: 'Chào' }] }] },
+      },
+      { role: 'user', content: 'Góp ý chỉnh kế hoạch: chỉ 4 ngày thôi' },
+    ]);
+
+    expect(isContentPlanRevisionText('Góp ý chỉnh kế hoạch: chỉ 4 ngày')).toBe(true);
+    expect(state.hasContentPlan).toBe(false);
+    expect(state.planApproved).toBe(false);
+    expect(evaluateNextGate(state, {})).toBeNull();
   });
 
   it('re-asks schedule when free-text infers recurring (not yet supported)', () => {

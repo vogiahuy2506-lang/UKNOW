@@ -2614,6 +2614,7 @@ export default {
     planReviseHint: 'Briefly describe what to change (which day, send time, content, message count...):',
     planRevisePlaceholder: 'e.g. Day 2 at 9am instead of 8am, Day 4 should mention the promo...',
     planReviseSubmit: 'Send revision feedback',
+    planReviseUserMessage: 'Plan revision: {feedback}',
     confirmUseTemplate: 'Confirm use this template',
     templateLinked: 'Template linked to the plan.',
     selectTemplate: 'Select template',
