@@ -206,7 +206,9 @@ export function createDynamicCorsMiddleware() {
       // Also allow *.founderai.biz subdomains (e.g., senna.founderai.biz, www.founderai.biz)
       if (hostname.endsWith('.founderai.biz') ||
           hostname.endsWith('.uknow.vn') ||
-          hostname === 'uknow.vn') {
+          hostname === 'uknow.vn' ||
+          hostname.endsWith('.hanhchinh.ai.vn') ||
+          hostname === 'hanhchinh.ai.vn') {
         // Allow founderai.biz/uknow.vn subdomains (they use domainResolver middleware)
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
