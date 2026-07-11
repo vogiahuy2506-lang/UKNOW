@@ -155,6 +155,37 @@ describe('aiCampaignWizard.service', () => {
     expect(evaluateNextGate(state, {})).toBeNull();
   });
 
+  it('infers plan approval from drafted templates when the marker is missing', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nSales' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"sheet"}\nGoogle Sheet' },
+      { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":3,"slotsPerDay":1}\n3 ngày' },
+      {
+        role: 'assistant',
+        type: 'content_plan',
+        content: 'Kế hoạch 3 ngày',
+        data: { totalDays: 3, days: [{ day: 1, channel: 'email', slots: [{ channel: 'email', summary: 'Ra mắt' }] }] },
+      },
+      // Không có marker planApproved (mất do session reload) nhưng template đã được soạn
+      { role: 'assistant', type: 'template_draft', content: 'Email 1', data: { channel: 'email', templateName: 'Email 1' } },
+    ]);
+
+    expect(state.planApproved).toBe(true);
+    expect(evaluateNextGate(state, {
+      emailSenders: [{ id: 7, name: 'Sales', email: 'sales@example.com', status: 'active' }],
+    })).toBeNull();
+  });
+
+  it('does not infer plan approval from templates drafted without a content plan', () => {
+    const state = extractWizardState([
+      { role: 'user', content: 'Tạo chiến dịch email ra mắt sản phẩm trong 3 ngày' },
+      { role: 'assistant', type: 'template_draft', content: 'Email 1', data: { channel: 'email', templateName: 'Email 1' } },
+    ]);
+
+    expect(state.planApproved).toBe(false);
+  });
+
   it('re-asks schedule when free-text infers recurring (not yet supported)', () => {
     const state = extractWizardState([
       { role: 'user', content: 'Tạo chiến dịch email gửi mỗi 7 ngày cho khách trong DB' },

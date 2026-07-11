@@ -41,6 +41,9 @@ const DEFAULT_CATEGORIES = (t) => [
 // Category picker overlay — lấy danh mục (nhãn template) thực tế của user
 const CategoryPicker = ({ onSelect, onCancel, t }) => {
   const [labels, setLabels] = useState(null); // null = đang tải
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   useEffect(() => {
     templateLabelApiService.getLabels()
@@ -51,6 +54,28 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
   const categories = labels && labels.length > 0
     ? labels.map((l) => ({ id: l.name, name: l.name, color: l.color }))
     : DEFAULT_CATEGORIES(t);
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast.error(t('aiChatbot.newCategoryEmpty') || 'Bạn nhập tên danh mục trước nhé.');
+      return;
+    }
+    setCreatingCategory(true);
+    try {
+      await templateLabelApiService.createLabel({ name });
+      onSelect(name);
+    } catch (e) {
+      if (e.response?.status === 409) {
+        // Nhãn đã tồn tại — dùng luôn để lưu template
+        onSelect(name);
+      } else {
+        toast.error(e.response?.data?.message || t('aiChatbot.createCategoryFailed') || 'Không tạo được danh mục.');
+      }
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
 
   return (
     <div className="mt-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
@@ -74,6 +99,36 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
               {cat.name}
             </button>
           ))}
+          {!showNewCategoryInput && (
+            <button
+              onClick={() => setShowNewCategoryInput(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border border-dashed border-orange-300 text-orange-600 bg-white transition-all hover:bg-orange-100"
+            >
+              ＋ {t('aiChatbot.createNewCategory') || 'Tạo danh mục mới'}
+            </button>
+          )}
+        </div>
+      )}
+      {showNewCategoryInput && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); } }}
+            placeholder={t('aiChatbot.newCategoryPlaceholder') || 'Tên danh mục mới...'}
+            autoFocus
+            className="min-w-0 flex-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-orange-400 focus:outline-none"
+          />
+          <button
+            onClick={handleCreateCategory}
+            disabled={creatingCategory}
+            className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {creatingCategory
+              ? (t('aiChatbot.saving') || 'Đang lưu...')
+              : (t('aiChatbot.createCategoryAndSave') || 'Tạo & lưu')}
+          </button>
         </div>
       )}
       <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">{t('aiChatbot.cancel')}</button>
@@ -82,10 +137,11 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 };
 
 // Template preview card
-export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false }) => {
+export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false, externallySaved = false }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const isSaved = saved || externallySaved;
 
   useEffect(() => {
     setSaved(false);
@@ -111,7 +167,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
     setSaving(true);
     setShowCategoryPicker(false);
     try {
-      const endpoint = draft.channel === 'zalo' ? '/zalo-templates' : '/email-templates';
+      const endpoint = draft.channel === 'email' ? '/email-templates' : '/zalo-templates';
       const response = await api.post(endpoint, {
         templateName: draft.templateName,
         subject: draft.subject || '',
@@ -176,7 +232,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
             <div className="flex gap-2">
               <button
                 onClick={() => {
-                  if (saved) return;
+                  if (isSaved) return;
                   if (isLibraryTemplate) {
                     handleSave();
                     return;
@@ -187,15 +243,15 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
                     setShowCategoryPicker(true);
                   }
                 }}
-                disabled={saving || saved}
+                disabled={saving || isSaved}
                 className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
-                  saved
+                  isSaved
                     ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
                     : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
                 }`}
               >
                 <HiOutlineCheck className="w-4 h-4" />
-                {saved
+                {isSaved
                   ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
                   : (saving
                     ? (t('aiChatbot.saving') || 'Đang lưu...')
@@ -211,7 +267,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
                 {t('aiChatbot.edit')}
               </button>
             </div>
-            {typeof onUseExisting === 'function' && !saved && (
+            {typeof onUseExisting === 'function' && !isSaved && (
               <button
                 type="button"
                 onClick={() => onUseExisting(draft)}
@@ -393,7 +449,7 @@ export const ContentPlanActionsCard = ({
           className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {approvalMode
-            ? (t('aiChatbot.planApproveButton') || 'Đồng ý với kế hoạch')
+            ? (t('aiChatbot.planApproveButton') || 'Đồng ý — soạn từng ngày một')
             : (t('aiChatbot.planApproveStartDay') || 'Đồng ý — tạo template Ngày 1')}
         </button>
         <button
@@ -423,7 +479,7 @@ export const ContentPlanActionsCard = ({
           {workflow?.isGeneratingAll
             ? (t('aiChatbot.planGeneratingAll') || 'Đang tạo tất cả...')
             : (approvalMode
-              ? (t('aiChatbot.planApproveGenerateAll') || 'Đồng ý & soạn template tất cả ngày')
+              ? (t('aiChatbot.planApproveGenerateAll') || 'Đồng ý — soạn tất cả các ngày 1 lượt')
               : (t('aiChatbot.planGenerateAllDays') || 'Tạo 1 lúc tất cả các ngày'))}
         </button>
       </div>
@@ -431,7 +487,7 @@ export const ContentPlanActionsCard = ({
       {!reviseOpen && (
         <p className="text-[11px] text-slate-500">
           {approvalMode
-            ? (t('aiChatbot.planApprovalNextStep') || 'Sau khi đồng ý, AI sẽ soạn nội dung tin nhắn từng ngày để bạn xem và lưu template.')
+            ? (t('aiChatbot.planApprovalNextStep') || 'Cả 2 nút «Đồng ý» đều duyệt kế hoạch — khác nhau ở cách soạn template: soạn lần lượt từng ngày để bạn duyệt từng tin, hoặc soạn sẵn tất cả các ngày trong 1 lượt.')
             : (t('aiChatbot.planReviseTeaser') || 'Kế hoạch chưa ổn? Bấm «Chỉnh lại kế hoạch» để ghi góp ý.')}
         </p>
       )}

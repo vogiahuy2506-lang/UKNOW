@@ -8,7 +8,7 @@ import {
   HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
   HiOutlineMail, HiOutlineGlobeAlt, HiOutlinePlus,
   HiOutlineClipboardList, HiOutlineChat, HiOutlineLink, HiOutlineClock,
-  HiOutlineCog, HiOutlineExclamation,
+  HiOutlineExclamation,
 } from 'react-icons/hi';
 import { writeCampaignDraft } from '../../utils/campaignDraftStorage';
 import { toast } from 'react-hot-toast';
@@ -177,12 +177,15 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
   }
 };
 
+const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
+
 const deriveWizardContext = (items = []) => {
   const context = {
     channel: null,
     senderAccountId: null,
     senderAccountName: null,
     dataSource: null,
+    sheetUrl: null,
     zaloGroupIds: [],
     schedule: null,
     planApproved: false,
@@ -190,7 +193,12 @@ const deriveWizardContext = (items = []) => {
   items.forEach((message) => {
     if (message?.role !== 'user') return;
     const marker = parseWizardMarker(message.content);
-    if (!marker) return;
+    if (!marker) {
+      // User dán link Google Sheet dưới dạng tin nhắn thường — lấy link mới nhất
+      const sheetMatch = String(message.content || '').match(GOOGLE_SHEET_URL_RE);
+      if (sheetMatch) context.sheetUrl = sheetMatch[0].replace(/[)\]}>.,;'"]+$/, '');
+      return;
+    }
     if (marker.gate === 'channel') {
       context.channel = normalizeChannel(marker.channel || marker.value);
       context.senderAccountId = null;
@@ -225,7 +233,8 @@ const applyWizardSelectionsToScript = (script, context = {}) => {
   if (!script) return script;
   const senderId = context.senderAccountId != null ? Number(context.senderAccountId) : null;
   const groupIds = Array.isArray(context.zaloGroupIds) ? context.zaloGroupIds : [];
-  if (!senderId && groupIds.length === 0 && !context.dataSource) return script;
+  const sheetUrl = context.sheetUrl || '';
+  if (!senderId && groupIds.length === 0 && !context.dataSource && !sheetUrl) return script;
 
   const next = {
     ...script,
@@ -243,13 +252,18 @@ const applyWizardSelectionsToScript = (script, context = {}) => {
         if (node.nodeSubtype === 'get_all_groups' && groupIds.length > 0) {
           config.zaloSelectedGroupIds = groupIds;
         }
+        if (node.nodeSubtype === 'read_sheet' && sheetUrl && !config.sheetUrl) {
+          config.sheetUrl = sheetUrl;
+        }
         if (context.dataSource === 'sheet' && node.nodeSubtype === 'interested_customers') {
           return {
             ...node,
             nodeSubtype: 'read_sheet',
             nodeName: 'Danh sách từ Sheet',
-            nodeDescription: 'Danh sách lấy từ Google Sheet - cần dán URL trong Campaign Builder nếu chưa có.',
-            config: { sheetUrl: '', sheetName: 'Sheet1', headerRow: 1, dataStartRow: 2 },
+            nodeDescription: sheetUrl
+              ? 'Danh sách lấy từ Google Sheet bạn đã cung cấp.'
+              : 'Danh sách lấy từ Google Sheet - cần dán URL trong Campaign Builder nếu chưa có.',
+            config: { sheetUrl, sheetName: 'Sheet1', headerRow: 1, dataStartRow: 2 },
           };
         }
         if (context.dataSource === 'landing' && node.nodeSubtype === 'interested_customers') {
@@ -416,9 +430,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState(null);
-  const [allowedModels, setAllowedModels] = useState([]);
   const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.5-flash');
-  const [modelLoading, setModelLoading] = useState(false);
+  const [isSavingAllTemplates, setIsSavingAllTemplates] = useState(false);
 
   const isMobile = useIsMobile();
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -482,28 +495,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const loadAllowedModels = async () => {
-    setModelLoading(true);
     try {
       const res = await aiApi.getAllowedModels();
       const list = normalizeAllowedModels(res?.data);
-      setAllowedModels(list);
       const preferred = res?.data?.preferredModel || res?.data?.maxModel || list[0]?.modelId || 'gemini-2.5-flash';
       setSelectedAiModel(list.some((model) => model.modelId === preferred) ? preferred : (list[0]?.modelId || 'gemini-2.5-flash'));
     } catch {
-      setAllowedModels([{ modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }]);
       setSelectedAiModel('gemini-2.5-flash');
-    } finally {
-      setModelLoading(false);
-    }
-  };
-
-  const handleModelChange = async (modelId) => {
-    setSelectedAiModel(modelId);
-    try {
-      await aiApi.savePreferredModel(modelId);
-    } catch (error) {
-      toast.error(error?.response?.data?.message || 'Không lưu được model AI');
-      loadAllowedModels();
     }
   };
 
@@ -1359,7 +1357,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }
 
         if (type === 'confirm_create' && data) {
-          const mergedScript = applyWizardSelectionsToScript(data, wizardContext);
+          // Derive từ newHistory (thay vì wizardContext state) để không bỏ sót
+          // tin nhắn vừa gửi trong lượt này (ví dụ link Google Sheet vừa dán)
+          const mergedScript = applyWizardSelectionsToScript(data, deriveWizardContext(newHistory));
           setCurrentScript(mergedScript);
           update(prev => [...prev, { role: 'assistant', content, type, data: mergedScript }]);
           return;
@@ -1367,7 +1367,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         if (type === 'create_and_run' && data) {
           setCreatingCampaign(true);
-          const scriptData = { ...data, isAiDraft: false, autoRun: true };
+          const scriptData = {
+            ...applyWizardSelectionsToScript(data, deriveWizardContext(newHistory)),
+            isAiDraft: false,
+            autoRun: true,
+          };
           update(prev => [...prev, {
             role: 'assistant',
             content: content || 'Đang tạo và chạy chiến dịch cho bạn...',
@@ -1626,6 +1630,58 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     });
   };
 
+  const getUnsavedPlanDrafts = () => {
+    if (!contentPlanWorkflow) return [];
+    const savedKeys = new Set((contentPlanWorkflow.savedTemplates || []).map((item) => String(item.slotId)));
+    return (contentPlanWorkflow.draftTemplates || []).filter((draft) => !savedKeys.has(String(draft._planSlotKey)));
+  };
+
+  const handleSaveAllPlanTemplates = async () => {
+    if (isSavingAllTemplates) return;
+    const drafts = getUnsavedPlanDrafts();
+    if (!drafts.length) return;
+
+    setIsSavingAllTemplates(true);
+    let savedCount = 0;
+    let failedCount = 0;
+    try {
+      for (const draft of drafts) {
+        try {
+          if (draft._fromLibrary && draft._libraryTemplateId) {
+            handlePlanTemplateSaved(draft, { id: draft._libraryTemplateId, templateName: draft.templateName });
+            savedCount += 1;
+            continue;
+          }
+          const endpoint = draft.channel === 'email' ? '/email-templates' : '/zalo-templates';
+          const response = await api.post(endpoint, {
+            templateName: draft.templateName,
+            subject: draft.subject || '',
+            bodyHtml: draft.bodyHtml || '',
+            bodyText: draft.bodyText || '',
+            category: 'AI Generated',
+            variables: [],
+          });
+          const savedTemplate = response?.data?.data || null;
+          if (!savedTemplate?.id) throw new Error('missing saved template id');
+          handlePlanTemplateSaved(draft, savedTemplate);
+          savedCount += 1;
+        } catch {
+          failedCount += 1;
+        }
+      }
+    } finally {
+      setIsSavingAllTemplates(false);
+    }
+
+    if (failedCount > 0) {
+      toast.error(t('aiChatbot.planSaveAllPartial', { saved: savedCount, failed: failedCount })
+        || `Đã lưu ${savedCount} template, ${failedCount} template lỗi. Bạn bấm Lưu ở từng template còn lại nhé.`);
+    } else {
+      toast.success(t('aiChatbot.planSaveAllDone', { count: savedCount })
+        || `Đã lưu ${savedCount} template vào thư viện.`);
+    }
+  };
+
   const handleGenerateDayTemplate = async (dayItem, options = {}) => {
     const { allMode = false, silentDone = false } = options;
     if (!dayItem || generatingDay !== null || !contentPlanWorkflow?.plan) return;
@@ -1880,7 +1936,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (generatedAll) {
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: '✅ Đã tạo nháp tất cả template trong kế hoạch. Bạn xem nội dung từng template và bấm Lưu; khi lưu đủ mình sẽ tạo campaign draft cho bạn.',
+        type: 'save_all_templates',
+        content: t('aiChatbot.planAllDraftsReady')
+          || '✅ Đã tạo nháp tất cả template trong kế hoạch. Bạn có thể xem lại và Lưu từng template, hoặc bấm nút bên dưới để lưu tất cả 1 lượt; khi lưu đủ mình sẽ tạo campaign draft cho bạn.',
       }]);
     }
   };
@@ -1950,7 +2008,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         return;
       }
       if (wizardQuestion.wizardGate === 'planApproved') {
-        await handleWizardPlanApproved();
+        if (contentPlanWorkflow?.plan) {
+          await handleWizardPlanApproved();
+        } else {
+          // Không còn plan workflow ở client (session reload / plan đã hoàn tất) —
+          // gửi marker duyệt kế hoạch cho backend để wizard đi tiếp thay vì kẹt im lặng
+          await emitWizardAnswer({ gate: 'planApproved', value: true }, 'Đồng ý với kế hoạch này.');
+        }
         return;
       }
     }
@@ -2238,7 +2302,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (!currentScript) return;
     const t = toast.loading('Đang tạo chiến dịch...');
     try {
-      const res = await aiApi.createCampaignFromDraft(currentScript);
+      // Merge lựa chọn wizard (tài khoản gửi, nhóm Zalo, link Sheet) vào script
+      // tại thời điểm tạo — currentScript có thể được set từ nhiều đường chưa merge
+      const scriptWithSelections = applyWizardSelectionsToScript(currentScript, wizardContext);
+      const res = await aiApi.createCampaignFromDraft(scriptWithSelections);
       if (res.success) {
         toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
         setCurrentScript(null);
@@ -2360,22 +2427,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const renderInputSection = ({ centered = false } = {}) => (
     <div className={centered ? 'w-full' : `flex-shrink-0 ${isFullscreen ? 'px-4 pb-6 bg-gray-50' : 'px-4 pt-3 pb-4 border-t border-slate-100 bg-white'}`}>
       <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
-        {!centered && (
-          <div className="mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <HiOutlineCog className="h-4 w-4 text-slate-400" />
-            <span className="text-[11px] font-bold uppercase text-slate-400">Gemini</span>
-            <select
-              value={selectedAiModel}
-              disabled={modelLoading || allowedModels.length === 0}
-              onChange={(e) => handleModelChange(e.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-700 outline-none"
-            >
-              {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
-                <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
-              ))}
-            </select>
-          </div>
-        )}
         <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white border-slate-200' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40' : centered ? '' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -2482,18 +2533,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isFullscreen && (
-            <select
-              value={selectedAiModel}
-              disabled={modelLoading || allowedModels.length === 0}
-              onChange={(e) => handleModelChange(e.target.value)}
-              className="hidden sm:block rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none"
-            >
-              {(allowedModels.length ? allowedModels : [{ modelId: selectedAiModel, displayName: selectedAiModel }]).map((model) => (
-                <option key={model.modelId} value={model.modelId}>{model.displayName}</option>
-              ))}
-            </select>
-          )}
           {!isFullscreen && (
             <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
               <HiOutlineArrowRight className="w-5 h-5" />
@@ -2957,6 +2996,28 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 </div>
               )}
 
+              {/* Save all plan templates */}
+              {msg.type === 'save_all_templates' && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveAllPlanTemplates}
+                    disabled={isSavingAllTemplates || !getUnsavedPlanDrafts().length}
+                    className={`rounded-xl px-3 py-2 text-xs font-black transition-all disabled:cursor-not-allowed ${
+                      !isSavingAllTemplates && !getUnsavedPlanDrafts().length
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
+                    }`}
+                  >
+                    {isSavingAllTemplates
+                      ? (t('aiChatbot.planSavingAllTemplates') || 'Đang lưu tất cả...')
+                      : (getUnsavedPlanDrafts().length
+                        ? (t('aiChatbot.planSaveAllTemplates') || 'Lưu tất cả template vào thư viện')
+                        : (t('aiChatbot.planAllTemplatesSaved') || 'Đã lưu tất cả template'))}
+                  </button>
+                </div>
+              )}
+
               {/* Template draft */}
               {msg.type === 'template_draft' && msg.data && (
                 <TemplateDraftCard
@@ -2966,6 +3027,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onUseExisting={msg.data?._planTemplate ? openTemplatePickerForDraft : undefined}
                   autoSaveCategory={msg.data?._planTemplate && !msg.data?._fromLibrary ? 'AI Generated' : null}
                   fromLibrary={Boolean(msg.data?._fromLibrary)}
+                  externallySaved={Boolean(msg.data?._planSlotKey)
+                    && (contentPlanWorkflow?.savedTemplates || []).some((item) => String(item.slotId) === String(msg.data._planSlotKey))}
                   t={t}
                 />
               )}

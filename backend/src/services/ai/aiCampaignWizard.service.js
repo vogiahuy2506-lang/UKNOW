@@ -161,6 +161,13 @@ export function extractWizardState(history = []) {
       }
     }
 
+    // Template đã được soạn sau content_plan nghĩa là kế hoạch đã được duyệt
+    // (UI chỉ sinh template sau khi user bấm Đồng ý) — kể cả khi marker planApproved
+    // bị mất khỏi history (ví dụ session reload), không được bắt duyệt lại.
+    if (message?.role === 'assistant' && message?.type === 'template_draft' && state.hasContentPlan) {
+      state.planApproved = true;
+    }
+
     if (!marker) return;
     state.isCampaignFlow = true;
 

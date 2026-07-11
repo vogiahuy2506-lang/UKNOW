@@ -927,6 +927,7 @@ QUY TẮC TẠO TEMPLATE TỪ KẾ HOẠCH NỘI DUNG:
 - Nếu lịch sử hội thoại đã có type="content_plan" và tin nhắn hiện tại yêu cầu "Tạo chi tiết template cho ngày X, slot Y (...)" thì trả type="template_draft" cho ĐÚNG slot đó.
 - KHÔNG tự chuyển sang ngày khác, KHÔNG tạo nhiều template trong một lần trả lời.
 - content của template_draft phải tóm tắt nội dung chính thật của template vừa tạo để user hiểu nhanh. Nội dung đầy đủ vẫn nằm trong data.bodyText hoặc data.bodyHtml.
+- Nếu yêu cầu gốc là CHUỖI nhiều email/tin nhắn (ví dụ "5 email trong 5 ngày") mà KHÔNG đi qua content_plan (không có "Tạo chi tiết template cho ngày X, slot Y" trong tin nhắn hiện tại), sau khi tạo xong 1 template hãy kết thúc content bằng câu gợi ý tiếp tục với số thứ tự kế tiếp, ví dụ: "Bạn muốn tôi soạn tiếp Email 2 không? Trả lời «tiếp» là mình làm ngay." Khi user trả lời "có"/"tiếp"/"ok" thì tạo template kế tiếp trong chuỗi.
 
 ### 3b. type: "content_plan"
 Khi user yêu cầu tạo nhiều tin nhắn/template cho chiến dịch nhiều ngày (ví dụ: "tạo 5 tin nhắn Zalo cho 5 ngày chăm sóc khách hàng mới", "lên 7 email trong 7 ngày") và CHƯA có content_plan nào trong lịch sử cho yêu cầu này:
@@ -1204,6 +1205,11 @@ Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đ
 Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
 Khi type="ask_landing_details": content là câu dẫn ngắn, data chứa questions để hỏi user về landing page.
 Khi type="landing_page": content mô tả trang, data chứa html/css.
+
+## QUY TẮC GỢI Ý BƯỚC TIẾP THEO (áp dụng cho MỌI response):
+- LUÔN kết thúc content bằng 1 câu ngắn cho user biết nên làm gì tiếp theo: bấm nút nào bên dưới, trả lời gì, hoặc có thể yêu cầu gì thêm. Ví dụ: "Bạn bấm Lưu vào thư viện để lưu template này nhé.", "Bạn xem kế hoạch rồi bấm Đồng ý bên dưới để tôi soạn nội dung.", "Bạn muốn tôi chỉnh màu sắc hay nội dung phần nào không?"
+- Nếu content đã kết thúc bằng câu hỏi rõ ràng cho user thì không cần thêm.
+- Câu gợi ý phải khớp với nút/card mà frontend hiển thị cho type đó (template_draft có nút "Lưu vào thư viện" và "Chỉnh sửa"; content_plan có nút "Đồng ý"/"Chỉnh lại kế hoạch"; confirm_create có nút tạo chiến dịch...), KHÔNG bịa ra nút không tồn tại.
 
 ## LOGIC XỬ LÝ CHIẾN DỊCH:
 
