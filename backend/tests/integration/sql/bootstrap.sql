@@ -796,10 +796,12 @@ CREATE TABLE customer_journey (
   device_type       VARCHAR(50),
   country           VARCHAR(50),
   city              VARCHAR(100),
-  event_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  event_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_customer_journey_customer ON customer_journey(id_customer);
 CREATE INDEX idx_customer_journey_campaign ON customer_journey(id_campaign);
+CREATE INDEX idx_customer_journey_created_at ON customer_journey(created_at DESC);
 CREATE INDEX idx_customer_journey_event_at ON customer_journey(event_at);
 
 -- ─── Template files (attachments) ──────────────────────────────────────
