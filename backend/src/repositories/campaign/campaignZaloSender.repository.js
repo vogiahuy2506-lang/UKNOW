@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { decryptZaloCookieRow, decryptZaloCookieRows, encryptZaloCookie } from '../../utils/zaloCookieCrypto.util.js';
 
 class CampaignZaloSenderRepository {
   /**
@@ -16,7 +17,7 @@ class CampaignZaloSenderRepository {
        LIMIT 1`,
       [accountId, userId]
     );
-    return result.rows[0] || null;
+    return decryptZaloCookieRow(result.rows[0] || null);
   }
 
   /**
@@ -40,7 +41,7 @@ class CampaignZaloSenderRepository {
            last_connected_at = $3,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $4 AND id_user = $5`,
-      [displayName, cookieText, now, accountId, userId]
+      [displayName, encryptZaloCookie(cookieText), now, accountId, userId]
     );
   }
 
@@ -98,7 +99,7 @@ class CampaignZaloSenderRepository {
        LIMIT 1`,
       isAdmin ? [accountId] : [accountId, userId]
     );
-    return result.rows[0] || null;
+    return decryptZaloCookieRow(result.rows[0] || null);
   }
 
   /**
@@ -127,7 +128,7 @@ class CampaignZaloSenderRepository {
    * @returns {Promise<{rows: Array}>}
    */
   async findConnectedAccountsNeedingRestore() {
-    return db.query(
+    const result = await db.query(
       `SELECT id, id_user, display_name, status, is_active, cookie_text
        FROM zalo_settings
        WHERE status = 'connected'
@@ -135,6 +136,8 @@ class CampaignZaloSenderRepository {
          AND cookie_text IS NOT NULL
          AND cookie_text <> ''`
     );
+    decryptZaloCookieRows(result.rows);
+    return result;
   }
 }
 

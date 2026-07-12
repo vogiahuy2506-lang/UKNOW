@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { decryptZaloCookieRow, encryptZaloCookie } from '../../utils/zaloCookieCrypto.util.js';
 
 class ZaloSettingRepository {
   async findActiveConnectedAccountByUser(userId) {
@@ -9,7 +10,7 @@ class ZaloSettingRepository {
        LIMIT 1`,
       [userId]
     );
-    return result.rows[0] || null;
+    return decryptZaloCookieRow(result.rows[0] || null);
   }
 
   async findActiveConnectedAccountSummaryByUser(userId) {
@@ -32,7 +33,7 @@ class ZaloSettingRepository {
        LIMIT 1`,
       [userId]
     );
-    return result.rows[0] || null;
+    return decryptZaloCookieRow(result.rows[0] || null);
   }
 
   /**
@@ -65,7 +66,7 @@ class ZaloSettingRepository {
            updated_at = CURRENT_TIMESTAMP
        WHERE id_user = $7 AND id = $8
        RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [displayName, zaloUserId, zaloName, zaloPhone, cookieText, now, userId, accountId]
+      [displayName, zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, userId, accountId]
     );
     return rows[0] || null;
   }
@@ -102,7 +103,7 @@ class ZaloSettingRepository {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
        RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [displayName, zaloName, zaloPhone, cookieText, now, accountId]
+      [displayName, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, accountId]
     );
     return rows[0] || null;
   }
@@ -130,7 +131,7 @@ class ZaloSettingRepository {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $7
        RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [zaloUserId, zaloName, zaloPhone, cookieText, displayName, now, accountId]
+      [zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), displayName, now, accountId]
     );
     return rows[0] || null;
   }
@@ -152,7 +153,7 @@ class ZaloSettingRepository {
         $1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), 'qr', NULLIF($6, ''), 'connected', TRUE, $7, NULL, $8
       )
       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
-      [userId, displayName, zaloUserId, zaloName, zaloPhone, cookieText, isDefault, now]
+      [userId, displayName, zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), isDefault, now]
     );
     return rows[0] || null;
   }
@@ -208,7 +209,7 @@ class ZaloSettingRepository {
        LIMIT 1`,
       isAdmin ? [accountId] : [accountId, userId]
     );
-    return rows[0] || null;
+    return decryptZaloCookieRow(rows[0] || null);
   }
 }
 

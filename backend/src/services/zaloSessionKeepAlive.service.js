@@ -17,6 +17,7 @@ import zaloPersonalInboxService from './chatbot/zaloInbox.service.js';
 import db from '../config/database.js';
 import { restoreZaloSessionFromCookie } from '../utils/zaloSessionRestore.util.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
+import { decryptZaloCookieRows } from '../utils/zaloCookieCrypto.util.js';
 
 // Track accounts currently being refreshed to avoid concurrent refresh
 const refreshingAccounts = new Set();
@@ -61,6 +62,7 @@ async function getAccountsWithCookies() {
          AND zs.is_active = TRUE
          AND zs.status = 'connected'`
     );
+    decryptZaloCookieRows(result.rows);
     console.log(`[ZaloKeepAlive] Found ${result.rows.length} accounts with cookies`);
     if (result.rows.length > 0) {
       result.rows.forEach((acc, i) => {

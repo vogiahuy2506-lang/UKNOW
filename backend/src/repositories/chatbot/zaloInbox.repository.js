@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { decryptZaloCookieRows } from '../../utils/zaloCookieCrypto.util.js';
 
 class ZaloInboxRepository {
   /**
@@ -12,7 +13,7 @@ class ZaloInboxRepository {
        FROM zalo_settings zs
        WHERE zs.is_active = true AND zs.status = 'connected' AND zs.cookie_text IS NOT NULL`
     );
-    return result.rows;
+    return decryptZaloCookieRows(result.rows);
   }
 
   /**

@@ -14,6 +14,7 @@ import campaignZaloSenderService from './services/campaign/campaignZaloSender.se
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
 import landingPageDomainService from './services/landingPage/landingPageDomain.service.js';
+import { decryptZaloCookieRows } from './utils/zaloCookieCrypto.util.js';
 
 const app = createApp();
 
@@ -141,6 +142,7 @@ const restoreZaloSessionsOnStartup = async () => {
          AND cookie_text IS NOT NULL AND TRIM(cookie_text) != ''`
     );
     if (!rows.length) return;
+    decryptZaloCookieRows(rows);
 
     console.log(`[Startup] Restoring ${rows.length} Zalo session(s) from saved cookies...`);
     let restored = 0;

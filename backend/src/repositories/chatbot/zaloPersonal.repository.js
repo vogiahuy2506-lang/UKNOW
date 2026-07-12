@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { decryptZaloCookieRow } from '../../utils/zaloCookieCrypto.util.js';
 
 class ZaloPersonalRepository {
   /**
@@ -15,7 +16,7 @@ class ZaloPersonalRepository {
        LIMIT 1`,
       [userId]
     );
-    return rows[0] || null;
+    return decryptZaloCookieRow(rows[0] || null);
   }
 
   /**
@@ -32,7 +33,7 @@ class ZaloPersonalRepository {
        LIMIT 1`,
       [accountId]
     );
-    return rows[0] || null;
+    return decryptZaloCookieRow(rows[0] || null);
   }
 
   /**
