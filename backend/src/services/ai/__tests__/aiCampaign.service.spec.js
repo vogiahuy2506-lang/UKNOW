@@ -163,8 +163,9 @@ describe('aiCampaign.service', () => {
       'vi'
     );
 
-    expect(guarded.type).toBe('ask_sender_account');
-    expect(guarded.data.channel).toBe('zalo');
+    expect(guarded.response.type).toBe('ask_sender_account');
+    expect(guarded.response.data.channel).toBe('zalo');
+    expect(guarded.gateAsked).toBe('senderAccount');
   });
 
   it('returns revised content_plan instead of planApproved gate after revision feedback', () => {
@@ -193,8 +194,8 @@ describe('aiCampaign.service', () => {
 
     const guarded = aiCampaignService._guardWizardGates(contentPlanResponse, history, {}, 'vi');
 
-    expect(guarded.type).toBe('content_plan');
-    expect(guarded.data.totalDays).toBe(4);
-    expect(guarded.data.requiresApproval).toBe(true);
+    expect(guarded.response.type).toBe('content_plan');
+    expect(guarded.response.data.totalDays).toBe(4);
+    expect(guarded.response.data.requiresApproval).toBe(true);
   });
 });

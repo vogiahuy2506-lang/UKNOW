@@ -69,7 +69,7 @@ describe('ai.controller', () => {
     await aiController.chat(req, res);
 
     expect(chargeAiCredit).not.toHaveBeenCalled();
-    expect(saveMessages).toHaveBeenCalledWith(123, expect.any(String), expect.not.objectContaining({
+    expect(saveMessages).toHaveBeenCalledWith(123, 42, expect.any(String), expect.not.objectContaining({
       wizardShortCircuit: true,
     }));
     expect(res.json).toHaveBeenCalledWith({

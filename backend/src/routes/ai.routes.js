@@ -47,6 +47,8 @@ router.put('/business-profile', aiController.saveBusinessProfile.bind(aiControll
 router.get('/sessions', aiController.getSessions.bind(aiController));
 router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiController));
 router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
+// Wizard state mutation từ nút bấm (không gọi AI → không aiLimiter, không credit)
+router.patch('/sessions/:id/wizard-state', aiController.patchWizardState.bind(aiController));
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
 router.post('/custom-chat', aiLimiter, assertAiCreditAvailable('ai_custom_chat'), aiController.customChat.bind(aiController));

@@ -26,7 +26,7 @@ export default function AdminAiModelsPage() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [savingId, setSavingId] = useState(null);
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +80,22 @@ export default function AdminAiModelsPage() {
     }
   };
 
+  // Chọn model hệ thống: bật model này, backend tự tắt toàn bộ model còn lại
+  const chooseSystemModel = async (model) => {
+    const modelId = toModelId(model);
+    if (!modelId || model.isEnabled) return;
+    setSavingId(modelId);
+    try {
+      await adminAiModelsApiService.setSystemModel(modelId);
+      setModels((prev) => prev.map((item) => ({ ...item, isEnabled: toModelId(item) === modelId })));
+      toast.success(t('adminAiModels.systemModelSet') || `Đã đặt ${modelId} làm model hệ thống`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminAiModels.saveFailed'));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -127,7 +143,7 @@ export default function AdminAiModelsPage() {
                   <th className="px-5 py-3">{t('adminAiModels.inputTokens')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.outputTokens')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.description')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.status')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.systemModelColumn') || 'Model hệ thống'}</th>
                   <th className="px-5 py-3">{t('adminAiModels.source')}</th>
                 </tr>
               </thead>
@@ -171,16 +187,19 @@ export default function AdminAiModelsPage() {
                         {model.description || '—'}
                       </td>
                       <td className="px-5 py-4">
-                        <label className="inline-flex cursor-pointer items-center gap-2">
+                        <label className={`inline-flex items-center gap-2 ${model.supportsGenerateContent ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                           <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-orange-600"
+                            type="radio"
+                            name="system-model"
+                            className="h-4 w-4 border-slate-300 text-orange-600"
                             checked={Boolean(model.isEnabled)}
-                            disabled={busy || (!model.supportsGenerateContent && !model.isEnabled)}
-                            onChange={(e) => updateModel(model, { isEnabled: e.target.checked })}
+                            disabled={busy || !model.supportsGenerateContent}
+                            onChange={() => chooseSystemModel(model)}
                           />
-                          <span className={model.isEnabled ? 'text-emerald-700' : 'text-slate-500'}>
-                            {model.isEnabled ? t('adminAiModels.enabled') : t('adminAiModels.disabled')}
+                          <span className={model.isEnabled ? 'font-semibold text-emerald-700' : 'text-slate-500'}>
+                            {model.isEnabled
+                              ? (t('adminAiModels.systemModelActive') || 'Đang dùng')
+                              : (t('adminAiModels.systemModelPick') || 'Chọn')}
                           </span>
                         </label>
                       </td>

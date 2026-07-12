@@ -1,49 +1,13 @@
-import db from '../../config/database.js';
-import { isAdminRole } from '../../utils/roleScope.util.js';
-import {
-  DEFAULT_AI_MODEL,
-  clampToTiers,
-  normalizeModelId,
-} from '../../utils/aiModelTier.util.js';
+import { DEFAULT_AI_MODEL, normalizeModelId } from '../../utils/aiModelTier.util.js';
 import { capabilityScore } from '../../utils/aiModelMetadata.util.js';
-import {
-  getCatalog,
-  getDefaultModel,
-  getEnabledModelIds,
-} from './aiModelCatalog.service.js';
-import {
-  updateUserPreferredModel,
-} from '../../repositories/ai/aiModelCatalog.repository.js';
-
-const ENV_DEFAULT_MODEL = normalizeModelId(process.env.GEMINI_MODEL) || DEFAULT_AI_MODEL;
+import { getCatalog } from './aiModelCatalog.service.js';
 
 /**
- * @param {number|string|null|undefined} userId
- * @returns {Promise<{ role: string|null, planMaxModel: string|null, preferredModel: string|null }>}
+ * Chính sách model AI: TOÀN HỆ THỐNG dùng đúng 1 model do super admin chọn
+ * (model duy nhất đang bật trong catalog — xem setSystemModel).
+ * User không thấy và không chọn được model; gói dịch vụ không còn gate model.
+ * Nếu catalog lỡ bật nhiều model, lấy model có capability cao nhất.
  */
-async function getUserPlanModelRow(userId) {
-  if (!userId) {
-    return { role: null, planMaxModel: null, preferredModel: null };
-  }
-  const { rows } = await db.query(
-    `SELECT u.role, u.preferred_ai_model, p.ai_model
-     FROM users u
-     LEFT JOIN plans p ON p.id = u.active_plan_id
-     WHERE u.id = $1`,
-    [userId]
-  );
-  const row = rows[0];
-  return {
-    role: row?.role ?? null,
-    planMaxModel: row?.ai_model ? normalizeModelId(row.ai_model) : null,
-    preferredModel: row?.preferred_ai_model ? normalizeModelId(row.preferred_ai_model) : null,
-  };
-}
-
-function findCatalogRow(catalog = [], modelId) {
-  const normalized = normalizeModelId(modelId);
-  return catalog.find((row) => normalizeModelId(row.modelId) === normalized) || null;
-}
 
 function sortByCapability(rows = []) {
   return [...rows].sort((a, b) => {
@@ -53,83 +17,50 @@ function sortByCapability(rows = []) {
   });
 }
 
-function pickEnabledAtOrBelow(planMaxModel, enabledCatalog = [], fullCatalog = []) {
-  if (!enabledCatalog.length) return DEFAULT_AI_MODEL;
-
-  const sortedEnabled = sortByCapability(enabledCatalog);
-  const planRow = findCatalogRow(fullCatalog, planMaxModel) || findCatalogRow(fullCatalog, ENV_DEFAULT_MODEL);
-  const planLimit = capabilityScore(planRow);
-
-  if (!planLimit) {
-    return sortedEnabled[sortedEnabled.length - 1]?.modelId || DEFAULT_AI_MODEL;
-  }
-
-  const eligible = sortedEnabled.filter((row) => capabilityScore(row) <= planLimit);
-  return (eligible[eligible.length - 1] || sortedEnabled[0])?.modelId || DEFAULT_AI_MODEL;
-}
-
-function rowsUpToMax(maxModel, enabledCatalog = []) {
-  const sortedEnabled = sortByCapability(enabledCatalog);
-  const maxRow = findCatalogRow(sortedEnabled, maxModel) || sortedEnabled[sortedEnabled.length - 1];
-  const maxLimit = capabilityScore(maxRow);
-  if (!maxLimit) return sortedEnabled;
-
-  return sortedEnabled.filter((row) => capabilityScore(row) <= maxLimit);
+async function getSystemModelRow() {
+  const enabledCatalog = await getCatalog({ enabledOnly: true });
+  const sorted = sortByCapability(enabledCatalog);
+  return sorted[sorted.length - 1] || null;
 }
 
 /**
- * Model cao nhất user được phép (theo gói). Admin bypass → tier cao nhất.
- *
- * @param {number|string|null|undefined} userId
+ * Model hệ thống hiện tại.
  * @returns {Promise<string>}
  */
-export async function getUserMaxAllowedModel(userId) {
-  const [{ role, planMaxModel }, enabledCatalog, fullCatalog] = await Promise.all([
-    getUserPlanModelRow(userId),
-    getCatalog({ enabledOnly: true }),
-    getCatalog({ enabledOnly: false }),
-  ]);
-  if (isAdminRole(role)) {
-    return enabledCatalog[enabledCatalog.length - 1]?.modelId || await getDefaultModel();
-  }
-  return pickEnabledAtOrBelow(planMaxModel, enabledCatalog, fullCatalog);
+export async function getSystemModel() {
+  const row = await getSystemModelRow();
+  return row?.modelId || DEFAULT_AI_MODEL;
 }
 
 /**
- * Clamp model theo gói — không throw, hạ êm nếu vượt capability.
- *
- * @param {number|string|null|undefined} userId
- * @param {string|null|undefined} requestedModel
+ * Giữ signature cũ cho các caller — luôn trả model hệ thống.
+ * @param {number|string|null|undefined} _userId
  * @returns {Promise<string>}
  */
-export async function resolveAllowedModel(userId, requestedModel = null) {
-  const [{ preferredModel }, maxModel, enabledModelIds, defaultModel] = await Promise.all([
-    getUserPlanModelRow(userId),
-    getUserMaxAllowedModel(userId),
-    getEnabledModelIds(),
-    getDefaultModel(),
-  ]);
-  const tiers = enabledModelIds.length ? enabledModelIds : [defaultModel || DEFAULT_AI_MODEL];
-  const requested = normalizeModelId(requestedModel) || preferredModel || maxModel;
-  return clampToTiers(requested, maxModel, tiers);
+export async function getUserMaxAllowedModel(_userId) {
+  return getSystemModel();
 }
 
 /**
- * @param {number|string|null|undefined} userId
- * @returns {Promise<{ maxModel: string, models: object[], modelIds: string[], preferredModel: string|null }>}
+ * Giữ signature cũ — model lưu trong DB/request bị bỏ qua, luôn dùng model hệ thống.
+ * @param {number|string|null|undefined} _userId
+ * @param {string|null|undefined} _requestedModel
+ * @returns {Promise<string>}
  */
-export async function getAllowedModelsForUser(userId) {
-  const [{ preferredModel }, maxModel, enabledCatalog] = await Promise.all([
-    getUserPlanModelRow(userId),
-    getUserMaxAllowedModel(userId),
-    getCatalog({ enabledOnly: true }),
-  ]);
-  const allowedRows = rowsUpToMax(maxModel, enabledCatalog);
-  const modelIds = allowedRows.map((row) => row.modelId);
-  const resolvedPreferred = modelIds.includes(preferredModel) ? preferredModel : maxModel;
-  return {
-    maxModel,
-    models: allowedRows.map((row) => ({
+export async function resolveAllowedModel(_userId, _requestedModel = null) {
+  return getSystemModel();
+}
+
+/**
+ * Giữ contract cũ của GET /ai/allowed-models cho client cũ chưa deploy lại:
+ * danh sách chỉ còn đúng 1 model hệ thống.
+ * @param {number|string|null|undefined} _userId
+ */
+export async function getAllowedModelsForUser(_userId) {
+  const row = await getSystemModelRow();
+  const systemModel = row?.modelId || DEFAULT_AI_MODEL;
+  const models = row
+    ? [{
       model_id: row.modelId,
       modelId: row.modelId,
       display_name: row.displayName,
@@ -140,19 +71,24 @@ export async function getAllowedModelsForUser(userId) {
       outputTokenLimit: row.outputTokenLimit,
       description: row.description,
       thinking: row.thinking,
-    })),
-    modelIds,
-    preferredModel: resolvedPreferred,
+    }]
+    : [{ model_id: systemModel, modelId: systemModel, display_name: systemModel, displayName: systemModel }];
+  return {
+    maxModel: systemModel,
+    models,
+    modelIds: [systemModel],
+    preferredModel: systemModel,
   };
 }
 
-export async function savePreferredModelForUser(userId, modelId) {
-  const allowed = await getAllowedModelsForUser(userId);
-  const normalized = normalizeModelId(modelId);
-  if (!allowed.modelIds.includes(normalized)) {
-    const err = new Error('Model AI không nằm trong gói của bạn');
-    err.status = 403;
-    throw err;
-  }
-  return updateUserPreferredModel(userId, normalized);
+/**
+ * Endpoint PUT /ai/preferred-model còn tồn tại cho client cũ — giờ là no-op:
+ * user không chọn model nữa, luôn trả model hệ thống, không ghi DB, không lỗi.
+ * @param {number|string|null|undefined} _userId
+ * @param {string|null|undefined} _modelId
+ */
+export async function savePreferredModelForUser(_userId, _modelId) {
+  void normalizeModelId(_modelId); // giữ validate nhẹ để không phá client cũ gửi giá trị lạ
+  const systemModel = await getSystemModel();
+  return { preferredModel: systemModel };
 }

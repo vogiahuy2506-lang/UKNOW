@@ -1,6 +1,7 @@
 import {
   listAiModels,
   markGoogleModelsMissing,
+  setOnlyEnabledModel,
   updateAiModel,
   upsertGoogleModel,
 } from '../../repositories/ai/aiModelCatalog.repository.js';
@@ -107,6 +108,37 @@ export async function updateCatalogModel(modelId, patch = {}) {
   }
   invalidateCatalogCache();
   return row;
+}
+
+/**
+ * Chọn MODEL HỆ THỐNG duy nhất: bật model được chọn, tắt toàn bộ model khác.
+ * Mọi tính năng AI (assistant, chatbot, insights...) đều chạy bằng model này
+ * qua resolveAllowedModel.
+ */
+export async function setSystemModel(modelId) {
+  const id = normalizeModelId(modelId);
+  if (!id) {
+    const err = new Error('Model ID không hợp lệ');
+    err.status = 400;
+    throw err;
+  }
+
+  const catalog = await getCatalog({ enabledOnly: false });
+  const target = catalog.find((row) => normalizeModelId(row.modelId) === id);
+  if (!target) {
+    const err = new Error('Không tìm thấy model AI trong catalog');
+    err.status = 404;
+    throw err;
+  }
+  if (!target.supportsGenerateContent) {
+    const err = new Error('Model này không hỗ trợ generateContent, không dùng làm model hệ thống được');
+    err.status = 400;
+    throw err;
+  }
+
+  await setOnlyEnabledModel(id);
+  invalidateCatalogCache();
+  return { systemModel: id };
 }
 
 export async function syncModelsFromGoogle() {

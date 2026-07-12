@@ -9,6 +9,8 @@ import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
+import { applyWizardStateAction, normalizeWizardState } from '../services/ai/aiCampaignWizard.service.js';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -119,6 +121,17 @@ class AiController {
         });
       }
 
+      // Load wizard state đã persist (sống sót qua session reload) — không block chat khi lỗi
+      let persistedWizardState = null;
+      if (sessionId) {
+        try {
+          const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
+          persistedWizardState = row?.wizard_state || null;
+        } catch (stateErr) {
+          console.warn('[AI] Không đọc được wizard state:', stateErr.message);
+        }
+      }
+
       const response = await aiCampaignService.processSmartChat({
         history,
         files: files || [],
@@ -126,10 +139,11 @@ class AiController {
         userRole: req.user.role,
         locale: locale || 'vi',
         model,
+        persistedWizardState,
       });
-      const { wizardShortCircuit, ...publicResponse } = response || {};
+      const { wizardShortCircuit, _wizard, ...publicResponse } = response || {};
 
-      // Persist session + messages (bỏ qua lỗi DB để không block chat)
+      // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
       let sessionTitle = null;
       try {
@@ -143,7 +157,40 @@ class AiController {
           sessionTitle = session.title;
         }
 
-        await aiSessionRepo.saveMessages(finalSessionId, userContent, publicResponse);
+        await aiSessionRepo.saveMessages(finalSessionId, req.user.id, userContent, publicResponse);
+
+        if (_wizard) {
+          // Dead-end: cùng 1 gate bị hỏi lần thứ 3 liên tiếp → log 1 lần cho mỗi streak
+          if (_wizard.gateAsked && _wizard.meta.lastGateCount >= 3 && !_wizard.meta.deadEndLoggedAt) {
+            _wizard.meta.deadEndLoggedAt = new Date().toISOString();
+            auditService.log({
+              userId: req.user.id,
+              category: 'system',
+              action: AUDIT_ACTIONS.WIZARD_DEAD_END,
+              entityType: AUDIT_ENTITY_TYPES.AI_SESSION,
+              entityId: finalSessionId,
+              details: {
+                sessionId: finalSessionId,
+                gate: _wizard.gateAsked,
+                count: _wizard.meta.lastGateCount,
+                channel: _wizard.gates?.channel || null,
+              },
+            });
+          }
+
+          await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
+            gates: _wizard.gates,
+            meta: _wizard.meta,
+            ...(_wizard.planChanged
+              ? {
+                planSnapshot: _wizard.planSnapshot ?? null,
+                planSourcePrompt: _wizard.planSourcePrompt ?? '',
+                planRequiresApproval: _wizard.planRequiresApproval !== false,
+                planReset: Boolean(_wizard.planReset),
+              }
+              : {}),
+          });
+        }
       } catch (dbErr) {
         console.warn('[AI] Không lưu được session:', dbErr.message);
       }
@@ -212,14 +259,63 @@ class AiController {
 
   async getSessionMessages(req, res) {
     try {
-      const messages = await aiSessionRepo.getSessionMessages(Number(req.params.id), req.user.id);
-      if (messages === null) {
+      const result = await aiSessionRepo.getSessionMessages(Number(req.params.id), req.user.id);
+      if (result === null) {
         return res.status(404).json({ success: false, message: 'Session không tồn tại' });
       }
-      return res.json({ success: true, data: messages });
+      // data giữ nguyên là mảng messages (không breaking); wizardState là field mới bên cạnh
+      return res.json({ success: true, data: result.messages, wizardState: result.wizardState });
     } catch (error) {
       console.error('Get session messages error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi khi lấy tin nhắn' });
+    }
+  }
+
+  /**
+   * PATCH /ai/sessions/:id/wizard-state — nút bấm frontend ghi state trực tiếp
+   * (approve_plan, record_template_saved, reset_plan, mark_campaign_created, set_sheet_url).
+   * Không tính AI credit vì không gọi model.
+   */
+  async patchWizardState(req, res) {
+    try {
+      const sessionId = Number(req.params.id);
+      if (!Number.isFinite(sessionId)) {
+        return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
+      }
+      const { action, payload } = req.body || {};
+
+      const row = await aiSessionRepo.getSessionWizardState(sessionId, req.user.id);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+      }
+
+      const current = normalizeWizardState(row.wizard_state);
+      let result;
+      try {
+        result = applyWizardStateAction(current, action, payload || {});
+      } catch (actionErr) {
+        return res.status(actionErr.status || 400).json({ success: false, message: actionErr.message });
+      }
+
+      if (!result.changed) {
+        // "Nút bấm không có tác dụng" — tín hiệu dead-end phía client
+        auditService.log({
+          userId: req.user.id,
+          category: 'system',
+          action: AUDIT_ACTIONS.WIZARD_STATE_NOOP,
+          entityType: AUDIT_ENTITY_TYPES.AI_SESSION,
+          entityId: sessionId,
+          details: { sessionId, action, payloadKeys: Object.keys(payload || {}) },
+        });
+        return res.json({ success: true, data: { wizardState: current, changed: false } });
+      }
+
+      result.state.meta.updatedAt = new Date().toISOString();
+      const saved = await aiSessionRepo.writeWizardState(sessionId, req.user.id, result.state);
+      return res.json({ success: true, data: { wizardState: saved, changed: true } });
+    } catch (error) {
+      console.error('Patch wizard state error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi cập nhật wizard state' });
     }
   }
 
@@ -660,7 +756,7 @@ class AiController {
           type: 'landing_page',
           data: { title: data.title, html: data.html },
         };
-        await aiSessionRepo.saveMessages(sid, userContent, assistantMsg).catch(() => {});
+        await aiSessionRepo.saveMessages(sid, req.user.id, userContent, assistantMsg).catch(() => {});
       }
 
       await chargeAiCredit(req);

@@ -10,6 +10,9 @@ const adminAiModelsApiService = {
   sync() {
     return api.post('/admin/ai-models/sync');
   },
+  setSystemModel(modelId) {
+    return api.put('/admin/ai-models/system-model', { modelId });
+  },
 };
 
 export default adminAiModelsApiService;

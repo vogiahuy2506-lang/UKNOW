@@ -14,6 +14,14 @@ router.get('/', ctrl.list);
 
 router.post('/sync', ctrl.sync);
 
+// Chọn model hệ thống duy nhất (bật model này, tắt tất cả model khác)
+router.put(
+  '/system-model',
+  [body('modelId').optional().isString(), body('model_id').optional().isString()],
+  handleValidationErrors,
+  ctrl.setSystemModel
+);
+
 router.patch(
   '/:id',
   [

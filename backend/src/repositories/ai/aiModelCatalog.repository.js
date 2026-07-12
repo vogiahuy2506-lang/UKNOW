@@ -84,6 +84,18 @@ export async function markGoogleModelsMissing({ seenModelIds = [], seenAt = new 
   return rowCount || 0;
 }
 
+// Chọn model hệ thống: bật đúng 1 model, tắt tất cả model còn lại (1 query, atomic)
+export async function setOnlyEnabledModel(modelId) {
+  const { rows } = await db.query(
+    `UPDATE ai_models
+     SET is_enabled = (model_id = $1), updated_at = NOW()
+     WHERE is_enabled IS DISTINCT FROM (model_id = $1)
+     RETURNING ${MODEL_COLS}`,
+    [modelId]
+  );
+  return rows;
+}
+
 export async function updateAiModel(modelId, patch = {}) {
   const allowed = {
     displayName: 'display_name',

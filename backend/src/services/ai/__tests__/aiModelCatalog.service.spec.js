@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 const mockRepo = {
   listAiModels: jest.fn(),
   markGoogleModelsMissing: jest.fn(),
+  setOnlyEnabledModel: jest.fn(),
   updateAiModel: jest.fn(),
   upsertGoogleModel: jest.fn(),
 };
@@ -74,5 +75,41 @@ describe('aiModelCatalog.service', () => {
     expect(mockRepo.markGoogleModelsMissing).toHaveBeenCalledWith(expect.objectContaining({
       seenModelIds: ['gemini-2.5-flash'],
     }));
+  });
+
+  describe('setSystemModel', () => {
+    const catalogRows = [
+      { modelId: 'gemini-2.5-flash', displayName: 'Flash', isEnabled: true, supportsGenerateContent: true },
+      { modelId: 'gemini-2.5-pro', displayName: 'Pro', isEnabled: false, supportsGenerateContent: true },
+      { modelId: 'gemini-embedding', displayName: 'Embed', isEnabled: false, supportsGenerateContent: false },
+    ];
+
+    beforeEach(() => {
+      mockRepo.listAiModels.mockResolvedValue(catalogRows);
+      mockRepo.setOnlyEnabledModel.mockResolvedValue([]);
+    });
+
+    it('enables exactly the chosen model and disables the rest', async () => {
+      const result = await catalogService.setSystemModel('gemini-2.5-pro');
+      expect(result).toEqual({ systemModel: 'gemini-2.5-pro' });
+      expect(mockRepo.setOnlyEnabledModel).toHaveBeenCalledWith('gemini-2.5-pro');
+    });
+
+    it('rejects unknown models with 404', async () => {
+      await expect(catalogService.setSystemModel('gemini-9000'))
+        .rejects.toThrow(expect.objectContaining({ status: 404 }));
+      expect(mockRepo.setOnlyEnabledModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects models without generateContent support with 400', async () => {
+      await expect(catalogService.setSystemModel('gemini-embedding'))
+        .rejects.toThrow(expect.objectContaining({ status: 400 }));
+      expect(mockRepo.setOnlyEnabledModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects empty model id with 400', async () => {
+      await expect(catalogService.setSystemModel(''))
+        .rejects.toThrow(expect.objectContaining({ status: 400 }));
+    });
   });
 });

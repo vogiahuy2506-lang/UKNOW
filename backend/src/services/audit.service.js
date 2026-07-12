@@ -95,6 +95,10 @@ export const AUDIT_ACTIONS = {
   ZALO_TEMPLATE_CREATED: 'ZALO_TEMPLATE_CREATED',
   ZALO_TEMPLATE_UPDATED: 'ZALO_TEMPLATE_UPDATED',
   ZALO_TEMPLATE_DELETED: 'ZALO_TEMPLATE_DELETED',
+
+  // System — AI wizard telemetry (dead-end detection)
+  WIZARD_DEAD_END: 'WIZARD_DEAD_END',
+  WIZARD_STATE_NOOP: 'WIZARD_STATE_NOOP',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -105,6 +109,7 @@ export const AUDIT_ENTITY_TYPES = {
   CAMPAIGN: 'campaign',
   EMAIL_TEMPLATE: 'email_template',
   ZALO_TEMPLATE: 'zalo_template',
+  AI_SESSION: 'ai_session',
 };
 
 /**

@@ -53,11 +53,9 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
   );
 }
 
-// ── AI Model Configuration ────────────────────────────────────────────────────
-
-const FALLBACK_AI_MODELS = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google' },
-];
+// ── AI Configuration ──────────────────────────────────────────────────────────
+// Model AI do super admin chọn ở cấp hệ thống (Quản lý model AI) — user không
+// thấy và không chọn model, backend luôn resolve về model hệ thống.
 
 const RESPONSE_STYLES = [
   { value: 'friendly', label: 'Thân thiện', desc: 'Gần gũi, dùng emoji phù hợp' },
@@ -67,85 +65,20 @@ const RESPONSE_STYLES = [
 
 /**
  * AI Configuration component - dùng chung cho cả Chatbot Settings & Zalo Personal
- * 
- * @param {Object}  config        - { ai_model, temperature, max_tokens, welcome_message, response_style, system_instruction }
+ *
+ * @param {Object}  config        - { temperature, max_tokens, welcome_message, response_style, system_instruction }
  * @param {Function} onChange     - (updatedConfig) => void - callback khi config thay đổi
  * @param {Object}  options       - { showSystemInstruction?: boolean, compact?: boolean }
  */
 export function AIConfig({ config = {}, onChange, options = {} }) {
   const { showSystemInstruction = true, compact = false } = options;
-  const [allowedModels, setAllowedModels] = useState({
-    maxModel: 'gemini-2.5-flash',
-    models: FALLBACK_AI_MODELS,
-    modelIds: FALLBACK_AI_MODELS.map((m) => m.value),
-  });
 
-  useEffect(() => {
-    api.get('/ai/allowed-models')
-      .then((res) => {
-        if (res.data?.success && res.data.data) {
-          const payload = res.data.data;
-          const models = Array.isArray(payload.models) ? payload.models.map((model) => {
-            if (typeof model === 'string') return { value: model, label: model, provider: 'Google' };
-            const value = model.modelId || model.model_id || model.value;
-            return {
-              value,
-              label: model.displayName || model.display_name || model.label || value,
-              provider: 'Google',
-            };
-          }).filter((model) => model.value) : FALLBACK_AI_MODELS;
-          setAllowedModels({
-            ...payload,
-            models,
-            modelIds: payload.modelIds || models.map((model) => model.value),
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
-  
   const update = (key, value) => {
     onChange?.({ ...config, [key]: value });
   };
 
-  const aiModelOptions = allowedModels.models?.length ? allowedModels.models : FALLBACK_AI_MODELS;
-  const currentModel = config.ai_model || 'gemini-2.5-flash';
-  const modelIds = allowedModels.modelIds || aiModelOptions.map((m) => m.value);
-  const modelAbovePlan = currentModel && !modelIds.includes(currentModel);
-  const renderedOptions = aiModelOptions.some((model) => model.value === currentModel)
-    ? aiModelOptions
-    : [{ value: currentModel, label: `${currentModel} (đang lưu)`, provider: 'Google' }, ...aiModelOptions];
-
   return (
     <div className={`space-y-${compact ? '4' : '5'}`}>
-      {/* AI Model */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
-            Model AI
-          </label>
-          <span className="text-xs text-slate-400">
-            {renderedOptions.find(m => m.value === currentModel)?.provider || 'Google'}
-          </span>
-        </div>
-        <select
-          value={currentModel}
-          onChange={e => update('ai_model', e.target.value)}
-          className="input w-full"
-        >
-          {renderedOptions.map(model => (
-            <option key={model.value} value={model.value}>
-              {model.label}
-            </option>
-          ))}
-        </select>
-        {modelAbovePlan && (
-          <p className="mt-1.5 text-xs text-amber-600">
-            Gói hiện tại chỉ hỗ trợ tối đa {allowedModels.maxModel}. Nâng cấp gói để dùng model cao hơn.
-          </p>
-        )}
-      </div>
-
       {/* Response Style */}
       <div>
         <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>

@@ -292,7 +292,7 @@ class LandingTemplateController {
             type: 'landing_page',
             data: { title: result.title, html: result.html, css: result.css },
           };
-          await saveMessages(sessionId, userContent, assistantMsg);
+          await saveMessages(sessionId, userId, userContent, assistantMsg);
         } catch (saveErr) {
           console.warn('[LandingTemplate] Could not save message to session:', saveErr.message);
         }

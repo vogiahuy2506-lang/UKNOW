@@ -1,5 +1,7 @@
 const WIZARD_MARKER_RE = /^\[wizard\](\{.*\})/;
 
+export const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
+
 const CAMPAIGN_RESPONSE_TYPES = new Set([
   'ask_campaign_details',
   'ask_campaign_type',
@@ -120,12 +122,20 @@ export function extractWizardState(history = []) {
     senderAccountId: null,
     senderAccountName: null,
     dataSource: null,
+    sheetUrl: null,
     zaloGroupIds: [],
     schedule: null,
     planApproved: false,
     senderOtherRequested: false,
     lastChannelMarkerIndex: -1,
     hasContentPlan: false,
+    // Tên các gate được trả lời bằng marker TƯỜNG MINH sau channel marker cuối cùng —
+    // mergeWizardState dùng để biết field nào derived phải thắng persisted.
+    markerGates: [],
+  };
+
+  const recordMarkerGate = (gate) => {
+    if (!state.markerGates.includes(gate)) state.markerGates.push(gate);
   };
 
   const messages = Array.isArray(history) ? history : [];
@@ -168,7 +178,14 @@ export function extractWizardState(history = []) {
       state.planApproved = true;
     }
 
-    if (!marker) return;
+    if (!marker) {
+      // User dán link Google Sheet dưới dạng tin nhắn thường — lấy link mới nhất
+      if (message?.role === 'user') {
+        const sheetMatch = content.match(GOOGLE_SHEET_URL_RE);
+        if (sheetMatch) state.sheetUrl = sheetMatch[0].replace(/[)\]}>.,;'"]+$/, '');
+      }
+      return;
+    }
     state.isCampaignFlow = true;
 
     if (marker.gate === 'channel') {
@@ -181,12 +198,14 @@ export function extractWizardState(history = []) {
       state.planApproved = false;
       state.senderOtherRequested = false;
       state.lastChannelMarkerIndex = index;
+      state.markerGates = ['channel'];
       return;
     }
 
     if (state.lastChannelMarkerIndex >= 0 && index <= state.lastChannelMarkerIndex) return;
 
     if (marker.gate === 'senderAccount') {
+      recordMarkerGate('senderAccount');
       state.channel = normalizeChannel(marker.channel) || state.channel;
       if (marker.other) {
         state.senderOtherRequested = true;
@@ -198,11 +217,14 @@ export function extractWizardState(history = []) {
         state.senderAccountName = marker.accountName || null;
       }
     } else if (marker.gate === 'dataSource') {
+      recordMarkerGate('dataSource');
       state.dataSource = marker.value || marker.dataSource || null;
     } else if (marker.gate === 'zaloGroups') {
+      recordMarkerGate('zaloGroups');
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
       state.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
     } else if (marker.gate === 'schedule') {
+      recordMarkerGate('schedule');
       const mode = marker.mode || marker.value || 'once';
       state.schedule = {
         mode,
@@ -212,6 +234,7 @@ export function extractWizardState(history = []) {
           : undefined,
       };
     } else if (marker.gate === 'planApproved') {
+      recordMarkerGate('planApproved');
       state.planApproved = true;
     }
   });
@@ -504,6 +527,240 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Wizard state persistence (ai_chat_sessions.wizard_state JSONB) — pure helpers
+// ---------------------------------------------------------------------------
+
+export const WIZARD_STATE_VERSION = 1;
+
+export function createEmptyWizardState() {
+  return {
+    v: WIZARD_STATE_VERSION,
+    gates: {
+      isCampaignFlow: false,
+      channel: null,
+      senderAccountId: null,
+      senderAccountName: null,
+      dataSource: null,
+      sheetUrl: null,
+      zaloGroupIds: [],
+      schedule: null,
+      planApproved: false,
+      senderOtherRequested: false,
+      hasContentPlan: false,
+    },
+    plan: {
+      snapshot: null,
+      sourcePrompt: '',
+      requiresApproval: true,
+      savedTemplates: [],
+      status: null,
+      campaignId: null,
+    },
+    meta: {
+      lastGate: null,
+      lastGateCount: 0,
+      deadEndLoggedAt: null,
+      updatedAt: null,
+    },
+  };
+}
+
+export function normalizeWizardState(raw) {
+  const empty = createEmptyWizardState();
+  if (!raw || typeof raw !== 'object' || raw.v !== WIZARD_STATE_VERSION) return empty;
+  return {
+    v: WIZARD_STATE_VERSION,
+    gates: { ...empty.gates, ...(raw.gates || {}) },
+    plan: { ...empty.plan, ...(raw.plan || {}) },
+    meta: { ...empty.meta, ...(raw.meta || {}) },
+  };
+}
+
+/**
+ * Merge persisted gates (DB) với state derive từ history của request hiện tại.
+ * Nguyên tắc: marker tường minh trong request → derived thắng; persisted lấp chỗ
+ * trống (marker đã mất khỏi history, ví dụ session reload); inference chỉ fill gap.
+ * Đổi kênh → mọi field downstream chỉ lấy derived, cấm hồi sinh từ persisted.
+ * Revision text → reset duyệt kế hoạch, thắng tất cả.
+ */
+export function mergeWizardState(persistedGates, derived, { lastUserText = '' } = {}) {
+  const p = persistedGates || {};
+  const d = derived || {};
+  const markerGates = Array.isArray(d.markerGates) ? d.markerGates : [];
+  const channelMarkerSeen = markerGates.includes('channel');
+  const channelSwitched = channelMarkerSeen && p.channel != null && d.channel !== p.channel;
+
+  const pick = (gateName, derivedValue, persistedValue, persistedUsable = (v) => v != null) => {
+    if (markerGates.includes(gateName)) return derivedValue;
+    if (channelSwitched) return derivedValue;
+    return persistedUsable(persistedValue) ? persistedValue : derivedValue;
+  };
+
+  const merged = {
+    isCampaignFlow: Boolean(d.isCampaignFlow || p.isCampaignFlow),
+    channel: channelMarkerSeen ? (d.channel ?? null) : (p.channel ?? d.channel ?? null),
+    senderAccountId: pick('senderAccount', d.senderAccountId ?? null, p.senderAccountId),
+    senderAccountName: pick('senderAccount', d.senderAccountName ?? null, p.senderAccountName),
+    senderOtherRequested: (markerGates.includes('senderAccount') || channelSwitched)
+      ? Boolean(d.senderOtherRequested)
+      : Boolean(p.senderOtherRequested || d.senderOtherRequested),
+    dataSource: pick('dataSource', d.dataSource ?? null, p.dataSource),
+    sheetUrl: channelSwitched ? (d.sheetUrl ?? null) : (d.sheetUrl ?? p.sheetUrl ?? null),
+    zaloGroupIds: pick(
+      'zaloGroups',
+      Array.isArray(d.zaloGroupIds) ? d.zaloGroupIds : [],
+      p.zaloGroupIds,
+      (v) => Array.isArray(v) && v.length > 0
+    ),
+    schedule: pick('schedule', d.schedule ?? null, p.schedule),
+    hasContentPlan: channelSwitched ? Boolean(d.hasContentPlan) : Boolean(d.hasContentPlan || p.hasContentPlan),
+    planApproved: channelSwitched ? Boolean(d.planApproved) : Boolean(d.planApproved || p.planApproved),
+  };
+
+  if (isContentPlanRevisionText(lastUserText)) {
+    merged.planApproved = false;
+    merged.hasContentPlan = false;
+  }
+
+  return merged;
+}
+
+export function computeWizardMeta(prevMeta = {}, gateAsked = null) {
+  const now = new Date().toISOString();
+  if (gateAsked && prevMeta?.lastGate === gateAsked) {
+    return {
+      lastGate: gateAsked,
+      lastGateCount: (Number(prevMeta.lastGateCount) || 0) + 1,
+      deadEndLoggedAt: prevMeta.deadEndLoggedAt || null,
+      updatedAt: now,
+    };
+  }
+  return {
+    lastGate: gateAsked || null,
+    lastGateCount: gateAsked ? 1 : 0,
+    deadEndLoggedAt: null,
+    updatedAt: now,
+  };
+}
+
+// --------------------------- PATCH action reducer ---------------------------
+
+export const WIZARD_STATE_ACTIONS = [
+  'approve_plan',
+  'set_sheet_url',
+  'record_template_saved',
+  'reset_plan',
+  'mark_campaign_created',
+];
+
+const invalidAction = (message) => {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+};
+
+// So sánh số record đã lưu theo ngày với số slot trong snapshot — không phụ thuộc
+// format slotId để khỏi lệch với getPlanSlotKey phía client.
+const computePlanStatus = (plan) => {
+  const days = Array.isArray(plan?.snapshot?.days) ? plan.snapshot.days : [];
+  if (!days.length) {
+    return (plan?.savedTemplates || []).length ? 'waiting_template_save' : (plan?.status || null);
+  }
+  const savedByDay = {};
+  (plan.savedTemplates || []).forEach((record) => {
+    const day = Number(record?.day);
+    if (Number.isFinite(day)) savedByDay[day] = (savedByDay[day] || 0) + 1;
+  });
+  const allDone = days.every((dayItem) => {
+    const day = Number(dayItem?.day);
+    const slotCount = Array.isArray(dayItem?.slots) && dayItem.slots.length > 0 ? dayItem.slots.length : 1;
+    return (savedByDay[day] || 0) >= slotCount;
+  });
+  return allDone ? 'waiting_campaign_confirm' : 'waiting_template_save';
+};
+
+/**
+ * Reducer thuần cho PATCH /ai/sessions/:id/wizard-state.
+ * Trả { state, changed }; không mutate input; throw { status: 400 } khi invalid.
+ */
+export function applyWizardStateAction(state, action, payload = {}) {
+  const current = normalizeWizardState(state);
+  if (!WIZARD_STATE_ACTIONS.includes(action)) {
+    throw invalidAction(`Action không hợp lệ: ${String(action)}`);
+  }
+
+  const next = {
+    v: WIZARD_STATE_VERSION,
+    gates: { ...current.gates },
+    plan: { ...current.plan, savedTemplates: [...current.plan.savedTemplates] },
+    meta: { ...current.meta },
+  };
+
+  switch (action) {
+    case 'approve_plan': {
+      if (current.gates.planApproved) return { state: current, changed: false };
+      next.gates.planApproved = true;
+      next.meta.lastGate = null;
+      next.meta.lastGateCount = 0;
+      next.meta.deadEndLoggedAt = null;
+      return { state: next, changed: true };
+    }
+    case 'set_sheet_url': {
+      const sheetUrl = String(payload?.sheetUrl || '').trim();
+      if (!GOOGLE_SHEET_URL_RE.test(sheetUrl)) {
+        throw invalidAction('sheetUrl phải là link Google Sheet hợp lệ (docs.google.com/spreadsheets/...)');
+      }
+      if (current.gates.sheetUrl === sheetUrl) return { state: current, changed: false };
+      next.gates.sheetUrl = sheetUrl;
+      if (!next.gates.dataSource) next.gates.dataSource = 'sheet';
+      return { state: next, changed: true };
+    }
+    case 'record_template_saved': {
+      const records = Array.isArray(payload?.records) ? payload.records : [];
+      if (!records.length) throw invalidAction('records không được để trống');
+      const existing = new Set(next.plan.savedTemplates.map((record) => String(record.slotId)));
+      let appended = 0;
+      for (const record of records) {
+        const slotId = record?.slotId != null ? String(record.slotId) : '';
+        const templateId = Number(record?.templateId);
+        if (!slotId || !Number.isFinite(templateId)) {
+          throw invalidAction('Mỗi record cần slotId và templateId hợp lệ');
+        }
+        if (existing.has(slotId)) continue;
+        existing.add(slotId);
+        next.plan.savedTemplates.push({ ...record, slotId, templateId });
+        appended += 1;
+      }
+      if (!appended) return { state: current, changed: false };
+      next.plan.status = computePlanStatus(next.plan);
+      return { state: next, changed: true };
+    }
+    case 'reset_plan': {
+      const alreadyEmpty = !current.plan.snapshot
+        && current.plan.savedTemplates.length === 0
+        && !current.gates.planApproved
+        && !current.gates.hasContentPlan;
+      if (alreadyEmpty) return { state: current, changed: false };
+      next.plan = createEmptyWizardState().plan;
+      next.gates.planApproved = false;
+      next.gates.hasContentPlan = false;
+      return { state: next, changed: true };
+    }
+    case 'mark_campaign_created': {
+      const campaignId = payload?.campaignId ?? null;
+      if (current.plan.status === 'completed' && current.plan.campaignId === campaignId) {
+        return { state: current, changed: false };
+      }
+      next.plan.status = 'completed';
+      next.plan.campaignId = campaignId;
+      return { state: next, changed: true };
+    }
+    default:
+      throw invalidAction(`Action không hợp lệ: ${String(action)}`);
+  }
 }
 
 export function shouldGuardCampaignResponse(response) {

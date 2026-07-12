@@ -31,6 +31,15 @@ export async function update(req, res) {
   }
 }
 
+export async function setSystemModel(req, res) {
+  try {
+    const result = await adminAiModelsService.chooseSystemModel(req.body?.modelId ?? req.body?.model_id);
+    return res.json({ success: true, data: result, message: 'Đã đặt model hệ thống' });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 export async function sync(_req, res) {
   try {
     const result = await adminAiModelsService.syncModels();

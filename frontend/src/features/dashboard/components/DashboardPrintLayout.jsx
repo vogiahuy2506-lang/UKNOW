@@ -68,7 +68,7 @@ const DashboardPrintLayout = ({
         <div className="card p-5 md:p-6">
           <h3 className="text-base font-semibold text-gray-900">Tổng quan insight</h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            Phân tích theo bộ lọc và (nếu có) insight Gemini đang hiển thị trên màn hình
+            Phân tích theo bộ lọc và (nếu có) insight AI đang hiển thị trên màn hình
           </p>
           <div className="mt-4">
             <DashboardInsightOverview insights={insights} isLoading={isGeneratingInsights} error={insightError} />

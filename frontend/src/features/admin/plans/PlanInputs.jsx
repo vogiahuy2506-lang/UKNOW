@@ -9,7 +9,6 @@ import {
 } from 'react-icons/hi';
 import { HiOutlineSparkles } from 'react-icons/hi2';
 import adminPlansApiService from '../services/adminPlansApi.service';
-import adminAiModelsApiService from '../services/adminAiModelsApi.service';
 import { useI18n } from '../../../i18n';
 import { normalizeMoneyValue } from './planUtils.jsx';
 
@@ -642,34 +641,11 @@ export const PeriodMessagesField = ({ form, set }) => {
 };
 
 // ── ResourceLimitsFields — giới hạn số lượng tài nguyên theo gói ─────────────
+// Model AI không còn gate theo gói: super admin chọn 1 model hệ thống duy nhất
+// ở trang Quản lý model AI, áp dụng cho mọi user.
 export const ResourceLimitsFields = ({ form, set, hint }) => {
   const { t } = useI18n();
   const hintText = hint || t('planInputs.hintLeaveEmptyUnlimited');
-  const [aiModelOptions, setAiModelOptions] = useState([
-    { modelId: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
-  ]);
-
-  useEffect(() => {
-    adminAiModelsApiService.list()
-      .then((res) => {
-        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-        const enabled = rows
-          .filter((row) => row.isEnabled && row.supportsGenerateContent)
-          .map((row) => ({
-            modelId: row.modelId || row.model_id,
-            displayName: row.displayName || row.display_name,
-            outputTokenLimit: row.outputTokenLimit ?? row.output_token_limit,
-          }))
-          .filter((row) => row.modelId);
-        if (enabled.length) setAiModelOptions(enabled);
-      })
-      .catch(() => {});
-  }, []);
-
-  const selectedAiModel = form.aiModel || 'gemini-2.5-flash';
-  const renderedAiModelOptions = aiModelOptions.some((model) => model.modelId === selectedAiModel)
-    ? aiModelOptions
-    : [{ modelId: selectedAiModel, displayName: `${selectedAiModel} (đang lưu)` }, ...aiModelOptions];
 
   return (
     <div>
@@ -694,20 +670,6 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
             <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
           </div>
         ))}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Model AI tối đa (theo output token Google)</label>
-          <select className="input w-full" value={selectedAiModel} onChange={(e) => set('aiModel', e.target.value)}>
-            {renderedAiModelOptions.map((model) => (
-              <option key={model.modelId} value={model.modelId}>
-                {model.displayName || model.modelId}
-                {model.outputTokenLimit ? ` — output ${Number(model.outputTokenLimit).toLocaleString()} tokens` : ''}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-xs text-slate-500">
-            Gói được phép dùng model này và mọi model enabled có output token thấp hơn hoặc bằng. Thông số lấy từ Google sau khi đồng bộ catalog.
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -12,12 +12,15 @@ const ACTION_LABELS = {
   USER_REGISTERED: 'Người dùng đăng ký mới',
   USER_PLAN_CHANGED: 'Thay đổi gói người dùng',
   USER_ROLE_CHANGED: 'Thay đổi vai trò người dùng',
+  WIZARD_DEAD_END: 'AI wizard kẹt vòng lặp',
+  WIZARD_STATE_NOOP: 'AI wizard: nút không có tác dụng',
 };
 
 const ENTITY_LABELS = {
   plan: 'Gói dịch vụ',
   voucher: 'Voucher',
   user: 'Người dùng',
+  ai_session: 'Phiên chat AI',
 };
 
 function fmtDate(d) {

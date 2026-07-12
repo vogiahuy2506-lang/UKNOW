@@ -5555,8 +5555,8 @@ export default {
 
   adminAiModels: {
     title: 'AI Model Management',
-    subtitle: 'Sync the catalog from Google, enable production models, and customize display names.',
-    metadataHint: 'Input/output token limits come from Google ListModels and drive plan mapping (higher plan model = higher output token cap). Run Sync after first deploy.',
+    subtitle: 'Pick the single model that powers every AI feature across the system.',
+    metadataHint: 'Users never see or choose models — the AI assistant, chatbots, and insights all run on this system model. Click Sync from Google to refresh the catalog.',
     catalog: 'Model catalog',
     sync: 'Sync from Google',
     syncing: 'Syncing...',
@@ -5584,6 +5584,10 @@ export default {
     noEnabledModels: 'No enabled models yet.',
     noLatest5Models: 'No stable models match this filter — try showing disabled models or sync again.',
     notSupported: 'Google no longer reports generateContent support',
+    systemModelColumn: 'System model',
+    systemModelActive: 'In use',
+    systemModelPick: 'Select',
+    systemModelSet: 'System model updated — applies to all AI features immediately',
   },
 
   userDeliveryMonitor: {

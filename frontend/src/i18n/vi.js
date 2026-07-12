@@ -5608,8 +5608,8 @@ export default {
 
   adminAiModels: {
     title: 'Quản lý model AI',
-    subtitle: 'Đồng bộ catalog từ Google, bật model dùng trong hệ thống và đặt tên hiển thị.',
-    metadataHint: 'Thông số input/output token lấy từ Google ListModels — dùng để map gói dịch vụ (model cao hơn = output token lớn hơn). Bấm Đồng bộ sau deploy lần đầu.',
+    subtitle: 'Chọn 1 model duy nhất áp dụng cho toàn bộ tính năng AI của hệ thống.',
+    metadataHint: 'Người dùng không thấy và không chọn được model — mọi tính năng AI (trợ lý, chatbot, insights...) đều chạy bằng model hệ thống này. Bấm Đồng bộ từ Google để cập nhật catalog.',
     catalog: 'Catalog model',
     sync: 'Đồng bộ từ Google',
     syncing: 'Đang đồng bộ...',
@@ -5637,6 +5637,10 @@ export default {
     noEnabledModels: 'Chưa có model nào đang bật.',
     noLatest5Models: 'Không có model stable nào khớp bộ lọc — thử bật "Hiện cả model đang tắt" hoặc đồng bộ lại.',
     notSupported: 'Google không còn báo hỗ trợ generateContent',
+    systemModelColumn: 'Model hệ thống',
+    systemModelActive: 'Đang dùng',
+    systemModelPick: 'Chọn',
+    systemModelSet: 'Đã đặt model hệ thống — áp dụng ngay cho toàn bộ tính năng AI',
   },
 
   userDeliveryMonitor: {

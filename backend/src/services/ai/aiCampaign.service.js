@@ -15,6 +15,10 @@ import {
   extractWizardState,
   findOriginalCampaignPrompt,
   buildCampaignPromptWithWizardState,
+  computeWizardMeta,
+  isContentPlanRevisionText,
+  mergeWizardState,
+  normalizeWizardState,
   parseWizardMarker,
   isPlanTemplateDraftRequest,
   isWizardMarkerMessage,
@@ -677,12 +681,15 @@ D. ZALO NHÓM:
     return { zaloAccounts, emailSenders };
   }
 
-  _guardWizardGates(response, history = [], resources = {}, locale = 'vi') {
+  // mergedGates: state đã merge persisted + derived (bước wizard-state DB); nếu không
+  // truyền thì tự derive từ history — tương đương behavior cũ.
+  // Return { response, gateAsked } để caller persist meta dead-end.
+  _guardWizardGates(response, history = [], resources = {}, locale = 'vi', mergedGates = null) {
     const lastUserText = this._lastUserMessageContent(history);
-    if (isPlanTemplateDraftRequest(lastUserText)) return response;
-    if (!shouldGuardCampaignResponse(response)) return response;
+    if (isPlanTemplateDraftRequest(lastUserText)) return { response, gateAsked: null };
+    if (!shouldGuardCampaignResponse(response)) return { response, gateAsked: null };
 
-    const state = extractWizardState(history);
+    const state = { ...(mergedGates || extractWizardState(history)) };
     state.isCampaignFlow = true;
     state.channel ||= normalizeChannel(
       response?.data?.campaignType
@@ -694,26 +701,35 @@ D. ZALO NHÓM:
     const nextGate = evaluateNextGate(state, resources, locale);
     if (!nextGate && response?.type === 'content_plan') {
       return {
-        ...response,
-        data: {
-          ...(response.data || {}),
-          requiresApproval: true,
+        response: {
+          ...response,
+          data: {
+            ...(response.data || {}),
+            requiresApproval: true,
+          },
         },
+        gateAsked: null,
       };
     }
     if (response?.type === 'content_plan' && nextGate?.gate === 'planApproved') {
       return {
-        ...response,
-        data: {
-          ...(response.data || {}),
-          requiresApproval: true,
+        response: {
+          ...response,
+          data: {
+            ...(response.data || {}),
+            requiresApproval: true,
+          },
         },
+        gateAsked: 'planApproved',
       };
     }
-    return nextGate?.response || response;
+    if (nextGate?.response) {
+      return { response: nextGate.response, gateAsked: nextGate.gate || null };
+    }
+    return { response, gateAsked: null };
   }
 
-  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
+  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null, persistedWizardState = null }) {
     let contextBlock = '';
 
     if (userRole === 'admin') {
@@ -751,22 +767,45 @@ QUY TẮC:
 
     const wizardResources = await this._getWizardResources(userId);
     const lastUserText = this._lastUserMessageContent(history);
-    if (isWizardMarkerMessage(lastUserText)) {
-      const state = extractWizardState(history);
-      const marker = parseWizardMarker(lastUserText);
-      const nextGate = evaluateNextGate(state, wizardResources, locale);
-      if (nextGate?.response) return { ...nextGate.response, wizardShortCircuit: true };
 
-      if (marker?.gate === 'schedule' && state.schedule?.mode === 'drip') {
+    // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
+    // từ history của request này (marker tường minh luôn thắng).
+    const persistedState = normalizeWizardState(persistedWizardState);
+    const derivedState = extractWizardState(history);
+    const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
+    const isRevision = isContentPlanRevisionText(lastUserText);
+
+    // Đóng gói state cho controller persist (field nội bộ, bị strip trước khi trả client)
+    const buildWizard = (gateAsked, planChange = null) => ({
+      gates: mergedGates,
+      gateAsked,
+      meta: computeWizardMeta(persistedState.meta, gateAsked),
+      ...(planChange
+        || (isRevision ? { planChanged: true, planReset: true } : { planChanged: false })),
+    });
+
+    if (isWizardMarkerMessage(lastUserText)) {
+      const marker = parseWizardMarker(lastUserText);
+      const nextGate = evaluateNextGate(mergedGates, wizardResources, locale);
+      if (nextGate?.response) {
+        return {
+          ...nextGate.response,
+          wizardShortCircuit: true,
+          _wizard: buildWizard(nextGate.gate || null),
+        };
+      }
+
+      if (marker?.gate === 'schedule' && mergedGates.schedule?.mode === 'drip') {
         const basePrompt = findOriginalCampaignPrompt(history);
         return {
           type: 'suggest_content_plan',
           content: locale === 'en'
             ? 'Next I will draft a day-by-day sending plan for you.'
             : 'Tiếp theo mình sẽ lên kế hoạch gửi theo từng ngày cho bạn.',
-          data: { userPrompt: buildCampaignPromptWithWizardState(state, basePrompt, locale) },
+          data: { userPrompt: buildCampaignPromptWithWizardState(mergedGates, basePrompt, locale) },
           missing_fields: [],
           wizardShortCircuit: true,
+          _wizard: buildWizard(null),
         };
       }
     }
@@ -1341,15 +1380,35 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
     const response = await this._runChat(systemPrompt, history, files, userId, model);
-    return this._guardWizardGates(
+    const guarded = this._guardWizardGates(
       this._guardContentPlanResponse(
         this._guardCampaignDataSourceResponse(response, history, locale),
         history
       ),
       history,
       wizardResources,
-      locale
+      locale,
+      mergedGates
     );
+    const finalResponse = guarded.response;
+
+    // AI vừa sinh content_plan mới → plan lifecycle mới, replace nguyên section plan
+    let planChange = null;
+    if (finalResponse?.type === 'content_plan' && finalResponse.data) {
+      mergedGates.hasContentPlan = true;
+      mergedGates.planApproved = false;
+      planChange = {
+        planChanged: true,
+        planSnapshot: finalResponse.data,
+        planSourcePrompt: findOriginalCampaignPrompt(history),
+        planRequiresApproval: finalResponse.data?.requiresApproval !== false,
+      };
+    }
+
+    return {
+      ...finalResponse,
+      _wizard: buildWizard(guarded.gateAsked, planChange),
+    };
   }
 
   /**

@@ -229,6 +229,22 @@ const deriveWizardContext = (items = []) => {
   return context;
 };
 
+// Fill wizardContext derive từ messages bằng gates persist trên server (chỉ lấp chỗ
+// trống — marker tường minh trong messages luôn thắng, cùng triết lý merge backend)
+const mergeClientWizardContext = (derived, gates) => ({
+  ...derived,
+  channel: derived.channel ?? gates.channel ?? null,
+  senderAccountId: derived.senderAccountId ?? gates.senderAccountId ?? null,
+  senderAccountName: derived.senderAccountName ?? gates.senderAccountName ?? null,
+  dataSource: derived.dataSource ?? gates.dataSource ?? null,
+  sheetUrl: derived.sheetUrl ?? gates.sheetUrl ?? null,
+  zaloGroupIds: derived.zaloGroupIds?.length
+    ? derived.zaloGroupIds
+    : (Array.isArray(gates.zaloGroupIds) ? gates.zaloGroupIds : []),
+  schedule: derived.schedule ?? gates.schedule ?? null,
+  planApproved: Boolean(derived.planApproved || gates.planApproved),
+});
+
 const applyWizardSelectionsToScript = (script, context = {}) => {
   if (!script) return script;
   const senderId = context.senderAccountId != null ? Number(context.senderAccountId) : null;
@@ -430,7 +446,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState(null);
-  const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.5-flash');
   const [isSavingAllTemplates, setIsSavingAllTemplates] = useState(false);
 
   const isMobile = useIsMobile();
@@ -446,6 +461,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const tabsDragRef = useRef({ dragging: false, startX: 0, scrollLeft: 0, moved: false });
   const currentSessionIdRef = useRef(null);
   const sessionMessagesCache = useRef(new Map()); // sessionId → messages[] (for background generation)
+  const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
+  const wizardPatchQueueRef = useRef(Promise.resolve()); // serialize PATCH wizard-state (tránh interleave khi "Lưu tất cả")
+  const [serverWizardGates, setServerWizardGates] = useState(null); // gates persist trên server của session hiện tại
   const pendingTabIdRef = useRef(new Set()); // non-rendering check
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
@@ -478,31 +496,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return;
     }
     toast.error(message);
-  };
-
-  const normalizeAllowedModels = (payload) => {
-    const models = Array.isArray(payload?.models) ? payload.models : [];
-    return models.map((model) => {
-      if (typeof model === 'string') {
-        return { modelId: model, displayName: model };
-      }
-      const modelId = model.modelId || model.model_id || model.value;
-      return {
-        modelId,
-        displayName: model.displayName || model.display_name || model.label || modelId,
-      };
-    }).filter((model) => model.modelId);
-  };
-
-  const loadAllowedModels = async () => {
-    try {
-      const res = await aiApi.getAllowedModels();
-      const list = normalizeAllowedModels(res?.data);
-      const preferred = res?.data?.preferredModel || res?.data?.maxModel || list[0]?.modelId || 'gemini-2.5-flash';
-      setSelectedAiModel(list.some((model) => model.modelId === preferred) ? preferred : (list[0]?.modelId || 'gemini-2.5-flash'));
-    } catch {
-      setSelectedAiModel('gemini-2.5-flash');
-    }
   };
 
   useEffect(() => {
@@ -564,17 +557,84 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     };
   };
 
+  // Fire-and-forget PATCH wizard-state, serialize qua promise queue để "Lưu tất cả"
+  // không gửi interleave. Chỉ gọi khi session đã tồn tại trên server.
+  const enqueueWizardPatch = (action, payload = {}) => {
+    const sessionId = currentSessionIdRef.current;
+    if (!sessionId) return;
+    wizardPatchQueueRef.current = wizardPatchQueueRef.current
+      .then(() => aiApi.patchWizardState(sessionId, action, payload))
+      .catch(() => {});
+  };
+
+  // Rebuild contentPlanWorkflow + serverWizardGates từ wizard_state server trả về.
+  // Return true nếu đã set workflow (caller bỏ qua fallback lossy từ messages).
+  const restoreFromServerWizardState = (wizardState) => {
+    const gates = wizardState?.v === 1 ? wizardState.gates : null;
+    const planSection = wizardState?.v === 1 ? wizardState.plan : null;
+    setServerWizardGates(gates || null);
+
+    if (!planSection?.snapshot || planSection.status === 'completed') return false;
+    const normalizedPlan = normalizeContentPlanData(planSection.snapshot);
+    if (!normalizedPlan.days.length) return false;
+
+    const savedTemplates = Array.isArray(planSection.savedTemplates) ? planSection.savedTemplates : [];
+    const completedDays = getCompletedDaysFromSaved(normalizedPlan.days, savedTemplates);
+    const pendingDay = getNextPendingDay(normalizedPlan.days, completedDays);
+    const savedCountByDay = buildSavedCountByDay(savedTemplates);
+    const allDone = !pendingDay && savedTemplates.length > 0;
+
+    setContentPlanWorkflow({
+      sourcePrompt: planSection.sourcePrompt || '',
+      plan: normalizedPlan,
+      pendingDay,
+      completedDays,
+      savedTemplates,
+      draftTemplates: [],
+      savedCountByDay,
+      generatingDay: null,
+      failedDay: null,
+      awaitingDayConfirm: Boolean(pendingDay),
+      awaitingCampaignConfirm: allDone,
+      isCreatingCampaign: false,
+      isGeneratingAll: false,
+      allDraftsRequested: false,
+      requiresApproval: planSection.requiresApproval !== false,
+      planApproved: Boolean(gates?.planApproved),
+      status: allDone
+        ? 'waiting_campaign_confirm'
+        : (savedTemplates.length > 0 ? 'waiting_template_save' : 'waiting_day_confirm'),
+    });
+    return true;
+  };
+
   const loadSession = async (sessionId) => {
     // If this session has cached messages (background generation in-progress or just completed), load from cache
     if (sessionMessagesCache.current.has(sessionId)) {
       setCurrentSessionId(sessionId);
       setMessages(sessionMessagesCache.current.get(sessionId));
       setIsTyping(pendingTabIdRef.current.has(sessionId));
+      // Cache path không hit server — restore wizard state từ cache; không clobber
+      // workflow đang sống (có thể chứa draft chưa lưu)
+      const cachedState = sessionWizardStateCache.current.get(sessionId);
+      if (cachedState) {
+        if (!contentPlanWorkflow) {
+          restoreFromServerWizardState(cachedState);
+        } else {
+          setServerWizardGates(cachedState?.v === 1 ? cachedState.gates : null);
+        }
+      } else {
+        setServerWizardGates(null);
+      }
       return;
     }
     try {
       const res = await aiApi.getSessionMessages(sessionId);
       const dbMessages = res.data || [];
+      const serverWizardState = res.wizardState || null;
+      if (serverWizardState) {
+        sessionWizardStateCache.current.set(sessionId, serverWizardState);
+      }
 
       // Tìm assistant message cuối cùng có type tương tác
       let lastAssistantIdx = -1;
@@ -597,6 +657,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);
       setCurrentSessionId(sessionId);
 
+      // Restore workflow từ wizard_state server (nguồn chuẩn); fallback lossy từ
+      // messages chỉ khi server chưa có state (session cũ trước migration)
+      let workflowRestored = false;
+      if (serverWizardState) {
+        workflowRestored = restoreFromServerWizardState(serverWizardState);
+      } else {
+        setServerWizardGates(null);
+      }
+
       // Restore pending state cho card tương tác cuối cùng
       const lastUserMsg = lastAssistantIdx > 0
         ? [...dbMessages].slice(0, lastAssistantIdx).reverse().find(m => m.role === 'user')
@@ -614,39 +683,41 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setCurrentScript(lastAssistant.data);
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null);
-        setContentPlanWorkflow(null);
+        if (!workflowRestored) setContentPlanWorkflow(null);
       } else if (['content_plan', 'content_plan_actions'].includes(lastAssistant?.type)) {
-        const contentPlanMsg = [...dbMessages].reverse().find((m) => m.type === 'content_plan' && m.data);
-        if (contentPlanMsg?.data) {
-          const normalizedPlan = normalizeContentPlanData(contentPlanMsg.data);
-          setContentPlanWorkflow({
-            sourcePrompt: lastUserMsg?.content || '',
-            plan: normalizedPlan,
-            pendingDay: normalizedPlan.days[0]?.day || null,
-            completedDays: [],
-            savedTemplates: [],
-            draftTemplates: [],
-            savedCountByDay: {},
-            generatingDay: null,
-            failedDay: null,
-            awaitingDayConfirm: true,
-            awaitingCampaignConfirm: false,
-            isCreatingCampaign: false,
-            isGeneratingAll: false,
-            allDraftsRequested: false,
-            requiresApproval: contentPlanMsg.data.requiresApproval !== false,
-            planApproved: false,
-            status: 'waiting_day_confirm',
-          });
-        } else {
-          setContentPlanWorkflow(null);
+        if (!workflowRestored) {
+          const contentPlanMsg = [...dbMessages].reverse().find((m) => m.type === 'content_plan' && m.data);
+          if (contentPlanMsg?.data) {
+            const normalizedPlan = normalizeContentPlanData(contentPlanMsg.data);
+            setContentPlanWorkflow({
+              sourcePrompt: lastUserMsg?.content || '',
+              plan: normalizedPlan,
+              pendingDay: normalizedPlan.days[0]?.day || null,
+              completedDays: [],
+              savedTemplates: [],
+              draftTemplates: [],
+              savedCountByDay: {},
+              generatingDay: null,
+              failedDay: null,
+              awaitingDayConfirm: true,
+              awaitingCampaignConfirm: false,
+              isCreatingCampaign: false,
+              isGeneratingAll: false,
+              allDraftsRequested: false,
+              requiresApproval: contentPlanMsg.data.requiresApproval !== false,
+              planApproved: false,
+              status: 'waiting_day_confirm',
+            });
+          } else {
+            setContentPlanWorkflow(null);
+          }
         }
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
       } else {
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
-        setContentPlanWorkflow(null);
+        if (!workflowRestored) setContentPlanWorkflow(null);
       }
     } catch { /* silent */ }
   };
@@ -661,6 +732,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setCurrentScript(null);
     setContentPlanWorkflow(null);
     setWizardContext(deriveWizardContext([]));
+    setServerWizardGates(null);
     setGeneratingDay(null);
   };
 
@@ -692,7 +764,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      loadAllowedModels();
       if (!isSuperAdmin) {
         aiApi.getBusinessProfile()
           .then(res => setHasProfile(!!res.data))
@@ -719,8 +790,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   }, [messages]);
 
   useEffect(() => {
-    setWizardContext(deriveWizardContext(messages));
-  }, [messages]);
+    const derived = deriveWizardContext(messages);
+    setWizardContext(serverWizardGates ? mergeClientWizardContext(derived, serverWizardGates) : derived);
+  }, [messages, serverWizardGates]);
 
   useEffect(() => {
     setMessages(prev => {
@@ -1171,6 +1243,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const res = await aiApi.createCampaignFromDraft(script);
       if (res.success) {
         toast.success('Đã tạo campaign draft thành công!', { id: loadingToast });
+        enqueueWizardPatch('mark_campaign_created', { campaignId: res.campaignId ?? null });
         setContentPlanWorkflow((prev) => (prev ? {
           ...prev,
           isCreatingCampaign: false,
@@ -1252,7 +1325,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setIsTyping(true);
 
     try {
-      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale, selectedAiModel);
+      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale);
       if (response.success) {
         refreshAiCredits();
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
@@ -1579,6 +1652,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       bodyText: draft.bodyText || '',
     };
 
+    // Persist tiến độ lên server để F5 không mất (server dedupe theo slotId)
+    enqueueWizardPatch('record_template_saved', { records: [record] });
+
     setContentPlanWorkflow((prev) => {
       if (!prev) return prev;
       if (prev.savedTemplates.some((item) => String(item.slotId) === String(slotId))) return prev;
@@ -1754,7 +1830,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         const slotUserMsg = { role: 'user', content: slotPrompt };
         workingHistory = [...workingHistory, slotUserMsg];
-        const response = await aiApi.chat(workingHistory, [], mySessionId, locale, selectedAiModel);
+        const response = await aiApi.chat(workingHistory, [], mySessionId, locale);
         if (!response?.success) {
           throw new Error('AI không trả về kết quả hợp lệ');
         }
@@ -1877,12 +1953,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const marker = buildWizardMarkerText({ gate: 'planApproved', value: true }, 'Đồng ý với kế hoạch này.');
     setMessages((prev) => [...prev, { role: 'user', content: marker, silent: true }]);
     setContentPlanWorkflow((prev) => (prev ? { ...prev, planApproved: true } : prev));
+    enqueueWizardPatch('approve_plan');
     await handleGenerateDayTemplate(dayItem);
   };
 
   const handleReviseContentPlan = async (feedback) => {
     const trimmed = String(feedback || '').trim();
     if (!trimmed) return;
+    // Reset plan trên server trước (backend merge cũng reset qua revision text — belt & braces)
+    enqueueWizardPatch('reset_plan');
     const basePrompt = contentPlanWorkflow?.sourcePrompt || '';
     const filtered = messages.filter((msg) => !['content_plan', 'content_plan_actions'].includes(msg.type));
     const feedbackContent = t('aiChatbot.planReviseUserMessage', { feedback: trimmed })
@@ -2008,6 +2087,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         return;
       }
       if (wizardQuestion.wizardGate === 'planApproved') {
+        // Ghi thẳng state lên server trước (idempotent với marker phía sau)
+        enqueueWizardPatch('approve_plan');
         if (contentPlanWorkflow?.plan) {
           await handleWizardPlanApproved();
         } else {
@@ -2056,7 +2137,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
         { role: 'user', content: summaryText + emailTemplateContext },
       ];
-      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale, selectedAiModel);
+      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale);
       if (response.success) {
         refreshAiCredits();
         const { type, content, data } = response.data;
@@ -2164,7 +2245,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
       ];
       
-      const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale);
       
       if (response.success) {
         refreshAiCredits();
@@ -2228,7 +2309,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'user', content: `Gửi cho ${audienceLabel}` }
       ];
 
-      const response = await aiApi.chat(enrichedHistory, [], null, locale, selectedAiModel);
+      const response = await aiApi.chat(enrichedHistory, [], null, locale);
 
       if (response.success) {
         refreshAiCredits();
