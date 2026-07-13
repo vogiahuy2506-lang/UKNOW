@@ -94,8 +94,10 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       rm.run_metadata->>'lastResumeReason' AS last_resume_reason,
       rm.run_metadata->>'lastResumeResumedBy' AS last_resume_resumed_by,
       rm.run_metadata->>'lastResumeStep' AS last_resume_step,
-      COALESCE(rm.run_metadata->>'nonContinuousDeferredUntil', rm.run_metadata->>'zaloOutboundDeferredUntil') AS deferred_until,
-      COALESCE(rm.run_metadata->>'nonContinuousDeferredReason', rm.run_metadata->>'zaloDeferredReason') AS deferred_reason,
+      COALESCE(rm.run_metadata->>'quotaDeferredUntil', rm.run_metadata->>'nonContinuousDeferredUntil', rm.run_metadata->>'zaloOutboundDeferredUntil') AS deferred_until,
+      COALESCE(rm.run_metadata->>'quotaDeferredReason', rm.run_metadata->>'nonContinuousDeferredReason', rm.run_metadata->>'zaloDeferredReason') AS deferred_reason,
+      rm.run_metadata->>'quotaDeferredUntil' AS quota_deferred_until,
+      rm.run_metadata->>'quotaDeferredReason' AS quota_deferred_reason,
       rm.duration_seconds
     FROM run_metrics rm
     ORDER BY
@@ -144,5 +146,7 @@ export function mapTopRunRow(row) {
     lastResumeStep: row.last_resume_step === null || row.last_resume_step === undefined ? null : toNumber(row.last_resume_step),
     deferredUntil: row.deferred_until || null,
     deferredReason: row.deferred_reason || null,
+    quotaDeferredUntil: row.quota_deferred_until || null,
+    quotaDeferredReason: row.quota_deferred_reason || null,
   };
 }

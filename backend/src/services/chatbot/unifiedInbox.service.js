@@ -229,13 +229,13 @@ class UnifiedInboxService {
       zaloAccountId = conversation.id_zalo_setting;
     }
 
-    // Save message to database
+    // Save message to database (manual inbox reply — marker for send-quota counting)
     await unifiedInboxRepository.sendMessage(
       parseInt(conversationId),
       userId,
       conversationType,
       channelId,
-      { role: 'agent', content: content.trim(), attachments }
+      { role: 'agent', content: content.trim(), attachments, metadata: { source: 'manual_inbox' } }
     );
 
     // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.

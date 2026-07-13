@@ -5,12 +5,17 @@
  */
 import bcrypt from 'bcryptjs';
 import db from '../../../src/config/database.js';
+import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
 
 /**
  * Truncate hết bảng dữ liệu giữa các test để bảo đảm test idempotent.
  * Không truncate schema_migrations để khỏi rerun bootstrap.
  */
 export async function truncateAll() {
+  // RESTART IDENTITY tái sử dụng user id giữa các test — phải xóa quota cache
+  // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
+  // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).
+  _clearQuotaCache();
   await db.query(`
     TRUNCATE TABLE
       usage_logs,
@@ -124,8 +129,8 @@ export async function createPlan(overrides = {}) {
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
                         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
-                        ai_credits_per_period)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                        ai_credits_per_period, messages_per_period)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       code,
@@ -141,6 +146,7 @@ export async function createPlan(overrides = {}) {
       overrides.dailyZaloLimit ?? null,
       overrides.monthlyZaloLimit ?? null,
       overrides.aiCreditsPerPeriod ?? null,
+      overrides.messagesPerPeriod ?? null,
     ]
   );
   return rows[0];

@@ -246,13 +246,23 @@ const refreshCampaignSchedules = async () => {
  *
  * @returns {Promise<void>}
  */
+const QUOTA_DEFER_READY_SQL = `AND (
+  NULLIF(TRIM(COALESCE(cr.run_metadata->>'quotaDeferredUntil', '')), '') IS NULL
+  OR (cr.run_metadata->>'quotaDeferredUntil')::timestamptz <= NOW()
+)
+AND (
+  NULLIF(TRIM(COALESCE(cr.run_metadata->>'zaloOutboundDeferredUntil', '')), '') IS NULL
+  OR (cr.run_metadata->>'zaloOutboundDeferredUntil')::timestamptz <= NOW()
+)`;
+
 const recoverContinuousCampaignRuns = async () => {
   const result = await db.query(
     `SELECT cr.id, cr.id_campaign, c.id_user
      FROM campaign_runs cr
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
-       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'`
+       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
+       ${QUOTA_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return;
 
@@ -313,7 +323,8 @@ const recoverNonContinuousCampaignRuns = async () => {
      FROM campaign_runs cr
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
-       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'`
+       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
+       ${QUOTA_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return;
 
@@ -350,7 +361,8 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
        AND COALESCE(crs.is_fully_completed, FALSE) = FALSE
        AND NULLIF(TRIM(COALESCE(crs.meta->>'nextDueAt', '')), '') IS NOT NULL
-       AND (crs.meta->>'nextDueAt')::timestamptz <= NOW()`
+       AND (crs.meta->>'nextDueAt')::timestamptz <= NOW()
+       ${QUOTA_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return;
 

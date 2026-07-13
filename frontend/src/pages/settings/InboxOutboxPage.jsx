@@ -403,7 +403,8 @@ const InboxPage = () => {
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      toast.error(t('errors.sendFailed'));
+      const serverMessage = err.response?.data?.message;
+      toast.error(serverMessage || t('errors.sendFailed'));
     } finally {
       setIsSending(false);
     }

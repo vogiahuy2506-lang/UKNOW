@@ -1,6 +1,6 @@
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
 import crypto from 'node:crypto';
-import { checkUserZaloSendLimit } from '../../utils/userSendLimit.util.js';
+import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import path from 'node:path';
 import uploadController from '../../controllers/upload.controller.js';
 import { ThreadType, Zalo } from 'zca-js';
@@ -1760,8 +1760,12 @@ class CampaignZaloSenderService {
    */
   async sendPersonalMessageByQueue(payload = {}) {
     if (payload?.userId) {
-      const limitCheck = await checkUserZaloSendLimit({ userId: payload.userId });
-      if (!limitCheck.allowed) throw new Error(limitCheck.message);
+      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
+      if (!quota.allowed) {
+        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
+        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+        throw err;
+      }
     }
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
@@ -1926,6 +1930,14 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequestByQueue(payload = {}) {
+    if (payload?.userId) {
+      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
+      if (!quota.allowed) {
+        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
+        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+        throw err;
+      }
+    }
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
@@ -2062,8 +2074,12 @@ class CampaignZaloSenderService {
    */
   async sendGroupMessageByQueue(payload = {}) {
     if (payload?.userId) {
-      const limitCheck = await checkUserZaloSendLimit({ userId: payload.userId });
-      if (!limitCheck.allowed) throw new Error(limitCheck.message);
+      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
+      if (!quota.allowed) {
+        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
+        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+        throw err;
+      }
     }
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,

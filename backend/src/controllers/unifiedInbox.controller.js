@@ -1,4 +1,5 @@
 import unifiedInboxService from '../services/chatbot/unifiedInbox.service.js';
+import { checkSendQuota } from '../utils/userSendLimit.util.js';
 
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
@@ -161,6 +162,28 @@ class UnifiedInboxController {
 
       if (!content?.trim()) {
         return res.status(400).json({ success: false, message: 'Message content is required' });
+      }
+
+      if (String(type) === 'zalo_personal') {
+        const quota = await checkSendQuota({
+          userId: req.user.id,
+          channel: 'zalo',
+          roleCode: req.user.role,
+          ownerContextId: req.user.activeContext?.type === 'employee'
+            ? req.user.activeContext.ownerId
+            : null,
+        });
+        if (!quota.allowed) {
+          return res.status(403).json({
+            success: false,
+            code: 'RESOURCE_LIMIT_EXCEEDED',
+            resource: 'zalo_send',
+            upgradeRequired: true,
+            resetAt: quota.resetAt,
+            message: quota.message
+              || 'Đã đạt giới hạn gửi tin Zalo của gói dịch vụ. Vui lòng nâng cấp gói để tiếp tục.',
+          });
+        }
       }
 
       await unifiedInboxService.sendMessage(req.user.id, id, type, content, attachments || []);

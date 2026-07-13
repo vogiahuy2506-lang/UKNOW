@@ -17,6 +17,7 @@ import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
+import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import zaloMessageRepository from '../../repositories/campaign/zaloMessage.repository.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
@@ -338,6 +339,29 @@ class CampaignRunService {
       reasonKey: 'zaloDeferredReason',
       atKey: 'zaloDeferredAt',
       label: 'Zalo outbound',
+    });
+  }
+
+  /**
+   * Lưu mốc resume khi chạm plan send-quota và ném RUN_YIELD_SLOT để nhả slot.
+   *
+   * @param {object} input
+   * @param {number} input.runId
+   * @param {number} input.campaignId
+   * @param {number} input.waitMs
+   * @param {string} [input.reason]
+   * @returns {Promise<never>}
+   */
+  async persistQuotaDeferYieldSlot({ runId, campaignId, waitMs, reason }) {
+    await this.persistRunDeferYieldSlot({
+      runId,
+      campaignId,
+      waitMs,
+      reason: String(reason || 'plan_quota'),
+      untilKey: 'quotaDeferredUntil',
+      reasonKey: 'quotaDeferredReason',
+      atKey: 'quotaDeferredAt',
+      label: 'Plan quota',
     });
   }
 
@@ -1029,6 +1053,34 @@ class CampaignRunService {
           await this.persistZaloDeferYieldSlot({ runId, campaignId, waitMs: w, reason });
         }
         await sleepWithRunCheck(w);
+      };
+      /**
+       * Pre-check plan send-quota trước khi enqueue/gửi.
+       * Chạm limit có resetAt → pause & tự resume; expired/disabled → hard-fail.
+       *
+       * @param {'email'|'zalo'} channel
+       * @returns {Promise<void>}
+       */
+      const assertSendQuotaOrYield = async (channel) => {
+        // KHÔNG truyền roleCode: quota của owner phải áp bất kể ai trigger run
+        // (superadmin chạy hộ vẫn tính) — nhất quán với pre-check email trong
+        // campaignEmailSender và backstop trong send*ByQueue (đều không có roleCode).
+        const quota = await checkSendQuota({ userId, channel });
+        if (quota.allowed) return;
+        if (!quota.resetAt) {
+          throw new Error(quota.message || 'Vượt giới hạn gửi của gói dịch vụ.');
+        }
+        const waitMs = Math.max(0, new Date(quota.resetAt).getTime() - Date.now());
+        if (waitMs < this.zaloRateLimiter.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
+          await sleepWithRunCheck(waitMs);
+          return;
+        }
+        await this.persistQuotaDeferYieldSlot({
+          runId,
+          campaignId,
+          waitMs,
+          reason: `plan_quota_${quota.limitType}`,
+        });
       };
       const EMAIL_API_DELAY_MIN_MS = 50;
       const EMAIL_API_DELAY_MAX_MS = 250;
@@ -3157,8 +3209,39 @@ class CampaignRunService {
               // Lỗi cấu hình SMTP (ví dụ 535) không phải bounce của người nhận.
               if (sendResult.status === 'failed') {
                 const isRateLimitedRetryScheduled = sendResult.errorType === 'smtp_rate_limited_retry_scheduled';
-                if (!isRateLimitedRetryScheduled) {
+                const isPlanQuotaExceeded = sendResult.errorType === 'plan_send_limit_exceeded';
+                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded) {
                   failedSends += 1;
+                }
+                if (isPlanQuotaExceeded) {
+                  if (!sendResult.resetAt) {
+                    failedSends += 1;
+                  } else {
+                    const failedMessage = sendResult.error
+                      || 'Đã đạt giới hạn gửi email của gói dịch vụ.';
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      customerId: customer.id || null,
+                      recipientEmail: recipientEmailForLog,
+                      status: 'warning',
+                      progressCurrent: successfulSends + failedSends + skippedSends,
+                      progressTotal: totalRecipients,
+                      errorMessage: failedMessage,
+                      executionData: buildSendEmailExecutionData({
+                        ...sendResult,
+                        message: failedMessage,
+                      }),
+                    });
+                    const waitMs = Math.max(0, new Date(sendResult.resetAt).getTime() - Date.now());
+                    await this.persistQuotaDeferYieldSlot({
+                      runId,
+                      campaignId,
+                      waitMs,
+                      reason: `plan_quota_${sendResult.limitType || sendResult.period || 'limit'}`,
+                    });
+                  }
                 }
                 if (isRateLimitedRetryScheduled) {
                   const pauseUntilMs = markCampaignPausedByEmailRateLimit();
@@ -3230,6 +3313,7 @@ class CampaignRunService {
               });
               return { success: true };
             } catch (error) {
+              if (error?.code === 'RUN_YIELD_SLOT') throw error;
               failedSends += 1;
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const failedPayload = {
@@ -3401,8 +3485,9 @@ class CampaignRunService {
                     });
                   }
                 } catch (recipientError) {
-                  // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  // Lỗi của 1 khách không được dừng toàn bộ run; chỉ propagate lệnh dừng do user / quota defer.
                   if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
+                  if (recipientError?.code === 'RUN_YIELD_SLOT') throw recipientError;
                   console.error(
                     `[CampaignRun][Email] run=${runId} email=${customerKey} step_error:`,
                     recipientError.message
@@ -4308,6 +4393,7 @@ class CampaignRunService {
             const sendOutcome = await this.runWithZaloAccountMutex(
               workingAccount.id,
               async () => {
+              await assertSendQuotaOrYield('zalo');
               // Policy Zalo outbound: giới hạn theo tài khoản + kênh (có thể override từng TK trên zalo_settings).
               await enforceZaloOutboundPolicyBeforeSend({
                 accountId: workingAccount.id,
@@ -5628,6 +5714,7 @@ class CampaignRunService {
               },
             });
             try {
+              await assertSendQuotaOrYield('zalo');
               await enforceZaloOutboundPolicyBeforeSend({
                 accountId: workingAccount.id,
                 channel: 'zalo_friend_request',
@@ -5697,6 +5784,9 @@ class CampaignRunService {
               }
             } catch (error) {
               if (error?.code === 'RUN_STOPPED') {
+                throw error;
+              }
+              if (error?.code === 'RUN_YIELD_SLOT') {
                 throw error;
               }
               if (isZaloUnreachableRecipientError(error)) {
@@ -6136,6 +6226,7 @@ class CampaignRunService {
               if (groupIdSet.size > 0 && !groupIdSet.has(groupId)) {
                 throw new Error(`Không tìm thấy nhóm ${groupId} trong tài khoản Zalo hiện tại`);
               }
+              await assertSendQuotaOrYield('zalo');
               await enforceZaloOutboundPolicyBeforeSend({ accountId: account.id, channel: 'zalo_group' });
               zaloMessageId = await createZaloMessageTrackingRecord({
                 nodeId: node.id,
@@ -6240,6 +6331,8 @@ class CampaignRunService {
               });
               return { success: true, status: 'success' };
             } catch (error) {
+              if (error?.code === 'RUN_YIELD_SLOT') throw error;
+              if (error?.code === 'RUN_STOPPED') throw error;
               const zaloGroupTemplateStepsForLimit = Array.isArray(config.zaloGroupTemplateSteps)
                 ? config.zaloGroupTemplateSteps.filter((step) => Number.isFinite(parseInt(step?.templateId, 10)))
                 : [];
@@ -6639,8 +6732,9 @@ class CampaignRunService {
                     });
                   }
                 } catch (groupError) {
-                  // Lỗi của 1 nhóm không dừng toàn bộ run; chỉ propagate lệnh dừng do user.
+                  // Lỗi của 1 nhóm không dừng toàn bộ run; chỉ propagate lệnh dừng do user / quota defer.
                   if (groupError?.code === 'RUN_STOPPED') throw groupError;
+                  if (groupError?.code === 'RUN_YIELD_SLOT') throw groupError;
                   console.error(
                     `[CampaignRun][ZaloGroup] run=${runId} groupId=${normalizedGroupId} step_error:`,
                     groupError.message

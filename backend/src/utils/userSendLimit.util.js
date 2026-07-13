@@ -1,77 +1,56 @@
 import db from '../config/database.js';
 import { isAdminRole } from './roleScope.util.js';
 import { getSubscriptionStatus } from './subscriptionStatus.util.js';
+import {
+  EFFECTIVE_PLAN_ID_SQL,
+  resolveBillingUserId,
+  getBillingCycle,
+} from './billingCycle.util.js';
+
+// is_fup_enabled: FUP behavior intentionally deferred (cờ chưa có hành vi).
 
 const SUBSCRIPTION_EXPIRED_MSG =
   'Gói đã hết hạn (đã qua thời gian ân hạn). Vui lòng gia hạn để tiếp tục gửi.';
 
+const PERIOD_LIMIT_MSG = (count, limit) =>
+  `Đã đạt tổng hạn mức tin nhắn trong kỳ (${count}/${limit}). Hạn mức reset khi sang kỳ mới.`;
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const QUOTA_COUNT_CACHE_TTL_MS = Number.parseInt(process.env.QUOTA_COUNT_CACHE_TTL_MS, 10) || 10_000;
+
+/** @type {Map<string, { value: any, expiresAt: number }>} */
+const quotaCache = new Map();
+
+export function _clearQuotaCache() {
+  quotaCache.clear();
+}
+
+async function cached(key, fn) {
+  const hit = quotaCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
+  const value = await fn();
+  quotaCache.set(key, { value, expiresAt: Date.now() + QUOTA_COUNT_CACHE_TTL_MS });
+  return value;
+}
+
 /**
- * Lấy giới hạn gửi tin từ plan hiện tại của user.
- * Session timezone = Asia/Ho_Chi_Minh nên CURRENT_DATE / DATE_TRUNC('month', NOW()) tự điều chỉnh múi giờ.
+ * Nửa đêm VN kế tiếp (00:00 Asia/Ho_Chi_Minh) tính từ `now`.
+ * @param {Date} [now]
+ * @returns {Date}
  */
-async function getUserPlanSendLimits(userId) {
-  const { rows } = await db.query(
-    `SELECT p.daily_email_limit, p.monthly_email_limit,
-            p.daily_zalo_limit,  p.monthly_zalo_limit
-     FROM users u
-     JOIN plans p ON p.id = u.active_plan_id
-     WHERE u.id = $1
-     LIMIT 1`,
-    [userId]
-  );
-  return rows[0] || null;
+export function nextVnMidnight(now = new Date()) {
+  const vn = new Date(now.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + 1) - VN_OFFSET_MS);
 }
 
-async function countEmailSentToday(userId) {
-  const { rows } = await db.query(
-    `SELECT COUNT(*)::int AS total
-     FROM email_messages em
-     INNER JOIN campaigns c ON c.id = em.id_campaign
-     WHERE c.id_user = $1
-       AND em.status IN ('sent', 'delivered', 'bounced')
-       AND em.sent_at >= CURRENT_DATE`,
-    [userId]
-  );
-  return toCount(rows[0]?.total);
-}
-
-async function countEmailSentThisMonth(userId) {
-  const { rows } = await db.query(
-    `SELECT COUNT(*)::int AS total
-     FROM email_messages em
-     INNER JOIN campaigns c ON c.id = em.id_campaign
-     WHERE c.id_user = $1
-       AND em.status IN ('sent', 'delivered', 'bounced')
-       AND em.sent_at >= DATE_TRUNC('month', NOW())`,
-    [userId]
-  );
-  return toCount(rows[0]?.total);
-}
-
-async function countZaloSentToday(userId) {
-  const { rows } = await db.query(
-    `SELECT COUNT(*)::int AS total
-     FROM zalo_messages zm
-     JOIN campaigns c ON c.id = zm.id_campaign
-     WHERE c.id_user = $1
-       AND zm.tracking_metadata->>'status' = 'sent'
-       AND zm.sent_at >= CURRENT_DATE`,
-    [userId]
-  );
-  return toCount(rows[0]?.total);
-}
-
-async function countZaloSentThisMonth(userId) {
-  const { rows } = await db.query(
-    `SELECT COUNT(*)::int AS total
-     FROM zalo_messages zm
-     JOIN campaigns c ON c.id = zm.id_campaign
-     WHERE c.id_user = $1
-       AND zm.tracking_metadata->>'status' = 'sent'
-       AND zm.sent_at >= DATE_TRUNC('month', NOW())`,
-    [userId]
-  );
-  return toCount(rows[0]?.total);
+/**
+ * 00:00 VN ngày 1 tháng sau.
+ * @param {Date} [now]
+ * @returns {Date}
+ */
+export function nextVnMonthStart(now = new Date()) {
+  const vn = new Date(now.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth() + 1, 1) - VN_OFFSET_MS);
 }
 
 const toInt = (v) => {
@@ -82,96 +61,344 @@ const toInt = (v) => {
 
 const toCount = (v) => Number.parseInt(v ?? 0, 10) || 0;
 
-/**
- * Kết quả trả về:
- *   { allowed: true, limit: null, currentCount: 0, period: null, message: null }  — không giới hạn
- *   { allowed: false, limit: N, currentCount: M, period: 'daily'|'monthly', message: '...' } — vượt giới hạn
- */
-const ok  = () => ({ allowed: true,  limit: null, currentCount: 0, period: null, message: null });
-const deny = (limit, count, period, msg) => ({ allowed: false, limit, currentCount: count, period, message: msg });
+/** Scope campaigns theo billing owner (owner + employee active). */
+const CAMPAIGN_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
+   SELECT um.employee_id FROM user_members um
+   WHERE um.owner_id = $1 AND um.status = 'active'))`;
+
+/** Scope zalo_personal_messages theo billing owner. */
+const ZPM_OWNER_PREDICATE = `(zpm.id_user = $1 OR zpm.id_user IN (
+   SELECT um.employee_id FROM user_members um
+   WHERE um.owner_id = $1 AND um.status = 'active'))`;
 
 /**
- * Kiểm tra user có còn hạn mức gửi email theo ngày/tháng của gói dịch vụ hay không.
- *
- * @param {{ userId: number|string, roleCode?: string }} input
+ * Lấy giới hạn gửi tin từ effective plan của billing user.
+ * @param {number|string} billingUserId
  */
-export async function checkUserEmailSendLimit({ userId, roleCode } = {}) {
-  if (isAdminRole(roleCode)) return ok();
+async function getUserPlanSendLimits(billingUserId) {
+  return cached(`${billingUserId}:limits`, async () => {
+    const { rows } = await db.query(
+      `SELECT p.daily_email_limit, p.monthly_email_limit,
+              p.daily_zalo_limit,  p.monthly_zalo_limit,
+              p.messages_per_period
+       FROM users u
+       JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+       WHERE u.id = $1
+       LIMIT 1`,
+      [billingUserId]
+    );
+    return rows[0] || null;
+  });
+}
 
-  const subscription = await getSubscriptionStatus(userId);
-  if (subscription.hasPlan && subscription.isExpired) {
-    return deny(null, 0, null, SUBSCRIPTION_EXPIRED_MSG);
-  }
+async function countEmailSentToday(billingUserId) {
+  return cached(`${billingUserId}:email_today`, async () => {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM email_messages em
+       INNER JOIN campaigns c ON c.id = em.id_campaign
+       WHERE ${CAMPAIGN_OWNER_PREDICATE}
+         AND em.status IN ('sent', 'delivered', 'bounced')
+         AND em.sent_at >= CURRENT_DATE`,
+      [billingUserId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
 
-  const limits = await getUserPlanSendLimits(userId);
-  if (!limits) return ok(); // Không có plan → không enforce
+async function countEmailSentThisMonth(billingUserId) {
+  return cached(`${billingUserId}:email_month`, async () => {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM email_messages em
+       INNER JOIN campaigns c ON c.id = em.id_campaign
+       WHERE ${CAMPAIGN_OWNER_PREDICATE}
+         AND em.status IN ('sent', 'delivered', 'bounced')
+         AND em.sent_at >= DATE_TRUNC('month', NOW())`,
+      [billingUserId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
 
-  const dailyLimit = toInt(limits.daily_email_limit);
-  if (dailyLimit !== null) {
-    if (dailyLimit === 0) {
-      return deny(0, 0, 'daily', 'Tính năng gửi email không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.');
-    }
-    const count = await countEmailSentToday(userId);
-    if (count >= dailyLimit) {
-      return deny(dailyLimit, count, 'daily',
-        `Đã đạt giới hạn gửi email trong ngày (${count}/${dailyLimit} email). Hạn mức sẽ reset vào 00:00 ngày mai.`);
-    }
-  }
+async function countZaloSentToday(billingUserId) {
+  return cached(`${billingUserId}:zalo_today`, async () => {
+    const { rows } = await db.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= CURRENT_DATE)
+       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+          WHERE ${ZPM_OWNER_PREDICATE}
+            AND zpm.role = 'agent'
+            AND zpm.metadata->>'source' = 'manual_inbox'
+            AND zpm.created_at >= CURRENT_DATE)
+       )::int AS total`,
+      [billingUserId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
 
-  const monthlyLimit = toInt(limits.monthly_email_limit);
-  if (monthlyLimit !== null) {
-    if (monthlyLimit === 0) {
-      return deny(0, 0, 'monthly', 'Tính năng gửi email không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.');
-    }
-    const count = await countEmailSentThisMonth(userId);
-    if (count >= monthlyLimit) {
-      return deny(monthlyLimit, count, 'monthly',
-        `Đã đạt giới hạn gửi email trong tháng (${count}/${monthlyLimit} email). Vui lòng liên hệ admin để nâng gói.`);
-    }
-  }
-
-  return ok();
+async function countZaloSentThisMonth(billingUserId) {
+  return cached(`${billingUserId}:zalo_month`, async () => {
+    const { rows } = await db.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= DATE_TRUNC('month', NOW()))
+       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+          WHERE ${ZPM_OWNER_PREDICATE}
+            AND zpm.role = 'agent'
+            AND zpm.metadata->>'source' = 'manual_inbox'
+            AND zpm.created_at >= DATE_TRUNC('month', NOW()))
+       )::int AS total`,
+      [billingUserId]
+    );
+    return toCount(rows[0]?.total);
+  });
 }
 
 /**
- * Kiểm tra user có còn hạn mức gửi Zalo theo ngày/tháng của gói dịch vụ hay không.
- *
- * @param {{ userId: number|string, roleCode?: string }} input
+ * Tổng email + zalo campaign + inbox manual trong chu kỳ billing [cycleStart, cycleEnd).
  */
-export async function checkUserZaloSendLimit({ userId, roleCode } = {}) {
-  if (isAdminRole(roleCode)) return ok();
+export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleEnd) {
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:combined:${startIso}:${endIso}`, async () => {
+    const { rows } = await db.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM email_messages em
+          JOIN campaigns c ON c.id = em.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.sent_at >= $2 AND em.sent_at < $3)
+       + (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= $2 AND zm.sent_at < $3)
+       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+          WHERE ${ZPM_OWNER_PREDICATE}
+            AND zpm.role = 'agent'
+            AND zpm.metadata->>'source' = 'manual_inbox'
+            AND zpm.created_at >= $2 AND zpm.created_at < $3)
+       )::int AS total`,
+      [billingUserId, startIso, endIso]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
 
-  const subscription = await getSubscriptionStatus(userId);
-  if (subscription.hasPlan && subscription.isExpired) {
-    return deny(null, 0, null, SUBSCRIPTION_EXPIRED_MSG);
+const okResult = (billingUserId = null) => ({
+  allowed: true,
+  limitType: null,
+  limit: null,
+  currentCount: 0,
+  resetAt: null,
+  message: null,
+  billingUserId,
+});
+
+const denyResult = ({
+  limitType,
+  limit,
+  currentCount,
+  resetAt,
+  message,
+  billingUserId,
+}) => ({
+  allowed: false,
+  limitType,
+  limit,
+  currentCount,
+  resetAt,
+  message,
+  billingUserId,
+});
+
+/**
+ * Entry point hợp nhất kiểm tra hạn mức gửi.
+ *
+ * @param {{ userId: number|string, channel: 'email'|'zalo', roleCode?: string, ownerContextId?: number|string|null }} input
+ * @returns {Promise<{allowed: boolean, limitType: null|string, limit: number|null, currentCount: number, resetAt: Date|null, message: string|null, billingUserId: *}>}
+ */
+export async function checkSendQuota({
+  userId,
+  channel,
+  roleCode,
+  ownerContextId,
+} = {}) {
+  if (isAdminRole(roleCode)) {
+    return okResult(null);
   }
 
-  const limits = await getUserPlanSendLimits(userId);
-  if (!limits) return ok();
+  // Cache cùng TTL với các COUNT — resolveBillingUserId/subscription/cycle đều
+  // là query lặp lại y hệt trên hot path gửi từng recipient.
+  const billingUserId = await cached(
+    `resolve:${userId}:${ownerContextId ?? ''}`,
+    () => resolveBillingUserId(userId, { ownerContextId })
+  );
+  if (!billingUserId) {
+    return okResult(null);
+  }
 
-  const dailyLimit = toInt(limits.daily_zalo_limit);
+  const subscription = await cached(
+    `${billingUserId}:subscription`,
+    () => getSubscriptionStatus(billingUserId)
+  );
+  if (subscription.hasPlan && subscription.isExpired) {
+    return denyResult({
+      limitType: 'expired',
+      limit: null,
+      currentCount: 0,
+      resetAt: null,
+      message: SUBSCRIPTION_EXPIRED_MSG,
+      billingUserId,
+    });
+  }
+
+  const limits = await getUserPlanSendLimits(billingUserId);
+  if (!limits) {
+    return okResult(billingUserId);
+  }
+
+  const isEmail = channel === 'email';
+  const dailyLimit = toInt(isEmail ? limits.daily_email_limit : limits.daily_zalo_limit);
+  const monthlyLimit = toInt(isEmail ? limits.monthly_email_limit : limits.monthly_zalo_limit);
+  const channelLabel = isEmail ? 'email' : 'Zalo';
+  const unitLabel = isEmail ? 'email' : 'tin';
+
   if (dailyLimit !== null) {
     if (dailyLimit === 0) {
-      return deny(0, 0, 'daily', 'Tính năng gửi Zalo không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.');
+      return denyResult({
+        limitType: 'disabled',
+        limit: 0,
+        currentCount: 0,
+        resetAt: null,
+        message: `Tính năng gửi ${channelLabel} không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.`,
+        billingUserId,
+      });
     }
-    const count = await countZaloSentToday(userId);
+    const count = isEmail
+      ? await countEmailSentToday(billingUserId)
+      : await countZaloSentToday(billingUserId);
     if (count >= dailyLimit) {
-      return deny(dailyLimit, count, 'daily',
-        `Đã đạt giới hạn gửi Zalo trong ngày (${count}/${dailyLimit} tin). Hạn mức sẽ reset vào 00:00 ngày mai.`);
+      return denyResult({
+        limitType: 'daily',
+        limit: dailyLimit,
+        currentCount: count,
+        resetAt: nextVnMidnight(),
+        message: `Đã đạt giới hạn gửi ${channelLabel} trong ngày (${count}/${dailyLimit} ${unitLabel}). Hạn mức sẽ reset vào 00:00 ngày mai.`,
+        billingUserId,
+      });
     }
   }
 
-  const monthlyLimit = toInt(limits.monthly_zalo_limit);
   if (monthlyLimit !== null) {
     if (monthlyLimit === 0) {
-      return deny(0, 0, 'monthly', 'Tính năng gửi Zalo không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.');
+      return denyResult({
+        limitType: 'disabled',
+        limit: 0,
+        currentCount: 0,
+        resetAt: null,
+        message: `Tính năng gửi ${channelLabel} không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.`,
+        billingUserId,
+      });
     }
-    const count = await countZaloSentThisMonth(userId);
+    const count = isEmail
+      ? await countEmailSentThisMonth(billingUserId)
+      : await countZaloSentThisMonth(billingUserId);
     if (count >= monthlyLimit) {
-      return deny(monthlyLimit, count, 'monthly',
-        `Đã đạt giới hạn gửi Zalo trong tháng (${count}/${monthlyLimit} tin). Vui lòng liên hệ admin để nâng gói.`);
+      return denyResult({
+        limitType: 'monthly',
+        limit: monthlyLimit,
+        currentCount: count,
+        resetAt: nextVnMonthStart(),
+        message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng (${count}/${monthlyLimit} ${unitLabel}). Vui lòng liên hệ admin để nâng gói.`,
+        billingUserId,
+      });
     }
   }
 
-  return ok();
+  const periodLimit = toInt(limits.messages_per_period);
+  if (periodLimit !== null) {
+    if (periodLimit === 0) {
+      return denyResult({
+        limitType: 'disabled',
+        limit: 0,
+        currentCount: 0,
+        resetAt: null,
+        message: 'Tính năng gửi tin nhắn không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.',
+        billingUserId,
+      });
+    }
+    const cycle = await cached(
+      `${billingUserId}:cycle`,
+      () => getBillingCycle(billingUserId)
+    );
+    if (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd) {
+      const count = await countCombinedSentInCycle(billingUserId, cycle.cycleStart, cycle.cycleEnd);
+      if (count >= periodLimit) {
+        return denyResult({
+          limitType: 'period',
+          limit: periodLimit,
+          currentCount: count,
+          resetAt: cycle.cycleEnd instanceof Date ? cycle.cycleEnd : new Date(cycle.cycleEnd),
+          message: PERIOD_LIMIT_MSG(count, periodLimit),
+          billingUserId,
+        });
+      }
+    }
+  }
+
+  return okResult(billingUserId);
+}
+
+/**
+ * Wrapper mỏng — giữ shape cũ + thêm resetAt/limitType.
+ * @param {{ userId: number|string, roleCode?: string, ownerContextId?: * }} input
+ */
+export async function checkUserEmailSendLimit({ userId, roleCode, ownerContextId } = {}) {
+  const quota = await checkSendQuota({
+    userId,
+    channel: 'email',
+    roleCode,
+    ownerContextId,
+  });
+  return {
+    allowed: quota.allowed,
+    limit: quota.limit,
+    currentCount: quota.currentCount,
+    period: quota.limitType === 'daily' || quota.limitType === 'monthly' ? quota.limitType : null,
+    message: quota.message,
+    resetAt: quota.resetAt,
+    limitType: quota.limitType,
+  };
+}
+
+/**
+ * Wrapper mỏng — giữ shape cũ + thêm resetAt/limitType.
+ * @param {{ userId: number|string, roleCode?: string, ownerContextId?: * }} input
+ */
+export async function checkUserZaloSendLimit({ userId, roleCode, ownerContextId } = {}) {
+  const quota = await checkSendQuota({
+    userId,
+    channel: 'zalo',
+    roleCode,
+    ownerContextId,
+  });
+  return {
+    allowed: quota.allowed,
+    limit: quota.limit,
+    currentCount: quota.currentCount,
+    period: quota.limitType === 'daily' || quota.limitType === 'monthly' ? quota.limitType : null,
+    message: quota.message,
+    resetAt: quota.resetAt,
+    limitType: quota.limitType,
+  };
 }

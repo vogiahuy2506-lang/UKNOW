@@ -642,14 +642,15 @@ class UnifiedInboxRepository {
   /**
    * Send a message from agent/admin
    */
-  async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [] }) {
+  async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [], metadata = {} } = {}) {
     const now = new Date().toISOString();
+    const metadataJson = JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
 
     if (conversationType === 'channel') {
       await db.query(
-        `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, true, $7)`,
-        [conversationId, userId, channelId, role, content, JSON.stringify(attachments), now]
+        `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, metadata, is_read, read_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
+        [conversationId, userId, channelId, role, content, JSON.stringify(attachments), metadataJson, now]
       );
       await db.query(
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
@@ -664,9 +665,9 @@ class UnifiedInboxRepository {
       const zaloSettingId = rows[0]?.id_zalo_setting;
       
       await db.query(
-        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, true, $7)`,
-        [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), now]
+        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
+        [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), metadataJson, now]
       );
       await db.query(
         `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
@@ -674,9 +675,9 @@ class UnifiedInboxRepository {
       );
     } else {
       await db.query(
-        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, true, $6)`,
-        [conversationId, userId, role, content, JSON.stringify(attachments), now]
+        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, metadata, is_read, read_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)`,
+        [conversationId, userId, role, content, JSON.stringify(attachments), metadataJson, now]
       );
       await db.query(
         `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,

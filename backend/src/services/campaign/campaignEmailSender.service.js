@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
-import { checkUserEmailSendLimit } from '../../utils/userSendLimit.util.js';
+import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import campaignFlowService from './campaignFlow.service.js';
 import {
@@ -478,14 +478,22 @@ class CampaignEmailSenderService {
       };
     }
 
-    const emailLimitCheck = await checkUserEmailSendLimit({ userId: campaign.id_user });
+    const emailLimitCheck = await checkSendQuota({ userId: campaign.id_user, channel: 'email' });
     if (!emailLimitCheck.allowed) {
       return {
         to: customer?.email || '',
         status: 'failed',
         errorType: 'plan_send_limit_exceeded',
         error: emailLimitCheck.message,
-        period: emailLimitCheck.period,
+        period: emailLimitCheck.limitType === 'daily' || emailLimitCheck.limitType === 'monthly'
+          ? emailLimitCheck.limitType
+          : null,
+        resetAt: emailLimitCheck.resetAt
+          ? (emailLimitCheck.resetAt instanceof Date
+            ? emailLimitCheck.resetAt.toISOString()
+            : String(emailLimitCheck.resetAt))
+          : null,
+        limitType: emailLimitCheck.limitType,
       };
     }
 

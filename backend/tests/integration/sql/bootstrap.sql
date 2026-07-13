@@ -997,6 +997,43 @@ CREATE INDEX idx_audit_logs_category   ON audit_logs(category);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
 
+-- ─── Zalo personal unified inbox (migration 045) ───────────────────────
+CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  external_id      VARCHAR(255) NOT NULL,
+  visitor_name     VARCHAR(255),
+  visitor_info     JSONB DEFAULT '{}',
+  is_group         BOOLEAN DEFAULT FALSE,
+  group_id         VARCHAR(255),
+  status           VARCHAR(20) DEFAULT 'active',
+  started_at       TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_zalo_personal_conv UNIQUE (id_zalo_setting, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS zalo_personal_messages (
+  id               BIGSERIAL PRIMARY KEY,
+  id_conversation  BIGINT NOT NULL REFERENCES zalo_personal_conversations(id) ON DELETE CASCADE,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  role             VARCHAR(20) NOT NULL,
+  content          TEXT NOT NULL,
+  message_type     VARCHAR(20) DEFAULT 'text',
+  external_id      VARCHAR(255),
+  external_ts      TIMESTAMPTZ,
+  attachments      JSONB DEFAULT '[]',
+  metadata         JSONB DEFAULT '{}',
+  is_read          BOOLEAN DEFAULT false,
+  read_at          TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
+  ON zalo_personal_messages (id_user, created_at)
+  WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
