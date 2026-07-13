@@ -8,6 +8,7 @@ import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import customChatService from '../services/ai/customChat.service.js';
 import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
+import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
 import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
@@ -493,6 +494,10 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
       }
       const settings = await chatbotZaloAccountRepository.setEnabled(req.user.id, zaloSettingId, enabled);
+      
+      // Invalidate cache to apply toggle immediately
+      zaloInboxService.invalidateAccountCache();
+      
       return res.json({ success: true, data: settings });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
