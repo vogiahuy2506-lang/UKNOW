@@ -2668,6 +2668,7 @@ export default {
     channelZaloGroup: 'Zalo nhóm',
     zaloGroupTemplate: 'Template Zalo nhóm',
     contentPlanUnsupportedChannel: 'Flow tạo template theo ngày hiện hỗ trợ Email, Zalo cá nhân hoặc Zalo nhóm (một kênh duy nhất). Mình sẽ chuyển bạn sang flow tạo campaign thường nếu cần trộn nhiều kênh.',
+    contentPlanEmpty: 'Kế hoạch AI trả về chưa có ngày nào. Bạn mô tả lại số ngày và nội dung muốn gửi giúp mình nhé (ví dụ: "5 email trong 5 ngày ra mắt sản phẩm").',
     suggestContentPlanHint: 'Để tạo template và chiến dịch có nút bấm, hãy chuyển sang chế độ kế hoạch đa ngày.',
     suggestContentPlanButton: 'Tạo kế hoạch & bắt đầu soạn chiến dịch',
     planApprovalHint: 'Đây là bước duyệt kế hoạch: xem từng ngày gửi gì, lúc mấy giờ. Nếu ổn, chọn cách soạn template bên dưới; nếu cần sửa bấm Chỉnh lại kế hoạch.',

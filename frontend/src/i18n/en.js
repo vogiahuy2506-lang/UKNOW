@@ -2608,6 +2608,7 @@ export default {
     channelZaloGroup: 'Zalo groups',
     zaloGroupTemplate: 'Zalo group template',
     contentPlanUnsupportedChannel: 'The day-by-day template flow supports Email, Zalo personal, or Zalo group (single channel only). Use the standard campaign flow for mixed channels.',
+    contentPlanEmpty: 'The AI returned an empty plan (no days). Please describe the number of days and content again (e.g., "5 emails over 5 days for a product launch").',
     suggestContentPlanHint: 'To create templates and a campaign with action buttons, switch to the multi-day plan flow.',
     suggestContentPlanButton: 'Create plan & start drafting',
     planApprovalHint: 'This step is plan review: which day sends what, and at what time. If it looks good, pick how to draft the templates below, or Revise plan to adjust.',

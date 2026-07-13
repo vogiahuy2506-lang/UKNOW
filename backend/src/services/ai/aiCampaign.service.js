@@ -1471,9 +1471,19 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
         });
         return this._validateWorkflowNodes(this._normalizeParsed(JSON.parse(sanitized)));
       } catch {
-        // JSON hoàn toàn không parse được → trả về text thay vì crash
+        // JSON hoàn toàn không parse được → trả text thân thiện thay vì crash.
+        // KHÔNG đổ raw JSON vỡ ra chat: nếu text trông như JSON/code fence thì
+        // thay bằng thông báo lỗi; text thuần (AI trả lời tự do) thì giữ nguyên.
         console.warn('[AI] JSON parse failed, falling back to text response');
-        return { type: 'text', content: text, data: null, missing_fields: [] };
+        const looksLikeBrokenJson = /^\s*(\{|```)/.test(text);
+        return {
+          type: 'text',
+          content: looksLikeBrokenJson
+            ? 'Xin lỗi, tôi gặp lỗi định dạng khi tạo câu trả lời. Bạn gửi lại yêu cầu giúp tôi nhé.'
+            : text,
+          data: null,
+          missing_fields: [],
+        };
       }
     }
   }

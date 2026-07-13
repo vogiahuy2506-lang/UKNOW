@@ -11,6 +11,11 @@ import reloadLostApprovalMarker from './fixtures/golden/reloadLostApprovalMarker
 import planRevisionResetsApproval from './fixtures/golden/planRevisionResetsApproval.fixture.js';
 import channelSwitchResetsDownstream from './fixtures/golden/channelSwitchResetsDownstream.fixture.js';
 import zaloGroupRequiresPicker from './fixtures/golden/zaloGroupRequiresPicker.fixture.js';
+import emailNoSenderSetupGuide from './fixtures/golden/emailNoSenderSetupGuide.fixture.js';
+import zaloAllDisconnectedQrLogin from './fixtures/golden/zaloAllDisconnectedQrLogin.fixture.js';
+import senderOtherRequestedSetupGuide from './fixtures/golden/senderOtherRequestedSetupGuide.fixture.js';
+import onceScheduleSkipsPlanApproval from './fixtures/golden/onceScheduleSkipsPlanApproval.fixture.js';
+import recurringScheduleReasks from './fixtures/golden/recurringScheduleReasks.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -18,6 +23,11 @@ const FIXTURES = [
   planRevisionResetsApproval,
   channelSwitchResetsDownstream,
   zaloGroupRequiresPicker,
+  emailNoSenderSetupGuide,
+  zaloAllDisconnectedQrLogin,
+  senderOtherRequestedSetupGuide,
+  onceScheduleSkipsPlanApproval,
+  recurringScheduleReasks,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -63,6 +73,12 @@ const runFixture = (fixture) => {
     if (turn.expectGate) {
       const gate = evaluateNextGate(currentState(), resources, locale);
       expect({ label, gate: gate?.gate ?? null }).toEqual({ label, gate: turn.expectGate });
+      return;
+    }
+    if (turn.expectGateResponseType) {
+      const gate = evaluateNextGate(currentState(), resources, locale);
+      expect({ label, responseType: gate?.response?.type ?? null })
+        .toEqual({ label, responseType: turn.expectGateResponseType });
       return;
     }
     if (turn.expectNoGate) {

@@ -1374,6 +1374,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         if (type === 'content_plan' && data) {
           const normalizedPlan = normalizeContentPlanData(data);
+          // Plan rỗng (AI trả 0 ngày) — message riêng, đừng báo nhầm "chỉ hỗ trợ 1 kênh"
+          if (!normalizedPlan.days.length) {
+            update((prev) => [...prev, {
+              role: 'assistant',
+              content: t('aiChatbot.contentPlanEmpty')
+                || 'Kế hoạch AI trả về chưa có ngày nào. Bạn mô tả lại số ngày và nội dung muốn gửi giúp mình nhé (ví dụ: "5 email trong 5 ngày ra mắt sản phẩm").',
+            }]);
+            return;
+          }
           const channels = new Set(
             normalizedPlan.days.flatMap((dayItem) => dayItem.slots.map((slot) => normalizeChannel(slot.channel || dayItem.channel)))
           );
