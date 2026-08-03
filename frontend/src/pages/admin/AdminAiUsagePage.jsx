@@ -103,6 +103,7 @@ export default function AdminAiUsagePage() {
   const timeline = useMemo(() => data?.timeline || [], [data]);
   const byPlan = data?.byPlan || [];
   const byFeature = data?.byFeature || [];
+  const byModel = data?.byModel || [];
   const topUsers = data?.topUsers || [];
 
   if (loading && !data) {
@@ -240,6 +241,45 @@ export default function AdminAiUsagePage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="p-5">
+          <SectionHeader title={t('adminAiUsage.byModel')} hint={t('adminAiUsage.byModelHint')} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="px-5 py-3">{t('adminAiUsage.model')}</th>
+                <th className="px-5 py-3">{t('adminAiUsage.totalTokens')}</th>
+                <th className="px-5 py-3">{t('adminAiUsage.promptOutput')}</th>
+                <th className="px-5 py-3">{t('adminAiUsage.cost')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {byModel.length === 0 && <EmptyRow colSpan={4} text={t('adminAiUsage.noData')} />}
+              {byModel.map((row) => (
+                <tr key={row.model} className="hover:bg-gray-50">
+                  <td className="px-5 py-4">
+                    <p className="font-semibold text-gray-900">{row.model === '_unknown' ? t('adminAiUsage.modelUnknown') : row.model}</p>
+                    <p className="text-xs text-gray-400">{t('adminAiUsage.users', { count: fmt(row.userCount) })}</p>
+                  </td>
+                  <td className="px-5 py-4 font-semibold text-gray-900">{fmt(row.totalTokens)}</td>
+                  <td className="px-5 py-4 text-gray-500">{fmt(row.promptTokens)} / {fmt(row.outputTokens)}</td>
+                  <td className="px-5 py-4">
+                    {fmtUsd(row.estimatedCostUsd)}
+                    {!row.priceConfigured && (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        {t('adminAiUsage.priceEstimated')}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

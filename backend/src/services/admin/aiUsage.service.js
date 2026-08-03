@@ -1,7 +1,13 @@
 import aiUsageRepository from '../../repositories/admin/aiUsage.repository.js';
 
+// Giá USD / 1 triệu token (text). Nguồn: bảng giá Gemini của Google — NÊN đối
+// chiếu lại định kỳ vì giá đổi. Ghi đè không cần deploy qua env AI_PRICING_JSON.
+// gemini-2.5-pro dùng mức cơ bản (prompt ≤200k); phần >200k Google tính cao hơn
+// ($2.50/$15) — hiếm gặp ở đây vì prompt trung bình ~10k token.
 const DEFAULT_PRICING = {
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
   'gemini-2.5-flash': { input: 0.30, output: 2.50 },
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   _default: { input: 0.30, output: 2.50 },
 };
@@ -244,7 +250,11 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     (row) => row.model || '_unknown',
     (row) => ({ model: row.model || '_unknown', promptTokens: 0, outputTokens: 0, totalTokens: 0, userCount: 0, estimatedCostUsd: 0 }),
     pricing
-  ).sort((a, b) => b.totalTokens - a.totalTokens);
+  )
+    // priceConfigured=false → chi phí đang tính bằng giá _default (Flash), KHÔNG
+    // phải giá thật của model này. Frontend đánh dấu để không ai tin nhầm con số.
+    .map((item) => ({ ...item, priceConfigured: Boolean(pricing[item.model]) }))
+    .sort((a, b) => b.totalTokens - a.totalTokens);
 
   const p90ByPlan = new Map(p90Rows.map((row) => [String(row.plan_id || row.plan_code || 'unknown'), {
     p90UserTokens: toNumber(row.p90_user_tokens),

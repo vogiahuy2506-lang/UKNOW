@@ -45,8 +45,14 @@ export default function AdminAiModelsPage() {
   }, [load]);
 
   const visibleModels = useMemo(() => {
-    if (showAll) return models;
-    return models.filter((model) => model.isEnabled);
+    if (!showAll) return models.filter((model) => model.isEnabled);
+    // Bật "hiện cả model tắt" → chỉ lộ model thinking còn dùng được (hỗ trợ
+    // generateContent), để duyệt/đổi model hệ thống mà không lội qua model rác
+    // (deep-research, non-generateContent, model đời cũ...). Model đang bật luôn
+    // hiện dù cờ có ra sao.
+    return models.filter(
+      (model) => model.isEnabled || (model.thinking && model.supportsGenerateContent)
+    );
   }, [models, showAll]);
 
   const updateModel = async (model, patch) => {

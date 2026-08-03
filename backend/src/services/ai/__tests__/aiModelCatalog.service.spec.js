@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 const mockRepo = {
+  deleteModelsByIds: jest.fn(),
   listAiModels: jest.fn(),
   markGoogleModelsMissing: jest.fn(),
   setOnlyEnabledModel: jest.fn(),
@@ -21,6 +22,8 @@ describe('aiModelCatalog.service', () => {
     process.env.GEMINI_API_KEY = 'test-key';
     mockRepo.markGoogleModelsMissing.mockResolvedValue(0);
     mockRepo.upsertGoogleModel.mockResolvedValue({});
+    mockRepo.listAiModels.mockResolvedValue([]);
+    mockRepo.deleteModelsByIds.mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -75,6 +78,30 @@ describe('aiModelCatalog.service', () => {
     expect(mockRepo.markGoogleModelsMissing).toHaveBeenCalledWith(expect.objectContaining({
       seenModelIds: ['gemini-2.5-flash'],
     }));
+  });
+
+  it('deletes stale preview/deprecated rows left in DB, keeps real chat models', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [] }),
+    });
+    // DB còn lẫn rác cũ mà sync mới không upsert nữa.
+    mockRepo.listAiModels.mockResolvedValue([
+      { modelId: 'gemini-2.5-flash' },
+      { modelId: 'gemini-2.5-pro' },
+      { modelId: 'antigravity-preview-05-2026' },
+      { modelId: 'deep-research-max-preview-04-2026' },
+      { modelId: 'gemini-2.5-flash-preview-09-2025' },
+    ]);
+
+    const result = await catalogService.syncModelsFromGoogle();
+
+    expect(mockRepo.deleteModelsByIds).toHaveBeenCalledWith([
+      'antigravity-preview-05-2026',
+      'deep-research-max-preview-04-2026',
+      'gemini-2.5-flash-preview-09-2025',
+    ]);
+    expect(result).toEqual(expect.objectContaining({ deletedIrrelevant: 0 }));
   });
 
   describe('setSystemModel', () => {
