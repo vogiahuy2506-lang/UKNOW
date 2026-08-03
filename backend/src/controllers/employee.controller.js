@@ -66,7 +66,7 @@ export async function createEmployee(req, res) {
     const ownerId = req.user.id;
     const { username, email, fullName } = req.body;
     const employee = await employeeService.createEmployee(ownerId, { username, email, fullName });
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, employee.id, { username, email, fullName });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, employee.id, { username, email, fullName });
     return res.status(201).json({ success: true, message: 'Đã gửi lời mời đến email nhân viên', data: employee });
   } catch (err) {
     return handleServiceError(res, err);
@@ -98,7 +98,7 @@ export async function linkEmployee(req, res) {
     const ownerId = req.user.id;
     const { email } = req.body;
     const member = await employeeService.linkUserAsEmployee(ownerId, email);
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.employee_id, { email, method: 'link' });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.employee_id, { email, method: 'link' });
     return res.status(201).json({ success: true, message: 'Liên kết nhân viên thành công', data: member });
   } catch (err) {
     return handleServiceError(res, err);
@@ -137,7 +137,7 @@ export async function updateLimits(req, res) {
       dailyZaloLimit,
       monthlyZaloLimit,
     });
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit });
     return res.json({ success: true, message: 'Cập nhật giới hạn lượt gửi thành công', data: updated });
   } catch (err) {
     return handleServiceError(res, err);
@@ -154,7 +154,7 @@ export async function updatePermissions(req, res) {
     const ownerId = req.user.id;
     const { permissions } = req.body;
     const updated = await employeeService.setEmployeePermissions(ownerId, Number(req.params.id), permissions);
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_PERMISSIONS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { permissions });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_PERMISSIONS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { permissions });
     return res.json({ success: true, message: 'Cập nhật quyền hạn thành công', data: updated });
   } catch (err) {
     return handleServiceError(res, err);
@@ -171,7 +171,7 @@ export async function updateStatus(req, res) {
     const ownerId = req.user.id;
     const { status } = req.body;
     const updated = await employeeService.setEmployeeStatus(ownerId, Number(req.params.id), status);
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_STATUS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { status });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_STATUS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { status });
     return res.json({ success: true, message: 'Cập nhật trạng thái thành công', data: updated });
   } catch (err) {
     return handleServiceError(res, err);
@@ -186,7 +186,7 @@ export async function deleteEmployee(req, res) {
   try {
     const ownerId = req.user.id;
     await employeeService.deleteEmployee(ownerId, Number(req.params.id));
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_REMOVED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {});
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_REMOVED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {});
     return res.json({ success: true, message: 'Đã xóa nhân viên khỏi team' });
   } catch (err) {
     return handleServiceError(res, err);
@@ -201,7 +201,7 @@ export async function resetEmployeePassword(req, res) {
   try {
     const ownerId = req.user.id;
     await employeeService.resetEmployeePassword(ownerId, Number(req.params.id));
-    logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_PASSWORD_RESET, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {});
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_PASSWORD_RESET, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {});
     return res.json({ success: true, message: 'Reset mật khẩu thành công' });
   } catch (err) {
     return handleServiceError(res, err);

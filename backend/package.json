@@ -16,8 +16,9 @@
     "pm2:logs": "pm2 logs",
     "pm2:status": "pm2 list",
     "seed": "node scripts/seed.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
-    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit",
+    "check:schema": "node scripts/checkCoreSchema.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
     "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --coverage"

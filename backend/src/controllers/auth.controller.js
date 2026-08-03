@@ -91,7 +91,7 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
 
-      logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+      await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
 
       return res.status(201).json({
         success: true,

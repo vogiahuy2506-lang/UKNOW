@@ -273,7 +273,7 @@ class CampaignController {
         connections,
       });
 
-      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType });
       res.status(201).json({
         success: true,
         message: 'Tạo chiến dịch thành công',
@@ -395,7 +395,7 @@ class CampaignController {
         }
       }
 
-      logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_DELETED, AUDIT_ENTITY_TYPES.CAMPAIGN, Number(id), {});
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_DELETED, AUDIT_ENTITY_TYPES.CAMPAIGN, Number(id), {});
       res.json({
         success: true,
         message: 'Xóa chiến dịch thành công',

@@ -42,7 +42,7 @@ export async function updateRole(req, res) {
 export async function promote(req, res) {
   try {
     const result = await adminMembersService.promoteToSuperAdmin(Number(req.params.id));
-    logSystem(
+    await logSystem(
       getSystemAuditContext(req),
       AUDIT_ACTIONS.USER_ROLE_CHANGED,
       AUDIT_ENTITY_TYPES.USER,
@@ -57,7 +57,7 @@ export async function promote(req, res) {
 export async function demote(req, res) {
   try {
     const result = await adminMembersService.demoteFromSuperAdmin(Number(req.params.id), req.user.id);
-    logSystem(
+    await logSystem(
       getSystemAuditContext(req),
       AUDIT_ACTIONS.USER_ROLE_CHANGED,
       AUDIT_ENTITY_TYPES.USER,

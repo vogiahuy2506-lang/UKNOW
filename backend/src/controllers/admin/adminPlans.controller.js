@@ -65,7 +65,7 @@ export async function create(req, res) {
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays,
     });
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
     return res.status(201).json({ success: true, message: 'Tạo gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -86,7 +86,7 @@ export async function update(req, res) {
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays,
     });
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
     return res.json({ success: true, message: 'Cập nhật gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -95,7 +95,7 @@ export async function update(req, res) {
 export async function remove(req, res) {
   try {
     const result = await adminPlansService.removePlan(Number(req.params.id));
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_DELETED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { softDelete: !!result.softDeleted });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_DELETED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { softDelete: !!result.softDeleted });
     return res.json({ success: true, message: result.message, data: result });
   } catch (err) { return handleError(res, err); }
 }
