@@ -5,8 +5,11 @@
 
 
 ####################
-# LOCAL DOCS (chứa thông tin test/credential)
+# TÀI LIỆU NỘI BỘ — KHÔNG đẩy lên (repo này PUBLIC)
 ####################
+# Kế hoạch, kết quả audit bảo mật, tài khoản test, ghi chú làm việc.
+# Tài liệu kỹ thuật dùng chung thì để ở docs/ hoặc cạnh code, không để đây.
+/_internal/
 docs/TEST_ACCOUNTS.md
 
 
