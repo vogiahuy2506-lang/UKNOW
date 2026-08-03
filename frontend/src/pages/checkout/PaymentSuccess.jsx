@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { HiOutlineCheckCircle, HiArrowRight, HiOutlineDocumentText } from 'react-icons/hi';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
@@ -13,10 +13,12 @@ const PaymentSuccessPage = () => {
     const [searchParams] = useSearchParams();
     const location = useLocation();
     const initialize = useAuthStore((state) => state.initialize);
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
     const [verified, setVerified] = useState(false);
     const [loading, setLoading] = useState(true);
     const [orderCode, setOrderCode] = useState(null);
+    const [needsLogin, setNeedsLogin] = useState(false);
 
     useEffect(() => {
         const verify = async () => {
@@ -25,16 +27,26 @@ const PaymentSuccessPage = () => {
                 navigate('/', { replace: true });
                 return;
             }
+            setOrderCode(code);
             try {
                 const data = await checkoutApiService.getPaymentStatus(code);
                 if (data.status === 'success') {
                     setVerified(true);
-                    setOrderCode(code);
+                    setNeedsLogin(false);
+                } else if (data.status === 'failed') {
+                    navigate('/checkout', { replace: true });
                 } else {
+                    // pending — keep showing spinner briefly then allow dashboard login
                     navigate('/checkout', { replace: true });
                 }
-            } catch {
-                navigate('/', { replace: true });
+            } catch (err) {
+                const status = err?.response?.status;
+                if (status === 401) {
+                    // Token missing (e.g. bank in-app browser) — do not bounce to home.
+                    setNeedsLogin(true);
+                } else {
+                    navigate('/', { replace: true });
+                }
             } finally {
                 setLoading(false);
             }
@@ -47,6 +59,26 @@ const PaymentSuccessPage = () => {
         return (
             <div className="relative min-h-[60vh] flex items-center justify-center">
                 <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (needsLogin && !verified) {
+        return (
+            <div className="relative min-h-screen flex items-center justify-center px-4">
+                <div className={`${GLASS_CARD} p-8 max-w-md w-full text-center`}>
+                    <h1 className="text-xl font-bold text-slate-900 mb-2">{t('paymentSuccess.confirmTitle')}</h1>
+                    <p className="text-sm text-slate-600 mb-6">{t('paymentSuccess.confirmLoginHint')}</p>
+                    {orderCode && (
+                        <p className="font-mono text-sm text-slate-500 mb-6">#{orderCode}</p>
+                    )}
+                    <Link
+                        to={`/login?redirect=${encodeURIComponent(`/payment-success?orderCode=${orderCode || ''}`)}`}
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold"
+                    >
+                        {t('paymentSuccess.loginToConfirm')}
+                    </Link>
+                </div>
             </div>
         );
     }
@@ -109,7 +141,7 @@ const PaymentSuccessPage = () => {
                         onClick={async () => { await initialize(); navigate('/app'); }}
                         className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base hover:shadow-lg hover:shadow-orange-500/30 transition-all group"
                     >
-                        {t('paymentSuccess.goToDashboard')}
+                        {isAuthenticated ? t('paymentSuccess.goToDashboard') : t('paymentSuccess.loginToConfirm')}
                         <HiArrowRight className="group-hover:translate-x-0.5 transition-transform" />
                     </button>
                 </div>

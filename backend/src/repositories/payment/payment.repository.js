@@ -18,8 +18,8 @@ export const createOrder = async ({
     discountAmount = 0,
     voucherId = null,
     voucherCode = null,
-}) => {
-    const { rows } = await db.query(
+}, queryable = db) => {
+    const { rows } = await queryable.query(
         `INSERT INTO orders (
             order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
             original_amount, discount_amount, voucher_id, voucher_code, created_at
@@ -52,7 +52,7 @@ export const updateOrderStatus = async (orderCode, status) => {
 };
 
 /**
- * Atomically mark order success — only if not already success/cancelled.
+ * Atomically mark order success — only if not already success/cancelled/failed.
  * @param {number|string} orderCode
  * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
  * @returns {Promise<object|null>}
@@ -62,26 +62,47 @@ export const claimOrderSuccess = async (orderCode, queryable = db) => {
         `UPDATE orders
          SET status = 'success', updated_at = NOW()
          WHERE order_code = $1
-           AND status NOT IN ('success', 'cancelled')
+           AND status NOT IN ('success', 'cancelled', 'failed')
          RETURNING id, user_id, plan_id, user_email, billing_period,
-                   voucher_id, voucher_code, discount_amount`,
+                   amount, voucher_id, voucher_code, discount_amount`,
         [orderCode]
+    );
+    return rows[0] || null;
+};
+
+/**
+ * Mark order failed for manual ops review (amount mismatch, etc.).
+ * Does not activate plan. Idempotent for already-terminal rows.
+ */
+export const markOrderFailedForReview = async (orderCode, note, queryable = db) => {
+    const { rows } = await queryable.query(
+        `UPDATE orders
+            SET status = 'failed',
+                note = CASE
+                  WHEN note IS NULL OR note = '' THEN $2
+                  ELSE note || E'\\n' || $2
+                END,
+                updated_at = NOW()
+          WHERE order_code = $1
+            AND status NOT IN ('success', 'cancelled')
+          RETURNING id, order_code, amount, status`,
+        [orderCode, note]
     );
     return rows[0] || null;
 };
 
 export const findOrderStatusByCode = async (orderCode) => {
     const { rows } = await db.query(
-        'SELECT status FROM orders WHERE order_code = $1',
+        'SELECT status, user_id, user_email FROM orders WHERE order_code = $1',
         [orderCode]
     );
     return rows[0] || null;
 };
 
-export const findOrderByCode = async (orderCode) => {
-    const { rows } = await db.query(
-        `SELECT id, user_id, plan_id, status, user_email, billing_period,
-                voucher_id, voucher_code, discount_amount
+export const findOrderByCode = async (orderCode, queryable = db) => {
+    const { rows } = await queryable.query(
+        `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
+                amount, voucher_id, voucher_code, discount_amount, note
          FROM orders WHERE order_code = $1`,
         [orderCode]
     );

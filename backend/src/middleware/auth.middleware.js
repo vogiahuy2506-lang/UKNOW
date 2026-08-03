@@ -102,4 +102,16 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional auth: attach req.user when Bearer token is valid; otherwise continue anonymously.
+ * Used for PayOS return URL polling where the bank in-app browser may lack the SPA token.
+ */
+export const optionalAuthMiddleware = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  return authMiddleware(req, res, next);
+};
+
 export default authMiddleware;

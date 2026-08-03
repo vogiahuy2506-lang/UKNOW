@@ -2,15 +2,22 @@ import * as paymentService from '../services/payment/payment.service.js';
 
 export const createPayment = async (req, res) => {
     try {
-        const { planCode, userEmail, billingPeriod = 'monthly', voucherCode = null } = req.body;
+        const { planCode, billingPeriod = 'monthly', voucherCode = null } = req.body;
+        const userEmail = req.user?.email;
         if (!planCode || !userEmail) {
-            return res.status(400).json({ error: 'Thiếu planCode hoặc userEmail' });
+            return res.status(400).json({ error: 'Thiếu planCode hoặc thông tin người dùng' });
         }
         if (!['monthly', 'yearly'].includes(billingPeriod)) {
             return res.status(400).json({ error: 'billingPeriod phải là monthly hoặc yearly' });
         }
 
-        const result = await paymentService.createPaymentLink({ planCode, userEmail, userId: req.user.id, billingPeriod, voucherCode });
+        const result = await paymentService.createPaymentLink({
+            planCode,
+            userEmail,
+            userId: req.user.id,
+            billingPeriod,
+            voucherCode,
+        });
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
         console.error(err);
@@ -24,7 +31,8 @@ export const webhook = async (req, res) => {
         res.json({ success: true, message: 'Webhook processed' });
     } catch (err) {
         console.error('Webhook error:', err.message);
-        res.status(200).json({ success: false });
+        // Transient errors only — amount mismatch is acknowledged inside handleWebhook (200).
+        res.status(500).json({ success: false, message: 'Webhook processing failed' });
     }
 };
 
@@ -61,6 +69,18 @@ export const getPaymentStatus = async (req, res) => {
             return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
         }
 
+        // When logged in, only the buyer may read status (reduces probing of others' codes).
+        if (req.user) {
+            const isOwner =
+                Number(order.user_id) === Number(req.user.id) ||
+                (order.user_email &&
+                    String(order.user_email).toLowerCase() === String(req.user.email || '').toLowerCase());
+            if (!isOwner) {
+                return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
+            }
+        }
+
+        // Status only — never expose email/user_id.
         res.json({ success: true, message: 'Lấy trạng thái thanh toán thành công', status: order.status });
     } catch (err) {
         console.error(err);

@@ -18,7 +18,7 @@ export async function list(_req, res) {
 export async function create(req, res) {
   try {
     const voucher = await voucherService.createAdminVoucher(req.body);
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_CREATED, AUDIT_ENTITY_TYPES.VOUCHER, voucher.id, { code: voucher.code });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_CREATED, AUDIT_ENTITY_TYPES.VOUCHER, voucher.id, { code: voucher.code });
     res.status(201).json({ success: true, data: voucher, message: 'Tạo voucher thành công' });
   } catch (err) {
     handleError(res, err);
@@ -28,7 +28,7 @@ export async function create(req, res) {
 export async function update(req, res) {
   try {
     const voucher = await voucherService.updateAdminVoucher(Number(req.params.id), req.body);
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_UPDATED, AUDIT_ENTITY_TYPES.VOUCHER, voucher.id, { code: voucher.code });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_UPDATED, AUDIT_ENTITY_TYPES.VOUCHER, voucher.id, { code: voucher.code });
     res.json({ success: true, data: voucher, message: 'Cập nhật voucher thành công' });
   } catch (err) {
     handleError(res, err);
@@ -38,8 +38,28 @@ export async function update(req, res) {
 export async function remove(req, res) {
   try {
     await voucherService.deleteAdminVoucher(Number(req.params.id));
-    logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_DELETED, AUDIT_ENTITY_TYPES.VOUCHER, Number(req.params.id), {});
-    res.json({ success: true, message: 'Đã xoá voucher' });
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_DELETED, AUDIT_ENTITY_TYPES.VOUCHER, Number(req.params.id), { soft: true });
+    res.json({ success: true, message: 'Đã ngừng dùng voucher' });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+export async function hardRemove(req, res) {
+  try {
+    await voucherService.hardDeleteAdminVoucher(Number(req.params.id));
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_DELETED, AUDIT_ENTITY_TYPES.VOUCHER, Number(req.params.id), { hard: true });
+    res.json({ success: true, message: 'Đã xoá vĩnh viễn voucher' });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+export async function restore(req, res) {
+  try {
+    const voucher = await voucherService.restoreAdminVoucher(Number(req.params.id), req.body || {});
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.VOUCHER_UPDATED, AUDIT_ENTITY_TYPES.VOUCHER, voucher.id, { restored: true, code: voucher.code });
+    res.json({ success: true, data: voucher, message: 'Đã khôi phục voucher' });
   } catch (err) {
     handleError(res, err);
   }

@@ -312,7 +312,7 @@ describe('PATCH /api/admin/vouchers/:id', () => {
 
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
 describe('DELETE /api/admin/vouchers/:id', () => {
-  it('xoá voucher tồn tại → 200 + row biến mất khỏi DB', async () => {
+  it('ngừng dùng (soft-delete) → 200 + row vẫn còn, is_active=false', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const token = await loginAs(admin);
     const created = await request(app)
@@ -328,8 +328,9 @@ describe('DELETE /api/admin/vouchers/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
 
-    const check = await db.query('SELECT id FROM vouchers WHERE id = $1', [id]);
-    expect(check.rows).toHaveLength(0);
+    const check = await db.query('SELECT id, is_active FROM vouchers WHERE id = $1', [id]);
+    expect(check.rows).toHaveLength(1);
+    expect(check.rows[0].is_active).toBe(false);
   });
 
   it('id không tồn tại → 404', async () => {
@@ -339,5 +340,84 @@ describe('DELETE /api/admin/vouchers/:id', () => {
       .delete('/api/admin/vouchers/99999')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(404);
+  });
+
+  it('tái dùng mã sau khi soft-delete → 201', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send(baseVoucher);
+    await request(app)
+      .delete(`/api/admin/vouchers/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, name: 'Reuse wave 2' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.code).toBe('TEST20');
+  });
+
+  it('khôi phục voucher hết hạn mà không sửa endsAt → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, code: 'EXPIRED1', endsAt: '2099-01-01T00:00:00Z' });
+    const id = created.body.data.id;
+    await db.query(`UPDATE vouchers SET is_active = FALSE, ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [id]);
+
+    const res = await request(app)
+      .post(`/api/admin/vouchers/${id}/restore`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('khôi phục với endsAt tương lai → 200', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, code: 'RESTORE1' });
+    const id = created.body.data.id;
+    await request(app).delete(`/api/admin/vouchers/${id}`).set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .post(`/api/admin/vouchers/${id}/restore`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ endsAt: '2099-12-31T23:59:59Z' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(true);
+  });
+
+  it('startsAt sau endsAt → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        ...baseVoucher,
+        code: 'BADDATE',
+        startsAt: '2099-12-31T00:00:00Z',
+        endsAt: '2099-01-01T00:00:00Z',
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it('usageLimitPerUser = 0 → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, code: 'ZEROUSER', usageLimitPerUser: 0 });
+    expect(res.status).toBe(400);
   });
 });

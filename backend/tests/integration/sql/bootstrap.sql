@@ -215,7 +215,7 @@ CREATE INDEX idx_orders_order_code ON orders(order_code);
 -- ─── Vouchers (migration 036) ──────────────────────────────────────────
 CREATE TABLE vouchers (
   id                         BIGSERIAL PRIMARY KEY,
-  code                       VARCHAR(64)  NOT NULL UNIQUE,
+  code                       VARCHAR(64)  NOT NULL,
   name                       VARCHAR(160) NOT NULL,
   description                TEXT,
   discount_type              VARCHAR(20)  NOT NULL CHECK (discount_type IN ('percentage', 'fixed_amount')),
@@ -235,6 +235,12 @@ CREATE TABLE vouchers (
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX vouchers_code_active_uniq ON vouchers (code) WHERE is_active = TRUE;
+
+CREATE INDEX idx_orders_voucher_pending
+  ON orders (voucher_id, status, created_at)
+  WHERE voucher_id IS NOT NULL;
 
 ALTER TABLE orders
   ADD CONSTRAINT orders_voucher_fk FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE SET NULL;

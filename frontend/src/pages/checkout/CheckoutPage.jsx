@@ -94,7 +94,6 @@ const CheckoutPage = () => {
 
             const { data } = await checkoutApiService.createPayment({
                 planCode: plan.code,
-                userEmail,
                 billingPeriod,
                 voucherCode: appliedVoucher?.code || null,
             });

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
 import db from '../../config/database.js';
@@ -5,12 +6,17 @@ import { validateVoucherForCheckout } from '../voucher.service.js';
 import {
     createOrder,
     findOrderStatusByCode,
+    findOrderByCode,
     claimOrderSuccess,
+    markOrderFailedForReview,
     findUserIdByEmail,
     activateUserPlan,
     hasSuccessfulOrderForPlanByUser,
 } from '../../repositories/payment/payment.repository.js';
-import { redeemVoucherForOrder } from '../../repositories/voucher.repository.js';
+import {
+    redeemVoucherForOrder,
+    getPayosPendingWindowMinutes,
+} from '../../repositories/voucher.repository.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -42,56 +48,110 @@ const assertNoImmediateDowngrade = async ({ targetPlan, userId }) => {
     }
 };
 
+/**
+ * PayOS orderCode: positive integer ≤ 9007199254740991.
+ * Keep millisecond-based form close to the previous Date.now() shape to avoid
+ * sandbox/production surprises; *100 + 0..99 only reduces same-ms collision.
+ * MUST create a sandbox payment link before production deploy when changing this.
+ */
+const generateOrderCode = () => Date.now() * 100 + crypto.randomInt(0, 100);
+
 export const createPaymentLink = async ({ planCode, userEmail, userId = null, billingPeriod = 'monthly', voucherCode = null }) => {
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
     await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
     await assertNoImmediateDowngrade({ targetPlan: plan, userId });
 
-    // Xác định số tiền theo chu kỳ thanh toán
     const originalAmount = billingPeriod === 'yearly' && plan.price_yearly
         ? Number(plan.price_yearly)
         : Number(plan.price);
 
     if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
 
+    const hasVoucher = Boolean(String(voucherCode || '').trim());
+    const pendingWindowMinutes = getPayosPendingWindowMinutes();
+    const orderCode = generateOrderCode();
+
+    const client = await db.getClient();
+    let order;
     let voucher = null;
     let amount = Math.round(originalAmount);
     let discountAmount = 0;
-    if (String(voucherCode || '').trim()) {
-        const validation = await validateVoucherForCheckout({
-            planCode,
-            billingPeriod,
-            userId,
+
+    try {
+        await client.query('BEGIN');
+
+        if (hasVoucher) {
+            await client.query(
+                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
+                [`voucher-code:${String(voucherCode).trim().toUpperCase()}`, 'redeem']
+            );
+
+            const validation = await validateVoucherForCheckout({
+                planCode,
+                billingPeriod,
+                userId,
+                userEmail,
+                code: voucherCode,
+                queryable: client,
+                pendingWindowMinutes,
+            });
+            if (!validation.voucher) {
+                throw { status: 400, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' };
+            }
+
+            await client.query(
+                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
+                [`voucher:${validation.voucher.id}`, 'redeem']
+            );
+
+            const recheck = await validateVoucherForCheckout({
+                planCode,
+                billingPeriod,
+                userId,
+                userEmail,
+                code: voucherCode,
+                queryable: client,
+                pendingWindowMinutes,
+            });
+            if (!recheck.voucher || Number(recheck.voucher.id) !== Number(validation.voucher.id)) {
+                throw { status: 400, message: 'Voucher không hợp lệ hoặc đã hết lượt sử dụng' };
+            }
+
+            voucher = recheck.voucher;
+            discountAmount = Number(voucher.discountAmount || 0);
+            amount = Number(voucher.finalAmount || 0);
+        }
+
+        order = await createOrder({
+            orderCode,
+            planId: plan.id,
+            amount,
             userEmail,
-            code: voucherCode,
-        });
-        if (!validation.voucher) throw { status: 400, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' };
-        voucher = validation.voucher;
-        discountAmount = Number(voucher.discountAmount || 0);
-        amount = Number(voucher.finalAmount || 0);
+            userId,
+            billingPeriod,
+            originalAmount,
+            discountAmount,
+            voucherId: voucher?.id || null,
+            voucherCode: voucher?.code || null,
+            status: amount <= 0 ? 'success' : 'pending',
+            paymentMethod: amount <= 0 ? 'voucher' : 'payos',
+        }, client);
+
+        if (amount <= 0) {
+            await redeemVoucherForOrder(order, client);
+            if (userId) await activateUserPlan(userId, plan.id, billingPeriod, client);
+        }
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
     }
 
-    const orderCode = Date.now();
-
-    const order = await createOrder({
-        orderCode,
-        planId: plan.id,
-        amount,
-        userEmail,
-        userId,
-        billingPeriod,
-        originalAmount,
-        discountAmount,
-        voucherId: voucher?.id || null,
-        voucherCode: voucher?.code || null,
-        status: amount <= 0 ? 'success' : 'pending',
-        paymentMethod: amount <= 0 ? 'voucher' : 'payos',
-    });
-
     if (amount <= 0) {
-        await redeemVoucherForOrder(order);
-        if (userId) await activateUserPlan(userId, plan.id, billingPeriod);
         return {
             orderCode,
             originalAmount: Math.round(originalAmount),
@@ -102,12 +162,15 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
         };
     }
 
+    const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
+
     const paymentLink = await payosClient.paymentRequests.create({
         orderCode: Number(orderCode),
         amount,
         description: `TT ${planCode}`.substring(0, 25),
         returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
         cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
+        expiredAt,
     });
 
     console.log('PayOS response:', JSON.stringify(paymentLink, null, 2));
@@ -120,6 +183,7 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
         discountAmount,
         amount,
         voucher,
+        expiredAt,
     };
 };
 
@@ -132,10 +196,39 @@ export const handleWebhook = async (body) => {
         const client = await db.getClient();
         try {
             await client.query('BEGIN');
+
+            const existing = await findOrderByCode(webhookData.orderCode, client);
+            if (!existing) {
+                await client.query('COMMIT');
+                console.warn(`[Webhook] Không tìm thấy đơn ${webhookData.orderCode}`);
+                return webhookData;
+            }
+
+            if (['success', 'cancelled', 'failed'].includes(existing.status)) {
+                await client.query('COMMIT');
+                console.log(`[Webhook] Đơn ${webhookData.orderCode} đã ${existing.status} — bỏ qua`);
+                return webhookData;
+            }
+
+            // Permanent anomaly: ack (HTTP 200) to stop PayOS retries; do not activate plan.
+            if (
+                webhookData.amount != null &&
+                Number(webhookData.amount) !== Number(existing.amount)
+            ) {
+                const note =
+                    `[OPS] AMOUNT_MISMATCH expected=${existing.amount} got=${webhookData.amount} at ${new Date().toISOString()}`;
+                await markOrderFailedForReview(webhookData.orderCode, note, client);
+                await client.query('COMMIT');
+                console.error(
+                    `[Webhook][OPS ALERT] Amount mismatch — order ${webhookData.orderCode} marked failed for manual review. ${note}`
+                );
+                return { ...webhookData, amountMismatch: true, acknowledged: true };
+            }
+
             const order = await claimOrderSuccess(webhookData.orderCode, client);
             if (!order) {
                 await client.query('COMMIT');
-                console.log(`[Webhook] Đơn ${webhookData.orderCode} đã xử lý hoặc đã hủy — bỏ qua`);
+                console.log(`[Webhook] Đơn ${webhookData.orderCode} không claim được — bỏ qua`);
                 return webhookData;
             }
 
@@ -145,8 +238,9 @@ export const handleWebhook = async (body) => {
             } else {
                 console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
             }
+
+            await redeemVoucherForOrder(order, client);
             await client.query('COMMIT');
-            await redeemVoucherForOrder(order);
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -170,7 +264,7 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
 
     if (amount > 0) throw new Error('Gói này cần thanh toán, không thể kích hoạt miễn phí');
 
-    const orderCode = Date.now();
+    const orderCode = generateOrderCode();
 
     await createOrder({
         orderCode,

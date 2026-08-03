@@ -415,11 +415,21 @@ export const initScheduler = () => {
     } catch (error) {
       console.error('[Scheduler] Lỗi khi đồng bộ khóa học:', error.message);
     }
+
+    try {
+      const { archiveExpiredVouchers } = await import('../repositories/voucher.repository.js');
+      const archived = await archiveExpiredVouchers();
+      if (archived > 0) {
+        console.log(`[Scheduler] Đã lưu trữ ${archived} voucher hết hạn`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi lưu trữ voucher hết hạn:', error.message);
+    }
   }, {
     timezone: 'Asia/Ho_Chi_Minh'
   });
 
-  console.log('[Scheduler] Đã khởi tạo scheduled job: Đồng bộ khóa học hàng ngày lúc 00:30');
+  console.log('[Scheduler] Đã khởi tạo scheduled job: Đồng bộ khóa học + lưu trữ voucher hết hạn lúc 00:30');
 
   // Refresh danh sách lịch chạy chiến dịch lệch giây để tránh trùng đúng thời điểm cron trigger.
   // Dùng cron có giây: "20 * * * * *" = giây thứ 20 của mỗi phút.

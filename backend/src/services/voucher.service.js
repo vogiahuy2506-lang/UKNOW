@@ -2,10 +2,15 @@ import { findAllPlans, findPlanByCode } from '../repositories/payment/plan.repos
 import {
   createVoucher,
   deleteVoucher,
+  hardDeleteVoucher,
   findAdminVouchers,
+  findActiveVoucherByCode,
   findEligibleVouchers,
+  findVoucherById,
   normalizeVoucherCode,
+  restoreVoucher,
   updateVoucher,
+  getPayosPendingWindowMinutes,
 } from '../repositories/voucher.repository.js';
 
 const toNumberOrNull = (value) => {
@@ -14,7 +19,23 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const toNonNegativeIntOrNull = (value, fieldLabel) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+    throw { status: 400, message: `${fieldLabel} phải là số nguyên ≥ 0` };
+  }
+  if (n === 0) {
+    throw {
+      status: 400,
+      message: `${fieldLabel} = 0 không hợp lệ — để trống nếu không giới hạn`,
+    };
+  }
+  return n;
+};
+
 const normalizeStringArray = (value) => {
+  if (value === undefined) return undefined;
   if (!value) return null;
   const items = Array.isArray(value) ? value : String(value).split(',');
   const normalized = items.map((item) => String(item || '').trim()).filter(Boolean);
@@ -22,6 +43,7 @@ const normalizeStringArray = (value) => {
 };
 
 const normalizeTimestamp = (value) => {
+  if (value === undefined) return undefined;
   const text = String(value || '').trim();
   return text ? text : null;
 };
@@ -72,8 +94,10 @@ export async function validateVoucherForCheckout({
   manualOnly = false,
   ignoreMinOrder = false,
   includeIneligible = false,
+  queryable,
+  pendingWindowMinutes = getPayosPendingWindowMinutes(),
 }) {
-  const plan = await findPlanByCode(planCode);
+  const plan = await findPlanByCode(planCode, queryable);
   if (!plan) throw { status: 404, message: 'Gói không tồn tại' };
 
   const amount = getPlanAmount(plan, billingPeriod);
@@ -87,6 +111,8 @@ export async function validateVoucherForCheckout({
     amount,
     userId,
     userEmail,
+    pendingWindowMinutes,
+    queryable,
   });
 
   const computed = vouchers
@@ -157,26 +183,59 @@ export async function listAdminVouchers() {
   return findAdminVouchers();
 }
 
-const normalizeVoucherPayload = (input) => {
-  const payload = {
-    code: normalizeVoucherCode(input.code),
-    name: String(input.name || '').trim(),
-    description: String(input.description || '').trim() || null,
-    discountType: input.discountType,
-    discountValue: Number(input.discountValue),
-    maxDiscountAmount: toNumberOrNull(input.maxDiscountAmount),
-    minOrderAmount: Number(input.minOrderAmount || 0),
-    appliesToPlanCodes: normalizeStringArray(input.appliesToPlanCodes),
-    appliesToBillingPeriods: normalizeStringArray(input.appliesToBillingPeriods),
-    startsAt: normalizeTimestamp(input.startsAt),
-    endsAt: normalizeTimestamp(input.endsAt),
-    usageLimit: toNumberOrNull(input.usageLimit),
-    usageLimitPerUser: toNumberOrNull(input.usageLimitPerUser),
-    autoApply: Boolean(input.autoApply),
-    stackable: Boolean(input.stackable),
-    isActive: input.isActive !== false,
-  };
+const normalizeVoucherPayload = (input, { partial = false } = {}) => {
+  const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
 
+  if (!partial) {
+    const payload = {
+      code: normalizeVoucherCode(input.code),
+      name: String(input.name || '').trim(),
+      description: String(input.description || '').trim() || null,
+      discountType: input.discountType,
+      discountValue: Number(input.discountValue),
+      maxDiscountAmount:
+        input.discountType === 'percentage' ? toNumberOrNull(input.maxDiscountAmount) : null,
+      minOrderAmount: Number(input.minOrderAmount || 0),
+      appliesToPlanCodes: normalizeStringArray(input.appliesToPlanCodes) ?? null,
+      appliesToBillingPeriods: normalizeStringArray(input.appliesToBillingPeriods) ?? null,
+      startsAt: normalizeTimestamp(input.startsAt) ?? null,
+      endsAt: normalizeTimestamp(input.endsAt) ?? null,
+      usageLimit: toNonNegativeIntOrNull(input.usageLimit, 'Tổng lượt dùng'),
+      usageLimitPerUser: toNonNegativeIntOrNull(input.usageLimitPerUser, 'Lượt/user'),
+      autoApply: Boolean(input.autoApply),
+      stackable: false,
+      isActive: input.isActive !== false,
+    };
+    assertVoucherPayload(payload);
+    return payload;
+  }
+
+  // Merge-patch: only normalize fields present in input.
+  const patch = {};
+  if (has('code')) patch.code = normalizeVoucherCode(input.code);
+  if (has('name')) patch.name = String(input.name || '').trim();
+  if (has('description')) patch.description = String(input.description || '').trim() || null;
+  if (has('discountType')) patch.discountType = input.discountType;
+  if (has('discountValue')) patch.discountValue = Number(input.discountValue);
+  if (has('maxDiscountAmount')) patch.maxDiscountAmount = toNumberOrNull(input.maxDiscountAmount);
+  if (has('minOrderAmount')) patch.minOrderAmount = Number(input.minOrderAmount || 0);
+  if (has('appliesToPlanCodes')) patch.appliesToPlanCodes = normalizeStringArray(input.appliesToPlanCodes) ?? null;
+  if (has('appliesToBillingPeriods')) {
+    patch.appliesToBillingPeriods = normalizeStringArray(input.appliesToBillingPeriods) ?? null;
+  }
+  if (has('startsAt')) patch.startsAt = normalizeTimestamp(input.startsAt) ?? null;
+  if (has('endsAt')) patch.endsAt = normalizeTimestamp(input.endsAt) ?? null;
+  if (has('usageLimit')) patch.usageLimit = toNonNegativeIntOrNull(input.usageLimit, 'Tổng lượt dùng');
+  if (has('usageLimitPerUser')) {
+    patch.usageLimitPerUser = toNonNegativeIntOrNull(input.usageLimitPerUser, 'Lượt/user');
+  }
+  if (has('autoApply')) patch.autoApply = Boolean(input.autoApply);
+  if (has('isActive')) patch.isActive = input.isActive !== false;
+  // stackable deliberately ignored (V-3A) — always leave existing DB value unless full create.
+  return patch;
+};
+
+function assertVoucherPayload(payload) {
   if (!payload.code) throw { status: 400, message: 'Mã voucher không được để trống' };
   if (!payload.name) throw { status: 400, message: 'Tên voucher không được để trống' };
   if (!['percentage', 'fixed_amount'].includes(payload.discountType)) {
@@ -191,8 +250,26 @@ const normalizeVoucherPayload = (input) => {
   if (!Number.isFinite(payload.minOrderAmount) || payload.minOrderAmount < 0) {
     throw { status: 400, message: 'Điều kiện đơn tối thiểu không hợp lệ' };
   }
-  return payload;
-};
+  if (payload.startsAt && payload.endsAt && new Date(payload.startsAt) > new Date(payload.endsAt)) {
+    throw { status: 400, message: 'Ngày bắt đầu phải trước ngày kết thúc' };
+  }
+  if (payload.usageLimit === 0) {
+    throw { status: 400, message: 'Tổng lượt dùng = 0 không hợp lệ — để trống nếu không giới hạn' };
+  }
+  if (payload.usageLimitPerUser === 0) {
+    throw { status: 400, message: 'Lượt/user = 0 không hợp lệ — để trống nếu không giới hạn' };
+  }
+  if (payload.discountType !== 'percentage') {
+    payload.maxDiscountAmount = null;
+  }
+  if (payload.isActive === true && payload.endsAt && new Date(payload.endsAt).getTime() <= Date.now()) {
+    throw {
+      status: 400,
+      message: 'Phải đặt ngày kết thúc trong tương lai (hoặc để trống) trước khi khôi phục',
+      code: 'VOUCHER_ENDS_AT_REQUIRED',
+    };
+  }
+}
 
 export async function createAdminVoucher(input) {
   try {
@@ -205,7 +282,54 @@ export async function createAdminVoucher(input) {
 
 export async function updateAdminVoucher(id, input) {
   try {
-    const voucher = await updateVoucher(id, normalizeVoucherPayload(input));
+    const current = await findVoucherById(id);
+    if (!current) throw { status: 404, message: 'Không tìm thấy voucher' };
+
+    const patch = normalizeVoucherPayload(input, { partial: true });
+    const merged = {
+      code: patch.code ?? current.code,
+      name: patch.name ?? current.name,
+      description: patch.description !== undefined ? patch.description : current.description,
+      discountType: patch.discountType ?? current.discountType,
+      discountValue: patch.discountValue ?? Number(current.discountValue),
+      maxDiscountAmount:
+        patch.maxDiscountAmount !== undefined ? patch.maxDiscountAmount : current.maxDiscountAmount,
+      minOrderAmount: patch.minOrderAmount ?? Number(current.minOrderAmount || 0),
+      appliesToPlanCodes:
+        patch.appliesToPlanCodes !== undefined ? patch.appliesToPlanCodes : current.appliesToPlanCodes,
+      appliesToBillingPeriods:
+        patch.appliesToBillingPeriods !== undefined
+          ? patch.appliesToBillingPeriods
+          : current.appliesToBillingPeriods,
+      startsAt: patch.startsAt !== undefined ? patch.startsAt : current.startsAt,
+      endsAt: patch.endsAt !== undefined ? patch.endsAt : current.endsAt,
+      usageLimit: patch.usageLimit !== undefined ? patch.usageLimit : current.usageLimit,
+      usageLimitPerUser:
+        patch.usageLimitPerUser !== undefined ? patch.usageLimitPerUser : current.usageLimitPerUser,
+      autoApply: patch.autoApply !== undefined ? patch.autoApply : current.autoApply,
+      stackable: false,
+      isActive: patch.isActive !== undefined ? patch.isActive : current.isActive,
+    };
+
+    if (merged.discountType !== 'percentage') {
+      merged.maxDiscountAmount = null;
+    }
+
+    assertVoucherPayload(merged);
+
+    // Reactivating with a code already held by another active voucher.
+    if (merged.isActive) {
+      const conflict = await findActiveVoucherByCode(merged.code);
+      if (conflict && Number(conflict.id) !== Number(id)) {
+        throw {
+          status: 409,
+          message: `Mã ${merged.code} hiện đang được dùng bởi voucher «${conflict.name}» (ID ${conflict.id}). Đổi mã của voucher này hoặc ngừng voucher kia trước khi khôi phục.`,
+          code: 'VOUCHER_CODE_IN_USE',
+        };
+      }
+    }
+
+    const voucher = await updateVoucher(id, merged);
     if (!voucher) throw { status: 404, message: 'Không tìm thấy voucher' };
     return voucher;
   } catch (err) {
@@ -217,4 +341,33 @@ export async function updateAdminVoucher(id, input) {
 export async function deleteAdminVoucher(id) {
   const ok = await deleteVoucher(id);
   if (!ok) throw { status: 404, message: 'Không tìm thấy voucher' };
+}
+
+export async function hardDeleteAdminVoucher(id) {
+  const current = await findVoucherById(id);
+  if (!current) throw { status: 404, message: 'Không tìm thấy voucher' };
+  if (Number(current.usedCount) > 0) {
+    throw {
+      status: 400,
+      message: 'Chỉ xoá vĩnh viễn được khi chưa có ai dùng (used_count = 0). Hãy dùng Ngừng dùng.',
+    };
+  }
+  const ok = await hardDeleteVoucher(id);
+  if (!ok) throw { status: 404, message: 'Không tìm thấy voucher' };
+}
+
+export async function restoreAdminVoucher(id, input = {}) {
+  try {
+    const endsAt = Object.prototype.hasOwnProperty.call(input, 'endsAt')
+      ? normalizeTimestamp(input.endsAt)
+      : undefined;
+    const voucher = await restoreVoucher(id, { endsAt });
+    if (!voucher) throw { status: 404, message: 'Không tìm thấy voucher' };
+    return voucher;
+  } catch (err) {
+    if (err?.code === '23505') {
+      throw { status: 409, message: 'Mã voucher đã tồn tại' };
+    }
+    throw err;
+  }
 }

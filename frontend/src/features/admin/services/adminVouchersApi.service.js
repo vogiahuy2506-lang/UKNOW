@@ -13,6 +13,12 @@ const adminVouchersApiService = {
   deleteVoucher(id) {
     return api.delete(`/admin/vouchers/${id}`);
   },
+  restoreVoucher(id, payload = {}) {
+    return api.post(`/admin/vouchers/${id}/restore`, payload);
+  },
+  hardDeleteVoucher(id) {
+    return api.delete(`/admin/vouchers/${id}/permanent`);
+  },
 };
 
 export default adminVouchersApiService;
