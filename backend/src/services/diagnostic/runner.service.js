@@ -28,9 +28,12 @@ function buildPolicySnapshot(limiter, channel, accountHint = null) {
   };
 }
 
+// Ngưỡng 160s (không phải 120s): delay giữa 2 tin ở production là 80–150s, nên
+// ngưỡng 120s cũ khiến test bị huỷ oan mỗi khi bốc trúng delay > 120s. 160s cho
+// dư ~10s so với trần policy. Nếu nới delay policy thì phải nâng ngưỡng này theo.
 function readMaxPolicyWaitMs() {
   const raw = Number.parseInt(process.env.DIAGNOSTIC_MAX_WAIT_MS, 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : 120_000;
+  return Number.isFinite(raw) && raw > 0 ? raw : 160_000;
 }
 
 function mapPolicyWaitReasonToErrorCategory(waitReason) {
