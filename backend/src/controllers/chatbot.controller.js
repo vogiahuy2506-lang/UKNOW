@@ -4,6 +4,7 @@ import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAccount.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import customChatService from '../services/ai/customChat.service.js';
@@ -13,9 +14,12 @@ import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
+const HANDOFF_VISITOR_ACK =
+  'Cảm ơn bạn. Tin nhắn đã được chuyển tới nhân viên hỗ trợ.';
 
 function isAiTokenLimitError(error) {
   return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
@@ -1154,7 +1158,18 @@ class ChatbotController {
   async getCustomChatbotDocuments(req, res) {
     try {
       const { chatbotId } = req.params;
-      const id = parseInt(chatbotId);
+      const id = parseInt(chatbotId, 10);
+
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // pg trả BIGINT dưới dạng chuỗi → phải so sánh qua Number, nếu không chủ
+      // sở hữu hợp lệ cũng bị 404 ("3" !== 3).
+      const chatbot = await chatbotRepository.findChatbotById(id);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
 
       const documents = await chatbotRepository.getCustomChatbotDocuments(id);
 
@@ -1171,7 +1186,7 @@ class ChatbotController {
   async chatWithCustomChatbot(req, res) {
     try {
       const { widgetKey } = req.params;
-      const { message, history } = req.body;
+      const { message, history, sessionId } = req.body;
 
       if (!message?.trim()) {
         return res.status(400).json({ success: false, message: 'message is required' });
@@ -1182,6 +1197,53 @@ class ChatbotController {
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+      }
+
+      const visitorKey = String(sessionId || '').trim()
+        || `widget_${widgetKey}_${String(req.ip || 'anon').slice(0, 64)}`;
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'web',
+        ownerUserId: chatbot.id_user,
+        chatbotId: chatbot.id,
+        senderKey: visitorKey,
+      });
+      if (!rate.allowed) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: rate.staticReply,
+            created_at: new Date().toISOString(),
+            rateLimited: true,
+          },
+        });
+      }
+
+      // Handoff: if owner paused AI for this webchat session, do not call Gemini.
+      const sessionForPause = String(sessionId || '').trim();
+      if (sessionForPause) {
+        try {
+          const widgets = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
+          for (const w of widgets) {
+            const convId = await chatbotRepository.findActiveWebChatConversationId({
+              widgetConfigId: w.id,
+              sessionId: sessionForPause,
+            });
+            if (convId && await unifiedInboxRepository.isAiPaused(convId, 'webchat')) {
+              return res.json({
+                success: true,
+                data: {
+                  role: 'assistant',
+                  content: HANDOFF_VISITOR_ACK,
+                  created_at: new Date().toISOString(),
+                  aiPaused: true,
+                },
+              });
+            }
+          }
+        } catch (pauseErr) {
+          console.warn('[CustomChatbot] ai_paused check failed:', pauseErr.message);
+        }
       }
 
       const creditPrep = await preparePublicChatCredit(chatbot.id_user);
@@ -1253,13 +1315,35 @@ class ChatbotController {
 
       const { message, history, sessionId } = req.body;
 
-      const creditPrep = await preparePublicChatCredit(chatbotUserId);
-      if (creditPrep.blocked) {
-        return res.json(publicChatbotCreditBlockedResponse({ sessionId: sessionId || undefined }));
-      }
-
       if (!message?.trim()) {
         return res.status(400).json({ success: false, message: 'message is required' });
+      }
+
+      // Prefer client-stable sessionId (PublicChatbotPage localStorage). Fallback is last resort.
+      visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'web',
+        ownerUserId: chatbotUserId,
+        chatbotId: chatbot.id,
+        senderKey: visitorSessionId,
+      });
+      if (!rate.allowed) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: rate.staticReply,
+            created_at: new Date().toISOString(),
+            sessionId: visitorSessionId,
+            rateLimited: true,
+          },
+        });
+      }
+
+      const creditPrep = await preparePublicChatCredit(chatbotUserId);
+      if (creditPrep.blocked) {
+        return res.json(publicChatbotCreditBlockedResponse({ sessionId: visitorSessionId }));
       }
 
       // Get or create widget config for this chatbot
@@ -1280,9 +1364,6 @@ class ChatbotController {
         widgetConfig = newWidget;
       }
 
-      // Create or find conversation
-      visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
       if (widgetConfig) {
         // Find existing conversation by session
         conversation = await chatbotRepository.getOrCreateWebChatConversation({
@@ -1298,6 +1379,12 @@ class ChatbotController {
           role: 'visitor',
           content: message,
         });
+
+        // Prefer first visitor snippet as display name when still generic
+        await chatbotRepository.maybeSetWebChatVisitorNameFromMessage(
+          conversation.id,
+          message
+        ).catch(() => {});
 
     // Broadcast SSE for real-time update
     sseService.broadcast(String(chatbot.id_user), 'inbox:new_message', {
@@ -1315,6 +1402,20 @@ class ChatbotController {
       conversationType: 'webchat',
       change: 1,
     });
+      }
+
+      // Handoff: owner took over — skip AI (no credit charge)
+      if (conversation && await unifiedInboxRepository.isAiPaused(conversation.id, 'webchat')) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: HANDOFF_VISITOR_ACK,
+            created_at: new Date().toISOString(),
+            sessionId: visitorSessionId,
+            aiPaused: true,
+          },
+        });
       }
 
       const fullHistory = [

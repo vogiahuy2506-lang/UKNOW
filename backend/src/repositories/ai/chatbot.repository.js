@@ -232,6 +232,26 @@ class ChatbotRepository {
     return conv;
   }
 
+  /**
+   * If conversation still has no useful visitor_name, set it from the first visitor message snippet.
+   */
+  async maybeSetWebChatVisitorNameFromMessage(conversationId, message) {
+    const snippet = String(message || '').trim().replace(/\s+/g, ' ').slice(0, 48);
+    if (!snippet) return;
+
+    await db.query(
+      `UPDATE webchat_conversations
+       SET visitor_name = $2
+       WHERE id = $1
+         AND (
+           visitor_name IS NULL
+           OR trim(visitor_name) = ''
+           OR visitor_name ~ '^[Kk]hách'
+         )`,
+      [conversationId, snippet]
+    );
+  }
+
   async getWebChatMessages(conversationId, { limit = 50, beforeId = null } = {}) {
     const beforeFilter = beforeId ? `AND id < $3` : '';
     const params = beforeId ? [conversationId, limit, beforeId] : [conversationId, limit];

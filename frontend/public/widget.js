@@ -43,6 +43,11 @@
   let isOpen = false;
   let messages = JSON.parse(localStorage.getItem('uknow_msgs_' + WIDGET_KEY) || '[]');
   let chatHistory = JSON.parse(localStorage.getItem('uknow_history_' + WIDGET_KEY) || '[]');
+  let sessionId = localStorage.getItem('uknow_session_' + WIDGET_KEY);
+  if (!sessionId) {
+    sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+    localStorage.setItem('uknow_session_' + WIDGET_KEY, sessionId);
+  }
   let configLoaded = false;
 
   // ── Load Config from API ─────────────────────────────────────────
@@ -319,6 +324,7 @@
         body: JSON.stringify({
           message: text,
           history: chatHistory.slice(-10),
+          sessionId: sessionId,
         }),
       });
 

@@ -129,6 +129,30 @@ class ZaloPersonalAdapter {
   // Map accountId → message handler
   static messageHandlers = new Map();
 
+  /** Recent bot outbound content — ignore isSelf echo of our own AI replies. */
+  static recentBotOutbound = new Map();
+
+  static markBotOutbound(accountId, content) {
+    const key = `${accountId}:${String(content || '').trim().slice(0, 200)}`;
+    ZaloPersonalAdapter.recentBotOutbound.set(key, Date.now());
+    const cutoff = Date.now() - 120000;
+    for (const [k, ts] of ZaloPersonalAdapter.recentBotOutbound) {
+      if (ts < cutoff) ZaloPersonalAdapter.recentBotOutbound.delete(k);
+    }
+  }
+
+  static consumeBotOutbound(accountId, content) {
+    const key = `${accountId}:${String(content || '').trim().slice(0, 200)}`;
+    const ts = ZaloPersonalAdapter.recentBotOutbound.get(key);
+    if (!ts) return false;
+    if (Date.now() - ts > 120000) {
+      ZaloPersonalAdapter.recentBotOutbound.delete(key);
+      return false;
+    }
+    ZaloPersonalAdapter.recentBotOutbound.delete(key);
+    return true;
+  }
+
   /**
    * Get the active Zalo personal session for a user.
    * @param {number} userId
@@ -286,23 +310,22 @@ class ZaloPersonalAdapter {
         };
         
         const contentStr = typeof msgData.content === 'string' ? msgData.content : JSON.stringify(msgData.content || '');
-        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} message from ${msgData.fromUid}: ${contentStr.substring(0, 100)} [msgType=${msgType}]`);
+        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} from ${msgData.fromUid} [msgType=${msgType}] len=${contentStr.length}`);
         
         // Add accountId to msgData for saveMessageToDatabase
         msgData.zaloSettingId = accountId;
         
-        // Save to database for unified inbox
-        console.log(`[ZaloPersonalAdapter] >>> Saving message to DB...`);
+        // Single inbound persist path (visitor or owner/agent). Then hand off to zaloInbox.
         try {
           const saveResult = await this.saveMessageToDatabase(stored.userId, accountId, msgData);
-          console.log(`[ZaloPersonalAdapter] >>> Save result:`, saveResult ? `saved with id ${saveResult}` : 'skipped/null');
+          if (saveResult?.isDuplicate) {
+            return;
+          }
         } catch (dbErr) {
-          console.error(`[ZaloPersonalAdapter] >>> DB save error:`, dbErr.message, dbErr.stack);
+          console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
         }
         
-        // Call custom handler if registered
         if (stored.handler) {
-          console.log(`[ZaloPersonalAdapter] Calling handler for account ${accountId}...`);
           stored.handler(msgData).catch((err) => {
             console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
           });
@@ -354,11 +377,13 @@ class ZaloPersonalAdapter {
    */
   async saveMessageToDatabase(userId, zaloSettingId, msgData, resolvedGroupName = null) {
     const now = new Date().toISOString();
+    const content = msgData.content || msgData.message || msgData.msg || '';
 
-    // Skip self-messages (sent by own account) - use isSelf flag from wrapper
+    // Owner messages from Zalo app: save as agent (not drop). Skip echo of our own bot replies.
     if (msgData.isSelf === true) {
-      console.log(`[ZaloPersonalAdapter] Skipping self-message`);
-      return null;
+      if (ZaloPersonalAdapter.consumeBotOutbound(zaloSettingId, content)) {
+        return null;
+      }
     }
 
     // isGroup is determined by zaloThreadType (message.type from zca-js)
@@ -375,9 +400,6 @@ class ZaloPersonalAdapter {
         if (session?.api) {
           const info = await session.api.getGroupInfo(bare);
           groupName = extractGroupNameFromApiResult(info, bare) || null;
-          if (groupName) {
-            console.log(`[ZaloPersonalAdapter] Resolved group name: ${bare} -> ${groupName}`);
-          }
         }
       } catch (err) {
         console.warn(`[ZaloPersonalAdapter] Failed to resolve group name for ${bare}:`, err.message);
@@ -461,23 +483,20 @@ class ZaloPersonalAdapter {
     if (incomingExternalId) {
       const existing = await zaloPersonalRepository.findMessageByExternalId(incomingExternalId, zaloSettingId);
       if (existing) {
-        console.log(`[ZaloPersonalAdapter] Message ${incomingExternalId} already saved (id=${existing.id}), skipping duplicate`);
         return { conversationId, messageId: existing.id, isDuplicate: true };
       }
     }
 
-    // Save message with attachments
-    console.log(`[ZaloPersonalAdapter] DEBUG: Saving msg with content="${msgData.content}", msg="${msgData.message}", fromUid=${msgData.fromUid}`);
+    const role = msgData.isSelf === true ? 'agent' : 'visitor';
     const msgRow = await zaloPersonalRepository.insertMessage({
       conversationId,
       userId,
       zaloSettingId,
-      role: 'visitor',
-      content: msgData.content || msgData.message || msgData.msg || '',
+      role,
+      content,
       externalId: msgData.messageId || msgData.msgId,
       externalTs: msgData.timestamp ? new Date(msgData.timestamp) : now,
       metadata: JSON.stringify({
-        _raw: msgData._raw,
         sender_name: msgData.senderName,
         sender_id: msgData.senderId,
         sender_avatar: msgData.senderAvatar,
@@ -487,9 +506,15 @@ class ZaloPersonalAdapter {
         msg_type: msgData.msgType,
         msg_type_raw: msgData.msgTypeRaw,
         attachments: msgData.attachments || [],
+        is_self: msgData.isSelf === true,
+        source: msgData.isSelf === true ? 'owner_zalo_app' : 'visitor',
       }),
       createdAt: msgData.timestamp ? new Date(msgData.timestamp) : now,
     });
+
+    if (role === 'agent') {
+      await zaloPersonalRepository.setAiPaused(conversationId, true);
+    }
 
     return {
       conversationId,
@@ -505,7 +530,7 @@ class ZaloPersonalAdapter {
    * @param {number} params.userId
    * @param {boolean} params.forceReply - if true, send even for group messages (for manual inbox replies)
    */
-  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false }) {
+  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false, persist = true }) {
     const session = await this.getSessionByAccountId(accountId);
     if (!session?.api) {
       return { success: false, error: 'No active Zalo personal session' };
@@ -523,8 +548,7 @@ class ZaloPersonalAdapter {
       // Group messages should be handled by the group chatbot, not personal chatbot
       // UNLESS forceReply is true (manual inbox reply)
       if (isGroup && !forceReply) {
-        console.log(`[ZaloPersonalAdapter] ⚠️ Blocked auto-reply to group message - group chatbots should be handled separately`);
-        console.log(`[ZaloPersonalAdapter] group_id=${conversationInfo?.group_id}, externalId=${externalId}`);
+        console.log(`[ZaloPersonalAdapter] Blocked auto-reply to group message`);
         return { success: false, error: 'Group messages should not trigger personal chatbot replies' };
       }
       
@@ -534,34 +558,34 @@ class ZaloPersonalAdapter {
         const parts = externalId.split('_');
         if (parts.length >= 3) {
           sendTarget = parts.slice(2).join('_'); // Get sender ID after "group_{groupId}_{senderId}"
-          console.log(`[ZaloPersonalAdapter] Extracted personal sender ID from group format: ${sendTarget}`);
         }
       }
 
       // For group messages with forceReply, send to the GROUP instead of individual
       if (isGroup && conversationInfo?.group_id) {
         sendTarget = conversationInfo.group_id;
-        console.log(`[ZaloPersonalAdapter] Sending group message to group: ${sendTarget}`);
       }
 
       await api.sendMessage(payload, sendTarget);
+      ZaloPersonalAdapter.markBotOutbound(session.accountId, payload);
 
-      // Also save the sent message to database
-      const now = new Date().toISOString();
-      const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
+      // Persist only when caller did not already save (AI path). Manual inbox sets persist=false.
+      if (persist) {
+        const now = new Date().toISOString();
+        const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
 
-      if (conversation) {
-        await zaloPersonalRepository.insertAgentMessage({
-          conversationId: conversation.id,
-          userId,
-          zaloSettingId: session.accountId,
-          content: message,
-          now,
-        });
-        await zaloPersonalRepository.touchConversation(conversation.id, now);
+        if (conversation) {
+          await zaloPersonalRepository.insertAgentMessage({
+            conversationId: conversation.id,
+            userId,
+            zaloSettingId: session.accountId,
+            content: message,
+            now,
+          });
+          await zaloPersonalRepository.touchConversation(conversation.id, now);
+        }
       }
 
-      console.log(`[ZaloPersonalAdapter] Sent reply to uid ${externalId}`);
       return { success: true };
     } catch (err) {
       console.error('[ZaloPersonalAdapter] Failed to send reply:', err.message);

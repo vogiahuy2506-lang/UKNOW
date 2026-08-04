@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
+import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -224,7 +225,9 @@ class UnifiedInboxRepository {
             SELECT created_at FROM channel_messages
             WHERE id_conversation = cc.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(cc.ai_paused, false) as ai_paused,
+          NULL::TEXT as first_visitor_message
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
         WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
@@ -280,7 +283,9 @@ class UnifiedInboxRepository {
             SELECT created_at FROM zalo_personal_messages
             WHERE id_conversation = zp.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(zp.ai_paused, false) as ai_paused,
+          NULL::TEXT as first_visitor_message
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
         LEFT JOIN LATERAL (
@@ -335,7 +340,13 @@ class UnifiedInboxRepository {
             SELECT created_at FROM webchat_messages
             WHERE id_conversation = wc.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(wc.ai_paused, false) as ai_paused,
+          (
+            SELECT content FROM webchat_messages
+            WHERE id_conversation = wc.id AND role = 'visitor'
+            ORDER BY created_at ASC LIMIT 1
+          ) as first_visitor_message
         FROM webchat_conversations wc
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
         WHERE wc.id_user = $1 ${wcSearch}
@@ -363,9 +374,14 @@ class UnifiedInboxRepository {
         ? row.group_name_override
         : null;
 
-      // For webchat: show "Chatbot Name - ID" instead of visitor_name
+      // For webchat: prefer visitor name / first message over "{widget} - {id}"
       if (row.conversation_type === 'webchat') {
-        displayName = `${row.channel_display_name} - ${row.id}`;
+        displayName = formatWebchatDisplayName({
+          visitorName: row.visitor_name,
+          channelDisplayName: row.channel_display_name,
+          conversationId: row.id,
+          firstMessageSnippet: row.first_visitor_message || null,
+        });
       } else if (isGroup && groupNameOverride) {
         displayName = groupNameOverride;
         visitorInfo.group_name = visitorInfo.group_name || groupNameOverride;
@@ -392,6 +408,7 @@ class UnifiedInboxRepository {
         lastMessageAt: row.last_message_at_override || row.last_message_at,
         lastMessage: row.last_message,
         unreadCount: parseInt(row.unread_count || 0),
+        aiPaused: row.ai_paused === true,
       };
     });
   }
@@ -683,6 +700,57 @@ class UnifiedInboxRepository {
         `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,
         [conversationId, now]
       );
+    }
+  }
+
+  async setAiPaused(conversationId, conversationType, paused) {
+    const table =
+      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
+        : conversationType === 'webchat' ? 'webchat_conversations'
+          : 'channel_conversations';
+    await db.query(
+      `UPDATE ${table}
+       SET ai_paused = $2,
+           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+       WHERE id = $1`,
+      [conversationId, !!paused]
+    );
+  }
+
+  /**
+   * Whether AI auto-reply is paused for this conversation (owner handoff).
+   * Auto-resumes after CHATBOT_HANDOFF_RESUME_MINUTES (default 30; 0 = never).
+   */
+  async isAiPaused(conversationId, conversationType, resumeMinutes = null) {
+    if (!conversationId) return false;
+    const minutes = resumeMinutes ?? Number.parseInt(
+      process.env.CHATBOT_HANDOFF_RESUME_MINUTES || '30',
+      10
+    );
+    const table =
+      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
+        : conversationType === 'webchat' ? 'webchat_conversations'
+          : 'channel_conversations';
+
+    try {
+      const { rows } = await db.query(
+        `SELECT ai_paused, ai_paused_at FROM ${table} WHERE id = $1`,
+        [conversationId]
+      );
+      const row = rows[0];
+      if (!row?.ai_paused) return false;
+      if (!Number.isFinite(minutes) || minutes <= 0) return true;
+      if (!row.ai_paused_at) return true;
+      const elapsedMin = (Date.now() - new Date(row.ai_paused_at).getTime()) / 60000;
+      if (elapsedMin >= minutes) {
+        await this.setAiPaused(conversationId, conversationType, false);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // Column missing (migration not applied yet) — do not block AI.
+      console.warn('[UnifiedInbox] isAiPaused check failed:', err.message);
+      return false;
     }
   }
 

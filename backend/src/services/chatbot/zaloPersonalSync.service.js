@@ -404,6 +404,7 @@ class ZaloPersonalSyncService {
     const results = {
       contacts: null,
       groups: null,
+      groupHistory: null,
       errors: [],
     };
 
@@ -423,6 +424,38 @@ class ZaloPersonalSyncService {
       results.errors.push({ type: 'groups', error: e.message });
     }
 
+    // Pull older GROUP chat history when supported (1-1 history is not available via zca-js)
+    try {
+      results.groupHistory = await this.syncAllGroupHistory(accountId, userId, { limit: 50 });
+    } catch (e) {
+      results.errors.push({ type: 'groupHistory', error: e.message });
+    }
+
+    return results;
+  }
+
+  /**
+   * Sync recent history for all known groups on this account.
+   */
+  async syncAllGroupHistory(accountId, userId, { limit = 50 } = {}) {
+    const groupsResult = await this.syncGroups(accountId, userId);
+    const groups = groupsResult.groups || [];
+    const results = { totalGroups: groups.length, synced: 0, errors: [] };
+
+    for (const group of groups) {
+      try {
+        const result = await this.syncChatHistory(
+          accountId,
+          userId,
+          group.groupId,
+          true,
+          { limit }
+        );
+        results.synced += result.synced || 0;
+      } catch (err) {
+        results.errors.push({ groupId: group.groupId, error: err.message });
+      }
+    }
     return results;
   }
 

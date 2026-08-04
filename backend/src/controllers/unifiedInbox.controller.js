@@ -202,6 +202,29 @@ class UnifiedInboxController {
   }
 
   /**
+   * Pause / resume AI auto-reply for a conversation (handoff).
+   * POST /api/ai/chatbot/inbox/conversations/:id/ai-pause
+   * body: { type, paused }
+   */
+  async setAiPaused(req, res) {
+    try {
+      const { id } = req.params;
+      const { type = 'zalo_personal', paused } = req.body;
+      if (typeof paused !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'paused (boolean) is required' });
+      }
+      const result = await unifiedInboxService.setConversationAiPaused(req.user.id, id, type, paused);
+      return res.json({ success: true, data: result });
+    } catch (err) {
+      console.error('[UnifiedInbox] setAiPaused error:', err);
+      if (err.message === 'Conversation not found') {
+        return res.status(404).json({ success: false, message: err.message });
+      }
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * Get all sent messages (outbox)
    * GET /api/ai/chatbot/inbox/outbox
    */

@@ -4,6 +4,7 @@ import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import sseService from '../sse.service.js';
+import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 
 class UnifiedInboxService {
   /**
@@ -80,9 +81,13 @@ class UnifiedInboxService {
       groupName = isGroup ? conversation._parsedVisitorInfo.group_name : null;
     }
 
-    // For webchat: show "Chatbot Name - ID"
+    // For webchat: prefer visitor name / first message over "{widget} - {id}"
     if (conversationType === 'webchat') {
-      displayName = `${conversation.channel_display_name} - ${conversation.id}`;
+      displayName = formatWebchatDisplayName({
+        visitorName: conversation.visitor_name,
+        channelDisplayName: conversation.channel_display_name,
+        conversationId: conversation.id,
+      });
     }
 
     return {
@@ -99,6 +104,7 @@ class UnifiedInboxService {
       startedAt: conversation.started_at,
       lastMessageAt: conversation.last_message_at,
       status: conversation.status,
+      aiPaused: conversation.ai_paused === true,
     };
   }
 
@@ -238,6 +244,13 @@ class UnifiedInboxService {
       { role: 'agent', content: content.trim(), attachments, metadata: { source: 'manual_inbox' } }
     );
 
+    // Handoff: pause AI for this conversation when owner replies from inbox
+    await unifiedInboxRepository.setAiPaused(
+      parseInt(conversationId),
+      conversationType,
+      true
+    ).catch((e) => console.warn('[UnifiedInbox] setAiPaused failed:', e.message));
+
     // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.
     // Broadcasting causes frontend to create duplicate "Agent" conversations.
 
@@ -258,6 +271,7 @@ class UnifiedInboxService {
             group_id: conversation.group_id,
           },
           forceReply: true, // Manual reply from inbox should always send
+          persist: false, // already saved above
         };
 
         if (conversationType === 'channel') {
@@ -272,6 +286,20 @@ class UnifiedInboxService {
     }
 
     return { success: true };
+  }
+
+  /**
+   * Pause / resume AI auto-reply for one conversation (handoff).
+   */
+  async setConversationAiPaused(userId, conversationId, conversationType, paused) {
+    const conversation = await unifiedInboxRepository.getConversationById(
+      userId,
+      parseInt(conversationId),
+      conversationType
+    );
+    if (!conversation) throw new Error('Conversation not found');
+    await unifiedInboxRepository.setAiPaused(parseInt(conversationId), conversationType, !!paused);
+    return { success: true, aiPaused: !!paused };
   }
 
   /**

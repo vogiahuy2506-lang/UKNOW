@@ -211,6 +211,33 @@ class ZaloPersonalRepository {
     return rows[0] || null;
   }
 
+  async setAiPaused(conversationId, paused) {
+    await db.query(
+      `UPDATE zalo_personal_conversations
+       SET ai_paused = $2,
+           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+       WHERE id = $1`,
+      [conversationId, !!paused]
+    );
+  }
+
+  async isAiPaused(conversationId, resumeMinutes = 30) {
+    const { rows } = await db.query(
+      `SELECT ai_paused, ai_paused_at FROM zalo_personal_conversations WHERE id = $1`,
+      [conversationId]
+    );
+    const row = rows[0];
+    if (!row?.ai_paused) return false;
+    if (!resumeMinutes || resumeMinutes <= 0) return true;
+    if (!row.ai_paused_at) return true;
+    const elapsedMin = (Date.now() - new Date(row.ai_paused_at).getTime()) / 60000;
+    if (elapsedMin >= resumeMinutes) {
+      await this.setAiPaused(conversationId, false);
+      return false;
+    }
+    return true;
+  }
+
   /**
    * Find conversation by ID and verify user ownership
    */

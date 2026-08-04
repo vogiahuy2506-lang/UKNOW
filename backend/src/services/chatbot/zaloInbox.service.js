@@ -290,14 +290,11 @@ class ZaloPersonalInboxService {
       }
       const timestamp = rawMessage?.timestamp || rawMessage?.time || rawMessage?.createdAt;
 
-      console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, content="${String(content).substring(0, 50)}"`);
+      console.log(`[ZaloInbox] processIncomingMessage: msgId=${messageId}, senderId=${senderId}, isSelf=${rawMessage?.isSelf === true}`);
 
       const zaloThreadType = rawMessage?.type;
       const rawData = rawMessage?._raw || rawMessage;
       const isGroup = zaloThreadType === 1 || zaloThreadType === 2;
-
-      console.log(`[ZaloInbox] DEBUG: isGroup=${isGroup}, zaloThreadType=${zaloThreadType}`);
-      console.log(`[ZaloInbox] DEBUG: senderName="${rawMessage?.senderName}", dName="${rawMessage?.dName}"`);
 
       // Extract groupId for group messages
       let groupId = null;
@@ -312,61 +309,38 @@ class ZaloPersonalInboxService {
       const senderName = rawMessage?.senderName || rawMessage?.dName || null;
       const groupName = rawMessage?.groupName || null;
 
-      console.log(`[ZaloInbox] DEBUG: resolved senderName="${senderName}", groupName="${groupName}", groupId="${groupId}"`);
-
       // Validate
       if (!messageId) {
         console.warn('[ZaloInbox] Bỏ qua tin nhắn không hợp lệ (no msgId)');
         return;
       }
 
+      // Owner typed from Zalo app: already saved as agent by adapter; pause AI for this thread.
       if (rawMessage.isSelf === true) {
-        console.log(`[ZaloInbox] Bỏ qua tin nhắn tự gửi`);
+        const externalIdSelf = isGroup
+          ? groupId
+          : String(senderId);
+        try {
+          const conv = await zaloPersonalRepository.findConversation(zaloSettingId, externalIdSelf);
+          if (conv?.id) {
+            await zaloPersonalRepository.setAiPaused(conv.id, true);
+          }
+        } catch (e) {
+          console.warn('[ZaloInbox] Failed to pause AI after owner message:', e.message);
+        }
         return;
       }
-
-      // Check chatbot enable status EARLY to skip unnecessary API calls
-      const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
-      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
-
-      console.log(`[ZaloInbox] DEBUG: chatbotSettings=${JSON.stringify(chatbotSettings)}`);
-      console.log(`[ZaloInbox] DEBUG: accountSettings=${JSON.stringify(accountSettings)}`);
-
-      const isAccountEnabled = accountSettings?.is_enabled;
-      const isMainEnabled = chatbotSettings?.is_enabled;
-
-      // If per-account explicitly disabled, skip immediately
-      if (isAccountEnabled === false) {
-        console.log(`[ZaloInbox] AI chatbot explicitly disabled for account ${zaloSettingId}`);
-        return;
-      }
-
-      // If both are disabled, skip
-      if (isAccountEnabled !== true && isMainEnabled !== true) {
-        console.log(`[ZaloInbox] AI chatbot disabled - main: ${isMainEnabled}, account: ${isAccountEnabled}`);
-        return;
-      }
-
-      // TEMP: Disable duplicate check to test
-      // if (await this.isMessageProcessed(messageId, zaloSettingId)) {
-      //   console.log(`[ZaloInbox] Tin nhắn đã xử lý trước đó, bỏ qua: ${messageId}`);
-      //   return;
-      // }
-      console.log(`[ZaloInbox] DEBUG: Skipping isMessageProcessed check (temp disable)`);
 
       // Determine externalId
       // FIX: groupId already has 'group_' prefix, don't add again
       const externalId = isGroup 
         ? groupId  // groupId is already like "group_7445330951687908000"
         : String(senderId);
-      console.log(`[ZaloInbox] DEBUG: externalId="${externalId}"`);
 
       // Check existing conversation
       let existingConv = null;
       try {
-        console.log(`[ZaloInbox] DEBUG: Finding conversation for ${externalId}...`);
         existingConv = await zaloPersonalRepository.findConversation(zaloSettingId, externalId);
-        console.log(`[ZaloInbox] DEBUG: existingConv=${existingConv ? 'found' : 'null'}`);
       } catch (e) {
         console.error(`[ZaloInbox] findConversation error: ${e.message}`);
       }
@@ -381,15 +355,12 @@ class ZaloPersonalInboxService {
             ? JSON.parse(existingConv.visitor_info) 
             : existingConv.visitor_info;
           if (convInfo?.is_group === true) {
-            console.log(`[ZaloInbox] Personal message from sender who was in a group - will still route to AI`);
             skipAiRouting = false;
           }
-        } catch (e) {
-          console.log(`[ZaloInbox] visitor_info parse error: ${e.message}`);
+        } catch {
+          // ignore parse errors
         }
       }
-
-      console.log(`[ZaloInbox] DEBUG: skipAiRouting=${skipAiRouting}, will route to AI=${!skipAiRouting}`);
 
       // Message type
       const msgType = rawMessage?.msgType || rawMessage?.type || 1;
@@ -398,29 +369,23 @@ class ZaloPersonalInboxService {
       // Resolve sender name via API if not available
       let resolvedSenderName = senderName;
       if (!senderName && senderId) {
-        console.log(`[ZaloInbox] Calling getUserProfile for ${senderId}...`);
         try {
           const profile = await this.getUserProfile(accountId, senderId);
           if (profile) {
             resolvedSenderName = profile.displayName || profile.zaloName;
-            console.log(`[ZaloInbox] Lấy được tên sender ${senderId}: ${resolvedSenderName}`);
           }
         } catch (e) {
-          console.log(`[ZaloInbox] getUserProfile error: ${e.message}`);
+          console.warn(`[ZaloInbox] getUserProfile error: ${e.message}`);
         }
       }
 
       // Resolve group name via API if not available
       let resolvedGroupName = groupName;
       if (isGroup && !groupName && groupId) {
-        console.log(`[ZaloInbox] Calling getGroupName for ${groupId}...`);
         try {
           resolvedGroupName = await this.getGroupName(accountId, groupId);
-          if (resolvedGroupName) {
-            console.log(`[ZaloInbox] Lấy được tên nhóm ${groupId}: ${resolvedGroupName}`);
-          }
         } catch (e) {
-          console.log(`[ZaloInbox] getGroupName error: ${e.message}`);
+          console.warn(`[ZaloInbox] getGroupName error: ${e.message}`);
         }
       }
 
@@ -438,7 +403,6 @@ class ZaloPersonalInboxService {
       } else {
         displayName = resolvedSenderName || senderName || `User ${senderId}`;
       }
-      console.log(`[ZaloInbox] DEBUG: final displayName="${displayName}"`);
 
       // Build visitor info
       const visitorInfo = {
@@ -455,7 +419,7 @@ class ZaloPersonalInboxService {
         attachment_url: rawMessage?.attachmentUrl || null,
       };
 
-      // Create or get conversation
+      // Create or get conversation (message already persisted by adapter)
       const conversation = await this.getOrCreateConversation(zaloSettingId, userId, externalId, displayName, visitorInfo);
 
       // Broadcast SSE
@@ -477,18 +441,14 @@ class ZaloPersonalInboxService {
         timestamp,
       });
 
-      console.log(`[ZaloInbox] Đã lưu tin nhắn từ ${isGroup ? 'nhóm' : 'cá nhân'}: ${String(content || '').substring(0, 50)}...`);
-
       // Skip AI for group messages
       if (skipAiRouting) {
-        console.log(`[ZaloInbox] Skipping AI routing for group message`);
         return;
       }
 
       // Build AI content
       let aiContent = content?.trim() || '';
       if (messageType === 'sticker') {
-        const stickerData = rawMessage.stickerInfo || rawMessage.sticker || {};
         aiContent = `[Sticker] Người dùng gửi một sticker`;
       }
       if (messageType === 'image') {
@@ -496,45 +456,64 @@ class ZaloPersonalInboxService {
       }
 
       if (!aiContent && messageType !== 'sticker' && messageType !== 'image') {
-        console.log(`[ZaloInbox] Skipping text message without content`);
         return;
       }
 
-      // Merge settings: account-specific settings override global settings
-      // Priority: per-account system_instruction > linked chatbot's system_instruction > main chatbot settings
+      // Unified chatbot settings — single enable gate (account then main)
+      const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
+      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+
+      const isAccountEnabled = accountSettings?.is_enabled;
+      const isMainEnabled = chatbotSettings?.is_enabled;
+      
+      if (isAccountEnabled === false) {
+        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId}`);
+        return;
+      }
+      
+      if (isAccountEnabled !== true && isMainEnabled !== true) {
+        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId} (main=${isMainEnabled}, account=${isAccountEnabled})`);
+        return;
+      }
+
+      const resumeMinutes = Number.parseInt(process.env.CHATBOT_HANDOFF_RESUME_MINUTES || '30', 10);
+      if (await zaloPersonalRepository.isAiPaused(conversation.id, resumeMinutes)) {
+        console.log(`[ZaloInbox] AI paused for conversation ${conversation.id} (handoff)`);
+        return;
+      }
+
+      const { default: chatbotRateLimitService } = await import('./chatbotRateLimit.service.js');
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'zalo_personal',
+        ownerUserId: userId,
+        chatbotId: zaloSettingId,
+        senderKey: senderId,
+      });
+      if (!rate.allowed) {
+        await zaloPersonalAdapter.sendReply({
+          externalId: String(senderId),
+          message: rate.staticReply,
+          userId,
+          accountId: zaloSettingId,
+          persist: true,
+        });
+        return;
+      }
+
       let mergedSettings = {
         ...chatbotSettings,
         ...accountSettings,
-        // Ensure is_enabled is true if we got here
         is_enabled: true,
       };
 
-      // If per-account system_instruction is empty, try to get from linked chatbot (id_chatbot)
       if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
         mergedSettings.system_instruction = accountSettings.chatbot_system_instruction;
-        console.log(`[ZaloInbox] Using system_instruction from linked chatbot ${accountSettings.id_chatbot}`);
       }
       
-      // If still no system_instruction, try to get from main chatbot settings
       if (!mergedSettings.system_instruction && chatbotSettings?.system_instruction) {
         mergedSettings.system_instruction = chatbotSettings.system_instruction;
-        console.log(`[ZaloInbox] Using system_instruction from main chatbot settings`);
       }
 
-      // Get AI response using chatRouterService
-      console.log(`[ZaloInbox] AI routing message from ${senderId}...`);
-      
-      // Get conversation history using unifiedInboxRepository
-      let conversationHistory = [];
-      try {
-        const historyResult = await unifiedInboxRepository.getMessages(conversation.id, 'zalo_personal', { limit: 10 });
-        conversationHistory = historyResult || [];
-        console.log(`[ZaloInbox] Got ${conversationHistory.length} history messages`);
-      } catch (e) {
-        console.log(`[ZaloInbox] getMessages error: ${e.message}`);
-      }
-      
-      // Route to AI using chatRouterService
       const result = await chatRouterService.routeMessageWithSettings({
         channel: 'zalo_personal',
         userId,
@@ -548,19 +527,14 @@ class ZaloPersonalInboxService {
         },
       });
 
-      console.log(`[ZaloInbox] AI result: type=${result?.type}, hasContent=${!!result?.content}, conversationId=${conversation.id}`);
-
       if (result?.content) {
-        console.log(`[ZaloInbox] AI reply: ${String(result.content).substring(0, 100)}...`);
+        // Single persist path: sendReply(persist=true) inserts agent message once.
         await zaloPersonalAdapter.sendReply({
           externalId: String(senderId),
           message: result.content,
           userId,
           accountId: zaloSettingId,
-        });
-        await unifiedInboxRepository.sendMessage(conversation.id, userId, 'zalo_personal', zaloSettingId, {
-          role: 'agent',
-          content: result.content,
+          persist: true,
         });
         sseService.broadcast(String(userId), 'inbox:new_message', {
           conversationId: conversation.id,

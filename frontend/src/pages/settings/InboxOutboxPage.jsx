@@ -159,7 +159,7 @@ const InboxPage = () => {
         limit: 20,
       };
       
-      if (filters.channel === 'zalo_personal' && selectedAccountId) {
+      if (selectedAccountId) {
         requestParams.zaloAccountId = selectedAccountId;
       }
       
@@ -649,8 +649,40 @@ const InboxPage = () => {
                 </h2>
                 <p className="text-sm text-gray-500">
                   {getChannelLabel(selectedConversation.channel, selectedConversation)}
+                  {selectedConversation.aiPaused ? ` · ${t('inbox.aiPausedHint')}` : ''}
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const nextPaused = !selectedConversation.aiPaused;
+                    await chatbotApi.setConversationAiPaused(
+                      selectedConversation.id,
+                      selectedConversation.type || 'zalo_personal',
+                      nextPaused
+                    );
+                    setSelectedConversation((prev) => prev ? { ...prev, aiPaused: nextPaused } : prev);
+                    setConversations((prev) => prev.map((c) =>
+                      c.id === selectedConversation.id && c.type === selectedConversation.type
+                        ? { ...c, aiPaused: nextPaused }
+                        : c
+                    ));
+                    toast.success(nextPaused ? t('inbox.takeOver') : t('inbox.resumeAi'));
+                  } catch (err) {
+                    toast.error(err?.response?.data?.message || err.message);
+                  }
+                }}
+                className={`px-3 py-2 text-sm rounded-xl transition-all ${
+                  selectedConversation.aiPaused
+                    ? 'text-primary-700 bg-primary-50 hover:bg-primary-100'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title={selectedConversation.aiPaused ? t('inbox.resumeAi') : t('inbox.takeOver')}
+              >
+                {selectedConversation.aiPaused ? t('inbox.resumeAi') : t('inbox.takeOver')}
+              </button>
 
               <button
                 onClick={() => {

@@ -4,6 +4,7 @@ import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import campaignController from './campaign.controller.js';
@@ -878,7 +879,19 @@ class AiController {
    */
   async getCustomChatbotDocuments(req, res) {
     try {
-      const documents = await customChatService.getDocuments(parseInt(req.params.chatbotId, 10));
+      const chatbotId = parseInt(req.params.chatbotId, 10);
+      if (Number.isNaN(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
+      // hợp lệ cũng bị 404 ("3" !== 3).
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const documents = await customChatService.getDocuments(chatbotId);
 
       return res.json({
         success: true,
@@ -892,8 +905,20 @@ class AiController {
 
   async deleteCustomChatbotDocument(req, res) {
     try {
+      const chatbotId = parseInt(req.params.chatbotId, 10);
+      if (Number.isNaN(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
+      // hợp lệ cũng bị 404 ("3" !== 3).
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
       const docId = decodeURIComponent(req.params.docId);
-      await customChatService.deleteDocument(parseInt(req.params.chatbotId, 10), docId);
+      await customChatService.deleteDocument(chatbotId, docId);
       return res.json({ success: true, message: 'Document deleted' });
     } catch (error) {
       console.error('[CustomChat] Delete document error:', error);

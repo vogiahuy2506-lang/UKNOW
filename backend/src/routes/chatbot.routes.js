@@ -112,6 +112,7 @@ router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatb
 router.get('/custom-chatbots/:chatbotId', chatbotController.getCustomChatbot.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Chatbot Channel Connections
 router.get('/custom-chatbots/:chatbotId/channels', chatbotController.getChatbotChannels.bind(chatbotController));
@@ -135,10 +136,8 @@ router.post('/widgets', chatbotController.createWidget.bind(chatbotController));
 router.put('/widgets/:id', chatbotController.updateWidget.bind(chatbotController));
 router.delete('/widgets/:id', chatbotController.deleteWidget.bind(chatbotController));
 
-// Web Chat (visitor-facing, no auth)
-router.get('/widgets/:widgetKey/start', chatbotController.startWebChat.bind(chatbotController));
-router.get('/widgets/conversations/:conversationId/messages', chatbotController.getWebChatMessages.bind(chatbotController));
-router.post('/widgets/conversations/:conversationId/messages', chatbotController.sendWebChatMessage.bind(chatbotController));
+// NOTE: visitor webchat start/messages routes removed (orphan + cross-tenant IDOR).
+// Inbox uses /inbox/*; public widget uses /api/chatbot-public/custom-chatbot/*.
 
 // ── Unified Inbox ────────────────────────────────────────────────
 
@@ -148,6 +147,7 @@ router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessag
 router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMessage.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));
 router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
+router.post('/inbox/conversations/:id/ai-pause', unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────

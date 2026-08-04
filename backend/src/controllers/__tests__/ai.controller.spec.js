@@ -15,6 +15,11 @@ jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({ 
 jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({
+  default: {
+    findChatbotById: jest.fn(),
+  },
+}));
 jest.unstable_mockModule('../../services/chatbot/chatbotStudioConversation.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   getAllowedModelsForUser: jest.fn(),

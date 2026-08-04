@@ -1,7 +1,21 @@
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
+
+async function gateChannelAi({ channel, userId, channelId, senderKey, staticSend }) {
+  const rate = await chatbotRateLimitService.checkBeforeAi({
+    channel,
+    ownerUserId: userId,
+    chatbotId: channelId,
+    senderKey,
+  });
+  if (rate.allowed) return null;
+  await staticSend(rate.staticReply);
+  return rate;
+}
 
 class ChatbotWebhookController {
   // ── Zalo OA Webhook (Token-based) ──────────────────────────────────
@@ -74,6 +88,28 @@ class ChatbotWebhookController {
         external_id: messageId,
         external_ts: event.timestamp,
       });
+
+      const blocked = await gateChannelAi({
+        channel: 'zalo_oa',
+        userId: channel.user_id,
+        channelId: channel.id,
+        senderKey: senderId,
+        staticSend: async (text) => {
+          await zaloOAAdapter.sendReply({
+            conversationId: conv.id,
+            message: text,
+            userId: channel.user_id,
+            channelId: channel.id,
+            externalId: senderId,
+          });
+          await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
+            role: 'bot',
+            content: text,
+            message_type: 'text',
+          });
+        },
+      });
+      if (blocked) return;
 
       // Route to AI
       const result = await chatRouterService.routeMessage({
@@ -172,6 +208,26 @@ class ChatbotWebhookController {
           external_ts: msg.timestamp,
         });
 
+        const blocked = await gateChannelAi({
+          channel: 'facebook',
+          userId: channel.user_id,
+          channelId: channel.id,
+          senderKey: msg.senderId,
+          staticSend: async (text) => {
+            await facebookAdapter.sendReply({
+              externalId: msg.senderId,
+              message: text,
+              userId: channel.user_id,
+            });
+            await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
+              role: 'bot',
+              content: text,
+              message_type: 'text',
+            });
+          },
+        });
+        if (blocked) continue;
+
         // Route to AI
         const result = await chatRouterService.routeMessage({
           channel: 'facebook',
@@ -256,6 +312,28 @@ class ChatbotWebhookController {
         external_ts: event.timestamp,
       });
 
+      const blocked = await gateChannelAi({
+        channel: 'zalo_oa',
+        userId: channel.user_id,
+        channelId: channel.id,
+        senderKey: senderId,
+        staticSend: async (text) => {
+          await zaloOAAdapter.sendReply({
+            conversationId: conv.id,
+            message: text,
+            userId: channel.user_id,
+            channelId: channel.id,
+            externalId: senderId,
+          });
+          await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
+            role: 'bot',
+            content: text,
+            message_type: 'text',
+          });
+        },
+      });
+      if (blocked) return;
+
       const result = await chatRouterService.routeMessage({
         channel: 'zalo_oa',
         userId: channel.user_id,
@@ -328,6 +406,26 @@ class ChatbotWebhookController {
           external_id: msg.messageId,
           external_ts: msg.timestamp,
         });
+
+        const blocked = await gateChannelAi({
+          channel: 'facebook',
+          userId: channel.user_id,
+          channelId: channel.id,
+          senderKey: msg.senderId,
+          staticSend: async (text) => {
+            await facebookAdapter.sendReply({
+              externalId: msg.senderId,
+              message: text,
+              userId: channel.user_id,
+            });
+            await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
+              role: 'bot',
+              content: text,
+              message_type: 'text',
+            });
+          },
+        });
+        if (blocked) continue;
 
         const result = await chatRouterService.routeMessage({
           channel: 'facebook',

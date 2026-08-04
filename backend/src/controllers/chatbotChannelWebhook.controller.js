@@ -1,8 +1,10 @@
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -86,6 +88,33 @@ class ChatbotChannelWebhookController {
         message_type: 'text',
         external_id: messageId,
       });
+
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'zalo_oa',
+        ownerUserId: chatbot.id_user,
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!rate.allowed) {
+        await zaloOAAdapter.sendReply({
+          conversationId: conv.id,
+          message: rate.staticReply,
+          channelId: channel.id,
+          externalId: senderId,
+        });
+        await chatbotChannelRepository.addMessage(conv.id, {
+          role: 'bot',
+          content: rate.staticReply,
+          message_type: 'text',
+        });
+        return;
+      }
+
+      // Handoff: owner paused AI for this conversation — save visitor msg only, no AI.
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`[ZaloOA] AI paused for conversation ${conv.id} — skipping reply`);
+        return;
+      }
 
       // Route to chatbot AI
       const result = await chatRouterService.routeChatbotMessage({
@@ -196,6 +225,31 @@ class ChatbotChannelWebhookController {
           message_type: 'text',
           external_id: msg.messageId,
         });
+
+        const rate = await chatbotRateLimitService.checkBeforeAi({
+          channel: 'facebook',
+          ownerUserId: chatbot.id_user,
+          chatbotId,
+          senderKey: msg.senderId,
+        });
+        if (!rate.allowed) {
+          await facebookAdapter.sendReply({
+            externalId: msg.senderId,
+            message: rate.staticReply,
+            channelId: channel.id,
+          });
+          await chatbotChannelRepository.addMessage(conv.id, {
+            role: 'bot',
+            content: rate.staticReply,
+            message_type: 'text',
+          });
+          continue;
+        }
+
+        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
+          continue;
+        }
 
         // Route to chatbot AI
         const result = await chatRouterService.routeChatbotMessage({
