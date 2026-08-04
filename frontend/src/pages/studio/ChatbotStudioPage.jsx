@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   HiOutlineViewBoards,
-  HiOutlinePaperAirplane,
+  HiOutlineMail,
   HiOutlineTrash,
   HiOutlineRefresh,
   HiOutlineChevronLeft,
@@ -521,7 +521,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             {sending ? (
               <HiOutlineRefresh className="w-5 h-5 animate-spin" />
             ) : (
-              <HiOutlinePaperAirplane className="w-5 h-5" />
+              <HiOutlineMail className="w-5 h-5" />
             )}
           </button>
         </div>

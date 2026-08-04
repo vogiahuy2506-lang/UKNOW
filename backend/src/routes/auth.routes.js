@@ -21,8 +21,10 @@ router.post('/register',
       .isEmail()
       .withMessage('Email không hợp lệ'),
     body('password')
-      .isLength({ min: 6 })
-      .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu phải có ít nhất 8 ký tự')
+      .matches(/^(?=.*[a-zA-Z])(?=.*[0-9])/)
+      .withMessage('Mật khẩu phải chứa ít nhất một chữ cái và một số'),
     body('fullName')
       .optional({ checkFalsy: true })
       .trim()
@@ -69,16 +71,8 @@ router.post('/google-login',
   authController.googleLogin.bind(authController)
 );
 
-// Refresh token
-router.post('/refresh-token',
-  [
-    body('refreshToken')
-      .notEmpty()
-      .withMessage('Refresh token không được để trống')
-  ],
-  handleValidationErrors,
-  authController.refreshToken.bind(authController)
-);
+// Refresh token — đọc từ cookie, không cần body
+router.post('/refresh-token', authController.refreshToken.bind(authController));
 
 // Đăng xuất
 router.post('/logout', authMiddleware, authController.logout.bind(authController));
@@ -105,9 +99,31 @@ router.post('/reset-password',
 
 // Kích hoạt tài khoản nhân viên qua link email
 router.post('/activate',
-  [body('token').notEmpty().withMessage('Token không được để trống')],
+  [
+    body('token').notEmpty().withMessage('Token không được để trống'),
+    body('password')
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu phải có ít nhất 8 ký tự')
+      .matches(/^(?=.*[a-zA-Z])(?=.*[0-9])/)
+      .withMessage('Mật khẩu phải chứa ít nhất một chữ cái và một số'),
+  ],
   handleValidationErrors,
   authController.activateAccount.bind(authController)
+);
+
+// Đổi mật khẩu khi bị yêu cầu (must_change_password = TRUE)
+router.post('/change-password',
+  authMiddleware,
+  [
+    body('currentPassword').notEmpty().withMessage('Mật khẩu hiện tại không được để trống'),
+    body('newPassword')
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu mới phải có ít nhất 8 ký tự')
+      .matches(/^(?=.*[a-zA-Z])(?=.*[0-9])/)
+      .withMessage('Mật khẩu mới phải chứa ít nhất một chữ cái và một số'),
+  ],
+  handleValidationErrors,
+  authController.changePassword.bind(authController)
 );
 
 export default router;

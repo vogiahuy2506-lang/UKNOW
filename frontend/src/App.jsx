@@ -23,6 +23,7 @@ import Campaigns from './pages/campaigns/Campaigns';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignRun from './pages/campaigns/CampaignRun';
+import QuickSend from './pages/campaigns/QuickSend';
 import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
 import ChannelSettings from './pages/settings/ChannelSettings';
@@ -119,6 +120,15 @@ const OwnerRoute = ({ children }) => {
 // Ẩn route đang hoàn thiện trên bản production (dev/preview vẫn truy cập được)
 const ProductionHiddenRoute = ({ children }) => {
   if (import.meta.env.MODE === 'production') return <UnauthorizedScreen />;
+  return children;
+};
+
+// Chỉ username "admin" hoặc nhân viên của account admin mới được vào
+const AdminUsernameRoute = ({ children }) => {
+  const { user, activeContext } = useAuthStore();
+  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
+  const ownerUsername = activeContext?.owner?.username?.toLowerCase();
+  if (!isAdminUsername && ownerUsername !== 'admin') return <UnauthorizedScreen />;
   return children;
 };
 
@@ -289,6 +299,7 @@ function App() {
             <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
             <Route path="campaigns/new" element={<CampaignBuilder />} />
             <Route path="campaign-run" element={<CampaignRun />} />
+            <Route path="quick-send" element={<QuickSend />} />
             <Route path="delivery-monitor" element={<UserDeliveryMonitorPage />} />
 
             {/* Customers */}
@@ -300,12 +311,14 @@ function App() {
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/audit-logs" element={<OwnerRoute><AuditLogsPage /></OwnerRoute>} />
-            <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
-            <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
+            {/* Admin-only cluster: chỉ username "admin" */}
+            <Route path="settings/landing-featured-courses" element={<AdminUsernameRoute><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></AdminUsernameRoute>} />
+            <Route path="settings/landing-testimonials" element={<AdminUsernameRoute><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></AdminUsernameRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
+            <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />
@@ -320,10 +333,9 @@ function App() {
             <Route path="settings/chatbot-widget" element={<Navigate to="/app/chatbot-studio" replace />} />
             <Route path="settings/chatbot-channels" element={<Navigate to="/app/chatbot-studio" replace />} />
 
-            {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
-            <Route path="courses" element={<Courses />} />
+            {/* Courses */}
+            <Route path="courses" element={<AdminUsernameRoute><Courses /></AdminUsernameRoute>} />
             <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
-            <Route path="orders" element={<OwnerRoute><Orders /></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
           </Route>
 

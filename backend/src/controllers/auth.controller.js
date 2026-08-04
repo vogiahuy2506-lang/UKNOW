@@ -17,8 +17,6 @@ import { getSystemAuditContext } from '../utils/auditContext.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
-
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 const REFRESH_TOKEN_PATH = '/api/auth';
 
@@ -162,13 +160,12 @@ class AuthController {
 
       const user = result.rows[0];
 
-      // TEMPORARILY DISABLED: login lockout check
-      // if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      //   return res.status(403).json({
-      //     success: false,
-      //     message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
-      //   });
-      // }
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+        });
+      }
 
       if (user.status !== 'active') {
         return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
@@ -177,13 +174,12 @@ class AuthController {
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
       if (!isValidPassword) {
-        // TEMPORARILY DISABLED: failed attempt counter and lockout update
-        // const failedAttempts = (user.failed_login_attempts || 0) + 1;
-        // const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
-        // await client.query(
-        //   'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
-        //   [failedAttempts, lockedUntil, user.id]
-        // );
+        const failedAttempts = (user.failed_login_attempts || 0) + 1;
+        const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
+        await client.query(
+          'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
+          [failedAttempts, lockedUntil, user.id]
+        );
         await this.logLoginAttempt(client, user.id, user.email, 'failed', 'Mật khẩu không đúng', ipAddress, userAgent);
 
         return res.status(401).json({
@@ -545,19 +541,19 @@ class AuthController {
   }
 
   /**
-   * Kích hoạt tài khoản nhân viên — đặt mật khẩu mặc định và chuyển status sang active.
-   * POST /auth/activate — body: { token }
+   * Kích hoạt tài khoản nhân viên — đặt mật khẩu do user tự chọn và chuyển status sang active.
+   * POST /auth/activate — body: { token, password }
    */
   async activateAccount(req, res) {
     try {
-      const { token } = req.body;
+      const { token, password } = req.body;
 
       const invitation = await verificationService.findInvitationByToken(token);
       if (!invitation) {
         return res.status(400).json({ success: false, message: 'Link kích hoạt không hợp lệ hoặc đã hết hạn' });
       }
 
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+      const passwordHash = await bcrypt.hash(password, 10);
 
       const activated = await activateUserByEmail(passwordHash, invitation.email);
 
@@ -574,6 +570,39 @@ class AuthController {
       });
     } catch (error) {
       console.error('Activate account error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Đổi mật khẩu khi bị yêu cầu (must_change_password = TRUE).
+   * POST /auth/change-password — body: { currentPassword, newPassword }
+   */
+  async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user.id;
+
+      const isValid = await bcrypt.compare(currentPassword, req.user.password_hash);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: 'Mật khẩu hiện tại không đúng' });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      const client = await db.getClient();
+      try {
+        await client.query(
+          `UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2`,
+          [passwordHash, userId]
+        );
+      } finally {
+        client.release();
+      }
+
+      return res.json({ success: true, message: 'Đổi mật khẩu thành công' });
+    } catch (error) {
+      console.error('Change password error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }

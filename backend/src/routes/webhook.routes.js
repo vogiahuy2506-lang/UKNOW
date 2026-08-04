@@ -4,7 +4,6 @@ import chatbotWebhookController from '../controllers/chatbotWebhook.controller.j
 import chatbotChannelWebhookController from '../controllers/chatbotChannelWebhook.controller.js';
 import oauthController from '../controllers/oauth.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import sendgridWebhookController from '../controllers/webhook/sendgridWebhook.controller.js';
 
 const router = express.Router();
 
@@ -92,29 +91,5 @@ router.post('/oauth/facebook/complete', authMiddleware, oauthController.complete
 // Zalo OA OAuth callback (public)
 router.get('/oauth/zalo-oa/init', oauthController.initZaloOAuth.bind(oauthController));
 router.get('/oauth/callback/zalo-oa', oauthController.handleZaloCallback.bind(oauthController));
-
-// ── SendGrid Email Tracking Webhook ─────────────────────────────────
-
-/**
- * POST /api/webhooks/sendgrid
- *
- * SendGrid sends email tracking events to this endpoint.
- * Configure this URL in SendGrid Webhook Settings.
- *
- * Required SendGrid Event Webhook events:
- * - Delivered
- * - Open
- * - Click
- * - Bounce
- * - Dropped
- */
-router.post('/sendgrid', sendgridWebhookController.handleSendGridWebhook.bind(sendgridWebhookController));
-
-/**
- * GET /api/webhooks/sendgrid/verify
- *
- * Verify SendGrid webhook integration.
- */
-router.get('/sendgrid/verify', sendgridWebhookController.verifySendGridWebhook.bind(sendgridWebhookController));
 
 export default router;

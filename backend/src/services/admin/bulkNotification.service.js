@@ -90,10 +90,10 @@ function buildMaintenanceEmail({ title, message, durationMinutes, startTime }) {
     </div>
 
     <!-- Footer -->
-    <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6">
-      <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center">
-        © ${new Date().getFullYear()} FounderAI · Email tự động, vui lòng không reply trực tiếp.
-      </p>
+    <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f3f4f6;font-size:11px;color:#6b7280">
+      <p style="margin:0 0 4px;font-weight:600">Đơn vị chủ quản: Công ty TNHH Giải pháp số Digiso</p>
+      <p style="margin:0 0 4px">Địa chỉ: Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh, Đ. Võ Trường Toản, KP. 6, Phường Linh Trung, Thành phố Thủ Đức.</p>
+      <p style="margin:0">Điện thoại: (+84) 879529079 (Hotline) | Email: info@digiso.vn</p>
     </div>
   </div>
 </body>
@@ -120,7 +120,7 @@ export async function sendMaintenanceNotification({ title, message, durationMinu
   let failed = 0;
   const failedEmails = [];
 
-  // Gửi tuần tự để tránh spam SendGrid
+  // Gửi tuần tự để tránh spam SMTP provider
   for (const user of users) {
     try {
       await sendSystemEmail({

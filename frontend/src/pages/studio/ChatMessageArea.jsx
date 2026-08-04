@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  HiOutlinePaperAirplane,
+  HiOutlineMail,
   HiOutlineTrash,
   HiOutlinePlus,
   HiOutlineChevronDown,
@@ -341,7 +341,7 @@ function ChatMessageArea({ chatbot }) {
             {sending ? (
               <HiOutlineTrash className="w-5 h-5 animate-spin" />
             ) : (
-              <HiOutlinePaperAirplane className="w-5 h-5" />
+              <HiOutlineMail className="w-5 h-5" />
             )}
           </button>
         </div>

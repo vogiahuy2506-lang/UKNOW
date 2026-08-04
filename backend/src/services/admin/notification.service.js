@@ -2,30 +2,27 @@ import notificationRepo from '../../repositories/admin/notification.repository.j
 import emailLogRepo from '../../repositories/admin/notificationEmailLog.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 
-const SENDER_NAME = process.env.SYSTEM_EMAIL_NAME || 'FounderAI';
-const PRODUCT_NAME = process.env.SYSTEM_EMAIL_NAME || 'FounderAI';
-const DASHBOARD_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
-const SYSTEM_LOGO_URL = process.env.SYSTEM_LOGO_URL || `${DASHBOARD_URL}/logo.png`;
+const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
+const PRODUCT_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
+const LOGO_URL = 'https://founderai.biz/logo.png';
 
-// Cache for logo data URI
+// ─── Logo Cache ────────────────────────────────────────────────────────────────
+
 let cachedLogoDataUri = null;
 let logoCacheTime = 0;
-const LOGO_CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+const LOGO_CACHE_DURATION = 1000 * 60 * 60;
 
 async function getLogoDataUri() {
   const now = Date.now();
   if (cachedLogoDataUri && (now - logoCacheTime) < LOGO_CACHE_DURATION) {
     return cachedLogoDataUri;
   }
-  
   try {
-    const response = await fetch(SYSTEM_LOGO_URL);
+    const response = await fetch(LOGO_URL);
     if (!response.ok) throw new Error('Logo fetch failed');
-    
     const buffer = await response.arrayBuffer();
     const base64 = Buffer.from(buffer).toString('base64');
     const mimeType = response.headers.get('content-type') || 'image/png';
-    
     cachedLogoDataUri = `data:${mimeType};base64,${base64}`;
     logoCacheTime = now;
     return cachedLogoDataUri;
@@ -35,7 +32,8 @@ async function getLogoDataUri() {
   }
 }
 
-// Notification types configuration
+// ─── Notification Type Config ──────────────────────────────────────────────────
+
 export const NOTIFICATION_TYPES = {
   MAINTENANCE: 'maintenance',
   ANNOUNCEMENT: 'announcement',
@@ -45,47 +43,15 @@ export const NOTIFICATION_TYPES = {
   SECURITY: 'security'
 };
 
-// Email template configurations by type
 const EMAIL_TEMPLATES = {
-  maintenance: {
-    headerColor: '#dc2626',
-    icon: 'warning',
-    label: 'Thông báo bảo trì',
-    defaultTitle: 'Bảo trì hệ thống định kỳ'
-  },
-  announcement: {
-    headerColor: '#2563eb',
-    icon: 'info',
-    label: 'Thông báo chung',
-    defaultTitle: 'Thông báo từ FounderAI'
-  },
-  promotion: {
-    headerColor: '#f97316',
-    icon: 'gift',
-    label: 'Khuyến mãi',
-    defaultTitle: 'Ưu đãi đặc biệt dành cho bạn'
-  },
-  warning: {
-    headerColor: '#eab308',
-    icon: 'alert',
-    label: 'Cảnh báo',
-    defaultTitle: 'Cảnh báo quan trọng'
-  },
-  reminder: {
-    headerColor: '#22c55e',
-    icon: 'clock',
-    label: 'Nhắc nhở',
-    defaultTitle: 'Nhắc nhở từ FounderAI'
-  },
-  security: {
-    headerColor: '#991b1b',
-    icon: 'shield',
-    label: 'Bảo mật',
-    defaultTitle: 'Thông báo bảo mật'
-  }
+  maintenance: { headerColor: '#dc2626', icon: '⚠️', label: 'Thông báo bảo trì' },
+  announcement: { headerColor: '#2563eb', icon: '📢', label: 'Thông báo chung' },
+  promotion: { headerColor: '#f97316', icon: '🎁', label: 'Khuyến mãi' },
+  warning: { headerColor: '#eab308', icon: '🚨', label: 'Cảnh báo' },
+  reminder: { headerColor: '#22c55e', icon: '⏰', label: 'Nhắc nhở' },
+  security: { headerColor: '#991b1b', icon: '🔒', label: 'Bảo mật' }
 };
 
-// Available variables for replacement
 export const AVAILABLE_VARIABLES = [
   { key: '{{user_name}}', description: 'Tên người dùng' },
   { key: '{{user_email}}', description: 'Email người dùng' },
@@ -96,6 +62,66 @@ export const AVAILABLE_VARIABLES = [
   { key: '{{support_email}}', description: 'Email hỗ trợ' }
 ];
 
+// ─── Base Template ─────────────────────────────────────────────────────────────
+
+function buildBaseTemplate({ subtitle, content, footerNote }) {
+  const year = new Date().getFullYear();
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 16px">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+
+          <!-- Card -->
+          <tr>
+            <td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+
+              <!-- Header -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);padding:28px 32px 22px;text-align:center">
+                    <img src="${LOGO_URL}" alt="${SENDER_NAME}" height="36" style="display:block;margin:0 auto 10px;max-width:150px;object-fit:contain">
+                    <p style="margin:0;font-size:17px;font-weight:700;color:#ffffff">${SENDER_NAME}</p>
+                    <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,.8);letter-spacing:.5px;text-transform:uppercase">${subtitle}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Body -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px">
+                <tr>
+                  <td>
+                    ${content}
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 8px;text-align:center;font-size:11px;color:#6b7280">
+              <p style="margin:0 0 4px;font-weight:600">Đơn vị chủ quản: Công ty TNHH Giải pháp số Digiso</p>
+              <p style="margin:0 0 4px">Địa chỉ: Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh, Đ. Võ Trường Toản, KP. 6, Phường Linh Trung, Thành phố Thủ Đức.</p>
+              <p style="margin:0">Điện thoại: (+84) 879529079 (Hotline) | Email: info@digiso.vn</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 /**
  * Notification Service
  * Handles all business logic for notifications
@@ -105,37 +131,22 @@ export default {
   // CRUD Operations
   // =====================
 
-  /**
-   * Create a new notification (draft)
-   */
   async createNotification(data) {
     return notificationRepo.create(data);
   },
 
-  /**
-   * Update notification by ID
-   */
   async updateNotification(id, data) {
     return notificationRepo.updateById(id, data);
   },
 
-  /**
-   * Delete notification by ID
-   */
   async deleteNotification(id) {
     return notificationRepo.deleteById(id);
   },
 
-  /**
-   * Get notifications with filters
-   */
   async getNotifications(query) {
     return notificationRepo.findAll(query);
   },
 
-  /**
-   * Get single notification by ID
-   */
   async getNotificationById(id) {
     return notificationRepo.findById(id);
   },
@@ -144,9 +155,6 @@ export default {
   // Targeting
   // =====================
 
-  /**
-   * Preview recipients based on criteria
-   */
   async previewRecipients(criteria) {
     const recipients = await notificationRepo.getEligibleRecipients({
       ...criteria,
@@ -160,9 +168,6 @@ export default {
     };
   },
 
-  /**
-   * Count eligible recipients
-   */
   async countRecipients(criteria) {
     return notificationRepo.countEligibleRecipients(criteria);
   },
@@ -171,9 +176,6 @@ export default {
   // Variable Replacement
   // =====================
 
-  /**
-   * Replace variables in content with user data
-   */
   replaceVariables(content, user) {
     if (!content) return content;
 
@@ -185,13 +187,10 @@ export default {
       .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric'
       }))
-      .replace(/\{\{dashboard_url\}\}/g, DASHBOARD_URL)
+      .replace(/\{\{dashboard_url\}\}/g, FRONTEND_URL)
       .replace(/\{\{support_email\}\}/g, 'support@digiso.vn');
   },
 
-  /**
-   * Format plan name for display
-   */
   formatPlanName(plan) {
     const planNames = {
       free: 'Miễn phí',
@@ -206,29 +205,23 @@ export default {
   // Email Building
   // =====================
 
-  /**
-   * Build email HTML based on notification type
-   */
   async buildEmailHtml(notification, user) {
     const template = EMAIL_TEMPLATES[notification.type] || EMAIL_TEMPLATES.announcement;
 
-    // Replace variables
     const title = this.replaceVariables(notification.title, user);
     const message = this.replaceVariables(notification.message, user);
     const titleEn = notification.title_en ? this.replaceVariables(notification.title_en, user) : null;
     const messageEn = notification.message_en ? this.replaceVariables(notification.message_en, user) : null;
 
     const priorityBadge = notification.priority === 'urgent'
-      ? `<span style="background:#dc2626;color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600">ƯU TIÊN CAO</span>`
+      ? `<span style="display:inline-block;background:#dc2626;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên cao</span>`
       : notification.priority === 'high'
-        ? `<span style="background:#f97316;color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600">ƯU TIÊN</span>`
+        ? `<span style="display:inline-block;background:#f97316;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên</span>`
         : '';
 
-    const subject = `[FounderAI] ${title}`;
+    const subject = `[${PRODUCT_NAME}] ${title}`;
 
-    // Get logo as data URI (embedded)
     const logoDataUri = await getLogoDataUri();
-
     const html = this.generateEmailTemplate({
       type: notification.type,
       headerColor: template.headerColor,
@@ -249,129 +242,75 @@ export default {
     };
   },
 
-  /**
-   * Generate email HTML template
-   */
   generateEmailTemplate({ type, headerColor, icon, label, title, message, priorityBadge, user, logoDataUri }) {
-    const year = new Date().getFullYear();
-
-    const iconEmoji = {
-      warning: '⚠️',
-      info: '📢',
-      gift: '🎁',
-      alert: '🚨',
-      clock: '⏰',
-      shield: '🔒'
-    }[icon] || '📢';
-
-    const backgroundColor = {
+    const bgColors = {
       maintenance: '#fef2f2',
       announcement: '#fff7ed',
       promotion: '#fff7ed',
       warning: '#fefce8',
       reminder: '#f0fdf4',
       security: '#fef2f2'
-    }[type] || '#fff7ed';
-
-    const borderColor = {
+    };
+    const borderColors = {
       maintenance: '#fecaca',
       announcement: '#fed7aa',
       promotion: '#fed7aa',
       warning: '#fef08a',
       reminder: '#bbf7d0',
       security: '#fecaca'
-    }[type] || '#fed7aa';
+    };
 
-    // Header with logo (use embedded data URI)
-    const logoHtml = logoDataUri
-      ? `<img src="${logoDataUri}" alt="${SENDER_NAME}" style="max-height:48px;max-width:160px;object-fit:contain;display:block;">`
-      : '';
+    const bg = bgColors[type] || '#fff7ed';
+    const border = borderColors[type] || '#fed7aa';
 
-    return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <div style="max-width:680px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
-
-    <!-- Header with gradient -->
-    <div style="background:linear-gradient(135deg, #f97316 0%, #ea580c 100%);padding:24px 40px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="display:flex;align-items:center;gap:16px">
-            ${logoHtml ? `<div style="background:rgba(255,255,255,0.2);padding:6px;border-radius:8px">${logoHtml}</div>` : ''}
-            <div>
-              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">${SENDER_NAME}</h1>
-              <p style="margin:2px 0 0;color:rgba(255,255,255,.85);font-size:13px">${label}</p>
-            </div>
-          </div>
-        </div>
-        ${priorityBadge ? `<span style="background:#dc2626;color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Ưu tiên cao</span>` : ''}
-      </div>
-    </div>
-
-    <!-- Body -->
-    <div style="padding:40px">
+    const content = `
       <!-- Greeting -->
-      <div style="margin-bottom:24px">
-        <p style="margin:0;font-size:16px;color:#374151;line-height:1.6">
-          Xin chào <strong style="color:#f97316">${user.full_name || user.username || 'bạn'}</strong>,
-        </p>
-        <p style="margin:8px 0 0;font-size:14px;color:#6b7280;line-height:1.6">
-          Chúng tôi có thông báo quan trọng dành cho bạn:
-        </p>
-      </div>
+      <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
+        Xin chào <strong style="color:#f97316">${user.full_name || user.username || 'bạn'}</strong>,
+      </p>
+      <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.6">
+        Chúng tôi có thông báo dành cho bạn:
+      </p>
 
       <!-- Title Box -->
-      <div style="background:${backgroundColor};border:2px solid ${borderColor};border-radius:16px;padding:24px;margin-bottom:24px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="color:#f97316">🔔</span>
-          <p style="margin:0;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:1px">
-            Tiêu đề thông báo
-          </p>
-        </div>
-        <h2 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;line-height:1.4">${title}</h2>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:${bg};border:2px solid ${border};border-radius:14px;margin-bottom:20px">
+        <tr>
+          <td style="padding:20px 24px">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px">
+              ${icon} Tiêu đề
+            </p>
+            <h2 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;line-height:1.4">
+              ${title}
+              ${priorityBadge ? '&nbsp;' + priorityBadge : ''}
+            </h2>
+          </td>
+        </tr>
+      </table>
 
       <!-- Message Box -->
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:24px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="color:#6b7280">📝</span>
-          <p style="margin:0;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px">
-            Nội dung
-          </p>
-        </div>
-        <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap">${message}</p>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:28px">
+        <tr>
+          <td style="padding:20px 24px">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px">
+              📝 Nội dung
+            </p>
+            <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap">${message}</p>
+          </td>
+        </tr>
+      </table>
 
       <!-- Support -->
-      <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6">
-        Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ:
-        <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none;font-weight:500">support@digiso.vn</a>
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6">
+        Nếu có thắc mắc, vui lòng liên hệ
+        <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none;font-weight:500">support@digiso.vn</a>.
       </p>
-    </div>
+    `;
 
-    <!-- Footer -->
-    <div style="padding:24px 40px;background:#1f2937">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:14px;font-weight:700;color:#fff">${PRODUCT_NAME}</span>
-            <span style="font-size:10px;color:#9ca3af;background:#374751;padding:2px 6px;border-radius:8px">${year}</span>
-          </div>
-          <p style="margin:0;font-size:12px;color:#9ca3af">
-            Email tự động, vui lòng không reply trực tiếp.
-          </p>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="#" style="color:#9ca3af;text-decoration:none;font-size:12px">Chính sách bảo mật</a>
-          <span style="color:#4b5563">·</span>
-          <a href="#" style="color:#9ca3af;text-decoration:none;font-size:12px">Hủy đăng ký</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+    return buildBaseTemplate({
+      subtitle: label,
+      content,
+      footerNote: 'Email tự động từ hệ thống. Vui lòng không reply trực tiếp.',
+    });
   },
 
   // =====================

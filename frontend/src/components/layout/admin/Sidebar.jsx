@@ -38,6 +38,7 @@ import {
   HiOutlinePhone,
   HiOutlineMailOpen,
   HiOutlinePencil,
+  HiOutlinePlus,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -143,22 +144,13 @@ const userMenuItems = (t) => [
     path: '/app/reports',
     icon: HiOutlineHome,
   },
+  // Chatbot cluster
   {
     name: t('nav.aiChatbot'),
-    icon: HiOutlineSparkles,
+    icon: HiOutlineInbox,
     children: [
-      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlineSparkles, ownerOnly: true },
-      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
-    ],
-  },
-  {
-    name: t('nav.landingPage'),
-    icon: HiOutlineGlobeAlt,
-    children: [
-      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlinePhotograph, adminUsernameOnly: true },
-      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, adminUsernameOnly: true },
-      { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
-      { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
+      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, permission: ['chatbot_create'] },
+      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, permission: ['chatbot_view', 'chatbot_create'] },
     ],
   },
   {
@@ -166,6 +158,7 @@ const userMenuItems = (t) => [
     icon: HiOutlineLightningBolt,
     permission: ['campaigns_view', 'campaigns_create', 'campaigns_run', 'customers', 'email_settings', 'zalo_settings', 'email_templates', 'zalo_templates'],
     children: [
+      { name: t('nav.quickSend'), path: '/app/quick-send', icon: HiOutlineMail, permission: ['campaigns_create'] },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
       { name: t('nav.createCampaign'), path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
@@ -176,21 +169,33 @@ const userMenuItems = (t) => [
     ],
   },
   {
+    name: t('nav.landingPage'),
+    icon: HiOutlineGlobeAlt,
+    children: [
+      { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
+      { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+    ],
+  },
+  // Admin-only cluster: chỉ username "admin" mới thấy
+  {
+    name: t('nav.adminOnlyCluster'),
+    icon: HiOutlineCube,
+    adminUsernameOnly: true,
+    children: [
+      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, adminUsernameOnly: true },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, adminUsernameOnly: true },
+      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
+      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, adminUsernameOnly: true },
+    ],
+  },
+  {
     name: t('nav.settings'),
     icon: HiOutlineCog,
     children: [
       { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
       { name: t('nav.employees'), path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
       { name: t('nav.auditLogs'), path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
-      { name: t('nav.myProducts'), path: '/app/products', icon: HiOutlineCube, ownerOnly: true, hideInProd: true },
-      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
     ],
-  },
-  {
-    name: t('nav.orders'),
-    path: '/app/orders',
-    icon: HiOutlineClipboardList,
-    adminUsernameOnly: true,
   },
 ];
 
@@ -209,7 +214,7 @@ const userMenuItems = (t) => [
 const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
   const { t, locale, changeLocale } = useI18n();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.aiChatbot'), t('nav.campaigns'), t('nav.settings')]);
+  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.aiChatbot'), t('nav.campaigns'), t('nav.settings'), t('nav.adminOnlyCluster')]);
   const { user, logout, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const isAdminUsername = user?.username?.toLowerCase() === 'admin';
@@ -459,13 +464,17 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
               <NavLink
                 to={item.path}
                 end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
-                  } ${isActive
-                    ? 'bg-primary-50 text-primary-600 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50'
-                  }`
-                }
+                className={({ isActive }) => {
+                  const isHighlight = item.highlight;
+                  if (isHighlight) {
+                    return `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'} bg-orange-50 text-orange-600 font-medium`;
+                  }
+                  return `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
+                    } ${isActive
+                      ? 'bg-primary-50 text-primary-600 font-medium'
+                      : 'text-gray-600 hover:bg-gray-50'
+                    }`;
+                }}
                 title={!showLabels ? item.name : ''}
                 onClick={handleNavClose}
               >

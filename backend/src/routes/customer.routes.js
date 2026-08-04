@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import customerController from '../controllers/customer.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
@@ -13,9 +14,10 @@ router.get('/email-tracking/unsubscribe/:token', customerController.trackEmailUn
 router.get('/zalo-tracking/click/:token', customerController.trackZaloClick.bind(customerController));
 
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
-
-// Get all
+// Get all — chỉ cần auth
 router.get('/', customerController.getAll.bind(customerController));
 router.get(
   '/campaigns/:campaignId/zalo-group/messages',
@@ -33,11 +35,12 @@ router.get('/:id/journey', customerController.getJourney.bind(customerController
 router.get('/:id/campaign-participations', customerController.getCampaignParticipations.bind(customerController));
 router.get('/:id/campaigns/:campaignId/journey', customerController.getCampaignJourneyDetail.bind(customerController));
 
-// Get by id
+// Get by id — chỉ cần auth
 router.get('/:id', customerController.getById.bind(customerController));
 
-// Create
+// Create — cần quyền customers
 router.post('/',
+  requirePermission('customers'),
   [
     body('email').optional().isEmail().withMessage('Email không hợp lệ'),
     body('phone').optional().trim().notEmpty(),
@@ -47,11 +50,12 @@ router.post('/',
   customerController.create.bind(customerController)
 );
 
-// Bulk import/update
-router.post('/bulk', customerController.bulkUpsert.bind(customerController));
+// Bulk import/update — cần quyền customers
+router.post('/bulk', requirePermission('customers'), customerController.bulkUpsert.bind(customerController));
 
-// Update
+// Update — cần quyền customers
 router.put('/:id',
+  requirePermission('customers'),
   [
     body('email').optional().isEmail().withMessage('Email không hợp lệ')
   ],
@@ -59,8 +63,8 @@ router.put('/:id',
   customerController.update.bind(customerController)
 );
 
-// Delete
-router.delete('/:id', customerController.delete.bind(customerController));
+// Delete — cần quyền customers
+router.delete('/:id', requirePermission('customers'), customerController.delete.bind(customerController));
 
 export default router;
 

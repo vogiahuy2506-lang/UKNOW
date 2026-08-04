@@ -29,7 +29,7 @@ const classifyFailure = (message = '') => {
   if (text.includes('timeout') || text.includes('etimedout') || text.includes('econnreset')) return 'network_timeout';
   if (text.includes('auth') || text.includes('login') || text.includes('session') || text.includes('cookie')) return 'account_session';
   if (text.includes('not found') || text.includes('unreachable') || text.includes('invalid') || text.includes('bounce')) return 'recipient_invalid';
-  if (text.includes('smtp') || text.includes('sendgrid') || text.includes('mail')) return 'email_provider';
+  if (text.includes('smtp') || text.includes('mail') || text.includes('email')) return 'email_provider';
   return 'other';
 };
 

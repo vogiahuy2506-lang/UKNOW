@@ -19,8 +19,6 @@ import {
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
 
-export const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
-
 const VALID_PERMISSION_KEYS = [
   'email_settings',
   'email_templates',
@@ -198,11 +196,8 @@ export async function resetEmployeePassword(ownerId, employeeId) {
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
-  const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
-  const result = await resetPasswordInDb(employeeId, ownerId, passwordHash);
-  if (!result) {
-    throw { status: 500, message: 'Không thể reset mật khẩu' };
-  }
+  // Gửi email reset mật khẩu thay vì gán mật khẩu cố định
+  await verificationService.sendPasswordReset(employee.email);
 }
 
 

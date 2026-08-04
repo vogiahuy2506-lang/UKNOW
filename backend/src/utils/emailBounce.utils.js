@@ -149,10 +149,10 @@ export function isSmtpAuthConfigError(error) {
 }
 
 /**
- * Nhận diện lỗi bị giới hạn gửi của provider SMTP (đặc biệt SendGrid).
+ * Nhận diện lỗi bị giới hạn gửi của provider SMTP.
  *
  * Luồng hoạt động:
- * 1. So khớp các pattern lỗi quota/rate-limit thường gặp của SendGrid.
+ * 1. So khớp các pattern lỗi quota/rate-limit thường gặp của SMTP provider.
  * 2. So khớp mã trạng thái 429 hoặc thông điệp "too many requests".
  * 3. Trả về true để luồng gửi lên lịch retry trễ thay vì fail cứng ngay.
  *

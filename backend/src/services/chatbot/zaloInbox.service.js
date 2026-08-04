@@ -325,6 +325,28 @@ class ZaloPersonalInboxService {
         return;
       }
 
+      // Check chatbot enable status EARLY to skip unnecessary API calls
+      const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
+      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+
+      console.log(`[ZaloInbox] DEBUG: chatbotSettings=${JSON.stringify(chatbotSettings)}`);
+      console.log(`[ZaloInbox] DEBUG: accountSettings=${JSON.stringify(accountSettings)}`);
+
+      const isAccountEnabled = accountSettings?.is_enabled;
+      const isMainEnabled = chatbotSettings?.is_enabled;
+
+      // If per-account explicitly disabled, skip immediately
+      if (isAccountEnabled === false) {
+        console.log(`[ZaloInbox] AI chatbot explicitly disabled for account ${zaloSettingId}`);
+        return;
+      }
+
+      // If both are disabled, skip
+      if (isAccountEnabled !== true && isMainEnabled !== true) {
+        console.log(`[ZaloInbox] AI chatbot disabled - main: ${isMainEnabled}, account: ${isAccountEnabled}`);
+        return;
+      }
+
       // TEMP: Disable duplicate check to test
       // if (await this.isMessageProcessed(messageId, zaloSettingId)) {
       //   console.log(`[ZaloInbox] Tin nhắn đã xử lý trước đó, bỏ qua: ${messageId}`);
@@ -475,32 +497,6 @@ class ZaloPersonalInboxService {
 
       if (!aiContent && messageType !== 'sticker' && messageType !== 'image') {
         console.log(`[ZaloInbox] Skipping text message without content`);
-        return;
-      }
-
-      // Unified chatbot settings
-      // Priority: per-account is_enabled > main chatbot is_enabled
-      const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
-      const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
-
-      console.log(`[ZaloInbox] DEBUG: chatbotSettings=${JSON.stringify(chatbotSettings)}`);
-      console.log(`[ZaloInbox] DEBUG: accountSettings=${JSON.stringify(accountSettings)}`);
-
-      // Check per-account setting first - if account has explicit setting, use it
-      // Otherwise, fallback to main chatbot setting
-      const isAccountEnabled = accountSettings?.is_enabled;
-      const isMainEnabled = chatbotSettings?.is_enabled;
-      
-      // If per-account explicitly disabled, skip
-      if (isAccountEnabled === false) {
-        console.log(`[ZaloInbox] AI chatbot explicitly disabled for account ${zaloSettingId}`);
-        return;
-      }
-      
-      // If per-account explicitly enabled, proceed
-      // If no per-account setting, check main chatbot setting
-      if (isAccountEnabled !== true && isMainEnabled !== true) {
-        console.log(`[ZaloInbox] AI chatbot disabled - main: ${isMainEnabled}, account: ${isAccountEnabled}`);
         return;
       }
 

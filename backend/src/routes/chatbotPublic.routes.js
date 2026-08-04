@@ -33,9 +33,6 @@ router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfi
 // Alternative: /custom-chatbot/:widgetKey/config (for widget.js)
 router.get('/custom-chatbot/:widgetKey/config', chatbotController.getCustomChatbotConfig.bind(chatbotController));
 
-// Get documents for a chatbot
-router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
-
 // Send message to custom chatbot (directly uses Gemini + KB)
 router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotController.chatWithCustomChatbot.bind(chatbotController));
 
