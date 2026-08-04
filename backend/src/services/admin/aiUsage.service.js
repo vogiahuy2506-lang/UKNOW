@@ -1,16 +1,9 @@
 import aiUsageRepository from '../../repositories/admin/aiUsage.repository.js';
-
-// Giá USD / 1 triệu token (text). Nguồn: bảng giá Gemini của Google — NÊN đối
-// chiếu lại định kỳ vì giá đổi. Ghi đè không cần deploy qua env AI_PRICING_JSON.
-// gemini-2.5-pro dùng mức cơ bản (prompt ≤200k); phần >200k Google tính cao hơn
-// ($2.50/$15) — hiếm gặp ở đây vì prompt trung bình ~10k token.
-const DEFAULT_PRICING = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
-  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
-  _default: { input: 0.30, output: 2.50 },
-};
+import {
+  parsePricing,
+  estimateCost,
+  hasConfiguredPrice,
+} from '../../utils/aiPricing.util.js';
 
 const TOKEN_SQL = {
   prompt: "CASE WHEN COALESCE(metadata->>'promptTokens', '') ~ '^[0-9]+$' THEN (metadata->>'promptTokens')::bigint ELSE 0 END",
@@ -34,30 +27,6 @@ const clampWindowDays = (value) => {
 const toNumber = (value) => Number(value || 0);
 const toNullableNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
-
-const parsePricing = () => {
-  const raw = String(process.env.AI_PRICING_JSON || '').trim();
-  if (!raw) return DEFAULT_PRICING;
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_PRICING,
-      ...(parsed && typeof parsed === 'object' ? parsed : {}),
-      _default: parsed?._default || DEFAULT_PRICING._default,
-    };
-  } catch (error) {
-    console.warn(`[AdminAiUsage] Invalid AI_PRICING_JSON, using defaults: ${error?.message || error}`);
-    return DEFAULT_PRICING;
-  }
-};
-
-const pricingForModel = (pricing, model) => pricing[model] || pricing._default || DEFAULT_PRICING._default;
-
-const estimateCost = (pricing, { model, promptTokens = 0, outputTokens = 0 }) => {
-  const price = pricingForModel(pricing, model);
-  return ((toNumber(promptTokens) / 1000000) * toNumber(price.input))
-    + ((toNumber(outputTokens) / 1000000) * toNumber(price.output));
-};
 
 const aggregateRows = (rows, keyFn, seedFn, pricing) => {
   const map = new Map();
@@ -253,7 +222,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
   )
     // priceConfigured=false → chi phí đang tính bằng giá _default (Flash), KHÔNG
     // phải giá thật của model này. Frontend đánh dấu để không ai tin nhầm con số.
-    .map((item) => ({ ...item, priceConfigured: Boolean(pricing[item.model]) }))
+    .map((item) => ({ ...item, priceConfigured: hasConfiguredPrice(pricing, item.model) }))
     .sort((a, b) => b.totalTokens - a.totalTokens);
 
   const p90ByPlan = new Map(p90Rows.map((row) => [String(row.plan_id || row.plan_code || 'unknown'), {
