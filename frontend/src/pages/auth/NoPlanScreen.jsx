@@ -8,10 +8,13 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../stores/authStore';
-import HeroNavbar from '../public/components/HeroNavbar';
+import Navbar from '../../components/layout/client/Navbar';
 import Footer from '../../components/layout/client/Footer';
 import { useI18n } from '../../i18n';
 
+/**
+ * NoPlanScreen - Refactored với Impeccable design principles
+ */
 const NoPlanScreen = () => {
   const { t } = useI18n();
   const { logout, user, switchContext } = useAuthStore();
@@ -29,38 +32,70 @@ const NoPlanScreen = () => {
   };
 
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen overflow-x-hidden">
-      <video
-        className="fixed inset-0 w-full h-full object-cover pointer-events-none"
-        style={{ zIndex: -1 }}
-        src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260403_050628_c4e32401-fab4-4a27-b7a8-6e9291cd5959.mp4"
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
+    <div className="relative min-h-screen overflow-x-hidden" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Gradient background */}
+      <div 
+        className="fixed inset-0"
+        style={{
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f172a 100%)',
+          zIndex: -1
+        }}
       />
-      <div className="fixed inset-0 bg-black/45 pointer-events-none" />
+      
+      {/* Grid pattern */}
+      <div 
+        className="fixed inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
+          zIndex: -1
+        }}
+      />
+
+      {/* Ambient glow */}
+      <div 
+        className="fixed w-[600px] h-[600px] rounded-full opacity-20 blur-[120px] pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle, rgba(249,115,22,0.4) 0%, transparent 70%)',
+          top: '-200px',
+          right: '-100px',
+          zIndex: -1
+        }}
+      />
 
       <div className="relative z-10 min-h-screen flex flex-col">
-        <HeroNavbar />
+        <Navbar />
 
         <main className="flex-1 flex items-center px-4 py-14 sm:py-20">
           <div className="w-full max-w-5xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-5 lg:gap-8 items-stretch">
-            <section className="rounded-[2rem] border border-white/20 bg-white/15 backdrop-blur-xl p-7 sm:p-10 text-white shadow-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-semibold">
-                <span className="w-2 h-2 rounded-full bg-orange-400" />
+            
+            {/* Left: Main content */}
+            <section 
+              className="rounded-3xl border border-white/10 p-8 sm:p-10 text-white shadow-2xl"
+              style={{
+                background: 'linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.98) 100%)',
+                backdropFilter: 'blur(20px)'
+              }}
+            >
+              <div 
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold"
+                style={{ background: 'rgba(249,115,22,0.2)', border: '1px solid rgba(249,115,22,0.3)' }}
+              >
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
                 {t('noPlan.accountReady')}
               </div>
 
-              <div className="mt-8 w-16 h-16 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
-                <HiOutlineLockClosed className="w-8 h-8 text-orange-300" />
+              <div 
+                className="mt-8 w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{ background: 'rgba(249,115,22,0.2)' }}
+              >
+                <HiOutlineLockClosed className="w-8 h-8 text-orange-400" />
               </div>
 
-              <h1 className="mt-6 text-3xl sm:text-5xl font-black leading-tight">
+              <h1 className="mt-6 text-3xl sm:text-5xl font-black leading-tight tracking-tight">
                 {t('noPlan.title')}
               </h1>
-              <p className="mt-5 text-base sm:text-lg leading-relaxed text-white/75 max-w-2xl">
+              <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-400 max-w-2xl">
                 {t('noPlan.description')}
                 {memberships.length > 0
                   ? t('noPlan.descriptionWithMembership')
@@ -70,15 +105,17 @@ const NoPlanScreen = () => {
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => navigate('/pricing')}
-                  className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/20 transition hover:-translate-y-0.5"
-                  style={{ backgroundColor: '#ef4d23' }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
+                  style={{
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)'
+                  }}
                 >
                   {t('noPlan.viewPlans')}
                   <HiOutlineArrowRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => navigate('/')}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/15"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white transition-all hover:bg-white/20"
                 >
                   <HiOutlineHome className="w-4 h-4" />
                   {t('noPlan.goHome')}
@@ -86,16 +123,23 @@ const NoPlanScreen = () => {
               </div>
             </section>
 
-            <aside className="rounded-[2rem] border border-white/20 bg-white/90 backdrop-blur-xl p-6 sm:p-7 shadow-2xl">
+            {/* Right: User info */}
+            <aside 
+              className="rounded-3xl border border-slate-200/50 bg-white/95 p-6 sm:p-7 shadow-xl backdrop-blur-sm"
+              style={{ backdropFilter: 'blur(20px)' }}
+            >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center shrink-0">
-                  <HiOutlineSparkles className="w-6 h-6 text-orange-600" />
+                <div 
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
+                >
+                  <HiOutlineSparkles className="w-7 h-7 text-orange-500" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-600">
+                  <p className="text-xs font-bold uppercase tracking-wider text-orange-500">
                     {t('noPlan.signedInAs')}
                   </p>
-                  <h2 className="mt-1 text-xl font-black text-slate-950 truncate">
+                  <h2 className="mt-1 text-xl font-bold text-slate-900 truncate">
                     {user?.fullName || user?.username || user?.email}
                   </h2>
                   {user?.email && (
@@ -106,20 +150,23 @@ const NoPlanScreen = () => {
 
               {memberships.length > 0 ? (
                 <div className="mt-7 space-y-3">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     {t('noPlan.enterWorkspace')}
                   </p>
                   {memberships.map((m) => (
                     <button
                       key={m.ownerId}
                       onClick={() => handleEnterWorkspace(m.ownerId)}
-                      className="w-full flex items-center gap-3 p-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition group text-left"
+                      className="w-full flex items-center gap-3 p-4 rounded-2xl border border-orange-100 bg-orange-50/50 hover:bg-orange-50 transition-all text-left group"
                     >
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                      <div 
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
+                      >
                         {(m.ownerName || m.ownerUsername || '?')[0].toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-950 truncate">
+                        <p className="text-sm font-bold text-slate-900 truncate">
                           {m.ownerName || m.ownerUsername}
                         </p>
                         <p className="text-xs text-slate-500 flex items-center gap-1">
@@ -127,12 +174,12 @@ const NoPlanScreen = () => {
                           {t('noPlan.employee')}
                         </p>
                       </div>
-                      <HiOutlineArrowRight className="w-4 h-4 text-orange-600 group-hover:translate-x-0.5 transition" />
+                      <HiOutlineArrowRight className="w-4 h-4 text-orange-500 group-hover:translate-x-1 transition-transform" />
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="mt-7 rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <div className="mt-7 rounded-2xl bg-slate-50 border border-slate-100 p-5">
                   <p className="text-sm leading-relaxed text-slate-600">
                     {t('noPlan.homeHint')}
                   </p>
@@ -141,7 +188,7 @@ const NoPlanScreen = () => {
 
               <button
                 onClick={handleLogout}
-                className="mt-7 w-full inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                className="mt-7 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600"
               >
                 <HiOutlineLogout className="w-4 h-4" />
                 {t('noPlan.logout')}
