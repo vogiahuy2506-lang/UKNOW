@@ -269,7 +269,10 @@ export async function removeEmployee(employeeId, ownerId) {
 
 export async function resetEmployeePassword(employeeId, ownerId, passwordHash) {
   const result = await db.query(
-    `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+    // must_change_password = TRUE: mật khẩu tạm chỉ để đăng nhập một lần, middleware
+    // requirePasswordChange sẽ chặn mọi thao tác cho tới khi nhân viên tự đổi.
+    `UPDATE users SET password_hash = $1, must_change_password = TRUE,
+                     updated_at = CURRENT_TIMESTAMP
      WHERE id = $2 AND EXISTS (
        SELECT 1 FROM user_members WHERE employee_id = $2 AND owner_id = $3
      )

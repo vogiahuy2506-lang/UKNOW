@@ -20,8 +20,8 @@ import {
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
+import { DEFAULT_EMPLOYEE_PASSWORD, generateTempPassword } from '../services/user/employee.service.js';
 
-const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
 const EMPLOYEE_LIMIT_KEYS = {
   maxCampaigns: 'max_campaigns',
   maxZaloAccounts: 'max_zalo_accounts',
@@ -512,7 +512,9 @@ class UserController {
         });
       }
 
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+      // Mật khẩu tạm ngẫu nhiên theo từng lần, không dùng hằng số dùng chung.
+      const tempPassword = generateTempPassword();
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
       const employee = await resetLegacyEmployeePassword(employeeId, passwordHash);
 
       if (!employee) {
@@ -524,9 +526,10 @@ class UserController {
 
       return res.json({
         success: true,
-        message: `Reset mật khẩu thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
+        message: 'Đã đặt lại mật khẩu. Gửi mật khẩu tạm này cho nhân viên — họ sẽ phải đổi ngay khi đăng nhập.',
         data: {
           id: employee.id,
+          tempPassword,
         },
       });
     } catch (error) {

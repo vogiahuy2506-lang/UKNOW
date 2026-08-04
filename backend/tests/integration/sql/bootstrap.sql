@@ -47,6 +47,8 @@ CREATE TABLE users (
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
   subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
+  -- migration 094: buộc đổi mật khẩu sau khi chủ shop reset cho nhân viên
+  must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,
   messages_per_period     INTEGER,
   is_fup_enabled          BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -1083,6 +1085,107 @@ CREATE TABLE IF NOT EXISTS zalo_personal_messages (
 CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
   ON zalo_personal_messages (id_user, created_at)
   WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
+
+-- ─── Web chat / custom chatbot ─────────────────────────────────────────
+-- Cần cho test widget + hội thoại web chat. Phải khớp migration 031/041/095/098:
+-- nếu lệch thì test xanh giả (đúng bài học lệch schema đã dính hai lần).
+
+-- Chỉ dựng cột tối thiểu mà repository JOIN tới.
+CREATE TABLE IF NOT EXISTS sub_assistants (
+  id           BIGSERIAL PRIMARY KEY,
+  id_user      BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  name         VARCHAR(255),
+  greeting_msg TEXT,
+  avatar_url   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_chatbots (
+  id                  BIGSERIAL PRIMARY KEY,
+  id_user             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name                VARCHAR(255) NOT NULL DEFAULT 'New Chatbot',
+  description         TEXT DEFAULT '',
+  system_instruction  TEXT DEFAULT '',
+  greeting_msg        TEXT DEFAULT 'Xin chào! Tôi có thể giúp gì cho bạn?',
+  avatar_url          TEXT DEFAULT NULL,
+  is_active           BOOLEAN DEFAULT true,
+  theme_color         VARCHAR(7) DEFAULT '#6366F1',
+  position            VARCHAR(20) DEFAULT 'bottom-right',
+  welcome_message     TEXT DEFAULT 'Xin chào! Tôi có thể giúp gì cho bạn?',
+  primary_color       VARCHAR(7) DEFAULT '#6366F1',
+  background_color    VARCHAR(7) DEFAULT '#FFFFFF',
+  text_color          VARCHAR(7) DEFAULT '#1F2937',
+  accent_color        VARCHAR(7) DEFAULT '#60A5FA',
+  logo_url            TEXT DEFAULT NULL,
+  show_avatar         BOOLEAN DEFAULT true,
+  border_radius       INTEGER DEFAULT 16,
+  chat_height         VARCHAR(10) DEFAULT '600px',
+  suggested_questions TEXT[] DEFAULT '{}',
+  widget_key          VARCHAR(100) UNIQUE DEFAULT NULL,
+  temperature         DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens          INTEGER DEFAULT 2048,
+  ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS web_widget_configs (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_sub_assistant BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  widget_key       VARCHAR(100) UNIQUE NOT NULL,
+  display_name     VARCHAR(255),
+  theme_color      VARCHAR(7) DEFAULT '#3B82F6',
+  position         VARCHAR(20) DEFAULT 'bottom-right',
+  welcome_message  TEXT,
+  is_active        BOOLEAN DEFAULT true,
+  allowed_domains  TEXT[],
+  settings         JSONB DEFAULT '{}',
+  logo_url         TEXT,
+  primary_color    VARCHAR(7) DEFAULT '#3B82F6',
+  background_color VARCHAR(7) DEFAULT '#FFFFFF',
+  text_color       VARCHAR(7) DEFAULT '#1F2937',
+  accent_color     VARCHAR(7) DEFAULT '#60A5FA',
+  suggested_questions TEXT[] DEFAULT '{}',
+  border_radius    INTEGER DEFAULT 16,
+  show_avatar      BOOLEAN DEFAULT true,
+  chat_height      VARCHAR(10) DEFAULT '500px',
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS webchat_conversations (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_widget_config BIGINT NOT NULL REFERENCES web_widget_configs(id) ON DELETE CASCADE,
+  session_id       VARCHAR(100),
+  visitor_name     VARCHAR(255),
+  visitor_email    VARCHAR(255),
+  visitor_info     JSONB DEFAULT '{}',
+  started_at       TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
+  status           VARCHAR(20) DEFAULT 'active',
+  ai_paused        BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migration 098 B5: chặn phân mảnh phiên đang hoạt động.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_webchat_active_session
+  ON webchat_conversations (id_widget_config, session_id)
+  WHERE session_id IS NOT NULL AND status = 'active';
+
+CREATE TABLE IF NOT EXISTS webchat_messages (
+  id              BIGSERIAL PRIMARY KEY,
+  id_conversation BIGINT NOT NULL REFERENCES webchat_conversations(id) ON DELETE CASCADE,
+  id_user         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role            VARCHAR(20) NOT NULL,
+  content         TEXT NOT NULL,
+  attachments     JSONB DEFAULT '[]',
+  metadata        JSONB DEFAULT '{}',
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_webchat_messages_conv ON webchat_messages(id_conversation);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

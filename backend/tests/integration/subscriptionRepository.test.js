@@ -164,7 +164,7 @@ describe('incrementReminderCount(userId)', () => {
 describe('assignPlanWithExpiry(userId, planId)', () => {
   it('user chưa có expires_at → expires = NOW + 1 month', async () => {
     const plan = await createPlan({ code: 'fresh' });
-    const user = await createUser({ username: 'fresh-buyer' });
+    const user = await createUser({ username: 'fresh-buyer', withPlan: false });
 
     const result = await assignPlanWithExpiry(user.id, plan.id);
     expect(Number(result.active_plan_id)).toBe(Number(plan.id));

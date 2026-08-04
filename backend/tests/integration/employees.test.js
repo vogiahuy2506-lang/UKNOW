@@ -14,18 +14,29 @@
  * Email gửi qua `sendSystemEmail` sẽ no-op khi không có SENDGRID_API_KEY (test env)
  * nên không cần mock SMTP.
  */
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
-import bcrypt from 'bcryptjs';
-import request from 'supertest';
-import { createApp } from '../../src/app.js';
-import db from '../../src/config/database.js';
-import {
+import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
+
+// Mời nhân viên có gửi mail. Không mock thì nodemailer mở socket thật →
+// 'Unexpected socket close' → endpoint trả 500. Mock phải đăng ký TRƯỚC khi
+// import app, nên phần import dưới đây dùng dynamic import.
+const mockSendMail = jest.fn().mockResolvedValue({ messageId: '<emp@test>' });
+const mockTransport = () => ({ verify: jest.fn().mockResolvedValue(true), sendMail: mockSendMail });
+jest.unstable_mockModule('nodemailer', () => ({
+  default: { createTransport: jest.fn(mockTransport) },
+  createTransport: jest.fn(mockTransport),
+}));
+
+const bcrypt = (await import('bcryptjs')).default;
+const request = (await import('supertest')).default;
+const { createApp } = await import('../../src/app.js');
+const db = (await import('../../src/config/database.js')).default;
+const {
   truncateAll,
   createUser,
   createPlan,
   assignPlanToUser,
-} from './helpers/db.js';
-import { DEFAULT_EMPLOYEE_PASSWORD } from '../../src/services/user/employee.service.js';
+} = await import('./helpers/db.js');
+const { DEFAULT_EMPLOYEE_PASSWORD } = await import('../../src/services/user/employee.service.js');
 
 let app;
 
@@ -111,7 +122,7 @@ describe('Authorization layer', () => {
   });
 
   it('user_admin không có plan vẫn list được (chỉ create mới cần plan)', async () => {
-    const owner = await createUser({ username: 'noplan', role: 'user' });
+    const owner = await createUser({ username: 'noplan', role: 'user', withPlan: false });
     const token = await loginAs(owner);
     const res = await request(app)
       .get('/api/employees')
@@ -239,7 +250,7 @@ describe('GET /api/employees/:id', () => {
 // ---------------------------------------------------------------------------
 describe('POST /api/employees', () => {
   it('owner không có plan → 403 NO_ACTIVE_PLAN (chặn bởi requireActivePlan)', async () => {
-    const owner = await createUser({ username: 'noplan', role: 'user' });
+    const owner = await createUser({ username: 'noplan', role: 'user', withPlan: false });
     const token = await loginAs(owner);
 
     const res = await request(app)
@@ -610,19 +621,54 @@ describe('PATCH /api/employees/:id/limits', () => {
 // PATCH /api/employees/:id/reset-password
 // ---------------------------------------------------------------------------
 describe('PATCH /api/employees/:id/reset-password', () => {
-  it('reset xong password_hash khớp với DEFAULT_EMPLOYEE_PASSWORD', async () => {
+  // Reset là việc NỘI BỘ trong workspace: chủ shop bấm reset, đọc mật khẩu tạm cho
+  // nhân viên, nhân viên đăng nhập rồi bị buộc đổi ngay. Không gửi email.
+  // Mật khẩu tạm phải NGẪU NHIÊN từng lần — không dùng hằng số dùng chung
+  // (DEFAULT_EMPLOYEE_PASSWORD nằm trong repo public).
+  it('trả mật khẩu tạm ngẫu nhiên + buộc đổi, không dùng hằng số dùng chung', async () => {
     const { owner, token } = await setupOwnerWithPlan();
     const emp = await createUser({ username: 'reset', role: 'user' });
     await addMembership(owner.id, emp.id);
+
+    const before = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [emp.id]);
 
     const res = await request(app)
       .patch(`/api/employees/${emp.id}/reset-password`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const u = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [emp.id]);
-    const ok = await bcrypt.compare(DEFAULT_EMPLOYEE_PASSWORD, u.rows[0].password_hash);
-    expect(ok).toBe(true);
+    const tempPassword = res.body?.data?.tempPassword;
+    expect(typeof tempPassword).toBe('string');
+    expect(tempPassword.length).toBeGreaterThanOrEqual(8);
+    // Không được là hằng số dùng chung
+    expect(tempPassword).not.toBe(DEFAULT_EMPLOYEE_PASSWORD);
+
+    const after = await db.query(
+      `SELECT password_hash, must_change_password FROM users WHERE id = $1`,
+      [emp.id]
+    );
+    expect(after.rows[0].password_hash).not.toBe(before.rows[0].password_hash);
+    // Hash trong DB khớp đúng mật khẩu tạm vừa trả về
+    expect(await bcrypt.compare(tempPassword, after.rows[0].password_hash)).toBe(true);
+    // Không đoán được bằng hằng số công khai
+    expect(await bcrypt.compare(DEFAULT_EMPLOYEE_PASSWORD, after.rows[0].password_hash)).toBe(false);
+    // Buộc đổi ngay lần đăng nhập kế tiếp
+    expect(after.rows[0].must_change_password).toBe(true);
+  });
+
+  it('hai lần reset cho ra hai mật khẩu khác nhau', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'reset2', role: 'user' });
+    await addMembership(owner.id, emp.id);
+
+    const first = await request(app)
+      .patch(`/api/employees/${emp.id}/reset-password`)
+      .set('Authorization', `Bearer ${token}`);
+    const second = await request(app)
+      .patch(`/api/employees/${emp.id}/reset-password`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(first.body.data.tempPassword).not.toBe(second.body.data.tempPassword);
   });
 
   it('reset employee thuộc owner khác → 404 (không leak), password_hash không đổi', async () => {

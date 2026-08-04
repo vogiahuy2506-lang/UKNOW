@@ -107,8 +107,8 @@ describe('GET /api/admin/plans', () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const plan = await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
 
-    const u1 = await createUser({ username: 'u1', role: 'user' });
-    const u2 = await createUser({ username: 'u2', role: 'user' });
+    const u1 = await createUser({ username: 'u1', role: 'user', withPlan: false });
+    const u2 = await createUser({ username: 'u2', role: 'user', withPlan: false });
     await assignPlanToUser(u1.id, plan.id);
     await assignPlanToUser(u2.id, plan.id);
 
@@ -171,7 +171,7 @@ describe('GET /api/admin/plans/search-users', () => {
     const plan = await createPlan({ code: 'basic', name: 'Basic' });
     const userWithPlan = await createUser({ role: 'user', username: 'has', email: 'has@x.com' });
     await assignPlanToUser(userWithPlan.id, plan.id);
-    await createUser({ role: 'user', username: 'free', email: 'free@x.com' });
+    await createUser({ role: 'user', username: 'free', withPlan: false, email: 'free@x.com' });
 
     const token = await loginAs(admin);
     const res = await request(app)

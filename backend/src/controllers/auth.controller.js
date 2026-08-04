@@ -156,7 +156,8 @@ class AuthController {
 
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
-                active_plan_id, password_hash, failed_login_attempts, locked_until
+                active_plan_id, password_hash, failed_login_attempts, locked_until,
+                must_change_password
          FROM users
          WHERE username = $1`,
         [username]
@@ -669,6 +670,10 @@ class AuthController {
       subscriptionExpiresAt: expiresAt,
       subscriptionExpired: isExpired,
       isReturningCustomer: expiresAt !== null,
+      // Frontend dựa vào cờ này để ép mở form đổi mật khẩu ngay sau đăng nhập.
+      // Thiếu nó thì mọi request sau đó bị requirePasswordChange trả 403 mà
+      // người dùng không hiểu vì sao.
+      mustChangePassword: user.must_change_password === true,
     };
   }
 

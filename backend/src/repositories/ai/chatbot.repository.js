@@ -124,6 +124,23 @@ class ChatbotRepository {
     return rows[0] || null;
   }
 
+  /**
+   * Same lookup as findWidgetByKey but ignores is_active.
+   * widget_key is UNIQUE regardless of is_active, so any create-on-miss path MUST use
+   * this — otherwise a deactivated row is invisible to the SELECT yet still blocks the
+   * INSERT, and the 23505 retry can never find it.
+   */
+  async findWidgetByKeyAnyStatus(widgetKey) {
+    const { rows } = await db.query(
+      `SELECT wc.*, sa.name AS sub_assistant_name, sa.greeting_msg, sa.avatar_url
+       FROM web_widget_configs wc
+       LEFT JOIN sub_assistants sa ON sa.id = wc.id_sub_assistant
+       WHERE wc.widget_key = $1`,
+      [widgetKey]
+    );
+    return rows[0] || null;
+  }
+
   async findWidgetsByUser(userId) {
     const { rows } = await db.query(
       `SELECT wc.*, sa.name AS sub_assistant_name,
@@ -160,6 +177,42 @@ class ChatbotRepository {
        show_avatar !== false, chat_height || '500px']
     );
     return rows[0];
+  }
+
+  /**
+   * Resolve the single web_widget_configs row for a custom chatbot.
+   * Keys off custom_chatbots.widget_key (fallback chatbot_<id>) — never id_sub_assistant.
+   *
+   * Reads ignore is_active on purpose. These rows are internal plumbing created by the
+   * system, not something the owner manages in the UI; the chatbot's own is_active is
+   * what gates public access (findChatbotById filters it). Filtering here would make a
+   * deactivated row unreadable but still UNIQUE-blocking, i.e. a permanent 500.
+   */
+  async resolveWidgetForChatbot(chatbot, { create = true } = {}) {
+    if (!chatbot?.id) return null;
+    const key = String(chatbot.widget_key || `chatbot_${chatbot.id}`).trim();
+    if (!key) return null;
+
+    let widget = await this.findWidgetByKeyAnyStatus(key);
+    if (widget) return widget;
+    if (!create) return null;
+
+    try {
+      return await this.createWidget(chatbot.id_user, {
+        widget_key: key,
+        display_name: chatbot.name || 'Web Chat',
+        theme_color: chatbot.primary_color || '#6366f1',
+        primary_color: chatbot.primary_color || '#6366f1',
+        welcome_message: chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
+      });
+    } catch (err) {
+      // Concurrent create: UNIQUE(widget_key) → re-read winner
+      if (err?.code === '23505') {
+        widget = await this.findWidgetByKeyAnyStatus(key);
+        if (widget) return widget;
+      }
+      throw err;
+    }
   }
 
   async updateWidget(id, userId, data) {
@@ -210,7 +263,7 @@ class ChatbotRepository {
       const existing = await db.query(
         `SELECT * FROM webchat_conversations
          WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
-         ORDER BY created_at DESC LIMIT 1`,
+         ORDER BY created_at ASC LIMIT 1`,
         [widgetConfigId, sessionId]
       );
       if (existing.rows[0]) {
@@ -219,15 +272,29 @@ class ChatbotRepository {
     }
 
     if (!conv) {
-      const created = await db.query(
-        `INSERT INTO webchat_conversations
-           (id_user, id_widget_config, session_id, visitor_name, visitor_email, visitor_info)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [userId, widgetConfigId, sessionId || null, visitorName || null,
-         visitorEmail || null, JSON.stringify(visitorInfo || {})]
-      );
-      conv = created.rows[0];
+      try {
+        const created = await db.query(
+          `INSERT INTO webchat_conversations
+             (id_user, id_widget_config, session_id, visitor_name, visitor_email, visitor_info)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [userId, widgetConfigId, sessionId || null, visitorName || null,
+           visitorEmail || null, JSON.stringify(visitorInfo || {})]
+        );
+        conv = created.rows[0];
+      } catch (err) {
+        // Partial unique index uniq_webchat_active_session (migration 098)
+        if (err?.code === '23505' && sessionId) {
+          const raced = await db.query(
+            `SELECT * FROM webchat_conversations
+             WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
+             ORDER BY created_at ASC LIMIT 1`,
+            [widgetConfigId, sessionId]
+          );
+          if (raced.rows[0]) return raced.rows[0];
+        }
+        throw err;
+      }
     }
     return conv;
   }
@@ -279,7 +346,7 @@ class ChatbotRepository {
     const { rows } = await db.query(
       `SELECT id FROM webchat_conversations
        WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
-       ORDER BY created_at DESC LIMIT 1`,
+       ORDER BY created_at ASC LIMIT 1`,
       [widgetConfigId, sessionId]
     );
     return rows[0]?.id || null;

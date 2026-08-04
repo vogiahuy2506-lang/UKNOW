@@ -288,7 +288,7 @@ describe('POST /api/payments/webhook', () => {
   });
 
   it('code !== "00" → KHÔNG cập nhật order, KHÔNG activate plan', async () => {
-    const user = await createUser({ username: 'webhook-fail', status: 'active' });
+    const user = await createUser({ username: 'webhook-fail', status: 'active', withPlan: false });
     const plan = await createPlan({ code: 'p1' });
     const orderCode = Date.now();
     await db.query(
@@ -310,7 +310,7 @@ describe('POST /api/payments/webhook', () => {
   });
 
   it('webhook amount mismatch → 200 (dừng retry), đơn failed, không activate', async () => {
-    const user = await createUser({ username: 'amt-mismatch' });
+    const user = await createUser({ username: 'amt-mismatch', withPlan: false });
     const plan = await createPlan({ code: 'amt-plan', price: 199000 });
     const orderCode = Date.now() + 77;
     await db.query(
@@ -334,7 +334,7 @@ describe('POST /api/payments/webhook', () => {
   });
 
   it('thanh toán thành công có user_id → order=success, active_plan_id set, expires ≈ now + 1 month', async () => {
-    const user = await createUser({ username: 'paid' });
+    const user = await createUser({ username: 'paid', withPlan: false });
     const plan = await createPlan({ code: 'monthly' });
     const orderCode = Date.now();
     await db.query(
@@ -402,7 +402,7 @@ describe('POST /api/payments/webhook', () => {
   });
 
   it('đơn đã cancelled bởi admin → webhook code=00 BỎ QUA (không re-activate)', async () => {
-    const user = await createUser({ username: 'cancelled-buyer' });
+    const user = await createUser({ username: 'cancelled-buyer', withPlan: false });
     const plan = await createPlan({ code: 'cancel-test' });
     const orderCode = Date.now() + 3;
     await db.query(

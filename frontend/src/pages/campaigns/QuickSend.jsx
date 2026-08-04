@@ -12,12 +12,9 @@ import {
   HiOutlineMail,
   HiOutlineChat,
   HiOutlineUsers,
-  HiOutlineClock,
   HiOutlineCheckCircle,
-  HiOutlineX,
   HiOutlineChevronRight,
   HiOutlineSearch,
-  HiOutlineFilter,
 } from 'react-icons/hi';
 
 const QUICK_SEND_STEPS = {

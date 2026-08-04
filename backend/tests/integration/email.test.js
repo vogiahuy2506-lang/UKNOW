@@ -42,6 +42,14 @@ jest.unstable_mockModule('nodemailer', () => ({
 const originalSendGridKey = process.env.SENDGRID_API_KEY;
 process.env.SENDGRID_API_KEY = 'SG.test-key-for-integration-only';
 
+// SMTP mặc định của hệ thống (DEFAULT_SMTP) đọc MAIL_* lúc nạp module. Đặt trước
+// các `await import` bên dưới để bài "dùng SMTP mặc định" có giá trị xác định —
+// không đặt thì MAIL_PASSWORD rỗng, không có gì để mã hoá và bài test mất ý nghĩa.
+const originalMailUsername = process.env.MAIL_USERNAME;
+const originalMailPassword = process.env.MAIL_PASSWORD;
+process.env.MAIL_USERNAME = process.env.MAIL_USERNAME || 'founderai.noreply@digiso.vn';
+process.env.MAIL_PASSWORD = process.env.MAIL_PASSWORD || 'integration-default-smtp-pass';
+
 const originalSmtpSecretKey = process.env.SMTP_SECRET_KEY;
 process.env.SMTP_SECRET_KEY = process.env.SMTP_SECRET_KEY
   || process.env.JWT_SECRET
@@ -64,6 +72,10 @@ beforeAll(() => {
 afterAll(() => {
   if (originalSendGridKey === undefined) delete process.env.SENDGRID_API_KEY;
   else process.env.SENDGRID_API_KEY = originalSendGridKey;
+  if (originalMailUsername === undefined) delete process.env.MAIL_USERNAME;
+  else process.env.MAIL_USERNAME = originalMailUsername;
+  if (originalMailPassword === undefined) delete process.env.MAIL_PASSWORD;
+  else process.env.MAIL_PASSWORD = originalMailPassword;
   if (originalSmtpSecretKey === undefined) delete process.env.SMTP_SECRET_KEY;
   else process.env.SMTP_SECRET_KEY = originalSmtpSecretKey;
 });
@@ -137,6 +149,8 @@ describe('POST /api/email-settings (create)', () => {
     expect(res.body.data).toMatchObject({
       name: 'My SendGrid',
       email: 'sender@example.com',
+      // Đây là SMTP do NGƯỜI DÙNG tự nhập (baseSettingBody), không phải mặc định
+      // hệ thống — phải trả lại đúng cái đã gửi lên.
       smtpHost: 'smtp.sendgrid.net',
       smtpPort: 587,
       isVerified: true,
@@ -172,8 +186,10 @@ describe('POST /api/email-settings (create)', () => {
     expect(res.body.data).toMatchObject({
       name: 'Default SMTP',
       email: 'default@example.com',
-      smtpHost: 'smtp.sendgrid.net',
-      smtpPort: 587,
+      // Mặc định hệ thống đã đổi khỏi SendGrid (emailSettingsCrud.service.js DEFAULT_SMTP).
+      // Đọc từ env như chính service để test không mục khi đổi nhà cung cấp lần nữa.
+      smtpHost: process.env.MAIL_SERVER || 'mail.digiso.vn',
+      smtpPort: Number.parseInt(process.env.MAIL_PORT, 10) || 465,
       isVerified: true,
     });
 
@@ -181,9 +197,11 @@ describe('POST /api/email-settings (create)', () => {
       `SELECT smtp_username, smtp_password FROM email_settings WHERE id = $1`,
       [res.body.data.id]
     );
-    expect(rows[0].smtp_username).toBe('apikey');
+    // Mặc định hệ thống lấy từ MAIL_USERNAME/MAIL_PASSWORD (DEFAULT_SMTP), không còn
+    // dùng cặp SendGrid 'apikey' + SENDGRID_API_KEY.
+    expect(rows[0].smtp_username).toBe(process.env.MAIL_USERNAME || 'founderai.noreply@digiso.vn');
     expect(isEncryptedSmtpSecret(rows[0].smtp_password)).toBe(true);
-    expect(decryptSmtpSecret(rows[0].smtp_password)).toBe('SG.test-key-for-integration-only');
+    expect(decryptSmtpSecret(rows[0].smtp_password)).toBe(process.env.MAIL_PASSWORD || '');
   });
 
   it('vượt max_email_accounts → 400 EMPLOYEE LIMIT (resource limit)', async () => {

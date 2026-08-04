@@ -11,7 +11,6 @@ import { useI18n } from './i18n';
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
-import LandingLayout from './layouts/LandingLayout';
 import PublicLayout from './layouts/PublicLayout';
 import PolicyLayout from './layouts/PolicyLayout';
 

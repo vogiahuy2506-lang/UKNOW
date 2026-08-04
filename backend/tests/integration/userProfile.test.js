@@ -54,7 +54,7 @@ describe('GET /api/users/profile', () => {
   });
 
   it('user thường → 200, trả về basic info (chưa có plan)', async () => {
-    const user = await createUser({ username: 'me', fullName: 'Me Person' });
+    const user = await createUser({ username: 'me', fullName: 'Me Person', withPlan: false });
     const token = await loginAs(user);
 
     const res = await request(app)
@@ -90,7 +90,7 @@ describe('GET /api/users/profile', () => {
 
   it('user chưa có active_plan_id NHƯNG có order success → fallback theo order mới nhất', async () => {
     const plan = await createPlan({ code: 'past' });
-    const user = await createUser({ username: 'has-order' });
+    const user = await createUser({ username: 'has-order', withPlan: false });
     // Tạo order success nhưng KHÔNG gán active_plan_id (giả lập order cũ migration thiếu sót)
     await createOrder({ planId: plan.id, userId: user.id, userEmail: user.email, status: 'success' });
     const token = await loginAs(user);

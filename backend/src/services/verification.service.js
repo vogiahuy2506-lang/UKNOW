@@ -4,6 +4,10 @@ import { sendSystemEmail } from '../utils/systemEmail.util.js';
 
 const PRODUCT_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const LOGO_URL = 'https://founderai.biz/logo.png';
+// Thiếu hằng này khiến sendInvitationEmail/sendPasswordResetEmail ném
+// ReferenceError → mời nhân viên và quên mật khẩu đều trả 500.
+// Cùng mặc định với auth.controller.js và systemEmail.util.js.
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
 // ─── Shared Template Builder ─────────────────────────────────────────────────
 

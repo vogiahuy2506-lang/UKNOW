@@ -9,9 +9,16 @@ import AiChatbot from '../features/ai/AiChatbot';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
+import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
 
 const MainLayout = () => {
   const { t } = useI18n();
+  // Nhân viên vừa được chủ shop reset mật khẩu: backend bật must_change_password,
+  // requirePasswordChange chặn mọi request cho tới khi đổi. Không ép mở form ở đây
+  // thì người dùng chỉ thấy 403 khắp nơi mà không hiểu vì sao.
+  const user = useAuthStore((s) => s.user);
+  const updateUser = useAuthStore((s) => s.updateUser);
+  const mustChangePassword = user?.mustChangePassword === true;
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', true);
   const [sidebarWidth, setSidebarWidth] = useLocalStorageState('founder_ai_sidebar_width', 256);
   const [isResizing, setIsResizing] = useState(false);
@@ -178,6 +185,12 @@ const MainLayout = () => {
             <Outlet />
           </main>
         </div>
+        <ChangePasswordModal
+          isOpen={mustChangePassword}
+          forced
+          onClose={() => {}}
+          onChanged={() => updateUser({ ...user, mustChangePassword: false })}
+        />
         {!isAiHomePage && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}

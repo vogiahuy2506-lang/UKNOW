@@ -57,6 +57,11 @@ export async function truncateAll() {
       voucher_redemptions,
       vouchers,
       orders,
+      webchat_messages,
+      webchat_conversations,
+      web_widget_configs,
+      custom_chatbots,
+      sub_assistants,
       plans,
       users
     RESTART IDENTITY CASCADE
@@ -69,6 +74,54 @@ export async function truncateAll() {
  * @param {object} overrides
  * @returns {Promise<object>}
  */
+/**
+ * Gói mặc định cho user test.
+ *
+ * `requireActivePlan` (authorization.middleware.js) trả 403 khi `users.active_plan_id`
+ * rỗng, và nó gác hầu hết route nghiệp vụ. Không gán gói thì ~226 bài đỏ vì 403.
+ *
+ * Gói này cố ý `is_active = false` VÀ `is_custom = false` để vô hình với:
+ *   - `findAllPlans()` — lọc `is_active = true` → không lọt vào guardrail gói tự chọn
+ *   - `deleteOrphanCustomPlans()` — chỉ đụng `is_custom = true`
+ * Hạn mức để NULL = không giới hạn, tránh vướng quota ngoài ý muốn.
+ * `requireActivePlan` chỉ đọc id nên hai cờ trên không ảnh hưởng.
+ */
+const TEST_PLAN_CODE = '__test_default_plan';
+
+async function ensureDefaultTestPlan() {
+  const existing = await db.query(`SELECT id FROM plans WHERE code = $1`, [TEST_PLAN_CODE]);
+  if (existing.rows[0]) return existing.rows[0].id;
+
+  // Hạn mức phải ghi RÕ số lớn, không để NULL: tầng quota coi NULL là "chưa cấu hình"
+  // rồi rơi về mặc định 1 → test đụng trần "đã đạt giới hạn tài khoản Email (1)".
+  const { rows } = await db.query(
+    `INSERT INTO plans (code, name, price, description, features,
+                        is_active, is_custom, duration_days,
+                        max_employees, max_campaigns, max_zalo_campaigns,
+                        max_zalo_group_campaigns, max_email_campaigns,
+                        max_zalo_accounts, max_email_accounts,
+                        max_email_templates, max_zalo_templates,
+                        max_landing_pages, max_chatbots,
+                        monthly_email_limit, monthly_zalo_limit,
+                        daily_email_limit, daily_zalo_limit,
+                        ai_credits_per_period)
+     VALUES ($1, 'Gói mặc định cho test', 0, NULL, '[]'::jsonb,
+             FALSE, FALSE, 3650,
+             1000, 1000, 1000,
+             1000, 1000,
+             1000, 1000,
+             1000, 1000,
+             1000, 1000,
+             1000000, 1000000,
+             1000000, 1000000,
+             1000000)
+     ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+     RETURNING id`,
+    [TEST_PLAN_CODE]
+  );
+  return rows[0].id;
+}
+
 export async function createUser(overrides = {}) {
   const password = overrides.password || 'Passw0rd!';
   const passwordHash = await bcrypt.hash(password, 4); // cost thấp cho test cho nhanh
@@ -90,7 +143,33 @@ export async function createUser(overrides = {}) {
     ]
   );
 
-  return { ...result.rows[0], plainPassword: password };
+  const user = result.rows[0];
+
+  // Admin bỏ qua requireActivePlan (isSuperAdmin → next) nên không cần gán gói —
+  // gán vào chỉ làm bẩn các bài đếm plan/user_count ở admin.
+  // withPlan: false → giữ user không có gói (để test đúng nhánh 403 NO_ACTIVE_PLAN)
+  const wantsPlan = overrides.withPlan !== false && (overrides.role ?? 'user') !== 'admin';
+  if (wantsPlan) {
+    const planId = overrides.planId ?? (await ensureDefaultTestPlan());
+    // Hạn mức tài nguyên đọc từ CỘT TRÊN users (userResourceLimit.util.js), không
+    // phải từ plan — production copy sang user lúc kích hoạt gói. Test bỏ qua bước
+    // đó nên phải set tay, nếu không NULL sẽ rơi về mặc định 1 ("đã đạt giới hạn").
+    await db.query(
+      `UPDATE users
+         SET active_plan_id = $1,
+             subscription_expires_at = NOW() + INTERVAL '365 days',
+             max_employees = 1000, max_campaigns = 1000,
+             max_zalo_campaigns = 1000, max_zalo_group_campaigns = 1000,
+             max_email_campaigns = 1000, max_zalo_accounts = 1000,
+             max_email_accounts = 1000, max_email_templates = 1000,
+             max_zalo_templates = 1000, max_landing_pages = 1000
+       WHERE id = $2`,
+      [planId, user.id]
+    );
+    user.active_plan_id = planId;
+  }
+
+  return { ...user, plainPassword: password };
 }
 
 /**

@@ -1220,13 +1220,14 @@ class ChatbotController {
       }
 
       // Handoff: if owner paused AI for this webchat session, do not call Gemini.
+      // After migration 098, one canonical widget per chatbot — no more scan-all-widgets loop.
       const sessionForPause = String(sessionId || '').trim();
       if (sessionForPause) {
         try {
-          const widgets = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
-          for (const w of widgets) {
+          const widget = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: false });
+          if (widget) {
             const convId = await chatbotRepository.findActiveWebChatConversationId({
-              widgetConfigId: w.id,
+              widgetConfigId: widget.id,
               sessionId: sessionForPause,
             });
             if (convId && await unifiedInboxRepository.isAiPaused(convId, 'webchat')) {
@@ -1346,26 +1347,10 @@ class ChatbotController {
         return res.json(publicChatbotCreditBlockedResponse({ sessionId: visitorSessionId }));
       }
 
-      // Get or create widget config for this chatbot
-      let widgetConfigs = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
-      let widgetConfig = widgetConfigs.find(w => w.id_sub_assistant === chatbot.id_sub_assistant);
-      
-      // If no widget exists, create a default one for this chatbot
-      if (!widgetConfig) {
-        const widgetKey = `chatbot_${chatbot.id}_${Date.now()}`;
-        const newWidget = await chatbotRepository.createWidget(chatbot.id_user, {
-          id_sub_assistant: chatbot.id_sub_assistant,
-          widget_key: widgetKey,
-          display_name: chatbot.name || 'Web Chat',
-          theme_color: chatbot.primary_color || '#6366f1',
-          primary_color: chatbot.primary_color || '#6366f1',
-          welcome_message: chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
-        });
-        widgetConfig = newWidget;
-      }
+      // One deterministic widget per chatbot (custom_chatbots.widget_key)
+      const widgetConfig = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: true });
 
       if (widgetConfig) {
-        // Find existing conversation by session
         conversation = await chatbotRepository.getOrCreateWebChatConversation({
           userId: chatbot.id_user,
           widgetConfigId: widgetConfig.id,
@@ -1497,9 +1482,8 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
-      // Get widget config
-      const widgetConfigs = await chatbotRepository.findWidgetsByUser(chatbot.id_user);
-      const widgetConfig = widgetConfigs.find(w => w.id_sub_assistant === chatbot.id_sub_assistant);
+      // Same deterministic widget lookup as chatWithCustomChatbotById (do not create)
+      const widgetConfig = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: false });
 
       if (!widgetConfig) {
         return res.json({ success: true, data: { messages: [], sessionId } });

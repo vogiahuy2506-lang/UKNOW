@@ -23,7 +23,6 @@ import {
   HiOutlineX,
   HiOutlineClipboardList,
   HiOutlineUserGroup,
-  HiOutlinePhotograph,
   HiOutlineStar,
   HiOutlineGlobeAlt,
   HiOutlineCurrencyDollar,

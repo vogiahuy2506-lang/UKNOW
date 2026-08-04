@@ -208,8 +208,12 @@ export async function findPasswordHashByUserId(userId) {
 }
 
 export async function updatePasswordHash(userId, passwordHash) {
+  // Đổi mật khẩu thành công thì gỡ luôn cờ bắt buộc đổi — nếu không, nhân viên
+  // vừa được reset sẽ đổi xong vẫn bị requirePasswordChange chặn, kẹt vòng lặp.
   await db.query(
-    'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    `UPDATE users
+     SET password_hash = $1, must_change_password = FALSE, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`,
     [passwordHash, userId]
   );
 }
@@ -300,8 +304,9 @@ export async function updateLegacyEmployeeStatus(employeeId, status) {
 
 export async function resetLegacyEmployeePassword(employeeId, passwordHash) {
   const { rows } = await db.query(
+    // must_change_password = TRUE: mật khẩu tạm chỉ dùng để đăng nhập một lần.
     `UPDATE users u
-     SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+     SET password_hash = $1, must_change_password = TRUE, updated_at = CURRENT_TIMESTAMP
      FROM roles r
      WHERE u.id = $2
        AND u.id_role = r.id

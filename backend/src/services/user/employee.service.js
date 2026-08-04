@@ -52,6 +52,38 @@ async function assertCanAddEmployee(ownerId) {
   }
 }
 
+/**
+ * Mật khẩu mặc định khi TẠO tài khoản nhân viên (luồng cũ ở user.controller.js).
+ * Nguồn duy nhất — không khai bản sao ở nơi khác.
+ *
+ * ⚠️ Chuỗi cố định này nằm trong repo public và giống nhau cho mọi tài khoản.
+ * Luồng reset đã chuyển sang mật khẩu ngẫu nhiên (generateTempPassword);
+ * luồng tạo mới nên làm tương tự khi có dịp.
+ */
+export const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
+
+// Bỏ ký tự dễ đọc nhầm khi chủ shop đọc mật khẩu cho nhân viên: 0/O, 1/l/I.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const TEMP_PASSWORD_LENGTH = 10;
+
+/**
+ * Mật khẩu tạm dùng một lần khi chủ shop reset cho nhân viên.
+ * Ngẫu nhiên theo từng lần — không dùng hằng số dùng chung.
+ * Lấy mẫu có loại bỏ (rejection sampling) để không lệch phân phối do phép chia dư.
+ */
+export function generateTempPassword() {
+  const limit = 256 - (256 % TEMP_PASSWORD_ALPHABET.length);
+  let out = '';
+  while (out.length < TEMP_PASSWORD_LENGTH) {
+    for (const byte of crypto.randomBytes(TEMP_PASSWORD_LENGTH)) {
+      if (byte >= limit) continue;
+      out += TEMP_PASSWORD_ALPHABET[byte % TEMP_PASSWORD_ALPHABET.length];
+      if (out.length === TEMP_PASSWORD_LENGTH) break;
+    }
+  }
+  return out;
+}
+
 export async function listEmployees(ownerId) {
   return findEmployeesByOwner(ownerId);
 }
@@ -77,14 +109,20 @@ export async function createEmployee(ownerId, { username, email, fullName }) {
   const employee = await createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName });
 
   const owner = await findOwnerInfo(ownerId);
+  // Không throw khi gửi thư hỏng — tài khoản đã tạo rồi, huỷ nửa chừng còn tệ hơn.
+  // NHƯNG phải báo lên trên: trước đây lỗi bị nuốt im lặng nên chủ shop tưởng đã
+  // gửi, còn nhân viên thì mắc kẹt (mật khẩu ngẫu nhiên, không có link kích hoạt).
+  let invitationSent = true;
+  let invitationError = null;
   try {
     await verificationService.sendEmployeeInvitation(email, owner?.full_name || owner?.username || 'Team');
   } catch (emailErr) {
+    invitationSent = false;
+    invitationError = emailErr?.message || 'Không gửi được email mời';
     console.error('Failed to send invitation email:', emailErr);
-    // Không throw — tài khoản đã tạo, owner có thể gửi lại lời mời thủ công
   }
 
-  return employee;
+  return { ...employee, invitationSent, invitationError };
 }
 
 export async function resendInvitation(ownerId, employeeId) {
@@ -191,13 +229,27 @@ export async function deleteEmployee(ownerId, employeeId) {
   return removeEmployee(employeeId, ownerId);
 }
 
+/**
+ * Chủ shop reset mật khẩu cho nhân viên — việc nội bộ trong workspace, không gửi email.
+ * Trả mật khẩu tạm về cho chủ đọc lại cho nhân viên; nhân viên bị buộc đổi ngay lần
+ * đăng nhập kế tiếp (must_change_password).
+ *
+ * @returns {Promise<{ tempPassword: string }>}
+ */
 export async function resetEmployeePassword(ownerId, employeeId) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
-  // Gửi email reset mật khẩu thay vì gán mật khẩu cố định
-  await verificationService.sendPasswordReset(employee.email);
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const updated = await resetPasswordInDb(employeeId, ownerId, passwordHash);
+  if (!updated) {
+    throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+
+  return { tempPassword };
 }
 
 

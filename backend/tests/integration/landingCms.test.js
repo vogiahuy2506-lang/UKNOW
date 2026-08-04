@@ -110,7 +110,7 @@ describe('GET /api/admin/landing-pages', () => {
   });
 
   it('user chưa có plan → 403 NO_ACTIVE_PLAN', async () => {
-    const u = await createUser({ username: 'lp-noplan', role: 'user' });
+    const u = await createUser({ username: 'lp-noplan', withPlan: false, role: 'user' });
     const token = await loginAs(u);
     const res = await request(app).get('/api/admin/landing-pages').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
