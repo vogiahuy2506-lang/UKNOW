@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import Footer from '../components/layout/client/Footer';
 
 /**
  * Layout cho các trang policy (Privacy Policy, Public DPA, Terms of Service)
- * Không có Navbar - các trang này có header tự thiết kế riêng
+ * Không có Navbar và Footer - các trang này có header/footer tự thiết kế riêng
  */
 export default function PolicyLayout() {
     const { pathname, hash } = useLocation();
@@ -20,7 +19,6 @@ export default function PolicyLayout() {
             <main>
                 <Outlet />
             </main>
-            <Footer />
         </div>
     );
 }
