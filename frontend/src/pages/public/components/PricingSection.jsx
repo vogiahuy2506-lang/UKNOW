@@ -6,8 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
 import { getActivePromotions } from '../../../services/promotion.service';
 import { useI18n } from '../../../i18n';
-
-const ZALO_URL = 'https://zalo.me/0866914382';
+import CustomPlanBuilder from '../../../features/billing/CustomPlanBuilder';
 
 const isContactPlan = (plan) => {
   const code = String(plan?.code || '').trim().toLowerCase();
@@ -18,7 +17,7 @@ const isContactPlan = (plan) => {
 const isFreePlan = (plan) => Number(plan?.price || 0) <= 0 && !isContactPlan(plan);
 
 const getPlanCtaLabel = (plan, t) => {
-  if (isContactPlan(plan)) return t('pricing.getQuote');
+  if (isContactPlan(plan)) return t('customPlan.cardCta');
   if (isFreePlan(plan)) return t('pricing.startTrial');
   return t('pricing.choosePlan');
 };
@@ -241,6 +240,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
   const [loading, setLoading] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
+  const [showCustomBuilder, setShowCustomBuilder] = useState(false);
 
   const getPlansData = async () => {
     try {
@@ -282,9 +282,17 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
   const hasYearlyPricing = plans.some(p => !isContactPlan(p) && p.price_yearly);
 
+  const openCustomBuilder = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setShowCustomBuilder(true);
+  };
+
   const handlePlanClick = (plan) => {
     if (isContactPlan(plan)) {
-      window.open(ZALO_URL, '_blank');
+      openCustomBuilder();
       return;
     }
     if (!isAuthenticated) {
@@ -444,7 +452,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                     <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
                       {isCustom ? (
                         <div className="flex items-end gap-2">
-                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('pricing.contact')}</span>
+                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('customPlan.priceLabel')}</span>
                         </div>
                       ) : hasPromotion ? (
                         <div>
@@ -536,6 +544,13 @@ export default function PricingSection({ embedded = false, compact = false, glas
           </AnimatedSection>
         )}
       </div>
+
+      <CustomPlanBuilder
+        open={showCustomBuilder}
+        onClose={() => setShowCustomBuilder(false)}
+        billingPeriod={billingPeriod}
+        glass={glass}
+      />
     </section>
   );
 }

@@ -66,6 +66,12 @@ router.use(requireRole('admin'));
 router.get('/', ctrl.list);
 router.get('/custom-list', ctrl.listCustom);
 router.get('/search-users', ctrl.searchUsers);
+router.get('/custom-pricing', ctrl.listCustomPricing);
+router.patch('/custom-pricing/:itemKey',
+  [param('itemKey').trim().notEmpty().withMessage('itemKey không hợp lệ')],
+  handleValidationErrors,
+  ctrl.updateCustomPricing
+);
 
 router.post('/custom-with-payment',
   [

@@ -94,19 +94,32 @@ export async function validateVoucherForCheckout({
   manualOnly = false,
   ignoreMinOrder = false,
   includeIneligible = false,
+  /** When set (e.g. self-serve custom plan), skip public-plan lookup and use this amount. */
+  amountOverride = null,
   queryable,
   pendingWindowMinutes = getPayosPendingWindowMinutes(),
 }) {
-  const plan = await findPlanByCode(planCode, queryable);
-  if (!plan) throw { status: 404, message: 'Gói không tồn tại' };
+  const normalizedPlanCode = String(planCode || '').trim().toLowerCase();
+  let amount;
+  let eligibilityPlanCode = normalizedPlanCode;
 
-  const amount = getPlanAmount(plan, billingPeriod);
+  if (amountOverride != null && Number.isFinite(Number(amountOverride))) {
+    // Self-serve custom plans have code=NULL; use sentinel 'custom' for voucher filters.
+    amount = Math.round(Number(amountOverride));
+    eligibilityPlanCode = normalizedPlanCode || 'custom';
+  } else {
+    const plan = await findPlanByCode(planCode, queryable);
+    if (!plan) throw { status: 404, message: 'Gói không tồn tại' };
+    amount = getPlanAmount(plan, billingPeriod);
+    eligibilityPlanCode = plan.code;
+  }
+
   const vouchers = await findEligibleVouchers({
     code,
     autoOnly,
     manualOnly,
     ignoreMinOrder,
-    planCode: plan.code,
+    planCode: eligibilityPlanCode,
     billingPeriod,
     amount,
     userId,

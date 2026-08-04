@@ -17,6 +17,12 @@ const adminPlansApiService = {
   translateFeatures(texts) {
     return api.post('/admin/plans/translate-features', { texts });
   },
+  getCustomPricing() {
+    return api.get('/admin/plans/custom-pricing');
+  },
+  updateCustomPricing(itemKey, payload) {
+    return api.patch(`/admin/plans/custom-pricing/${encodeURIComponent(itemKey)}`, payload);
+  },
 };
 
 export default adminPlansApiService;

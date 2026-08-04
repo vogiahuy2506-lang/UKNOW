@@ -64,7 +64,8 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
+  maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+  aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
   gracePeriodDays }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
@@ -93,6 +94,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
       maxEmailAccounts:        parseLimitField(maxEmailAccounts),
       maxEmailTemplates:       parseLimitField(maxEmailTemplates),
       maxZaloTemplates:        parseLimitField(maxZaloTemplates),
+      maxChatbots:             parseLimitField(maxChatbots),
       aiTokensPerPeriod:       parseLimitField(aiTokensPerPeriod),
       aiCreditsPerPeriod:      parseLimitField(aiCreditsPerPeriod),
       aiModel:                 aiModel?.trim() || 'gemini-2.5-flash',
@@ -135,6 +137,7 @@ export async function editPlan(id, payload) {
     maxEmailAccounts:      parseLimitField(payload.maxEmailAccounts),
     maxEmailTemplates:     parseLimitField(payload.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(payload.maxZaloTemplates),
+    maxChatbots:           parseLimitField(payload.maxChatbots),
     aiTokensPerPeriod:     parseLimitField(payload.aiTokensPerPeriod),
     aiCreditsPerPeriod:    parseLimitField(payload.aiCreditsPerPeriod),
     aiModel:               payload.aiModel?.trim() || plan.ai_model || 'gemini-2.5-flash',
@@ -236,6 +239,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
     maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
     maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
+    maxChatbots:           parseLimitField(planData.maxChatbots),
     aiTokensPerPeriod:     parseLimitField(planData.aiTokensPerPeriod),
     aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
     aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
@@ -289,8 +293,9 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       maxEmailAccounts:      parseLimitField(planData.maxEmailAccounts),
       maxEmailTemplates:     parseLimitField(planData.maxEmailTemplates),
       maxZaloTemplates:      parseLimitField(planData.maxZaloTemplates),
+      maxChatbots:           parseLimitField(planData.maxChatbots),
       aiTokensPerPeriod:     parseLimitField(planData.aiTokensPerPeriod),
-    aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
+      aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
       aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
       gracePeriodDays:       parseLimitField(planData.gracePeriodDays) ?? 0,
     });

@@ -25,6 +25,42 @@ export const createPayment = async (req, res) => {
     }
 };
 
+export const createCustomPayment = async (req, res) => {
+    try {
+        const {
+            quantities,
+            billingPeriod = 'monthly',
+            voucherCode = null,
+            reusePlanId = null,
+        } = req.body || {};
+
+        if (!quantities || typeof quantities !== 'object') {
+            return res.status(400).json({ success: false, message: 'Thiếu quantities' });
+        }
+        if (!['monthly', 'yearly'].includes(billingPeriod)) {
+            return res.status(400).json({ success: false, message: 'billingPeriod phải là monthly hoặc yearly' });
+        }
+
+        const result = await paymentService.createCustomPaymentLink({
+            quantities,
+            userEmail: req.user.email,
+            userId: req.user.id,
+            billingPeriod,
+            voucherCode,
+            reusePlanId: reusePlanId ? Number(reusePlanId) : null,
+        });
+        res.json({ success: true, message: 'Tạo liên kết thanh toán gói tự chọn thành công', result });
+    } catch (err) {
+        console.error(err);
+        res.status(err.status || 500).json({
+            success: false,
+            message: err.message || 'Lỗi server',
+            code: err.code,
+            capacity: err.capacity,
+        });
+    }
+};
+
 export const webhook = async (req, res) => {
     try {
         await paymentService.handleWebhook(req.body);

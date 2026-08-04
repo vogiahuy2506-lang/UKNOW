@@ -641,4 +641,20 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Scheduled Notifications: xử lý mỗi phút');
+
+  // ── Cleanup orphan self-serve custom plans (unpaid / abandoned) ───────────
+  cron.schedule('15 * * * *', async () => {
+    try {
+      const { getPayosPendingWindowMinutes } = await import('../repositories/voucher.repository.js');
+      const { cleanupOrphanCustomPlans } = await import('../services/payment/customPlan.service.js');
+      const deleted = await cleanupOrphanCustomPlans(getPayosPendingWindowMinutes());
+      if (deleted.length) {
+        console.log(`[Scheduler] Đã xoá ${deleted.length} gói custom mồ côi: ${deleted.map((p) => p.id).join(', ')}`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn gói custom mồ côi:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Custom Plan orphan cleanup: mỗi giờ phút 15');
 };
