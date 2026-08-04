@@ -31,16 +31,16 @@ const authMiddleware = async (req, res, next) => {
     let userResult;
     try {
       userResult = await db.query(
-        `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
-                subscription_expires_at
+        `SELECT id, username, email, password_hash, full_name, avatar_url, status, role, active_plan_id,
+                subscription_expires_at, must_change_password
          FROM users
          WHERE id = $1 AND status IN ('active', 'pending_activation')`,
         [decoded.userId]
       );
     } catch {
       userResult = await db.query(
-        `SELECT id, username, email, full_name, avatar_url, status, role, active_plan_id,
-                NULL AS subscription_expires_at
+        `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
+                NULL AS subscription_expires_at, FALSE AS must_change_password
          FROM users
          WHERE id = $1 AND status IN ('active', 'pending_activation')`,
         [decoded.userId]

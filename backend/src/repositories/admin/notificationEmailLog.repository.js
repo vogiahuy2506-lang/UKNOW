@@ -118,7 +118,7 @@ export default {
   },
 
   /**
-   * Update message_id (from SendGrid)
+   * Update message_id (from SMTP provider)
    */
   async updateMessageId(id, messageId) {
     const { rows } = await db.query(

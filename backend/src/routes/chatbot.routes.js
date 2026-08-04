@@ -4,11 +4,16 @@ import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
 // ── SSE Stream (parse JWT from query param for SSE compatibility) ───
 router.get('/inbox/stream', (req, res) => {

@@ -132,10 +132,11 @@ export function createApp() {
   // Resolve custom hostname (*.founderai.biz) → landing page slug
   app.use(domainResolver);
 
-  // TEMPORARILY DISABLED FOR QA: authLimiter blocks repeated Google login tests with 429.
-  // Re-enable before production hardening if brute-force protection is required.
-  // app.use('/api/auth', authLimiter, authRoutes);
-  app.use('/api/auth', authRoutes);
+  // Global rate limit cho toàn bộ API
+  app.use('/api', globalLimiter);
+
+  // Auth rate limit (chống brute-force login)
+  app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
   app.use('/api/email-templates', emailTemplateRoutes);

@@ -1,6 +1,26 @@
 import { isSuperAdmin, isUserAdmin, isEmployeeContext } from '../utils/roleScope.util.js';
 
 /**
+ * Middleware yêu cầu user đổi mật khẩu trước khi truy cập.
+ * Chỉ áp dụng cho user thường, bypass cho superadmin.
+ */
+export function requirePasswordChange(req, res, next) {
+  if (isSuperAdmin(req.user?.role)) {
+    return next();
+  }
+
+  if (req.user?.must_change_password === true) {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn cần đổi mật khẩu trước khi sử dụng hệ thống',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+  }
+
+  return next();
+}
+
+/**
  * Middleware kiểm tra superadmin — quyền cao nhất, quản lý toàn hệ thống.
  * Giữ tên requireAdmin để tương thích với các route cũ đang dùng.
  */

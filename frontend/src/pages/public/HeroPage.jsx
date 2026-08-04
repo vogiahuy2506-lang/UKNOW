@@ -52,9 +52,15 @@ export default function HeroPage() {
       {/* ── City video background ── */}
       <video
         className="fixed inset-0 w-full h-full object-cover pointer-events-none"
-        style={{ zIndex: -1 }}
+        style={{ zIndex: -2 }}
         src={getValue('media.videoUrl', 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260403_050628_c4e32401-fab4-4a27-b7a8-6e9291cd5959.mp4')}
         autoPlay loop muted playsInline preload="auto"
+      />
+
+      {/* Dark overlay for better text readability */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.4) 30%, rgba(0,0,0,0.5) 100%)', zIndex: -1 }}
       />
 
       {/* ── Hero Section ── */}

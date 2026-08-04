@@ -32,7 +32,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
       .replace(/\{\{product_name\}\}/g, 'FounderAI')
       .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN'))
       .replace(/\{\{dashboard_url\}\}/g, 'https://founderai.vn')
-      .replace(/\{\{support_email\}\}/g, 'support@digiso.vn');
+      .replace(/\{\{support_email\}\}/g, 'info@digiso.vn');
   };
 
   const title = replaceVariables(
@@ -322,14 +322,14 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
                       : 'If you have any questions, please contact us:'}
                   </p>
                   <a 
-                    href="mailto:support@digiso.vn" 
+                    href="mailto:info@digiso.vn" 
                     style={{ 
                       color: '#f97316',
                       fontWeight: 600,
                       textDecoration: 'none'
                     }}
                   >
-                    support@digiso.vn
+                    info@digiso.vn
                   </a>
                 </div>
 

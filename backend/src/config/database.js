@@ -18,7 +18,9 @@ function isConnectionError(error) {
     msg.includes('connection closed') ||
     msg.includes('recovery mode') ||
     msg.includes('not yet accepting connections') ||
-    msg.includes('the database system is not yet accepting')
+    msg.includes('the database system is not yet accepting') ||
+    msg.includes('channel binding') ||
+    msg.includes('channel_binding')
   );
 }
 
@@ -78,6 +80,18 @@ if (process.env.DB_SSL === 'true' || process.env.DB_SSL === true) {
     rejectUnauthorized: false,
   };
 }
+
+// Fix for Neon channel_binding issue
+// Remove channel_binding from connection string if present
+const fixNeonConnectionString = () => {
+  if (isNeon && process.env.DATABASE_URL) {
+    // Remove channel_binding=require from the connection string
+    process.env.DATABASE_URL = process.env.DATABASE_URL
+      .replace(/&channel_binding=require/, '')
+      .replace(/\?channel_binding=require/, '?');
+  }
+};
+fixNeonConnectionString();
 
 const pool = new Pool(poolConfig);
 

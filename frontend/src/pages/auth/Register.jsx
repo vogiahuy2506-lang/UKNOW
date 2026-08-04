@@ -15,9 +15,19 @@ import {
   HiOutlinePhone,
   HiOutlineMail,
   HiOutlineArrowLeft,
+  HiOutlineCheckCircle,
+  HiOutlineShieldCheck,
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
+
+/**
+ * Register Page - Refactored với Impeccable design principles:
+ * - Clear visual hierarchy
+ * - Better form UX với progress indication
+ * - Smooth transitions between steps
+ * - Improved error handling
+ */
 
 const registerSchema = (t) => z.object({
   username: z
@@ -40,11 +50,6 @@ const registerSchema = (t) => z.object({
 
 const RESEND_COOLDOWN = 60;
 
-const inputClass = 'w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 text-sm bg-white';
-const FieldError = ({ msg }) => msg ? (
-  <p className="text-xs text-red-500 mt-1">{msg}</p>
-) : null;
-
 // ── Màn nhập OTP ─────────────────────────────────────────────────────────────
 const OtpStep = ({ email, formData, onBack }) => {
   const { t } = useI18n();
@@ -56,10 +61,11 @@ const OtpStep = ({ email, formData, onBack }) => {
   const [isResending, setIsResending]  = useState(false);
   const [countdown, setCountdown]      = useState(RESEND_COOLDOWN);
   const timerRef                        = useRef(null);
+  const inputRefs = useRef([]);
 
   useEffect(() => {
     startTimer();
-    document.getElementById('otp-0')?.focus();
+    inputRefs.current[0]?.focus();
     return () => clearInterval(timerRef.current);
   }, []);
 
@@ -76,12 +82,13 @@ const OtpStep = ({ email, formData, onBack }) => {
     const next = [...digits];
     next[i] = val.slice(-1);
     setDigits(next);
-    if (val && i < 5) document.getElementById(`otp-${i + 1}`)?.focus();
+    if (val && i < 5) inputRefs.current[i + 1]?.focus();
   };
 
   const handleKeyDown = (i, e) => {
-    if (e.key === 'Backspace' && !digits[i] && i > 0)
-      document.getElementById(`otp-${i - 1}`)?.focus();
+    if (e.key === 'Backspace' && !digits[i] && i > 0) {
+      inputRefs.current[i - 1]?.focus();
+    }
   };
 
   const handlePaste = (e) => {
@@ -90,7 +97,7 @@ const OtpStep = ({ email, formData, onBack }) => {
     const next = [...digits];
     for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setDigits(next);
-    document.getElementById(`otp-${Math.min(pasted.length, 5)}`)?.focus();
+    inputRefs.current[Math.min(pasted.length, 5)]?.focus();
   };
 
   const handleResend = async () => {
@@ -100,7 +107,7 @@ const OtpStep = ({ email, formData, onBack }) => {
       setDigits(['', '', '', '', '', '']);
       startTimer();
       toast.success(t('register.resendSuccess'));
-      document.getElementById('otp-0')?.focus();
+      inputRefs.current[0]?.focus();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('register.resendFailed'));
     } finally {
@@ -128,29 +135,35 @@ const OtpStep = ({ email, formData, onBack }) => {
   const code = digits.join('');
 
   return (
-    <div className="w-full max-w-[400px] mx-auto">
-      <button type="button" onClick={onBack}
-        className="flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 mb-8 transition-colors"
+    <div className="w-full max-w-md mx-auto opacity-0 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
+      <button 
+        type="button" 
+        onClick={onBack}
+        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 mb-8 transition-colors duration-200 group"
       >
-        <HiOutlineArrowLeft className="w-4 h-4" />
+        <HiOutlineArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
         {t('register.back')}
       </button>
 
+      {/* Success icon */}
       <div className="mb-8">
-        <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center mb-5">
-          <HiOutlineMail className="w-7 h-7 text-orange-500" />
+        <div 
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+          style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
+        >
+          <HiOutlineShieldCheck className="w-8 h-8 text-orange-500" />
         </div>
-        <h1 className="text-2xl font-black text-slate-900 mb-2">{t('register.verifyEmail')}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2 tracking-tight">{t('register.verifyEmail')}</h1>
         <p className="text-slate-500 text-sm leading-relaxed">{t('register.enterOtpCode')}</p>
-        <p className="font-bold text-slate-800 text-sm mt-0.5">{email}</p>
+        <p className="font-bold text-slate-800 text-sm mt-1">{email}</p>
       </div>
 
       {/* 6 ô OTP */}
-      <div className="flex justify-center gap-2 mb-6">
+      <div className="flex justify-center gap-3 mb-8">
         {digits.map((d, i) => (
           <input
             key={i}
-            id={`otp-${i}`}
+            ref={(el) => (inputRefs.current[i] = el)}
             type="text"
             inputMode="numeric"
             maxLength={1}
@@ -158,7 +171,7 @@ const OtpStep = ({ email, formData, onBack }) => {
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={i === 0 ? handlePaste : undefined}
-            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all duration-200 bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
           />
         ))}
       </div>
@@ -167,22 +180,30 @@ const OtpStep = ({ email, formData, onBack }) => {
         type="button"
         onClick={handleSubmit}
         disabled={isSubmitting || code.length < 6}
-        className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none text-sm"
+        className="w-full py-4 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/25 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-sm relative overflow-hidden"
+        style={{
+          background: code.length === 6 
+            ? 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)'
+            : 'linear-gradient(135deg, #94a3b8 0%, #94a3b8 100%)'
+        }}
       >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             {t('register.verifying')}
           </span>
         ) : t('register.confirmButton')}
       </button>
 
-      <div className="mt-5 text-center text-sm text-slate-500">
+      <div className="mt-6 text-center text-sm text-slate-500">
         {t('register.didntReceiveCode')}{' '}
         {countdown > 0 ? (
           <span className="text-slate-400">{t('register.resendAfter', { n: countdown })}</span>
         ) : (
-          <button type="button" onClick={handleResend} disabled={isResending}
+          <button 
+            type="button" 
+            onClick={handleResend} 
+            disabled={isResending}
             className="font-bold text-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
           >
             {isResending ? t('register.sending') : t('register.resendButton')}
@@ -201,6 +222,7 @@ const Register = () => {
   const [step, setStep]                               = useState('form');
   const [isSendingCode, setIsSendingCode]             = useState(false);
   const [otpData, setOtpData]                         = useState(null);
+  const [termsChecked, setTermsChecked]               = useState(false);
   const { googleLogin }                               = useAuthStore();
   const navigate                                      = useNavigate();
 
@@ -227,6 +249,10 @@ const Register = () => {
   });
 
   const onSubmit = async (data) => {
+    if (!termsChecked) {
+      toast.error(t('auth.acceptTerms'));
+      return;
+    }
     setIsSendingCode(true);
     try {
       await sendVerificationCode({ email: data.email, username: data.username });
@@ -259,122 +285,219 @@ const Register = () => {
   }
 
   return (
-    <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">{t('register.registerTitle')}</h1>
-        <p className="text-sm text-slate-500 mt-1">{t('register.registerSubtitle')}</p>
+    <div className="w-full max-w-md mx-auto opacity-0 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t('register.registerTitle')}</h1>
+        <p className="text-slate-500 mt-2 text-sm leading-relaxed">{t('register.registerSubtitle')}</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Progress indicator */}
+      <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold">1</div>
+        <div className="flex-1 h-0.5 bg-slate-200 rounded">
+          <div className="h-full bg-orange-500 rounded" style={{ width: '0%' }} />
+        </div>
+        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold">2</div>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Username & Email */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">
               {t('auth.usernameLabel')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type="text" {...register('username')}
-                className={errors.username ? `${inputClass} border-red-400` : inputClass}
+              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type="text" 
+                {...register('username')}
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  errors.username 
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                }`}
                 placeholder={t('register.usernamePlaceholder')}
               />
             </div>
-            <FieldError msg={errors.username?.message} />
+            {errors.username && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                {errors.username.message}
+              </p>
+            )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">
               {t('common.email')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type="email" {...register('email')}
-                className={errors.email ? `${inputClass} border-red-400` : inputClass}
+              <HiOutlineMail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type="email" 
+                {...register('email')}
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  errors.email 
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                }`}
                 placeholder={t('register.emailPlaceholder')}
               />
             </div>
-            <FieldError msg={errors.email?.message} />
+            {errors.email && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                {errors.email.message}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Full Name & Phone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">{t('register.fullName')}</label>
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">{t('register.fullName')}</label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type="text" {...register('fullName')} className={inputClass} placeholder={t('register.fullNamePlaceholder')} />
+              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type="text" 
+                {...register('fullName')} 
+                className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm bg-white hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
+                placeholder={t('register.fullNamePlaceholder')} 
+              />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">{t('register.phone')}</label>
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">{t('register.phone')}</label>
             <div className="relative group">
-              <HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type="tel" {...register('phone')} className={`${inputClass} ${errors.phone ? 'border-red-400' : ''}`} placeholder={t('register.phonePlaceholder')} />
+              <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type="tel" 
+                {...register('phone')} 
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  errors.phone 
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                }`}
+                placeholder={t('register.phonePlaceholder')} 
+              />
             </div>
-            <FieldError msg={errors.phone?.message} />
+            {errors.phone && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                {errors.phone.message}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Password & Confirm */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">
               {t('auth.password')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type={showPassword ? 'text' : 'password'} {...register('password')}
-                className={`${errors.password ? `${inputClass} border-red-400` : inputClass} pr-10`}
+              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type={showPassword ? 'text' : 'password'} 
+                {...register('password')}
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  errors.password 
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                }`}
                 placeholder="••••••••"
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1">
-                {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
+              >
+                {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
               </button>
             </div>
-            <FieldError msg={errors.password?.message} />
+            {errors.password && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                {errors.password.message}
+              </p>
+            )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">
               {t('auth.confirmPassword')} <span className="text-red-500">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input type={showConfirmPassword ? 'text' : 'password'} {...register('confirmPassword')}
-                className={`${errors.confirmPassword ? `${inputClass} border-red-400` : inputClass} pr-10`}
+              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <input 
+                type={showConfirmPassword ? 'text' : 'password'} 
+                {...register('confirmPassword')}
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  errors.confirmPassword 
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                }`}
                 placeholder="••••••••"
               />
-              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1">
-                {showConfirmPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
+              <button 
+                type="button" 
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
+              >
+                {showConfirmPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
               </button>
             </div>
-            <FieldError msg={errors.confirmPassword?.message} />
+            {errors.confirmPassword && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                {errors.confirmPassword.message}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Terms */}
-        <div className="flex items-start pt-2">
-          <input type="checkbox" required
-            className="w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
-          />
-          <span className="ml-2.5 text-xs text-slate-600 font-medium leading-relaxed">
-            {t('auth.termsAgree')}{' '}
-            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.terms')}</a>
-            {' '}{t('auth.and')}{' '}
-            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.privacyPolicy')}</a>
-          </span>
+        {/* Terms, Privacy Policy & Public DPA */}
+        <div className="space-y-3 pt-2">
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <div className="relative mt-0.5">
+              <input 
+                type="checkbox" 
+                checked={termsChecked}
+                onChange={(e) => setTermsChecked(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+                {termsChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
+              </div>
+            </div>
+            <span className="text-xs text-slate-600 font-medium leading-relaxed group-hover:text-slate-700 transition-colors">
+              {t('auth.termsAgree')}{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.terms')}</a>
+              {', '}
+              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.privacyPolicy')}</a>
+              {' '}{t('auth.and')}{' '}
+              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.publicDPA')}</a>
+            </span>
+          </label>
         </div>
 
-        <button type="submit" disabled={isSendingCode}
-          className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
+        {/* Submit button */}
+        <button 
+          type="submit" 
+          disabled={isSendingCode}
+          className="w-full py-4 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/25 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed text-sm relative overflow-hidden mt-2"
+          style={{
+            background: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)',
+          }}
         >
           {isSendingCode ? (
             <span className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               {t('register.sendingCode')}
             </span>
           ) : t('register.registerButton')}
@@ -383,10 +506,10 @@ const Register = () => {
 
       {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
         <>
-          <div className="flex items-center my-4">
-            <div className="flex-1 border-t border-slate-200" />
-            <span className="px-3 text-xs text-slate-400">{t('common.or')}</span>
-            <div className="flex-1 border-t border-slate-200" />
+          <div className="flex items-center my-6">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="px-4 text-xs text-slate-400 font-medium uppercase tracking-wider">{t('common.or')}</span>
+            <div className="flex-1 h-px bg-slate-200" />
           </div>
 
           <GoogleAuthButton
@@ -398,13 +521,16 @@ const Register = () => {
         </>
       )}
 
-      <p className="mt-5 text-center text-sm text-slate-600">
+      <p className="mt-8 text-center text-sm text-slate-600">
         {t('auth.alreadyHaveAccount')}{' '}
-        <Link to="/login" className="text-orange-500 hover:text-orange-600 font-semibold">
+        <Link 
+          to="/login" 
+          className="text-orange-500 hover:text-orange-600 font-bold hover:underline underline-offset-4 transition-colors"
+        >
           {t('auth.loginHere')}
         </Link>
       </p>
-    </>
+    </div>
   );
 };
 

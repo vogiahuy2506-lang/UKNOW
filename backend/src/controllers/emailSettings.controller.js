@@ -10,10 +10,6 @@ class EmailSettingsController {
   /**
    * Chuẩn hóa cấu hình SMTP.
    *
-   * Luồng hoạt động:
-   * 1. Ưu tiên sử dụng cấu hình SMTP truyền vào (từ DB).
-   * 2. Nếu không có host, fallback sang biến env SendGrid.
-   *
    * @param {{host?: string, port?: number|string, username?: string, password?: string}} config cấu hình SMTP thô
    * @returns {{host: string, port: number, username: string, password: string}} cấu hình SMTP đã chuẩn hóa
    */
@@ -26,21 +22,18 @@ class EmailSettingsController {
     if (rawHost) {
       return {
         host: rawHost,
-        port: Number.isFinite(rawPort) ? rawPort : 587,
+        port: Number.isFinite(rawPort) ? rawPort : 465,
         username: rawUsername,
         password: rawPassword,
       };
     }
 
-    const envSendGridHost = String(process.env.SENDGRID_SMTP_HOST || '').trim() || 'smtp.sendgrid.net';
-    const envSendGridPort = Number.parseInt(process.env.SENDGRID_SMTP_PORT, 10);
-    const envSendGridApiKey = String(process.env.SENDGRID_API_KEY || '').trim();
-
+    // Fallback sang cấu hình mặc định từ env
     return {
-      host: envSendGridHost,
-      port: Number.isFinite(envSendGridPort) ? envSendGridPort : 587,
-      username: 'apikey',
-      password: envSendGridApiKey,
+      host: process.env.MAIL_SERVER || 'mail.digiso.vn',
+      port: parseInt(process.env.MAIL_PORT, 10) || 465,
+      username: process.env.MAIL_USERNAME || '',
+      password: process.env.MAIL_PASSWORD || '',
     };
   }
 
@@ -351,14 +344,14 @@ ${linkItems}
     if (error.message.includes('Email address is not verified')) {
       return res.status(400).json({
         success: false,
-        message: 'Email gửi chưa xác thực. Với SendGrid, hãy xác thực Sender Identity/Domain trước khi gửi.',
+        message: 'Email gửi chưa xác thực. Vui lòng xác thực Sender Identity/Domain trước khi gửi.',
         errorType: 'EMAIL_NOT_VERIFIED'
       });
     }
     if (error.message.includes('Message rejected')) {
       return res.status(400).json({
         success: false,
-        message: 'Email bị từ chối bởi SendGrid SMTP. Kiểm tra API key, sender identity và cấu hình SMTP.',
+        message: 'Email bị từ chối bởi SMTP. Kiểm tra credentials và cấu hình.',
         errorType: 'MESSAGE_REJECTED'
       });
     }
@@ -584,44 +577,20 @@ ${linkItems}
     }
   }
 
-  // ─── Domain verification (Hướng 2) ─────────────────────────────────────────
+  // ─── Domain verification ───────────────────────────────────────────────
 
   async initiateDomainVerification(req, res) {
-    try {
-      const { default: emailDomainVerificationService } = await import('../services/email/emailDomainVerification.service.js');
-      const result = await emailDomainVerificationService.initiate({
-        userId: req.user.id,
-        roleCode: req.user?.role,
-        settingId: req.params.id,
-      });
-
-      return res.json({ success: true, data: result });
-    } catch (error) {
-      console.error('Initiate domain verification error:', error);
-      return res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.statusCode ? error.message : 'Lỗi server',
-      });
-    }
+    return res.status(410).json({
+      success: false,
+      message: 'Domain verification không còn được hỗ trợ. Vui lòng sử dụng SMTP provider mặc định.',
+    });
   }
 
   async getDomainVerificationStatus(req, res) {
-    try {
-      const { default: emailDomainVerificationService } = await import('../services/email/emailDomainVerification.service.js');
-      const result = await emailDomainVerificationService.checkStatus({
-        userId: req.user.id,
-        roleCode: req.user?.role,
-        settingId: req.params.id,
-      });
-
-      return res.json({ success: true, data: result });
-    } catch (error) {
-      console.error('Get domain verification status error:', error);
-      return res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.statusCode ? error.message : 'Lỗi server',
-      });
-    }
+    return res.status(410).json({
+      success: false,
+      message: 'Domain verification không còn được hỗ trợ.',
+    });
   }
 }
 

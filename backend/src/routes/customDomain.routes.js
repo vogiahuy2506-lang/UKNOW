@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import customDomainController from '../controllers/customDomain.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
+import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
 // GET /api/custom-domains - List user's domains
 router.get('/', customDomainController.list.bind(customDomainController));

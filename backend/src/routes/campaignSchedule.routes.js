@@ -3,22 +3,26 @@ import { body } from 'express-validator';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import CampaignScheduleController from '../controllers/campaignSchedule.controller.js';
+import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 const controller = new CampaignScheduleController();
 
 // Apply auth middleware to all routes
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
-// Get all schedules
+// Get all — chỉ cần auth
 router.get('/', controller.getAll.bind(controller));
 
-// Get schedule by ID
+// Get schedule by ID — chỉ cần auth
 router.get('/:id', controller.getById.bind(controller));
 
-// Create new schedule
+// Create new schedule — cần quyền campaigns_create
 router.post(
   '/',
+  requirePermission('campaigns_create'),
   [
     body('campaignId').isInt({ min: 1 }).withMessage('Campaign ID phải là số nguyên dương'),
     body('scheduleName').trim().notEmpty().withMessage('Tên lịch không được để trống'),
@@ -30,9 +34,10 @@ router.post(
   controller.create.bind(controller)
 );
 
-// Update schedule
+// Update schedule — cần quyền campaigns_create
 router.patch(
   '/:id',
+  requirePermission('campaigns_create'),
   [
     body('scheduleName').optional().trim().notEmpty().withMessage('Tên lịch không được để trống'),
     body('scheduleType').optional().isIn(['once', 'daily', 'weekly', 'monthly', 'custom']).withMessage('Loại lịch không hợp lệ'),
@@ -43,7 +48,7 @@ router.patch(
   controller.update.bind(controller)
 );
 
-// Delete schedule
-router.delete('/:id', controller.delete.bind(controller));
+// Delete schedule — cần quyền campaigns_create
+router.delete('/:id', requirePermission('campaigns_create'), controller.delete.bind(controller));
 
 export default router;

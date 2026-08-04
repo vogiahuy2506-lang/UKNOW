@@ -1385,7 +1385,7 @@ class CampaignRunService {
         const safeTotalSteps = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
         const isFullyCompleted = safeCompletedStep >= safeTotalSteps;
         const localKey = buildRecipientLedgerKey({ nodeId, channel, recipientKey: safeRecipientKey });
-        // Khi hoàn thành bước: đồng bộ bộ nhớ về 0 để sendgridLimitRetryCount không kéo dài sang template kế.
+        // Khi hoàn thành bước: đồng bộ bộ nhớ về 0 để smtpLimitRetryCount không kéo dài sang template kế.
         const resolvedRetryCount = removeRetryCountFromMeta
           ? 0
           : Math.max(0, Number.parseInt(retryCount, 10) || 0);
@@ -2356,7 +2356,7 @@ class CampaignRunService {
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
       /**
-       * Theo dõi trong phiên chạy: có recipient được hẹn retry do SMTP rate-limit (SendGrid).
+       * Theo dõi trong phiên chạy: có recipient được hẹn retry do SMTP rate-limit.
        * Bắt buộc khai báo trước — `markRunHasPendingEmailRetry` gán giá trị; thiếu `let` sẽ gây ReferenceError (strict) và chặn cả lưu ledger.
        */
       let hasPendingEmailRetry = false;
@@ -3116,7 +3116,7 @@ class CampaignRunService {
               // 1) không reset bộ đếm retry về lần 1 ở mỗi vòng xử lý;
               // 2) có guard chặn gửi sớm hơn mốc nextDueAt nếu worker lệch nhịp.
               const retryMeta = {
-                ...(retryCountFromProgress > 0 ? { sendgridLimitRetryCount: retryCountFromProgress } : {}),
+                ...(retryCountFromProgress > 0 ? { smtpLimitRetryCount: retryCountFromProgress } : {}),
                 ...(scheduledRetryAtFromProgress ? { scheduledRetryAt: scheduledRetryAtFromProgress } : {}),
               };
               const emailSendMeta = {

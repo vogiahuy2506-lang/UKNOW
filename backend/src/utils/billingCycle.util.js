@@ -7,7 +7,8 @@ import db from '../config/database.js';
 export const EFFECTIVE_PLAN_ID_SQL = `COALESCE(
   u.active_plan_id,
   (SELECT o.plan_id FROM orders o
-   WHERE o.user_id = u.id OR o.user_email = u.email
+   WHERE (o.user_id = u.id OR o.user_email = u.email)
+     AND o.status = 'success'
    ORDER BY o.created_at DESC LIMIT 1)
 )`;
 
@@ -15,7 +16,8 @@ export const EFFECTIVE_PLAN_ID_SQL = `COALESCE(
 const OWNER_EFFECTIVE_PLAN_ID_SQL = `COALESCE(
   o.active_plan_id,
   (SELECT ord.plan_id FROM orders ord
-   WHERE ord.user_id = o.id OR ord.user_email = o.email
+   WHERE (ord.user_id = o.id OR ord.user_email = o.email)
+     AND ord.status = 'success'
    ORDER BY ord.created_at DESC LIMIT 1)
 )`;
 
