@@ -201,6 +201,7 @@ const Register = () => {
   const [step, setStep]                               = useState('form');
   const [isSendingCode, setIsSendingCode]             = useState(false);
   const [otpData, setOtpData]                         = useState(null);
+  const [publicDPAError, setPublicDPAError]           = useState('');
   const { googleLogin }                               = useAuthStore();
   const navigate                                      = useNavigate();
 
@@ -227,6 +228,22 @@ const Register = () => {
   });
 
   const onSubmit = async (data) => {
+    // Validate Public DPA checkbox
+    const termsCheckbox = document.getElementById('terms-checkbox');
+    const publicDPACheckbox = document.getElementById('public-dpa-checkbox');
+    
+    if (!termsCheckbox?.checked) {
+      toast.error(t('auth.acceptTerms'));
+      return;
+    }
+    
+    if (!publicDPACheckbox?.checked) {
+      setPublicDPAError(t('auth.acceptPublicDPA'));
+      toast.error(t('auth.acceptPublicDPA'));
+      return;
+    }
+    
+    setPublicDPAError('');
     setIsSendingCode(true);
     try {
       await sendVerificationCode({ email: data.email, username: data.username });
@@ -356,17 +373,31 @@ const Register = () => {
           </div>
         </div>
 
-        {/* Terms */}
-        <div className="flex items-start pt-2">
-          <input type="checkbox" required
-            className="w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
-          />
-          <span className="ml-2.5 text-xs text-slate-600 font-medium leading-relaxed">
-            {t('auth.termsAgree')}{' '}
-            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.terms')}</a>
-            {' '}{t('auth.and')}{' '}
-            <a href="#" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.privacyPolicy')}</a>
-          </span>
+        {/* Terms & Public DPA */}
+        <div className="flex items-start pt-2 space-y-2">
+          <div className="flex items-start">
+            <input type="checkbox" id="terms-checkbox" required
+              className="w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+            />
+            <span className="ml-2.5 text-xs text-slate-600 font-medium leading-relaxed">
+              {t('auth.termsAgree')}{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.terms')}</a>
+              {' '}{t('auth.and')}{' '}
+              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline transition-colors">{t('auth.privacyPolicy')}</a>
+            </span>
+          </div>
+          <div className="flex items-start">
+            <input type="checkbox" id="public-dpa-checkbox"
+              className={`w-4 h-4 mt-0.5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer ${publicDPAError ? 'border-red-500' : ''}`}
+            />
+            <span className={`ml-2.5 text-xs font-medium leading-relaxed ${publicDPAError ? 'text-red-500' : 'text-slate-600'}`}>
+              {t('auth.termsAgree')}{' '}
+              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className={`font-bold hover:underline transition-colors ${publicDPAError ? 'text-red-600 hover:text-red-700' : 'text-orange-600 hover:text-orange-700'}`}>{t('auth.publicDPA')}</a>
+            </span>
+          </div>
+          {publicDPAError && (
+            <p className="text-xs text-red-500 mt-1">{publicDPAError}</p>
+          )}
         </div>
 
         <button type="submit" disabled={isSendingCode}

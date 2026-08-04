@@ -98,7 +98,7 @@ Chúng tôi có thông báo quan trọng dành cho bạn:
 
 [Nội dung thông báo]
 
-Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email: support@digiso.vn
+Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua email: info@digiso.vn
 
 Trân trọng,
 Đội ngũ FounderAI`,
@@ -108,7 +108,7 @@ We have an important announcement for you:
 
 [Announcement content]
 
-If you have any questions, please contact us at: support@digiso.vn
+If you have any questions, please contact us at: info@digiso.vn
 
 Best regards,
 FounderAI Team`
@@ -165,7 +165,7 @@ Thời hạn: {{current_date}}
 
 Nếu bạn không thực hiện hành động trên, tài khoản của bạn có thể bị ảnh hưởng.
 
-Liên hệ hỗ trợ: support@digiso.vn
+Liên hệ hỗ trợ: info@digiso.vn
 
 Trân trọng,
 Đội ngũ FounderAI`,
@@ -182,7 +182,7 @@ Deadline: {{current_date}}
 
 If you don't take action, your account may be affected.
 
-Contact support: support@digiso.vn
+Contact support: info@digiso.vn
 
 Best regards,
 FounderAI Team`
@@ -234,7 +234,7 @@ Nếu đây là bạn: Vui lòng bỏ qua email này.
 
 Nếu đây không phải bạn:
 1. Đổi mật khẩu ngay lập tức
-2. Liên hệ support@digiso.vn
+2. Liên hệ info@digiso.vn
 3. Kiểm tra các thiết bị đã đăng nhập
 
 Để bảo vệ tài khoản, chúng tôi khuyến nghị bạn bật xác thực 2 bước.
@@ -253,7 +253,7 @@ If this was you: Please ignore this email.
 
 If this wasn't you:
 1. Change your password immediately
-2. Contact support@digiso.vn
+2. Contact info@digiso.vn
 3. Check logged-in devices
 
 To protect your account, we recommend enabling two-factor authentication.

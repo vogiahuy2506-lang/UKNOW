@@ -152,7 +152,7 @@ else
         -d "$DOMAIN" \
         --non-interactive \
         --agree-tos \
-        --email support@digiso.vn \
+        --email info@digiso.vn \
         --keep-until-expiring \
         2>&1 | tee -a "$LOG_FILE"; then
         log "Certificate obtained successfully!"

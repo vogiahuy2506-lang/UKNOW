@@ -183,7 +183,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
       Nếu bạn đã gia hạn hoặc không muốn nhận thông báo này, vui lòng liên hệ
-      <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none">support@digiso.vn</a>.
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
     </p>
   `;
 
@@ -285,7 +285,7 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }
 
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
-      Nếu cần hỗ trợ, liên hệ <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none">support@digiso.vn</a> hoặc
+      Nếu cần hỗ trợ, liên hệ <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a> hoặc
       xem <a href="${FRONTEND_URL}/docs" style="color:#f97316;text-decoration:none">tài liệu hướng dẫn</a>.
     </p>
   `;
@@ -461,7 +461,7 @@ export function buildMaintenanceEmail({ title, message, durationMinutes, startTi
     html: buildBaseTemplate({
       subtitle: 'Thông báo bảo trì hệ thống',
       content,
-      footerNote: 'Nếu có thắc mắc, vui lòng liên hệ support@digiso.vn.',
+      footerNote: 'Nếu có thắc mắc, vui lòng liên hệ info@digiso.vn.',
     }),
   };
 }

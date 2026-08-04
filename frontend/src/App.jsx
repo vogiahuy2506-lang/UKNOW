@@ -13,6 +13,7 @@ import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
 import LandingLayout from './layouts/LandingLayout';
 import PublicLayout from './layouts/PublicLayout';
+import PolicyLayout from './layouts/PolicyLayout';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -40,6 +41,8 @@ import Products from './pages/products/Products';
 import Orders from './pages/orders/Orders';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
+import PublicDPA from './pages/public/PublicDPA';
+import TermsOfService from './pages/public/TermsOfService';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
@@ -257,10 +260,14 @@ function App() {
           <Route path="/checkout" element={<CheckoutLayout><CheckoutPage /></CheckoutLayout>} />
           <Route path="/payment-success" element={<CheckoutLayout><PaymentSuccessPage /></CheckoutLayout>} />
 
-          {/* Landing Routes — legacy pages */}
-          <Route element={<LandingLayout />}>
+          {/* Policy Routes — không có Navbar, có header tự thiết kế */}
+          <Route element={<PolicyLayout />}>
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
             <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+            <Route path="/public-dpa" element={<PublicDPA />} />
+            <Route path="/public-dpa/" element={<PublicDPA />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/terms/" element={<TermsOfService />} />
           </Route>
 
           {/* Kích hoạt tài khoản nhân viên qua link email */}

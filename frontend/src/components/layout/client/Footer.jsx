@@ -26,6 +26,8 @@ const COLUMNS = (t) => [
     links: [
       { label: t('footer.contact'), to: '/contact' },
       { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
+      { label: t('footer.publicDPA'), href: '/public-dpa' },
+      { label: t('footer.termsOfUse'), href: '/terms' },
     ],
   },
 ];
@@ -108,9 +110,13 @@ export default function Footer() {
             {t('footer.privacy')}
           </a>
           <span className="text-neutral-400">|</span>
-          <Link to="/contact" className="text-[13px] text-slate-600 hover:text-slate-800 transition-colors">
+          <a href="/public-dpa" className="text-[13px] text-slate-600 hover:text-slate-800 transition-colors">
+            {t('footer.publicDPA')}
+          </a>
+          <span className="text-neutral-400">|</span>
+          <a href="/terms" className="text-[13px] text-slate-600 hover:text-slate-800 transition-colors">
             {t('footer.termsOfUse')}
-          </Link>
+          </a>
         </div>
       </div>
     </footer>

@@ -188,7 +188,7 @@ export default {
         day: '2-digit', month: '2-digit', year: 'numeric'
       }))
       .replace(/\{\{dashboard_url\}\}/g, FRONTEND_URL)
-      .replace(/\{\{support_email\}\}/g, 'support@digiso.vn');
+      .replace(/\{\{support_email\}\}/g, 'info@digiso.vn');
   },
 
   formatPlanName(plan) {
@@ -302,7 +302,7 @@ export default {
       <!-- Support -->
       <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6">
         Nếu có thắc mắc, vui lòng liên hệ
-        <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none;font-weight:500">support@digiso.vn</a>.
+        <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none;font-weight:500">info@digiso.vn</a>.
       </p>
     `;
 
