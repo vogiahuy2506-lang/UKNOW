@@ -222,9 +222,7 @@ const Register = () => {
   const [step, setStep]                               = useState('form');
   const [isSendingCode, setIsSendingCode]             = useState(false);
   const [otpData, setOtpData]                         = useState(null);
-  const [publicDPAError, setPublicDPAError]           = useState('');
   const [termsChecked, setTermsChecked]               = useState(false);
-  const [publicDPAChecked, setPublicDPAChecked]       = useState(false);
   const { googleLogin }                               = useAuthStore();
   const navigate                                      = useNavigate();
 
@@ -251,19 +249,10 @@ const Register = () => {
   });
 
   const onSubmit = async (data) => {
-    // Validate checkboxes
     if (!termsChecked) {
       toast.error(t('auth.acceptTerms'));
       return;
     }
-    
-    if (!publicDPAChecked) {
-      setPublicDPAError(t('auth.acceptPublicDPA'));
-      toast.error(t('auth.acceptPublicDPA'));
-      return;
-    }
-    
-    setPublicDPAError('');
     setIsSendingCode(true);
     try {
       await sendVerificationCode({ email: data.email, username: data.username });
@@ -472,7 +461,7 @@ const Register = () => {
           </div>
         </div>
 
-        {/* Terms & Public DPA */}
+        {/* Terms, Privacy Policy & Public DPA */}
         <div className="space-y-3 pt-2">
           <label className="flex items-start gap-3 cursor-pointer group">
             <div className="relative mt-0.5">
@@ -489,43 +478,12 @@ const Register = () => {
             <span className="text-xs text-slate-600 font-medium leading-relaxed group-hover:text-slate-700 transition-colors">
               {t('auth.termsAgree')}{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.terms')}</a>
-              {' '}{t('auth.and')}{' '}
+              {', '}
               <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.privacyPolicy')}</a>
+              {' '}{t('auth.and')}{' '}
+              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.publicDPA')}</a>
             </span>
           </label>
-
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <div className="relative mt-0.5">
-              <input 
-                type="checkbox" 
-                checked={publicDPAChecked}
-                onChange={(e) => {
-                  setPublicDPAChecked(e.target.checked);
-                  if (e.target.checked) setPublicDPAError('');
-                }}
-                className="sr-only peer"
-              />
-              <div className={`w-5 h-5 border-2 rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center ${
-                publicDPAError ? 'border-red-500' : 'border-slate-300'
-              }`}>
-                {publicDPAChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
-              </div>
-            </div>
-            <span className={`text-xs font-medium leading-relaxed group-hover:text-slate-700 transition-colors ${
-              publicDPAError ? 'text-red-500' : 'text-slate-600'
-            }`}>
-              {t('auth.termsAgree')}{' '}
-              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className={`font-bold hover:underline underline-offset-2 transition-colors ${
-                publicDPAError ? 'text-red-600 hover:text-red-700' : 'text-orange-600 hover:text-orange-700'
-              }`}>{t('auth.publicDPA')}</a>
-            </span>
-          </label>
-          {publicDPAError && (
-            <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-              <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
-              {publicDPAError}
-            </p>
-          )}
         </div>
 
         {/* Submit button */}
