@@ -197,6 +197,206 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
   };
 }
 
+// ─── Welcome Email ────────────────────────────────────────────────────────────
+
+export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }) {
+  const displayName = fullName || email.split('@')[0];
+  const planSection = planName ? `
+    <!-- Plan Info -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px;text-align:center">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;text-transform:uppercase;letter-spacing:.5px">Gói của bạn</p>
+          <p style="margin:0;font-size:18px;font-weight:700;color:#15803d">${planName}</p>
+        </td>
+      </tr>
+    </table>
+  ` : '';
+
+  const content = `
+    <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${displayName}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Chào mừng bạn đến với <strong>${SENDER_NAME}</strong>! Tài khoản của bạn đã được tạo thành công.
+    </p>
+
+    ${planSection}
+
+    <!-- Features Preview -->
+    <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.5px">
+      Bạn có thể làm gì với ${SENDER_NAME}?
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+      <tr>
+        <td width="50%" style="padding-right:8px;vertical-align:top">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:#f9fafb;border-radius:8px;padding:14px">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#374151">📧 Gửi Email Marketing</p>
+              <p style="margin:0;font-size:12px;color:#6b7280">Tạo và gửi chiến dịch email hàng loạt với template chuyên nghiệp</p>
+            </td></tr>
+          </table>
+        </td>
+        <td width="50%" style="padding-left:8px;vertical-align:top">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:#f9fafb;border-radius:8px;padding:14px">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#374151">💬 Zalo OA Marketing</p>
+              <p style="margin:0;font-size:12px;color:#6b7280">Kết nối Zalo Official Account và gửi tin nhắn hàng loạt</p>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px">
+      <tr>
+        <td width="50%" style="padding-right:8px;vertical-align:top">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:#f9fafb;border-radius:8px;padding:14px">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#374151">🤖 AI Assistant</p>
+              <p style="margin:0;font-size:12px;color:#6b7280">Sử dụng AI để tạo nội dung email, Zalo message tự động</p>
+            </td></tr>
+          </table>
+        </td>
+        <td width="50%" style="padding-left:8px;vertical-align:top">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:#f9fafb;border-radius:8px;padding:14px">
+              <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#374151">📊 Báo cáo chi tiết</p>
+              <p style="margin:0;font-size:12px;color:#6b7280">Theo dõi tỷ lệ mở email, click, reply và hiệu suất chiến dịch</p>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${loginUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Bắt đầu ngay →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Help -->
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu cần hỗ trợ, liên hệ <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none">support@digiso.vn</a> hoặc
+      xem <a href="${FRONTEND_URL}/docs" style="color:#f97316;text-decoration:none">tài liệu hướng dẫn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `Chào mừng đến với ${SENDER_NAME}!`,
+    html: buildBaseTemplate({
+      subtitle: 'Chào mừng bạn!',
+      content,
+      footerNote: 'Email này được gửi tự động từ hệ thống.',
+    }),
+  };
+}
+
+// ─── Payment Success Email ────────────────────────────────────────────────────
+
+export function buildPaymentSuccessEmail({ fullName, email, planName, amount, billingPeriod, orderCode, paymentMethod, expiresAt, invoiceUrl }) {
+  const amountFormatted = new Intl.NumberFormat('vi-VN').format(amount);
+  const periodLabel = billingPeriod === 'yearly' ? 'năm' : 'tháng';
+  const expiresStr = new Date(expiresAt).toLocaleDateString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+  const methodLabel = paymentMethod === 'payos' ? 'PayOS (QR Code)' : paymentMethod === 'voucher' ? 'Voucher' : 'Thủ công';
+
+  const content = `
+    <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || email}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Cảm ơn bạn đã thanh toán! Chúng tôi đã nhận được thanh toán của bạn và gói <strong>${planName}</strong> đã được kích hoạt thành công.
+    </p>
+
+    <!-- Success Badge -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:20px;text-align:center">
+          <p style="margin:0 0 8px;font-size:32px">🎉</p>
+          <p style="margin:0;font-size:18px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:1px">
+            Thanh toán thành công!
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Order Details -->
+    <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.5px">
+      Chi tiết đơn hàng
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;margin-bottom:20px">
+      <tr>
+        <td style="padding:16px">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Mã đơn hàng</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">#${orderCode}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Gói dịch vụ</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${planName}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Chu kỳ thanh toán</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${periodLabel}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Phương thức</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${methodLabel}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Ngày hết hạn</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${expiresStr}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 0 0;font-size:15px;font-weight:600;color:#374151">Tổng thanh toán</td>
+              <td style="padding:12px 0 0;font-size:18px;font-weight:800;color:#f97316;text-align:right">${amountFormatted}đ</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Invoice CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${invoiceUrl}"
+             style="display:inline-block;background:#374151;color:#fff;font-size:14px;font-weight:600;
+                    padding:12px 28px;border-radius:8px;text-decoration:none">
+            📄 Tải hóa đơn
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Help -->
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu có thắc mắc về thanh toán, liên hệ <a href="mailto:billing@digiso.vn" style="color:#f97316;text-decoration:none">billing@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Thanh toán thành công - Gói ${planName}`,
+    html: buildBaseTemplate({
+      subtitle: 'Xác nhận thanh toán',
+      content,
+      footerNote: 'Email này là chứng từ thanh toán. Vui lòng lưu giữ để đối soát.',
+    }),
+  };
+}
+
 // ─── Maintenance Notice ───────────────────────────────────────────────────────
 
 export function buildMaintenanceEmail({ title, message, durationMinutes, startTime }) {

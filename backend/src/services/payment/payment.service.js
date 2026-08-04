@@ -1,7 +1,8 @@
-import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
+import { findPlanByCode, getPlanByUserId, findPlanById } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
 import db from '../../config/database.js';
 import { validateVoucherForCheckout } from '../voucher.service.js';
+import { sendSystemEmail, buildPaymentSuccessEmail } from '../../utils/systemEmail.util.js';
 import {
     createOrder,
     findOrderStatusByCode,
@@ -11,6 +12,9 @@ import {
     hasSuccessfulOrderForPlanByUser,
 } from '../../repositories/payment/payment.repository.js';
 import { redeemVoucherForOrder } from '../../repositories/voucher.repository.js';
+import { findActiveUserByEmail } from '../../repositories/user/user.repository.js';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -142,6 +146,26 @@ export const handleWebhook = async (body) => {
             const userId = order.user_id || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
             if (userId && order.plan_id) {
                 await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
+
+                // Gửi email xác nhận thanh toán thành công (async)
+                const user = await findActiveUserByEmail(order.user_email);
+                const plan = await findPlanById(order.plan_id);
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + (plan?.duration_days || 30));
+
+                sendSystemEmail(
+                    buildPaymentSuccessEmail({
+                        fullName: user?.full_name,
+                        email: order.user_email,
+                        planName: plan?.name || 'Unknown Plan',
+                        amount: order.amount,
+                        billingPeriod: order.billing_period || 'monthly',
+                        orderCode: order.order_code,
+                        paymentMethod: order.payment_method,
+                        expiresAt,
+                        invoiceUrl: `${FRONTEND_URL}/invoices/${order.order_code}`,
+                    })
+                ).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
             } else {
                 console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
             }

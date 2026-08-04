@@ -11,6 +11,11 @@ export const findPlanByCode = async (code) => {
     return rows[0] || null;
 };
 
+export const findPlanById = async (id) => {
+    const { rows } = await db.query('SELECT * FROM plans WHERE id = $1', [id]);
+    return rows[0] || null;
+};
+
 export const findAllPlans = async () => {
     const { rows } = await db.query(
         'SELECT * FROM plans WHERE is_active = true AND is_custom = false ORDER BY price ASC'

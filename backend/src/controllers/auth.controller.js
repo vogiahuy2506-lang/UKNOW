@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
+import { sendSystemEmail, buildWelcomeEmail } from '../utils/systemEmail.util.js';
 import {
   findActiveUserByEmail,
   updatePasswordByEmail,
@@ -19,6 +20,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 const REFRESH_TOKEN_PATH = '/api/auth';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
 class AuthController {
   setRefreshTokenCookie(res, token, rememberMe = true) {
@@ -90,6 +92,16 @@ class AuthController {
       this.setRefreshTokenCookie(res, refreshToken);
 
       logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+
+      // Gửi Welcome Email (async, không block response)
+      const { full_name, email: userEmail } = user;
+      sendSystemEmail(
+        buildWelcomeEmail({
+          fullName: full_name,
+          email: userEmail,
+          loginUrl: `${FRONTEND_URL}/login`,
+        })
+      ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
 
       return res.status(201).json({
         success: true,
@@ -319,6 +331,16 @@ class AuthController {
           [username, email, passwordHash, name || null, picture || null]
         );
         user = insertResult.rows[0];
+
+        // Gửi Welcome Email cho user mới đăng ký qua Google (async)
+        const { full_name, email: userEmail } = user;
+        sendSystemEmail(
+          buildWelcomeEmail({
+            fullName: full_name,
+            email: userEmail,
+            loginUrl: `${FRONTEND_URL}/login`,
+          })
+        ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
       } else {
         user = result.rows[0];
 
