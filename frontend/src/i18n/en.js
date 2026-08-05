@@ -231,6 +231,7 @@ export default {
     siteHome: 'Home',
     sitePricing: 'Pricing',
     siteContact: 'Contact',
+    siteGuide: 'User Guide',
     businessProfile: 'Business Profile',
     inbox: 'Conversation History',
     chatHistory: 'Conversation History',

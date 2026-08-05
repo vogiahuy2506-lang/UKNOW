@@ -40,6 +40,7 @@ import {
   HiOutlinePlus,
   HiOutlineDocumentText,
   HiOutlineQuestionMarkCircle,
+  HiOutlineBookOpen,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -509,6 +510,9 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
           )}
           <div className="space-y-0.5">
             {[
+              // Đặt đầu nhóm: trước đây /huong-dan không có lối vào nào trong app,
+              // người dùng chỉ thấy tài liệu qua icon ? trên từng màn hình.
+              { name: t('nav.siteGuide'), path: '/huong-dan', icon: HiOutlineBookOpen },
               { name: t('nav.siteHome'), path: '/', icon: HiOutlineHome },
               { name: t('nav.sitePricing'), path: '/pricing', icon: HiOutlineTag },
               { name: t('nav.siteContact'), path: '/contact', icon: HiOutlinePhone },

@@ -231,6 +231,7 @@ export default {
     siteHome: 'Trang chủ',
     sitePricing: 'Bảng giá',
     siteContact: 'Liên hệ',
+    siteGuide: 'Hướng dẫn sử dụng',
     businessProfile: 'Hồ sơ doanh nghiệp',
     chatbotStudio: 'Tạo AI Chatbot',
     inbox: 'Lịch sử trò chuyện',
