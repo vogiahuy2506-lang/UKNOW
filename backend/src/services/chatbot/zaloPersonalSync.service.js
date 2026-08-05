@@ -16,6 +16,32 @@ import {
   isPlaceholderGroupName,
 } from '../../utils/zaloGroupName.util.js';
 
+/** Log từng nhóm chỉ khi bật cờ — cron 10 phút/lần sẽ ngập log nếu để mặc định. */
+const SYNC_VERBOSE = String(process.env.ZALO_SYNC_VERBOSE || '').toLowerCase() === 'true';
+
+/** Số lần 404 liên tiếp trước khi ngừng thử lại một nhóm. */
+const GROUP_404_STRIKES = 3;
+/** Thời gian tạm bỏ qua nhóm đã 404 quá số lần cho phép. */
+const GROUP_404_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Nhóm không truy cập được (đã rời, đã giải tán, hoặc id cũ trong DB).
+ * Giữ trong RAM: mất khi restart là chấp nhận được — tệ nhất là thử lại một vòng.
+ * key = `${accountId}:${groupId}` → { strikes, skipUntil }
+ */
+const unavailableGroups = new Map();
+
+/** @returns {boolean} true nếu lỗi là 404 từ Zalo (nhóm không còn truy cập được). */
+function isGroupNotFoundError(error) {
+  if (error?.response?.status === 404) return true;
+  return /status code 404/i.test(String(error?.message || ''));
+}
+
+/** @internal test helper — Map sống theo vòng đời tiến trình nên phải dọn giữa các bài test. */
+export function _resetGroupAvailabilityForTests() {
+  unavailableGroups.clear();
+}
+
 class ZaloPersonalSyncService {
   /**
    * Get active zca-js API for an account
@@ -217,13 +243,17 @@ class ZaloPersonalSyncService {
     try {
       // For group messages, use getGroupChatHistory
       if (isGroup) {
-        console.log(`[ZaloSync] Calling api.getGroupChatHistory(${externalId}, ${limit})...`);
-        
+        if (SYNC_VERBOSE) {
+          console.log(`[ZaloSync] Calling api.getGroupChatHistory(${externalId}, ${limit})...`);
+        }
+
         // zca-js getGroupChatHistory signature: getGroupChatHistory(groupId, limit, beforeMsgId?)
         const history = await api.getGroupChatHistory(externalId, limit, beforeMsgId);
-        
-        console.log(`[ZaloSync] getGroupChatHistory returned ${history?.length || 0} messages`);
-        
+
+        if (SYNC_VERBOSE) {
+          console.log(`[ZaloSync] getGroupChatHistory returned ${history?.length || 0} messages`);
+        }
+
         // Save to database
         const saved = await this.saveGroupChatHistory(accountId, userId, externalId, history || []);
         
@@ -244,7 +274,12 @@ class ZaloPersonalSyncService {
         type: 'personal'
       };
     } catch (error) {
-      console.error('[ZaloSync] Error syncing chat history:', error.message);
+      // 404 = nhóm không còn truy cập được. Chỗ gọi gộp lại thành một dòng tổng kết,
+      // không log từng nhóm — trước đây việc này đẩy log container xoay vòng liên tục
+      // và làm mất các dòng chẩn đoán khác.
+      if (!isGroupNotFoundError(error)) {
+        console.error(`[ZaloSync] Lỗi đồng bộ lịch sử nhóm ${externalId}:`, error.message);
+      }
       throw error;
     }
   }
@@ -469,21 +504,49 @@ class ZaloPersonalSyncService {
     }
 
     const groupIds = await this.listKnownGroupIds(accountId);
-    const results = { totalGroups: groupIds.length, synced: 0, errors: [], skipped: false };
+    const results = {
+      totalGroups: groupIds.length,
+      synced: 0,
+      errors: [],
+      skipped: false,
+      notFound: 0,
+      cooledDown: 0,
+    };
+    const now = Date.now();
 
     for (const groupId of groupIds) {
+      const key = `${accountId}:${groupId}`;
+      const state = unavailableGroups.get(key);
+      if (state?.skipUntil && state.skipUntil > now) {
+        results.cooledDown += 1;
+        continue;
+      }
+
       try {
-        const result = await this.syncChatHistory(
-          accountId,
-          userId,
-          groupId,
-          true,
-          { limit }
-        );
+        const result = await this.syncChatHistory(accountId, userId, groupId, true, { limit });
         results.synced += result.synced || 0;
+        unavailableGroups.delete(key); // gọi được → xoá lịch sử 404
       } catch (err) {
+        if (isGroupNotFoundError(err)) {
+          const strikes = (state?.strikes || 0) + 1;
+          unavailableGroups.set(key, {
+            strikes,
+            skipUntil: strikes >= GROUP_404_STRIKES ? now + GROUP_404_COOLDOWN_MS : 0,
+          });
+          results.notFound += 1;
+          continue;
+        }
         results.errors.push({ groupId, error: err.message });
       }
+    }
+
+    // Một dòng tổng kết cho cả tài khoản, thay vì một dòng cho mỗi nhóm.
+    if (results.notFound || results.errors.length || results.synced) {
+      console.log(
+        `[ZaloSync] account=${accountId}: synced=${results.synced} ` +
+          `nhóm=${results.totalGroups} khôngTồnTại=${results.notFound} ` +
+          `tạmBỏQua=${results.cooledDown} lỗiKhác=${results.errors.length}`
+      );
     }
     return results;
   }

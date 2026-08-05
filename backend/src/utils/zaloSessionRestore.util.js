@@ -56,6 +56,46 @@ function deserializeCookieSource(cookieText) {
 /**
  * Normalize credentials từ cookie source
  */
+/**
+ * Ép cookie về đúng hình dạng zca-js chấp nhận.
+ *
+ * `Zalo.parseCookies` (node_modules/zca-js/dist/zalo.js:14-16) làm:
+ *   const cookieArr = Array.isArray(cookie) ? cookie : cookie.cookies;
+ *   cookieArr.forEach(...)
+ *
+ * Nên bất cứ thứ gì không phải mảng và không có `.cookies` đều ném
+ * `Cannot read properties of undefined (reading 'forEach')` — kể cả một chuỗi.
+ * `validateParams` của zca-js chỉ kiểm `!credentials.cookie` nên không chặn được.
+ *
+ * @param {unknown} cookie
+ * @returns {Array|{cookies: Array}|null} null nếu không thể dùng để đăng nhập
+ */
+function toZcaCookieShape(cookie) {
+  if (!cookie) return null;
+
+  if (Array.isArray(cookie)) return cookie.length ? cookie : null;
+
+  if (typeof cookie === 'string') {
+    const text = cookie.trim();
+    if (!text.startsWith('{') && !text.startsWith('[')) return null;
+    try {
+      return toZcaCookieShape(JSON.parse(text));
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof cookie === 'object') {
+    if (Array.isArray(cookie.cookies)) return cookie.cookies.length ? cookie : null;
+    if (Array.isArray(cookie.cookie)) return cookie.cookie.length ? cookie.cookie : null;
+  }
+
+  return null;
+}
+
+/** @internal test helper */
+export const _toZcaCookieShapeForTests = toZcaCookieShape;
+
 function normalizeLoginCredentials(source) {
   if (!source) return null;
 
@@ -64,9 +104,13 @@ function normalizeLoginCredentials(source) {
     safeObject?.userAgent || safeObject?.user_agent || safeObject?.ua || ''
   ).trim() || DEFAULT_USER_AGENT;
   const language = String(safeObject?.language || '').trim() || DEFAULT_LANGUAGE;
-  const cookie = safeObject
+  const rawCookie = safeObject
     ? (safeObject.cookie || safeObject.cookies || null)
     : source;
+
+  // Bỏ hẳn ứng viên không đúng hình dạng: gọi login với nó thì chắc chắn nổ
+  // TypeError, và lỗi đó che mất nguyên nhân thật (cookie hết hạn → cần quét QR).
+  const cookie = toZcaCookieShape(rawCookie);
   if (!cookie) return null;
 
   const imei = String(safeObject?.imei || '').trim() || buildImeiFromUserAgent(userAgent);
@@ -187,7 +231,13 @@ async function loginWithStrategies(credentials) {
       return api;
     }
   } catch (error) {
-    console.warn('[ZaloRestore] ❌ SDK login failed:', error.message);
+    // Dịch TypeError của zca-js thành thông điệp nói đúng việc phải làm.
+    // Không có dòng này thì log chỉ hiện "Cannot read properties of undefined
+    // (reading 'forEach')" — không ai đoán được là cookie sai định dạng.
+    const message = /reading 'forEach'/.test(String(error?.message || ''))
+      ? 'Cookie sai định dạng (zca-js cần mảng cookie hoặc { cookies: [...] }) — cần quét QR đăng nhập lại'
+      : error.message;
+    console.warn('[ZaloRestore] ❌ SDK login failed:', message);
     if (isQrSessionTimeoutIssue(error)) {
       return null; // Don't retry on session timeout
     }

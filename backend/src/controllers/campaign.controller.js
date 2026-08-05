@@ -617,6 +617,18 @@ class CampaignController {
         }
       });
 
+      // Khởi động chiến dịch TRƯỚC khi ghi nhật ký.
+      // Trước đây `await logWorkspace(...)` nằm ở giữa: nó chen một vòng đi-về DB vào
+      // giữa lúc đã trả 200 "Đã bắt đầu chạy" và lúc thật sự chạy. Hệ quả là chiến dịch
+      // khởi động muộn hơn thời điểm người dùng được báo, và nếu câu ghi nhật ký treo
+      // (pool cạn — đúng lúc chạy chiến dịch là lúc pool căng nhất) thì chiến dịch KHÔNG
+      // BAO GIỜ chạy dù API đã báo thành công; try/catch bắt được lỗi ném ra nhưng không
+      // bắt được treo.
+      const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
+      this.executeCampaign(campaignId, runRecord.id, executionUserId, roleCode).catch(error => {
+        console.error('Execute campaign error:', error);
+      });
+
       try {
         await logWorkspace(
           getWorkspaceAuditContext(req),
@@ -628,11 +640,6 @@ class CampaignController {
       } catch (auditErr) {
         console.warn('[Campaign] CAMPAIGN_RUN_STARTED audit failed:', auditErr?.message);
       }
-
-      const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
-      this.executeCampaign(campaignId, runRecord.id, executionUserId, roleCode).catch(error => {
-        console.error('Execute campaign error:', error);
-      });
     } catch (error) {
       console.error('Run campaign error:', error);
       const statusCode = error.statusCode || 500;

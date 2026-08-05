@@ -126,9 +126,23 @@ const stopAllCampaignScheduleTasks = () => {
 
 const triggerCampaignSchedule = async (schedule) => {
   try {
-    if (!schedule?.id_campaign || !schedule?.id_user) return;
+    // Hai nhánh dưới đây trước kia return im lặng — khi lịch không chạy, log không để lại
+    // dấu vết nào và không thể phân biệt "cron không bắn" với "cron bắn rồi bị bỏ qua".
+    if (!schedule?.id_campaign || !schedule?.id_user) {
+      console.warn(
+        `[Scheduler] Bỏ qua schedule #${schedule?.id ?? '?'}: thiếu id_campaign hoặc id_user ` +
+          `(id_campaign=${schedule?.id_campaign ?? 'null'}, id_user=${schedule?.id_user ?? 'null'})`
+      );
+      return;
+    }
     const isCustomSchedule = String(schedule?.schedule_type || '').toLowerCase() === 'custom';
     if (isCustomSchedule && !shouldTriggerCustomScheduleToday(schedule)) {
+      console.log(
+        `[Scheduler] Bỏ qua schedule #${schedule.id} (custom chưa tới chu kỳ): ` +
+          `cron="${schedule.cron_expression}", ` +
+          `mốc neo=${schedule.last_run_at ? 'last_run_at' : 'created_at'} ` +
+          `${schedule.last_run_at || schedule.created_at}`
+      );
       return;
     }
     console.log(
