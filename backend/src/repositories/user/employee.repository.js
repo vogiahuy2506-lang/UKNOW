@@ -190,7 +190,27 @@ export async function updateEmployeeSendLimits(employeeId, ownerId, {
   return result.rows[0] || null;
 }
 
-export async function findTeamOverview(ownerId) {
+export async function findOwnerIdForEmployee(employeeId) {
+  const { rows } = await db.query(
+    `SELECT owner_id AS "ownerId"
+     FROM user_members
+     WHERE employee_id = $1
+       AND status = 'active'
+     ORDER BY updated_at DESC NULLS LAST, created_at DESC, owner_id ASC
+     LIMIT 1`,
+    [employeeId]
+  );
+  return rows[0]?.ownerId ? Number(rows[0].ownerId) : null;
+}
+
+export async function findTeamOverview(ownerId, { employeeId = null } = {}) {
+  const params = [ownerId];
+  let employeeFilter = '';
+  if (employeeId != null) {
+    params.push(employeeId);
+    employeeFilter = ` AND um.employee_id = $${params.length}`;
+  }
+
   const { rows } = await db.query(
     `SELECT
        u.id,
@@ -220,20 +240,47 @@ export async function findTeamOverview(ownerId) {
          WHERE cr.started_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        ), 0)::int                                                    AS "failedThisMonth",
 
-       MAX(cr.started_at)                                            AS "lastActiveAt"
+       MAX(cr.started_at)                                            AS "lastActiveAt",
+
+       (
+         SELECT COUNT(*)::int
+         FROM audit_logs al
+         WHERE al.id_user = u.id
+           AND al.owner_id = $1
+           AND al.action IN ('EMAIL_TEMPLATE_CREATED', 'ZALO_TEMPLATE_CREATED')
+           AND al.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       )                                                             AS "templatesThisMonth",
+
+       (
+         SELECT COALESCE(SUM(ABS(ul.delta)), 0)::int
+         FROM usage_logs ul
+         WHERE ul.actor_user_id = u.id
+           AND ul.resource_type = 'ai_credit'
+           AND ul.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       )                                                             AS "aiCreditsThisMonth"
 
      FROM user_members um
      JOIN users u ON u.id = um.employee_id
      LEFT JOIN campaigns c ON c.id_user = um.employee_id
      LEFT JOIN campaign_runs cr ON cr.id_campaign = c.id
-     WHERE um.owner_id = $1
+     WHERE um.owner_id = $1${employeeFilter}
      GROUP BY u.id, u.username, u.full_name, u.avatar_url, u.status,
               um.status, um.daily_email_limit, um.monthly_email_limit,
               um.daily_zalo_limit, um.monthly_zalo_limit
      ORDER BY u.username`,
-    [ownerId]
+    params
   );
-  return rows;
+
+  return rows.map((row) => {
+    const sends = Number(row.sendsThisMonth || 0);
+    const failed = Number(row.failedThisMonth || 0);
+    const denom = sends + failed;
+    return {
+      ...row,
+      successRate: denom > 0 ? Math.round((sends / denom) * 1000) / 10 : null,
+      attributionNote: 'Theo người tạo chiến dịch (chưa đủ dữ liệu triggered_by)',
+    };
+  });
 }
 
 export async function removeEmployee(employeeId, ownerId) {

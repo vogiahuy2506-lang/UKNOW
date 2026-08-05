@@ -476,10 +476,12 @@ CREATE TABLE campaign_runs (
   skipped_sends     INTEGER      NOT NULL DEFAULT 0,
   error_message     TEXT,
   run_metadata      JSONB        NOT NULL DEFAULT '{}',
+  triggered_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
 CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
+CREATE INDEX idx_campaign_runs_triggered_by ON campaign_runs (triggered_by) WHERE triggered_by IS NOT NULL;
 
 -- Campaign executions — log từng node được engine xử lý cho mỗi customer/run.
 -- Bảng tối thiểu để GET /api/campaign-runs/:id không 500 khi chưa có run nào.
@@ -925,6 +927,7 @@ CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
 CREATE TABLE usage_logs (
   id            BIGSERIAL PRIMARY KEY,
   id_user       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   resource_type VARCHAR(50) NOT NULL,
   delta         INTEGER NOT NULL DEFAULT 1,
   period_start  TIMESTAMPTZ NOT NULL,
@@ -935,6 +938,7 @@ CREATE TABLE usage_logs (
 CREATE INDEX idx_usage_logs_user ON usage_logs(id_user);
 CREATE INDEX idx_usage_logs_resource ON usage_logs(resource_type);
 CREATE INDEX idx_usage_logs_period ON usage_logs(period_start, period_end);
+CREATE INDEX idx_usage_logs_actor ON usage_logs (actor_user_id) WHERE actor_user_id IS NOT NULL;
 
 -- ─── Dashboard insights (Gemini AI persistence) ───────────────────────
 CREATE TABLE dashboard_insights (
@@ -1284,6 +1288,50 @@ CREATE TABLE help_unanswered (
 );
 
 CREATE INDEX idx_help_unanswered_asked ON help_unanswered (asked_at DESC);
+
+-- ─── Alerts + cron status (migration 104) ──────────────────────────────
+CREATE TABLE alert_rules (
+  id                SERIAL PRIMARY KEY,
+  code              VARCHAR(64) NOT NULL UNIQUE,
+  name              TEXT NOT NULL,
+  description       TEXT,
+  threshold_value   NUMERIC,
+  window_minutes    INT,
+  channel           VARCHAR(32) NOT NULL DEFAULT 'email',
+  severity          VARCHAR(16) NOT NULL DEFAULT 'warning',
+  enabled           BOOLEAN NOT NULL DEFAULT TRUE,
+  cooldown_minutes  INT NOT NULL DEFAULT 60,
+  config            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE alert_events (
+  id              BIGSERIAL PRIMARY KEY,
+  rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+  fired_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  measured_value  NUMERIC,
+  message         TEXT,
+  payload         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  resolved        BOOLEAN NOT NULL DEFAULT FALSE,
+  resolved_at     TIMESTAMPTZ,
+  resolved_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  notified        BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX idx_alert_events_rule_fired ON alert_events (rule_id, fired_at DESC);
+CREATE INDEX idx_alert_events_unresolved ON alert_events (resolved, fired_at DESC) WHERE resolved = FALSE;
+
+CREATE TABLE cron_job_runs (
+  id             BIGSERIAL PRIMARY KEY,
+  job_code       VARCHAR(64) NOT NULL,
+  started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at    TIMESTAMPTZ,
+  duration_ms    INT,
+  status         VARCHAR(32) NOT NULL,
+  result         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error_message  TEXT
+);
+CREATE INDEX idx_cron_job_runs_job_started ON cron_job_runs (job_code, started_at DESC);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

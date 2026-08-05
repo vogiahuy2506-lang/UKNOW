@@ -8,12 +8,23 @@ import * as employeeController from '../controllers/employee.controller.js';
 const router = express.Router();
 
 // Tất cả routes yêu cầu đăng nhập.
-// Chỉ super_admin và user_admin mới quản lý được nhân viên.
 router.use(authMiddleware);
+
+// D4 — employee may view own contribution (owner_id from token/membership only)
+router.get(
+  '/contribution/me',
+  requireRole('admin', 'user', 'employee'),
+  employeeController.myContribution
+);
+
+// Chỉ super_admin và user_admin mới quản lý được nhân viên.
 router.use(requireRole('admin', 'user'));
 
 // GET /api/employees
 router.get('/', employeeController.getEmployees);
+
+// GET /api/employees/contribution — đóng góp team (owner); ownerId từ token only
+router.get('/contribution', employeeController.teamContribution);
 
 // GET /api/employees/team-overview — tổng quan hoạt động toàn team (read-only)
 router.get('/team-overview', employeeController.teamOverview);

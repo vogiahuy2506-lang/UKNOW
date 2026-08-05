@@ -226,8 +226,52 @@ export async function resetEmployeePassword(req, res) {
  */
 export async function teamOverview(req, res) {
   try {
+    // owner_id from token only — never from query/body
+    if (req.user.activeContext?.type === 'employee') {
+      return res.status(403).json({ success: false, message: 'Chỉ chủ workspace xem được tổng quan team' });
+    }
     const ownerId = req.user.id;
     const data = await employeeService.getTeamOverview(ownerId);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * GET /api/employees/contribution
+ * Đóng góp nhân viên — chủ workspace xem toàn team.
+ * Ranh giới quyền (PLAN_DO_LUONG_KPI): ownerId LUÔN từ token, tuyệt đối không đọc query/body.
+ */
+export async function teamContribution(req, res) {
+  try {
+    if (req.user.activeContext?.type === 'employee') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ chủ workspace xem được đóng góp team',
+      });
+    }
+    // Ignore client-supplied ownerId (query/body) — intentional security boundary.
+    void req.query?.ownerId;
+    void req.body?.ownerId;
+    const ownerId = req.user.id;
+    const data = await employeeService.getTeamOverview(ownerId);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * GET /api/employees/contribution/me
+ * Nhân viên xem số của chính mình (D4).
+ */
+export async function myContribution(req, res) {
+  try {
+    const data = await employeeService.getMyContribution({
+      userId: req.user.id,
+      activeContext: req.user.activeContext,
+    });
     return res.json({ success: true, data });
   } catch (err) {
     return handleServiceError(res, err);

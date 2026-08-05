@@ -37,7 +37,7 @@ const DashboardSkeleton = () => (
 );
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-const KpiCard = ({ icon: Icon, label, value, sub, color = 'text-primary-600', bg = 'bg-primary-50' }) => (
+const KpiCard = ({ icon: Icon, label, value, sub, delta, color = 'text-primary-600', bg = 'bg-primary-50' }) => (
   <div className="card p-5 flex items-start gap-4">
     <div className={`${bg} rounded-xl p-3 shrink-0`}>
       <Icon className={`w-6 h-6 ${color}`} />
@@ -45,6 +45,11 @@ const KpiCard = ({ icon: Icon, label, value, sub, color = 'text-primary-600', bg
     <div className="min-w-0">
       <p className="text-sm text-gray-500 truncate">{label}</p>
       <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+      {delta != null && (
+        <p className={`text-xs mt-0.5 font-medium ${delta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          {delta >= 0 ? '+' : ''}{delta}% so với kỳ trước
+        </p>
+      )}
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </div>
   </div>
@@ -112,7 +117,7 @@ const AdminDashboard = () => {
     </div>
   );
 
-  const { kpi, monthlyRevenue, planDistribution, recentOrders, recentMembers } = data;
+  const { kpi, monthlyRevenue, planDistribution, recentOrders, recentMembers, dataSince, dataSinceNote } = data;
 
   const chartRevenue = monthlyRevenue.map((r) => ({
     month:   r.month,
@@ -133,6 +138,11 @@ const AdminDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('adminDashboard.title')}</h1>
           <p className="text-gray-500 mt-1">{t('adminDashboard.description')}</p>
+          {(dataSince || dataSinceNote) && (
+            <p className="text-xs text-amber-700 mt-1">
+              {dataSince ? `Dữ liệu từ ${dataSince}. ` : ''}{dataSinceNote || ''}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -157,28 +167,30 @@ const AdminDashboard = () => {
           icon={HiOutlineUsers}
           label={t('adminDashboard.activeMembers')}
           value={fmt(kpi.activeMembers)}
-          sub={`/ ${fmt(kpi.totalMembers)} ${t('adminDashboard.totalMembers')}`}
+          sub={`/ ${fmt(kpi.totalMembers)} ${t('adminDashboard.totalMembers')} · Paying ${fmt(kpi.payingActiveMembers)}`}
           color="text-blue-600" bg="bg-blue-50"
         />
         <KpiCard
           icon={HiOutlineCurrencyDollar}
           label={t('adminDashboard.revenueThisMonth')}
           value={fmtVnd(kpi.revenueThisMonth)}
+          delta={kpi.revenueMomPct}
           sub={`${fmt(kpi.completedOrdersThisMonth)} ${t('adminDashboard.ordersCompletedThisMonth')}`}
           color="text-green-600" bg="bg-green-50"
         />
         <KpiCard
           icon={HiOutlineClipboardList}
-          label={t('adminDashboard.ordersThisMonthLabel')}
-          value={fmt(kpi.ordersThisMonth)}
-          sub={`${fmt(kpi.pendingOrdersThisMonth)} ${t('adminDashboard.pendingOrdersThisMonth')}`}
+          label="Đăng ký mới"
+          value={fmt(kpi.newMembersThisMonth)}
+          delta={kpi.newMembersMomPct}
+          sub={`${fmt(kpi.ordersThisMonth)} đơn tháng này`}
           color="text-orange-600" bg="bg-orange-50"
         />
         <KpiCard
           icon={HiOutlineChartBar}
-          label={t('adminDashboard.totalEmployees')}
-          value={fmt(kpi.totalEmployees)}
-          sub={`${fmt(kpi.totalMembers)} ${t('adminDashboard.accountOwners')}`}
+          label="Kích hoạt / Rời bỏ"
+          value={kpi.activationRate != null ? `${kpi.activationRate}%` : '—'}
+          sub={`Churn ${kpi.churnRate ?? 0}% · ${fmt(kpi.churnedThisMonth)} hết hạn tháng này`}
           color="text-purple-600" bg="bg-purple-50"
         />
       </div>

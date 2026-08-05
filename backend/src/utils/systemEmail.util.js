@@ -465,3 +465,54 @@ export function buildMaintenanceEmail({ title, message, durationMinutes, startTi
     }),
   };
 }
+
+// ─── Ops Alert (PLAN_DO_LUONG_KPI Phần A5) ────────────────────────────────────
+
+export function buildAlertEmail({ ruleName, severity, message, measuredValue, alertsUrl }) {
+  const isCritical = severity === 'critical';
+  const accent = isCritical ? '#dc2626' : '#d97706';
+  const badgeBg = isCritical ? '#fef2f2' : '#fff7ed';
+  const badgeBorder = isCritical ? '#fecaca' : '#fed7aa';
+  const badgeText = isCritical ? '#991b1b' : '#92400e';
+  const measured = measuredValue == null ? '—' : String(measuredValue);
+
+  const content = `
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6">
+      Quy tắc <strong style="color:${accent}">${ruleName || 'Cảnh báo'}</strong> vừa kích hoạt.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:${badgeBg};border:2px solid ${badgeBorder};border-radius:12px;margin-bottom:20px">
+      <tr>
+        <td style="padding:14px 18px;text-align:center">
+          <p style="margin:0;font-size:12px;font-weight:600;color:${badgeText};text-transform:uppercase;letter-spacing:.5px">
+            ${isCritical ? 'Nghiêm trọng' : 'Cảnh báo'} · Giá trị đo
+          </p>
+          <p style="margin:6px 0 0;font-size:28px;font-weight:800;color:${accent};line-height:1">${measured}</p>
+        </td>
+      </tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Chi tiết</p>
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap">${message || ''}</p>
+        </td>
+      </tr>
+    </table>
+    ${alertsUrl ? `
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center">
+          <a href="${alertsUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px">
+            Mở trung tâm cảnh báo
+          </a>
+        </td>
+      </tr>
+    </table>` : ''}
+  `;
+
+  return buildBaseTemplate({
+    subtitle: 'Cảnh báo vận hành',
+    content,
+    footerNote: 'Email này gửi tới siêu quản trị. Có thể tắt/chỉnh ngưỡng tại /admin/alerts.',
+  });
+}

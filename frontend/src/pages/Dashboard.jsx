@@ -23,6 +23,7 @@ import DashboardTopCharts from '../features/dashboard/components/DashboardTopCha
 import DashboardChannelBreakdownCharts from '../features/dashboard/components/DashboardChannelBreakdownCharts';
 import DashboardPrintLayout from '../features/dashboard/components/DashboardPrintLayout';
 import DashboardLandingPagesStats from '../features/dashboard/components/DashboardLandingPagesStats';
+import EmployeeMyContributionCard from '../components/EmployeeMyContributionCard';
 import LandingPagesAdminStatsCharts from '../features/landing-pages/components/LandingPagesAdminStatsCharts.jsx';
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
@@ -420,6 +421,8 @@ const Dashboard = () => {
           {errorMessage}
         </div>
       )}
+
+      <EmployeeMyContributionCard />
 
       {/* Nhắc khi đang xem bản insight đã lưu (có thể lệch với bộ lọc hiện tại) */}
       {insightViewSource === 'stored' && insights && (

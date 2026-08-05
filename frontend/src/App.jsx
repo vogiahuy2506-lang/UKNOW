@@ -69,6 +69,11 @@ import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
 import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
 import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
 import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
+import AdminAlertsPage from './pages/admin/AdminAlertsPage';
+import AdminFunnelPage from './pages/admin/AdminFunnelPage';
+import AdminSystemHealthPage from './pages/admin/AdminSystemHealthPage';
+import AdminCronStatusPanel from './pages/admin/AdminCronStatusPanel';
+import AdminAiOpsPage from './pages/admin/AdminAiOpsPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
 import NotificationCenter from './pages/admin/NotificationCenter';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
@@ -370,15 +375,27 @@ function App() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
-            <Route path="system" element={<AdminSystemPage />} />
-            <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
-            <Route path="ai-usage" element={<AdminAiUsagePage />} />
+            <Route path="alerts" element={<AdminAlertsPage />} />
+            <Route path="funnel" element={<AdminFunnelPage />} />
+            <Route path="health" element={<AdminSystemHealthPage />}>
+              <Route path="system" element={<AdminSystemPage />} />
+              <Route path="delivery" element={<AdminDeliveryMonitorPage />} />
+              <Route path="diagnostic" element={<DiagnosticPage />} />
+              <Route path="cron" element={<AdminCronStatusPanel />} />
+            </Route>
+            <Route path="ai-ops" element={<AdminAiOpsPage />}>
+              <Route path="usage" element={<AdminAiUsagePage />} />
+              <Route path="unanswered" element={<AdminHelpUnansweredPage />} />
+            </Route>
+            <Route path="system" element={<Navigate to="/admin/health/system" replace />} />
+            <Route path="delivery-monitor" element={<Navigate to="/admin/health/delivery" replace />} />
+            <Route path="diagnostic" element={<Navigate to="/admin/health/diagnostic" replace />} />
+            <Route path="ai-usage" element={<Navigate to="/admin/ai-ops/usage" replace />} />
+            <Route path="help-unanswered" element={<Navigate to="/admin/ai-ops/unanswered" replace />} />
             <Route path="ai-models" element={<AdminAiModelsPage />} />
             <Route path="help-articles" element={<AdminHelpArticlesPage />} />
             <Route path="help-articles/:id" element={<AdminHelpArticleEditPage />} />
-            <Route path="help-unanswered" element={<AdminHelpUnansweredPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
-            <Route path="diagnostic" element={<DiagnosticPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />
           </Route>

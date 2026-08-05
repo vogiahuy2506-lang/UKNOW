@@ -41,6 +41,8 @@ import {
   HiOutlineDocumentText,
   HiOutlineQuestionMarkCircle,
   HiOutlineBookOpen,
+  HiOutlineBell,
+  HiOutlineFilter,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -84,19 +86,25 @@ const superAdminMenuItems = (t) => [
   {
     name: t('nav.serverMonitoring'),
     section: t('nav.adminNavMonitoring'),
-    path: '/admin/system',
+    path: '/admin/health/system',
     icon: HiOutlineServer,
   },
   {
-    name: t('nav.deliveryMonitoring'),
+    name: t('nav.alertCenter'),
     section: t('nav.adminNavMonitoring'),
-    path: '/admin/delivery-monitor',
-    icon: HiOutlineLightningBolt,
+    path: '/admin/alerts',
+    icon: HiOutlineBell,
+  },
+  {
+    name: t('nav.activationFunnel'),
+    section: t('nav.adminNavOverview'),
+    path: '/admin/funnel',
+    icon: HiOutlineFilter,
   },
   {
     name: t('nav.aiUsageAnalytics'),
     section: t('nav.adminNavMessaging'),
-    path: '/admin/ai-usage',
+    path: '/admin/ai-ops/usage',
     icon: HiOutlineSparkles,
   },
   {
@@ -118,22 +126,10 @@ const superAdminMenuItems = (t) => [
     icon: HiOutlineDocumentText,
   },
   {
-    name: t('nav.helpUnanswered'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/help-unanswered',
-    icon: HiOutlineQuestionMarkCircle,
-  },
-  {
     name: t('nav.systemAuditLogs'),
     section: t('nav.adminNavMonitoring'),
     path: '/admin/audit-logs',
     icon: HiOutlineClipboard,
-  },
-  {
-    name: t('nav.diagnosticTool'),
-    section: t('nav.adminNavMonitoring'),
-    path: '/admin/diagnostic',
-    icon: HiOutlinePhone,
   },
   {
     name: t('nav.landingCustomizer'),

@@ -515,6 +515,8 @@ class CampaignRunService {
         scheduleId,
         runType,
         runMetadata,
+        // Manual click → actor; scheduled → NULL (plan 0a)
+        triggeredBy: runType === 'manual' ? userId : null,
       });
 
       runRecord = {

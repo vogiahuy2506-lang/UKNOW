@@ -549,27 +549,40 @@ export const initScheduler = () => {
   const zaloBgSyncEnabled = String(process.env.ZALO_BG_SYNC_ENABLED ?? 'true').toLowerCase() !== 'false';
   if (zaloBgSyncEnabled) {
     const syncZaloPersonalGroupHistory = async () => {
+      const cronJobRunRepository = (await import('../repositories/admin/cronJobRun.repository.js'));
       try {
-        const zaloPersonalSyncService = (await import('../services/chatbot/zaloPersonalSync.service.js')).default;
-        const zaloAccountSessionService = (await import('../services/zalo/zaloAccountSession.service.js')).default;
-        const accounts = await zaloPersonalInboxService.getActiveZaloPersonalAccounts(true);
-        for (const acc of accounts) {
-          const accountId = acc.account_id;
-          const userId = acc.id_user;
-          try {
-            if (!zaloAccountSessionService.getAccountApi(accountId)) {
-              continue; // skip disconnected / no in-memory session
+        await cronJobRunRepository.recordRun('zalo_personal_bg_group_sync', async () => {
+          const zaloPersonalSyncService = (await import('../services/chatbot/zaloPersonalSync.service.js')).default;
+          const zaloAccountSessionService = (await import('../services/zalo/zaloAccountSession.service.js')).default;
+          const accounts = await zaloPersonalInboxService.getActiveZaloPersonalAccounts(true);
+          let synced = 0;
+          let totalGroups = 0;
+          let errors = 0;
+          let skipped = 0;
+          for (const acc of accounts) {
+            const accountId = acc.account_id;
+            const userId = acc.id_user;
+            try {
+              if (!zaloAccountSessionService.getAccountApi(accountId)) {
+                skipped += 1;
+                continue;
+              }
+              const result = await zaloPersonalSyncService.syncKnownGroupHistory(accountId, userId, { limit: 50 });
+              synced += Number(result.synced || 0);
+              totalGroups += Number(result.totalGroups || 0);
+              errors += result.errors?.length || 0;
+              if (result.synced > 0 || result.errors?.length) {
+                console.log(
+                  `[Scheduler] Zalo bg sync account=${accountId}: synced=${result.synced} groups=${result.totalGroups} errors=${result.errors?.length || 0}`
+                );
+              }
+            } catch (err) {
+              errors += 1;
+              console.error(`[Scheduler] Zalo bg sync account ${accountId} failed:`, err.message);
             }
-            const result = await zaloPersonalSyncService.syncKnownGroupHistory(accountId, userId, { limit: 50 });
-            if (result.synced > 0 || result.errors?.length) {
-              console.log(
-                `[Scheduler] Zalo bg sync account=${accountId}: synced=${result.synced} groups=${result.totalGroups} errors=${result.errors?.length || 0}`
-              );
-            }
-          } catch (err) {
-            console.error(`[Scheduler] Zalo bg sync account ${accountId} failed:`, err.message);
           }
-        }
+          return { synced, totalGroups, errors, skipped, accounts: accounts.length };
+        });
       } catch (error) {
         console.error('[Scheduler] Lỗi Zalo background group sync:', error.message);
       }
@@ -697,4 +710,16 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Custom Plan orphan cleanup: mỗi giờ phút 15');
+
+  // ── Ops alerts evaluator (PLAN_DO_LUONG_KPI Phần A) ─────────────────────────
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const { evaluateAllAlerts } = await import('../services/admin/alertEvaluator.service.js');
+      await evaluateAllAlerts();
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đánh giá cảnh báo:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Alert evaluator: mỗi 5 phút');
 };

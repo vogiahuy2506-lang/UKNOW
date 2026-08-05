@@ -44,8 +44,11 @@ class AiUsageMeterService {
     const totalTokens = Number(usage?.totalTokens) || 0;
     if (totalTokens <= 0) return;
 
+    const baseMeta = metadata && typeof metadata === 'object' ? metadata : {};
+    const actorUserId = baseMeta.actorUserId ?? userId;
     const usageMetadata = {
-      ...(metadata && typeof metadata === 'object' ? metadata : {}),
+      ...baseMeta,
+      actorUserId,
       promptTokens: Number(usage?.promptTokens) || 0,
       outputTokens: Number(usage?.outputTokens) || 0,
       totalTokens,

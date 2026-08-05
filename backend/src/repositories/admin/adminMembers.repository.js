@@ -41,9 +41,33 @@ export async function findAllMembers({ search, planId, status, expiry, role } = 
       `SELECT
          u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
          u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt",
+         u.last_login_at AS "lastLoginAt",
          p.name AS "planName",
          p.code AS "planCode",
-         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount"
+         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount",
+         (
+           SELECT COALESCE(SUM(cr.failed_sends), 0)::int
+           FROM campaigns c
+           JOIN campaign_runs cr ON cr.id_campaign = c.id
+           WHERE c.id_user = u.id
+             AND cr.started_at >= NOW() - INTERVAL '30 days'
+         ) AS "failedSends30d",
+         (
+           SELECT COALESCE(SUM(ABS(delta)), 0)::int
+           FROM usage_logs ul
+           WHERE ul.id_user = u.id
+             AND ul.resource_type = 'ai_credit'
+             AND ul.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+         ) AS "aiCreditsUsedThisMonth",
+         COALESCE(p.ai_credits_per_period, 0)::int AS "aiCreditsLimit",
+         CASE
+           WHEN u.last_login_at IS NULL THEN TRUE
+           WHEN u.last_login_at < NOW() - INTERVAL '21 days' THEN TRUE
+           WHEN u.subscription_expires_at IS NOT NULL
+             AND u.subscription_expires_at <= NOW() + INTERVAL '7 days'
+             AND u.subscription_expires_at > NOW() THEN TRUE
+           ELSE FALSE
+         END AS "churnRisk"
        FROM users u
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ${where}

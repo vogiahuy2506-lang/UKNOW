@@ -20,6 +20,12 @@ export async function getKpiStats() {
           AND COALESCE(payment_method, 'payos') != 'free'
           AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "revenueThisMonth",
+      (SELECT COALESCE(SUM(amount), 0) FROM orders
+        WHERE status = 'success'
+          AND COALESCE(payment_method, 'payos') != 'free'
+          AND DATE_TRUNC('month', created_at AT TIME ZONE $1)
+            = DATE_TRUNC('month', NOW() AT TIME ZONE $1) - INTERVAL '1 month'
+      ) AS "revenueLastMonth",
       (SELECT COUNT(*) FROM orders
         WHERE DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
       ) AS "ordersThisMonth",
@@ -28,7 +34,31 @@ export async function getKpiStats() {
       ) AS "completedOrdersThisMonth",
       (SELECT COUNT(*) FROM orders WHERE status = 'pending'
           AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "pendingOrdersThisMonth"
+      ) AS "pendingOrdersThisMonth",
+      (SELECT COUNT(*) FROM users WHERE role = 'user'
+          AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
+      ) AS "newMembersThisMonth",
+      (SELECT COUNT(*) FROM users WHERE role = 'user'
+          AND DATE_TRUNC('month', created_at AT TIME ZONE $1)
+            = DATE_TRUNC('month', NOW() AT TIME ZONE $1) - INTERVAL '1 month'
+      ) AS "newMembersLastMonth",
+      (SELECT COUNT(*) FROM users WHERE role = 'user'
+          AND active_plan_id IS NOT NULL
+          AND (subscription_expires_at IS NULL OR subscription_expires_at > NOW())
+      ) AS "payingActiveMembers",
+      (SELECT COUNT(*) FROM users WHERE role = 'user'
+          AND subscription_expires_at IS NOT NULL
+          AND subscription_expires_at < NOW()
+          AND DATE_TRUNC('month', subscription_expires_at AT TIME ZONE $1)
+            = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
+      ) AS "churnedThisMonth",
+      (SELECT COUNT(DISTINCT COALESCE(owner_id, id_user)) FROM audit_logs
+          WHERE action IN ('EMAIL_ACCOUNT_CONNECTED', 'ZALO_ACCOUNT_CONNECTED')
+            AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $1) AT TIME ZONE $1
+      ) AS "activatedThisMonth",
+      (SELECT COUNT(*) FROM users WHERE role = 'user'
+          AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $1) AT TIME ZONE $1
+      ) AS "registeredThisMonthForActivation"
   `, [TZ]);
   return rows[0];
 }

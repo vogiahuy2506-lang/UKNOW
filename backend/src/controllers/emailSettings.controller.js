@@ -5,6 +5,7 @@ import { generateFileToken } from '../utils/fileDownloadToken.js';
 import trackingShortLinkService from '../services/tracking/trackingShortLink.service.js';
 import emailSettingsCrudService from '../services/email/emailSettingsCrud.service.js';
 import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 class EmailSettingsController {
   /**
@@ -416,6 +417,24 @@ ${linkItems}
         userId: req.user.id,
         roleCode: req.user?.role,
         payload: req.body,
+      });
+
+      const ownerId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : req.user.id;
+      auditService.log({
+        userId: req.user.id,
+        ownerId,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.EMAIL_ACCOUNT_CONNECTED,
+        entityType: AUDIT_ENTITY_TYPES.EMAIL_SETTING,
+        entityId: data?.id ?? null,
+        details: {
+          email: data?.email || req.body?.email || null,
+          emailMode: req.body?.emailMode || null,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get?.('user-agent') || null,
       });
 
       return res.status(201).json({

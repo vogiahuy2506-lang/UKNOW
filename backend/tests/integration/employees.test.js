@@ -798,3 +798,117 @@ describe('POST /api/employees/:id/resend-invite', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Contribution / team-overview — ranh giới quyền (PLAN_DO_LUONG_KPI Phần D)
+// ---------------------------------------------------------------------------
+describe('Contribution tenant isolation (Phần D)', () => {
+  it('nhân viên workspace A gọi /contribution/me → chỉ đúng 1 dòng của chính họ', async () => {
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA = await createUser({ username: 'empa', role: 'employee' });
+    const empB = await createUser({ username: 'empb', role: 'employee' });
+    await addMembership(ownerA.id, empA.id);
+    await addMembership(ownerB.id, empB.id);
+
+    const tokenA = await loginAs(empA);
+    const res = await request(app)
+      .get('/api/employees/contribution/me')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Owner-Context', String(ownerA.id));
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toBeTruthy();
+    expect(res.body.data.id).toBe(empA.id);
+    expect(res.body.data.id).not.toBe(empB.id);
+    expect(res.body.data.username).toBe('empa');
+  });
+
+  it('chủ A gọi /contribution kèm ownerId của B trên query/body → không có dòng nào của B', async () => {
+    // Bài bắt buộc PLAN_DO_LUONG_KPI — Ranh giới quyền:
+    // chủ workspace A gọi API đóng góp → không có một dòng nào của workspace B,
+    // kể cả khi truyền ownerId của B lên.
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera2', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb2', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA1 = await createUser({ username: 'alice_a', role: 'user' });
+    const empA2 = await createUser({ username: 'carol_a', role: 'user' });
+    const empB1 = await createUser({ username: 'bob_b', role: 'user' });
+    const empB2 = await createUser({ username: 'dave_b', role: 'user' });
+    await addMembership(ownerA.id, empA1.id);
+    await addMembership(ownerA.id, empA2.id);
+    await addMembership(ownerB.id, empB1.id);
+    await addMembership(ownerB.id, empB2.id);
+
+    const tokenA = await loginAs(ownerA);
+    const res = await request(app)
+      .get('/api/employees/contribution')
+      .query({ ownerId: ownerB.id })
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ ownerId: ownerB.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const rows = res.body.data || [];
+    const ids = rows.map((r) => r.id);
+    const usernames = rows.map((r) => r.username).sort();
+
+    // Không một dòng nào của workspace B
+    expect(ids).not.toContain(empB1.id);
+    expect(ids).not.toContain(empB2.id);
+    expect(ids).not.toContain(ownerB.id);
+    expect(usernames).not.toContain('bob_b');
+    expect(usernames).not.toContain('dave_b');
+
+    // Chỉ đúng team của A (token), bất chấp ownerId=B trên request
+    expect(ids).toContain(empA1.id);
+    expect(ids).toContain(empA2.id);
+    expect(rows).toHaveLength(2);
+    expect(usernames).toEqual(['alice_a', 'carol_a']);
+  });
+
+  it('chủ A gọi /team-overview kèm ownerId của B → cũng không rò (cùng ranh giới)', async () => {
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera3', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb3', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA = await createUser({ username: 'alice_ov', role: 'user' });
+    const empB = await createUser({ username: 'bob_ov', role: 'user' });
+    await addMembership(ownerA.id, empA.id);
+    await addMembership(ownerB.id, empB.id);
+
+    const tokenA = await loginAs(ownerA);
+    const res = await request(app)
+      .get('/api/employees/team-overview')
+      .query({ ownerId: ownerB.id })
+      .set('Authorization', `Bearer ${tokenA}`);
+
+    expect(res.status).toBe(200);
+    const rows = res.body.data || [];
+    expect(rows.some((r) => r.id === empB.id)).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(empA.id);
+  });
+
+  it('findOwnerIdForEmployee bỏ qua membership inactive', async () => {
+    const { findOwnerIdForEmployee } = await import(
+      '../../src/repositories/user/employee.repository.js'
+    );
+    const owner = await createUser({ username: 'own_inactive', role: 'user' });
+    const emp = await createUser({ username: 'emp_inactive', role: 'employee' });
+    await addMembership(owner.id, emp.id, { status: 'inactive' });
+
+    const ownerId = await findOwnerIdForEmployee(emp.id);
+    expect(ownerId).toBeNull();
+  });
+});

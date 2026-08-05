@@ -617,6 +617,18 @@ class CampaignController {
         }
       });
 
+      try {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.CAMPAIGN_RUN_STARTED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          campaignId,
+          { runId: runRecord.id, source, continuousMode: Boolean(continuousMode) }
+        );
+      } catch (auditErr) {
+        console.warn('[Campaign] CAMPAIGN_RUN_STARTED audit failed:', auditErr?.message);
+      }
+
       const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
       this.executeCampaign(campaignId, runRecord.id, executionUserId, roleCode).catch(error => {
         console.error('Execute campaign error:', error);

@@ -4,6 +4,7 @@ import {
   findEmployeesByOwner,
   findEmployeeByIdAndOwner,
   findTeamOverview,
+  findOwnerIdForEmployee,
   countActiveEmployees,
   findOwnerPlanLimit,
   findUserByEmail,
@@ -253,6 +254,25 @@ export async function resetEmployeePassword(ownerId, employeeId) {
 }
 
 
-export async function getTeamOverview(ownerId) {
-  return findTeamOverview(ownerId);
+export async function getTeamOverview(ownerId, options = {}) {
+  return findTeamOverview(ownerId, options);
+}
+
+/**
+ * Employee self contribution — owner_id ALWAYS from membership/token, never client.
+ */
+export async function getMyContribution({ userId, activeContext }) {
+  const employeeId = Number(userId);
+  let ownerId = null;
+
+  if (activeContext?.type === 'employee' && activeContext.ownerId) {
+    ownerId = Number(activeContext.ownerId);
+  } else {
+    ownerId = await findOwnerIdForEmployee(employeeId);
+  }
+
+  if (!ownerId) return null;
+
+  const rows = await findTeamOverview(ownerId, { employeeId });
+  return rows[0] || null;
 }

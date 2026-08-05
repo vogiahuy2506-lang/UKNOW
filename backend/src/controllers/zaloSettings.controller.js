@@ -18,6 +18,7 @@ import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
 import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 
 class ZaloSettingsController {
@@ -562,8 +563,19 @@ class ZaloSettingsController {
       context: 'loginQr',
     });
 
-    // Notify inbox service to register listener for this account
     if (account?.id) {
+      auditService.log({
+        userId,
+        ownerId: userId,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.ZALO_ACCOUNT_CONNECTED,
+        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
+        entityId: account.id,
+        details: {
+          channel: 'zalo_personal',
+          displayName: account.display_name || accountIdentity?.displayName || null,
+        },
+      });
       addPendingAccount(account.id);
       zaloPersonalInboxService.invalidateAccountCache();
       // Trigger immediate refresh of listeners

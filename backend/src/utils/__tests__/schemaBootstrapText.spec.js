@@ -66,4 +66,20 @@ describe('bootstrap.sql text parity (S-2)', () => {
     expect(bootstrapSql).toMatch(/CREATE TABLE help_article_chunks\s*\(/i);
     expect(bootstrapSql).toMatch(/CREATE TABLE help_unanswered\s*\(/i);
   });
+
+  it('campaign_runs declares triggered_by (migration 103)', () => {
+    const body = tableBody(bootstrapSql, 'campaign_runs');
+    expect(body).toMatch(/triggered_by\s+BIGINT/i);
+  });
+
+  it('usage_logs declares actor_user_id (migration 103)', () => {
+    const body = tableBody(bootstrapSql, 'usage_logs');
+    expect(body).toMatch(/actor_user_id\s+BIGINT/i);
+  });
+
+  it('bootstrap declares alert tables (migration 104)', () => {
+    expect(bootstrapSql).toMatch(/CREATE TABLE alert_rules\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE alert_events\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE cron_job_runs\s*\(/i);
+  });
 });

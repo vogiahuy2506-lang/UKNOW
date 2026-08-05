@@ -85,12 +85,18 @@ class UsageTrackingRepository {
       ? new Date(usageMetadata.periodEnd)
       : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+    const rawActor = usageMetadata.actorUserId ?? usageMetadata.actor_user_id ?? null;
+    const actorUserId = rawActor != null && Number.isFinite(Number(rawActor))
+      ? Number(rawActor)
+      : null;
+
     const { rows } = await queryable.query(
-      `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO usage_logs (id_user, actor_user_id, resource_type, delta, period_start, period_end, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         userId,
+        actorUserId,
         resourceType,
         delta,
         periodStart.toISOString(),
