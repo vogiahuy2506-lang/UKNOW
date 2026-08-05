@@ -5,6 +5,27 @@ const handleError = (res, err) => {
   res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
 };
 
+// Trả về true nếu có ít nhất một tiêu chí targeting được cung cấp
+function hasAnyTargeting({
+  target_user_ids,
+  target_emails,
+  target_roles,
+  target_plans,
+  target_statuses,
+  registered_before,
+  registered_after
+}) {
+  return (
+    (Array.isArray(target_user_ids) && target_user_ids.length > 0) ||
+    (Array.isArray(target_emails) && target_emails.length > 0) ||
+    (Array.isArray(target_roles) && target_roles.length > 0) ||
+    (Array.isArray(target_plans) && target_plans.length > 0) ||
+    (Array.isArray(target_statuses) && target_statuses.length > 0) ||
+    Boolean(registered_before) ||
+    Boolean(registered_after)
+  );
+}
+
 // =====================
 // CRUD Operations
 // =====================
@@ -43,6 +64,24 @@ export async function createNotification(req, res) {
     }
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Nội dung thông báo là bắt buộc' });
+    }
+
+    // Phải có ít nhất một tiêu chí targeting để tránh nháp "gửi cho tất cả" vô tình
+    const hasTargeting = hasAnyTargeting({
+      target_user_ids,
+      target_emails,
+      target_roles,
+      target_plans,
+      target_statuses,
+      registered_before,
+      registered_after
+    });
+
+    if (!hasTargeting) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn ít nhất một tiêu chí người nhận (user IDs, email, role, plan, status hoặc khoảng ngày đăng ký)'
+      });
     }
 
     const notification = await notificationService.createNotification({
@@ -286,11 +325,11 @@ export async function sendNotification(req, res) {
     }
 
     if (notification.status === 'sent') {
-      return res.status(400).json({ success: false, message: 'Thông báo đã được gửi trước đó' });
+      return res.status(409).json({ success: false, message: 'Thông báo đã được gửi trước đó' });
     }
 
     if (notification.status === 'sending') {
-      return res.status(400).json({ success: false, message: 'Thông báo đang được gửi' });
+      return res.status(409).json({ success: false, message: 'Thông báo đang được gửi' });
     }
 
     // Start sending in background and return immediately
@@ -313,6 +352,9 @@ export async function sendNotification(req, res) {
       data: result
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
     handleError(res, err);
   }
 }
@@ -346,16 +388,21 @@ export async function createAndSend(req, res) {
       return res.status(400).json({ success: false, message: 'Nội dung thông báo là bắt buộc' });
     }
 
-    // Kiểm tra có ít nhất một tiêu chí targeting
-    const hasTargeting = (
-      (target_user_ids && target_user_ids.length > 0) ||
-      (target_emails && target_emails.length > 0)
-    );
+    // Phải có ít nhất một tiêu chí targeting — nhất quán với service.sendNow
+    const hasTargeting = hasAnyTargeting({
+      target_user_ids,
+      target_emails,
+      target_roles,
+      target_plans,
+      target_statuses,
+      registered_before,
+      registered_after
+    });
 
     if (!hasTargeting) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Vui lòng chọn ít nhất một người nhận hoặc nhập email cụ thể' 
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn ít nhất một tiêu chí người nhận (user IDs, email, role, plan, status hoặc khoảng ngày đăng ký)'
       });
     }
 
@@ -367,8 +414,14 @@ export async function createAndSend(req, res) {
       message_en: message_en?.trim(),
       metadata,
       priority,
+      target_roles,
+      target_plans,
+      target_statuses,
       target_user_ids,
-      target_emails
+      target_emails,
+      registered_before,
+      registered_after,
+      created_by: req.user?.id
     });
 
     const allFailed = result.sent === 0 && result.total > 0;
@@ -387,6 +440,9 @@ export async function createAndSend(req, res) {
       data: result
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
     handleError(res, err);
   }
 }
@@ -408,8 +464,10 @@ export async function scheduleNotification(req, res) {
       return res.status(400).json({ success: false, message: 'Định dạng ngày không hợp lệ' });
     }
 
-    if (scheduledDate <= new Date()) {
-      return res.status(400).json({ success: false, message: 'Thời gian hẹn giờ phải lớn hơn thời gian hiện tại' });
+    // Cho phép buffer 1 phút để tránh lệch múi giờ client/server khi người dùng chọn "hiện tại"
+    const MIN_LEAD_MS = 60 * 1000;
+    if (scheduledDate.getTime() <= Date.now() + MIN_LEAD_MS) {
+      return res.status(400).json({ success: false, message: 'Thời gian hẹn giờ phải lớn hơn thời gian hiện tại ít nhất 1 phút' });
     }
 
     const notification = await notificationService.scheduleNotification(id, scheduledDate);
@@ -424,6 +482,9 @@ export async function scheduleNotification(req, res) {
       data: notification
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
     handleError(res, err);
   }
 }
@@ -442,6 +503,9 @@ export async function cancelScheduled(req, res) {
 
     res.json({ success: true, message: 'Đã hủy thông báo hẹn giờ', data: notification });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
     handleError(res, err);
   }
 }

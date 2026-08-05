@@ -126,6 +126,12 @@ const superAdminMenuItems = (t) => [
     icon: HiOutlineDocumentText,
   },
   {
+    name: t('nav.helpUnanswered'),
+    section: t('nav.adminNavMessaging'),
+    path: '/admin/ai-ops/unanswered',
+    icon: HiOutlineQuestionMarkCircle,
+  },
+  {
     name: t('nav.systemAuditLogs'),
     section: t('nav.adminNavMonitoring'),
     path: '/admin/audit-logs',

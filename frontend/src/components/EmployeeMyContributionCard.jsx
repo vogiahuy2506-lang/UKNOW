@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useAuthStore } from '../../stores/authStore';
-import userManagementApiService from '../../features/users/services/userManagementApi.service';
+import { useAuthStore } from '../stores/authStore';
+import userManagementApiService from '../features/users/services/userManagementApi.service';
 
 /**
  * D4 — nhân viên xem số của chính mình (không thấy người khác).

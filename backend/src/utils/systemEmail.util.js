@@ -59,9 +59,9 @@ export async function sendSystemEmail({ to, subject, html }) {
   throw lastError;
 }
 
-// ─── Base Template ────────────────────────────────────────────────────────────
+// ─── Base Template (export để các service khác dùng chung) ────────────────────
 
-function buildBaseTemplate({ subtitle, content, footerNote }) {
+export function buildBaseTemplate({ subtitle, content, footerNote }) {
   const year = new Date().getFullYear();
   return `<!DOCTYPE html>
 <html lang="vi">
