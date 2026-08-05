@@ -11,7 +11,7 @@ import { useI18n } from './i18n';
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
-import PublicLayout from './layouts/PublicLayout';
+import PublicLayout, { PublicLayoutLite } from './layouts/PublicLayout';
 import PolicyLayout from './layouts/PolicyLayout';
 import DocsLayout from './layouts/DocsLayout';
 
@@ -247,8 +247,8 @@ function App() {
             )}
           />
 
-          {/* Public pages — dùng video background + HeroNavbar */}
-          <Route element={<PublicLayout />}>
+          {/* Public pages — pricing dùng video bg, contact dùng lite */}
+          <Route element={<PublicLayoutLite />}>
             <Route
               path="/pricing"
               element={(

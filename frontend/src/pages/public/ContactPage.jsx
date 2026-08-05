@@ -3,61 +3,95 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineMail, HiOutlinePhone, HiOutlineLocationMarker,
-  HiOutlineChat, HiOutlineCheckCircle, HiOutlineArrowRight,
+  HiOutlineCheckCircle, HiOutlineArrowRight,
 } from 'react-icons/hi';
+import { FaArrowRight } from 'react-icons/fa';
+import PublicFooter from './components/PublicFooter';
 import { submitContactForm } from '../../services/contactApi.service';
+import AnimatedSection from '../../components/AnimatedSection';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
 
-const COMPANY_SIZES = (t) => [
-  { value: '', label: t('contact.companySizePlaceholder') },
-  { value: '1-10', label: t('contact.companySize1') },
-  { value: '11-50', label: t('contact.companySize2') },
-  { value: '51-200', label: t('contact.companySize3') },
-  { value: '201-500', label: t('contact.companySize4') },
-  { value: '500+', label: t('contact.companySize5') },
+const contactChannels = [
+  {
+    icon: HiOutlineMail,
+    iconBg: 'from-orange-500 to-red-500',
+    label: 'Email',
+    value: 'info@digiso.vn',
+    desc: 'Phản hồi trong 24 giờ làm việc',
+    href: 'mailto:info@digiso.vn',
+  },
+  {
+    icon: HiOutlinePhone,
+    iconBg: 'from-blue-500 to-indigo-500',
+    label: 'Hotline',
+    value: '(+84) 877 909 606',
+    desc: 'Tư vấn miễn phí 08:00 - 17:00',
+    href: 'tel:+84877909606',
+  },
+  {
+    icon: HiOutlineLocationMarker,
+    iconBg: 'from-emerald-500 to-teal-500',
+    label: 'Văn phòng',
+    value: 'Phòng I101B, ĐHQG TP.HCM',
+    desc: 'Khu Công nghệ phần mềm, TP.HCM',
+    href: 'https://maps.google.com/?q=Phòng+I101B,+Khu+Công+nghệ+phần+mềm+ĐHQG+HCM',
+  },
 ];
 
 export default function ContactPage() {
   const { t } = useI18n();
   const { getOverride } = usePublicLandingOverrides('contact');
 
-  // Helper to get override value with i18n fallback
   const getValue = (key, fallback) => {
     const override = getOverride(key);
     return override || fallback;
   };
 
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', company: '', companySize: '', message: '',
+    name: '', email: '', phone: '', company: '', message: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
 
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
-      toast.error(t('contact.validationRequired'));
-      return;
+    const nextErrors = {};
+    if (!form.name.trim()) nextErrors.name = t('contact.validationRequired');
+    if (!form.email.trim()) {
+      nextErrors.email = t('contact.validationRequired');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      nextErrors.email = t('contact.validationEmail');
     }
-    if (form.message.trim().length < 10) {
-      toast.error(t('contact.validationMinLength'));
+    if (!form.message.trim()) {
+      nextErrors.message = t('contact.validationRequired');
+    } else if (form.message.trim().length < 10) {
+      nextErrors.message = t('contact.validationMinLength', { n: 10 });
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
 
+    setErrors({});
     setSubmitting(true);
     try {
       const res = await submitContactForm(form);
       toast.success(res.data?.message || t('contact.sentSuccess'));
       setSubmitted(true);
-      setForm({ name: '', email: '', phone: '', company: '', companySize: '', message: '' });
+      setForm({ name: '', email: '', phone: '', company: '', message: '' });
     } catch (err) {
       toast.error(err?.response?.data?.message || t('contact.errorMessage'));
     } finally {
@@ -66,307 +100,280 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="relative min-h-screen">
-      <div className="relative pt-8 pb-20">
-      {/* Hero */}
-      <div className="max-w-7xl mx-auto px-6 text-center mb-12 pt-10">
-        <h1 
-          className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4"
-          style={{ color: getValue('contact.titleColor', undefined) }}
-          data-edit="contact.title"
-        >
-          {getValue('contact.title', t('contact.title'))}
-        </h1>
-        <p 
-          className="text-base md:text-lg text-white/70 max-w-2xl mx-auto"
-          data-edit="contact.subtitle"
-        >
-          {getValue('contact.subtitle', t('contact.subtitle'))}
-        </p>
+    <div className="min-h-screen bg-white">
+
+      {/* ── Hero Section ── */}
+      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-20 overflow-hidden">
+        {/* Background dots */}
+        <div className="absolute inset-0 opacity-[0.3]" style={{
+          backgroundColor: '#f8fafc',
+          backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }} />
+
+        {/* Decorative shapes */}
+        <div className="absolute top-16 left-10 w-24 h-24 border border-orange-200 rounded-full opacity-40" />
+        <div className="absolute top-40 right-16 w-16 h-16 border border-blue-200 rounded-2xl rotate-12 opacity-40" />
+        <div className="absolute bottom-20 left-20 w-12 h-12 border border-purple-200 rounded-full opacity-40" />
+        <div className="absolute bottom-32 right-32 w-8 h-8 bg-orange-100 rounded-lg rotate-45 opacity-30" />
+
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8">
+            <span className="w-2 h-2 rounded-full bg-orange-500" />
+            <span data-edit="contact.tagline">Liên hệ với chúng tôi</span>
+          </div>
+
+          {/* Title */}
+          <h1
+            className="text-slate-900 mb-6"
+            style={{ fontSize: 'clamp(32px, 6vw, 56px)', lineHeight: 1.15, fontWeight: 600 }}
+            data-edit="contact.title"
+          >
+            Chúng tôi luôn sẵn sàng{' '}
+            <span className="text-orange-500">hỗ trợ bạn</span>
+          </h1>
+
+          {/* Subtitle */}
+          <p
+            className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
+            data-edit="contact.subtitle"
+          >
+            Để lại thông tin, đội ngũ tư vấn sẽ liên hệ lại trong 24 giờ.
+          </p>
+        </div>
+      </section>
+
+      {/* ── DIVIDER ── */}
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
-        {/* LEFT: Form (3 cols) */}
-        <div className="lg:col-span-3">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
-            {submitted ? (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-5">
-                  <HiOutlineCheckCircle className="w-9 h-9 text-green-600" />
+      {/* ── CONTACT SECTION ── */}
+      <section className="pt-12 pb-10 md:pt-14 md:pb-24 bg-white relative overflow-hidden">
+        {/* Grid background */}
+        <div className="absolute inset-0 opacity-[0.3]" style={{
+          backgroundColor: '#f8fafc',
+          backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }} />
+
+        <div className="max-w-6xl mx-auto px-6 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-[5fr_6fr] gap-6 lg:gap-8 items-stretch">
+
+            {/* ── Left Panel — Contact Channels ── */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 md:p-6 flex flex-col">
+              {/* Header */}
+              <div className="mb-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-orange-500 mb-1.5">
+                  Thông tin liên hệ
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mb-2">{t('contact.successTitle')}</h3>
-                <p className="text-slate-600 mb-6 max-w-md mx-auto">
-                  {t('contact.successMessage')}
+                <h3 className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">
+                  Nhiều cách để kết nối với <span className="text-orange-500">Founder AI</span>
+                </h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  Chọn kênh phù hợp nhất với bạn — chúng tôi phản hồi nhanh nhất qua email.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              </div>
+
+              {/* Channel list */}
+              <div className="space-y-3 flex-1">
+                {contactChannels.map((ch) => (
+                  <a
+                    key={ch.label}
+                    href={ch.href}
+                    target={ch.href.startsWith('http') ? '_blank' : undefined}
+                    rel={ch.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    className="group flex items-center gap-4 p-3.5 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/40 transition-all"
+                  >
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${ch.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
+                      <ch.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {ch.label}
+                      </div>
+                      <div className="text-sm md:text-base font-semibold text-slate-900 truncate">
+                        {ch.value}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {ch.desc}
+                      </div>
+                    </div>
+                    <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all shrink-0" />
+                  </a>
+                ))}
+              </div>
+
+              {/* Working Hours */}
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
+                  </span>
+                  <span className="text-sm font-bold text-slate-900">Đang mở cửa</span>
+                  <span className="text-xs text-slate-500">• Thứ 2 – Thứ 6</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Tư vấn miễn phí từ <span className="font-semibold text-slate-900">08:00 – 17:00</span>. Ngoài giờ, vui lòng gửi email — đội ngũ sẽ phản hồi vào đầu giờ làm việc hôm sau.
+                </p>
+              </div>
+            </div>
+
+            {/* ── Right Panel — Form ── */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 md:p-7 flex flex-col">
+              {/* Header */}
+              <div className="mb-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-orange-500 mb-1.5">
+                  Gửi yêu cầu
+                </div>
+                <h3 className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">
+                  Để lại thông tin, chúng tôi sẽ <span className="text-orange-500">phản hồi sớm</span>
+                </h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  Điền form bên dưới — đội ngũ tư vấn sẽ liên hệ lại trong vòng 24 giờ làm việc.
+                </p>
+              </div>
+
+              {submitted ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center py-6">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mb-4">
+                    <HiOutlineCheckCircle className="w-7 h-7 text-green-600" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900 mb-1.5">
+                    {t('contact.successTitle')}
+                  </h4>
+                  <p className="text-slate-600 mb-5 text-sm max-w-sm">
+                    {t('contact.successMessage')}
+                  </p>
                   <button
                     type="button"
                     onClick={() => setSubmitted(false)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                    className="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm"
                   >
-                    {t('contact.sendAnother')}
+                    Gửi yêu cầu khác
                   </button>
-                  <Link
-                    to="/pricing"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:shadow-lg transition-all"
-                  >
-                    {t('contact.viewPricing')} <HiOutlineArrowRight className="w-4 h-4" />
-                  </Link>
                 </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-1" data-edit="contact.formTitle">
-                    {getValue('contact.formTitle', t('contact.formTitle'))}
-                  </h2>
-                  <p className="text-sm text-slate-500" data-edit="contact.formSubtitle">
-                    {getValue('contact.formSubtitle', t('contact.formSubtitle'))}
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-3.5 flex-1 flex flex-col" noValidate>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <FormField
+                      label={t('contact.nameLabel')}
+                      name="name"
+                      value={form.name}
+                      onChange={handleChange}
+                      placeholder={t('contact.namePlaceholder')}
+                      error={errors.name}
+                      required
+                    />
+                    <FormField
+                      label={t('contact.emailLabel')}
+                      type="email"
+                      name="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      placeholder={t('contact.emailPlaceholder')}
+                      error={errors.email}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <FormField
+                      label={t('contact.phoneLabel')}
+                      type="tel"
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder={t('contact.phonePlaceholder')}
+                    />
+                    <FormField
+                      label={t('contact.companyLabel')}
+                      name="company"
+                      value={form.company}
+                      onChange={handleChange}
+                      placeholder={t('contact.companyPlaceholder')}
+                    />
+                  </div>
+
+                  <div className="flex-1 flex flex-col">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      {t('contact.messageLabel')} <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      name="message"
+                      value={form.message}
+                      onChange={handleChange}
+                      rows={4}
+                      placeholder={t('contact.messagePlaceholder')}
+                      aria-invalid={!!errors.message}
+                      className={`w-full px-4 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 outline-none transition-all resize-none text-sm flex-1 ${
+                        errors.message
+                          ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100'
+                          : 'border-slate-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100'
+                      }`}
+                    />
+                    {errors.message ? (
+                      <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.message}</p>
+                    ) : (
+                      <div className="text-xs text-slate-400 mt-1 text-right">
+                        {form.message.length} / 5000
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm shadow-sm hover:shadow-md"
+                  >
+                    {submitting ? t('contact.submitting') : (
+                      <>{t('contact.submitButton')} <HiOutlineArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+
+                  <p className="text-xs text-slate-500 text-center">
+                    {t('contact.privacyNote')}{' '}
+                    <a href="/privacy-policy" className="text-orange-600 hover:underline font-medium">
+                      {t('contact.privacyLink')}
+                    </a>
                   </p>
-                </div>
-
-                {/* Row 1: Name + Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    label={t('contact.nameLabel')}
-                    required
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    placeholder={t('contact.namePlaceholder')}
-                  />
-                  <FormField
-                    label={t('contact.emailLabel')}
-                    required
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    placeholder={t('contact.emailPlaceholder')}
-                  />
-                </div>
-
-                {/* Row 2: Phone + Company */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    label={t('contact.phoneLabel')}
-                    type="tel"
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    placeholder={t('contact.phonePlaceholder')}
-                  />
-                  <FormField
-                    label={t('contact.companyLabel')}
-                    name="company"
-                    value={form.company}
-                    onChange={handleChange}
-                    placeholder={t('contact.companyPlaceholder')}
-                  />
-                </div>
-
-                {/* Row 3: Company size */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    {t('contact.companySizeLabel')}
-                  </label>
-                  <select
-                    name="companySize"
-                    value={form.companySize}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all"
-                  >
-                    {COMPANY_SIZES(t).map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Row 4: Message */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    {t('contact.messageLabel')} <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    name="message"
-                    value={form.message}
-                    onChange={handleChange}
-                    rows={5}
-                    required
-                    placeholder={t('contact.messagePlaceholder')}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none"
-                  />
-                  <div className="text-xs text-slate-400 mt-1 text-right">
-                    {form.message.length} / 5000
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {submitting ? t('contact.submitting') : (
-                    <>{t('contact.submitButton')} <HiOutlineArrowRight className="w-4 h-4" /></>
-                  )}
-                </button>
-
-                <p className="text-xs text-slate-400">
-                  {t('contact.privacyNote')}{' '}
-                  <a href="/privacy-policy" className="text-orange-600 hover:underline">
-                    {t('contact.privacyLink')}
-                  </a>.
-                </p>
-              </form>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: Contact info (2 cols) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border border-orange-100 p-6">
-            <h3 className="text-lg font-black text-slate-900 mb-1" data-edit="contact.contactChannels">{t('contact.contactChannels')}</h3>
-            <p className="text-sm text-slate-600 mb-5" data-edit="contact.contactChannelsSubtitle">
-              {getValue('contact.contactChannelsSubtitle', t('contact.contactChannelsSubtitle'))}
-            </p>
-
-            <div className="space-y-3">
-              {/* Email */}
-              <a
-                href={getValue('contact.emailHref', 'mailto:hello@founderai.vn')}
-                className="block"
-              >
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
-                    <HiOutlineMail className="w-5 h-5 text-white" data-edit="contact.email.icon" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.email.label">
-                      {getValue('contact.email.label', t('contact.email'))}
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.email.value">
-                      {getValue('contact.email.value', t('contact.emailValue'))}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.email.desc">
-                      {getValue('contact.email.desc', t('contact.emailDesc'))}
-                    </div>
-                  </div>
-                </div>
-              </a>
-
-              {/* Phone */}
-              <a
-                href={getValue('contact.phoneHref', 'tel:19006868')}
-                className="block"
-              >
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
-                    <HiOutlinePhone className="w-5 h-5 text-white" data-edit="contact.phone.icon" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.phone.label">
-                      {getValue('contact.phone.label', t('contact.hotline'))}
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.phone.value">
-                      {getValue('contact.phone.value', t('contact.hotlineValue'))}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.phone.desc">
-                      {getValue('contact.phone.desc', t('contact.hotlineDesc'))}
-                    </div>
-                  </div>
-                </div>
-              </a>
-
-              {/* Zalo */}
-              <a
-                href={getValue('contact.zaloHref', 'https://zalo.me/founderai')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-              >
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent hover:border-orange-200">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0">
-                    <HiOutlineChat className="w-5 h-5 text-white" data-edit="contact.zalo.icon" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.zalo.label">
-                      {getValue('contact.zalo.label', t('contact.zalo'))}
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 truncate" data-edit="contact.zalo.value">
-                      {getValue('contact.zalo.value', t('contact.zaloValue'))}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.zalo.desc">
-                      {getValue('contact.zalo.desc', t('contact.zaloDesc'))}
-                    </div>
-                  </div>
-                </div>
-              </a>
-
-              {/* Office */}
-              <div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/70 hover:bg-white transition-colors border border-transparent">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shrink-0">
-                    <HiOutlineLocationMarker className="w-5 h-5 text-white" data-edit="contact.office.icon" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide" data-edit="contact.office.label">
-                      {getValue('contact.office.label', t('contact.office'))}
-                    </div>
-                    <div className="text-sm font-bold text-slate-900" data-edit="contact.office.value">
-                      {getValue('contact.office.value', t('contact.officeValue'))}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5" data-edit="contact.office.desc">
-                      {getValue('contact.office.desc', t('contact.officeDesc'))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* CTA secondary */}
-          <div className="bg-slate-900 rounded-2xl p-6 text-white">
-            <h4 className="font-black text-lg mb-2" data-edit="contact.readyToStart">{t('contact.readyToStart')}</h4>
-            <p className="text-sm text-slate-300 mb-4" data-edit="contact.freeTrial">
-              {getValue('contact.freeTrial', t('contact.freeTrial'))}
-            </p>
-            <div className="flex flex-col gap-2">
-              <Link
-                to="/register"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-slate-900 font-bold hover:bg-slate-100 transition-colors text-sm"
-              >
-                {t('contact.registerFree')} <HiOutlineArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                to="/pricing"
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-semibold hover:bg-slate-800 transition-colors text-sm"
-              >
-                {t('contact.viewPricing')}
-              </Link>
+                </form>
+              )}
             </div>
           </div>
         </div>
-      </div>
-      </div>{/* end relative content wrapper */}
+      </section>
+
+      <PublicFooter />
     </div>
   );
 }
 
-function FormField({ label, required, type = 'text', name, value, onChange, placeholder }) {
+function FormField({ label, required, type = 'text', name, value, onChange, placeholder, error }) {
   return (
-    <div>
-      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+    <div className="flex flex-col">
+      <label htmlFor={name} className="block text-sm font-semibold text-slate-700 mb-1.5">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <input
+        id={name}
         type={type}
         name={name}
         value={value}
         onChange={onChange}
-        required={required}
         placeholder={placeholder}
-        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all"
+        aria-invalid={!!error}
+        className={`w-full px-4 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 outline-none transition-all text-sm ${
+          error
+            ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100'
+            : 'border-slate-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100'
+        }`}
       />
+      {error && (
+        <p className="mt-1.5 text-xs text-red-500 font-medium">{error}</p>
+      )}
     </div>
   );
 }

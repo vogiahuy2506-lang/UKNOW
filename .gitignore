@@ -95,6 +95,10 @@ AGENTS.md
 .claude/*
 !.claude/skills/
 
+# Thư mục tooling local của Cursor AI / agents khác — không commit
+.agents/
+.impeccable-temp/
+
 ####################
 # LOCAL DOCS / PLANNING / DELIVERABLES
 ####################

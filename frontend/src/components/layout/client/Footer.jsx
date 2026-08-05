@@ -1,14 +1,9 @@
 import { Link } from 'react-router-dom';
-import { FaFacebookF, FaLinkedinIn, FaYoutube, FaTwitter } from 'react-icons/fa';
-import founderaiLogo from '../../../assets/icons/founderai-logo.png';
+import { FaFacebookF, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
 import { useI18n } from '../../../i18n';
 
 /**
- * Footer - Refactored với Impeccable design principles:
- * - Modern gradient background
- * - Clear typography hierarchy
- * - Strategic color usage
- * - Social icons with hover effects
+ * Footer - Cho các trang public: HeroPage, ContactPage, PricingPage
  */
 
 const COLUMNS = (t) => [
@@ -44,26 +39,15 @@ const SOCIAL_LINKS = [
   { icon: FaLinkedinIn, href: 'https://linkedin.com', label: 'LinkedIn' },
   { icon: FaFacebookF, href: 'https://facebook.com', label: 'Facebook' },
   { icon: FaYoutube, href: 'https://youtube.com', label: 'YouTube' },
-  { icon: FaTwitter, href: 'https://twitter.com', label: 'Twitter' },
 ];
 
 export default function Footer() {
   const { t } = useI18n();
 
   return (
-    <footer 
-      className="relative"
-      style={{
-        background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
-      }}
-    >
+    <footer className="bg-slate-900 text-white">
       {/* Decorative gradient accent */}
-      <div 
-        className="absolute top-0 left-0 right-0 h-1"
-        style={{
-          background: 'linear-gradient(90deg, #f97316 0%, #ef4444 50%, #f97316 100%)'
-        }}
-      />
+      <div className="h-px bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-12 lg:gap-16">
@@ -72,35 +56,17 @@ export default function Footer() {
           <div className="flex flex-col gap-6">
             <Link to="/" className="w-fit">
               <img 
-                src={founderaiLogo} 
-                alt="Founder AI" 
-                className="h-10 w-auto object-contain" 
+                src="/logo-digiso.png" 
+                alt="DIGISO" 
+                className="h-10 w-auto object-contain brightness-0 invert" 
               />
             </Link>
-            <p className="text-[15px] leading-relaxed text-slate-600 max-w-xs">
-              {t('footer.description')}
+            <p className="text-[15px] leading-relaxed text-slate-400 max-w-xs">
+              Founder AI là giải pháp Marketing Automation & AI hàng đầu cho doanh nghiệp Việt Nam.
             </p>
             
-            {/* Newsletter */}
-            <div className="mt-2">
-              <p className="text-sm font-semibold text-slate-800 mb-3">Đăng ký nhận tin</p>
-              <form className="flex gap-2" onSubmit={(e) => e.preventDefault()}>
-                <input 
-                  type="email" 
-                  placeholder="email@example.com"
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
-                />
-                <button 
-                  type="submit"
-                  className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-orange-500/25 transition-all text-sm"
-                >
-                  Đăng ký
-                </button>
-              </form>
-            </div>
-
             {/* Social links */}
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3">
               {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
@@ -108,7 +74,7 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:border-orange-400 hover:text-orange-500 hover:bg-orange-50 transition-all duration-200"
+                  className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-white hover:bg-orange-500 transition-colors"
                 >
                   <Icon className="w-4 h-4" />
                 </a>
@@ -148,21 +114,13 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-16 pt-8 border-t border-slate-200">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <span className="text-[13px] text-slate-500">{t('footer.copyright')}</span>
-            <div className="flex items-center gap-6 text-[13px]">
-              <a href="/privacy-policy" className="text-slate-600 hover:text-orange-500 transition-colors font-medium">
-                {t('footer.privacy')}
-              </a>
-              <span className="text-slate-300">|</span>
-              <a href="/public-dpa" className="text-slate-600 hover:text-orange-500 transition-colors font-medium">
-                {t('footer.publicDPA')}
-              </a>
-              <span className="text-slate-300">|</span>
-              <a href="/terms" className="text-slate-600 hover:text-orange-500 transition-colors font-medium">
-                {t('footer.termsOfUse')}
-              </a>
+        <div className="mt-16 pt-8 border-t border-slate-800">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+            <p>© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người</p>
+            <div className="flex items-center gap-6">
+              <a href="/privacy-policy" className="hover:text-white transition-colors">Chính sách bảo mật</a>
+              <a href="/public-dpa" className="hover:text-white transition-colors">Thoả thuận xử lý dữ liệu</a>
+              <a href="/terms" className="hover:text-white transition-colors">Điều khoản sử dụng</a>
             </div>
           </div>
         </div>

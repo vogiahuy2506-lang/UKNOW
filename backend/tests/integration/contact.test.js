@@ -3,7 +3,7 @@
  *
  * Endpoint không yêu cầu auth (lead capture từ landing page),
  * nên test tập trung vào:
- *   - Validator (name/email/phone/companySize/message length).
+ *   - Validator (name/email/phone/message length).
  *   - Rate limit chống spam (3 submissions / 5 phút / email).
  *   - DB side-effect: contact_submissions row + normalize email (lowercase),
  *     ip_address từ X-Forwarded-For hoặc req.ip.
@@ -58,26 +58,24 @@ describe('POST /api/contact', () => {
     });
   });
 
-  it('lưu đủ các field optional (phone, company, companySize)', async () => {
+  it('lưu đủ các field optional (phone, company)', async () => {
     const res = await request(app)
       .post('/api/contact')
       .send(
         validBody({
           phone: '0901-234 567',
           company: 'ACME Co',
-          companySize: '11-50',
         })
       );
 
     expect(res.status).toBe(201);
     const { rows } = await db.query(
-      `SELECT phone, company, company_size FROM contact_submissions WHERE email = $1`,
+      `SELECT phone, company FROM contact_submissions WHERE email = $1`,
       ['lead@test.local']
     );
     expect(rows[0]).toEqual({
       phone: '0901-234 567',
       company: 'ACME Co',
-      company_size: '11-50',
     });
   });
 
@@ -122,11 +120,14 @@ describe('POST /api/contact', () => {
     expect(res.status).toBe(400);
   });
 
-  it('companySize không nằm trong whitelist → 400', async () => {
+  it('companySize không nằm trong whitelist → 400 (đã loại bỏ field khỏi API)', async () => {
+    // Trước đây companySize bị reject khi không match whitelist.
+    // Hiện tại field đã được loại bỏ khỏi form, nên gửi kèm sẽ được bỏ qua
+    // (chỉ name/email/phone/message còn được validate).
     const res = await request(app)
       .post('/api/contact')
       .send(validBody({ companySize: '9999' }));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
   });
 
   it('message < 10 ký tự → 400', async () => {

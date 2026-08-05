@@ -1,11 +1,11 @@
 import db from '../config/database.js';
 
-export async function createContactSubmission({ name, email, phone, company, companySize, message, ipAddress }) {
+export async function createContactSubmission({ name, email, phone, company, message, ipAddress }) {
   const { rows } = await db.query(
-    `INSERT INTO contact_submissions (name, email, phone, company, company_size, message, ip_address)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO contact_submissions (name, email, phone, company, message, ip_address)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, name, email, created_at AS "createdAt"`,
-    [name, email, phone || null, company || null, companySize || null, message || null, ipAddress || null]
+    [name, email, phone || null, company || null, message || null, ipAddress || null]
   );
   return rows[0];
 }

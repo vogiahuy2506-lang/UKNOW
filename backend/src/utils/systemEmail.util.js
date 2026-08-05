@@ -397,6 +397,94 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
   };
 }
 
+// ─── Contact Form Notification (to internal team) ────────────────────────────
+
+export function buildContactNotificationEmail({ name, email, phone, company, message, ipAddress }) {
+  const submittedAt = new Date().toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  const safe = (v) => (v == null || v === '' ? '<em style="color:#9ca3af">—</em>' : String(v));
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Có một yêu cầu liên hệ mới từ website,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Vui lòng phản hồi khách hàng trong vòng <strong>24 giờ</strong>.
+    </p>
+
+    <!-- Customer info table -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;margin-bottom:20px">
+      <tr>
+        <td style="padding:16px">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280;width:140px">Họ và tên</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${safe(name)}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Email</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">
+                <a href="mailto:${safe(email)}" style="color:#f97316;text-decoration:none">${safe(email)}</a>
+              </td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Số điện thoại</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">
+                ${phone ? `<a href="tel:${safe(phone)}" style="color:#f97316;text-decoration:none">${safe(phone)}</a>` : '<em style="color:#9ca3af">—</em>'}
+              </td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Công ty</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${safe(company)}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Thời gian</td>
+              <td style="padding:8px 0;font-size:13px;color:#374151">${submittedAt}${ipAddress ? ` <span style="color:#9ca3af">(IP: ${ipAddress})</span>` : ''}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Message -->
+    <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.5px">
+      Nội dung liên hệ
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-left:4px solid #f97316;border-radius:0 8px 8px 0;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px">
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.7;white-space:pre-wrap">${safe(message)}</p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Reply CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="text-align:center">
+          <a href="mailto:${safe(email)}?subject=Re: Yêu cầu liên hệ từ ${safe(name)}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:12px 32px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Phản hồi khách hàng →
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return {
+    subject: `[Contact] Khách mới: ${name} — ${email}`,
+    html: buildBaseTemplate({
+      subtitle: 'Yêu cầu liên hệ mới',
+      content,
+      footerNote: 'Email thông báo tự động từ form liên hệ website.',
+    }),
+  };
+}
+
 // ─── Maintenance Notice ───────────────────────────────────────────────────────
 
 export function buildMaintenanceEmail({ title, message, durationMinutes, startTime }) {

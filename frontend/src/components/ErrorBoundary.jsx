@@ -2,9 +2,15 @@ import React from 'react';
 import { I18nContext } from '../i18n';
 
 const defaultTranslations = {
-  title: 'Something went wrong',
-  message: 'An error occurred. Please try again.',
-  goHome: 'Go to Homepage',
+  errorBoundary: {
+    title: 'Something went wrong',
+    message: 'An error occurred. Please try again.',
+    goHome: 'Go to Homepage',
+  },
+};
+
+const lookupFallback = (key) => {
+  return key.split('.').reduce((acc, part) => (acc != null ? acc[part] : undefined), defaultTranslations) ?? key;
 };
 
 class ErrorBoundary extends React.Component {
@@ -26,7 +32,7 @@ class ErrorBoundary extends React.Component {
       return (
         <I18nContext.Consumer>
           {(context) => {
-            const t = context?.t || ((key) => defaultTranslations[key] || key);
+            const t = context?.t || ((key) => lookupFallback(key));
             return (
               <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center p-8">
