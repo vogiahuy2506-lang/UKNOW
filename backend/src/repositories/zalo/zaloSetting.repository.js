@@ -63,9 +63,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $6,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id_user = $7 AND id = $8
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [displayName, zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, userId, accountId]
     );
     return rows[0] || null;
@@ -100,9 +102,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $5,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [displayName, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, accountId]
     );
     return rows[0] || null;
@@ -128,9 +132,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $6,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $7
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), displayName, now, accountId]
     );
     return rows[0] || null;
@@ -163,6 +169,8 @@ class ZaloSettingRepository {
       `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
               zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes,
               zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
+              zs.last_restore_attempt_at::timestamptz AS last_restore_attempt_at,
+              zs.restore_fail_count,
               COALESCE(u.full_name, u.username) AS creator_name
        FROM zalo_settings zs
        LEFT JOIN users u ON zs.id_user = u.id

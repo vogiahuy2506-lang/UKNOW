@@ -132,6 +132,8 @@ class ZaloSettingsController {
       createdBy: item.creator_name ? { name: item.creator_name } : null,
       updatedAt: item.updated_at,
       lastConnectedAt: item.last_connected_at,
+      lastRestoreAttemptAt: item.last_restore_attempt_at || null,
+      restoreFailCount: Number(item.restore_fail_count || 0),
     };
   }
 
@@ -1690,6 +1692,55 @@ class ZaloSettingsController {
       return res.status(500).json({ success: false, message: 'Không thể cập nhật tài khoản mặc định' });
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * POST /api/zalo/accounts/:id/retry-restore
+   * Clear restore-fail window and set status=connected so cron/keep-alive retry.
+   * Does not claim the session is alive.
+   */
+  async retryRestore(req, res) {
+    try {
+      const userId = req.user.id;
+      const isAdmin = isAdminRole(req.user?.role);
+      const accountId = Number.parseInt(req.params.id, 10);
+      if (!Number.isFinite(accountId)) {
+        return res.status(400).json({ success: false, message: 'ID tài khoản không hợp lệ' });
+      }
+
+      const campaignZaloSenderRepository = (await import('../repositories/campaign/campaignZaloSender.repository.js')).default;
+      const row = await campaignZaloSenderRepository.resetRestoreForRetry(accountId, {
+        userId,
+        isAdmin,
+      });
+      if (!row) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy tài khoản Zalo',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã mở lại thử khôi phục tự động. Hệ thống sẽ thử lại ở chu kỳ kế tiếp.',
+        data: {
+          account: {
+            id: row.id,
+            status: row.status,
+            restoreFailCount: Number(row.restore_fail_count || 0),
+            lastRestoreAttemptAt: row.last_restore_attempt_at || null,
+            displayName: row.display_name,
+            isActive: row.is_active,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('retryRestore error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Không thể mở lại thử khôi phục',
+      });
     }
   }
 

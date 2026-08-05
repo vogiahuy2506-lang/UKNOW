@@ -54,6 +54,15 @@ router.post(
   zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
 );
 
+// Clear needs_reauth fail window so keep-alive/cron will try again
+router.post(
+  '/accounts/:id/retry-restore',
+  requirePermission('zalo_settings'),
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.retryRestore.bind(zaloSettingsController)
+);
+
 // Restore account session by cookie — cần quyền zalo_settings
 router.post(
   '/accounts/:id/restore-session-by-cookie',

@@ -342,6 +342,9 @@ CREATE TABLE zalo_settings (
   is_default        BOOLEAN      NOT NULL DEFAULT FALSE,
   notes             TEXT,
   last_connected_at TIMESTAMPTZ,
+  restore_fail_count INT NOT NULL DEFAULT 0,
+  first_restore_fail_at TIMESTAMPTZ,
+  last_restore_attempt_at TIMESTAMPTZ,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

@@ -148,6 +148,12 @@ export const buildCronExpression = (scheduleForm = {}) => {
   switch (scheduleType) {
     case 'once': {
       if (!scheduleDate) return '';
+      // Parse YYYY-MM-DD as calendar date (not browser-local Date) so day/month
+      // match Asia/Ho_Chi_Minh wall clock used by the scheduler.
+      const ymd = String(scheduleDate).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (ymd) {
+        return `${minute} ${hour} ${Number(ymd[3])} ${Number(ymd[2])} *`;
+      }
       const date = new Date(scheduleDate);
       return `${minute} ${hour} ${date.getDate()} ${date.getMonth() + 1} *`;
     }
@@ -165,6 +171,58 @@ export const buildCronExpression = (scheduleForm = {}) => {
     default:
       return '';
   }
+};
+
+/** Minimum lead time for explicit `once` schedules (matches scheduler refresh cadence). */
+export const ONCE_SCHEDULE_MIN_LEAD_MS = 2 * 60 * 1000;
+
+/**
+ * Block past / too-soon one-shot schedules on the UI.
+ * Only applies when scheduleType === 'once' (not after_delay / recurring).
+ * Interprets scheduleDate + scheduleTime as Asia/Ho_Chi_Minh wall clock.
+ *
+ * @param {object} scheduleForm
+ * @param {Date} [now]
+ * @returns {{ ok: true } | { ok: false, reason: 'too_soon' | 'invalid' }}
+ */
+export const assertOnceScheduleNotInPast = (scheduleForm = {}, now = new Date()) => {
+  if (scheduleForm.scheduleType !== 'once') {
+    return { ok: true };
+  }
+
+  const dateStr = String(scheduleForm.scheduleDate || '').trim();
+  const timeStr = String(scheduleForm.scheduleTime || '').trim();
+  if (!dateStr || !timeStr) {
+    return { ok: true };
+  }
+
+  const ymd = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const hm = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!ymd || !hm) {
+    return { ok: false, reason: 'invalid' };
+  }
+
+  const year = Number.parseInt(ymd[1], 10);
+  const month = Number.parseInt(ymd[2], 10);
+  const day = Number.parseInt(ymd[3], 10);
+  const hour = Number.parseInt(hm[1], 10);
+  const minute = Number.parseInt(hm[2], 10);
+  if (
+    !Number.isFinite(year)
+    || month < 1 || month > 12
+    || day < 1 || day > 31
+    || hour < 0 || hour > 23
+    || minute < 0 || minute > 59
+  ) {
+    return { ok: false, reason: 'invalid' };
+  }
+
+  const runAt = hanoiWallClockToDate(year, month, day, hour, minute, 0);
+  const minAllowed = now.getTime() + ONCE_SCHEDULE_MIN_LEAD_MS;
+  if (runAt.getTime() < minAllowed) {
+    return { ok: false, reason: 'too_soon' };
+  }
+  return { ok: true };
 };
 
 /**

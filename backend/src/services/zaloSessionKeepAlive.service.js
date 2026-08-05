@@ -132,6 +132,11 @@ async function refreshAccountSession(account) {
       console.log(`[ZaloKeepAlive] Account ${accountId}: restoreZaloSessionFromCookie returned: ${!!restoredApi}`);
     } catch (restoreError) {
       console.warn(`[ZaloKeepAlive] Account ${accountId}: Restore failed: ${restoreError.message}`);
+      try {
+        await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+      } catch (recordErr) {
+        console.warn(`[ZaloKeepAlive] recordRestoreFailure failed for ${accountId}: ${recordErr.message}`);
+      }
       refreshingAccounts.delete(accountKey);
       return { accountId, status: 'failed', reason: 'restore_failed_temporary' };
     }
@@ -179,6 +184,11 @@ async function refreshAccountSession(account) {
     }
 
     console.log(`[ZaloKeepAlive] Account ${accountId}: restore returned null`);
+    try {
+      await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+    } catch (recordErr) {
+      console.warn(`[ZaloKeepAlive] recordRestoreFailure failed for ${accountId}: ${recordErr.message}`);
+    }
     refreshingAccounts.delete(accountKey);
     return { accountId, status: 'failed', reason: 'restore_failed' };
 

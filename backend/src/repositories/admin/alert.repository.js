@@ -217,6 +217,7 @@ export async function metricZaloDisconnected(minutes, maxAgeMinutes) {
     `SELECT COUNT(*)::int AS cnt
      FROM zalo_settings
      WHERE COALESCE(status, '') <> 'connected'
+       AND COALESCE(status, '') <> 'needs_reauth'
        AND updated_at <= NOW() - ($1 || ' minutes')::interval
        AND updated_at >= NOW() - ($2 || ' minutes')::interval`,
     [String(minutes), String(maxAgeMinutes)]

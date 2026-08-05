@@ -21,6 +21,10 @@ const zaloSettingsApiService = {
     return api.post(`/zalo/accounts/${accountId}/restore-session`);
   },
 
+  retryRestore(accountId) {
+    return api.post(`/zalo/accounts/${accountId}/retry-restore`);
+  },
+
   getLoginQrStatus(sessionKey) {
     return api.get(`/zalo/accounts/login-qr/${sessionKey}/status`);
   },
