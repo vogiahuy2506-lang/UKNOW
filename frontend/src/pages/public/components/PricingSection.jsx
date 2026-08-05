@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt } from 'react-icons/fa';
+import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight } from 'react-icons/fa';
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
 import { getPlans } from '../../../services/plan.service';
@@ -119,103 +119,42 @@ const getTranslatedFeature = (feature, t) => {
   return key ? t(`pricing.features.${key}`) : text;
 };
 
-// Glass mode styles — dùng cho trang /pricing với video background
-const GLASS_STYLES = [
+// Solid styles — đồng bộ với giao diện tổng thể (ContactPage, HeroPage)
+// Tất cả card cùng style border trắng, không có "phổ biến nhất" nổi bật riêng.
+const CARD_STYLES = [
   {
-    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
+    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
     title: 'text-slate-900',
     price: 'text-slate-900',
     unit: 'text-slate-500',
     feature: 'text-slate-600',
-    featureIcon: 'text-orange-500',
-    button: 'bg-orange-500 text-white hover:bg-orange-600',
-    corner: 'from-orange-100/40 to-orange-50/20',
+    featureIcon: 'bg-green-100 text-green-600',
+    button: 'bg-slate-900 text-white hover:bg-slate-800',
+    iconBg: 'bg-slate-50',
     icon: FaRocket,
   },
   {
-    wrapper: 'bg-white/75 border border-orange-300/60 backdrop-blur-sm shadow-xl shadow-orange-500/10',
-    badge: null, // Will be set from t('pricing.mostPopular')
+    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
     title: 'text-slate-900',
     price: 'text-slate-900',
     unit: 'text-slate-500',
     feature: 'text-slate-600',
-    featureIcon: 'text-orange-500',
-    button: 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg hover:shadow-orange-500/30',
-    corner: 'from-orange-200/40 to-orange-100/20',
+    featureIcon: 'bg-green-100 text-green-600',
+    button: 'bg-slate-900 text-white hover:bg-slate-800',
+    iconBg: 'bg-slate-50',
     icon: FaCrown,
   },
   {
-    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
+    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
     title: 'text-slate-900',
     price: 'text-slate-900',
     unit: 'text-slate-500',
     feature: 'text-slate-600',
-    featureIcon: 'text-orange-500',
-    button: 'bg-orange-500 text-white hover:bg-orange-600',
-    corner: 'from-amber-100/40 to-amber-50/20',
+    featureIcon: 'bg-green-100 text-green-600',
+    button: 'bg-slate-900 text-white hover:bg-slate-800',
+    iconBg: 'bg-slate-50',
     icon: FaBolt,
   },
-  {
-    wrapper: 'bg-white/55 border border-white/80 backdrop-blur-sm',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'text-orange-500',
-    button: 'bg-orange-500 text-white hover:bg-orange-600',
-    corner: 'from-amber-100/40 to-amber-50/20',
-    icon: FaGem,
-  },
-];
-
-// Mảng các style động để tự động xoay vòng cho các gói
-const DYNAMIC_STYLES = [
-  {
-    wrapper: 'bg-white border border-slate-200',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'text-orange-500',
-    button: 'bg-orange-50 text-orange-700 hover:bg-orange-100',
-    corner: 'from-orange-100 to-orange-50',
-    icon: FaRocket,
-  },
-  {
-    // Nổi bật bằng màu + shadow + ring, KHÔNG dùng scale (làm card lệch chiều cao so với các card khác)
-    wrapper: 'bg-gradient-to-b from-orange-600 to-red-600 shadow-2xl shadow-orange-500/30 ring-2 ring-orange-400 relative z-10',
-    badge: true, // Will use t('pricing.mostPopular')
-    title: 'text-white',
-    price: 'text-white',
-    unit: 'text-orange-100',
-    feature: 'text-orange-50',
-    featureIcon: 'text-orange-200',
-    button: 'bg-white text-orange-600 hover:bg-slate-50 shadow-lg shadow-orange-900/20',
-    corner: 'bg-white/10',
-    icon: FaCrown,
-  },
-  {
-    wrapper: 'bg-white border border-slate-200',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'text-red-500',
-    button: 'bg-red-50 text-red-700 hover:bg-red-100',
-    corner: 'from-red-100 to-red-50',
-    icon: FaBolt,
-  },
-  {
-    wrapper: 'bg-white border border-slate-200',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'text-amber-500',
-    button: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
-    corner: 'from-amber-100 to-amber-50',
-    icon: FaGem,
-  }
 ];
 
 /**
@@ -304,45 +243,50 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
   if (loading) {
     return (
-      <div className="py-32 flex justify-center">
+      <div className="py-20 flex justify-center">
         <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  const styleSet = glass ? GLASS_STYLES : DYNAMIC_STYLES;
+  const styleSet = CARD_STYLES;
 
   const sectionPadding = compact
     ? 'pb-6 md:pb-8'
     : embedded
-      ? 'py-12 md:py-16'
-      : glass
-        ? 'py-16'
-        : 'py-32 bg-slate-50 border-t border-slate-200';
-
-  const sectionBg = (glass || compact || embedded) ? '' : '';
+      ? 'pt-8 pb-8 md:pt-10 md:pb-20'
+      : 'py-12 md:py-16';
 
   return (
     <section
       id="pricing"
-      className={`${sectionPadding} ${sectionBg} relative w-full ${embedded ? '' : 'overflow-hidden'} ${compact ? 'pt-3' : ''}`}
+      className={`${sectionPadding} bg-white relative overflow-hidden`}
     >
-      {!embedded && (
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-50 opacity-70"></div>
-      )}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      {/* Dot grid background — match ContactPage / HeroPage */}
+      <div className="absolute inset-0 opacity-[0.3]" style={{
+        backgroundColor: '#f8fafc',
+        backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }} />
+
+      <div className="max-w-6xl mx-auto px-6 relative z-10">
         {!embedded && (
-          <AnimatedSection className="text-center mb-20">
-            <span className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full font-bold text-sm tracking-wide uppercase mb-6 shadow-sm border border-orange-200">
-              {t('pricing.heroBadge')}
-            </span>
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 mb-6 tracking-tight">
+          <AnimatedSection className="text-center mb-8">
+            {/* Badge — match HeroPage style */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-5">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              <span>{t('pricing.heroBadge')}</span>
+            </div>
+
+            <h2
+              className="text-slate-900 mb-4"
+              style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.15, fontWeight: 600 }}
+            >
               {t('pricing.heroTitlePrefix')}{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
-                {t('pricing.heroTitleHighlight')}
-              </span>
+              <span className="text-orange-500">{t('pricing.heroTitleHighlight')}</span>
             </h2>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+
+            <p className="text-slate-600 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
               {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
@@ -350,14 +294,14 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
         {/* Billing period toggle */}
         {hasYearlyPricing && (
-          <div className={`flex justify-center ${compact ? 'mb-5' : 'mb-10'}`}>
-            <div className={`inline-flex items-center rounded-full p-1 gap-1 ${glass ? 'bg-white/20 backdrop-blur-sm' : 'bg-slate-100 border border-slate-200'}`}>
+          <div className={`flex justify-center ${compact ? 'mb-4' : 'mb-6'}`}>
+            <div className="inline-flex items-center rounded-full p-1 gap-1 bg-slate-100 border border-slate-200">
               <button
                 onClick={() => setBillingPeriod('monthly')}
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                   billingPeriod === 'monthly'
                     ? 'bg-white text-slate-900 shadow-sm'
-                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 {t('pricing.billingMonthly')}
@@ -367,7 +311,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
                   billingPeriod === 'yearly'
                     ? 'bg-white text-slate-900 shadow-sm'
-                    : glass ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 {t('pricing.billingYearly')}
@@ -381,20 +325,13 @@ export default function PricingSection({ embedded = false, compact = false, glas
           </div>
         )}
 
-        {/*
-          Layout cố định tối đa 3 cột/hàng — khi nhiều hơn 3 plans, cards tự động wrap xuống hàng tiếp.
-          - 1 plan: 1 cột (max-w-md)
-          - 2 plans: 2 cột (max-w-4xl)
-          - 3+ plans: 3 cột, wrap (max-w-7xl)
-        */}
-        <div className={`grid ${compact ? 'gap-5' : 'gap-8'} mx-auto items-stretch ${
+        {/* Layout giống ContactPage grid: 1/2/3 cột responsive */}
+        <div className={`grid ${compact ? 'gap-4' : 'gap-5'} mx-auto items-stretch ${
           plans.length === 1 ? 'grid-cols-1 max-w-md' :
           plans.length === 2 ? 'grid-cols-1 md:grid-cols-2 max-w-4xl' :
-          'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-7xl'
+          'grid-cols-1 md:grid-cols-3 max-w-6xl'
         }`}>
           {plans.map((plan, index) => {
-            // Cấp phát style động dựa trên vị trí. Gói ở giữa (index 1) thường nổi bật nhất.
-            // Admin có thể thêm code "custom" để ép hiển thị nút liên hệ Zalo.
             const isCustom = isContactPlan(plan);
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
@@ -416,132 +353,103 @@ export default function PricingSection({ embedded = false, compact = false, glas
               : 0;
 
             return (
-              <AnimatedSection key={plan.id} delay={index * 100} className="h-full">
-                <div className={`${compact ? 'rounded-3xl p-7' : 'rounded-[2rem] p-8 md:p-10'} transition-all duration-500 hover:-translate-y-2 relative overflow-hidden flex flex-col h-full ${style.wrapper}`}>
-
-                  {/* Corner decoration */}
-                  <div className={`absolute top-0 right-0 w-40 h-40 rounded-full -translate-y-1/2 translate-x-1/3 bg-gradient-to-br blur-2xl ${style.corner}`} />
-
-                  {/* Popular badge — dạng pill căn giữa, không bị rounded corners cắt */}
-                  {style.badge && (
-                    <div className="absolute top-3 inset-x-0 flex justify-center z-20">
-                      <span className="bg-white text-orange-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full shadow-md whitespace-nowrap">
-                        {t('pricing.mostPopular')}
-                      </span>
-                    </div>
-                  )}
-                  <div className={`relative z-10 flex-1 flex flex-col ${style.badge ? 'pt-5' : ''}`}>
-                    {hasPromotion && (
-                      <div className="mb-2">
-                        <span className="bg-emerald-500 text-white px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm whitespace-nowrap">
-                          {t('pricing.promoDiscount', { pct: discountPct })}
-                        </span>
+              <AnimatedSection key={plan.id} delay={index * 100}>
+                <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${style.wrapper}`}>
+                  {/* Plan name + icon */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className={`text-base font-bold ${style.title}`}>{planName}</h3>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${style.iconBg}`}>
+                        <PlanIcon className="w-4 h-4 text-orange-500" />
                       </div>
-                    )}
-                    <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-                      <h3 className={`${compact ? 'text-2xl' : 'text-2xl'} font-black ${style.title}`}>{planName}</h3>
-                      {PlanIcon && (
-                        <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl flex items-center justify-center bg-white/10 backdrop-blur-sm ${style.featureIcon}`}>
-                          <PlanIcon className={compact ? 'w-5 h-5' : 'w-6 h-6'} />
-                        </div>
-                      )}
                     </div>
+                    <p className={`text-xs leading-relaxed min-h-[32px] ${style.unit}`}>{planDescription}</p>
+                  </div>
 
-                    <p className={`${compact ? 'mb-5 text-sm min-h-[40px]' : 'mb-8 text-sm min-h-[40px]'} font-medium leading-relaxed ${style.unit}`}>{planDescription}</p>
-
-                    <div className={`${compact ? 'mb-5 pb-5' : 'mb-8 pb-8'} border-b border-slate-200/40`}>
-                      {isCustom ? (
-                        <div className="flex items-end gap-2">
-                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>{t('customPlan.priceLabel')}</span>
+                  {/* Price */}
+                  <div className="mb-5 pb-5 border-b border-slate-200/30">
+                    {isCustom ? (
+                      <div className={`text-2xl font-black ${style.price}`}>
+                        {t('customPlan.priceLabel')}
+                      </div>
+                    ) : hasPromotion ? (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-xs line-through ${style.unit}`}>{fmtVnd(rawPlanPrice)}</span>
+                          <span className="bg-emerald-500 text-white text-[9px] font-black px-1 py-0.5 rounded-full leading-none">
+                            -{fmtVnd(promotion.discountAmount)}
+                          </span>
                         </div>
-                      ) : hasPromotion ? (
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-sm line-through ${style.unit}`}>
-                              {fmtVnd(rawPlanPrice)}
+                        <div className="flex items-baseline gap-0.5">
+                          <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(promotedPrice)}</span>
+                          <span className={`text-base ${style.unit}`}>đ</span>
+                        </div>
+                        <div className={`text-xs ${style.unit}`}>
+                          {billingPeriod === 'yearly' ? t('pricing.perYear') : t('pricing.perMonth')}
+                        </div>
+                      </div>
+                    ) : billingPeriod === 'yearly' && plan.price_yearly ? (
+                      <div>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(plan.price_yearly)}</span>
+                          <span className={`text-base ${style.unit}`}>đ</span>
+                        </div>
+                        <div className={`text-xs ${style.unit}`}>{t('pricing.perYear')}</div>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className={`text-xs ${style.unit}`}>
+                            ≈ {fmtVnd(Math.round(Number(plan.price_yearly) / 12))} / tháng
+                          </span>
+                          {calcSavings(plan.price, plan.price_yearly) > 0 && (
+                            <span className="bg-emerald-500 text-white text-[9px] font-black px-1 py-0.5 rounded-full leading-none">
+                              -{calcSavings(plan.price, plan.price_yearly)}%
                             </span>
-                            <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
-                              -{fmtVnd(promotion.discountAmount)}
-                            </span>
-                          </div>
-                          <div className="flex items-end gap-2">
-                            <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
-                              {fmtVnd(promotedPrice)}
-                            </span>
-                            <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>
-                              {billingPeriod === 'yearly' ? t('pricing.perYear') : t('pricing.perMonth')}
-                            </span>
-                          </div>
-                          {billingPeriod === 'yearly' && plan.price_yearly && (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <span className={`text-sm ${style.unit}`}>
-                                ≈ {fmtVnd(Math.round(promotedPrice / 12))} / tháng
-                              </span>
-                            </div>
                           )}
                         </div>
-                      ) : billingPeriod === 'yearly' && plan.price_yearly ? (
-                        <div>
-                          <div className="flex items-end gap-2">
-                            <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
-                              {fmtVnd(plan.price_yearly)}
-                            </span>
-                            <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perYear')}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className={`text-sm ${style.unit}`}>
-                              ≈ {fmtVnd(Math.round(Number(plan.price_yearly) / 12))} / tháng
-                            </span>
-                            {calcSavings(plan.price, plan.price_yearly) > 0 && (
-                              <span className="bg-emerald-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
-                                -{calcSavings(plan.price, plan.price_yearly)}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-end gap-2">
-                          <span className={`${compact ? 'text-4xl' : 'text-4xl md:text-5xl'} font-black tracking-tight ${style.price}`}>
-                            {fmtVnd(plan.price)}
-                          </span>
-                          <span className={`font-semibold ${compact ? 'mb-1.5 text-sm' : 'mb-2'} ${style.unit}`}>{t('pricing.perMonth')}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <ul className={`${compact ? 'space-y-3 mb-6' : 'space-y-4 mb-8'} flex-1`}>
-                      {features.map((feature, i) => {
-                        const featureText = (typeof feature === 'object' && feature !== null)
-                          ? (feature[locale] || feature.vi || feature.en || '')
-                          : getTranslatedFeature(feature, t);
-                        return (
-                        <li key={i} className="flex items-start gap-3">
-                          <FaCheckCircle className={`flex-shrink-0 w-5 h-5 mt-0.5 ${style.featureIcon}`} />
-                          <span className={`text-sm font-medium leading-relaxed ${style.feature}`}>{featureText}</span>
-                        </li>
-                        );
-                      })}
-                    </ul>
-
-                    <button
-                      onClick={() => handlePlanClick(plan)}
-                      className={`w-full ${compact ? 'py-3 text-sm' : 'py-4 text-sm'} rounded-xl font-bold tracking-wide transition-all duration-300 mt-auto ${style.button}`}
-                    >
-                      {hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t)}
-                    </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-baseline gap-0.5">
+                        <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(plan.price)}</span>
+                        <span className={`text-base ${style.unit}`}>đ</span>
+                        <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Features */}
+                  <ul className="space-y-2 flex-1 mb-5">
+                    {features.map((feature, i) => {
+                      const featureText = (typeof feature === 'object' && feature !== null)
+                        ? (feature[locale] || feature.vi || feature.en || '')
+                        : getTranslatedFeature(feature, t);
+                      return (
+                        <li key={i} className="flex items-start gap-2">
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${style.featureIcon}`}>
+                            <FaCheckCircle className="w-2.5 h-2.5" />
+                          </div>
+                          <span className={`text-xs leading-relaxed ${style.feature}`}>{featureText}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {/* CTA */}
+                  <button
+                    onClick={() => handlePlanClick(plan)}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all ${style.button}`}
+                  >
+                    {hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t)}
+                    <FaArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </AnimatedSection>
             );
           })}
         </div>
 
-        {!compact && !glass && (
-          <AnimatedSection className="text-center mt-16 max-w-2xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-full px-6 py-3 text-sm font-medium text-slate-600">
-              <FaStar className="text-yellow-400 w-5 h-5" /> {t('pricing.trialOffer')}
-            </div>
-          </AnimatedSection>
+        {!compact && (
+          <p className="text-center text-sm text-slate-500 mt-10">
+            Tất cả các gói đều bao gồm SSL miễn phí, backup hàng ngày và hỗ trợ kỹ thuật.
+          </p>
         )}
       </div>
 

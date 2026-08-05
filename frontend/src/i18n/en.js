@@ -3029,6 +3029,7 @@ export default {
     officeDesc: 'Working hours 9am-6pm, Mon-Fri',
     validationRequired: 'Please fill in all required information',
     validationMinLength: 'Minimum {n} characters',
+    validationEmail: 'Invalid email address',
     sentSuccess: 'Sent successfully!',
     errorMessage: 'An error occurred, please try again.',
     subtitle: 'Do you have questions or need support?',

@@ -203,7 +203,7 @@ const contactPageTemplate = {
       elements: [
         // Email
         { key: 'contact.email.label', label: 'Email - Label', labelVi: 'Email - Nhãn', type: 'text', defaultValue: 'Email' },
-        { key: 'contact.email.value', label: 'Email - Value', labelVi: 'Email - Giá trị', type: 'text', defaultValue: 'hello@founderai.vn' },
+        { key: 'contact.email.value', label: 'Email - Value', labelVi: 'Email - Giá trị', type: 'text', defaultValue: 'info@digiso.vn' },
         { key: 'contact.email.desc', label: 'Email - Description', labelVi: 'Email - Mô tả', type: 'text', defaultValue: 'Phản hồi trong 24h' },
         
         // Hotline

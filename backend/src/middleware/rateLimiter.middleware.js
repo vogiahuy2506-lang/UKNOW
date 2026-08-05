@@ -3,11 +3,11 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 const isTest = process.env.NODE_ENV === 'test';
 const skipInTest = () => isTest;
 
-// Global rate limiter - 100 requests per 15 minutes
+// Global rate limiter - 600 requests per 15 minutes (cao để user có thể load nhiều page liên tục)
 export const globalLimiter = rateLimit({
   skip: skipInTest,
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 600,
   message: {
     success: false,
     message: 'Quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.',

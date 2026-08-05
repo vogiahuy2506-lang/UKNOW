@@ -2,11 +2,11 @@ import * as contactService from '../services/contact.service.js';
 
 export async function submitContact(req, res) {
   try {
-    const { name, email, phone, company, companySize, message } = req.body;
+    const { name, email, phone, company, message } = req.body;
     const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
 
     const submission = await contactService.submitContactForm({
-      name, email, phone, company, companySize, message, ipAddress,
+      name, email, phone, company, message, ipAddress,
     });
 
     return res.status(201).json({

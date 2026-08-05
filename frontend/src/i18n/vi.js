@@ -3072,6 +3072,7 @@ export default {
     officeDesc: 'Làm việc từ 9h-18h, Thứ 2 - Thứ 6',
     validationRequired: 'Vui lòng điền đầy đủ thông tin bắt buộc',
     validationMinLength: 'Tối thiểu {n} ký tự',
+    validationEmail: 'Email không hợp lệ',
     sentSuccess: 'Gửi thành công!',
     errorMessage: 'Có lỗi xảy ra, vui lòng thử lại.',
     subtitle: 'Bạn có câu hỏi hoặc cần hỗ trợ?',

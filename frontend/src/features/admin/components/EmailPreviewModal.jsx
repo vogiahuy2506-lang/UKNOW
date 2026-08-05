@@ -12,7 +12,7 @@ const SAMPLE_USER = {
 };
 
 // System config
-const SYSTEM_EMAIL_NAME = 'Founder AI Platform';
+const MAIL_FROM_NAME = 'Founder AI Platform';
 const SYSTEM_LOGO_URL = '/logo.png'; // Sử dụng relative path, sẽ tự động lấy từ frontend
 
 export default function EmailPreviewModal({ isOpen, onClose, notification }) {
@@ -165,7 +165,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
                         <div style={{ background: 'rgba(255,255,255,0.2)', padding: '6px', borderRadius: '8px' }}>
                           <img 
                             src={SYSTEM_LOGO_URL} 
-                            alt={SYSTEM_EMAIL_NAME} 
+                            alt={MAIL_FROM_NAME} 
                             style={{ maxHeight: '48px', maxWidth: '160px', objectFit: 'contain', display: 'block' }}
                           />
                         </div>
@@ -176,7 +176,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
                       )}
                       <div>
                         <h1 style={{ margin: 0, color: '#fff', fontSize: '22px', fontWeight: 700 }}>
-                          {SYSTEM_EMAIL_NAME}
+                          {MAIL_FROM_NAME}
                         </h1>
                         <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.85)', fontSize: '13px' }}>
                           {typeConfig.label}

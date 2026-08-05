@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import HeroNavbar from '../pages/public/components/HeroNavbar';
-import Footer from '../components/layout/client/Footer';
 
 export default function PublicLayout() {
   const { pathname, hash } = useLocation();
@@ -24,8 +23,24 @@ export default function PublicLayout() {
       <main>
         <Outlet />
       </main>
+    </div>
+  );
+}
 
-      <Footer />
+export function PublicLayoutLite() {
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    if (!hash) window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [pathname, hash]);
+
+  return (
+    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen bg-slate-50">
+      <HeroNavbar />
+
+      <main>
+        <Outlet />
+      </main>
     </div>
   );
 }
