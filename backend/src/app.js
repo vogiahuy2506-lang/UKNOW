@@ -55,6 +55,7 @@ import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
 import topupRoutes from './routes/topup.routes.js';
+import helpRoutes from './routes/help.routes.js';
 import voucherRoutes from './routes/voucher.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
@@ -173,6 +174,7 @@ export function createApp() {
   app.use('/api/payments', paymentRoutes);
   app.use('/api/plans', planRoutes);
   app.use('/api/topup', topupRoutes);
+  app.use('/api/help', helpRoutes);
   app.use('/api/vouchers', voucherRoutes);
   app.use('/api/contact', contactRoutes);
   app.use('/api/employees', employeeRoutes);

@@ -12,6 +12,7 @@ import {
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import LanguageSwitcher from '../../LanguageSwitcher';
+import HelpHintLink from '../../help/HelpHintLink';
 import { useI18n } from '../../../i18n';
 
 const Header = ({ onToggleSidebar }) => {
@@ -59,6 +60,7 @@ const Header = ({ onToggleSidebar }) => {
       </div>
 
       <div className="flex items-center gap-2">
+        <HelpHintLink />
         <LanguageSwitcher />
 
         <div className="relative" ref={menuRef}>

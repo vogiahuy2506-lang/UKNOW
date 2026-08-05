@@ -13,6 +13,7 @@ import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
 import PublicLayout from './layouts/PublicLayout';
 import PolicyLayout from './layouts/PolicyLayout';
+import DocsLayout from './layouts/DocsLayout';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -46,6 +47,8 @@ import TermsOfService from './pages/public/TermsOfService';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
+import HelpIndexPage from './pages/docs/HelpIndexPage';
+import HelpArticlePage from './pages/docs/HelpArticlePage';
 import LandingHtmlModeGate from './features/landing-customizer/components/LandingHtmlModeGate.jsx';
 import LpRendererPage from './pages/public/LpRendererPage';
 import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
@@ -63,6 +66,9 @@ import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import AdminAiUsagePage from './pages/admin/AdminAiUsagePage';
 import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
+import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
+import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
+import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
 import NotificationCenter from './pages/admin/NotificationCenter';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
@@ -256,6 +262,12 @@ function App() {
             />
           </Route>
 
+          {/* Trung tâm hướng dẫn — layout riêng, sidebar tài liệu */}
+          <Route path="/huong-dan" element={<DocsLayout />}>
+            <Route index element={<HelpIndexPage />} />
+            <Route path=":slug" element={<HelpArticlePage />} />
+          </Route>
+
           {/* Thanh toán — video background, không có navbar/footer */}
           <Route path="/checkout" element={<CheckoutLayout><CheckoutPage /></CheckoutLayout>} />
           <Route path="/payment-success" element={<CheckoutLayout><PaymentSuccessPage /></CheckoutLayout>} />
@@ -362,6 +374,9 @@ function App() {
             <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
             <Route path="ai-usage" element={<AdminAiUsagePage />} />
             <Route path="ai-models" element={<AdminAiModelsPage />} />
+            <Route path="help-articles" element={<AdminHelpArticlesPage />} />
+            <Route path="help-articles/:id" element={<AdminHelpArticleEditPage />} />
+            <Route path="help-unanswered" element={<AdminHelpUnansweredPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="diagnostic" element={<DiagnosticPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />

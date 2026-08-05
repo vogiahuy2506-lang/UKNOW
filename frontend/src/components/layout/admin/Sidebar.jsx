@@ -38,6 +38,8 @@ import {
   HiOutlineMailOpen,
   HiOutlinePencil,
   HiOutlinePlus,
+  HiOutlineDocumentText,
+  HiOutlineQuestionMarkCircle,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
@@ -107,6 +109,18 @@ const superAdminMenuItems = (t) => [
     section: t('nav.adminNavMessaging'),
     path: '/admin/notification-center',
     icon: HiOutlineMailOpen,
+  },
+  {
+    name: t('nav.helpArticles'),
+    section: t('nav.adminNavMessaging'),
+    path: '/admin/help-articles',
+    icon: HiOutlineDocumentText,
+  },
+  {
+    name: t('nav.helpUnanswered'),
+    section: t('nav.adminNavMessaging'),
+    path: '/admin/help-unanswered',
+    icon: HiOutlineQuestionMarkCircle,
   },
   {
     name: t('nav.systemAuditLogs'),

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import useIsMobile from '../../hooks/useIsMobile';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
+import { getHelpArticle } from '../../services/help.service';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
@@ -467,6 +468,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const pendingTabIdRef = useRef(new Set()); // non-rendering check
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const getAiRequestErrorMessage = (error) => getAiQuotaErrorMessage(error, t);
 
@@ -783,6 +785,33 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Nút "Hỏi trợ lý về mục này" ở trang hướng dẫn (/huong-dan/:slug) điều hướng tới
+  // /app?ask=<slug> — khi panel mở, tự điền câu hỏi gợi ý rồi xoá query param.
+  useEffect(() => {
+    const askSlug = searchParams.get('ask');
+    if (!isOpen || !askSlug) return;
+
+    let mounted = true;
+    getHelpArticle(askSlug)
+      .then((res) => {
+        if (!mounted) return;
+        const title = res.data?.result?.title;
+        setInputText(title ? t('aiChatbot.askAboutArticle', { title }) : t('aiChatbot.askAboutSlug', { slug: askSlug }));
+      })
+      .catch(() => {
+        if (mounted) setInputText(t('aiChatbot.askAboutSlug', { slug: askSlug }));
+      });
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('ask');
+      return next;
+    }, { replace: true });
+
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, searchParams]);
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

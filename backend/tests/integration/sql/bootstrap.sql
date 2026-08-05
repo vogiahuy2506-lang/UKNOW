@@ -1224,6 +1224,62 @@ CREATE TABLE IF NOT EXISTS webchat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_webchat_messages_conv ON webchat_messages(id_conversation);
 
+-- ─── Help center (migration 100) ───────────────────────────────────────
+-- Production dùng pgvector (migration 100). Bootstrap test dùng JSONB để
+-- chạy được trên postgres thuần (e2e image có thể chưa gắn pgvector).
+-- Repository tự phát hiện kiểu cột và chọn đường insert/search phù hợp.
+
+CREATE TABLE help_articles (
+  id            BIGSERIAL PRIMARY KEY,
+  slug          VARCHAR(120) NOT NULL UNIQUE,
+  title         VARCHAR(255) NOT NULL,
+  summary       TEXT NOT NULL DEFAULT '',
+  body_md       TEXT NOT NULL DEFAULT '',
+  feature_key   VARCHAR(80) NOT NULL,
+  primary_route VARCHAR(255),
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  is_published  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_help_articles_feature ON help_articles (feature_key, sort_order);
+CREATE INDEX idx_help_articles_published ON help_articles (is_published) WHERE is_published = TRUE;
+
+CREATE TABLE help_article_media (
+  id          BIGSERIAL PRIMARY KEY,
+  article_id  BIGINT NOT NULL REFERENCES help_articles(id) ON DELETE CASCADE,
+  type        VARCHAR(20) NOT NULL CHECK (type IN ('image', 'video')),
+  url         TEXT NOT NULL,
+  caption     TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_help_article_media_article ON help_article_media (article_id, sort_order);
+
+CREATE TABLE help_article_chunks (
+  id            BIGSERIAL PRIMARY KEY,
+  article_id    BIGINT NOT NULL REFERENCES help_articles(id) ON DELETE CASCADE,
+  chunk_index   INTEGER NOT NULL,
+  content_text  TEXT NOT NULL,
+  embedding     JSONB,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT help_article_chunks_unique UNIQUE (article_id, chunk_index)
+);
+
+CREATE INDEX idx_help_article_chunks_article ON help_article_chunks (article_id);
+
+CREATE TABLE help_unanswered (
+  id              BIGSERIAL PRIMARY KEY,
+  question        TEXT NOT NULL,
+  user_id         BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  asked_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  top_similarity  REAL
+);
+
+CREATE INDEX idx_help_unanswered_asked ON help_unanswered (asked_at DESC);
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (

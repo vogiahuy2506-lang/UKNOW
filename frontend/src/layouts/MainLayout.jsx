@@ -57,6 +57,16 @@ const MainLayout = () => {
     setMobileDrawerOpen(false);
   }, [location.pathname]);
 
+  // Link "Hỏi trợ lý về mục này" từ trang hướng dẫn (/huong-dan/:slug) mở /app?ask=<slug>
+  // → tự mở panel AI để AiChatbot đọc param và gợi ý câu hỏi.
+  useEffect(() => {
+    const askSlug = new URLSearchParams(location.search).get('ask');
+    if (askSlug) {
+      setAiPanelOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   // Trang Trợ lý AI đã có chat full-screen — tự thu side panel để không bị lấn layout
   useEffect(() => {
     if (isAiHomePage && aiPanelOpen) {

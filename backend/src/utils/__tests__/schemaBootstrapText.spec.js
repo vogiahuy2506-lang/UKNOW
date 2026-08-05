@@ -61,9 +61,9 @@ describe('bootstrap.sql text parity (S-2)', () => {
     expect(ordersBody).toMatch(/topup_config\s+JSONB/i);
   });
 
-  it('bootstrap declares topup_pricing and topup_grants tables', () => {
-    expect(bootstrapSql).toMatch(/CREATE TABLE topup_pricing\s*\(/i);
-    expect(bootstrapSql).toMatch(/CREATE TABLE topup_grants\s*\(/i);
-    expect(bootstrapSql).toMatch(/CONSTRAINT topup_grants_order_item_unique UNIQUE\s*\(\s*order_id\s*,\s*item_key\s*\)/i);
+  it('bootstrap declares help center tables (migration 100)', () => {
+    expect(bootstrapSql).toMatch(/CREATE TABLE help_articles\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE help_article_chunks\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE help_unanswered\s*\(/i);
   });
 });
