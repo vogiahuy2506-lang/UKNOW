@@ -90,7 +90,10 @@ uknow_campaign_schema.sql
 ####################
 CLAUDE.md
 AGENTS.md
-.claude/
+# Cấu hình cá nhân (settings.local.json, worktrees) không commit,
+# nhưng skills/ là quy ước làm việc chung — phải theo repo.
+.claude/*
+!.claude/skills/
 
 ####################
 # LOCAL DOCS / PLANNING / DELIVERABLES

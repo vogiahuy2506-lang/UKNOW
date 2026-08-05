@@ -18,31 +18,72 @@ jobs:
   schema-sync-check:
     name: Schema sync (migrations ↔ bootstrap.sql)
     runs-on: ubuntu-latest
-    # Chỉ chạy cho PR vì cần so sánh với base branch.
-    if: github.event_name == 'pull_request'
+    # Chạy cho CẢ push (kể cả thẳng vào main) lẫn PR.
+    # Trước đây giới hạn ở pull_request nên với lối làm việc push thẳng vào main,
+    # job này skip vĩnh viễn — cổng gác cho đúng vấn đề hay xảy ra nhất mà chưa
+    # từng chạy lần nào (đã dính lệch schema 4 lần chỉ trong ngày 04/08/2026).
     steps:
-      - name: Checkout PR
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Cảnh báo nếu migration mới chưa được mirror vào bootstrap.sql
+      - name: Migration mới phải được mirror vào bootstrap.sql
         run: |
-          BASE_REF="origin/${{ github.base_ref }}"
-          git fetch origin "${{ github.base_ref }}" --depth=1 || true
+          set -euo pipefail
 
-          MIGRATIONS_CHANGED=$(git diff --name-only "$BASE_REF"...HEAD | grep -c '^backend/migrations/' || true)
-          BOOTSTRAP_CHANGED=$(git diff --name-only "$BASE_REF"...HEAD | grep -c '^backend/tests/integration/sql/bootstrap.sql' || true)
-
-          if [ "$MIGRATIONS_CHANGED" -gt 0 ] && [ "$BOOTSTRAP_CHANGED" -eq 0 ]; then
-            echo "::warning::PR có $MIGRATIONS_CHANGED file migration thay đổi nhưng KHÔNG sửa backend/tests/integration/sql/bootstrap.sql."
-            echo "::warning::Nếu migration thêm/đổi cột NOT NULL hoặc bảng mới được dùng trong code, hãy mirror vào bootstrap.sql để integration test vẫn pass."
-            echo ""
-            echo "Migrations đổi trong PR:"
-            git diff --name-only "$BASE_REF"...HEAD | grep '^backend/migrations/' || true
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1 || true
+            RANGE="origin/${{ github.base_ref }}...HEAD"
           else
-            echo "✅ Không phát hiện drift giữa migrations và bootstrap.sql trong PR này."
+            BEFORE="${{ github.event.before }}"
+            # Nhánh mới / force-push: before toàn số 0 → so với commit cha.
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              RANGE="HEAD~1...HEAD"
+            else
+              RANGE="$BEFORE...HEAD"
+            fi
           fi
+
+          CHANGED=$(git diff --name-only $RANGE || true)
+          MIGRATIONS=$(echo "$CHANGED" | grep '^backend/migrations/.*\.sql$' || true)
+          BOOTSTRAP=$(echo "$CHANGED" | grep '^backend/tests/integration/sql/bootstrap.sql$' || true)
+
+          if [ -z "$MIGRATIONS" ]; then
+            echo "Khong co migration nao thay doi."
+            exit 0
+          fi
+
+          # Chi bat buoc mirror khi migration THEM BANG / THEM COT / THEM EXTENSION —
+          # do moi la thu lam bootstrap.sql lech va khien integration test do.
+          # Migration chi them index / comment / UPDATE du lieu thi khong can.
+          NEEDS_MIRROR=""
+          for f in $MIGRATIONS; do
+            [ -f "$f" ] || continue
+            if grep -qiE 'CREATE TABLE|ADD COLUMN|CREATE EXTENSION' "$f"; then
+              NEEDS_MIRROR="$NEEDS_MIRROR $f"
+            fi
+          done
+
+          if [ -z "$NEEDS_MIRROR" ]; then
+            echo "Migration thay doi nhung khong them bang/cot — khong can mirror."
+            exit 0
+          fi
+
+          if [ -n "$BOOTSTRAP" ]; then
+            echo "Co migration them bang/cot VA bootstrap.sql da duoc sua."
+            exit 0
+          fi
+
+          echo "::error::Migration them bang/cot nhung KHONG sua backend/tests/integration/sql/bootstrap.sql"
+          echo ""
+          echo "Cac migration can mirror:"
+          for f in $NEEDS_MIRROR; do echo "  - $f"; done
+          echo ""
+          echo "Vi sao chan: bootstrap.sql la schema dung DB test. Lech voi migration thi"
+          echo "integration test hoac do, hoac XANH GIA (test khong cham cot moi)."
+          echo "Sua: them bang/cot tuong ung vao bootstrap.sql roi commit lai."
+          exit 1
 
   unit:
     name: Jest unit (backend)
