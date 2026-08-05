@@ -31,3 +31,34 @@ export function extractSendMsgId(sent) {
   if (raw == null || raw === '') return null;
   return String(raw);
 }
+
+/**
+ * After saveMessageToDatabase: skip zaloInbox handler for echo / unique-index races.
+ * Dropping skippedEcho here silently pauses AI on every bot reply (D3+D4).
+ *
+ * @param {object|null|undefined} saveResult
+ * @returns {boolean}
+ */
+export function shouldSkipInboxHandler(saveResult) {
+  return !!(saveResult?.isDuplicate || saveResult?.skippedEcho);
+}
+
+/**
+ * Gate used by the listener after persist — single place D3+D4 is enforced.
+ * @returns {boolean} true if handler was invoked
+ */
+export function runInboxHandlerAfterSave(saveResult, handler, msgData, onHandlerError) {
+  if (shouldSkipInboxHandler(saveResult)) return false;
+  if (typeof handler !== 'function') return false;
+  try {
+    const maybePromise = handler(msgData);
+    if (maybePromise && typeof maybePromise.catch === 'function') {
+      maybePromise.catch((err) => {
+        if (typeof onHandlerError === 'function') onHandlerError(err);
+      });
+    }
+  } catch (err) {
+    if (typeof onHandlerError === 'function') onHandlerError(err);
+  }
+  return true;
+}

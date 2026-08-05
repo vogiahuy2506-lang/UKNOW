@@ -575,12 +575,12 @@ export const initScheduler = () => {
       }
     };
 
-    // Offset from */5 listener cron — avoid piling API calls
-    cron.schedule('*/10 * * * *', async () => {
+    // Offset from */5 listener cron (min 0,5,10,...) — run at 5,15,25,... so they never pile
+    cron.schedule('5-59/10 * * * *', async () => {
       await syncZaloPersonalGroupHistory();
     }, { timezone: HANOI_TIME_ZONE });
 
-    console.log('[Scheduler] Đã khởi tạo Zalo Personal background group sync: mỗi 10 phút (ZALO_BG_SYNC_ENABLED)');
+    console.log('[Scheduler] Đã khởi tạo Zalo Personal background group sync: phút 5/15/25/... (ZALO_BG_SYNC_ENABLED)');
   } else {
     console.log('[Scheduler] Zalo Personal background group sync TẮT (ZALO_BG_SYNC_ENABLED=false)');
   }

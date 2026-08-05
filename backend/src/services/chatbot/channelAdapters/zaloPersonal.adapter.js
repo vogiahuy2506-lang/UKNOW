@@ -23,6 +23,7 @@ import {
 import {
   extractSendMsgId,
   resolveConversationExternalId,
+  runInboxHandlerAfterSave,
 } from '../../../utils/zaloPersonalMessage.util.js';
 
 /**
@@ -154,10 +155,10 @@ class ZaloPersonalAdapter {
       ? String(payload.content).trim().slice(0, 200)
       : '';
     const now = Date.now();
+    // Prefer msgId-only when available — avoid text false positives on repeated greetings
     if (msgId) {
       ZaloPersonalAdapter.recentBotOutbound.set(`id:${accountId}:${msgId}`, now);
-    }
-    if (content) {
+    } else if (content) {
       ZaloPersonalAdapter.recentBotOutbound.set(`text:${accountId}:${content}`, now);
     }
     ZaloPersonalAdapter._pruneBotOutbound();
@@ -357,20 +358,24 @@ class ZaloPersonalAdapter {
         msgData.zaloSettingId = accountId;
         
         // Single inbound persist path (visitor or owner/agent). Then hand off to zaloInbox.
+        // Echo / unique-index skip must not run handler — would setAiPaused (D3+D4).
         try {
           const saveResult = await this.saveMessageToDatabase(stored.userId, accountId, msgData);
-          // Echo filtered or DB unique-index skip — do NOT run handler (would pause AI)
-          if (saveResult?.isDuplicate || saveResult?.skippedEcho) {
-            return;
-          }
+          runInboxHandlerAfterSave(
+            saveResult,
+            stored.handler,
+            msgData,
+            (err) => {
+              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
+            }
+          );
         } catch (dbErr) {
           console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
-        }
-        
-        if (stored.handler) {
-          stored.handler(msgData).catch((err) => {
-            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
-          });
+          if (stored.handler) {
+            stored.handler(msgData).catch((err) => {
+              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
+            });
+          }
         }
       }
     });
@@ -699,4 +704,5 @@ class ZaloPersonalAdapter {
   }
 }
 
+export { ZaloPersonalAdapter };
 export default new ZaloPersonalAdapter();
