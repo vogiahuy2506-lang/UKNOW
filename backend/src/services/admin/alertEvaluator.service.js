@@ -40,6 +40,11 @@ export function cooldownOk(lastEvent, cooldownMinutes) {
   return elapsedMs >= cooldownMinutes * 60 * 1000;
 }
 
+/** @internal test helper — cho phép kiểm từng quy tắc mà không cần cả vòng đánh giá. */
+export function evaluateRuleForTests(rule) {
+  return evaluateRule(rule);
+}
+
 async function evaluateRule(rule) {
   const threshold = Number(rule.thresholdValue);
   const windowMinutes = Number(rule.windowMinutes) || 60;
@@ -102,24 +107,28 @@ async function evaluateRule(rule) {
     }
     case 'zalo_disconnected': {
       const minutes = windowMinutes || threshold || 30;
-      const cnt = await alertRepo.metricZaloDisconnected(minutes);
+      // Cận trên: bỏ qua tài khoản khách đã bỏ dùng từ lâu. Không có nó thì
+      // quy tắc bắn mãi mãi và người ta sẽ tắt hết cảnh báo.
+      const maxAgeMinutes = Number(config.maxAgeMinutes) || 7 * 24 * 60;
+      const cnt = await alertRepo.metricZaloDisconnected(minutes, maxAgeMinutes);
       if (cnt > 0) {
         return {
           measuredValue: cnt,
-          message: `${cnt} tài khoản Zalo mất kết nối > ${minutes} phút`,
-          payload: { count: cnt, minutes },
+          message: `${cnt} tài khoản Zalo mất kết nối > ${minutes} phút (trong ${Math.round(maxAgeMinutes / 60)} giờ qua)`,
+          payload: { count: cnt, minutes, maxAgeMinutes },
         };
       }
       return null;
     }
     case 'order_pending_stale': {
       const hours = threshold || 2;
-      const cnt = await alertRepo.metricStalePendingOrders(hours);
+      const maxAgeHours = Number(config.maxAgeHours) || 48;
+      const cnt = await alertRepo.metricStalePendingOrders(hours, maxAgeHours);
       if (cnt > 0) {
         return {
           measuredValue: cnt,
-          message: `${cnt} đơn pending quá ${hours} giờ`,
-          payload: { count: cnt, hours },
+          message: `${cnt} đơn pending quá ${hours} giờ (tạo trong ${maxAgeHours} giờ qua)`,
+          payload: { count: cnt, hours, maxAgeHours },
         };
       }
       return null;

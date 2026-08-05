@@ -202,24 +202,40 @@ export async function metricAiTokenSpike() {
   return { todayTokens, avgPrev7, ratio: avgPrev7 > 0 ? todayTokens / avgPrev7 : 0 };
 }
 
-export async function metricZaloDisconnected(minutes) {
+/**
+ * Tài khoản Zalo mất kết nối lâu hơn `minutes` NHƯNG chưa quá `maxAgeMinutes`.
+ *
+ * Cận trên là bắt buộc: không có nó thì tài khoản khách bỏ dùng từ nhiều tháng
+ * trước sẽ làm quy tắc bắn mỗi lần đánh giá, mãi mãi. Cảnh báo phải báo "vừa có
+ * thứ hỏng", không phải "vẫn còn thứ chưa ai sửa".
+ *
+ * @param {number} minutes ngưỡng dưới — mất kết nối ít nhất bấy nhiêu phút
+ * @param {number} maxAgeMinutes cận trên — bỏ qua thứ hỏng lâu hơn mốc này
+ */
+export async function metricZaloDisconnected(minutes, maxAgeMinutes) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS cnt
      FROM zalo_settings
      WHERE COALESCE(status, '') <> 'connected'
-       AND updated_at <= NOW() - ($1 || ' minutes')::interval`,
-    [String(minutes)]
+       AND updated_at <= NOW() - ($1 || ' minutes')::interval
+       AND updated_at >= NOW() - ($2 || ' minutes')::interval`,
+    [String(minutes), String(maxAgeMinutes)]
   );
   return Number(rows[0]?.cnt || 0);
 }
 
-export async function metricStalePendingOrders(hours) {
+/**
+ * Đơn pending lâu hơn `hours` NHƯNG được tạo trong vòng `maxAgeHours`.
+ * Xem ghi chú ở `metricZaloDisconnected` về lý do phải có cận trên.
+ */
+export async function metricStalePendingOrders(hours, maxAgeHours) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS cnt
      FROM orders
      WHERE status = 'pending'
-       AND created_at <= NOW() - ($1 || ' hours')::interval`,
-    [String(hours)]
+       AND created_at <= NOW() - ($1 || ' hours')::interval
+       AND created_at >= NOW() - ($2 || ' hours')::interval`,
+    [String(hours), String(maxAgeHours)]
   );
   return Number(rows[0]?.cnt || 0);
 }

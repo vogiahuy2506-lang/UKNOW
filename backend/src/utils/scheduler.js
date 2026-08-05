@@ -124,6 +124,9 @@ const stopAllCampaignScheduleTasks = () => {
   campaignScheduleTasks.clear();
 };
 
+/** @internal test helper */
+export const _triggerCampaignScheduleForTests = (schedule) => triggerCampaignSchedule(schedule);
+
 const triggerCampaignSchedule = async (schedule) => {
   try {
     // Hai nhánh dưới đây trước kia return im lặng — khi lịch không chạy, log không để lại
@@ -157,9 +160,36 @@ const triggerCampaignSchedule = async (schedule) => {
       [schedule.id_campaign]
     );
     if (runningCheck.rows.length > 0) {
+      const isOnce = String(schedule?.schedule_type || '').toLowerCase() === 'once';
       console.log(
-        `[Scheduler] Bỏ qua schedule #${schedule.id} vì campaign #${schedule.id_campaign} đang chạy`
+        `[Scheduler] Bỏ qua schedule #${schedule.id} vì campaign #${schedule.id_campaign} đang chạy` +
+          (isOnce ? ' — vô hiệu hoá luôn vì đây là lịch chạy 1 lần' : '')
       );
+
+      // Lịch "chạy 1 lần" bị bỏ qua thì phải tắt luôn, đừng để nằm chờ.
+      //
+      // Trước đây nhánh này chỉ `return`: lịch giữ nguyên enabled=true, run_count=0,
+      // mà cron của `once` mã hoá ngày+tháng nên nó sẽ TỰ BẮN LẠI ĐÚNG NGÀY ĐÓ NĂM SAU.
+      // Thực tế 2026-08-05: #33 và #31 cùng campaign 37, cron giống hệt "30 19 9 4 *"
+      // (lịch bị tạo trùng) — #31 chạy, #33 bị bỏ qua và nằm chờ tới 9/4/2027.
+      //
+      // Không chạy bù: lượt chạy đang diễn ra đã làm đúng việc của lịch này rồi,
+      // chạy bù nghĩa là gửi hai lần cho cùng một danh sách.
+      if (isOnce) {
+        try {
+          await db.query(
+            `UPDATE campaign_schedules
+             SET enabled = false, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [schedule.id]
+          );
+        } catch (disableErr) {
+          console.error(
+            `[Scheduler] Không thể vô hiệu hoá schedule #${schedule.id}:`,
+            disableErr.message
+          );
+        }
+      }
       return;
     }
 
