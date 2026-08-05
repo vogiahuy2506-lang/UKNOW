@@ -6,6 +6,7 @@ import { Field, FormSection, ModalShell } from '../../features/admin/plans/PlanM
 import { MODAL_FORM, renderModal } from '../../features/admin/plans/planUtils.jsx';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { useI18n } from '../../i18n';
+import { getVoucherLifecycleStatus } from './voucherStatus.util.js';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d, locale = 'vi') => d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN') : '—';
@@ -84,12 +85,7 @@ const toggleCsvValue = (csv, value) => {
   return next.join(', ');
 };
 
-/** Derived admin status — see PLAN_VOUCHER V-2b. */
-export const getVoucherLifecycleStatus = (voucher, now = Date.now()) => {
-  if (voucher.isActive) return 'active';
-  if (voucher.endsAt && new Date(voucher.endsAt).getTime() < now) return 'expired';
-  return 'disabled';
-};
+/** Derived admin status moved to ./voucherStatus.util.js — see PLAN_VOUCHER V-2b. */
 
 const voucherErrorKeyMap = {
   'Mã voucher không được để trống': 'voucherAdmin.errorCodeRequired',

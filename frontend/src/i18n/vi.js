@@ -3042,7 +3042,6 @@ export default {
   },
 
   contact: {
-    title: 'Liên hệ',
     getInTouch: 'Liên hệ với chúng tôi',
     fillForm: 'Điền form bên dưới để liên hệ.',
     name: 'Họ và tên',
@@ -3080,10 +3079,8 @@ export default {
     validationEmail: 'Email không hợp lệ',
     sentSuccess: 'Gửi thành công!',
     errorMessage: 'Có lỗi xảy ra, vui lòng thử lại.',
-    subtitle: 'Bạn có câu hỏi hoặc cần hỗ trợ?',
     successTitle: 'Cảm ơn bạn đã liên hệ!',
     successMessage: 'Chúng tôi đã nhận được tin nhắn và sẽ phản hồi trong 24 giờ làm việc.',
-    sendAnother: 'Gửi tin nhắn khác',
     viewPricing: 'Xem bảng giá',
     formTitle: 'Liên hệ với chúng tôi',
     formSubtitle: 'Điền thông tin bên dưới, chúng tôi sẽ liên hệ lại sớm nhất có thể.',

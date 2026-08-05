@@ -718,10 +718,11 @@ const QuickSend = () => {
               </button>
               <button
                 onClick={handleSend}
-                className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-2"
+                disabled={isSending}
+                className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <HiOutlineMail className="w-5 h-5" />
-                {t('quickSend.sendNow')}
+                {isSending ? t('quickSend.sending') : t('quickSend.sendNow')}
               </button>
             </div>
           </div>

@@ -2999,7 +2999,6 @@ export default {
   },
 
   contact: {
-    title: 'Contact',
     getInTouch: 'Get in touch with us',
     fillForm: 'Fill the form below to contact us.',
     name: 'Full Name',
@@ -3037,11 +3036,7 @@ export default {
     validationEmail: 'Invalid email address',
     sentSuccess: 'Sent successfully!',
     errorMessage: 'An error occurred, please try again.',
-    subtitle: 'Do you have questions or need support?',
     successTitle: 'Thank you for contacting us!',
-    successMessage: 'We have received your message and will respond within 24 business hours.',
-    sendAnother: 'Send another message',
-    viewPricing: 'View pricing',
     formTitle: 'Contact us',
     formSubtitle: 'Fill in the information below, we will contact you as soon as possible.',
     nameLabel: 'Full Name',
