@@ -24,6 +24,10 @@ jest.unstable_mockModule('../../services/chatbot/chatbotStudioConversation.servi
 jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   getAllowedModelsForUser: jest.fn(),
   savePreferredModelForUser: jest.fn(),
+  resolveAllowedModel: jest.fn(async () => 'gemini-2.5-flash'),
+}));
+jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
+  tryHandleHelpChat: jest.fn(async () => null),
 }));
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
   chargeAiCredit,
