@@ -1122,6 +1122,10 @@ CREATE TABLE IF NOT EXISTS zalo_personal_messages (
 CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
   ON zalo_personal_messages (id_user, created_at)
   WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
+-- Migration 101: prevent duplicate inbound / sync rows (and bot echo after restart)
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
+  ON zalo_personal_messages (id_zalo_setting, external_id)
+  WHERE external_id IS NOT NULL;
 
 -- ─── Web chat / custom chatbot ─────────────────────────────────────────
 -- Cần cho test widget + hội thoại web chat. Phải khớp migration 031/041/095/098:

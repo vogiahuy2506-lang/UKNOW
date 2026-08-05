@@ -253,8 +253,7 @@ class ZaloPersonalSyncService {
    * Save group chat history to database
    */
   async saveGroupChatHistory(accountId, userId, groupId, messages) {
-    const { ZaloPersonalRepository } = await import('../../repositories/chatbot/zaloPersonal.repository.js');
-    const zaloPersonalRepo = ZaloPersonalRepository;
+    const zaloPersonalRepo = (await import('../../repositories/chatbot/zaloPersonal.repository.js')).default;
     
     let saved = 0;
     const now = new Date().toISOString();
@@ -457,6 +456,84 @@ class ZaloPersonalSyncService {
       }
     }
     return results;
+  }
+
+  /**
+   * Background sync: pull history only for groups already known in DB.
+   * Avoids calling getAllGroups() every 10 minutes (Zalo rate-limit risk).
+   */
+  async syncKnownGroupHistory(accountId, userId, { limit = 50 } = {}) {
+    const api = this.getApi(accountId);
+    if (!api) {
+      return { skipped: true, reason: 'no_session', totalGroups: 0, synced: 0, errors: [] };
+    }
+
+    const groupIds = await this.listKnownGroupIds(accountId);
+    const results = { totalGroups: groupIds.length, synced: 0, errors: [], skipped: false };
+
+    for (const groupId of groupIds) {
+      try {
+        const result = await this.syncChatHistory(
+          accountId,
+          userId,
+          groupId,
+          true,
+          { limit }
+        );
+        results.synced += result.synced || 0;
+      } catch (err) {
+        results.errors.push({ groupId, error: err.message });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Groups known via zalo_groups and/or existing group conversations.
+   * @param {number} accountId
+   * @returns {Promise<string[]>}
+   */
+  async listKnownGroupIds(accountId) {
+    const ids = new Set();
+
+    try {
+      const { rows } = await db.query(
+        `SELECT regexp_replace(group_id, '^group_', '') AS group_id
+         FROM zalo_groups
+         WHERE id_zalo_setting = $1 AND group_id IS NOT NULL AND btrim(group_id) <> ''`,
+        [accountId]
+      );
+      for (const row of rows) {
+        if (row.group_id) ids.add(String(row.group_id));
+      }
+    } catch (err) {
+      // zalo_groups may be absent in slim test schemas
+      console.warn('[ZaloSync] listKnownGroupIds zalo_groups:', err.message);
+    }
+
+    const { rows: convRows } = await db.query(
+      `SELECT DISTINCT regexp_replace(
+         COALESCE(
+           NULLIF(visitor_info::jsonb->>'group_id', ''),
+           NULLIF(visitor_info::jsonb->>'groupId', ''),
+           external_id
+         ),
+         '^group_',
+         ''
+       ) AS group_id
+       FROM zalo_personal_conversations
+       WHERE id_zalo_setting = $1
+         AND (
+           external_id LIKE 'group_%'
+           OR COALESCE(visitor_info::jsonb->>'is_group', '') IN ('true', 't', '1')
+         )`,
+      [accountId]
+    );
+    for (const row of convRows) {
+      if (row.group_id) ids.add(String(row.group_id));
+    }
+
+    return [...ids].filter((id) => id && id !== 'null');
   }
 
   /**

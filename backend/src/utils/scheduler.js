@@ -545,6 +545,46 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Zalo Personal Inbox: đăng ký listeners mỗi 5 phút');
 
+  // ── Zalo Personal — background group history sync (option a: known groups only) ──
+  const zaloBgSyncEnabled = String(process.env.ZALO_BG_SYNC_ENABLED ?? 'true').toLowerCase() !== 'false';
+  if (zaloBgSyncEnabled) {
+    const syncZaloPersonalGroupHistory = async () => {
+      try {
+        const zaloPersonalSyncService = (await import('../services/chatbot/zaloPersonalSync.service.js')).default;
+        const zaloAccountSessionService = (await import('../services/zalo/zaloAccountSession.service.js')).default;
+        const accounts = await zaloPersonalInboxService.getActiveZaloPersonalAccounts(true);
+        for (const acc of accounts) {
+          const accountId = acc.account_id;
+          const userId = acc.id_user;
+          try {
+            if (!zaloAccountSessionService.getAccountApi(accountId)) {
+              continue; // skip disconnected / no in-memory session
+            }
+            const result = await zaloPersonalSyncService.syncKnownGroupHistory(accountId, userId, { limit: 50 });
+            if (result.synced > 0 || result.errors?.length) {
+              console.log(
+                `[Scheduler] Zalo bg sync account=${accountId}: synced=${result.synced} groups=${result.totalGroups} errors=${result.errors?.length || 0}`
+              );
+            }
+          } catch (err) {
+            console.error(`[Scheduler] Zalo bg sync account ${accountId} failed:`, err.message);
+          }
+        }
+      } catch (error) {
+        console.error('[Scheduler] Lỗi Zalo background group sync:', error.message);
+      }
+    };
+
+    // Offset from */5 listener cron — avoid piling API calls
+    cron.schedule('*/10 * * * *', async () => {
+      await syncZaloPersonalGroupHistory();
+    }, { timezone: HANOI_TIME_ZONE });
+
+    console.log('[Scheduler] Đã khởi tạo Zalo Personal background group sync: mỗi 10 phút (ZALO_BG_SYNC_ENABLED)');
+  } else {
+    console.log('[Scheduler] Zalo Personal background group sync TẮT (ZALO_BG_SYNC_ENABLED=false)');
+  }
+
   // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
   // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)
   const restoreZaloSessions = async () => {

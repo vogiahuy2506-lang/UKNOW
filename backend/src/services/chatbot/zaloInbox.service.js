@@ -31,6 +31,7 @@ import {
   isPlaceholderGroupName,
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
+import { resolveConversationExternalId } from '../../utils/zaloPersonalMessage.util.js';
 
 class ZaloPersonalInboxService {
   constructor() {
@@ -315,18 +316,41 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Owner typed from Zalo app: already saved as agent by adapter; pause AI for this thread.
+      // Owner typed from Zalo app: already saved as agent by adapter; pause AI + SSE.
+      // Echo of our own bot replies never reaches here (adapter returns skippedEcho first).
       if (rawMessage.isSelf === true) {
-        const externalIdSelf = isGroup
-          ? groupId
-          : String(senderId);
+        const externalIdSelf = resolveConversationExternalId({
+          isGroup,
+          groupId,
+          threadId: rawMessage.threadId,
+          fromUid: senderId,
+        });
         try {
           const conv = await zaloPersonalRepository.findConversation(zaloSettingId, externalIdSelf);
           if (conv?.id) {
             await zaloPersonalRepository.setAiPaused(conv.id, true);
+            sseService.broadcast(String(userId), 'inbox:new_message', {
+              conversationId: conv.id,
+              channel: 'zalo_personal',
+              type: 'zalo_personal',
+              message: content,
+              messageType: this.getMessageType(rawMessage?.msgType || rawMessage?.type || 1),
+              attachments: rawMessage?.attachments || [],
+              attachmentUrl: rawMessage?.attachmentUrl || null,
+              senderId: senderId,
+              senderName: senderName,
+              senderAvatar: rawMessage?.senderAvatar || null,
+              isGroup: isGroup,
+              groupId: isGroup ? groupId : null,
+              groupName: isGroup ? groupName : null,
+              visitorName: conv.visitor_name || null,
+              role: 'agent',
+              isSelf: true,
+              timestamp,
+            });
           }
         } catch (e) {
-          console.warn('[ZaloInbox] Failed to pause AI after owner message:', e.message);
+          console.warn('[ZaloInbox] Failed to pause AI / SSE after owner message:', e.message);
         }
         return;
       }

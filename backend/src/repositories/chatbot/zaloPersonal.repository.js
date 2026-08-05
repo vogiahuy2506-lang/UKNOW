@@ -145,9 +145,12 @@ class ZaloPersonalRepository {
       `INSERT INTO zalo_personal_messages
        (id_conversation, id_user, id_zalo_setting, role, content, external_id, external_ts, metadata, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id_zalo_setting, external_id) WHERE external_id IS NOT NULL
+       DO NOTHING
        RETURNING *`,
       [conversationId, userId, zaloSettingId, role, content, externalId, externalTs, metadata, createdAt]
     );
+    // ON CONFLICT DO NOTHING → empty RETURNING; callers must treat undefined as duplicate skip
     return rows[0];
   }
 
@@ -160,14 +163,17 @@ class ZaloPersonalRepository {
    * @param {number} params.zaloSettingId
    * @param {string} params.content
    * @param {string} params.now ISO timestamp
+   * @param {string|null} [params.externalId] Zalo msgId when known (echo dedupe)
    * @returns {Promise<void>}
    */
-  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now }) {
+  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now, externalId = null }) {
     await db.query(
       `INSERT INTO zalo_personal_messages
-       (id_conversation, id_user, id_zalo_setting, role, content, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [conversationId, userId, zaloSettingId, 'agent', content, now]
+       (id_conversation, id_user, id_zalo_setting, role, content, external_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id_zalo_setting, external_id) WHERE external_id IS NOT NULL
+       DO NOTHING`,
+      [conversationId, userId, zaloSettingId, 'agent', content, externalId, now]
     );
   }
 

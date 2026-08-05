@@ -7,6 +7,7 @@
 
 import { Zalo } from 'zca-js';
 import { getZaloHttpPolyfillOption } from './zaloUndiciFetch.util.js';
+import { ZALO_LISTENER_OPTIONS } from './zaloListenerOptions.util.js';
 import crypto from 'node:crypto';
 
 /**
@@ -130,8 +131,7 @@ function isQrSessionTimeoutIssue(error) {
  */
 function createZaloInstance() {
   return new Zalo({
-    selfListen: false,
-    checkUpdate: true,
+    ...ZALO_LISTENER_OPTIONS,
     logging: true, // Enable logging for debugging
     ...getZaloHttpPolyfillOption(),
   });

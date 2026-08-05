@@ -14,6 +14,7 @@ import campaignZaloSenderService from '../services/campaign/campaignZaloSender.s
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
+import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
 import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
@@ -301,8 +302,7 @@ class ZaloSettingsController {
     let lastError = null;
     for (const credentials of credentialCandidates) {
       const zalo = new Zalo({
-        selfListen: false,
-        checkUpdate: true,
+        ...ZALO_LISTENER_OPTIONS,
         logging: false,
         ...getZaloHttpPolyfillOption(),
       });
@@ -1060,8 +1060,7 @@ class ZaloSettingsController {
     const traceId = String(options?.traceId || 'no-trace');
     const stepLabel = String(options?.stepLabel || 'manual-context-login');
     const zalo = new Zalo({
-      selfListen: false,
-      checkUpdate: true,
+      ...ZALO_LISTENER_OPTIONS,
       logging: false,
       ...getZaloHttpPolyfillOption(),
     });
@@ -1117,8 +1116,7 @@ class ZaloSettingsController {
         let api = null;
         if (strategy.kind === 'sdk') {
           const zalo = new Zalo({
-            selfListen: false,
-            checkUpdate: true,
+            ...ZALO_LISTENER_OPTIONS,
             logging: false,
             ...getZaloHttpPolyfillOption(),
           });
@@ -1241,8 +1239,7 @@ class ZaloSettingsController {
     const imei = generateZaloUUID(userAgent);
     const rawCtx = createContext();
     Object.assign(rawCtx.options, {
-      selfListen: false,
-      checkUpdate: true,
+      ...ZALO_LISTENER_OPTIONS,
       logging: false,
     });
 
