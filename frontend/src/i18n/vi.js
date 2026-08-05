@@ -6139,7 +6139,12 @@ export default {
     fieldSlug: 'Slug',
     fieldSummary: 'Tóm tắt',
     fieldBody: 'Nội dung (Markdown)',
+    fieldBodyHtml: 'Nội dung (trình soạn thảo)',
     bodyHint: 'Hỗ trợ #, ##, ###, danh sách "- ", **đậm** và [text](url).',
+    convertToRich: 'Chuyển sang trình soạn thảo mới',
+    convertToRichConfirm:
+      'Chỉ giữ được heading, đậm, danh sách và link. Các cú pháp Markdown khác sẽ mất. Tiếp tục?',
+    convertToRichDone: 'Đã chuyển sang trình soạn thảo mới — nhớ bấm Lưu',
     fieldFeatureKey: 'Feature key',
     fieldPrimaryRoute: 'Route chính',
     fieldSortOrder: 'Thứ tự hiển thị',

@@ -4,17 +4,24 @@ import toast from 'react-hot-toast';
 import { HiOutlineArrowLeft, HiOutlineTrash, HiOutlineRefresh } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
+import RichTextEditor from '../../components/editor/RichTextEditor';
+import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
 
 const EMPTY_FORM = {
   title: '',
   slug: '',
   summary: '',
   body_md: '',
+  body_html: '',
   feature_key: '',
   primary_route: '',
   sort_order: 0,
   is_published: false,
 };
+
+function hasHtmlBody(html) {
+  return Boolean(String(html || '').trim());
+}
 
 export default function AdminHelpArticleEditPage() {
   const { t } = useI18n();
@@ -28,25 +35,33 @@ export default function AdminHelpArticleEditPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
+  /** New articles default to rich editor; existing MD-only stay on textarea until converted */
+  const [useRichEditor, setUseRichEditor] = useState(isCreate);
 
   useEffect(() => {
-    if (isCreate) return;
+    if (isCreate) {
+      setUseRichEditor(true);
+      return;
+    }
     let mounted = true;
     setIsLoading(true);
     help.adminGetHelpArticle(id)
       .then((res) => {
         if (!mounted) return;
         const a = res.data?.result || {};
+        const html = a.body_html || '';
         setForm({
           title: a.title || '',
           slug: a.slug || '',
           summary: a.summary || '',
           body_md: a.body_md || '',
+          body_html: html,
           feature_key: a.feature_key || '',
           primary_route: a.primary_route || '',
           sort_order: a.sort_order ?? 0,
           is_published: Boolean(a.is_published),
         });
+        setUseRichEditor(hasHtmlBody(html));
         setMedia(a.media || []);
       })
       .catch((err) => {
@@ -60,6 +75,14 @@ export default function AdminHelpArticleEditPage() {
 
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
+  const handleConvertToRich = () => {
+    if (!window.confirm(t('adminHelp.convertToRichConfirm'))) return;
+    const html = miniMarkdownToHtml(form.body_md);
+    setForm((prev) => ({ ...prev, body_html: html }));
+    setUseRichEditor(true);
+    toast.success(t('adminHelp.convertToRichDone'));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.slug.trim() || !form.feature_key.trim()) {
@@ -68,7 +91,23 @@ export default function AdminHelpArticleEditPage() {
     }
     setIsSaving(true);
     try {
-      const payload = { ...form, sort_order: Number(form.sort_order) || 0 };
+      const payload = {
+        title: form.title,
+        slug: form.slug,
+        summary: form.summary,
+        feature_key: form.feature_key,
+        primary_route: form.primary_route || null,
+        sort_order: Number(form.sort_order) || 0,
+        is_published: form.is_published,
+      };
+      if (useRichEditor) {
+        payload.body_html = form.body_html || '';
+        // Keep body_md as-is (seed history) — do not wipe unless empty create
+        if (isCreate) payload.body_md = '';
+      } else {
+        payload.body_md = form.body_md;
+      }
+
       if (isCreate) {
         const res = await help.adminCreateHelpArticle(payload);
         toast.success(t('adminHelp.createSuccess'));
@@ -168,15 +207,38 @@ export default function AdminHelpArticleEditPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminHelp.fieldBody')}</label>
-          <textarea
-            className="input font-mono text-xs"
-            rows={16}
-            value={form.body_md}
-            onChange={(e) => setField('body_md', e.target.value)}
-            placeholder={'# Tiêu đề\n\nNội dung hướng dẫn...\n\n- Bước 1\n- Bước 2'}
-          />
-          <p className="mt-1 text-xs text-slate-400">{t('adminHelp.bodyHint')}</p>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <label className="block text-sm font-medium text-gray-700">
+              {useRichEditor ? t('adminHelp.fieldBodyHtml') : t('adminHelp.fieldBody')}
+            </label>
+            {!useRichEditor && (
+              <button
+                type="button"
+                onClick={handleConvertToRich}
+                className="text-xs font-medium text-primary-600 hover:text-primary-700"
+              >
+                {t('adminHelp.convertToRich')}
+              </button>
+            )}
+          </div>
+          {useRichEditor ? (
+            <RichTextEditor
+              value={form.body_html}
+              onChange={(html) => setField('body_html', html)}
+              disabled={isSaving}
+            />
+          ) : (
+            <>
+              <textarea
+                className="input font-mono text-xs"
+                rows={16}
+                value={form.body_md}
+                onChange={(e) => setField('body_md', e.target.value)}
+                placeholder={'# Tiêu đề\n\nNội dung hướng dẫn...\n\n- Bước 1\n- Bước 2'}
+              />
+              <p className="mt-1 text-xs text-slate-400">{t('adminHelp.bodyHint')}</p>
+            </>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">

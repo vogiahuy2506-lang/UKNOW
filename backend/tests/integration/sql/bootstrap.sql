@@ -1239,6 +1239,7 @@ CREATE TABLE help_articles (
   title         VARCHAR(255) NOT NULL,
   summary       TEXT NOT NULL DEFAULT '',
   body_md       TEXT NOT NULL DEFAULT '',
+  body_html     TEXT,
   feature_key   VARCHAR(80) NOT NULL,
   primary_route VARCHAR(255),
   sort_order    INTEGER NOT NULL DEFAULT 0,

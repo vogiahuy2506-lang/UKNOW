@@ -6084,7 +6084,12 @@ export default {
     fieldSlug: 'Slug',
     fieldSummary: 'Summary',
     fieldBody: 'Body (Markdown)',
+    fieldBodyHtml: 'Body (rich editor)',
     bodyHint: 'Supports #, ##, ###, "- " lists, **bold** and [text](url).',
+    convertToRich: 'Switch to rich text editor',
+    convertToRichConfirm:
+      'Only headings, bold, lists and links are preserved. Other Markdown will be lost. Continue?',
+    convertToRichDone: 'Switched to rich editor — remember to Save',
     fieldFeatureKey: 'Feature key',
     fieldPrimaryRoute: 'Primary route',
     fieldSortOrder: 'Sort order',

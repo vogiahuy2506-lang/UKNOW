@@ -192,4 +192,80 @@ describe('Help center', () => {
     const pub = await request(app).get('/api/help/articles');
     expect(pub.body.result.length).toBe(7);
   });
+
+  it('body_html persists through create/update/public API and is sanitized', async () => {
+    const admin = await createUser({ username: 'help-html-admin', role: 'admin' });
+    const token = await loginAs(admin);
+
+    const created = await request(app)
+      .post('/api/help/admin/articles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'html-article',
+        title: 'HTML Article',
+        summary: 's',
+        feature_key: 'html-article',
+        is_published: true,
+        body_html: '<p><strong>Hello</strong></p><script>alert(1)</script>',
+        body_md: '',
+      });
+    expect(created.status).toBe(201);
+    const id = created.body.result.id;
+    expect(created.body.result.body_html).toContain('<strong>Hello</strong>');
+    expect(created.body.result.body_html.toLowerCase()).not.toContain('script');
+
+    const patched = await request(app)
+      .patch(`/api/help/admin/articles/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body_html: '<p>Updated</p><img src=x onerror="alert(1)">' });
+    expect(patched.status).toBe(200);
+    expect(patched.body.result.body_html).toContain('Updated');
+    expect(patched.body.result.body_html.toLowerCase()).not.toContain('onerror');
+
+    const pub = await request(app).get('/api/help/articles/html-article');
+    expect(pub.status).toBe(200);
+    expect(pub.body.result.bodyHtml).toContain('Updated');
+    expect(pub.body.result.bodyHtml.toLowerCase()).not.toContain('onerror');
+
+    const chunks = await helpRepo.countChunksByArticleId(id);
+    expect(chunks).toBeGreaterThan(0);
+  });
+
+  it('seed markdown articles still expose bodyMd without bodyHtml', async () => {
+    const admin = await createUser({ username: 'help-md-admin', role: 'admin' });
+    const token = await loginAs(admin);
+    await request(app)
+      .post('/api/help/admin/seed')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reindex: false });
+    const list = await request(app).get('/api/help/articles');
+    const slug = list.body.result[0].slug;
+    const article = await request(app).get(`/api/help/articles/${slug}`);
+    expect(article.status).toBe(200);
+    expect(article.body.result.bodyMd).toBeTruthy();
+    expect(article.body.result.bodyHtml == null || article.body.result.bodyHtml === '').toBe(true);
+  });
+
+  it('POST /uploads/help-image rejects non-admin', async () => {
+    const user = await createUser({ username: 'help-upload-user', role: 'user' });
+    const token = await loginAs(user);
+    const res = await request(app)
+      .post('/api/uploads/help-image')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('fake'), { filename: 'a.png', contentType: 'image/png' });
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /uploads/help-image rejects svg for admin', async () => {
+    const admin = await createUser({ username: 'help-upload-admin', role: 'admin' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/uploads/help-image')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('<svg></svg>'), {
+        filename: 'x.svg',
+        contentType: 'image/svg+xml',
+      });
+    expect(res.status).toBe(400);
+  });
 });

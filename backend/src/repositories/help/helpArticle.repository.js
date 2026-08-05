@@ -54,7 +54,7 @@ function parseEmbedding(value) {
 
 export async function listArticles({ publishedOnly = false, queryable = db } = {}) {
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, feature_key, primary_route,
+    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
             sort_order, is_published, created_at, updated_at
      FROM help_articles
      ${publishedOnly ? 'WHERE is_published = TRUE' : ''}
@@ -65,7 +65,7 @@ export async function listArticles({ publishedOnly = false, queryable = db } = {
 
 export async function findArticleBySlug(slug, { publishedOnly = false, queryable = db } = {}) {
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, feature_key, primary_route,
+    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
             sort_order, is_published, created_at, updated_at
      FROM help_articles
      WHERE slug = $1
@@ -78,7 +78,7 @@ export async function findArticleBySlug(slug, { publishedOnly = false, queryable
 
 export async function findArticleById(id, queryable = db) {
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, feature_key, primary_route,
+    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
             sort_order, is_published, created_at, updated_at
      FROM help_articles WHERE id = $1 LIMIT 1`,
     [id]
@@ -88,7 +88,7 @@ export async function findArticleById(id, queryable = db) {
 
 export async function findArticleByFeatureKey(featureKey, { publishedOnly = true, queryable = db } = {}) {
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, feature_key, primary_route, is_published
+    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route, is_published
      FROM help_articles
      WHERE feature_key = $1
        ${publishedOnly ? 'AND is_published = TRUE' : ''}
@@ -102,14 +102,15 @@ export async function findArticleByFeatureKey(featureKey, { publishedOnly = true
 export async function createArticle(payload, queryable = db) {
   const { rows } = await queryable.query(
     `INSERT INTO help_articles
-       (slug, title, summary, body_md, feature_key, primary_route, sort_order, is_published)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       (slug, title, summary, body_md, body_html, feature_key, primary_route, sort_order, is_published)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING *`,
     [
       payload.slug,
       payload.title,
       payload.summary || '',
       payload.body_md || payload.bodyMd || '',
+      payload.body_html || payload.bodyHtml || null,
       payload.feature_key || payload.featureKey,
       payload.primary_route || payload.primaryRoute || null,
       payload.sort_order ?? payload.sortOrder ?? 0,
@@ -129,6 +130,8 @@ export async function updateArticle(id, patch, queryable = db) {
     summary: 'summary',
     body_md: 'body_md',
     bodyMd: 'body_md',
+    body_html: 'body_html',
+    bodyHtml: 'body_html',
     feature_key: 'feature_key',
     featureKey: 'feature_key',
     primary_route: 'primary_route',

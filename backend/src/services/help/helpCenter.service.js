@@ -1,5 +1,6 @@
 import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
 import { chunkHelpMarkdown, buildCapabilityMap } from '../../utils/helpCenter.util.js';
+import { sanitizeHelpHtml, htmlToPlainText } from '../../utils/helpHtmlSanitize.util.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
 
 let capabilityMapCache = { text: '', builtAt: 0, fingerprint: '' };
@@ -34,7 +35,11 @@ export async function reindexArticle(articleId, { actorUserId = null } = {}) {
     throw Object.assign(new Error('Không tìm thấy bài viết'), { status: 404 });
   }
 
-  const pieces = chunkHelpMarkdown(article.body_md);
+  const pieces = chunkHelpMarkdown(
+    article.body_html
+      ? htmlToPlainText(article.body_html)
+      : article.body_md
+  );
   await helpRepo.deleteChunksByArticleId(articleId);
 
   if (!pieces.length) {
@@ -82,6 +87,7 @@ export async function getPublicArticleBySlug(slug) {
     title: article.title,
     summary: article.summary,
     bodyMd: article.body_md,
+    bodyHtml: article.body_html || null,
     featureKey: article.feature_key,
     primaryRoute: article.primary_route,
     media: media.map((m) => ({
@@ -107,7 +113,13 @@ export async function adminGetArticle(id) {
 }
 
 export async function adminCreateArticle(payload, { actorUserId } = {}) {
-  const created = await helpRepo.createArticle(payload);
+  const cleaned = { ...payload };
+  if (cleaned.body_html !== undefined || cleaned.bodyHtml !== undefined) {
+    const raw = cleaned.body_html ?? cleaned.bodyHtml;
+    cleaned.body_html = raw == null || raw === '' ? null : sanitizeHelpHtml(raw);
+    delete cleaned.bodyHtml;
+  }
+  const created = await helpRepo.createArticle(cleaned);
   if (created.is_published) {
     await reindexArticle(created.id, { actorUserId });
   }
@@ -119,9 +131,20 @@ export async function adminUpdateArticle(id, patch, { actorUserId } = {}) {
   const before = await helpRepo.findArticleById(id);
   if (!before) throw Object.assign(new Error('Không tìm thấy bài viết'), { status: 404 });
 
-  const updated = await helpRepo.updateArticle(id, patch);
-  const bodyChanged = patch.body_md !== undefined || patch.bodyMd !== undefined;
-  const publishChanged = patch.is_published !== undefined || patch.isPublished !== undefined;
+  const cleaned = { ...patch };
+  if (cleaned.body_html !== undefined || cleaned.bodyHtml !== undefined) {
+    const raw = cleaned.body_html ?? cleaned.bodyHtml;
+    cleaned.body_html = raw == null || raw === '' ? null : sanitizeHelpHtml(raw);
+    delete cleaned.bodyHtml;
+  }
+
+  const updated = await helpRepo.updateArticle(id, cleaned);
+  const bodyChanged =
+    cleaned.body_md !== undefined ||
+    cleaned.bodyMd !== undefined ||
+    cleaned.body_html !== undefined ||
+    cleaned.bodyHtml !== undefined;
+  const publishChanged = cleaned.is_published !== undefined || cleaned.isPublished !== undefined;
   const nowPublished = updated.is_published;
 
   if (nowPublished && (bodyChanged || publishChanged || !(await helpRepo.countChunksByArticleId(id)))) {
