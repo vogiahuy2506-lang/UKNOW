@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { HiTrendingUp, HiExclamation } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
 const UsageTracker = ({ resourceType: _resourceType, title, used, limit, icon: Icon, color = 'primary' }) => {
   const { t } = useI18n();
-  const [_showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const navigate = useNavigate();
 
   const remaining = Math.max(0, limit - used);
   const percentage = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
@@ -43,67 +43,62 @@ const UsageTracker = ({ resourceType: _resourceType, title, used, limit, icon: I
   };
 
   return (
-    <>
-      <div
-        className={`bg-white rounded-xl p-4 border ${
-          isExceeded ? 'border-red-200' : isWarning ? 'border-orange-200' : 'border-gray-100'
-        } hover:shadow-md transition-shadow`}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {Icon && (
-              <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center`}>
-                <Icon className={`w-4 h-4 ${colors.text}`} />
-              </div>
-            )}
-            <span className="text-sm font-medium text-gray-700">{title}</span>
-          </div>
-
-          {isExceeded && (
-            <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
-              <HiExclamation className="w-3.5 h-3.5" />
-              {t('plans.expired')}
-            </span>
+    <div
+      className={`bg-white rounded-xl p-4 border ${
+        isExceeded ? 'border-red-200' : isWarning ? 'border-orange-200' : 'border-gray-100'
+      } hover:shadow-md transition-shadow`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {Icon ? (
+            <div className={`p-2 rounded-lg ${colors.bg}`}>
+              <Icon className={`w-5 h-5 ${colors.text}`} />
+            </div>
+          ) : (
+            <div className={`p-2 rounded-lg ${colors.bg}`}>
+              <HiTrendingUp className={`w-5 h-5 ${colors.text}`} />
+            </div>
           )}
-          {isWarning && (
-            <span className="flex items-center gap-1 text-xs text-orange-500 font-medium">
-              <HiTrendingUp className="w-3.5 h-3.5" />
-              80%+
-            </span>
-          )}
+          <h3 className="font-medium text-gray-900">{title}</h3>
         </div>
+        {isExceeded && <HiExclamation className="w-5 h-5 text-red-500" />}
+      </div>
 
-        {/* Progress bar */}
-        <div className="mb-2">
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${getBarColor()}`}
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-        </div>
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-2 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${getBarColor()}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
 
-        {/* Stats */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-500">
-            {used} / {limit}
-          </span>
-          <span className={`font-medium ${isExceeded ? 'text-red-500' : 'text-gray-700'}`}>
-            {remaining} {t('plans.remaining')}
-          </span>
-        </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-500">
+          {used} / {limit}
+        </span>
+        <span className={`font-medium ${isExceeded ? 'text-red-500' : 'text-gray-700'}`}>
+          {remaining} {t('plans.remaining')}
+        </span>
+      </div>
 
-        {/* Upgrade CTA */}
-        {isExceeded && (
+      {isExceeded && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <button
-            onClick={() => setShowUpgradeModal(true)}
-            className="w-full mt-3 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            type="button"
+            onClick={() => navigate('/app/topup')}
+            className="py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+          >
+            {t('plans.buyTopup')}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/pricing')}
+            className="py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
           >
             {t('plans.upgrade')}
           </button>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 };
 

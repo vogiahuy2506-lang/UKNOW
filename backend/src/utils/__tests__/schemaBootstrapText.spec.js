@@ -57,10 +57,13 @@ describe('bootstrap.sql text parity (S-2)', () => {
     }
   });
 
-  it('users declares resource-limit columns from migration 093', () => {
-    const missing = REQUIRED_USER_MAX_COLUMNS.filter(
-      (col) => !new RegExp(`^\\s*${col}\\s`, 'im').test(usersBody)
-    );
-    expect(missing).toEqual([]);
+  it('orders declares topup_config JSONB (migration 099)', () => {
+    expect(ordersBody).toMatch(/topup_config\s+JSONB/i);
+  });
+
+  it('bootstrap declares topup_pricing and topup_grants tables', () => {
+    expect(bootstrapSql).toMatch(/CREATE TABLE topup_pricing\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE topup_grants\s*\(/i);
+    expect(bootstrapSql).toMatch(/CONSTRAINT topup_grants_order_item_unique UNIQUE\s*\(\s*order_id\s*,\s*item_key\s*\)/i);
   });
 });

@@ -3,6 +3,7 @@ import usageTrackingService from '../payment/usageTracking.service.js';
 import { getBillingCycle } from '../../utils/billingCycle.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { getSubscriptionStatus } from '../../utils/subscriptionStatus.util.js';
+import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
 
 export const AI_CREDIT_RESOURCE = 'ai_credit';
 
@@ -44,11 +45,11 @@ class AiCreditMeterService {
     const cycle = await getBillingCycle(userId, billingOptions);
     const billingUserId = cycle.billingUserId || userId;
     const limits = await usageTrackingService.getUserPlanLimits(billingUserId);
-    const limit = Number(limits?.ai_credits_per_period) || 0;
+    const baseLimit = Number(limits?.ai_credits_per_period) || 0;
     const creditUsage = await usageTrackingService.getCreditUsageForCycle(billingUserId, cycle);
     const used = Number(creditUsage.used) || 0;
 
-    if (limit <= 0) {
+    if (baseLimit <= 0) {
       if (forceBillable) {
         return {
           skip: false,
@@ -61,6 +62,9 @@ class AiCreditMeterService {
       }
       return { skip: true, billingUserId, cycle, limit: 0, used: 0 };
     }
+
+    const topupCredits = await sumActiveTopupGrants(billingUserId, 'ai_credits');
+    const limit = baseLimit + topupCredits;
 
     return { skip: false, billingUserId, cycle, limit, used };
   }

@@ -27,6 +27,7 @@ import {
 } from '../../repositories/payment/customPlan.repository.js';
 import { resolveCustomPlanQuote } from './customPlan.service.js';
 import { CUSTOM_PLAN_VOUCHER_CODE } from '../../utils/customPlanPricing.util.js';
+import { fulfillTopupOrder } from './topup.service.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
@@ -244,34 +245,42 @@ export const handleWebhook = async (body) => {
                 return webhookData;
             }
 
-            const userId = order.user_id || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
-            if (userId && order.plan_id) {
-                await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
+            const isTopup = order.note === 'topup' || order.topup_config != null;
 
-                // Gửi email xác nhận thanh toán thành công (async)
-                const user = await findActiveUserByEmail(order.user_email);
-                const plan = await findPlanById(order.plan_id);
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + (plan?.duration_days || 30));
-
-                sendSystemEmail(
-                    buildPaymentSuccessEmail({
-                        fullName: user?.full_name,
-                        email: order.user_email,
-                        planName: plan?.name || 'Unknown Plan',
-                        amount: order.amount,
-                        billingPeriod: order.billing_period || 'monthly',
-                        orderCode: order.order_code,
-                        paymentMethod: order.payment_method,
-                        expiresAt,
-                        invoiceUrl: `${FRONTEND_URL}/invoices/${order.order_code}`,
-                    })
-                ).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
+            if (isTopup) {
+                // Mua lẻ hạn mức — cấp grant, KHÔNG gọi activateUserPlan.
+                await fulfillTopupOrder(order, client);
+                console.log(`[Webhook] Top-up order ${webhookData.orderCode} granted`);
             } else {
-                console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
-            }
+                const userId = order.user_id || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
+                if (userId && order.plan_id) {
+                    await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
 
-            await redeemVoucherForOrder(order, client);
+                    // Gửi email xác nhận thanh toán thành công (async)
+                    const user = await findActiveUserByEmail(order.user_email);
+                    const plan = await findPlanById(order.plan_id);
+                    const expiresAt = new Date();
+                    expiresAt.setDate(expiresAt.getDate() + (plan?.duration_days || 30));
+
+                    sendSystemEmail(
+                        buildPaymentSuccessEmail({
+                            fullName: user?.full_name,
+                            email: order.user_email,
+                            planName: plan?.name || 'Unknown Plan',
+                            amount: order.amount,
+                            billingPeriod: order.billing_period || 'monthly',
+                            orderCode: order.order_code,
+                            paymentMethod: order.payment_method,
+                            expiresAt,
+                            invoiceUrl: `${FRONTEND_URL}/invoices/${order.order_code}`,
+                        })
+                    ).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
+                } else {
+                    console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
+                }
+
+                await redeemVoucherForOrder(order, client);
+            }
             await client.query('COMMIT');
         } catch (err) {
             await client.query('ROLLBACK');

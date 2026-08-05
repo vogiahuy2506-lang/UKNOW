@@ -18,13 +18,14 @@ export const createOrder = async ({
     discountAmount = 0,
     voucherId = null,
     voucherCode = null,
+    topupConfig = null,
 }, queryable = db) => {
     const { rows } = await queryable.query(
         `INSERT INTO orders (
             order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
-            original_amount, discount_amount, voucher_id, voucher_code, created_at
+            original_amount, discount_amount, voucher_id, voucher_code, topup_config, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()) RETURNING *`,
         [
             orderCode,
             planId,
@@ -39,6 +40,7 @@ export const createOrder = async ({
             discountAmount || 0,
             voucherId,
             voucherCode,
+            topupConfig ? JSON.stringify(topupConfig) : null,
         ]
     );
     return rows[0];
@@ -64,7 +66,8 @@ export const claimOrderSuccess = async (orderCode, queryable = db) => {
          WHERE order_code = $1
            AND status NOT IN ('success', 'cancelled', 'failed')
          RETURNING id, user_id, plan_id, user_email, billing_period,
-                   amount, voucher_id, voucher_code, discount_amount`,
+                   amount, voucher_id, voucher_code, discount_amount,
+                   note, topup_config, order_code, payment_method`,
         [orderCode]
     );
     return rows[0] || null;
@@ -102,7 +105,8 @@ export const findOrderStatusByCode = async (orderCode) => {
 export const findOrderByCode = async (orderCode, queryable = db) => {
     const { rows } = await queryable.query(
         `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
-                amount, voucher_id, voucher_code, discount_amount, note
+                amount, voucher_id, voucher_code, discount_amount, note, topup_config,
+                payment_method
          FROM orders WHERE order_code = $1`,
         [orderCode]
     );

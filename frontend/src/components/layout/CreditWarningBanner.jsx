@@ -113,6 +113,19 @@ const CreditWarningBanner = () => {
         <span className="min-w-0">{alertState.message}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {alertState.kind !== 'expired' && (
+          <button
+            type="button"
+            onClick={() => navigate('/app/topup')}
+            className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
+              alertState.isEmpty
+                ? 'border border-red-600 bg-white text-red-700 hover:bg-red-50'
+                : 'border border-amber-500 bg-white text-amber-800 hover:bg-amber-50'
+            }`}
+          >
+            {t('creditBanner.buyTopup')}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => navigate('/pricing')}

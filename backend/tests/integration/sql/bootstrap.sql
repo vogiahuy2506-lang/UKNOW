@@ -250,6 +250,7 @@ CREATE TABLE orders (
   discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   voucher_id  BIGINT,
   voucher_code VARCHAR(64),
+  topup_config JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -257,6 +258,42 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
+
+-- ─── Top-up pricing & grants (migration 099) ───────────────────────────
+CREATE TABLE topup_pricing (
+  id           BIGSERIAL PRIMARY KEY,
+  item_key     VARCHAR(50) UNIQUE NOT NULL,
+  unit_price   BIGINT  NOT NULL DEFAULT 0,
+  min_qty      INTEGER NOT NULL DEFAULT 0,
+  step_qty     INTEGER NOT NULL DEFAULT 1,
+  max_qty      INTEGER,
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_pricing_unit_price_nonneg CHECK (unit_price >= 0),
+  CONSTRAINT topup_pricing_min_qty_nonneg CHECK (min_qty >= 0),
+  CONSTRAINT topup_pricing_step_qty_positive CHECK (step_qty > 0)
+);
+
+INSERT INTO topup_pricing (item_key, unit_price, min_qty, step_qty, max_qty, is_active, sort_order)
+VALUES
+  ('zalo_messages', 100, 50, 50, NULL, TRUE, 10),
+  ('emails', 20, 250, 250, 50000, TRUE, 20),
+  ('ai_credits', 200, 25, 25, 5000, TRUE, 30);
+
+CREATE TABLE topup_grants (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key   VARCHAR(50) NOT NULL,
+  qty        INTEGER NOT NULL CHECK (qty > 0),
+  order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  cycle_end  TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key)
+);
+
+CREATE INDEX idx_topup_grants_user_item_cycle
+  ON topup_grants (user_id, item_key, cycle_end);
 
 -- ─── Vouchers (migration 036) ──────────────────────────────────────────
 CREATE TABLE vouchers (

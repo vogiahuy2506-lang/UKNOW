@@ -56,6 +56,7 @@ export async function truncateAll() {
       user_members,
       voucher_redemptions,
       vouchers,
+      topup_grants,
       orders,
       webchat_messages,
       webchat_conversations,
