@@ -1,6 +1,84 @@
 import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
 
+/**
+ * Load user + activeContext (self / employee) for a known userId.
+ * Shared by authMiddleware and SSE (query-token) so plan checks stay in one place.
+ *
+ * @param {number|string} userId
+ * @param {{ ownerContextId?: string|number|null }} [options]
+ * @returns {Promise<object>} user object suitable for req.user
+ * @throws {{ status: number, body: object }}
+ */
+export async function resolveUserContext(userId, { ownerContextId = null } = {}) {
+  let userResult;
+  try {
+    userResult = await db.query(
+      `SELECT id, username, email, password_hash, full_name, avatar_url, status, role, active_plan_id,
+              subscription_expires_at, must_change_password
+       FROM users
+       WHERE id = $1 AND status IN ('active', 'pending_activation')`,
+      [userId]
+    );
+  } catch {
+    userResult = await db.query(
+      `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
+              NULL AS subscription_expires_at, FALSE AS must_change_password
+       FROM users
+       WHERE id = $1 AND status IN ('active', 'pending_activation')`,
+      [userId]
+    );
+  }
+
+  if (userResult.rows.length === 0) {
+    const err = new Error('Người dùng không tồn tại hoặc đã bị vô hiệu hóa');
+    err.status = 401;
+    err.body = { success: false, message: err.message };
+    throw err;
+  }
+
+  const user = { ...userResult.rows[0] };
+
+  if (ownerContextId != null && ownerContextId !== '') {
+    const memberResult = await db.query(
+      `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
+              u.subscription_expires_at AS "ownerPlanExpiry"
+       FROM user_members um
+       JOIN users u ON u.id = um.owner_id
+       WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'`,
+      [user.id, ownerContextId]
+    );
+
+    if (!memberResult.rows[0]) {
+      const err = new Error('Không có quyền truy cập với ngữ cảnh này');
+      err.status = 403;
+      err.body = {
+        success: false,
+        message: err.message,
+        code: 'INVALID_CONTEXT',
+      };
+      throw err;
+    }
+
+    const member = memberResult.rows[0];
+    user.activeContext = {
+      type: 'employee',
+      ownerId: Number(ownerContextId),
+      permissions: member.permissions,
+      contextPlanId: member.ownerPlanId,
+      contextPlanExpiry: member.ownerPlanExpiry,
+    };
+  } else {
+    user.activeContext = {
+      type: 'self',
+      contextPlanId: user.active_plan_id,
+      contextPlanExpiry: user.subscription_expires_at,
+    };
+  }
+
+  return user;
+}
+
 const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -28,71 +106,15 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Token không hợp lệ' });
     }
 
-    let userResult;
     try {
-      userResult = await db.query(
-        `SELECT id, username, email, password_hash, full_name, avatar_url, status, role, active_plan_id,
-                subscription_expires_at, must_change_password
-         FROM users
-         WHERE id = $1 AND status IN ('active', 'pending_activation')`,
-        [decoded.userId]
-      );
-    } catch {
-      userResult = await db.query(
-        `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
-                NULL AS subscription_expires_at, FALSE AS must_change_password
-         FROM users
-         WHERE id = $1 AND status IN ('active', 'pending_activation')`,
-        [decoded.userId]
-      );
-    }
-
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Người dùng không tồn tại hoặc đã bị vô hiệu hóa',
+      req.user = await resolveUserContext(decoded.userId, {
+        ownerContextId: req.headers['x-owner-context'],
       });
-    }
-
-    const user = userResult.rows[0];
-    req.user = { ...user };
-
-    // Xử lý context switching: header X-Owner-Context cho phép user hoạt động
-    // trong ngữ cảnh của một owner mà họ là employee.
-    const ownerCtxId = req.headers['x-owner-context'];
-
-    if (ownerCtxId) {
-      const memberResult = await db.query(
-        `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
-                u.subscription_expires_at AS "ownerPlanExpiry"
-         FROM user_members um
-         JOIN users u ON u.id = um.owner_id
-         WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'`,
-        [user.id, ownerCtxId]
-      );
-
-      if (!memberResult.rows[0]) {
-        return res.status(403).json({
-          success: false,
-          message: 'Không có quyền truy cập với ngữ cảnh này',
-          code: 'INVALID_CONTEXT',
-        });
+    } catch (err) {
+      if (err.status && err.body) {
+        return res.status(err.status).json(err.body);
       }
-
-      const member = memberResult.rows[0];
-      req.user.activeContext = {
-        type: 'employee',
-        ownerId: Number(ownerCtxId),
-        permissions: member.permissions,
-        contextPlanId: member.ownerPlanId,
-        contextPlanExpiry: member.ownerPlanExpiry,
-      };
-    } else {
-      req.user.activeContext = {
-        type: 'self',
-        contextPlanId: user.active_plan_id,
-        contextPlanExpiry: user.subscription_expires_at,
-      };
+      throw err;
     }
 
     return next();
@@ -113,5 +135,43 @@ export const optionalAuthMiddleware = async (req, res, next) => {
   }
   return authMiddleware(req, res, next);
 };
+
+/**
+ * Soft-attach user id for rate limiting (Bearer only). Never returns 401.
+ * Sets req.rateLimitUserId when verify succeeds.
+ */
+export function attachUserIdForRateLimit(req, _res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded?.userId != null) {
+        req.rateLimitUserId = decoded.userId;
+      }
+    }
+  } catch {
+    // ignore — authMiddleware will reject later if needed
+  }
+  return next();
+}
+
+/**
+ * Soft-attach user id from SSE query token for sseLimiter. Never returns 401.
+ */
+export function attachSseUserIdForRateLimit(req, _res, next) {
+  try {
+    const token = req.query?.token;
+    if (token) {
+      const decoded = jwt.verify(String(token), process.env.JWT_SECRET);
+      if (decoded?.userId != null) {
+        req.rateLimitUserId = decoded.userId;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return next();
+}
 
 export default authMiddleware;

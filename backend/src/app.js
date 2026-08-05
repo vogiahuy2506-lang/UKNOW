@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { globalLimiter, authLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
+import { attachUserIdForRateLimit } from './middleware/auth.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -134,8 +135,8 @@ export function createApp() {
   // Resolve custom hostname (*.founderai.biz) → landing page slug
   app.use(domainResolver);
 
-  // Global rate limit cho toàn bộ API
-  app.use('/api', globalLimiter);
+  // Soft-resolve user id for rate-limit keys (never 401) then global limit
+  app.use('/api', attachUserIdForRateLimit, globalLimiter);
 
   // Auth rate limit (chống brute-force login)
   app.use('/api/auth', authLimiter, authRoutes);

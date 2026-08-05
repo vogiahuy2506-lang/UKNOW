@@ -1601,6 +1601,8 @@ export default {
     noZaloAccount: 'No Zalo account connected',
     connected: 'Connected',
     sessionExpired: 'Session expired',
+    sseDisconnected: 'Realtime connection lost',
+    sseRetry: 'Retry',
     online: 'Online',
     offline: 'Offline',
     syncNow: 'Sync now',

@@ -372,7 +372,7 @@ const InboxPage = () => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
 
-  useInboxSSE(handleNewMessage, handleUnreadChange);
+  const { status: sseStatus, retry: retrySse } = useInboxSSE(handleNewMessage, handleUnreadChange);
 
   const handleSendMessage = useCallback(async (content, replyTo) => {
     if (!selectedConversation || isSending) return;
@@ -552,6 +552,22 @@ const InboxPage = () => {
               <p className="text-[11px] text-amber-800 leading-tight">
                 {t('inbox.sessionExpired')} — {t('inbox.rescanQR')}
               </p>
+            </div>
+          )}
+
+          {sseStatus === 'disconnected' && (
+            <div className="mx-3 mb-2 px-2 py-1.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2">
+              <HiOutlineExclamation className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <p className="text-[11px] text-rose-800 leading-tight flex-1">
+                {t('inbox.sseDisconnected')}
+              </p>
+              <button
+                type="button"
+                onClick={retrySse}
+                className="shrink-0 text-[11px] font-semibold text-rose-700 underline"
+              >
+                {t('inbox.sseRetry')}
+              </button>
             </div>
           )}
 

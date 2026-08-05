@@ -1,9 +1,14 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import {
+  SSE_HEARTBEAT_TIMEOUT,
+  SSE_MAX_FAILURES,
+  nextSseBackoffMs,
+} from './sseBackoff.util';
 
-const SSE_RECONNECT_DELAY = 3000;
-const SSE_HEARTBEAT_TIMEOUT = 60000;
-
+/**
+ * @returns {{ status: 'connecting'|'connected'|'disconnected', retry: Function, reconnect: Function, disconnect: Function }}
+ */
 export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   const { user } = useAuthStore();
   const eventSourceRef = useRef(null);
@@ -11,6 +16,8 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   const reconnectTimeoutRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
   const tokenRef = useRef(null);
+  const failureCountRef = useRef(0);
+  const [status, setStatus] = useState('connecting');
 
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
@@ -27,16 +34,32 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     }
   }, []);
 
+  const scheduleReconnect = useCallback((tokenAtFail) => {
+    failureCountRef.current += 1;
+    if (failureCountRef.current > SSE_MAX_FAILURES) {
+      console.error('[SSE] Max reconnect attempts reached — stopped');
+      setStatus('disconnected');
+      return;
+    }
+    const delay = nextSseBackoffMs(failureCountRef.current);
+    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${failureCountRef.current})...`);
+    reconnectTimeoutRef.current = setTimeout(() => {
+      if (tokenRef.current === tokenAtFail && connectRef.current) {
+        connectRef.current();
+      }
+    }, delay);
+  }, []);
+
   const resetHeartbeat = useCallback(() => {
     if (heartbeatTimeoutRef.current) {
       clearTimeout(heartbeatTimeoutRef.current);
     }
     heartbeatTimeoutRef.current = setTimeout(() => {
-      console.log('[SSE] Heartbeat timeout - reconnecting');
+      console.log('[SSE] Heartbeat timeout - reconnecting via backoff');
       cleanup();
-      if (connectRef.current) connectRef.current();
+      scheduleReconnect(tokenRef.current);
     }, SSE_HEARTBEAT_TIMEOUT);
-  }, [cleanup]);
+  }, [cleanup, scheduleReconnect]);
 
   const connect = useCallback(() => {
     if (!user?.id) return;
@@ -44,6 +67,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     const newToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
     if (!newToken) {
       cleanup();
+      setStatus('disconnected');
       return;
     }
 
@@ -60,8 +84,8 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     }
 
     tokenRef.current = newToken;
+    setStatus('connecting');
 
-    // EventSource doesn't support custom headers, use query param with token
     const url = `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(newToken)}`;
 
     try {
@@ -69,6 +93,8 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
 
       eventSource.onopen = () => {
         console.log('[SSE] Connected to inbox stream');
+        failureCountRef.current = 0;
+        setStatus('connected');
         resetHeartbeat();
       };
 
@@ -76,14 +102,10 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         console.error('[SSE] Connection error:', error);
         cleanup();
         if (tokenRef.current === newToken) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('[SSE] Reconnecting...');
-            connect();
-          }, SSE_RECONNECT_DELAY);
+          scheduleReconnect(newToken);
         }
       };
 
-      // Listen for new messages
       eventSource.addEventListener('inbox:new_message', (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -95,7 +117,6 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         }
       });
 
-      // Listen for unread count changes
       eventSource.addEventListener('inbox:unread_change', (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -107,21 +128,28 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         }
       });
 
-      // Listen for connected event
       eventSource.addEventListener('connected', () => {
         console.log('[SSE] Server confirmed connection');
+        failureCountRef.current = 0;
+        setStatus('connected');
         resetHeartbeat();
       });
 
       eventSourceRef.current = eventSource;
     } catch (error) {
       console.error('[SSE] Failed to create EventSource:', error);
+      scheduleReconnect(newToken);
     }
-  }, [cleanup, resetHeartbeat, user?.id, onNewMessage, onUnreadCountChange]);
+  }, [cleanup, resetHeartbeat, scheduleReconnect, user?.id, onNewMessage, onUnreadCountChange]);
 
   connectRef.current = connect;
 
-  // Reconnect when user logs in/out (token changes)
+  const retry = useCallback(() => {
+    failureCountRef.current = 0;
+    cleanup();
+    connect();
+  }, [cleanup, connect]);
+
   useEffect(() => {
     if (user?.id) {
       const currentToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
@@ -129,6 +157,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         console.log('[SSE] User/token changed, reconnecting...');
         cleanup();
         tokenRef.current = currentToken;
+        failureCountRef.current = 0;
         connect();
       }
     }
@@ -143,6 +172,8 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   }, [connect, cleanup]);
 
   return {
+    status,
+    retry,
     reconnect: connect,
     disconnect: cleanup,
   };

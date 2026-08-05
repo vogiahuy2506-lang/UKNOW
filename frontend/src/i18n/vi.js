@@ -1616,6 +1616,8 @@ export default {
     noZaloAccount: 'Chưa kết nối Zalo',
     connected: 'Đã kết nối',
     sessionExpired: 'Phiên hết hạn',
+    sseDisconnected: 'Mất kết nối realtime',
+    sseRetry: 'Thử lại',
     online: 'Online',
     offline: 'Offline',
     syncNow: 'Đồng bộ ngay',
