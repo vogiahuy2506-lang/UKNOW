@@ -5,28 +5,29 @@ import AnimatedSection from '../../components/AnimatedSection';
 import PricingSection from './components/PricingSection';
 import { FaCheck } from 'react-icons/fa';
 
-const faqs = [
+const getFaqs = (t) => [
   {
-    q: 'Tôi có cần thẻ tín dụng để dùng thử không?',
-    a: 'Không. Bạn chỉ cần đăng ký bằng email để bắt đầu dùng thử 14 ngày.',
+    q: t('pricingPage.faq1Q'),
+    a: t('pricingPage.faq1A'),
   },
   {
-    q: 'Tôi có thể nâng cấp hoặc hạ cấp gói dịch vụ không?',
-    a: 'Có. Bạn có thể thay đổi gói bất kỳ lúc nào từ trang quản lý tài khoản.',
+    q: t('pricingPage.faq2Q'),
+    a: t('pricingPage.faq2A'),
   },
   {
-    q: 'Chi phí có bao gồm thuế VAT không?',
-    a: 'Giá hiển thị chưa bao gồm VAT 10%. Bạn có thể yêu cầu xuất hóa đơn GTGT.',
+    q: t('pricingPage.faq3Q'),
+    a: t('pricingPage.faq3A'),
   },
   {
-    q: 'Founder AI có hỗ trợ setup ban đầu không?',
-    a: 'Gói Professional và Enterprise được hỗ trợ setup miễn phí trong 30 phút đầu tiên.',
+    q: t('pricingPage.faq4Q'),
+    a: t('pricingPage.faq4A'),
   },
 ];
 
 export default function PricingPage() {
   const { t } = useI18n();
   const { getOverride } = usePublicLandingOverrides('pricing');
+  const faqs = getFaqs(t);
 
   const getValue = (key, fallback) => {
     const override = getOverride(key);
@@ -54,7 +55,7 @@ export default function PricingPage() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
-            <span data-edit="pricing.badge">{getValue('pricing.badge', 'Founder AI')}</span>
+            <span data-edit="pricing.badge">{getValue('pricing.badge', t('pricingPage.badge'))}</span>
           </div>
 
           {/* Title */}
@@ -63,8 +64,8 @@ export default function PricingPage() {
             style={{ fontSize: 'clamp(32px, 6vw, 56px)', lineHeight: 1.15, fontWeight: 600 }}
             data-edit="pricing.title"
           >
-            Giá cả hợp lý,{' '}
-            <span className="text-orange-500">hiệu quả thật</span>
+            {t('pricingPage.titlePrefix')}{' '}
+            <span className="text-orange-500">{t('pricingPage.titleHighlight')}</span>
           </h1>
 
           {/* Subtitle */}
@@ -72,22 +73,22 @@ export default function PricingPage() {
             className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
             data-edit="pricing.subtitle"
           >
-            Dùng thử 14 ngày không cần thẻ. Không phí khởi tạo, không ràng buộc.
+            {t('pricingPage.subtitle')}
           </p>
 
           {/* Trust indicators */}
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500">
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Miễn phí 14 ngày đầu
+              {t('pricingPage.trust1')}
             </span>
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Không phí khởi tạo
+              {t('pricingPage.trust2')}
             </span>
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Hủy bất kỳ lúc nào
+              {t('pricingPage.trust3')}
             </span>
           </div>
         </div>
@@ -117,10 +118,10 @@ export default function PricingPage() {
         <div className="max-w-3xl mx-auto px-6 relative z-10">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
-              Câu hỏi thường gặp
+              {t('pricingPage.faqTitle')}
             </h2>
             <p className="text-slate-600">
-              Nếu bạn có câu hỏi khác, hãy liên hệ với chúng tôi.
+              {t('pricingPage.faqSubtitle')}
             </p>
           </div>
 

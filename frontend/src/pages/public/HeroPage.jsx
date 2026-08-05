@@ -4,6 +4,7 @@ import {
   FaRocket, FaHeadset, FaCheck, FaArrowRight,
   FaLaptop, FaMagic, FaChartLine, FaLock,
   FaBullseye, FaHandshake, FaClock, FaTools,
+  FaPiggyBank,
 } from 'react-icons/fa';
 import HeroNavbar from './components/HeroNavbar';
 import PublicFooter from './components/PublicFooter';
@@ -12,101 +13,101 @@ import AnimatedSection from '../../components/AnimatedSection';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
 
-// Features data - có thể thay đổi theo sản phẩm thật
-const features = [
+const getFeatures = (t) => [
   {
     icon: FaLaptop,
-    title: 'Tạo trang đích chuyên nghiệp',
-    description: 'Không cần biết code. Kéo thả để tạo landing page, form thu thập lead, trang bán hàng.',
-    highlight: 'Chỉ mất 10 phút',
+    title: t('heroPage.f1Title'),
+    description: t('heroPage.f1Desc'),
+    highlight: t('heroPage.f1Highlight'),
   },
   {
     icon: FaEnvelope,
-    title: 'Gửi email marketing hàng loạt',
-    description: 'Thiết kế email đẹp, gửi cho hàng nghìn khách hàng cùng lúc. Theo dõi tỷ lệ mở và click.',
-    highlight: 'Tỷ lệ vào inbox cao',
+    title: t('heroPage.f2Title'),
+    description: t('heroPage.f2Desc'),
+    highlight: t('heroPage.f2Highlight'),
   },
   {
     icon: FaComments,
-    title: 'Nhắn tin Zalo tự động',
-    description: 'Kết nối nhiều tài khoản Zalo. Gửi tin nhắn tự động, nuôi dưỡng khách hàng không cần ngồi máy.',
-    highlight: 'Tiết kiệm 20+ giờ/tuần',
+    title: t('heroPage.f3Title'),
+    description: t('heroPage.f3Desc'),
+    highlight: t('heroPage.f3Highlight'),
   },
   {
     icon: FaUsers,
-    title: 'Quản lý khách hàng tiềm năng',
-    description: 'Lưu trữ thông tin, phân loại theo mức độ quan tâm. Không để khách hàng rơi vào quên lãng.',
-    highlight: 'Mọi lead đều được chăm sóc',
+    title: t('heroPage.f4Title'),
+    description: t('heroPage.f4Desc'),
+    highlight: t('heroPage.f4Highlight'),
   },
   {
     icon: FaChartLine,
-    title: 'Báo cáo doanh thu rõ ràng',
-    description: 'Biết chính xác chiến dịch nào mang lại đơn hàng. Tối ưu ngân sách marketing dựa trên số liệu thật.',
-    highlight: 'ROI rõ ràng',
+    title: t('heroPage.f5Title'),
+    description: t('heroPage.f5Desc'),
+    highlight: t('heroPage.f5Highlight'),
   },
   {
     icon: FaLock,
-    title: 'Dữ liệu được bảo mật',
-    description: 'Hạ tầng cloud với backup tự động. Khách hàng của bạn là khách hàng của bạn, không ai khác được đọc.',
-    highlight: 'An toàn tuyệt đối',
+    title: t('heroPage.f6Title'),
+    description: t('heroPage.f6Desc'),
+    highlight: t('heroPage.f6Highlight'),
   },
 ];
 
-// How it works - quy trình đơn giản hóa
-const steps = [
+const getSteps = (t) => [
   {
     number: '01',
-    title: 'Tạo tài khoản miễn phí',
-    description: 'Đăng ký bằng email, không cần thẻ tín dụng. Bắt đầu dùng ngay.',
+    title: t('heroPage.s1Title'),
+    description: t('heroPage.s1Desc'),
     icon: FaBolt,
   },
   {
     number: '02',
-    title: 'Kết nối kênh của bạn',
-    description: 'Thêm email và tài khoản Zalo cần dùng. Mất khoảng 5 phút.',
+    title: t('heroPage.s2Title'),
+    description: t('heroPage.s2Desc'),
     icon: FaTools,
   },
   {
     number: '03',
-    title: 'Tạo chiến dịch đầu tiên',
-    description: 'Dùng template có sẵn hoặc tự thiết kế. Hệ thống sẽ hướng dẫn từng bước.',
+    title: t('heroPage.s3Title'),
+    description: t('heroPage.s3Desc'),
     icon: FaBullseye,
   },
   {
     number: '04',
-    title: 'Theo dõi và tối ưu',
-    description: 'Xem kết quả trong dashboard. Điều chỉnh nội dung để tăng hiệu quả.',
+    title: t('heroPage.s4Title'),
+    description: t('heroPage.s4Desc'),
     icon: FaChartBar,
   },
 ];
 
-// Benefits - Tại sao chọn Founder AI
-const benefits = [
+const getBenefits = (t) => [
   {
-    icon: FaBolt,
-    title: 'Khởi tạo nhanh',
-    description: 'Đăng ký và chạy chiến dịch đầu tiên trong 15 phút. Không cần đội kỹ thuật.',
+    icon: FaClock,
+    title: t('heroPage.b1Title'),
+    description: t('heroPage.b1Desc'),
   },
   {
-    icon: FaRocket,
-    title: 'Tự động hóa thông minh',
-    description: 'AI tự phân loại khách hàng, gửi tin nhắn đúng thời điểm, nuôi dưỡng lead 24/7.',
+    icon: FaUsers,
+    title: t('heroPage.b2Title'),
+    description: t('heroPage.b2Desc'),
   },
   {
-    icon: FaChartLine,
-    title: 'Đo lường rõ ràng',
-    description: 'Dashboard trực quan, theo dõi tỷ lệ mở email, click, chuyển đổi theo thời gian thực.',
+    icon: FaPiggyBank,
+    title: t('heroPage.b3Title'),
+    description: t('heroPage.b3Desc'),
   },
   {
-    icon: FaHeadset,
-    title: 'Hỗ trợ tiếng Việt',
-    description: 'Đội ngũ hỗ trợ trực tiếp qua Zalo, điện thoại. Giải đáp trong vài phút.',
+    icon: FaShieldAlt,
+    title: t('heroPage.b4Title'),
+    description: t('heroPage.b4Desc'),
   },
 ];
 
 export default function HeroPage() {
   const { t, locale } = useI18n();
   const { getOverride } = usePublicLandingOverrides('hero');
+  const features = getFeatures(t);
+  const steps = getSteps(t);
+  const benefits = getBenefits(t);
 
   const getValue = (baseKey, fallback) => {
     const override = getOverride(baseKey);
@@ -185,14 +186,14 @@ export default function HeroPage() {
               className="inline-flex items-center gap-2 px-8 py-4 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors text-base"
               data-edit="cta.button"
             >
-              Dùng thử miễn phí
+              {t('heroPage.heroCtaPrimary')}
               <FaArrowRight className="w-4 h-4" />
             </Link>
             <Link
               to="/pricing"
               className="inline-flex items-center gap-2 px-8 py-4 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-base"
             >
-              Xem bảng giá
+              {t('heroPage.heroCtaSecondary')}
             </Link>
           </div>
 
@@ -200,15 +201,15 @@ export default function HeroPage() {
           <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-slate-500">
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Dùng thử 14 ngày
+              {t('heroPage.heroTrust1')}
             </span>
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Không cần thẻ tín dụng
+              {t('heroPage.heroTrust2')}
             </span>
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
-              Hủy bất kỳ lúc nào
+              {t('heroPage.heroTrust3')}
             </span>
           </div>
 
@@ -239,13 +240,13 @@ export default function HeroPage() {
         <div className="max-w-6xl mx-auto px-6 relative z-10">
           <div className="text-center mb-16">
             <span className="inline-block px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
-              GIẢI PHÁP
+              {t('heroPage.section1Badge')}
             </span>
             <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
-              Thay đổi cách bạn bán hàng
+              {t('heroPage.section1Title')}
             </h2>
             <p className="text-slate-600 max-w-xl mx-auto">
-              Thay vì chạy theo từng khách hàng, để hệ thống tự động tiếp cận và chăm sóc họ.
+              {t('heroPage.section1Subtitle')}
             </p>
           </div>
 
@@ -277,13 +278,13 @@ export default function HeroPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <span className="inline-block px-4 py-1.5 bg-slate-200 text-slate-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
-              BẮT ĐẦU NHANH
+              {t('heroPage.section2Badge')}
             </span>
             <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
-              Chỉ cần 15 phút để chạy chiến dịch đầu tiên
+              {t('heroPage.section2Title')}
             </h2>
             <p className="text-slate-600 max-w-lg mx-auto">
-              Không cần đọc tài liệu dài. Hệ thống hướng dẫn bạn từng bước.
+              {t('heroPage.section2Subtitle')}
             </p>
           </div>
 
@@ -332,23 +333,23 @@ export default function HeroPage() {
         }} />
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-16 relative z-10">
-          <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
-            Tại sao chọn Founder AI?
+          <h2 className="text-[26px] md:text-[34px] font-semibold text-slate-900 mb-4 whitespace-nowrap">
+            {t('heroPage.section3Title')}
           </h2>
             <p className="text-slate-600 max-w-lg mx-auto">
-              Những gì chúng tôi đảm bảo khi bạn sử dụng dịch vụ.
+              {t('heroPage.section3Subtitle')}
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {benefits.map((b, i) => (
               <AnimatedSection key={i} delay={i * 80}>
-                <div className="text-center p-6 rounded-2xl border border-slate-200 hover:border-orange-200 hover:bg-orange-50/30 transition-colors relative z-10">
-                  <div className="w-14 h-14 mx-auto mb-5 flex items-center justify-center bg-orange-100 rounded-xl">
+                <div className="h-full text-center p-6 rounded-2xl border border-slate-200 hover:border-orange-200 hover:bg-orange-50/30 transition-colors relative z-10 flex flex-col items-center">
+                  <div className="w-14 h-14 mb-5 flex items-center justify-center bg-orange-100 rounded-xl shrink-0">
                     <b.icon className="w-6 h-6 text-orange-500" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-3">{b.title}</h3>
-                  <p className="text-sm text-slate-600">{b.description}</p>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3 min-h-[3.5rem] flex items-center">{b.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed min-h-[3rem]">{b.description}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -373,7 +374,7 @@ export default function HeroPage() {
         }} />
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
           <span className="inline-block px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
-            Đơn vị phát triển
+            {t('heroPage.section4Badge')}
           </span>
           <div className="flex items-center justify-center mb-4">
             <img
@@ -383,8 +384,9 @@ export default function HeroPage() {
             />
           </div>
 
-          <p className="text-slate-600 text-lg max-w-xl mx-auto mb-8 leading-relaxed">
-            Founder AI là sản phẩm thuộc sở hữu của <span className="font-semibold text-slate-900">Công ty TNHH Giải pháp Số DIGISO</span>. 
+          <p className="text-slate-600 text-lg max-w-xl mx-auto mb-8 leading-relaxed text-center">
+            {t('heroPage.section4Desc')}{' '}
+            <span className="font-semibold text-slate-900 whitespace-nowrap">{t('heroPage.section4CompanyName')}</span>.
           </p>
 
           <a
@@ -393,7 +395,7 @@ export default function HeroPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-colors text-sm"
           >
-            Tìm hiểu thêm về DIGISO
+            {t('heroPage.section4Button')}
             <FaArrowRight className="w-4 h-4" />
           </a>
         </div>
