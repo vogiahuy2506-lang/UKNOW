@@ -2,7 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { renderModal, emptyForm, fmtVnd, MODAL_FORM } from './planUtils.jsx';
-import { PriceInput, FeatureEditor, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField, LimitInput } from './PlanInputs';
+import { PriceInput, FeatureEditor, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField, GraceDaysInput } from './PlanInputs';
 import { Field, FormSection, ModalShell, normalizePlanPayload, PLAN_PRESETS } from './PlanModalsShared.jsx';
 import { useI18n } from '../../../i18n';
 
@@ -141,7 +141,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
             <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
           </Field>
           <Field label="Số ngày ân hạn sau hết hạn" note="0 = chặn ngay khi hết hạn gói">
-            <LimitInput value={form.gracePeriodDays ?? ''} onChange={(v) => set('gracePeriodDays', v)} />
+            <GraceDaysInput value={form.gracePeriodDays ?? ''} onChange={(v) => set('gracePeriodDays', v)} />
           </Field>
           <Field label={t('planInputs.descriptionLabel')} className="md:col-span-2">
             <textarea rows={3} className="input w-full resize-none" value={form.description}

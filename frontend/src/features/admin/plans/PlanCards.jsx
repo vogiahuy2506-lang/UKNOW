@@ -12,7 +12,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
             {!plan.isActive && <span className="badge badge-gray text-xs">{t('plans.hiddenStatus')}</span>}
-            {plan.isFupEnabled && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">FUP</span>}
+            
           </div>
           {plan.code && <p className="text-xs text-gray-400 mt-0.5">#{plan.code}</p>}
         </div>
@@ -29,7 +29,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
           <span className="font-semibold">{t('planInputs.messagesPerPeriod')}:</span>{' '}
           {fmtPeriodMessages(plan.messagesPerPeriod)}
-          {plan.isFupEnabled && <span className="ml-1 text-orange-500">({t('planInputs.fupEnabled')})</span>}
+          
         </div>
       )}
 
@@ -112,7 +112,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{plan.name}</h3>
-          {plan.isFupEnabled && <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">FUP</span>}
+          
         </div>
         <p className="text-base font-bold text-primary-600 shrink-0">{fmtVnd(plan.price)}</p>
       </div>

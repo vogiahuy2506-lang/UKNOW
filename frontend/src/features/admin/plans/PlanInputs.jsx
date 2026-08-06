@@ -12,6 +12,17 @@ import adminPlansApiService from '../services/adminPlansApi.service';
 import { useI18n } from '../../../i18n';
 import { normalizeMoneyValue } from './planUtils.jsx';
 
+/**
+ * Hiển thị số nguyên với dấu chấm phân cách nghìn (vi-VN).
+ * Trả '' khi chưa nhập để placeholder ("Không giới hạn"…) còn hiện được.
+ * Chỉ đổi phần hiển thị — giá trị đẩy lên onChange vẫn là Number.
+ */
+const formatIntGrouped = (value) => {
+  if (value === '' || value === null || value === undefined) return '';
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toLocaleString('vi-VN') : String(value);
+};
+
 // ── PriceInput ────────────────────────────────────────────────────────────────
 /** Money text input with vi-VN grouping. Optional suffix (đ) and allowEmpty ('' instead of 0). */
 export const PriceInput = ({
@@ -554,6 +565,29 @@ export const DurationInput = ({ value, onChange }) => {
 
 // ── LimitInput — input số với toggle "Không hỗ trợ" (-1) ─────────────────────
 /** value: '' = unlimited, -1 = not supported, number = limit */
+/**
+ * Số ngày ân hạn — KHÔNG dùng LimitInput.
+ *
+ * LimitInput thiết kế cho hạn mức tài nguyên: trống = không giới hạn, -1 = N/A.
+ * Cả hai ý nghĩa đó đều sai với ô này:
+ *   - trống → backend lưu 0 (chặn ngay khi hết hạn), KHÔNG phải ân hạn vô hạn
+ *   - -1    → vi phạm CHECK (grace_period_days >= 0) ở migration 073, lưu luôn thất bại
+ * Nếu không có ràng buộc DB đó, -1 sẽ thành ân hạn ÂM: khách bị chặn TRƯỚC hạn 1 ngày.
+ */
+export const GraceDaysInput = ({ value, onChange }) => (
+  <input
+    type="text"
+    inputMode="numeric"
+    className="input h-11 w-full"
+    placeholder="0"
+    value={value ?? ''}
+    onChange={(e) => {
+      const digits = e.target.value.replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+      onChange(digits === '' ? '' : Number(digits));
+    }}
+  />
+);
+
 export const LimitInput = ({ value, onChange, placeholder }) => {
   const { t } = useI18n();
   const isNotSupported = value === -1 || value === '-1';
@@ -579,7 +613,7 @@ export const LimitInput = ({ value, onChange, placeholder }) => {
           inputMode="numeric"
           className="input h-11 flex-1 min-w-0"
           placeholder={placeholder || t('planInputs.noLimit')}
-          value={value ?? ''}
+          value={formatIntGrouped(value)}
           onChange={handleInputChange}
         />
       )}
@@ -645,23 +679,21 @@ export const PeriodMessagesField = ({ form, set }) => {
             inputMode="numeric"
             className="input h-11 w-full"
             placeholder={t('planInputs.messagesPerPeriodPlaceholder')}
-            value={form.messagesPerPeriod ?? ''}
+            value={formatIntGrouped(form.messagesPerPeriod)}
             onChange={handleInputChange}
           />
           <p className="mt-1.5 text-xs text-slate-400">{t('planInputs.messagesPerPeriodHint')}</p>
         </div>
-        <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded text-primary-600"
-            checked={Boolean(form.isFupEnabled)}
-            onChange={(e) => set('isFupEnabled', e.target.checked)}
-          />
-          <span className="ml-3">
-            <span className="block text-sm font-semibold text-slate-800">{t('planInputs.fupEnabled')}</span>
-            <span className="text-xs text-slate-500">{t('planInputs.fupDescription')}</span>
-          </span>
-        </label>
+        {/*
+          Ô "Bật FUP" đã ẩn 06/08/2026. Cờ `is_fup_enabled` CHƯA CÓ HÀNH VI —
+          `userSendLimit.util.js:10` ghi rõ "FUP behavior intentionally deferred";
+          grep toàn backend thì cột này chỉ được đọc/ghi qua lại giữa `plans` và
+          `users`, không nhánh quyết định nào dùng. Tick hay không, hệ thống chạy
+          y hệt — nên ô tick là lời nói dối trên màn hình.
+
+          Cột DB và đường ống dữ liệu giữ nguyên: bật lại chỉ cần bỏ comment khối
+          này SAU KHI đã có logic bóp tốc độ thật.
+        */}
       </div>
     </div>
   );
