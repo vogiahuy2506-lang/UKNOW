@@ -49,5 +49,10 @@ describe('helpCenter.util', () => {
       expect(parseRouteLabel('ngoài_phạm_vi')).toBe('ngoài_phạm_vi');
       expect(parseRouteLabel('xyz')).toBe('không_rõ');
     });
+
+    it('chọn nhãn xuất hiện sớm nhất khi model giải thích kèm phủ định', () => {
+      expect(parseRouteLabel('hỏi_đáp (không phải làm giúp)')).toBe('hỏi_đáp');
+      expect(parseRouteLabel('')).toBe('không_rõ');
+    });
   });
 });

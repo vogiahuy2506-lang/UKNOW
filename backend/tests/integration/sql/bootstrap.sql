@@ -283,7 +283,12 @@ INSERT INTO topup_pricing (item_key, unit_price, min_qty, step_qty, max_qty, is_
 VALUES
   ('zalo_messages', 100, 50, 50, NULL, TRUE, 10),
   ('emails', 20, 250, 250, 50000, TRUE, 20),
-  ('ai_credits', 200, 25, 25, 5000, TRUE, 30);
+  ('ai_credits', 200, 25, 25, 5000, TRUE, 30),
+  ('zalo_accounts', 50000, 1, 1, 50, TRUE, 40),
+  ('email_accounts', 50000, 1, 1, 50, TRUE, 50),
+  ('landing_pages', 30000, 1, 1, 200, TRUE, 60),
+  ('chatbots', 100000, 1, 1, 100, TRUE, 70),
+  ('employees', 50000, 1, 1, 100, TRUE, 80);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,
@@ -291,13 +296,30 @@ CREATE TABLE topup_grants (
   item_key   VARCHAR(50) NOT NULL,
   qty        INTEGER NOT NULL CHECK (qty > 0),
   order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  cycle_end  TIMESTAMPTZ NOT NULL,
+  cycle_end  TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key)
+  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key),
+  CONSTRAINT topup_grants_consumable_no_expiry CHECK (
+    item_key NOT IN ('zalo_messages', 'emails', 'ai_credits')
+    OR cycle_end IS NULL
+  )
 );
 
 CREATE INDEX idx_topup_grants_user_item_cycle
   ON topup_grants (user_id, item_key, cycle_end);
+
+CREATE TABLE topup_debits (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key    VARCHAR(50) NOT NULL,
+  qty         INTEGER     NOT NULL CHECK (qty > 0),
+  source_key  VARCHAR(120) NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_debits_source_unique UNIQUE (item_key, source_key)
+);
+
+CREATE INDEX idx_topup_debits_user_item
+  ON topup_debits (user_id, item_key);
 
 -- ─── Vouchers (migration 036) ──────────────────────────────────────────
 CREATE TABLE vouchers (

@@ -46,6 +46,20 @@ function formatSources(chunks = []) {
   return sources;
 }
 
+const THINKING_BUDGET_RETRY_RE = /budget 0 is invalid|thinking mode|thinking_?budget/i;
+
+async function recordRouteUsage(userId, modelName, raw) {
+  try {
+    await aiUsageMeter.record(userId, {
+      promptTokens: Number(raw?.usageMetadata?.promptTokenCount) || 0,
+      outputTokens: Number(raw?.usageMetadata?.candidatesTokenCount) || 0,
+      totalTokens: Number(raw?.usageMetadata?.totalTokenCount) || 0,
+    }, { feature: 'help_route', model: modelName, kind: 'generate' });
+  } catch {
+    // metering best-effort
+  }
+}
+
 async function routeQuestion(question, userId) {
   const systemPrompt = `Bạn là bộ định tuyến ý định cho trợ lý Founder AI.
 Chỉ trả về ĐÚNG MỘT trong bốn nhãn sau (không giải thích):
@@ -60,22 +74,42 @@ Quy tắc:
 - không_rõ: quá ngắn / thiếu ngữ cảnh (vd: "Zalo")
 - ngoài_phạm_vi: không liên quan sản phẩm (thời tiết, tin tức, kiến thức chung...)`;
 
-  const { text, modelName, raw } = await generateGeminiText({
+  const baseArgs = {
     userId,
     systemPrompt,
     userPrompt: question,
     temperature: 0,
-    maxOutputTokens: 32,
-  });
+  };
+
+  let text;
+  let modelName;
+  let raw;
 
   try {
-    await aiUsageMeter.record(userId, {
-      promptTokens: Number(raw?.usageMetadata?.promptTokenCount) || 0,
-      outputTokens: Number(raw?.usageMetadata?.candidatesTokenCount) || 0,
-      totalTokens: Number(raw?.usageMetadata?.totalTokenCount) || 0,
-    }, { feature: 'help_route', model: modelName, kind: 'generate' });
-  } catch {
-    // metering best-effort
+    ({ text, modelName, raw } = await generateGeminiText({
+      ...baseArgs,
+      maxOutputTokens: 256,
+      thinkingBudget: 0,
+    }));
+    await recordRouteUsage(userId, modelName, raw);
+  } catch (err) {
+    const msg = String(err?.message || '');
+    if (!THINKING_BUDGET_RETRY_RE.test(msg)) {
+      throw err;
+    }
+    // Thinking-only models (e.g. gemini-2.5-pro) reject budget 0 — retry without thinkingConfig.
+    ({ text, modelName, raw } = await generateGeminiText({
+      ...baseArgs,
+      maxOutputTokens: 1024,
+    }));
+    await recordRouteUsage(userId, modelName, raw);
+  }
+
+  if (!String(text || '').trim()) {
+    console.warn('[help_route] empty route label', {
+      modelName,
+      finishReason: raw?.candidates?.[0]?.finishReason,
+    });
   }
 
   return parseRouteLabel(text);
@@ -85,8 +119,10 @@ async function answerWithDocs(question, userId) {
   const capabilityMap = await getCapabilityMapText();
   const { chunks, topSimilarity } = await searchHelpChunks(question, { userId });
 
-  // Overview questions → capability map even without strong chunk hits
-  const isOverview = /làm được gì|tính năng|hệ thống .+ (gì|nào)|overview|capabilities/i.test(question);
+  // Overview questions → capability map even without strong chunk hits.
+  // "bạn có thể làm những gì" là câu khách mới vào hỏi nhiều nhất mà mẫu cũ không bắt.
+  const isOverview = /làm được gì|làm những gì|làm gì|giúp (được )?gì|hỗ trợ (được )?gì|dùng để làm gì|tính năng|chức năng|hệ thống .+ (gì|nào)|overview|capabilit/i
+    .test(question);
 
   if (!chunks.length && !isOverview) {
     await helpRepo.insertUnanswered({

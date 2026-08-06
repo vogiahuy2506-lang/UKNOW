@@ -10,6 +10,7 @@ export async function generateGeminiText({
   userPrompt,
   temperature = 0.2,
   maxOutputTokens = 1024,
+  thinkingBudget = null,
 } = {}) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
@@ -19,13 +20,18 @@ export async function generateGeminiText({
   const modelName = await resolveAllowedModel(userId, null);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+  const generationConfig = {
+    temperature,
+    maxOutputTokens,
+  };
+  if (Number.isFinite(thinkingBudget) && thinkingBudget >= 0) {
+    generationConfig.thinkingConfig = { thinkingBudget };
+  }
+
   const body = {
     systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: {
-      temperature,
-      maxOutputTokens,
-    },
+    generationConfig,
   };
 
   const res = await fetch(url, {

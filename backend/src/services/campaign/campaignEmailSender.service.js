@@ -852,6 +852,7 @@ class CampaignEmailSenderService {
           emailStep: logEmailStepForDb,
           fromAddress,
           brandDomain,
+          debitWallet: true,
         });
         // Cập nhật email_message vừa insert sang status bounced
         await campaignEmailSenderRepository.markEmailMessageBounced(bounceTrackingToken, bouncedAt, bounceReason);
@@ -895,6 +896,7 @@ class CampaignEmailSenderService {
           emailStep: logEmailStepForDb,
           fromAddress,
           brandDomain,
+          debitWallet: true,
         });
       } catch (logError) {
         console.error('[sendEmailToCustomer] Lỗi lưu log:', logError.message);

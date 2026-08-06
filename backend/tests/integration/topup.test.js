@@ -217,7 +217,7 @@ describe('Top-up mid-cycle', () => {
     await request(app).post('/api/payments/webhook').send({});
 
     const grants = await db.query(
-      `SELECT item_key, qty, user_id FROM topup_grants WHERE order_id = (
+      `SELECT item_key, qty, user_id, cycle_end FROM topup_grants WHERE order_id = (
          SELECT id FROM orders WHERE order_code = $1
        ) ORDER BY item_key`,
       [orderCode]
@@ -227,6 +227,9 @@ describe('Top-up mid-cycle', () => {
     expect(Number(grants.rows.find((g) => g.item_key === 'emails').qty)).toBe(1000);
     expect(Number(grants.rows.find((g) => g.item_key === 'ai_credits').qty)).toBe(50);
     expect(Number(grants.rows[0].user_id)).toBe(Number(user.id));
+    for (const g of grants.rows) {
+      expect(g.cycle_end).toBeNull();
+    }
 
     const after = await db.query(
       `SELECT subscription_expires_at FROM users WHERE id = $1`,
@@ -283,7 +286,7 @@ describe('Top-up mid-cycle', () => {
     expect(grants.rows[0].item_key).toBe('emails');
   });
 
-  it('early renewal drops old-cycle grants from effective limit', async () => {
+  it('early renewal keeps wallet grants (cycle_end NULL)', async () => {
     const { user, plan } = await createTopupReadyUser({
       username: 'topup-renew',
       monthlyZaloLimit: 100,
@@ -309,23 +312,22 @@ describe('Top-up mid-cycle', () => {
     );
     await db.query(
       `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
-       VALUES ($1, 'zalo_messages', 500, $2, $3)`,
-      [user.id, orderRows[0].id, cycleEnd]
+       VALUES ($1, 'zalo_messages', 500, $2, NULL)`,
+      [user.id, orderRows[0].id]
     );
 
     _clearQuotaCache();
-    // Force monthly deny by counting — insert enough sent messages is heavy;
-    // instead assert SQL sumActive path via limits query after extending expiry.
+    // Wallet grants survive subscription renew (cycle_end IS NULL)
     const withGrant = await db.query(
       `SELECT COALESCE(SUM(tg.qty), 0)::int AS total
        FROM topup_grants tg
        WHERE tg.user_id = $1 AND tg.item_key = 'zalo_messages'
-         AND tg.cycle_end = (SELECT subscription_expires_at FROM users WHERE id = $1)`,
+         AND tg.cycle_end IS NULL`,
       [user.id]
     );
     expect(Number(withGrant.rows[0].total)).toBe(500);
 
-    // Early renew: push subscription_expires_at forward
+    // Early renew: push subscription_expires_at forward — wallet must remain
     await db.query(
       `UPDATE users SET subscription_expires_at = NOW() + INTERVAL '40 days' WHERE id = $1`,
       [user.id]
@@ -335,10 +337,10 @@ describe('Top-up mid-cycle', () => {
       `SELECT COALESCE(SUM(tg.qty), 0)::int AS total
        FROM topup_grants tg
        WHERE tg.user_id = $1 AND tg.item_key = 'zalo_messages'
-         AND tg.cycle_end = (SELECT subscription_expires_at FROM users WHERE id = $1)`,
+         AND tg.cycle_end IS NULL`,
       [user.id]
     );
-    expect(Number(afterRenew.rows[0].total)).toBe(0);
+    expect(Number(afterRenew.rows[0].total)).toBe(500);
 
     // Sanity: plan still there
     expect(Number(plan.id)).toBeTruthy();
@@ -405,9 +407,9 @@ describe('Top-up mid-cycle', () => {
     expect(Number(profile.body.data.monthlyZaloLimit)).toBe(2000);
     expect(profile.body.data.addons).toEqual(
       expect.objectContaining({
-        zaloMessages: 300,
-        emails: 1000,
-        aiCredits: 50,
+        zaloMessages: { granted: 300, used: 0, remaining: 300 },
+        emails: { granted: 1000, used: 0, remaining: 1000 },
+        aiCredits: { granted: 50, used: 0, remaining: 50 },
       })
     );
 
@@ -432,7 +434,14 @@ describe('Top-up mid-cycle', () => {
     const afterCycle = await request(app)
       .get('/api/users/profile')
       .set('Authorization', `Bearer ${token}`);
-    expect(afterCycle.body.data.addons).toBeNull();
+    // Ví vĩnh viễn — gia hạn gói không làm mất số dư (ca nghiệm thu #3)
+    expect(afterCycle.body.data.addons).toEqual(
+      expect.objectContaining({
+        zaloMessages: { granted: 300, used: 0, remaining: 300 },
+        emails: { granted: 1000, used: 0, remaining: 1000 },
+        aiCredits: { granted: 50, used: 0, remaining: 50 },
+      })
+    );
     expect(Number(afterCycle.body.data.monthlyZaloLimit)).toBe(2000);
   });
 });

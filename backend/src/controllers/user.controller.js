@@ -21,7 +21,7 @@ import {
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 import { generateTempPassword } from '../services/user/employee.service.js';
-import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
+import { sumActiveTopupGrants, getWalletBalance } from '../repositories/payment/topup.repository.js';
 import {
   buildAddonsPayload,
   isTopupOrderRow,
@@ -68,13 +68,39 @@ const isMissingLimitColumnError = (error) => error?.code === '42703';
  * @param {number|string} billingUserId
  * @param {Date|string|null|undefined} expiresAt
  */
-async function loadProfileAddons(billingUserId, expiresAt) {
-  const [zaloMessages, emails, aiCredits] = await Promise.all([
-    sumActiveTopupGrants(billingUserId, 'zalo_messages'),
-    sumActiveTopupGrants(billingUserId, 'emails'),
-    sumActiveTopupGrants(billingUserId, 'ai_credits'),
+/**
+ * Load addons for profile: consumable = wallet {granted,used,remaining}; structural = cycle grants.
+ */
+async function loadProfileAddons(billingUserId) {
+  const [
+    zaloWallet,
+    emailWallet,
+    aiWallet,
+    zaloAccounts,
+    emailAccounts,
+    landingPages,
+    chatbots,
+    employees,
+  ] = await Promise.all([
+    getWalletBalance(billingUserId, 'zalo_messages'),
+    getWalletBalance(billingUserId, 'emails'),
+    getWalletBalance(billingUserId, 'ai_credits'),
+    sumActiveTopupGrants(billingUserId, 'zalo_accounts'),
+    sumActiveTopupGrants(billingUserId, 'email_accounts'),
+    sumActiveTopupGrants(billingUserId, 'landing_pages'),
+    sumActiveTopupGrants(billingUserId, 'chatbots'),
+    sumActiveTopupGrants(billingUserId, 'employees'),
   ]);
-  return buildAddonsPayload({ zaloMessages, emails, aiCredits, expiresAt });
+  return buildAddonsPayload({
+    zaloMessages: zaloWallet,
+    emails: emailWallet,
+    aiCredits: aiWallet,
+    zaloAccounts,
+    emailAccounts,
+    landingPages,
+    chatbots,
+    employees,
+  });
 }
 
 /**
@@ -231,10 +257,7 @@ class UserController {
       try {
         // Grant neo theo subscription_expires_at của billing user — luôn lấy từ
         // billingRow (kể cả khi employee tự resolve owner qua user_members, không có X-Owner-Context).
-        addons = await loadProfileAddons(
-          billingUserId,
-          billingRow.subscription_expires_at ?? null
-        );
+        addons = await loadProfileAddons(billingUserId);
       } catch (err) {
         console.error('[Profile] loadProfileAddons failed', { userId, billingUserId, message: err.message });
       }
@@ -312,7 +335,7 @@ class UserController {
             // keep expiresAt from self
           }
         }
-        addons = await loadProfileAddons(billingUserId, expiresAt);
+        addons = await loadProfileAddons(billingUserId);
       } catch (err) {
         console.error('[Profile] loadProfileAddons on update failed', { userId, message: err.message });
       }

@@ -3,6 +3,7 @@ import {
   buildAddonsPayload,
   isTopupOrderRow,
   mapTopupItemsFromConfig,
+  normalizeWalletAddon,
 } from '../topupDisplay.util.js';
 
 describe('topupDisplay.util', () => {
@@ -36,25 +37,48 @@ describe('topupDisplay.util', () => {
     });
   });
 
+  describe('normalizeWalletAddon', () => {
+    it('kẹp remaining sàn 0 khi âm', () => {
+      expect(normalizeWalletAddon({ granted: 3, used: 5 })).toEqual({
+        granted: 3,
+        used: 5,
+        remaining: 0,
+      });
+    });
+  });
+
   describe('buildAddonsPayload', () => {
-    it('null khi cả ba = 0', () => {
+    it('null khi mọi hạng mục = 0', () => {
       expect(buildAddonsPayload({ zaloMessages: 0, emails: 0, aiCredits: 0 })).toBeNull();
     });
 
-    it('trả object đầy đủ kể cả khi một hạng mục = 0', () => {
+    it('consumable là object wallet; không còn expiresAt', () => {
       expect(
         buildAddonsPayload({
-          zaloMessages: 300,
+          zaloMessages: { granted: 300, used: 10, remaining: 290 },
           emails: 0,
           aiCredits: 0,
-          expiresAt: '2026-09-01',
         })
       ).toEqual({
-        zaloMessages: 300,
-        emails: 0,
-        aiCredits: 0,
-        expiresAt: '2026-09-01',
+        zaloMessages: { granted: 300, used: 10, remaining: 290 },
+        emails: { granted: 0, used: 0, remaining: 0 },
+        aiCredits: { granted: 0, used: 0, remaining: 0 },
+        zaloAccounts: 0,
+        emailAccounts: 0,
+        landingPages: 0,
+        chatbots: 0,
+        employees: 0,
       });
+    });
+
+    it('hiện khi chỉ mua slot cấu trúc', () => {
+      expect(
+        buildAddonsPayload({ chatbots: 1, employees: 2 })
+      ).toEqual(expect.objectContaining({
+        chatbots: 1,
+        employees: 2,
+        zaloMessages: { granted: 0, used: 0, remaining: 0 },
+      }));
     });
   });
 });

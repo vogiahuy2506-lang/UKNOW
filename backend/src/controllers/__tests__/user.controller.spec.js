@@ -8,6 +8,7 @@ const getResourceUsage = jest.fn();
 const getCreditUsageForCycle = jest.fn();
 const resolveBillingUserId = jest.fn();
 const sumActiveTopupGrants = jest.fn();
+const getWalletBalance = jest.fn();
 const findSuccessfulOrdersForUser = jest.fn();
 
 jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
@@ -45,6 +46,7 @@ jest.unstable_mockModule('../../services/payment/usageTracking.service.js', () =
 
 jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants,
+  getWalletBalance,
   findAllTopupPricing: jest.fn(),
   insertTopupGrants: jest.fn(),
   findGrantsByOrderId: jest.fn(),
@@ -64,6 +66,7 @@ describe('UserController.getProfile', () => {
     getCreditUsageForCycle.mockReset();
     resolveBillingUserId.mockReset();
     sumActiveTopupGrants.mockReset();
+    getWalletBalance.mockReset();
     findSuccessfulOrdersForUser.mockReset();
 
     resolveBillingUserId.mockImplementation(async (userId, options = {}) => {
@@ -73,6 +76,7 @@ describe('UserController.getProfile', () => {
       return userId;
     });
     sumActiveTopupGrants.mockResolvedValue(0);
+    getWalletBalance.mockResolvedValue({ granted: 0, used: 0, remaining: 0, rawRemaining: 0 });
 
     findProfileBase.mockResolvedValue({
       id: 42,
@@ -210,8 +214,10 @@ describe('UserController.getProfile', () => {
       grace_period_days: 0,
     });
     getCreditUsageForCycle.mockResolvedValue({ used: 8, cycle: { billingUserId: 42 } });
-    sumActiveTopupGrants.mockImplementation(async (_uid, itemKey) => (
-      itemKey === 'zalo_messages' ? 300 : 0
+    getWalletBalance.mockImplementation(async (_uid, itemKey) => (
+      itemKey === 'zalo_messages'
+        ? { granted: 300, used: 0, remaining: 300, rawRemaining: 300 }
+        : { granted: 0, used: 0, remaining: 0, rawRemaining: 0 }
     ));
 
     await userController.getProfile({
@@ -236,8 +242,7 @@ describe('UserController.getProfile', () => {
         aiCreditsUsed: 8,
         aiCreditsPerPeriod: 10,
         addons: expect.objectContaining({
-          zaloMessages: 300,
-          expiresAt: new Date('2026-08-01'),
+          zaloMessages: { granted: 300, used: 0, remaining: 300 },
         }),
       }),
     });
@@ -284,14 +289,17 @@ describe('UserController.getProfile', () => {
       plan_code: 'starter',
       monthly_zalo_limit: 2000,
     });
-    sumActiveTopupGrants.mockResolvedValueOnce(100).mockResolvedValue(0);
+    getWalletBalance.mockResolvedValueOnce({
+      granted: 100, used: 0, remaining: 100, rawRemaining: 100,
+    }).mockResolvedValue({ granted: 0, used: 0, remaining: 0, rawRemaining: 0 });
 
     await userController.getProfile({ user: { id: 99 } }, res);
 
-    expect(res.json.mock.calls[0][0].data.addons.expiresAt).toEqual(new Date('2026-09-15'));
+    expect(res.json.mock.calls[0][0].data.addons.zaloMessages.remaining).toBe(100);
+    expect(res.json.mock.calls[0][0].data.addons.expiresAt).toBeUndefined();
   });
 
-  it('trả addons từ sumActiveTopupGrants theo billing owner, không cộng vào monthlyZaloLimit', async () => {
+  it('trả addons wallet theo billing owner, không cộng vào monthlyZaloLimit', async () => {
     findProfilePlan.mockResolvedValue({
       plan_id: 7,
       plan_name: 'Starter',
@@ -300,11 +308,14 @@ describe('UserController.getProfile', () => {
       monthly_email_limit: 5000,
       ai_credits_per_period: 100,
     });
-    sumActiveTopupGrants.mockImplementation(async (_uid, itemKey) => {
-      if (itemKey === 'zalo_messages') return 300;
-      if (itemKey === 'emails') return 0;
-      if (itemKey === 'ai_credits') return 50;
-      return 0;
+    getWalletBalance.mockImplementation(async (_uid, itemKey) => {
+      if (itemKey === 'zalo_messages') {
+        return { granted: 300, used: 0, remaining: 300, rawRemaining: 300 };
+      }
+      if (itemKey === 'ai_credits') {
+        return { granted: 50, used: 0, remaining: 50, rawRemaining: 50 };
+      }
+      return { granted: 0, used: 0, remaining: 0, rawRemaining: 0 };
     });
 
     await userController.getProfile({ user: { id: 42 } }, res);
@@ -314,10 +325,14 @@ describe('UserController.getProfile', () => {
       data: expect.objectContaining({
         monthlyZaloLimit: 2000,
         addons: {
-          zaloMessages: 300,
-          emails: 0,
-          aiCredits: 50,
-          expiresAt: null,
+          zaloMessages: { granted: 300, used: 0, remaining: 300 },
+          emails: { granted: 0, used: 0, remaining: 0 },
+          aiCredits: { granted: 50, used: 0, remaining: 50 },
+          zaloAccounts: 0,
+          emailAccounts: 0,
+          landingPages: 0,
+          chatbots: 0,
+          employees: 0,
         },
       }),
     });

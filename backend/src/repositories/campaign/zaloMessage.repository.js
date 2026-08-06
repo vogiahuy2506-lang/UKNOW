@@ -101,14 +101,29 @@ class ZaloMessageRepository {
     return result.rows[0]?.id ?? null;
   }
 
-  async mergeZaloMessageTrackingMetadata(zaloMessageId, metadata) {
-    await db.query(
+  async mergeZaloMessageTrackingMetadata(zaloMessageId, metadata, queryable = db) {
+    await queryable.query(
       `UPDATE zalo_messages
        SET tracking_metadata = COALESCE(tracking_metadata, '{}'::jsonb) || $2::jsonb,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [zaloMessageId, JSON.stringify(metadata || {})]
     );
+  }
+
+  async withTransaction(callback) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

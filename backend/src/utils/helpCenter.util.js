@@ -75,23 +75,44 @@ export const HELP_ROUTE_LABELS = Object.freeze({
 
 /**
  * Parse model routing output into one of the closed labels.
+ * When multiple labels appear (e.g. "hỏi_đáp (không phải làm giúp)"), pick the
+ * earliest occurrence so negation/clarification does not flip the route.
  * @param {string} raw
  * @returns {keyof typeof HELP_ROUTE_LABELS}
  */
 export function parseRouteLabel(raw) {
   const text = String(raw || '').toLowerCase().normalize('NFC');
-  if (text.includes('làm_giúp') || text.includes('lam_giup') || /\blàm giúp\b/.test(text)) {
-    return HELP_ROUTE_LABELS.làm_giúp;
+  const candidates = [
+    {
+      label: HELP_ROUTE_LABELS.làm_giúp,
+      patterns: ['làm_giúp', 'lam_giup', 'làm giúp'],
+    },
+    {
+      label: HELP_ROUTE_LABELS.ngoài_phạm_vi,
+      patterns: ['ngoài_phạm_vi', 'ngoai_pham_vi', 'ngoài phạm vi'],
+    },
+    {
+      label: HELP_ROUTE_LABELS.không_rõ,
+      patterns: ['không_rõ', 'khong_ro', 'không rõ'],
+    },
+    {
+      label: HELP_ROUTE_LABELS.hỏi_đáp,
+      patterns: ['hỏi_đáp', 'hoi_dap', 'hỏi đáp'],
+    },
+  ];
+
+  let bestLabel = null;
+  let bestIndex = Infinity;
+  for (const { label, patterns } of candidates) {
+    for (const pattern of patterns) {
+      const idx = text.indexOf(pattern);
+      if (idx >= 0 && idx < bestIndex) {
+        bestIndex = idx;
+        bestLabel = label;
+      }
+    }
   }
-  if (text.includes('ngoài_phạm_vi') || text.includes('ngoai_pham_vi') || text.includes('ngoài phạm vi')) {
-    return HELP_ROUTE_LABELS.ngoài_phạm_vi;
-  }
-  if (text.includes('không_rõ') || text.includes('khong_ro') || text.includes('không rõ')) {
-    return HELP_ROUTE_LABELS.không_rõ;
-  }
-  if (text.includes('hỏi_đáp') || text.includes('hoi_dap') || text.includes('hỏi đáp')) {
-    return HELP_ROUTE_LABELS.hỏi_đáp;
-  }
+
   // Default conservative: clarify rather than wrong action
-  return HELP_ROUTE_LABELS.không_rõ;
+  return bestLabel || HELP_ROUTE_LABELS.không_rõ;
 }

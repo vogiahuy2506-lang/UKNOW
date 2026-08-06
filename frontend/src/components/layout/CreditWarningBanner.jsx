@@ -17,7 +17,7 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(number) ? number : 0;
 };
 
-const CreditWarningBanner = () => {
+const CreditWarningBanner = ({ placement = 'page' }) => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -97,9 +97,15 @@ const CreditWarningBanner = () => {
     setIsDismissed(true);
   };
 
+  const isComposer = placement === 'composer';
+
   return (
     <div
-      className={`sticky top-0 z-20 mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-sm ${
+      className={`flex items-center justify-between gap-3 border shadow-sm ${
+        isComposer
+          ? 'mb-2 rounded-xl px-3 py-2 text-xs'
+          : 'sticky top-0 z-20 mb-4 rounded-md px-3 py-2 text-sm'
+      } ${
         alertState.isEmpty
           ? 'border-red-200 bg-red-50 text-red-800'
           : 'border-amber-200 bg-amber-50 text-amber-900'
@@ -108,7 +114,7 @@ const CreditWarningBanner = () => {
     >
       <div className="flex min-w-0 items-center gap-2">
         <HiOutlineExclamation
-          className={`h-5 w-5 shrink-0 ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
+          className={`shrink-0 ${isComposer ? 'h-4 w-4' : 'h-5 w-5'} ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
         />
         <span className="min-w-0">{alertState.message}</span>
       </div>

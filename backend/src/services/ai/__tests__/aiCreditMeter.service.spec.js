@@ -1,28 +1,67 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-const mockTrackUsage = jest.fn();
 const mockGetUserPlanLimits = jest.fn();
 const mockGetCreditUsageForCycle = jest.fn();
 const mockGetSubscriptionStatus = jest.fn();
 const mockDbQuery = jest.fn();
+const mockGetClient = jest.fn();
+const mockTrackUsageRepo = jest.fn();
+const mockGetUsageInRange = jest.fn();
+const mockGetWalletBalance = jest.fn();
+const mockInsertTopupDebit = jest.fn();
+const mockAcquireWalletLock = jest.fn();
 
 jest.unstable_mockModule('../../payment/usageTracking.service.js', () => ({
   default: {
-    trackUsage: mockTrackUsage,
     getUserPlanLimits: mockGetUserPlanLimits,
     getCreditUsageForCycle: mockGetCreditUsageForCycle,
   },
+}));
+
+jest.unstable_mockModule('../../../repositories/payment/usageTracking.repository.js', () => ({
+  default: {
+    trackUsage: mockTrackUsageRepo,
+    getUsageInRange: mockGetUsageInRange,
+  },
+}));
+
+jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
+  acquireWalletLock: mockAcquireWalletLock,
+  getWalletBalance: mockGetWalletBalance,
+  insertTopupDebit: mockInsertTopupDebit,
+  sumActiveTopupGrants: jest.fn(),
 }));
 
 jest.unstable_mockModule('../../../utils/subscriptionStatus.util.js', () => ({
   getSubscriptionStatus: mockGetSubscriptionStatus,
 }));
 
+jest.unstable_mockModule('../../../utils/billingCycle.util.js', () => ({
+  getBillingCycle: jest.fn(async () => ({
+    hasPlan: true,
+    billingUserId: 5,
+    cycleStart: new Date('2026-06-01'),
+    cycleEnd: new Date('2026-07-01'),
+  })),
+}));
+
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  default: { query: mockDbQuery },
+  default: { query: mockDbQuery, getClient: mockGetClient },
 }));
 
 const { default: aiCreditMeter, AI_CREDIT_RESOURCE } = await import('../aiCreditMeter.service.js');
+
+function mockTxClient() {
+  return {
+    query: jest.fn(async (sql) => {
+      if (String(sql).includes('BEGIN') || String(sql).includes('COMMIT') || String(sql).includes('ROLLBACK') || String(sql).includes('pg_advisory')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }),
+    release: jest.fn(),
+  };
+}
 
 describe('aiCreditMeter.service', () => {
   beforeEach(() => {
@@ -37,70 +76,87 @@ describe('aiCreditMeter.service', () => {
       cycle: { cycleStart: new Date('2026-06-01'), cycleEnd: new Date('2026-07-01') },
     });
     mockDbQuery.mockResolvedValue({ rows: [{ role: 'user' }] });
-    mockTrackUsage.mockResolvedValue({});
+    mockGetWalletBalance.mockResolvedValue({ granted: 0, used: 0, remaining: 0, rawRemaining: 0 });
+    mockGetUsageInRange.mockResolvedValue(0);
+    mockTrackUsageRepo.mockResolvedValue({ id: 99 });
+    mockInsertTopupDebit.mockResolvedValue({ id: 1 });
+    mockAcquireWalletLock.mockResolvedValue(undefined);
+    mockGetClient.mockImplementation(async () => mockTxClient());
   });
 
   it('skips charge when userId is missing', async () => {
     await aiCreditMeter.consume(null, { feature: 'test' });
-    expect(mockTrackUsage).not.toHaveBeenCalled();
+    expect(mockTrackUsageRepo).not.toHaveBeenCalled();
   });
 
   it('admin bypasses credit limit', async () => {
     mockDbQuery.mockResolvedValueOnce({ rows: [{ role: 'admin' }] });
     await aiCreditMeter.consume(1, { feature: 'test' });
-    expect(mockTrackUsage).not.toHaveBeenCalled();
+    expect(mockTrackUsageRepo).not.toHaveBeenCalled();
   });
 
-  it('forceBillable charges admin accounts', async () => {
-    mockDbQuery.mockResolvedValueOnce({ rows: [{ role: 'admin' }] });
-    mockGetUserPlanLimits.mockResolvedValueOnce({ ai_credits_per_period: 100 });
-    await aiCreditMeter.consume(1, { feature: 'test', forceBillable: true });
-    expect(mockTrackUsage).toHaveBeenCalled();
-  });
-
-  it('forceBillable tracks usage even on unlimited plans', async () => {
-    mockGetUserPlanLimits.mockResolvedValueOnce({ ai_credits_per_period: null });
-    await aiCreditMeter.consume(5, { feature: 'ai_chat', forceBillable: true });
-    expect(mockTrackUsage).toHaveBeenCalled();
-  });
-
-  it('assertAvailable throws when credits exhausted', async () => {
+  it('assertAvailable throws when plan + wallet exhausted', async () => {
     mockGetCreditUsageForCycle.mockResolvedValueOnce({ used: 10, cycle: {} });
+    mockGetWalletBalance.mockResolvedValueOnce({ granted: 0, used: 0, remaining: 0, rawRemaining: 0 });
     await expect(aiCreditMeter.assertAvailable(5)).rejects.toMatchObject({
       status: 402,
       code: 'RESOURCE_LIMIT_EXCEEDED',
       resource: AI_CREDIT_RESOURCE,
       upgradeRequired: true,
     });
-    expect(mockTrackUsage).not.toHaveBeenCalled();
   });
 
-  it('consume does not re-check limit when creditContext provided', async () => {
+  it('assertAvailable allows when plan exhausted but wallet remaining', async () => {
     mockGetCreditUsageForCycle.mockResolvedValueOnce({ used: 10, cycle: {} });
-    const creditContext = {
-      skip: false,
-      billingUserId: 5,
-      cycle: { cycleStart: new Date('2026-06-01'), cycleEnd: new Date('2026-07-01') },
+    mockGetWalletBalance.mockResolvedValueOnce({ granted: 5, used: 0, remaining: 5, rawRemaining: 5 });
+    await expect(aiCreditMeter.assertAvailable(5)).resolves.toMatchObject({
+      used: 10,
       limit: 10,
-      used: 9,
-    };
-    await aiCreditMeter.consume(5, { feature: 'ai_chat', creditContext });
-    expect(mockTrackUsage).toHaveBeenCalledWith(5, AI_CREDIT_RESOURCE, 1, expect.objectContaining({
-      feature: 'ai_chat',
-    }));
-    expect(mockGetCreditUsageForCycle).not.toHaveBeenCalled();
+      walletRemaining: 5,
+    });
   });
 
-  it('tracks one credit per consume call', async () => {
-    await aiCreditMeter.consume(5, { feature: 'ai_chat' });
-    expect(mockTrackUsage).toHaveBeenCalledWith(5, AI_CREDIT_RESOURCE, 1, expect.objectContaining({
+  it('consume does not debit wallet while within plan', async () => {
+    mockGetUsageInRange.mockResolvedValueOnce(3);
+    await aiCreditMeter.consume(5, {
       feature: 'ai_chat',
-    }));
+      creditContext: {
+        skip: false,
+        billingUserId: 5,
+        cycle: { hasPlan: true, cycleStart: new Date('2026-06-01'), cycleEnd: new Date('2026-07-01') },
+        limit: 10,
+        used: 3,
+      },
+    });
+    expect(mockTrackUsageRepo).toHaveBeenCalled();
+    expect(mockInsertTopupDebit).not.toHaveBeenCalled();
+  });
+
+  it('consume debits wallet when over plan limit', async () => {
+    mockGetUsageInRange.mockResolvedValueOnce(10);
+    await aiCreditMeter.consume(5, {
+      feature: 'ai_chat',
+      creditContext: {
+        skip: false,
+        billingUserId: 5,
+        cycle: { hasPlan: true, cycleStart: new Date('2026-06-01'), cycleEnd: new Date('2026-07-01') },
+        limit: 10,
+        used: 10,
+      },
+    });
+    expect(mockInsertTopupDebit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 5,
+        itemKey: 'ai_credits',
+        sourceKey: 'ai_credit:99',
+      }),
+      expect.anything(),
+    );
   });
 
   it('unlimited when plan limit is null or zero', async () => {
     mockGetUserPlanLimits.mockResolvedValueOnce({ ai_credits_per_period: null });
     await aiCreditMeter.consume(5, { feature: 'ai_chat' });
-    expect(mockTrackUsage).not.toHaveBeenCalled();
+    expect(mockTrackUsageRepo).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,8 @@ import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zalo
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { checkSendQuota } from '../../utils/userSendLimit.util.js';
+import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
+import { maybeDebitWalletForSend } from '../payment/topupWallet.service.js';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import zaloMessageRepository from '../../repositories/campaign/zaloMessage.repository.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
@@ -2275,9 +2277,59 @@ class CampaignRunService {
         return insertResultId || null;
       };
 
+      const ZALO_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
+         SELECT um.employee_id FROM user_members um
+         WHERE um.owner_id = $1 AND um.status = 'active'))`;
+
       const updateZaloMessageTrackingMeta = async (zaloMessageId, metadata = {}) => {
         if (!Number.isFinite(Number.parseInt(zaloMessageId, 10))) return;
-        await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata);
+        if (metadata?.status !== 'sent') {
+          await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata);
+          return;
+        }
+        // Cùng TX: đánh dấu sent + trừ ví (nếu vượt hạn mức gói)
+        await zaloMessageRepository.withTransaction(async (client) => {
+          await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata, client);
+          const billingUserId = await resolveBillingUserId(userId);
+          if (!billingUserId) return;
+          const { rows: limitRows } = await client.query(
+            `SELECT p.monthly_zalo_limit
+             FROM users u
+             JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+             WHERE u.id = $1
+             LIMIT 1`,
+            [billingUserId]
+          );
+          const rawLimit = limitRows[0]?.monthly_zalo_limit;
+          const planLimit = rawLimit == null || rawLimit === ''
+            ? null
+            : Number.parseInt(rawLimit, 10);
+          const { rows: countRows } = await client.query(
+            `SELECT (
+               (SELECT COUNT(*) FROM zalo_messages zm
+                JOIN campaigns c ON c.id = zm.id_campaign
+                WHERE ${ZALO_OWNER_PREDICATE}
+                  AND zm.tracking_metadata->>'status' = 'sent'
+                  AND zm.sent_at >= DATE_TRUNC('month', NOW()))
+             + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+                WHERE (zpm.id_user = $1 OR zpm.id_user IN (
+                  SELECT um.employee_id FROM user_members um
+                  WHERE um.owner_id = $1 AND um.status = 'active'))
+                  AND zpm.role = 'agent'
+                  AND zpm.metadata->>'source' = 'manual_inbox'
+                  AND zpm.created_at >= DATE_TRUNC('month', NOW()))
+             )::int AS total`,
+            [billingUserId]
+          );
+          const usageCountAfterSend = Number(countRows[0]?.total) || 0;
+          await maybeDebitWalletForSend(client, {
+            billingUserId,
+            itemKey: 'zalo_messages',
+            sourceKey: `zalo_message:${zaloMessageId}`,
+            planLimit: Number.isFinite(planLimit) ? planLimit : null,
+            usageCountAfterSend,
+          });
+        });
       };
 
       const logZaloSentJourneyEvent = async ({

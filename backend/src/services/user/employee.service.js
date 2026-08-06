@@ -19,6 +19,7 @@ import {
   resetEmployeePassword as resetPasswordInDb,
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
+import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
 
 const VALID_PERMISSION_KEYS = [
   'email_settings',
@@ -42,11 +43,13 @@ async function assertCanAddEmployee(ownerId) {
   }
 
   if (maxEmployees !== -1) {
+    const topupSlots = await sumActiveTopupGrants(ownerId, 'employees');
+    const effectiveMax = maxEmployees + Math.max(0, Number(topupSlots) || 0);
     const current = await countActiveEmployees(ownerId);
-    if (current >= maxEmployees) {
+    if (current >= effectiveMax) {
       throw {
         status: 403,
-        message: `Gói của bạn chỉ cho phép tối đa ${maxEmployees} nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.`,
+        message: `Gói của bạn chỉ cho phép tối đa ${effectiveMax} nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.`,
         code: 'EMPLOYEE_LIMIT_REACHED',
       };
     }

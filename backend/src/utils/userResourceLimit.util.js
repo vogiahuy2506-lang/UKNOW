@@ -1,5 +1,7 @@
 import db from '../config/database.js';
 import { isAdminRole } from './roleScope.util.js';
+import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
+import { TOPUP_GRANT_KEY_BY_RESOURCE } from './topupPricing.util.js';
 
 const RESOURCE_LIMIT_MAP = {
   campaigns: {
@@ -67,6 +69,14 @@ function normalizeLimitValue(rawValue) {
     ? Number.parseInt(rawValue, 10)
     : null;
   return Number.isFinite(normalized) ? normalized : null;
+}
+
+async function resolveEffectiveLimit(queryable, userId, resourceKey, baseLimit) {
+  if (!Number.isFinite(baseLimit) || baseLimit === null) return baseLimit;
+  const grantKey = TOPUP_GRANT_KEY_BY_RESOURCE[resourceKey];
+  if (!grantKey) return baseLimit;
+  const grants = await sumActiveTopupGrants(userId, grantKey, queryable);
+  return baseLimit + Math.max(0, Number(grants) || 0);
 }
 
 function buildLimitExceededMessage(resourceConfig, normalizedLimit) {
@@ -165,7 +175,8 @@ export async function enforceResourceLimitTx(client, input) {
   await acquireResourceLimitLock(client, userId, resourceKey);
 
   const userLimitRow = await getUserLimitRow(client, userId);
-  const normalizedLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+  const baseLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+  const normalizedLimit = await resolveEffectiveLimit(client, userId, resourceKey, baseLimit);
 
   if (!Number.isFinite(normalizedLimit) || normalizedLimit === null) return;
 
@@ -205,7 +216,8 @@ export async function checkUserResourceLimit(input) {
   }
 
   const userLimitRow = await getUserLimitRow(db, userId);
-  const normalizedLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+  const baseLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+  const normalizedLimit = await resolveEffectiveLimit(db, userId, resourceKey, baseLimit);
 
   if (!Number.isFinite(normalizedLimit) || normalizedLimit === null) {
     return {

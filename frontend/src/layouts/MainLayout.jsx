@@ -191,7 +191,7 @@ const MainLayout = () => {
         {/* Main content — offset by header height (64px) */}
         <div className="flex-1 min-w-0 flex flex-col mt-16 min-h-0">
           <main ref={mainContentRef} className={mainClassName}>
-            <CreditWarningBanner />
+            {!isAiHomePage && <CreditWarningBanner />}
             <Outlet />
           </main>
         </div>
@@ -249,7 +249,7 @@ const MainLayout = () => {
         }}
       >
         <main ref={mainContentRef} className={desktopMainClassName}>
-          <CreditWarningBanner />
+          {!isAiHomePage && <CreditWarningBanner />}
           <Outlet />
         </main>
       </div>

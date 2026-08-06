@@ -14,6 +14,7 @@ import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
+import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
@@ -1037,7 +1038,9 @@ class ChatbotController {
   async createCustomChatbot(req, res) {
     try {
       const plan = await getPlanByUserId(req.user.id);
-      const maxChatbots = Number(plan?.max_chatbots || 0);
+      const planMax = Number(plan?.max_chatbots || 0);
+      const topupSlots = await sumActiveTopupGrants(req.user.id, 'chatbots');
+      const maxChatbots = planMax + Math.max(0, Number(topupSlots) || 0);
       if (maxChatbots > 0) {
         const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(req.user.id);
         if (currentChatbots >= maxChatbots) {

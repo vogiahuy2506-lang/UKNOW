@@ -111,7 +111,7 @@ describe('topupPricing.util', () => {
       expect(result.remaining).toBe(0);
     });
 
-    it('0 tài khoản đã nối → remaining 0 + hướng dẫn kết nối', () => {
+    it('0 slot tài khoản → remaining 0 (không còn bắt buộc đã kết nối)', () => {
       const result = checkTopupZaloCapacity({
         accounts: 0,
         capacityPerAccount: 16000,
@@ -120,8 +120,20 @@ describe('topupPricing.util', () => {
       });
       expect(result.ok).toBe(false);
       expect(result.remaining).toBe(0);
-      expect(result.code).toBe('ZALO_NOT_CONNECTED');
-      expect(result.message).toMatch(/kết nối tài khoản Zalo/i);
+      expect(result.code).toBe('ZALO_NO_SLOT');
+      expect(result.message).toMatch(/slot tài khoản Zalo/i);
+    });
+
+    it('có slot gói dù chưa nối → cho phép mua trong remaining', () => {
+      const result = checkTopupZaloCapacity({
+        accounts: 1,
+        capacityPerAccount: 16000,
+        planMonthlyZaloLimit: 8000,
+        existingZaloGrants: 0,
+        requestedQty: 50,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.remaining).toBe(8000);
     });
   });
 });

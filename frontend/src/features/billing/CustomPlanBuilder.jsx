@@ -57,6 +57,13 @@ function formatQtyWithUnit(itemKey, qty, t) {
   return `${n.toLocaleString('vi-VN')} ${noun}`;
 }
 
+/** Ô số lượng hiển thị có dấu chấm phân cách nghìn; để trống khi user xoá hết. */
+function formatQtyInput(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('vi-VN') : '';
+}
+
 function defaultQuantities(items = []) {
   const q = {};
   for (const item of items) {
@@ -140,39 +147,84 @@ export default function CustomPlanBuilder({
     }
   }, [t]);
 
+  /** { itemKey: 'thông báo lỗi' } cho những ô đang nằm ngoài khoảng cho phép. */
+  const quantityIssues = useMemo(() => {
+    const issues = {};
+    for (const item of editableItems) {
+      const raw = quantities[item.itemKey];
+      const noun = t(UNIT_LABEL_KEYS[item.itemKey] || 'customPlan.units.generic');
+      const n = Number(raw);
+
+      if (raw === '' || raw === null || raw === undefined || !Number.isFinite(n)) {
+        issues[item.itemKey] = t('customPlan.qtyRequired');
+        continue;
+      }
+
+      const min = Number(item.minQty || 0);
+      const max = item.maxQty == null ? Infinity : Number(item.maxQty);
+      const step = Number(item.stepQty || 1);
+
+      if (n < min) {
+        issues[item.itemKey] = Number(item.includedQty || 0) >= min
+          ? t('customPlan.qtyBelowIncluded', { n: `${min.toLocaleString('vi-VN')} ${noun}` })
+          : t('customPlan.qtyBelowMin', { n: `${min.toLocaleString('vi-VN')} ${noun}` });
+      } else if (n > max) {
+        issues[item.itemKey] = t('customPlan.qtyAboveMax', {
+          n: `${max.toLocaleString('vi-VN')} ${noun}`,
+        });
+      } else if (step > 1 && (n - min) % step !== 0) {
+        issues[item.itemKey] = t('customPlan.qtyStep', {
+          n: `${step.toLocaleString('vi-VN')} ${noun}`,
+        });
+      }
+    }
+    return issues;
+  }, [editableItems, quantities, t]);
+
+  const hasQuantityIssues = Object.keys(quantityIssues).length > 0;
+
   useEffect(() => {
     if (!open || loading || !Object.keys(quantities).length) return;
+    if (hasQuantityIssues) {
+      setQuote(null);
+      setError(null);
+      return;
+    }
     const timer = setTimeout(() => runQuote(quantities, billingPeriod), 400);
     return () => clearTimeout(timer);
-  }, [open, loading, quantities, billingPeriod, runQuote]);
+  }, [open, loading, quantities, billingPeriod, runQuote, hasQuantityIssues]);
 
+  // Nút −/+ vẫn kẹp về khoảng hợp lệ: đây là điều khiển có hướng dẫn, bấm ra số
+  // sai thì vô nghĩa. Còn gõ tay thì để tự do (xem setQty).
   const adjustQty = (item, delta) => {
     const step = Number(item.stepQty || 1);
     const min = Number(item.minQty || 0);
     const max = item.maxQty == null ? Infinity : Number(item.maxQty);
     setQuantities((prev) => {
-      const current = Number(prev[item.itemKey] ?? min);
+      const raw = prev[item.itemKey];
+      const parsed = Number(raw);
+      const current = raw === '' || !Number.isFinite(parsed) ? min : parsed;
       const next = Math.min(max, Math.max(min, current + delta * step));
       return { ...prev, [item.itemKey]: next };
     });
   };
 
+  /**
+   * Gõ tay: KHÔNG kẹp về min/max/step.
+   * Kẹp im lặng khiến người dùng tưởng mình gõ sai tay — họ nhập 100 rồi thấy ô
+   * nhảy thành 500 mà không hiểu vì sao. Thay vào đó nhận nguyên số họ gõ, rồi
+   * `quantityIssues` báo lỗi ngay dưới ô và khoá nút thanh toán.
+   */
   const setQty = (item, value) => {
-    const min = Number(item.minQty || 0);
-    const max = item.maxQty == null ? Infinity : Number(item.maxQty);
-    const step = Number(item.stepQty || 1);
-    let n = Number(value);
-    if (!Number.isFinite(n)) n = min;
-    n = Math.min(max, Math.max(min, Math.round(n)));
-    if (step > 1) {
-      n = min + Math.round((n - min) / step) * step;
-      n = Math.min(max, Math.max(min, n));
-    }
-    setQuantities((prev) => ({ ...prev, [item.itemKey]: n }));
+    const digits = String(value).replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    setQuantities((prev) => ({
+      ...prev,
+      [item.itemKey]: digits === '' ? '' : Number(digits),
+    }));
   };
 
   const handleCheckout = () => {
-    if (!quote) return;
+    if (!quote || hasQuantityIssues) return;
     if (!isAuthenticated) {
       navigate('/login');
       return;
@@ -278,12 +330,15 @@ export default function CustomPlanBuilder({
                         <HiMinus className="w-4 h-4" />
                       </button>
                       <input
-                        type="number"
-                        className="flex-1 text-center font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1.5"
-                        value={quantities[item.itemKey] ?? item.minQty ?? 0}
-                        min={item.minQty || 0}
-                        max={item.maxQty ?? undefined}
-                        step={item.stepQty || 1}
+                        type="text"
+                        inputMode="numeric"
+                        aria-invalid={Boolean(quantityIssues[item.itemKey])}
+                        className={`flex-1 text-center font-bold bg-white border rounded-lg py-1.5 ${
+                          quantityIssues[item.itemKey]
+                            ? 'border-red-300 text-red-600'
+                            : 'border-slate-200 text-slate-900'
+                        }`}
+                        value={formatQtyInput(quantities[item.itemKey])}
                         onChange={(e) => setQty(item, e.target.value)}
                       />
                       <button
@@ -294,6 +349,11 @@ export default function CustomPlanBuilder({
                         <HiPlus className="w-4 h-4" />
                       </button>
                     </div>
+                    {quantityIssues[item.itemKey] && (
+                      <p className="mt-1.5 text-[11px] font-medium text-red-600 leading-snug">
+                        {quantityIssues[item.itemKey]}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -346,6 +406,12 @@ export default function CustomPlanBuilder({
                   <h4 className="font-bold text-slate-800">{t('customPlan.priceBreakdown')}</h4>
                   {quoting && <span className="text-xs text-slate-500">{t('customPlan.updating')}</span>}
                 </div>
+                {hasQuantityIssues ? (
+                  <div className="flex items-start gap-2 text-sm text-red-700">
+                    <HiOutlineExclamation className="w-5 h-5 shrink-0 mt-0.5" />
+                    <span>{t('customPlan.fixQtyToSeePrice')}</span>
+                  </div>
+                ) : (
                 <div className="space-y-1.5 text-sm">
                   {(quote?.items || []).filter((i) => i.subtotal > 0 || i.itemKey === 'base_fee').map((line) => (
                     <div key={line.itemKey} className="flex justify-between gap-3 text-slate-600">
@@ -382,6 +448,7 @@ export default function CustomPlanBuilder({
                     </p>
                   )}
                 </div>
+                )}
               </div>
             </>
           )}
@@ -399,9 +466,10 @@ export default function CustomPlanBuilder({
             </button>
             <button
               type="button"
-              disabled={!quote || !!error || quoting}
+              disabled={!quote || !!error || quoting || hasQuantityIssues}
+              title={hasQuantityIssues ? t('customPlan.fixQtyToSeePrice') : undefined}
               onClick={handleCheckout}
-              className="btn btn-primary disabled:opacity-50"
+              className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t('customPlan.checkout')}
             </button>

@@ -658,6 +658,7 @@ class UnifiedInboxRepository {
 
   /**
    * Send a message from agent/admin
+   * @returns {Promise<number|null>} zalo_personal message id when applicable; otherwise null
    */
   async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [], metadata = {} } = {}) {
     const now = new Date().toISOString();
@@ -673,33 +674,71 @@ class UnifiedInboxRepository {
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
         [conversationId, now]
       );
-    } else if (conversationType === 'zalo_personal') {
-      // Get zalo_setting_id from conversation
-      const { rows } = await db.query(
-        `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
-        [conversationId]
-      );
-      const zaloSettingId = rows[0]?.id_zalo_setting;
-      
-      await db.query(
-        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
-        [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), metadataJson, now]
-      );
-      await db.query(
-        `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-        [conversationId, now]
-      );
-    } else {
-      await db.query(
-        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)`,
-        [conversationId, userId, role, content, JSON.stringify(attachments), metadataJson, now]
-      );
-      await db.query(
-        `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,
-        [conversationId, now]
-      );
+      return null;
+    }
+
+    if (conversationType === 'zalo_personal') {
+      return this.insertZaloPersonalAgentMessage(db, conversationId, userId, {
+        role, content, attachments, metadataJson, now,
+      });
+    }
+
+    await db.query(
+      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, metadata, is_read, read_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)`,
+      [conversationId, userId, role, content, JSON.stringify(attachments), metadataJson, now]
+    );
+    await db.query(
+      `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,
+      [conversationId, now]
+    );
+    return null;
+  }
+
+  /**
+   * @param {import('pg').Pool|import('pg').PoolClient} queryable
+   * @returns {Promise<number|null>}
+   */
+  async insertZaloPersonalAgentMessage(queryable, conversationId, userId, {
+    role = 'agent',
+    content,
+    attachments = [],
+    metadata = {},
+    metadataJson = null,
+    now = null,
+  } = {}) {
+    const ts = now || new Date().toISOString();
+    const meta = metadataJson ?? JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
+    const { rows: settingRows } = await queryable.query(
+      `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
+      [conversationId]
+    );
+    const zaloSettingId = settingRows[0]?.id_zalo_setting;
+    const { rows: inserted } = await queryable.query(
+      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+       RETURNING id`,
+      [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), meta, ts]
+    );
+    await queryable.query(
+      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
+      [conversationId, ts]
+    );
+    return inserted[0]?.id ?? null;
+  }
+
+  async withTransaction(callback) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

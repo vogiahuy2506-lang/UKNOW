@@ -8,10 +8,12 @@ import {
   computeTopupPrice,
   checkTopupZaloCapacity,
   TOPUP_MIN_ORDER_AMOUNT,
+  TOPUP_CONSUMABLE_KEYS,
 } from '../../utils/topupPricing.util.js';
 import {
   findAllTopupPricing,
   sumActiveTopupGrants,
+  sumWalletGrants,
   insertTopupGrants,
 } from '../../repositories/payment/topup.repository.js';
 import { findAllPricingRows } from '../../repositories/payment/customPlan.repository.js';
@@ -61,24 +63,32 @@ async function countConnectedZaloAccounts(billingUserId, queryable = db) {
 }
 
 /**
- * Năng lực giao tin = số tài khoản Zalo đã kết nối thật.
- * Slot gói (max_zalo_accounts) chỉ là trần được phép nối — không phải năng lực giao hàng.
- * Nếu gói có trần slot, lấy min(đã nối, slot) để không vượt trần thương mại.
+ * Năng lực giao tin theo slot được phép (gói + grant mua thêm tài khoản),
+ * không bắt buộc đã quét QR kết nối. Slot gói (max_zalo_accounts) là trần thương mại;
+ * grant mid-cycle cộng thêm vào trần đó trong chu kỳ hiện tại.
  */
-function resolveAccountCount(planRow, connectedCount) {
-  const connected = Math.max(0, Number(connectedCount) || 0);
+function resolveAccountCount(planRow, connectedCount, accountGrants = 0) {
+  const grants = Math.max(0, Number(accountGrants) || 0);
   const maxAccounts = planRow?.max_zalo_accounts;
-  if (maxAccounts != null && Number.isFinite(Number(maxAccounts))) {
-    return Math.min(connected, Math.max(0, Number(maxAccounts)));
+  const planSlots = maxAccounts != null && Number.isFinite(Number(maxAccounts))
+    ? Math.max(0, Number(maxAccounts))
+    : null;
+
+  if (planSlots != null) {
+    return planSlots + grants;
   }
-  return connected;
+
+  // Gói không khai báo trần slot → lấy số đã nối (tối thiểu 1 nếu chưa nối) + grant.
+  const connected = Math.max(0, Number(connectedCount) || 0);
+  return Math.max(connected, 1) + grants;
 }
 
 async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
-  const [planRow, connectedCount, existingGrants, customPricingRows] = await Promise.all([
+  const [planRow, connectedCount, existingGrants, accountGrants, customPricingRows] = await Promise.all([
     getBillingPlanZaloContext(billingUserId),
     countConnectedZaloAccounts(billingUserId),
-    sumActiveTopupGrants(billingUserId, 'zalo_messages'),
+    sumWalletGrants(billingUserId, 'zalo_messages'),
+    sumActiveTopupGrants(billingUserId, 'zalo_accounts'),
     findAllPricingRows(),
   ]);
 
@@ -87,7 +97,7 @@ async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
     'zalo_monthly_capacity_per_account',
     16000
   );
-  const accounts = resolveAccountCount(planRow, connectedCount);
+  const accounts = resolveAccountCount(planRow, connectedCount, accountGrants);
   const planMonthlyZaloLimit = planRow?.monthly_zalo_limit == null
     ? null
     : Number(planRow.monthly_zalo_limit);
@@ -316,28 +326,50 @@ export async function fulfillTopupOrder(order, queryable = db) {
     throw new Error(`Top-up order ${order.id || order.order_code}: missing billingUserId`);
   }
 
-  const { rows } = await queryable.query(
-    `SELECT subscription_expires_at FROM users WHERE id = $1 LIMIT 1`,
-    [billingUserId]
-  );
-  const cycleEnd = rows[0]?.subscription_expires_at;
-  if (!cycleEnd) {
-    // Đơn đã claim success trong cùng transaction — đừng ném lỗi (rollback → PayOS
-    // retry vô hạn mà vẫn không cấp được). Log OPS để cấp tay.
-    console.error(
-      `[Webhook][OPS ALERT] Top-up order ${order.order_code || order.id} ` +
-      `claimed but user ${billingUserId} has no subscription_expires_at — ` +
-      `grants NOT written. Manual grant needed. quantities=${JSON.stringify(quantities)}`
-    );
-    return [];
+  const consumableQty = {};
+  const structuralQty = {};
+  for (const [key, qty] of Object.entries(quantities)) {
+    if (!(Number(qty) > 0)) continue;
+    if (TOPUP_CONSUMABLE_KEYS.includes(key)) consumableQty[key] = Number(qty);
+    else structuralQty[key] = Number(qty);
   }
 
-  const inserted = await insertTopupGrants({
-    userId: billingUserId,
-    orderId: order.id,
-    cycleEnd,
-    quantities,
-  }, queryable);
+  const inserted = [];
+
+  // Consumable wallet: cycle_end NULL — không cần subscription_expires_at
+  if (Object.keys(consumableQty).length > 0) {
+    const rows = await insertTopupGrants({
+      userId: billingUserId,
+      orderId: order.id,
+      cycleEnd: null,
+      quantities: consumableQty,
+    }, queryable);
+    inserted.push(...rows);
+  }
+
+  // Structural: vẫn neo chu kỳ; thiếu expires_at → log OPS, không cấp
+  if (Object.keys(structuralQty).length > 0) {
+    const { rows } = await queryable.query(
+      `SELECT subscription_expires_at FROM users WHERE id = $1 LIMIT 1`,
+      [billingUserId]
+    );
+    const cycleEnd = rows[0]?.subscription_expires_at;
+    if (!cycleEnd) {
+      console.error(
+        `[Webhook][OPS ALERT] Top-up order ${order.order_code || order.id} ` +
+        `claimed but user ${billingUserId} has no subscription_expires_at — ` +
+        `structural grants NOT written. Manual grant needed. quantities=${JSON.stringify(structuralQty)}`
+      );
+    } else {
+      const rowsInserted = await insertTopupGrants({
+        userId: billingUserId,
+        orderId: order.id,
+        cycleEnd,
+        quantities: structuralQty,
+      }, queryable);
+      inserted.push(...rowsInserted);
+    }
+  }
 
   _clearQuotaCache();
   return inserted;

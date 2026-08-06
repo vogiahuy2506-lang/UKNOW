@@ -11,13 +11,37 @@ const ITEM_LABEL_KEYS = {
   zalo_messages: 'topup.items.zaloMessages',
   emails: 'topup.items.emails',
   ai_credits: 'topup.items.aiCredits',
+  zalo_accounts: 'topup.items.zaloAccounts',
+  email_accounts: 'topup.items.emailAccounts',
+  landing_pages: 'topup.items.landingPages',
+  chatbots: 'topup.items.chatbots',
+  employees: 'topup.items.employees',
 };
 
 const UNIT_LABEL_KEYS = {
   zalo_messages: 'topup.units.zaloMessages',
   emails: 'topup.units.emails',
   ai_credits: 'topup.units.aiCredits',
+  zalo_accounts: 'topup.units.zaloAccounts',
+  email_accounts: 'topup.units.emailAccounts',
+  landing_pages: 'topup.units.landingPages',
+  chatbots: 'topup.units.chatbots',
+  employees: 'topup.units.employees',
 };
+
+const STRUCTURAL_KEYS = new Set([
+  'zalo_accounts',
+  'email_accounts',
+  'landing_pages',
+  'chatbots',
+  'employees',
+]);
+
+function formatQtyInput(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('vi-VN') : '';
+}
 
 const TopupPage = () => {
   const { t } = useI18n();
@@ -70,19 +94,60 @@ const TopupPage = () => {
     }
   }, [t]);
 
+  const items = useMemo(() => config?.items || [], [config]);
+
+  const quantityIssues = useMemo(() => {
+    const issues = {};
+    for (const item of items) {
+      const raw = quantities[item.itemKey];
+      if (raw === '' || raw === null || raw === undefined) {
+        issues[item.itemKey] = t('topup.qtyRequired');
+        continue;
+      }
+      const n = Number(raw);
+      if (!Number.isFinite(n)) {
+        issues[item.itemKey] = t('topup.qtyRequired');
+        continue;
+      }
+      if (n === 0) continue;
+
+      const min = Number(item.minQty || 0);
+      const max = item.maxQty == null ? Infinity : Number(item.maxQty);
+      const step = Number(item.stepQty || 1);
+      const noun = t(UNIT_LABEL_KEYS[item.itemKey] || 'topup.units.generic');
+
+      if (n < min) {
+        issues[item.itemKey] = t('topup.qtyBelowMin', {
+          n: `${min.toLocaleString('vi-VN')} ${noun}`,
+        });
+      } else if (n > max) {
+        issues[item.itemKey] = t('topup.qtyAboveMax', {
+          n: `${max.toLocaleString('vi-VN')} ${noun}`,
+        });
+      } else if (step > 1 && (n - min) % step !== 0) {
+        issues[item.itemKey] = t('topup.qtyStep', {
+          n: `${step.toLocaleString('vi-VN')} ${noun}`,
+        });
+      }
+    }
+    return issues;
+  }, [items, quantities, t]);
+
+  const hasQuantityIssues = Object.keys(quantityIssues).length > 0;
+
   useEffect(() => {
     if (loading || !Object.keys(quantities).length) return;
+    if (hasQuantityIssues) {
+      setQuote(null);
+      setError(null);
+      return;
+    }
     const timer = setTimeout(() => runQuote(quantities), 350);
     return () => clearTimeout(timer);
-  }, [loading, quantities, runQuote]);
-
-  const items = useMemo(() => config?.items || [], [config]);
+  }, [loading, quantities, runQuote, hasQuantityIssues]);
 
   const zaloRemaining = quote?.zaloCapacity?.remaining
     ?? config?.zaloCapacity?.remaining
-    ?? null;
-  const zaloAccounts = quote?.zaloCapacity?.accounts
-    ?? config?.zaloCapacity?.accounts
     ?? null;
 
   const adjustQty = (item, delta) => {
@@ -93,7 +158,9 @@ const TopupPage = () => {
       max = Math.min(max, Number(zaloRemaining));
     }
     setQuantities((prev) => {
-      const current = Number(prev[item.itemKey] ?? 0);
+      const raw = prev[item.itemKey];
+      const parsed = Number(raw);
+      const current = raw === '' || !Number.isFinite(parsed) ? 0 : parsed;
       let next;
       if (delta > 0 && current === 0) {
         next = min;
@@ -109,29 +176,17 @@ const TopupPage = () => {
   };
 
   const setQty = (item, value) => {
-    const min = Number(item.minQty || 0);
-    let max = item.maxQty == null ? Infinity : Number(item.maxQty);
-    if (item.itemKey === 'zalo_messages' && zaloRemaining != null) {
-      max = Math.min(max, Number(zaloRemaining));
-    }
-    const step = Number(item.stepQty || 1);
-    let n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) {
-      setQuantities((prev) => ({ ...prev, [item.itemKey]: 0 }));
-      return;
-    }
-    n = Math.min(max, Math.max(min, Math.round(n)));
-    if (step > 1) {
-      n = min + Math.round((n - min) / step) * step;
-      n = Math.min(max, Math.max(min, n));
-    }
-    setQuantities((prev) => ({ ...prev, [item.itemKey]: n }));
+    const digits = String(value).replace(/\D/g, '').replace(/^0+(\d)/, '$1');
+    setQuantities((prev) => ({
+      ...prev,
+      [item.itemKey]: digits === '' ? '' : Number(digits),
+    }));
   };
 
   const total = Number(quote?.total || 0);
   const meetsMinimum = Boolean(quote?.meetsMinimum);
   const shortfall = Number(quote?.shortfall || 0);
-  const canPay = meetsMinimum && !paying && !quoting && !error;
+  const canPay = meetsMinimum && !paying && !quoting && !error && !hasQuantityIssues;
 
   const handlePay = async () => {
     if (!canPay) return;
@@ -160,7 +215,7 @@ const TopupPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{t('topup.title')}</h1>
         <p className="mt-1 text-sm text-slate-500">{t('topup.subtitle')}</p>
@@ -176,13 +231,20 @@ const TopupPage = () => {
         </div>
       )}
 
-      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {items.map((item) => {
-          const qty = Number(quantities[item.itemKey] || 0);
+          const qty = quantities[item.itemKey] === '' ? '' : Number(quantities[item.itemKey] || 0);
           const line = quote?.items?.find((i) => i.itemKey === item.itemKey);
-          const subtotal = line ? Number(line.subtotal) : qty * Number(item.unitPrice || 0);
+          const numericQty = Number(qty) || 0;
+          const subtotal = line
+            ? Number(line.subtotal)
+            : numericQty * Number(item.unitPrice || 0);
+          const issue = quantityIssues[item.itemKey];
           return (
-            <div key={item.itemKey} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+            <div
+              key={item.itemKey}
+              className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-semibold text-slate-900">
@@ -193,12 +255,12 @@ const TopupPage = () => {
                     {' · '}
                     {t('topup.stepHint', { step: item.stepQty })}
                   </div>
-                  {item.itemKey === 'zalo_messages' && Number(zaloAccounts) === 0 && (
-                    <div className="mt-1 text-xs text-amber-700">
-                      {t('topup.zaloConnectFirst')}
+                  {STRUCTURAL_KEYS.has(item.itemKey) && (
+                    <div className="mt-1 text-xs text-slate-500">
+                      {t('topup.structuralHint')}
                     </div>
                   )}
-                  {item.itemKey === 'zalo_messages' && Number(zaloAccounts) > 0 && zaloRemaining != null && (
+                  {item.itemKey === 'zalo_messages' && zaloRemaining != null && (
                     <div className="mt-1 text-xs text-amber-700">
                       {t('topup.zaloRemaining', { n: Number(zaloRemaining).toLocaleString('vi-VN') })}
                     </div>
@@ -216,11 +278,13 @@ const TopupPage = () => {
                   <HiMinus className="h-4 w-4" />
                 </button>
                 <input
-                  type="number"
-                  className="w-28 rounded-lg border border-slate-200 px-3 py-2 text-center text-sm"
-                  value={qty}
-                  min={0}
-                  step={item.stepQty}
+                  type="text"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(issue)}
+                  className={`w-28 rounded-lg border px-3 py-2 text-center text-sm ${
+                    issue ? 'border-red-300 text-red-600' : 'border-slate-200'
+                  }`}
+                  value={formatQtyInput(qty)}
                   onChange={(e) => setQty(item, e.target.value)}
                 />
                 <button
@@ -235,6 +299,9 @@ const TopupPage = () => {
                   {t(UNIT_LABEL_KEYS[item.itemKey] || 'topup.units.generic')}
                 </span>
               </div>
+              {issue && (
+                <p className="mt-1.5 text-[11px] font-medium text-red-600 leading-snug">{issue}</p>
+              )}
             </div>
           );
         })}
@@ -249,9 +316,15 @@ const TopupPage = () => {
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
         <div className="flex items-center justify-between text-base font-bold text-slate-900">
           <span>{t('topup.total')}</span>
-          <span>{quoting ? t('topup.updating') : fmtVnd(total)}</span>
+          <span>
+            {hasQuantityIssues
+              ? t('topup.fixQtyToSeePrice')
+              : quoting
+                ? t('topup.updating')
+                : fmtVnd(total)}
+          </span>
         </div>
-        {!meetsMinimum && total > 0 && (
+        {!hasQuantityIssues && !meetsMinimum && total > 0 && (
           <p className="text-sm text-amber-700">
             {t('topup.shortfall', {
               min: fmtVnd(quote?.minOrderAmount || 50000),

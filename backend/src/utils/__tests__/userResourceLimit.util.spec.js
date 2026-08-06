@@ -2,8 +2,12 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // Mock module phải đặt trước khi import file dùng nó (ESM dynamic mock pattern).
 const mockQuery = jest.fn();
+const sumActiveTopupGrants = jest.fn();
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockQuery },
+}));
+jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () => ({
+  sumActiveTopupGrants,
 }));
 
 const { checkUserResourceLimit, enforceResourceLimitTx } = await import('../userResourceLimit.util.js');
@@ -11,6 +15,8 @@ const { checkUserResourceLimit, enforceResourceLimitTx } = await import('../user
 describe('userResourceLimit.util', () => {
   beforeEach(() => {
     mockQuery.mockReset();
+    sumActiveTopupGrants.mockReset();
+    sumActiveTopupGrants.mockResolvedValue(0);
   });
 
   describe('checkUserResourceLimit', () => {

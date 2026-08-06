@@ -292,44 +292,48 @@ function PlanSection({ data, t }) {
             {t('accountProfileModal.addonsTitle')}
           </p>
           <ul className="space-y-1 text-sm text-amber-950">
-            {data.addons.zaloMessages > 0 && (
-              <li>
-                {t('topup.items.zaloMessages')}
-                {' · '}
-                <span className="font-semibold">
-                  +{Number(data.addons.zaloMessages).toLocaleString('vi-VN')}
-                </span>
-              </li>
-            )}
-            {data.addons.emails > 0 && (
-              <li>
-                {t('topup.items.emails')}
-                {' · '}
-                <span className="font-semibold">
-                  +{Number(data.addons.emails).toLocaleString('vi-VN')}
-                </span>
-              </li>
-            )}
-            {data.addons.aiCredits > 0 && (
-              <li>
-                {t('topup.items.aiCredits')}
-                {' · '}
-                <span className="font-semibold">
-                  +{Number(data.addons.aiCredits).toLocaleString('vi-VN')}
-                </span>
-              </li>
-            )}
+            {[
+              ['zaloMessages', 'topup.items.zaloMessages', true],
+              ['emails', 'topup.items.emails', true],
+              ['aiCredits', 'topup.items.aiCredits', true],
+              ['zaloAccounts', 'topup.items.zaloAccounts', false],
+              ['emailAccounts', 'topup.items.emailAccounts', false],
+              ['landingPages', 'topup.items.landingPages', false],
+              ['chatbots', 'topup.items.chatbots', false],
+              ['employees', 'topup.items.employees', false],
+            ].map(([field, labelKey, isWallet]) => {
+              const raw = data.addons[field];
+              if (isWallet) {
+                const granted = Number(raw?.granted) || 0;
+                if (granted <= 0) return null;
+                const remaining = Number(raw?.remaining) || 0;
+                return (
+                  <li key={field}>
+                    {t(labelKey)}
+                    {' · '}
+                    <span className="font-semibold">
+                      {t('accountProfileModal.addonsRemaining', {
+                        n: remaining.toLocaleString('vi-VN'),
+                      })}
+                    </span>
+                  </li>
+                );
+              }
+              const qty = Number(raw) || 0;
+              if (qty <= 0) return null;
+              return (
+                <li key={field}>
+                  {t(labelKey)}
+                  {' · '}
+                  <span className="font-semibold">
+                    +{qty.toLocaleString('vi-VN')}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
           <p className="text-xs text-amber-700/90 pt-1">
-            {t('accountProfileModal.addonsExpiryNote', {
-              date: data.addons.expiresAt
-                ? new Date(data.addons.expiresAt).toLocaleDateString('vi-VN', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                  })
-                : '—',
-            })}
+            {t('accountProfileModal.addonsRolloverNote')}
           </p>
         </div>
       )}
@@ -356,6 +360,11 @@ const TOPUP_ITEM_LABEL_KEYS = {
   zalo_messages: 'topup.items.zaloMessages',
   emails: 'topup.items.emails',
   ai_credits: 'topup.items.aiCredits',
+  zalo_accounts: 'topup.items.zaloAccounts',
+  email_accounts: 'topup.items.emailAccounts',
+  landing_pages: 'topup.items.landingPages',
+  chatbots: 'topup.items.chatbots',
+  employees: 'topup.items.employees',
 };
 
 function formatTopupItemsSummary(items, t) {

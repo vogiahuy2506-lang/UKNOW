@@ -6,6 +6,8 @@ import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import sseService from '../sse.service.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
+import { resolveBillingUserId } from '../../utils/billingCycle.util.js';
+import { debitZaloPersonalInboxIfNeeded } from '../payment/topupWallet.service.js';
 
 class UnifiedInboxService {
   /**
@@ -249,8 +251,10 @@ class UnifiedInboxService {
 
   /**
    * Send a message as agent
+   * @param {object} [options]
+   * @param {number|string|null} [options.ownerContextId]
    */
-  async sendMessage(userId, conversationId, conversationType, content, attachments = []) {
+  async sendMessage(userId, conversationId, conversationType, content, attachments = [], options = {}) {
     if (!content?.trim()) {
       throw new Error('Message content is required');
     }
@@ -278,14 +282,42 @@ class UnifiedInboxService {
       zaloAccountId = conversation.id_zalo_setting;
     }
 
-    // Save message to database (manual inbox reply — marker for send-quota counting)
-    await unifiedInboxRepository.sendMessage(
-      parseInt(conversationId),
-      userId,
-      conversationType,
-      channelId,
-      { role: 'agent', content: content.trim(), attachments, metadata: { source: 'manual_inbox' } }
-    );
+    const messagePayload = {
+      role: 'agent',
+      content: content.trim(),
+      attachments,
+      metadata: { source: 'manual_inbox' },
+    };
+
+    // Zalo Personal: insert + trừ ví cùng transaction (đếm vào hạn mức tháng)
+    if (conversationType === 'zalo_personal') {
+      const billingOptions = options.ownerContextId != null && options.ownerContextId !== ''
+        ? { ownerContextId: options.ownerContextId }
+        : {};
+      const billingUserId = await resolveBillingUserId(userId, billingOptions);
+      await unifiedInboxRepository.withTransaction(async (client) => {
+        const msgId = await unifiedInboxRepository.insertZaloPersonalAgentMessage(
+          client,
+          parseInt(conversationId),
+          userId,
+          messagePayload
+        );
+        if (billingUserId && msgId) {
+          await debitZaloPersonalInboxIfNeeded(client, {
+            billingUserId,
+            messageId: msgId,
+          });
+        }
+      });
+    } else {
+      await unifiedInboxRepository.sendMessage(
+        parseInt(conversationId),
+        userId,
+        conversationType,
+        channelId,
+        messagePayload
+      );
+    }
 
     // Handoff: pause AI for this conversation when owner replies from inbox
     await unifiedInboxRepository.setAiPaused(

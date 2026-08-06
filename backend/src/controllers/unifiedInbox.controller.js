@@ -186,7 +186,18 @@ class UnifiedInboxController {
         }
       }
 
-      await unifiedInboxService.sendMessage(req.user.id, id, type, content, attachments || []);
+      await unifiedInboxService.sendMessage(
+        req.user.id,
+        id,
+        type,
+        content,
+        attachments || [],
+        {
+          ownerContextId: req.user.activeContext?.type === 'employee'
+            ? req.user.activeContext.ownerId
+            : null,
+        }
+      );
 
       return res.json({
         success: true,

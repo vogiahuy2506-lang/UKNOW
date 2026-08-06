@@ -1,11 +1,8 @@
 /**
  * Helpers hiển thị mua thêm (top-up) — thuần, không I/O.
  *
- * Nguyên tắc: phần mua thêm KHÔNG cộng vào hạn mức gói. Hồ sơ trả `addons` riêng
- * để người dùng thấy được đâu là gói, đâu là phần mua thêm. Riêng tầng gửi tin thì
- * vẫn cộng cả hai (`userSendLimit.util.js`) — nên khách gửi vượt hạn mức gói nhờ
- * phần mua thêm sẽ thấy thanh hạn mức đỏ dù vẫn gửi được. Đây là hạn chế đã biết:
- * số "đã dùng" là tổng gộp, tầng gửi không lưu tin nào trừ vào đâu.
+ * Consumable (tin/email/AI): ví vĩnh viễn — hồ sơ trả { granted, used, remaining }.
+ * Structural: vẫn số nguyên (slot theo chu kỳ) khi ship phần B.
  */
 
 /**
@@ -40,23 +37,64 @@ export function mapTopupItemsFromConfig(topupConfig) {
 }
 
 /**
- * @param {{
- *   zaloMessages: number,
- *   emails: number,
- *   aiCredits: number,
- *   expiresAt?: Date|string|null,
- * }} totals
- * @returns {null|{ zaloMessages: number, emails: number, aiCredits: number, expiresAt: Date|string|null }}
+ * @param {{ granted?: number, used?: number, remaining?: number }|number|null|undefined} value
+ * @returns {{ granted: number, used: number, remaining: number }}
  */
-export function buildAddonsPayload({ zaloMessages = 0, emails = 0, aiCredits = 0, expiresAt = null } = {}) {
-  const z = Number(zaloMessages) || 0;
-  const e = Number(emails) || 0;
-  const a = Number(aiCredits) || 0;
-  if (z === 0 && e === 0 && a === 0) return null;
+export function normalizeWalletAddon(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const granted = Number(value.granted) || 0;
+    const used = Number(value.used) || 0;
+    const remaining = value.remaining != null
+      ? Math.max(0, Number(value.remaining) || 0)
+      : Math.max(0, granted - used);
+    return { granted, used, remaining };
+  }
+  const granted = Number(value) || 0;
+  return { granted, used: 0, remaining: Math.max(0, granted) };
+}
+
+/**
+ * @param {{
+ *   zaloMessages?: object|number,
+ *   emails?: object|number,
+ *   aiCredits?: object|number,
+ *   zaloAccounts?: number,
+ *   emailAccounts?: number,
+ *   landingPages?: number,
+ *   chatbots?: number,
+ *   employees?: number,
+ * }} input
+ * @returns {null|object}
+ */
+export function buildAddonsPayload({
+  zaloMessages = 0,
+  emails = 0,
+  aiCredits = 0,
+  zaloAccounts = 0,
+  emailAccounts = 0,
+  landingPages = 0,
+  chatbots = 0,
+  employees = 0,
+} = {}) {
+  const wallet = {
+    zaloMessages: normalizeWalletAddon(zaloMessages),
+    emails: normalizeWalletAddon(emails),
+    aiCredits: normalizeWalletAddon(aiCredits),
+  };
+  const structural = {
+    zaloAccounts: Number(zaloAccounts) || 0,
+    emailAccounts: Number(emailAccounts) || 0,
+    landingPages: Number(landingPages) || 0,
+    chatbots: Number(chatbots) || 0,
+    employees: Number(employees) || 0,
+  };
+
+  const hasWallet = Object.values(wallet).some((w) => w.granted > 0);
+  const hasStructural = Object.values(structural).some((n) => n > 0);
+  if (!hasWallet && !hasStructural) return null;
+
   return {
-    zaloMessages: z,
-    emails: e,
-    aiCredits: a,
-    expiresAt: expiresAt ?? null,
+    ...wallet,
+    ...structural,
   };
 }

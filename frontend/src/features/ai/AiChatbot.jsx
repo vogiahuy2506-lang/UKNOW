@@ -28,6 +28,7 @@ import {
   ZaloQrLoginCard,
 } from './components/AiChatbotWizardCards';
 import ConfirmModal from '../inbox/ConfirmModal';
+import CreditWarningBanner from '../../components/layout/CreditWarningBanner';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service';
@@ -2546,6 +2547,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const renderInputSection = ({ centered = false } = {}) => (
     <div className={centered ? 'w-full' : `flex-shrink-0 ${isFullscreen ? 'px-4 pb-6 bg-gray-50' : 'px-4 pt-3 pb-4 border-t border-slate-100 bg-white'}`}>
       <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
+        {isFullscreen && <CreditWarningBanner placement="composer" />}
         <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white border-slate-200' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40' : centered ? '' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -2729,8 +2731,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </button>
       </div>
 
-      {/* Gói hết hạn / hết credit AI */}
-      {!isSuperAdmin && aiBillingBlock && (
+      {/* Gói hết hạn / hết credit AI — ở fullscreen đã có banner ngay trên khung nhập */}
+      {!isSuperAdmin && !isFullscreen && aiBillingBlock && (
         <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5">
           <HiOutlineExclamation className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
           <div className="min-w-0 flex-1">
@@ -2739,13 +2741,24 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 ? t('aiChatbot.planExpiredBanner')
                 : t('aiChatbot.creditsEmptyBanner')}
             </p>
-            <button
-              type="button"
-              onClick={() => navigate('/pricing')}
-              className="mt-1.5 text-xs font-semibold text-red-700 underline hover:text-red-900"
-            >
-              {t('aiChatbot.upgradePlan')}
-            </button>
+            <div className="mt-1.5 flex flex-wrap items-center gap-3">
+              {aiBillingBlock.type !== 'expired' && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/app/topup')}
+                  className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+                >
+                  {t('creditBanner.buyTopup')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/pricing')}
+                className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+              >
+                {t('aiChatbot.upgradePlan')}
+              </button>
+            </div>
           </div>
         </div>
       )}

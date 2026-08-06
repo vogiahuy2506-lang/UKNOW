@@ -5,7 +5,33 @@
 
 export const TOPUP_MIN_ORDER_AMOUNT = 50_000;
 
-export const TOPUP_ITEM_KEYS = Object.freeze(['zalo_messages', 'emails', 'ai_credits']);
+/** Consumable quotas — permanent wallet (cycle_end NULL). */
+export const TOPUP_CONSUMABLE_KEYS = Object.freeze([
+  'zalo_messages',
+  'emails',
+  'ai_credits',
+]);
+
+/** Structural slots (also expire with cycle; raise effective plan limits while active). */
+export const TOPUP_STRUCTURAL_KEYS = Object.freeze([
+  'zalo_accounts',
+  'email_accounts',
+  'landing_pages',
+  'chatbots',
+  'employees',
+]);
+
+export const TOPUP_ITEM_KEYS = Object.freeze([
+  ...TOPUP_CONSUMABLE_KEYS,
+  ...TOPUP_STRUCTURAL_KEYS,
+]);
+
+/** resourceKey (userResourceLimit) → topup_grants.item_key */
+export const TOPUP_GRANT_KEY_BY_RESOURCE = Object.freeze({
+  zaloAccounts: 'zalo_accounts',
+  emailAccounts: 'email_accounts',
+  landingPages: 'landing_pages',
+});
 
 function normalizeRow(row) {
   return {
@@ -85,21 +111,20 @@ export function validateTopupQuantities(pricingRows, rawQuantities = {}) {
  * }}
  */
 export function computeTopupPrice(pricingRows, quantities = {}) {
-  const byKey = new Map(
-    (pricingRows || []).map(normalizeRow).filter((r) => r.isActive).map((r) => [r.itemKey, r])
-  );
+  const billable = (pricingRows || [])
+    .map(normalizeRow)
+    .filter((r) => r.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder || String(a.itemKey).localeCompare(String(b.itemKey)));
 
   const items = [];
   let total = 0;
 
-  for (const itemKey of TOPUP_ITEM_KEYS) {
-    const qty = Math.max(0, Number(quantities?.[itemKey] || 0));
+  for (const row of billable) {
+    const qty = Math.max(0, Number(quantities?.[row.itemKey] || 0));
     if (qty <= 0) continue;
-    const row = byKey.get(itemKey);
-    if (!row) continue;
     const subtotal = qty * row.unitPrice;
     items.push({
-      itemKey,
+      itemKey: row.itemKey,
       qty,
       unitPrice: row.unitPrice,
       minQty: row.minQty,
@@ -163,6 +188,8 @@ export function checkTopupZaloCapacity({
     };
   }
 
+  // accounts=0: gói không cấp slot Zalo (hoặc feature tắt) → không còn chỗ mua thêm.
+  // Không còn bắt buộc đã kết nối QR — capacity lấy theo slot gói (+ grant) ở tầng service.
   if (acct === 0) {
     return {
       ok: requested === 0,
@@ -174,9 +201,9 @@ export function checkTopupZaloCapacity({
       remaining: 0,
       requested,
       message: requested > 0
-        ? 'Hãy kết nối tài khoản Zalo trước khi mua thêm tin.'
+        ? 'Gói hiện tại không có slot tài khoản Zalo — không thể mua thêm tin.'
         : undefined,
-      code: requested > 0 ? 'ZALO_NOT_CONNECTED' : undefined,
+      code: requested > 0 ? 'ZALO_NO_SLOT' : undefined,
     };
   }
 

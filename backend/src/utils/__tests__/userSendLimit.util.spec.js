@@ -19,6 +19,13 @@ jest.unstable_mockModule('../billingCycle.util.js', () => ({
   getBillingCycle: mockGetBillingCycle,
 }));
 
+jest.unstable_mockModule('../../services/payment/topupWallet.service.js', () => ({
+  hasWalletRemaining: jest.fn(async () => false),
+  WALLET_ITEM_BY_CHANNEL: { email: 'emails', zalo: 'zalo_messages' },
+  maybeDebitWalletForSend: jest.fn(),
+  getWalletSnapshot: jest.fn(),
+}));
+
 const {
   checkUserEmailSendLimit,
   checkUserZaloSendLimit,

@@ -6,6 +6,10 @@ import {
   resolveBillingUserId,
   getBillingCycle,
 } from './billingCycle.util.js';
+import {
+  hasWalletRemaining,
+  WALLET_ITEM_BY_CHANNEL,
+} from '../services/payment/topupWallet.service.js';
 
 // is_fup_enabled: FUP behavior intentionally deferred (cờ chưa có hành vi).
 
@@ -76,8 +80,8 @@ const ZPM_OWNER_PREDICATE = `(zpm.id_user = $1 OR zpm.id_user IN (
    WHERE um.owner_id = $1 AND um.status = 'active'))`;
 
 /**
- * Lấy giới hạn gửi tin từ effective plan của billing user + top-up grants còn hiệu lực.
- * Chỉ cộng vào monthly_* — không đụng daily hay messages_per_period.
+ * Lấy giới hạn gửi tin từ effective plan của billing user.
+ * Top-up consumable KHÔNG cộng vào trần — tiêu qua ví (topup_debits).
  * @param {number|string} billingUserId
  */
 async function getUserPlanSendLimits(billingUserId) {
@@ -85,19 +89,7 @@ async function getUserPlanSendLimits(billingUserId) {
     const { rows } = await db.query(
       `SELECT p.daily_email_limit, p.monthly_email_limit,
               p.daily_zalo_limit,  p.monthly_zalo_limit,
-              p.messages_per_period,
-              COALESCE((
-                SELECT SUM(tg.qty)::int FROM topup_grants tg
-                WHERE tg.user_id = u.id
-                  AND tg.item_key = 'emails'
-                  AND tg.cycle_end = u.subscription_expires_at
-              ), 0) AS topup_emails,
-              COALESCE((
-                SELECT SUM(tg.qty)::int FROM topup_grants tg
-                WHERE tg.user_id = u.id
-                  AND tg.item_key = 'zalo_messages'
-                  AND tg.cycle_end = u.subscription_expires_at
-              ), 0) AS topup_zalo
+              p.messages_per_period
        FROM users u
        JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
        WHERE u.id = $1
@@ -107,17 +99,12 @@ async function getUserPlanSendLimits(billingUserId) {
     const row = rows[0];
     if (!row) return null;
 
-    const monthlyEmail = toInt(row.monthly_email_limit);
-    const monthlyZalo = toInt(row.monthly_zalo_limit);
-    const topupEmails = Number(row.topup_emails) || 0;
-    const topupZalo = Number(row.topup_zalo) || 0;
-
     return {
       daily_email_limit: row.daily_email_limit,
       daily_zalo_limit: row.daily_zalo_limit,
       messages_per_period: row.messages_per_period,
-      monthly_email_limit: monthlyEmail === null ? null : monthlyEmail + topupEmails,
-      monthly_zalo_limit: monthlyZalo === null ? null : monthlyZalo + topupZalo,
+      monthly_email_limit: toInt(row.monthly_email_limit),
+      monthly_zalo_limit: toInt(row.monthly_zalo_limit),
     };
   });
 }
@@ -353,14 +340,21 @@ export async function checkSendQuota({
       ? await countEmailSentThisMonth(billingUserId)
       : await countZaloSentThisMonth(billingUserId);
     if (count >= monthlyLimit) {
-      return denyResult({
-        limitType: 'monthly',
-        limit: monthlyLimit,
-        currentCount: count,
-        resetAt: nextVnMonthStart(),
-        message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng (${count}/${monthlyLimit} ${unitLabel}). Vui lòng liên hệ admin để nâng gói.`,
-        billingUserId,
-      });
+      // Hết hạn mức gói — còn ví thì vẫn cho gửi (trừ lúc ghi tin). Đọc ví không qua cache.
+      const walletItemKey = WALLET_ITEM_BY_CHANNEL[isEmail ? 'email' : 'zalo'];
+      const walletOk = walletItemKey
+        ? await hasWalletRemaining(billingUserId, walletItemKey, db)
+        : false;
+      if (!walletOk) {
+        return denyResult({
+          limitType: 'monthly',
+          limit: monthlyLimit,
+          currentCount: count,
+          resetAt: nextVnMonthStart(),
+          message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng (${count}/${monthlyLimit} ${unitLabel}). Vui lòng mua thêm hoặc liên hệ admin để nâng gói.`,
+          billingUserId,
+        });
+      }
     }
   }
 
