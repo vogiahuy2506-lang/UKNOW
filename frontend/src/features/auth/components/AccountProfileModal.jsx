@@ -35,7 +35,15 @@ function formatPrice(price, t) {
 }
 
 /** Single usage row with a progress bar. */
-function UsageBar({ icon: Icon, label, used, limit, t, serviceSuspended = false }) {
+function UsageBar({
+  icon: Icon,
+  label,
+  used,
+  limit,
+  t,
+  serviceSuspended = false,
+  usingAddons = false,
+}) {
   if (serviceSuspended) {
     return (
       <div className="flex items-center justify-between py-1">
@@ -71,6 +79,7 @@ function UsageBar({ icon: Icon, label, used, limit, t, serviceSuspended = false 
   const isWarning = pct >= 80;
   const barColor = isDanger ? 'bg-red-500' : isWarning ? 'bg-orange-400' : 'bg-primary-500';
   const textColor = isDanger ? 'text-red-600' : isWarning ? 'text-orange-500' : 'text-gray-700';
+  const showAddonsHint = usingAddons && Number(used) > Number(limit);
 
   return (
     <div>
@@ -86,6 +95,11 @@ function UsageBar({ icon: Icon, label, used, limit, t, serviceSuspended = false 
       <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
+      {showAddonsHint && (
+        <p className="mt-0.5 text-[11px] text-amber-700">
+          {t('accountProfileModal.usingAddonsHint')}
+        </p>
+      )}
     </div>
   );
 }
@@ -242,6 +256,7 @@ function PlanSection({ data, t }) {
           limit={data.monthlyEmailLimit}
           t={t}
           serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons}
         />
         <UsageBar
           icon={HiOutlineChatAlt2}
@@ -258,6 +273,7 @@ function PlanSection({ data, t }) {
           limit={data.monthlyZaloLimit}
           t={t}
           serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons}
         />
         <UsageBar
           icon={HiOutlineSparkles}
@@ -266,8 +282,57 @@ function PlanSection({ data, t }) {
           limit={data.aiCreditsPerPeriod}
           t={t}
           serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons}
         />
       </div>
+
+      {data.addons && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-2">
+          <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
+            {t('accountProfileModal.addonsTitle')}
+          </p>
+          <ul className="space-y-1 text-sm text-amber-950">
+            {data.addons.zaloMessages > 0 && (
+              <li>
+                {t('topup.items.zaloMessages')}
+                {' · '}
+                <span className="font-semibold">
+                  +{Number(data.addons.zaloMessages).toLocaleString('vi-VN')}
+                </span>
+              </li>
+            )}
+            {data.addons.emails > 0 && (
+              <li>
+                {t('topup.items.emails')}
+                {' · '}
+                <span className="font-semibold">
+                  +{Number(data.addons.emails).toLocaleString('vi-VN')}
+                </span>
+              </li>
+            )}
+            {data.addons.aiCredits > 0 && (
+              <li>
+                {t('topup.items.aiCredits')}
+                {' · '}
+                <span className="font-semibold">
+                  +{Number(data.addons.aiCredits).toLocaleString('vi-VN')}
+                </span>
+              </li>
+            )}
+          </ul>
+          <p className="text-xs text-amber-700/90 pt-1">
+            {t('accountProfileModal.addonsExpiryNote', {
+              date: data.addons.expiresAt
+                ? new Date(data.addons.expiresAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })
+                : '—',
+            })}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,6 +351,24 @@ const STATUS_MAP = (t) => ({
   pending:   { label: t('accountProfileModal.pending'), cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: HiOutlineClock },
   cancelled: { label: t('accountProfileModal.cancelled'), cls: 'text-gray-400 bg-gray-50 border-gray-200', icon: HiOutlineBan },
 });
+
+const TOPUP_ITEM_LABEL_KEYS = {
+  zalo_messages: 'topup.items.zaloMessages',
+  emails: 'topup.items.emails',
+  ai_credits: 'topup.items.aiCredits',
+};
+
+function formatTopupItemsSummary(items, t) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return items
+    .filter((it) => Number(it.qty) > 0)
+    .map((it) => {
+      const labelKey = TOPUP_ITEM_LABEL_KEYS[it.itemKey];
+      const label = labelKey ? t(labelKey) : it.itemKey;
+      return `${Number(it.qty).toLocaleString('vi-VN')} ${label}`;
+    })
+    .join(' · ');
+}
 
 function OrderHistoryTab({ isUserAdmin, t }) {
   const [orders, setOrders] = useState([]);
@@ -332,8 +415,15 @@ function OrderHistoryTab({ isUserAdmin, t }) {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">
-                  {order.plan?.name || t('accountProfileModal.unknownPlan')}
+                  {order.kind === 'topup'
+                    ? t('accountProfileModal.topupOrderTitle')
+                    : (order.plan?.name || t('accountProfileModal.unknownPlan'))}
                 </p>
+                {order.kind === 'topup' && order.topup?.items?.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {formatTopupItemsSummary(order.topup.items, t)}
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 mt-0.5">
                   {t('accountProfileModal.orderCode')} <span className="font-mono">{order.orderCode}</span>
                 </p>
@@ -348,7 +438,7 @@ function OrderHistoryTab({ isUserAdmin, t }) {
                 </span>
               </div>
             </div>
-            {order.plan && (
+            {order.kind !== 'topup' && order.plan && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-3 text-xs text-gray-500">
                 <span>{t('accountProfileModal.emailPerDay')} <strong className="text-gray-700">{order.plan.dailyEmailLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
                 <span>{t('accountProfileModal.emailPerMonth')} <strong className="text-gray-700">{order.plan.monthlyEmailLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>

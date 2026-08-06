@@ -347,7 +347,8 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
     `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
             p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
             p.daily_email_limit, p.monthly_email_limit,
-            p.daily_zalo_limit, p.monthly_zalo_limit
+            p.daily_zalo_limit, p.monthly_zalo_limit,
+            o.note, o.topup_config
      FROM orders o
      LEFT JOIN plans p ON o.plan_id = p.id
      WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'

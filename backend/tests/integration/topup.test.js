@@ -359,4 +359,80 @@ describe('Top-up mid-cycle', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/tối thiểu/i);
   });
+
+  it('profile addons + my-orders kind=topup; monthlyZaloLimit không đổi', async () => {
+    const { user } = await createTopupReadyUser({
+      username: 'topup-display',
+      monthlyZaloLimit: 2000,
+      connectedZaloAccounts: 1,
+    });
+    const cycleEnd = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    await db.query(
+      `UPDATE users SET subscription_expires_at = $1 WHERE id = $2`,
+      [cycleEnd, user.id]
+    );
+    const token = await loginAs(user);
+
+    const before = await request(app)
+      .get('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`);
+    expect(before.status).toBe(200);
+    expect(before.body.data.addons).toBeNull();
+    expect(Number(before.body.data.monthlyZaloLimit)).toBe(2000);
+
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'fake',
+      checkoutUrl: 'https://pay.payos.vn/web/fake',
+    });
+    const created = await request(app)
+      .post('/api/topup/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { zalo_messages: 300, emails: 1000, ai_credits: 50 } });
+    expect(created.status).toBe(200);
+    const orderCode = created.body.result.orderCode;
+
+    mockWebhooksVerify.mockResolvedValue({
+      code: '00',
+      orderCode,
+      amount: created.body.result.amount,
+    });
+    await request(app).post('/api/payments/webhook').send({});
+
+    const profile = await request(app)
+      .get('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`);
+    expect(profile.status).toBe(200);
+    expect(Number(profile.body.data.monthlyZaloLimit)).toBe(2000);
+    expect(profile.body.data.addons).toEqual(
+      expect.objectContaining({
+        zaloMessages: 300,
+        emails: 1000,
+        aiCredits: 50,
+      })
+    );
+
+    const orders = await request(app)
+      .get('/api/users/my-orders')
+      .set('Authorization', `Bearer ${token}`);
+    expect(orders.status).toBe(200);
+    const topupOrder = orders.body.data.find((o) => o.kind === 'topup');
+    expect(topupOrder).toBeTruthy();
+    expect(topupOrder.topup.items).toEqual(
+      expect.arrayContaining([
+        { itemKey: 'zalo_messages', qty: 300 },
+        { itemKey: 'emails', qty: 1000 },
+        { itemKey: 'ai_credits', qty: 50 },
+      ])
+    );
+
+    await db.query(
+      `UPDATE users SET subscription_expires_at = NOW() + INTERVAL '40 days' WHERE id = $1`,
+      [user.id]
+    );
+    const afterCycle = await request(app)
+      .get('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`);
+    expect(afterCycle.body.data.addons).toBeNull();
+    expect(Number(afterCycle.body.data.monthlyZaloLimit)).toBe(2000);
+  });
 });

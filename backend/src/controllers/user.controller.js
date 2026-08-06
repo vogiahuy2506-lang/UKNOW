@@ -21,6 +21,12 @@ import {
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 import { DEFAULT_EMPLOYEE_PASSWORD, generateTempPassword } from '../services/user/employee.service.js';
+import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
+import {
+  buildAddonsPayload,
+  isTopupOrderRow,
+  mapTopupItemsFromConfig,
+} from '../utils/topupDisplay.util.js';
 
 const EMPLOYEE_LIMIT_KEYS = {
   maxCampaigns: 'max_campaigns',
@@ -56,6 +62,20 @@ const normalizeLimitValue = (rawValue) => {
  * @returns {boolean} true nếu lỗi do thiếu cột
  */
 const isMissingLimitColumnError = (error) => error?.code === '42703';
+
+/**
+ * Phần mua thêm còn hiệu lực theo chu kỳ billing (không cộng vào hạn mức gói).
+ * @param {number|string} billingUserId
+ * @param {Date|string|null|undefined} expiresAt
+ */
+async function loadProfileAddons(billingUserId, expiresAt) {
+  const [zaloMessages, emails, aiCredits] = await Promise.all([
+    sumActiveTopupGrants(billingUserId, 'zalo_messages'),
+    sumActiveTopupGrants(billingUserId, 'emails'),
+    sumActiveTopupGrants(billingUserId, 'ai_credits'),
+  ]);
+  return buildAddonsPayload({ zaloMessages, emails, aiCredits, expiresAt });
+}
 
 /**
  * Chuẩn hóa dữ liệu profile trả về cho frontend.
@@ -207,9 +227,21 @@ class UserController {
         ai_credits_used: aiCreditUsage.used,
       };
 
+      let addons = null;
+      try {
+        // Grant neo theo subscription_expires_at của billing user — luôn lấy từ
+        // billingRow (kể cả khi employee tự resolve owner qua user_members, không có X-Owner-Context).
+        addons = await loadProfileAddons(
+          billingUserId,
+          billingRow.subscription_expires_at ?? null
+        );
+      } catch (err) {
+        console.error('[Profile] loadProfileAddons failed', { userId, billingUserId, message: err.message });
+      }
+
       res.json({
         success: true,
-        data: mapProfileResponse(profileRow),
+        data: { ...mapProfileResponse(profileRow), addons },
       });
     } catch (error) {
       console.error('Get profile error:', error);
@@ -262,10 +294,33 @@ class UserController {
         ...(roleAndLimits || {}),
       };
 
+      let addons = null;
+      try {
+        const employeeCtx = req.user?.activeContext?.type === 'employee'
+          ? req.user.activeContext
+          : null;
+        const billingOptions = employeeCtx?.ownerId != null
+          ? { ownerContextId: employeeCtx.ownerId }
+          : {};
+        const billingUserId = await resolveBillingUserId(userId, billingOptions);
+        let expiresAt = userProfileRow.subscription_expires_at ?? null;
+        if (String(billingUserId) !== String(userId)) {
+          try {
+            const billingBase = await findProfileBase(billingUserId);
+            expiresAt = billingBase?.subscription_expires_at ?? expiresAt;
+          } catch {
+            // keep expiresAt from self
+          }
+        }
+        addons = await loadProfileAddons(billingUserId, expiresAt);
+      } catch (err) {
+        console.error('[Profile] loadProfileAddons on update failed', { userId, message: err.message });
+      }
+
       res.json({
         success: true,
         message: 'Cập nhật thông tin thành công',
-        data: mapProfileResponse(userProfileRow)
+        data: { ...mapProfileResponse(userProfileRow), addons },
       });
     } catch (error) {
       console.error('Update profile error:', error);
@@ -633,23 +688,30 @@ class UserController {
 
       res.json({
         success: true,
-        data: orders.map((row) => ({
-          id: row.id,
-          orderCode: String(row.order_code),
-          amount: Number(row.amount),
-          status: row.status,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          plan: row.plan_id ? {
-            id: row.plan_id,
-            name: row.plan_name,
-            code: row.plan_code,
-            dailyEmailLimit: row.daily_email_limit,
-            monthlyEmailLimit: row.monthly_email_limit,
-            dailyZaloLimit: row.daily_zalo_limit,
-            monthlyZaloLimit: row.monthly_zalo_limit,
-          } : null,
-        })),
+        data: orders.map((row) => {
+          const kind = isTopupOrderRow(row) ? 'topup' : 'plan';
+          return {
+            id: row.id,
+            orderCode: String(row.order_code),
+            amount: Number(row.amount),
+            status: row.status,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            kind,
+            topup: kind === 'topup'
+              ? { items: mapTopupItemsFromConfig(row.topup_config) }
+              : null,
+            plan: row.plan_id ? {
+              id: row.plan_id,
+              name: row.plan_name,
+              code: row.plan_code,
+              dailyEmailLimit: row.daily_email_limit,
+              monthlyEmailLimit: row.monthly_email_limit,
+              dailyZaloLimit: row.daily_zalo_limit,
+              monthlyZaloLimit: row.monthly_zalo_limit,
+            } : null,
+          };
+        }),
       });
     } catch (error) {
       console.error('Get my orders error:', error);

@@ -7,6 +7,8 @@ const findProfileUsageCounts = jest.fn();
 const getResourceUsage = jest.fn();
 const getCreditUsageForCycle = jest.fn();
 const resolveBillingUserId = jest.fn();
+const sumActiveTopupGrants = jest.fn();
+const findSuccessfulOrdersForUser = jest.fn();
 
 jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   createLegacyEmployee: jest.fn(),
@@ -21,7 +23,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findProfileUsageCounts,
   findRoleAndLimits: jest.fn(),
   findRoleAndLimitsFallback: jest.fn(),
-  findSuccessfulOrdersForUser: jest.fn(),
+  findSuccessfulOrdersForUser,
   findUserByEmailExceptId: jest.fn(),
   resetLegacyEmployeePassword: jest.fn(),
   updateLegacyEmployeeLimits: jest.fn(),
@@ -41,6 +43,13 @@ jest.unstable_mockModule('../../services/payment/usageTracking.service.js', () =
   },
 }));
 
+jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () => ({
+  sumActiveTopupGrants,
+  findAllTopupPricing: jest.fn(),
+  insertTopupGrants: jest.fn(),
+  findGrantsByOrderId: jest.fn(),
+}));
+
 const userController = (await import('../user.controller.js')).default;
 
 describe('UserController.getProfile', () => {
@@ -54,6 +63,8 @@ describe('UserController.getProfile', () => {
     getResourceUsage.mockReset();
     getCreditUsageForCycle.mockReset();
     resolveBillingUserId.mockReset();
+    sumActiveTopupGrants.mockReset();
+    findSuccessfulOrdersForUser.mockReset();
 
     resolveBillingUserId.mockImplementation(async (userId, options = {}) => {
       if (options.ownerContextId != null && options.ownerContextId !== '') {
@@ -61,6 +72,7 @@ describe('UserController.getProfile', () => {
       }
       return userId;
     });
+    sumActiveTopupGrants.mockResolvedValue(0);
 
     findProfileBase.mockResolvedValue({
       id: 42,
@@ -169,7 +181,7 @@ describe('UserController.getProfile', () => {
         status: 'active',
         role: 'user',
         active_plan_id: null,
-        subscription_expires_at: null,
+        subscription_expires_at: new Date('2025-01-01'),
         max_campaigns: null,
         max_zalo_accounts: null,
         max_email_accounts: null,
@@ -198,6 +210,9 @@ describe('UserController.getProfile', () => {
       grace_period_days: 0,
     });
     getCreditUsageForCycle.mockResolvedValue({ used: 8, cycle: { billingUserId: 42 } });
+    sumActiveTopupGrants.mockImplementation(async (_uid, itemKey) => (
+      itemKey === 'zalo_messages' ? 300 : 0
+    ));
 
     await userController.getProfile({
       user: {
@@ -220,7 +235,166 @@ describe('UserController.getProfile', () => {
         activePlanCode: 'starter',
         aiCreditsUsed: 8,
         aiCreditsPerPeriod: 10,
+        addons: expect.objectContaining({
+          zaloMessages: 300,
+          expiresAt: new Date('2026-08-01'),
+        }),
       }),
+    });
+  });
+
+  it('addons expiresAt lấy từ billing owner khi employee tự resolve qua user_members (không có context)', async () => {
+    resolveBillingUserId.mockResolvedValue(42);
+    findProfileBase.mockImplementation(async (id) => {
+      if (Number(id) === 42) {
+        return {
+          id: 42,
+          username: 'owner',
+          email: 'owner@test.local',
+          active_plan_id: 7,
+          subscription_expires_at: new Date('2026-09-15'),
+        };
+      }
+      return {
+        id: 99,
+        username: 'emp2',
+        email: 'emp2@test.local',
+        full_name: 'Emp',
+        avatar_url: null,
+        phone: null,
+        status: 'active',
+        role: 'user',
+        active_plan_id: null,
+        subscription_expires_at: new Date('2025-02-02'),
+        max_campaigns: null,
+        max_zalo_accounts: null,
+        max_email_accounts: null,
+        max_email_templates: null,
+        max_zalo_templates: null,
+        max_landing_pages: null,
+        created_at: new Date('2026-06-01'),
+        last_login_at: null,
+        role_code: 'user',
+        role_name: 'Người dùng',
+      };
+    });
+    findProfilePlan.mockResolvedValue({
+      plan_id: 7,
+      plan_name: 'Starter',
+      plan_code: 'starter',
+      monthly_zalo_limit: 2000,
+    });
+    sumActiveTopupGrants.mockResolvedValueOnce(100).mockResolvedValue(0);
+
+    await userController.getProfile({ user: { id: 99 } }, res);
+
+    expect(res.json.mock.calls[0][0].data.addons.expiresAt).toEqual(new Date('2026-09-15'));
+  });
+
+  it('trả addons từ sumActiveTopupGrants theo billing owner, không cộng vào monthlyZaloLimit', async () => {
+    findProfilePlan.mockResolvedValue({
+      plan_id: 7,
+      plan_name: 'Starter',
+      plan_code: 'starter',
+      monthly_zalo_limit: 2000,
+      monthly_email_limit: 5000,
+      ai_credits_per_period: 100,
+    });
+    sumActiveTopupGrants.mockImplementation(async (_uid, itemKey) => {
+      if (itemKey === 'zalo_messages') return 300;
+      if (itemKey === 'emails') return 0;
+      if (itemKey === 'ai_credits') return 50;
+      return 0;
+    });
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({
+        monthlyZaloLimit: 2000,
+        addons: {
+          zaloMessages: 300,
+          emails: 0,
+          aiCredits: 50,
+          expiresAt: null,
+        },
+      }),
+    });
+  });
+
+  it('addons = null khi chưa mua thêm', async () => {
+    findProfilePlan.mockResolvedValue({ plan_id: 7, monthly_zalo_limit: 2000 });
+    await userController.getProfile({ user: { id: 42 } }, res);
+    expect(res.json.mock.calls[0][0].data.addons).toBeNull();
+  });
+});
+
+describe('UserController.getMyOrders', () => {
+  let res;
+
+  beforeEach(() => {
+    findSuccessfulOrdersForUser.mockReset();
+    res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  });
+
+  it("gắn kind=topup khi note=topup, lọc qty=0, kind=plan khi có plan_id", async () => {
+    findSuccessfulOrdersForUser.mockResolvedValue([
+      {
+        id: 1,
+        order_code: 100,
+        amount: 60000,
+        status: 'success',
+        created_at: new Date('2026-08-01'),
+        updated_at: new Date('2026-08-01'),
+        note: 'topup',
+        topup_config: { quantities: { zalo_messages: 300, emails: 0, ai_credits: 50 } },
+        plan_id: null,
+        plan_name: null,
+      },
+      {
+        id: 2,
+        order_code: 200,
+        amount: 99000,
+        status: 'success',
+        created_at: new Date('2026-07-01'),
+        updated_at: new Date('2026-07-01'),
+        note: null,
+        topup_config: null,
+        plan_id: 7,
+        plan_name: 'Starter',
+        plan_code: 'starter',
+        daily_email_limit: null,
+        monthly_email_limit: 5000,
+        daily_zalo_limit: null,
+        monthly_zalo_limit: 2000,
+      },
+    ]);
+
+    await userController.getMyOrders(
+      { user: { id: 42, email: 'sub@test.local' } },
+      res
+    );
+
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: [
+        expect.objectContaining({
+          kind: 'topup',
+          topup: {
+            items: [
+              { itemKey: 'zalo_messages', qty: 300 },
+              { itemKey: 'ai_credits', qty: 50 },
+            ],
+          },
+          plan: null,
+        }),
+        expect.objectContaining({
+          kind: 'plan',
+          topup: null,
+          plan: expect.objectContaining({ name: 'Starter', code: 'starter' }),
+        }),
+      ],
     });
   });
 });
