@@ -188,9 +188,9 @@ Hoặc nhờ trợ lý AI: "Tạo giúp tôi chiến dịch…".
     primary_route: '/pricing',
     sort_order: 70,
     title: 'Gói dịch vụ & thanh toán',
-    summary: 'Xem bảng giá, nâng gói, thanh toán PayOS và mua thêm hạn mức giữa chu kỳ.',
+    summary: 'Xem bảng giá, nâng gói, thanh toán PayOS và mua thêm hạn mức — phần mua thêm không hết hạn theo chu kỳ.',
     body_md: `# Gói dịch vụ & thanh toán
-Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, email, lượt AI) trong chu kỳ hiện tại.
+Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, email, lượt AI).
 
 ## Vào ở đâu
 - Bảng giá công khai: [/pricing](/pricing)
@@ -202,12 +202,19 @@ Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, emai
 1. Vào /pricing chọn gói hoặc **Gói tự chọn**.
 2. Thanh toán qua PayOS (QR). Sau khi thành công, hạn mức gói được kích hoạt.
 3. Nếu sắp hết tin/email/AI giữa chu kỳ: vào /app/topup mua thêm (tối thiểu 50.000đ/đơn).
-4. Phần mua thêm **hết hạn cuối chu kỳ, không cộng dồn**.
+4. Phần mua thêm **không hết hạn theo chu kỳ** — còn nguyên sang kỳ sau, tiêu tới đâu trừ tới đó.
+
+## Hạn mức gói và phần mua thêm khác nhau thế nào
+- **Hạn mức gói** làm mới mỗi kỳ. Dùng không hết thì mất, không cộng dồn.
+- **Phần mua thêm** là số dư riêng, không làm mới và không mất khi sang kỳ mới.
+- Hệ thống **tiêu hạn mức gói trước**, hết mới trừ vào phần mua thêm — để phần bạn đã trả tiền được giữ lâu nhất.
+- Cần **gói còn hiệu lực** mới dùng được phần mua thêm. Gói hết hạn thì số dư vẫn còn nguyên, gia hạn là dùng tiếp.
 
 ## Lỗi thường gặp
-- Đã trả tiền nhưng hạn mức chưa tăng → đợi webhook PayOS vài phút; tải lại trang; với top-up kiểm tra đã hết hạn gói chưa.
+- Đã trả tiền nhưng hạn mức chưa tăng → đợi webhook PayOS vài phút rồi tải lại trang.
 - Không mua được tin Zalo → năng lực tính theo **số tài khoản Zalo đã kết nối**, không theo số slot gói; hãy nối Zalo trước.
 - Hết credit AI → mua thêm tại /app/topup hoặc nâng gói.
+- Gói đã hết hạn, còn số dư mua thêm nhưng không gửi được → gia hạn gói; số dư không mất đi đâu.
 
 ## Liên quan
 - [Thêm tài khoản Zalo](zalo-account)

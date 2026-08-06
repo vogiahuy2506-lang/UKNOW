@@ -178,7 +178,7 @@ export default function DocsLayout() {
         )}
 
         <main className="flex-1 min-w-0">
-          <div className="mx-auto max-w-3xl px-4 sm:px-8 py-8">
+          <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <Outlet context={{ articles, groups, isLoading }} />
           </div>
         </main>
