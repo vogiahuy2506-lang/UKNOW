@@ -119,10 +119,28 @@ describe('POST /api/verification/send-code', () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  it('gọi send-code 2 lần → mã cũ bị mark is_used=true, mã mới is_used=false', async () => {
+  it('gọi send-code 2 lần trong cooldown → lần 2 trả 429', async () => {
+    const email = 'reissue-cooldown@gmail.com';
+    const r1 = await request(app).post('/api/verification/send-code').send({ email });
+    expect(r1.status).toBe(200);
+    const r2 = await request(app).post('/api/verification/send-code').send({ email });
+    expect(r2.status).toBe(429);
+    expect(r2.body.code).toBe('VERIFICATION_COOLDOWN');
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+  });
+
+  it('gọi send-code lại sau cooldown → mã cũ bị mark is_used=true, mã mới is_used=false', async () => {
     const email = 'reissue@gmail.com';
     const r1 = await request(app).post('/api/verification/send-code').send({ email });
     expect(r1.status).toBe(200);
+
+    await db.query(
+      `UPDATE verification_codes
+       SET created_at = NOW() - INTERVAL '61 seconds'
+       WHERE LOWER(email) = LOWER($1)`,
+      [email]
+    );
+
     const r2 = await request(app).post('/api/verification/send-code').send({ email });
     expect(r2.status).toBe(200);
 

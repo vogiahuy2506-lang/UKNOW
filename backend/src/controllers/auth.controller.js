@@ -299,7 +299,7 @@ class AuthController {
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until
          FROM users
-         WHERE email = $1`,
+         WHERE LOWER(email) = LOWER($1)`,
         [email]
       );
 

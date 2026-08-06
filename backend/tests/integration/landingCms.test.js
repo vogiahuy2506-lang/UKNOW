@@ -767,14 +767,12 @@ describe('POST /api/public/leads', () => {
     expect(res.body.message).toMatch(/đồng ý/i);
   });
 
-  it('happy path không có slug → 201, lead có id_user=1 (default), KHÔNG ghi submit event', async () => {
+  it('happy path không có slug → 400, không fallback id_user=1', async () => {
     const res = await request(app).post('/api/public/leads').send(baseLead);
-    expect(res.status).toBe(201);
-    expect(res.body.data.id).toBeTruthy();
-    const lead = await db.query(`SELECT id_user FROM leads WHERE id = $1`, [res.body.data.id]);
-    expect(Number(lead.rows[0].id_user)).toBe(1);
-    const evt = await db.query(`SELECT 1 FROM landing_page_events WHERE event_type = 'submit'`);
-    expect(evt.rows).toHaveLength(0);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/trang đích|landing/i);
+    const leads = await db.query(`SELECT 1 FROM leads WHERE email = $1`, [baseLead.email]);
+    expect(leads.rows).toHaveLength(0);
   });
 
   it('có landingPageSlug đã publish → 201 + lead.id_user = chủ landing + ghi submit event', async () => {
@@ -798,14 +796,17 @@ describe('POST /api/public/leads', () => {
     expect(evt.rows[0].utm_source).toBe('fb');
   });
 
-  it('landingPageSlug chưa publish → 201 nhưng id_user fallback về 1 (admin)', async () => {
+  it('landingPageSlug chưa publish → 400, không fallback id_user=1', async () => {
     const owner = await createUser({ username: 'lead-owner-draft' });
     await insertLandingPage({ idUser: owner.id, slug: 'draft-lead', isPublished: false });
     const res = await request(app)
       .post('/api/public/leads')
       .send({ ...baseLead, landingPageSlug: 'draft-lead' });
-    expect(res.status).toBe(201);
-    const lead = await db.query(`SELECT id_user FROM leads WHERE id = $1`, [res.body.data.id]);
-    expect(Number(lead.rows[0].id_user)).toBe(1);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/trang đích|landing/i);
+    const leads = await db.query(
+      `SELECT 1 FROM leads WHERE landing_page_slug = 'draft-lead'`
+    );
+    expect(leads.rows).toHaveLength(0);
   });
 });

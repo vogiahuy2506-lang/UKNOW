@@ -269,6 +269,16 @@ class VerificationService {
   }
 
   async sendVerification(userId, email, type = 'email_verification') {
+    const cooldown = await verificationRepository.getSendCooldown(email, type, 60);
+    if (cooldown.blocked) {
+      const err = new Error(
+        `Vui lòng đợi ${cooldown.retryAfterSec} giây trước khi gửi lại mã xác minh`
+      );
+      err.status = 429;
+      err.code = 'VERIFICATION_COOLDOWN';
+      err.retryAfterSec = cooldown.retryAfterSec;
+      throw err;
+    }
     const code = this.generateCode();
     await this.saveVerificationCode(email, code, type);
     await this.sendVerificationEmail(email, code);

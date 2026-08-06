@@ -1,9 +1,10 @@
 import express from 'express';
 import db from '../config/database.js';
+import { publicLeadLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/', publicLeadLimiter, async (req, res) => {
   try {
     const { lastName, firstName, email, phone, marketingConsent, landingPageSlug, utmSource, utmCampaign } = req.body;
 
@@ -24,27 +25,37 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bạn cần đồng ý nhận email marketing' });
     }
 
-    let idUser = 1;
-    if (landingPageSlug) {
-      const { rows: landingRows } = await db.query(
-        `SELECT id_user FROM landing_pages WHERE slug = $1 AND is_published = true`,
-        [landingPageSlug]
-      );
-      if (landingRows[0]) {
-        idUser = landingRows[0].id_user;
-        await db.query(
-          `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)
-           VALUES ((SELECT id FROM landing_pages WHERE slug = $1), $1, 'submit', $2, $3)`,
-          [landingPageSlug, utmSource || null, utmCampaign || null]
-        );
-      }
+    const slug = typeof landingPageSlug === 'string' ? landingPageSlug.trim() : '';
+    if (!slug) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu trang đích hợp lệ để ghi nhận lead',
+      });
     }
+
+    const { rows: landingRows } = await db.query(
+      `SELECT id, id_user FROM landing_pages WHERE slug = $1 AND is_published = true`,
+      [slug]
+    );
+    if (!landingRows[0]?.id_user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy landing page',
+      });
+    }
+
+    const idUser = landingRows[0].id_user;
+    await db.query(
+      `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)
+       VALUES ($1, $2, 'submit', $3, $4)`,
+      [landingRows[0].id, slug, utmSource || null, utmCampaign || null]
+    );
 
     const { rows } = await db.query(
       `INSERT INTO leads (id_user, last_name, first_name, email, phone, marketing_consent, landing_page_slug, utm_source, utm_campaign)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [idUser, lastName, firstName, email, phone, marketingConsent, landingPageSlug || null, utmSource || null, utmCampaign || null]
+      [idUser, lastName, firstName, email, phone, marketingConsent, slug, utmSource || null, utmCampaign || null]
     );
 
     return res.status(201).json({ success: true, data: rows[0] });

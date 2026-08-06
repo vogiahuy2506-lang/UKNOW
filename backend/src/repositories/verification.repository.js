@@ -18,6 +18,26 @@ class VerificationRepository {
     return result.rows[0];
   }
 
+  /**
+   * Cooldown gửi mã theo email (mặc định 60s).
+   * @returns {Promise<{ blocked: boolean, retryAfterSec?: number }>}
+   */
+  async getSendCooldown(email, type = 'email_verification', cooldownSeconds = 60) {
+    const { rows } = await db.query(
+      `SELECT EXTRACT(EPOCH FROM (created_at + ($3 || ' seconds')::interval - NOW()))::int AS retry_after
+       FROM verification_codes
+       WHERE LOWER(email) = LOWER($1) AND type = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [email, type, cooldownSeconds]
+    );
+    const retryAfter = Number(rows[0]?.retry_after);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      return { blocked: true, retryAfterSec: retryAfter };
+    }
+    return { blocked: false };
+  }
+
   async findValidCode({ email, code, type }) {
     const result = await db.query(
       `SELECT * FROM verification_codes
@@ -47,7 +67,7 @@ class VerificationRepository {
 
   async userExistsByEmail(email) {
     const result = await db.query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
     return result.rows.length > 0;

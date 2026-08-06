@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import landingCustomizerService from '../services/landingCustomizer.service.js';
+import { publicLeadLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -61,7 +62,7 @@ router.get('/landing-overrides/:page', async (req, res) => {
   }
 });
 
-router.post('/leads', async (req, res) => {
+router.post('/leads', publicLeadLimiter, async (req, res) => {
   try {
     const { lastName, firstName, email, phone, marketingConsent, landingPageSlug, utmSource, utmCampaign } = req.body;
 
@@ -82,7 +83,7 @@ router.post('/leads', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bạn cần đồng ý nhận email marketing' });
     }
 
-    let idUser = 1;
+    let idUser = null;
     if (landingPageSlug) {
       const { rows: landingRows } = await db.query(
         `SELECT id_user FROM landing_pages WHERE slug = $1 AND is_published = true`,
@@ -96,6 +97,13 @@ router.post('/leads', async (req, res) => {
           [landingPageSlug, utmSource || null, utmCampaign || null]
         );
       }
+    }
+
+    if (!idUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu trang đích hợp lệ để ghi nhận lead',
+      });
     }
 
     const { rows } = await db.query(
