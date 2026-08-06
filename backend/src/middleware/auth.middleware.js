@@ -14,16 +14,19 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
   let userResult;
   try {
     userResult = await db.query(
-      `SELECT id, username, email, password_hash, full_name, avatar_url, status, role, active_plan_id,
-              subscription_expires_at, must_change_password
-       FROM users
-       WHERE id = $1 AND status IN ('active', 'pending_activation')`,
+      `SELECT u.id, u.username, u.email, u.password_hash, u.full_name, u.avatar_url, u.status, u.role,
+              u.active_plan_id, u.subscription_expires_at, u.must_change_password,
+              COALESCE(p.grace_period_days, 0)::int AS grace_period_days
+       FROM users u
+       LEFT JOIN plans p ON p.id = u.active_plan_id
+       WHERE u.id = $1 AND u.status IN ('active', 'pending_activation')`,
       [userId]
     );
   } catch {
     userResult = await db.query(
       `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
-              NULL AS subscription_expires_at, FALSE AS must_change_password
+              NULL AS subscription_expires_at, FALSE AS must_change_password,
+              0 AS grace_period_days
        FROM users
        WHERE id = $1 AND status IN ('active', 'pending_activation')`,
       [userId]
@@ -42,9 +45,11 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
   if (ownerContextId != null && ownerContextId !== '') {
     const memberResult = await db.query(
       `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
-              u.subscription_expires_at AS "ownerPlanExpiry"
+              u.subscription_expires_at AS "ownerPlanExpiry",
+              COALESCE(p.grace_period_days, 0)::int AS "ownerGraceDays"
        FROM user_members um
        JOIN users u ON u.id = um.owner_id
+       LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'`,
       [user.id, ownerContextId]
     );
@@ -67,12 +72,14 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
       permissions: member.permissions,
       contextPlanId: member.ownerPlanId,
       contextPlanExpiry: member.ownerPlanExpiry,
+      contextGraceDays: Number(member.ownerGraceDays) || 0,
     };
   } else {
     user.activeContext = {
       type: 'self',
       contextPlanId: user.active_plan_id,
       contextPlanExpiry: user.subscription_expires_at,
+      contextGraceDays: Number(user.grace_period_days) || 0,
     };
   }
 

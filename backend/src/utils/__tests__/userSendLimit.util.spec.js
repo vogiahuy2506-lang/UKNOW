@@ -85,11 +85,12 @@ describe('userSendLimit.util', () => {
       expect(mockResolveBillingUserId).not.toHaveBeenCalled();
     });
 
-    it('không có plan (join trả rỗng) → không giới hạn', async () => {
+    it('không có plan (join trả rỗng) → từ chối gửi', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       const result = await checkUserEmailSendLimit({ userId: 10 });
-      expect(result.allowed).toBe(true);
+      expect(result.allowed).toBe(false);
       expect(result.limit).toBeNull();
+      expect(result.message).toMatch(/chưa có gói/i);
     });
 
     it('plan có daily_email_limit = null → không giới hạn theo ngày, kiểm tra tháng', async () => {
@@ -210,9 +211,9 @@ describe('userSendLimit.util', () => {
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
-    it('không có plan → không giới hạn', async () => {
+    it('không có plan → từ chối gửi', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
-      expect((await checkUserZaloSendLimit({ userId: 10 })).allowed).toBe(true);
+      expect((await checkUserZaloSendLimit({ userId: 10 })).allowed).toBe(false);
     });
 
     it('vượt daily_zalo_limit → chặn', async () => {

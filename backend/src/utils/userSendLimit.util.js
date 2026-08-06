@@ -12,11 +12,15 @@ import {
 const SUBSCRIPTION_EXPIRED_MSG =
   'Gói đã hết hạn (đã qua thời gian ân hạn). Vui lòng gia hạn để tiếp tục gửi.';
 
+const NO_PLAN_MSG =
+  'Tài khoản chưa có gói dịch vụ. Vui lòng đăng ký gói để tiếp tục gửi.';
+
 const PERIOD_LIMIT_MSG = (count, limit) =>
   `Đã đạt tổng hạn mức tin nhắn trong kỳ (${count}/${limit}). Hạn mức reset khi sang kỳ mới.`;
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-const QUOTA_COUNT_CACHE_TTL_MS = Number.parseInt(process.env.QUOTA_COUNT_CACHE_TTL_MS, 10) || 10_000;
+// TTL thấp để giảm vượt hạn mức do check-then-act (P1-12). Override bằng env nếu cần.
+const QUOTA_COUNT_CACHE_TTL_MS = Number.parseInt(process.env.QUOTA_COUNT_CACHE_TTL_MS, 10) || 1_000;
 
 /** @type {Map<string, { value: any, expiresAt: number }>} */
 const quotaCache = new Map();
@@ -291,7 +295,15 @@ export async function checkSendQuota({
 
   const limits = await getUserPlanSendLimits(billingUserId);
   if (!limits) {
-    return okResult(billingUserId);
+    // Không có plan join được → không cho gửi (defense-in-depth sau requireActivePlan).
+    return denyResult({
+      limitType: 'no_plan',
+      limit: null,
+      currentCount: 0,
+      resetAt: null,
+      message: NO_PLAN_MSG,
+      billingUserId,
+    });
   }
 
   const isEmail = channel === 'email';

@@ -58,6 +58,7 @@ export function requireRole(...roles) {
  * - superadmin      : bypass (không cần plan).
  * - employee context: kiểm tra plan của owner (contextPlanId từ auth middleware).
  * - self context    : kiểm tra plan của chính user.
+ * - Hết hạn: chặn khi đã qua subscription_expires_at + grace_period_days.
  */
 export function requireActivePlan(req, res, next) {
   const { role, activeContext } = req.user || {};
@@ -76,6 +77,25 @@ export function requireActivePlan(req, res, next) {
         : 'Bạn cần đăng ký gói dịch vụ để sử dụng tính năng này',
       code: 'NO_ACTIVE_PLAN',
     });
+  }
+
+  const expiryRaw = activeContext?.contextPlanExpiry ?? null;
+  if (expiryRaw) {
+    const expiresAt = new Date(expiryRaw);
+    if (!Number.isNaN(expiresAt.getTime())) {
+      const graceDays = Number(activeContext?.contextGraceDays) || 0;
+      const graceUntil = new Date(expiresAt);
+      graceUntil.setUTCDate(graceUntil.getUTCDate() + graceDays);
+      if (Date.now() > graceUntil.getTime()) {
+        return res.status(403).json({
+          success: false,
+          message: isEmployeeContext(activeContext)
+            ? 'Gói dịch vụ của chủ tài khoản đã hết hạn'
+            : 'Gói dịch vụ của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục sử dụng',
+          code: 'PLAN_EXPIRED',
+        });
+      }
+    }
   }
 
   return next();
