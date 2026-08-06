@@ -1,10 +1,17 @@
 /**
- * Expected core-schema facts — khớp production sau PLAN_SCHEMA_BUOC2
- * (Loại B/C: DB đúng; Loại A vá bằng migration 107).
+ * Expected core-schema facts — mô tả hình dạng thật của schema production.
  *
- * Shared by integration tests and `scripts/checkCoreSchema.js`.
+ * Sinh ra từ đợt rà lệch schema 08/2026: mở rộng `check:schema` để so kiểu,
+ * NOT NULL, CHECK, khoá ngoại và UNIQUE (trước đó chỉ kiểm cột có tồn tại — lý do
+ * ba vụ lệch sống sót nhiều tháng). Chạy trên production ra 21 điểm lệch, phân
+ * làm ba loại:
+ *   - Loại A (11) — DB sai, vá bằng migration 107
+ *   - Loại B/C (10) — DB đúng, kỳ vọng trong file này sai → sửa kỳ vọng
  *
- * @see _internal/PLAN_SCHEMA_BUOC2.md
+ * Giá trị lớn nhất không phải 21 điểm đã vá, mà là cổng gác nay bắt được lệch
+ * TƯƠNG LAI. Thêm cột/ràng buộc mới thì cập nhật file này cùng lúc với migration.
+ *
+ * Dùng chung bởi integration tests và `scripts/checkCoreSchema.js`.
  */
 
 /** @typedef {{ udt: string, nullable: boolean, maxLen?: number|null }} ExpectedColumn */

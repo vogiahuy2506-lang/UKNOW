@@ -1,6 +1,11 @@
 /**
  * Helpers hiển thị mua thêm (top-up) — thuần, không I/O.
- * @see _internal/PLAN_HIEN_THI_MUA_THEM.md
+ *
+ * Nguyên tắc: phần mua thêm KHÔNG cộng vào hạn mức gói. Hồ sơ trả `addons` riêng
+ * để người dùng thấy được đâu là gói, đâu là phần mua thêm. Riêng tầng gửi tin thì
+ * vẫn cộng cả hai (`userSendLimit.util.js`) — nên khách gửi vượt hạn mức gói nhờ
+ * phần mua thêm sẽ thấy thanh hạn mức đỏ dù vẫn gửi được. Đây là hạn chế đã biết:
+ * số "đã dùng" là tổng gộp, tầng gửi không lưu tin nào trừ vào đâu.
  */
 
 /**
