@@ -20,6 +20,7 @@ import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZalo
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import sseService from '../sse.service.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
+import { isZaloAccountChatbotEnabled } from '../../utils/zaloAccountChatbotGate.util.js';
 import {
   drainPendingAccounts,
   markAccountRegistered,
@@ -483,25 +484,17 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Unified chatbot settings — single enable gate (account then main)
+      // Unified chatbot settings — account-level is the sole enable gate
       const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
 
-      const isAccountEnabled = accountSettings?.is_enabled;
-      const isMainEnabled = chatbotSettings?.is_enabled;
-      
-      if (isAccountEnabled === false) {
-        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId}`);
-        return;
-      }
-      
-      if (isAccountEnabled !== true && isMainEnabled !== true) {
-        console.log(`[ZaloInbox] AI chatbot disabled for account ${zaloSettingId} (main=${isMainEnabled}, account=${isAccountEnabled})`);
+      // Không có dòng / chưa bật cho tài khoản này = TẮT (không fallback cấp kênh)
+      if (!isZaloAccountChatbotEnabled(accountSettings)) {
+        console.log(`[ZaloInbox] AI chatbot chưa bật cho account ${zaloSettingId}`);
         return;
       }
 
-      const resumeMinutes = Number.parseInt(process.env.CHATBOT_HANDOFF_RESUME_MINUTES || '30', 10);
-      if (await zaloPersonalRepository.isAiPaused(conversation.id, resumeMinutes)) {
+      if (await zaloPersonalRepository.isAiPaused(conversation.id)) {
         console.log(`[ZaloInbox] AI paused for conversation ${conversation.id} (handoff)`);
         return;
       }

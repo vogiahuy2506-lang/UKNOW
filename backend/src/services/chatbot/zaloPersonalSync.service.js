@@ -138,7 +138,17 @@ class ZaloPersonalSyncService {
       }));
 
       const persisted = await this.persistGroups(accountId, resolvedGroups);
-      const conversationsUpdated = await this.backfillGroupConversationNames(accountId, resolvedGroups);
+
+      // Đặt tên hội thoại là phụ trợ — không được kéo sập syncGroups / syncAllGroupHistory
+      let conversationsUpdated = 0;
+      try {
+        conversationsUpdated = await this.backfillGroupConversationNames(accountId, resolvedGroups);
+      } catch (backfillErr) {
+        console.warn(
+          `[ZaloSync] backfillGroupConversationNames failed (non-fatal) account=${accountId}:`,
+          backfillErr?.message || backfillErr
+        );
+      }
 
       return {
         synced: resolvedGroups.length,
@@ -192,7 +202,10 @@ class ZaloPersonalSyncService {
 
       const result = await db.query(
         `UPDATE zalo_personal_conversations
-         SET visitor_name = $3,
+         -- $3 phải ép kiểu text ở CẢ HAI chỗ: visitor_name là varchar(255) nên
+         -- Postgres suy ra varchar, còn to_jsonb($3::text) suy ra text → xung đột
+         -- "inconsistent types deduced for parameter $3" và chết cả syncGroups.
+         SET visitor_name = $3::text,
              visitor_info = jsonb_set(
                COALESCE(visitor_info::jsonb, '{}'::jsonb),
                '{group_name}',

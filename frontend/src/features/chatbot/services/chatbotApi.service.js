@@ -126,18 +126,24 @@ const chatbotApiService = {
   },
 
   // Sync all (contacts + groups)
-  syncZaloAll() {
-    return api.get('/ai/chatbot/zalo-personal/sync');
+  syncZaloAll(accountId) {
+    return api.get('/ai/chatbot/zalo-personal/sync', {
+      params: accountId != null ? { accountId } : undefined,
+    });
   },
 
   // Sync contacts only
-  syncZaloContacts() {
-    return api.get('/ai/chatbot/zalo-personal/sync/contacts');
+  syncZaloContacts(accountId) {
+    return api.get('/ai/chatbot/zalo-personal/sync/contacts', {
+      params: accountId != null ? { accountId } : undefined,
+    });
   },
 
   // Sync groups only
-  syncZaloGroups() {
-    return api.get('/ai/chatbot/zalo-personal/sync/groups');
+  syncZaloGroups(accountId) {
+    return api.get('/ai/chatbot/zalo-personal/sync/groups', {
+      params: accountId != null ? { accountId } : undefined,
+    });
   },
 
   // Sync chat history for a specific conversation
@@ -147,12 +153,18 @@ const chatbotApiService = {
       isGroup,
       limit: options.limit || 50,
       beforeMsgId: options.beforeMsgId,
+      accountId: options.accountId,
     });
   },
 
   // Sync all group histories
-  syncZaloAllGroupHistory(limit = 50) {
-    return api.post(`/ai/chatbot/zalo-personal/sync/group-history?limit=${limit}`);
+  syncZaloAllGroupHistory(limit = 50, accountId = null) {
+    return api.post('/ai/chatbot/zalo-personal/sync/group-history', null, {
+      params: {
+        limit,
+        ...(accountId != null ? { accountId } : {}),
+      },
+    });
   },
 
   // Get chat history from DB for AI context

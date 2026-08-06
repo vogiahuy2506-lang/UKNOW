@@ -669,36 +669,71 @@ const InboxPage = () => {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const nextPaused = !selectedConversation.aiPaused;
-                    await chatbotApi.setConversationAiPaused(
-                      selectedConversation.id,
-                      selectedConversation.type || 'zalo_personal',
-                      nextPaused
-                    );
-                    setSelectedConversation((prev) => prev ? { ...prev, aiPaused: nextPaused } : prev);
-                    setConversations((prev) => prev.map((c) =>
-                      c.id === selectedConversation.id && c.type === selectedConversation.type
-                        ? { ...c, aiPaused: nextPaused }
-                        : c
-                    ));
-                    toast.success(nextPaused ? t('inbox.takeOver') : t('inbox.resumeAi'));
-                  } catch (err) {
-                    toast.error(err?.response?.data?.message || err.message);
-                  }
-                }}
-                className={`px-3 py-2 text-sm rounded-xl transition-all ${
-                  selectedConversation.aiPaused
-                    ? 'text-primary-700 bg-primary-50 hover:bg-primary-100'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-                title={selectedConversation.aiPaused ? t('inbox.resumeAi') : t('inbox.takeOver')}
-              >
-                {selectedConversation.aiPaused ? t('inbox.resumeAi') : t('inbox.takeOver')}
-              </button>
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm text-right leading-tight ${
+                    selectedConversation.chatbotEnabled === false
+                      ? 'text-gray-400'
+                      : 'text-gray-700'
+                  }`}>
+                    {t('inbox.aiToggleLabel')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused}
+                    disabled={selectedConversation.chatbotEnabled === false}
+                    onClick={async () => {
+                      if (selectedConversation.chatbotEnabled === false) return;
+                      try {
+                        const nextPaused = !selectedConversation.aiPaused;
+                        await chatbotApi.setConversationAiPaused(
+                          selectedConversation.id,
+                          selectedConversation.type || 'zalo_personal',
+                          nextPaused
+                        );
+                        setSelectedConversation((prev) => prev ? { ...prev, aiPaused: nextPaused } : prev);
+                        setConversations((prev) => prev.map((c) =>
+                          c.id === selectedConversation.id && c.type === selectedConversation.type
+                            ? { ...c, aiPaused: nextPaused }
+                            : c
+                        ));
+                      } catch (err) {
+                        toast.error(err?.response?.data?.message || err.message);
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                        ? 'bg-primary-600'
+                        : 'bg-slate-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                  {selectedConversation.chatbotEnabled === false ? (
+                    <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                      {t('inbox.aiToggleDisabledHint')}{' '}
+                      <button
+                        type="button"
+                        className="underline font-medium"
+                        onClick={() => window.open('/app/chatbot-studio', '_blank')}
+                      >
+                        {t('inbox.openDeployModal')}
+                      </button>
+                    </p>
+                  ) : selectedConversation.aiPaused ? (
+                    <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">
+                      {t('inbox.aiToggleManualHint')}
+                    </p>
+                  ) : null}
+              </div>
 
               <button
                 onClick={() => {
@@ -760,7 +795,9 @@ const InboxPage = () => {
                 {t('inbox.selectConversation')}
               </h2>
               <p className="text-gray-500 leading-relaxed">
-                {t('inbox.noConversations')}
+                {conversations.length === 0
+                  ? (t('inbox.emptyInboxHint') || t('inbox.noConversations'))
+                  : t('inbox.noConversations')}
               </p>
               {filters.channel === 'zalo_personal' && !sessionStatus.connected && (
                 <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">

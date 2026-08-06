@@ -629,7 +629,7 @@ export default function LearningPage() {
                 Đăng Ký Ngay
               </button>
             </div>
-            <p className="mt-6 text-orange-200 text-sm font-medium">Hỗ trợ thanh toán trả góp 0% qua thẻ tín dụng</p>
+            <p className="mt-6 text-orange-200 text-sm font-medium">Thanh toán nhanh bằng quét mã QR</p>
           </AnimatedSection>
         </div>
       </div>

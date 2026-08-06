@@ -227,21 +227,12 @@ class ZaloPersonalRepository {
     );
   }
 
-  async isAiPaused(conversationId, resumeMinutes = 30) {
+  async isAiPaused(conversationId) {
     const { rows } = await db.query(
-      `SELECT ai_paused, ai_paused_at FROM zalo_personal_conversations WHERE id = $1`,
+      `SELECT ai_paused FROM zalo_personal_conversations WHERE id = $1`,
       [conversationId]
     );
-    const row = rows[0];
-    if (!row?.ai_paused) return false;
-    if (!resumeMinutes || resumeMinutes <= 0) return true;
-    if (!row.ai_paused_at) return true;
-    const elapsedMin = (Date.now() - new Date(row.ai_paused_at).getTime()) / 60000;
-    if (elapsedMin >= resumeMinutes) {
-      await this.setAiPaused(conversationId, false);
-      return false;
-    }
-    return true;
+    return rows[0]?.ai_paused === true;
   }
 
   /**

@@ -719,14 +719,10 @@ class UnifiedInboxRepository {
 
   /**
    * Whether AI auto-reply is paused for this conversation (owner handoff).
-   * Auto-resumes after CHATBOT_HANDOFF_RESUME_MINUTES (default 30; 0 = never).
+   * Pause stays until the owner explicitly resumes — no timed auto-resume.
    */
-  async isAiPaused(conversationId, conversationType, resumeMinutes = null) {
+  async isAiPaused(conversationId, conversationType) {
     if (!conversationId) return false;
-    const minutes = resumeMinutes ?? Number.parseInt(
-      process.env.CHATBOT_HANDOFF_RESUME_MINUTES || '30',
-      10
-    );
     const table =
       conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
         : conversationType === 'webchat' ? 'webchat_conversations'
@@ -734,19 +730,10 @@ class UnifiedInboxRepository {
 
     try {
       const { rows } = await db.query(
-        `SELECT ai_paused, ai_paused_at FROM ${table} WHERE id = $1`,
+        `SELECT ai_paused FROM ${table} WHERE id = $1`,
         [conversationId]
       );
-      const row = rows[0];
-      if (!row?.ai_paused) return false;
-      if (!Number.isFinite(minutes) || minutes <= 0) return true;
-      if (!row.ai_paused_at) return true;
-      const elapsedMin = (Date.now() - new Date(row.ai_paused_at).getTime()) / 60000;
-      if (elapsedMin >= minutes) {
-        await this.setAiPaused(conversationId, conversationType, false);
-        return false;
-      }
-      return true;
+      return rows[0]?.ai_paused === true;
     } catch (err) {
       // Column missing (migration not applied yet) — do not block AI.
       console.warn('[UnifiedInbox] isAiPaused check failed:', err.message);

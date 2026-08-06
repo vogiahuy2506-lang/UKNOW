@@ -1,5 +1,6 @@
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
+import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
@@ -8,15 +9,42 @@ import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js
 
 class UnifiedInboxService {
   /**
+   * Map id_zalo_setting → is_enabled for a user (single query, no N+1).
+   */
+  async _loadZaloAccountChatbotEnabledMap(userId) {
+    const rows = await chatbotZaloAccountRepository.getAllSettingsForUser(userId);
+    const map = new Map();
+    for (const row of rows) {
+      map.set(Number(row.id_zalo_setting), row.is_enabled === true);
+    }
+    return map;
+  }
+
+  /**
+   * Resolve chatbotEnabled for one conversation type.
+   * zalo_personal: account-level only (missing row = false).
+   * Other channels: true for now (no per-account gate change).
+   */
+  _resolveChatbotEnabled(conversation, zaloEnabledMap) {
+    if (conversation.type === 'zalo_personal' || conversation.channel === 'zalo_personal') {
+      const settingId = Number(conversation.idZaloSetting || conversation.id_zalo_setting);
+      if (!Number.isFinite(settingId)) return false;
+      return zaloEnabledMap.get(settingId) === true;
+    }
+    return true;
+  }
+
+  /**
    * Get all conversations with pagination and filters
    */
   async getConversations(userId, filters = {}) {
     console.log('[UnifiedInboxService] getConversations called:', { userId, filters });
 
-    const [conversations, total, unreadByChannel] = await Promise.all([
+    const [conversations, total, unreadByChannel, zaloEnabledMap] = await Promise.all([
       unifiedInboxRepository.getConversations(userId, filters),
       unifiedInboxRepository.getConversationsCount(userId, filters),
       unifiedInboxRepository.getUnreadCountByChannel(userId),
+      this._loadZaloAccountChatbotEnabledMap(userId),
     ]);
 
     const formattedConversations = conversations.map(conv => ({
@@ -27,7 +55,6 @@ class UnifiedInboxService {
       externalId: conv.externalId,
       visitorName: conv.visitorName,
       visitorInfo: conv.visitorInfo,
-      // Add group info for zalo_personal
       isGroup: conv.isGroup || false,
       groupId: conv.groupId || null,
       groupName: conv.groupName || null,
@@ -36,6 +63,9 @@ class UnifiedInboxService {
       startedAt: conv.startedAt,
       lastMessageAt: conv.lastMessageAt,
       status: conv.status,
+      aiPaused: conv.aiPaused === true,
+      chatbotEnabled: this._resolveChatbotEnabled(conv, zaloEnabledMap),
+      idZaloSetting: conv.idZaloSetting || null,
     }));
 
     // Build unread summary
@@ -90,6 +120,17 @@ class UnifiedInboxService {
       });
     }
 
+    let chatbotEnabled = true;
+    if (conversationType === 'zalo_personal') {
+      const zaloSettingId = conversation.id_zalo_setting;
+      if (zaloSettingId) {
+        const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+        chatbotEnabled = accountSettings?.is_enabled === true;
+      } else {
+        chatbotEnabled = false;
+      }
+    }
+
     return {
       id: conversation.id,
       type: conversationType,
@@ -105,6 +146,8 @@ class UnifiedInboxService {
       lastMessageAt: conversation.last_message_at,
       status: conversation.status,
       aiPaused: conversation.ai_paused === true,
+      chatbotEnabled,
+      idZaloSetting: conversation.id_zalo_setting || null,
     };
   }
 
