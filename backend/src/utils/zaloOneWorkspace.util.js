@@ -1,6 +1,6 @@
 /**
- * Mỗi số Zalo (zalo_user_id) chỉ được 1 kết nối sống trên toàn hệ thống.
- * @see _internal/PLAN_ZALO_MOT_WORKSPACE.md
+ * Mỗi số Zalo (zalo_user_id) chỉ được có MỘT kết nối còn sống trên toàn hệ thống.
+ * Kết nối đã ngắt / đã tắt không tính, để khách chuyển workspace được.
  */
 
 export const ZALO_LIVE_ELSEWHERE_CODE = 'ZALO_LIVE_ELSEWHERE';
