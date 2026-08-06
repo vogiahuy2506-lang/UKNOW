@@ -722,7 +722,16 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],
           ['maxChatbots',           'Số chatbot tối đa'],
           ['aiCreditsPerPeriod',    'Credit AI / kỳ (số lượt nhờ AI)'],
-          ['aiTokensPerPeriod',    'Token AI / kỳ (hạn mức token tiêu thụ — admin)'],
+          // Ô "Token AI / kỳ" đã ẩn 06/08/2026. `ai_tokens_per_period` KHÔNG chặn và
+          // KHÔNG cảnh báo: grep toàn backend thì nó chỉ làm mẫu số cho cột
+          // quotaUsagePctAtP90 ở trang Phân tích chi phí AI (aiUsage.service.js:255).
+          // Quy tắc cảnh báo token duy nhất (metricAiTokenSpike) so hôm nay với trung
+          // bình 7 ngày, không đọc cột này.
+          //
+          // Ẩn vì hỏi sai chỗ: lúc TẠO gói chưa có dữ liệu nào để chọn con số, nên ô
+          // luôn trống → cột phần trăm luôn gạch ngang → tính năng coi như không có.
+          // Nếu sau này cần hiệu chỉnh giá, đưa ô này vào chính trang Phân tích chi phí
+          // AI, cạnh số liệu thật. Cột DB và cột báo cáo giữ nguyên.
         ].map(([key, label]) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
