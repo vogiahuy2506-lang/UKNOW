@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import {
-  createLegacyEmployee,
   findLegacyEmployees,
   findPasswordHashByUserId,
   findProfileBase,
@@ -13,6 +12,7 @@ import {
   findSuccessfulOrdersForUser,
   findUserByEmailExceptId,
   resetLegacyEmployeePassword,
+  revokeAllRefreshTokensForUser,
   updateLegacyEmployeeLimits,
   updateLegacyEmployeeStatus,
   updatePasswordHash,
@@ -20,7 +20,7 @@ import {
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
-import { DEFAULT_EMPLOYEE_PASSWORD, generateTempPassword } from '../services/user/employee.service.js';
+import { generateTempPassword } from '../services/user/employee.service.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import {
   buildAddonsPayload,
@@ -365,6 +365,7 @@ class UserController {
 
       // Cập nhật mật khẩu
       await updatePasswordHash(userId, newPasswordHash);
+      await revokeAllRefreshTokensForUser(userId, 'password_changed');
 
       res.json({
         success: true,
@@ -425,75 +426,6 @@ class UserController {
       });
     } catch (error) {
       console.error('Get employees error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * Tạo tài khoản nhân viên (chỉ dành cho admin).
-   *
-   * Luồng hoạt động:
-   * 1. Kiểm tra trùng username/email.
-   * 2. Lấy role employee từ bảng roles.
-   * 3. Dùng mật khẩu mặc định của hệ thống để hash và tạo user mới.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async createEmployee(req, res) {
-    try {
-      const { username, email, fullName, phone } = req.body;
-
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
-      const createResult = await createLegacyEmployee({
-        username,
-        email,
-        passwordHash,
-        fullName,
-        phone,
-      });
-
-      if (createResult.status === 'duplicate') {
-        return res.status(400).json({
-          success: false,
-          message: 'Username hoặc email đã tồn tại',
-        });
-      }
-
-      if (createResult.status === 'missing_role') {
-        return res.status(400).json({
-          success: false,
-          message: 'Hệ thống chưa cấu hình role nhân viên. Vui lòng chạy migration role trước.',
-        });
-      }
-
-      const employee = createResult.employee;
-      return res.status(201).json({
-        success: true,
-        message: `Tạo tài khoản nhân viên thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
-        data: {
-          id: employee.id,
-          username: employee.username,
-          email: employee.email,
-          fullName: employee.full_name,
-          phone: employee.phone,
-          status: employee.status,
-          roleCode: 'employee',
-          roleName: 'Nhân viên',
-          maxCampaigns: null,
-          maxZaloAccounts: null,
-          maxEmailAccounts: null,
-          maxEmailTemplates: null,
-          maxZaloTemplates: null,
-          maxLandingPages: null,
-          createdAt: employee.created_at,
-        },
-      });
-    } catch (error) {
-      console.error('Create employee error:', error);
       return res.status(500).json({
         success: false,
         message: 'Lỗi server',

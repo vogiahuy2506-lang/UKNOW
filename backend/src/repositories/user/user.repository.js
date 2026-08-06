@@ -218,6 +218,20 @@ export async function updatePasswordHash(userId, passwordHash) {
   );
 }
 
+/**
+ * Thu hồi mọi refresh token còn hiệu lực của user (đổi/reset mật khẩu).
+ * @param {number|string} userId
+ * @param {string} [reason='password_changed']
+ */
+export async function revokeAllRefreshTokensForUser(userId, reason = 'password_changed') {
+  await db.query(
+    `UPDATE refresh_tokens
+     SET is_revoked = TRUE, revoked_at = NOW(), revoked_reason = $2
+     WHERE id_user = $1 AND is_revoked = FALSE`,
+    [userId, reason]
+  );
+}
+
 export async function findLegacyEmployees({ includeLimits = true } = {}) {
   const limitSelect = includeLimits
     ? 'u.max_campaigns, u.max_zalo_accounts, u.max_email_accounts, u.max_email_templates, u.max_zalo_templates, u.max_landing_pages,'
@@ -232,60 +246,6 @@ export async function findLegacyEmployees({ includeLimits = true } = {}) {
      ORDER BY u.created_at DESC, u.id DESC`
   );
   return rows;
-}
-
-export async function createLegacyEmployee({ username, email, passwordHash, fullName, phone }) {
-  const client = await db.getClient();
-  try {
-    await client.query('BEGIN');
-
-    const existingUserResult = await client.query(
-      `SELECT id
-       FROM users
-       WHERE username = $1 OR email = $2
-       LIMIT 1`,
-      [username, email]
-    );
-    if (existingUserResult.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return { status: 'duplicate' };
-    }
-
-    const employeeRoleResult = await client.query(
-      `SELECT id
-       FROM roles
-       WHERE role_code = 'employee'
-       LIMIT 1`
-    );
-    if (employeeRoleResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { status: 'missing_role' };
-    }
-
-    const createResult = await client.query(
-      `INSERT INTO users (
-        username, email, password_hash, full_name, phone, status, id_role, created_at, updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, 'active', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING id, username, email, full_name, phone, status, created_at`,
-      [
-        username,
-        email,
-        passwordHash,
-        fullName || null,
-        phone || null,
-        employeeRoleResult.rows[0].id,
-      ]
-    );
-
-    await client.query('COMMIT');
-    return { status: 'created', employee: createResult.rows[0] };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
 }
 
 export async function updateLegacyEmployeeStatus(employeeId, status) {

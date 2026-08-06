@@ -91,7 +91,11 @@ router.post('/forgot-password',
 router.post('/reset-password',
   [
     body('token').notEmpty().withMessage('Token không được để trống'),
-    body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+    body('password')
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu phải có ít nhất 8 ký tự')
+      .matches(/^(?=.*[a-zA-Z])(?=.*[0-9])/)
+      .withMessage('Mật khẩu phải chứa ít nhất một chữ cái và một số'),
   ],
   handleValidationErrors,
   authController.resetPassword.bind(authController)

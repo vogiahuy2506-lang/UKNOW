@@ -11,6 +11,7 @@ import {
   activateUserByEmail,
   findMembershipsByEmployeeId,
   insertRefreshToken,
+  revokeAllRefreshTokensForUser,
 } from '../repositories/user/user.repository.js';
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -554,6 +555,7 @@ class AuthController {
         return res.status(400).json({ success: false, message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa' });
       }
 
+      await revokeAllRefreshTokensForUser(updated.id, 'password_changed');
       await verificationService.markCodeAsUsed(record.id);
 
       return res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
@@ -618,6 +620,12 @@ class AuthController {
         await client.query(
           `UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2`,
           [passwordHash, userId]
+        );
+        await client.query(
+          `UPDATE refresh_tokens
+           SET is_revoked = TRUE, revoked_at = NOW(), revoked_reason = 'password_changed'
+           WHERE id_user = $1 AND is_revoked = FALSE`,
+          [userId]
         );
       } finally {
         client.release();

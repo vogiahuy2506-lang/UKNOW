@@ -36,7 +36,9 @@ const {
   createPlan,
   assignPlanToUser,
 } = await import('./helpers/db.js');
-const { DEFAULT_EMPLOYEE_PASSWORD } = await import('../../src/services/user/employee.service.js');
+
+/** Chuỗi mật khẩu cố định cũ từng hardcode — không được xuất hiện trong reset. */
+const LEGACY_HARDCODED_EMPLOYEE_PASSWORD = 'digiso@2026';
 
 let app;
 
@@ -624,7 +626,7 @@ describe('PATCH /api/employees/:id/reset-password', () => {
   // Reset là việc NỘI BỘ trong workspace: chủ shop bấm reset, đọc mật khẩu tạm cho
   // nhân viên, nhân viên đăng nhập rồi bị buộc đổi ngay. Không gửi email.
   // Mật khẩu tạm phải NGẪU NHIÊN từng lần — không dùng hằng số dùng chung
-  // (DEFAULT_EMPLOYEE_PASSWORD nằm trong repo public).
+  // (chuỗi digiso@2026 từng nằm trong repo public).
   it('trả mật khẩu tạm ngẫu nhiên + buộc đổi, không dùng hằng số dùng chung', async () => {
     const { owner, token } = await setupOwnerWithPlan();
     const emp = await createUser({ username: 'reset', role: 'user' });
@@ -641,7 +643,7 @@ describe('PATCH /api/employees/:id/reset-password', () => {
     expect(typeof tempPassword).toBe('string');
     expect(tempPassword.length).toBeGreaterThanOrEqual(8);
     // Không được là hằng số dùng chung
-    expect(tempPassword).not.toBe(DEFAULT_EMPLOYEE_PASSWORD);
+    expect(tempPassword).not.toBe(LEGACY_HARDCODED_EMPLOYEE_PASSWORD);
 
     const after = await db.query(
       `SELECT password_hash, must_change_password FROM users WHERE id = $1`,
@@ -651,7 +653,7 @@ describe('PATCH /api/employees/:id/reset-password', () => {
     // Hash trong DB khớp đúng mật khẩu tạm vừa trả về
     expect(await bcrypt.compare(tempPassword, after.rows[0].password_hash)).toBe(true);
     // Không đoán được bằng hằng số công khai
-    expect(await bcrypt.compare(DEFAULT_EMPLOYEE_PASSWORD, after.rows[0].password_hash)).toBe(false);
+    expect(await bcrypt.compare(LEGACY_HARDCODED_EMPLOYEE_PASSWORD, after.rows[0].password_hash)).toBe(false);
     // Buộc đổi ngay lần đăng nhập kế tiếp
     expect(after.rows[0].must_change_password).toBe(true);
   });

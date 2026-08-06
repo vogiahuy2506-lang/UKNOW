@@ -106,6 +106,10 @@ Push main ──► deploy-backend.yml ──► unit + integration  ──► B
 - [`backend/tests/integration/README.md`](./backend/tests/integration/README.md) — guide integration test
 - [`backend/ARCHITECTURE_REFACTOR_MAP.md`](./backend/ARCHITECTURE_REFACTOR_MAP.md) — refactor map
 
+## Vận hành quan trọng — campaign
+
+Backend campaign engine giữ state trong RAM (`activeRunIds`, rate-limit Zalo, mutex tài khoản). **Chỉ chạy 1 container/replica backend** cho luồng chạy campaign. Thêm replica thứ 2 mà chưa chuyển guard sang Redis/DB lock = gửi trùng + nhân đôi hạn mức Zalo.
+
 ## Stack
 
 - **Backend**: Node 20 (ESM), Express, PostgreSQL 16, BullMQ + Redis, JWT, Nodemailer + SendGrid, zca-js (Zalo), PayOS, Google Gemini, node-cron

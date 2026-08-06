@@ -264,7 +264,7 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
   const cooldown = status?.phoneLookupCooldown;
   const quiet = status?.quietHours;
   const quotaText = quota
-    ? `${quota.successCount}/${quota.limitPerWindow}`
+    ? `${quota.attemptCount ?? quota.successCount}/${quota.limitPerWindow}`
     : '—';
   const resetText = quota?.windowResetInMs == null
     ? 'chưa có window'

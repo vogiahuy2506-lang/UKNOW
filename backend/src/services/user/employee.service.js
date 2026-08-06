@@ -53,16 +53,6 @@ async function assertCanAddEmployee(ownerId) {
   }
 }
 
-/**
- * Mật khẩu mặc định khi TẠO tài khoản nhân viên (luồng cũ ở user.controller.js).
- * Nguồn duy nhất — không khai bản sao ở nơi khác.
- *
- * ⚠️ Chuỗi cố định này nằm trong repo public và giống nhau cho mọi tài khoản.
- * Luồng reset đã chuyển sang mật khẩu ngẫu nhiên (generateTempPassword);
- * luồng tạo mới nên làm tương tự khi có dịp.
- */
-export const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
-
 // Bỏ ký tự dễ đọc nhầm khi chủ shop đọc mật khẩu cho nhân viên: 0/O, 1/l/I.
 const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const TEMP_PASSWORD_LENGTH = 10;

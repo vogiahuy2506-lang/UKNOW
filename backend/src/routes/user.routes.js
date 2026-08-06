@@ -6,8 +6,6 @@ import { requireAdmin } from '../middleware/authorization.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 
 const router = express.Router();
-const USERNAME_REGEX = /^[A-Za-z0-9]+$/;
-
 // All routes require authentication
 router.use(authMiddleware);
 
@@ -53,8 +51,10 @@ router.put('/change-password',
       .notEmpty()
       .withMessage('Mật khẩu hiện tại không được để trống'),
     body('newPassword')
-      .isLength({ min: 6 })
-      .withMessage('Mật khẩu mới phải có ít nhất 6 ký tự')
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu mới phải có ít nhất 8 ký tự')
+      .matches(/^(?=.*[a-zA-Z])(?=.*[0-9])/)
+      .withMessage('Mật khẩu mới phải chứa ít nhất một chữ cái và một số')
   ],
   handleValidationErrors,
   userController.changePassword.bind(userController)
@@ -67,34 +67,6 @@ router.put('/change-password',
  * Response: danh sách nhân viên gồm thông tin cơ bản + trạng thái tài khoản.
  */
 router.get('/employees', requireAdmin, userController.getEmployees.bind(userController));
-
-/**
- * POST /api/users/employees
- * Mục đích: Admin tạo tài khoản nhân viên mới.
- * Input body: { username, email, fullName?, phone? }.
- * Response: thông tin nhân viên vừa tạo (mật khẩu mặc định được hệ thống tự gán).
- */
-router.post(
-  '/employees',
-  requireAdmin,
-  [
-    body('username')
-      .trim()
-      .isLength({ min: 3, max: 50 })
-      .withMessage('Tên đăng nhập phải từ 3-50 ký tự')
-      .matches(USERNAME_REGEX)
-      .withMessage('Tên đăng nhập chỉ được chứa chữ cái không dấu và số (không khoảng trắng, không ký tự đặc biệt)'),
-    body('email').trim().isEmail().withMessage('Email không hợp lệ'),
-    body('fullName')
-      .optional()
-      .trim()
-      .isLength({ max: 255 })
-      .withMessage('Họ tên không được quá 255 ký tự'),
-    body('phone').optional().trim(),
-  ],
-  handleValidationErrors,
-  userController.createEmployee.bind(userController)
-);
 
 /**
  * PATCH /api/users/employees/:id/status

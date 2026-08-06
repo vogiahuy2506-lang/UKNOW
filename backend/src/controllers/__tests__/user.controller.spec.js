@@ -11,7 +11,6 @@ const sumActiveTopupGrants = jest.fn();
 const findSuccessfulOrdersForUser = jest.fn();
 
 jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
-  createLegacyEmployee: jest.fn(),
   findLegacyEmployees: jest.fn(),
   findPasswordHashByUserId: jest.fn(),
   findProfileBase,
@@ -26,6 +25,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findSuccessfulOrdersForUser,
   findUserByEmailExceptId: jest.fn(),
   resetLegacyEmployeePassword: jest.fn(),
+  revokeAllRefreshTokensForUser: jest.fn(),
   updateLegacyEmployeeLimits: jest.fn(),
   updateLegacyEmployeeStatus: jest.fn(),
   updatePasswordHash: jest.fn(),
