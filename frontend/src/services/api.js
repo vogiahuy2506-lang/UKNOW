@@ -127,6 +127,12 @@ const getLimitReachedLabel = () => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Map server message vào Error.message để toast/UI không hiện chuỗi axios mặc định (vd. 429)
+    const serverMessage = error.response?.data?.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+      error.message = serverMessage;
+    }
+
     const originalRequest = error.config;
     const statusCode = error.response?.status;
     const requestUrl = originalRequest?.url;

@@ -136,14 +136,19 @@ export const publicChatLimiter = rateLimit({
   keyGenerator: (req) => `pubchat:${clientIpKey(req)}`,
 });
 
-// Campaign run limiter - 10 campaign executions per hour
+// Campaign run limiter — số lần /run mỗi giờ (không phải concurrent; concurrent = MAX_CONCURRENT_CAMPAIGNS)
+const CAMPAIGN_RUN_LIMIT_PER_HOUR = Math.max(
+  1,
+  Number.parseInt(process.env.CAMPAIGN_RUN_RATE_LIMIT_PER_HOUR || '30', 10) || 30
+);
+
 export const campaignRunLimiter = rateLimit({
   skip: skipInTest,
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: CAMPAIGN_RUN_LIMIT_PER_HOUR,
   message: {
     success: false,
-    message: 'Quá nhiều chiến dịch chạy cùng lúc. Vui lòng thử lại sau.',
+    message: 'Bạn chạy chiến dịch quá nhiều lần trong một giờ. Vui lòng thử lại sau.',
     code: 'CAMPAIGN_RUN_RATE_LIMIT_EXCEEDED',
   },
   standardHeaders: true,

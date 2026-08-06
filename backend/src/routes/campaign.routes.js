@@ -5,6 +5,7 @@ import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { campaignRunLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed'];
@@ -52,8 +53,8 @@ router.post('/:id/publish', requirePermission('campaigns_run'), campaignControll
 // Pause
 router.post('/:id/pause', requirePermission('campaigns_run'), campaignController.pause.bind(campaignController));
 
-// Run campaign — cần quyền chạy
-router.post('/:id/run', requirePermission('campaigns_run'), campaignController.run.bind(campaignController));
+// Run campaign — cần quyền chạy; rate limit sau auth (key theo user)
+router.post('/:id/run', campaignRunLimiter, requirePermission('campaigns_run'), campaignController.run.bind(campaignController));
 
 // Duplicate — cần quyền tạo
 router.post('/:id/duplicate',

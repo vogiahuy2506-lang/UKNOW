@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
+import { publicLandingAnalyticsLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.get('/landing-pages/:slug', async (req, res) => {
   }
 });
 
-router.post('/landing-analytics/view', async (req, res) => {
+router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req, res) => {
   try {
     const { slug, visitorId, utmSource, utmCampaign, utmMedium } = req.body;
 
