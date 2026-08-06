@@ -42,7 +42,13 @@ const AdminFunnelPage = () => {
 
   const steps = data?.steps || {};
   const conv = data?.conversionFromRegistered || {};
+  const ttf = data?.timeToFirstSend || {};
   const max = Math.max(1, Number(steps.registered || 0));
+  const fmtOrDash = (v, suffix = '') => (
+    v == null || Number.isNaN(Number(v))
+      ? '—'
+      : `${Number(v).toLocaleString('vi-VN')}${suffix}`
+  );
 
   return (
     <div className="space-y-6">
@@ -64,6 +70,34 @@ const AdminFunnelPage = () => {
         <button type="button" className="btn btn-secondary" onClick={load}>
           <HiOutlineRefresh className="w-4 h-4 mr-2" /> Làm mới
         </button>
+      </div>
+
+      <div className="card p-5">
+        <div className="mb-4">
+          <h2 className="font-semibold text-gray-800">Thời gian tới tin đầu tiên</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Trung vị phút từ đăng ký tới email/Zalo campaign gửi thành công đầu tiên.
+            Mục tiêu &lt; 10 phút. Số liệu hiện chủ yếu tài khoản nội bộ/test.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Trung vị</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{fmtOrDash(ttf.medianMinutes, ' phút')}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">≤ 10 phút</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{fmtOrDash(ttf.pctUnder10, '%')}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Đã gửi</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{Number(ttf.sentCount || 0).toLocaleString('vi-VN')}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Tổng TK</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{Number(ttf.totalUsers || 0).toLocaleString('vi-VN')}</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">

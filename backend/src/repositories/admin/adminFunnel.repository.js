@@ -104,3 +104,62 @@ export async function getFunnelCohorts({ since = FUNNEL_DATA_SINCE } = {}) {
   );
   return rows;
 }
+
+/**
+ * Time from registration (users.created_at) to first successful campaign send.
+ * Email: status = 'sent'. Zalo: tracking_metadata status = 'sent' (column status stays pending).
+ * Do NOT filter by FUNNEL_DATA_SINCE — this KPI uses full user history.
+ */
+export async function getTimeToFirstSend() {
+  const { rows } = await db.query(
+    `WITH first_send AS (
+       SELECT c.id_user AS user_id, MIN(m.sent_at) AS first_sent_at
+       FROM (
+         SELECT id_campaign, sent_at
+         FROM email_messages
+         WHERE status = 'sent' AND sent_at IS NOT NULL
+         UNION ALL
+         SELECT id_campaign, sent_at
+         FROM zalo_messages
+         WHERE COALESCE(tracking_metadata->>'status', '') = 'sent'
+           AND sent_at IS NOT NULL
+       ) m
+       JOIN campaigns c ON c.id = m.id_campaign
+       GROUP BY c.id_user
+     ),
+     eligible AS (
+       SELECT u.id, u.created_at, f.first_sent_at
+       FROM users u
+       LEFT JOIN first_send f ON f.user_id = u.id
+       WHERE u.role = 'user'
+     ),
+     timed AS (
+       SELECT id, created_at, first_sent_at,
+              EXTRACT(EPOCH FROM (first_sent_at - created_at)) / 60.0 AS minutes
+       FROM eligible
+       WHERE first_sent_at IS NOT NULL AND first_sent_at >= created_at
+     )
+     SELECT
+       (SELECT COUNT(*)::int FROM eligible) AS total_users,
+       (SELECT COUNT(*)::int FROM timed) AS sent_count,
+       ROUND((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes) FROM timed)::numeric, 1) AS median_minutes,
+       ROUND(
+         (SELECT COUNT(*) FROM timed WHERE minutes <= 10)::numeric
+         / NULLIF((SELECT COUNT(*) FROM timed), 0) * 100,
+         1
+       ) AS pct_under_10`
+  );
+
+  const row = rows[0] || {};
+  const sentCount = Number(row.sent_count || 0);
+  const totalUsers = Number(row.total_users || 0);
+  const medianRaw = row.median_minutes;
+  const pctRaw = row.pct_under_10;
+
+  return {
+    medianMinutes: medianRaw == null ? null : Number(medianRaw),
+    pctUnder10: pctRaw == null ? null : Number(pctRaw),
+    sentCount,
+    totalUsers,
+  };
+}
