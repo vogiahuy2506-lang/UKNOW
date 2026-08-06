@@ -222,15 +222,21 @@ class ZaloRateLimiter {
       if (Number.isFinite(accLim) && accLim > 0) {
         policy = { ...policy, limitPerWindow: accLim };
       }
+      // Ghi đè theo tài khoản chỉ được phép làm CHẬM hơn, không bao giờ nhanh hơn
+      // mức cấu hình chung. Trước đây `dMin >= 0` cho phép đặt thẳng 0 giây —
+      // tức bỏ qua toàn bộ mặc định an toàn và tự đưa tài khoản Zalo của khách
+      // vào diện chống spam. Sàn = giá trị đang cấu hình ở env/mặc định code.
+      const floorMin = policy.minDelayMs;
+      const floorMax = policy.maxDelayMs;
       const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
       const dMax = Number.parseInt(accountHint.zaloPersonalOutboundDelayMaxMs, 10);
-      let nextMin = policy.minDelayMs;
-      let nextMax = policy.maxDelayMs;
+      let nextMin = floorMin;
+      let nextMax = floorMax;
       if (Number.isFinite(dMin) && dMin >= 0) {
-        nextMin = dMin;
+        nextMin = Math.max(floorMin, dMin);
       }
       if (Number.isFinite(dMax) && dMax >= 0) {
-        nextMax = dMax;
+        nextMax = Math.max(floorMax, dMax);
       }
       nextMax = Math.max(nextMin, nextMax);
       policy = { ...policy, minDelayMs: nextMin, maxDelayMs: nextMax };
