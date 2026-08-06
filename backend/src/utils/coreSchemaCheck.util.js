@@ -342,14 +342,22 @@ export async function checkCoreSchema(queryable, expected = CORE_SCHEMA_EXPECTED
           detail: sample,
         });
       } else {
-        const { rows: totalRows } = await queryable.query(
-          `SELECT COUNT(*)::int AS n FROM orders WHERE order_code IS NOT NULL`
+        // Chỉ nhắc khi cột chưa phải bigint — sau migration 107 thông báo này thành tiếng ồn
+        const { rows: typeRows } = await queryable.query(
+          `SELECT udt_name FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'order_code'`
         );
-        const n = totalRows[0]?.n ?? 0;
-        if (n > 0) {
-          warnings.push(
-            `orders.order_code: ${n} giá trị đều ép được sang BIGINT (an toàn cho đổi kiểu — vẫn sao lưu trước)`
+        const udt = String(typeRows[0]?.udt_name || '').toLowerCase();
+        if (udt && udt !== 'int8') {
+          const { rows: totalRows } = await queryable.query(
+            `SELECT COUNT(*)::int AS n FROM orders WHERE order_code IS NOT NULL`
           );
+          const n = totalRows[0]?.n ?? 0;
+          if (n > 0) {
+            warnings.push(
+              `orders.order_code: ${n} giá trị đều ép được sang BIGINT (an toàn cho đổi kiểu — vẫn sao lưu trước)`
+            );
+          }
         }
       }
     } catch (err) {

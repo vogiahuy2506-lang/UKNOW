@@ -32,7 +32,7 @@ CREATE TABLE users (
   locked_until            TIMESTAMPTZ,
   last_login_at           TIMESTAMPTZ,
   last_login_ip           VARCHAR(45),
-  active_plan_id          BIGINT,
+  active_plan_id          INTEGER,
   preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
@@ -46,7 +46,7 @@ CREATE TABLE users (
   max_email_templates     INTEGER,
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
-  subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
+  subscription_reminder_count SMALLINT NOT NULL DEFAULT 0,
   -- migration 094: buộc đổi mật khẩu sau khi chủ shop reset cho nhân viên
   must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,
   messages_per_period     INTEGER,
@@ -119,7 +119,7 @@ CREATE INDEX idx_verification_codes_lookup ON verification_codes(email, code, ty
 
 -- ─── Plans + Orders (payment) ──────────────────────────────────────────
 CREATE TABLE plans (
-  id                    BIGSERIAL PRIMARY KEY,
+  id                    SERIAL PRIMARY KEY,
   code                  VARCHAR(50)  UNIQUE,
   name                  VARCHAR(100) NOT NULL,
   price                 BIGINT       NOT NULL DEFAULT 0,
@@ -186,8 +186,9 @@ VALUES
   ('gemini-2.5-pro', 'Gemini 2.5 Pro', 1048576, 131072, FALSE, TRUE, 'google');
 
 -- FK sau khi plans tồn tại: users.active_plan_id → plans(id)
+-- Tên khớp Neon/production (migration 107): users_active_plan_id_fkey
 ALTER TABLE users
-  ADD CONSTRAINT users_active_plan_fk
+  ADD CONSTRAINT users_active_plan_id_fkey
     FOREIGN KEY (active_plan_id) REFERENCES plans(id) ON DELETE SET NULL;
 
 ALTER TABLE plans
@@ -232,16 +233,18 @@ VALUES
   ('email_templates', 'max_email_templates', 8000, 1, 0, 0, 500, 1, TRUE, 140),
   ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150);
 
+-- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
+-- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).
 CREATE TABLE orders (
-  id          BIGSERIAL PRIMARY KEY,
-  order_code  BIGINT       NOT NULL UNIQUE,
-  plan_id     BIGINT       REFERENCES plans(id) ON DELETE SET NULL,
-  amount      BIGINT       NOT NULL DEFAULT 0,
+  id          SERIAL PRIMARY KEY,
+  order_code  BIGINT       NOT NULL,
+  plan_id     INTEGER      REFERENCES plans(id),
+  amount      NUMERIC(12, 2) NOT NULL DEFAULT 0,
   user_email  VARCHAR(255),
-  user_id     BIGINT       REFERENCES users(id) ON DELETE SET NULL,
-  status      VARCHAR(20)  NOT NULL DEFAULT 'pending'
+  user_id     BIGINT       REFERENCES users(id),
+  status      VARCHAR(50)  NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
-  payment_method VARCHAR(20) NOT NULL DEFAULT 'payos'
+  payment_method VARCHAR(50) NOT NULL DEFAULT 'payos'
     CHECK (payment_method IN ('payos', 'manual', 'free', 'voucher')),
   note        TEXT,
   billing_period VARCHAR(10) NOT NULL DEFAULT 'monthly'
@@ -252,7 +255,8 @@ CREATE TABLE orders (
   voucher_code VARCHAR(64),
   topup_config JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT orders_order_code_key UNIQUE (order_code)
 );
 
 CREATE INDEX idx_orders_plan_id    ON orders(plan_id);

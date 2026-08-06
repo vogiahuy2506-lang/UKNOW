@@ -66,14 +66,14 @@ const FKS_OK = [
     column_name: 'plan_id',
     ref_table: 'plans',
     ref_column: 'id',
-    on_delete: 'n',
+    on_delete: 'a',
   },
   {
     table_name: 'orders',
     column_name: 'user_id',
     ref_table: 'users',
     ref_column: 'id',
-    on_delete: 'n',
+    on_delete: 'a',
   },
   {
     table_name: 'plans',

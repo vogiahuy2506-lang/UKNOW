@@ -172,9 +172,18 @@ describe('POST /api/payments/create-payment', () => {
     );
     expect(order.rows[0]).toMatchObject({
       status: 'pending',
-      amount: '199000',
       user_email: user.email,
     });
+    // So bằng Number, KHÔNG so chuỗi.
+    //
+    // orders.amount trên production là numeric(12,2) nên pg trả "199000.00";
+    // bootstrap trước đây khai BIGINT nên trả "199000". Bài test cũ chỉ xanh vì
+    // hai schema lệch nhau — nó SAI với production suốt từ đầu. Sau khi bootstrap
+    // được sửa cho khớp (PLAN_SCHEMA_BUOC2 Loại C), lệch này lộ ra.
+    //
+    // Code thật cũng so bằng Number (payment.service.js, payosReconcile.service.js),
+    // nên so kiểu này khớp với hành vi thật và miễn nhiễm với định dạng chuỗi.
+    expect(Number(order.rows[0].amount)).toBe(199000);
     expect(Number(order.rows[0].plan_id)).toBe(Number(plan.id));
     expect(Number(order.rows[0].user_id)).toBe(Number(user.id));
   });

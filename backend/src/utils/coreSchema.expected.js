@@ -1,12 +1,10 @@
 /**
- * Expected core-schema facts (bootstrap.sql + migrations 092/093).
- * Shared by integration tests and `scripts/checkCoreSchema.js` (S-5 / PR3 bước 1).
+ * Expected core-schema facts — khớp production sau PLAN_SCHEMA_BUOC2
+ * (Loại B/C: DB đúng; Loại A vá bằng migration 107).
  *
- * `columns` / `foreignKeys` / `uniques` / `checkMustContain` mirror bootstrap —
- * the source of truth for “schema mong muốn”. Production may drift silently
- * (baseline 001–009, ADD COLUMN IF NOT EXISTS swallowing CHECK/NOT NULL).
+ * Shared by integration tests and `scripts/checkCoreSchema.js`.
  *
- * @see PLAN_THANH_TOAN_TRUOC_MO_BAN.md Việc 3a
+ * @see _internal/PLAN_SCHEMA_BUOC2.md
  */
 
 /** @typedef {{ udt: string, nullable: boolean, maxLen?: number|null }} ExpectedColumn */
@@ -15,10 +13,10 @@
 const COLUMNS = Object.freeze({
   users: Object.freeze({
     id: Object.freeze({ udt: 'int8', nullable: false }),
-    active_plan_id: Object.freeze({ udt: 'int8', nullable: true }),
+    active_plan_id: Object.freeze({ udt: 'int4', nullable: true }),
     email: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 255 }),
     must_change_password: Object.freeze({ udt: 'bool', nullable: false }),
-    subscription_reminder_count: Object.freeze({ udt: 'int4', nullable: false }),
+    subscription_reminder_count: Object.freeze({ udt: 'int2', nullable: false }),
     max_employees: Object.freeze({ udt: 'int4', nullable: true }),
     max_campaigns: Object.freeze({ udt: 'int4', nullable: true }),
     max_zalo_accounts: Object.freeze({ udt: 'int4', nullable: true }),
@@ -28,13 +26,13 @@ const COLUMNS = Object.freeze({
     max_landing_pages: Object.freeze({ udt: 'int4', nullable: true }),
   }),
   orders: Object.freeze({
-    id: Object.freeze({ udt: 'int8', nullable: false }),
+    id: Object.freeze({ udt: 'int4', nullable: false }),
     order_code: Object.freeze({ udt: 'int8', nullable: false }),
-    plan_id: Object.freeze({ udt: 'int8', nullable: true }),
-    amount: Object.freeze({ udt: 'int8', nullable: false }),
+    plan_id: Object.freeze({ udt: 'int4', nullable: true }),
+    amount: Object.freeze({ udt: 'numeric', nullable: false }),
     user_id: Object.freeze({ udt: 'int8', nullable: true }),
-    status: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 20 }),
-    payment_method: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 20 }),
+    status: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 50 }),
+    payment_method: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 50 }),
     billing_period: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 10 }),
     discount_amount: Object.freeze({ udt: 'numeric', nullable: false }),
     voucher_id: Object.freeze({ udt: 'int8', nullable: true }),
@@ -42,7 +40,7 @@ const COLUMNS = Object.freeze({
     topup_config: Object.freeze({ udt: 'jsonb', nullable: true }),
   }),
   plans: Object.freeze({
-    id: Object.freeze({ udt: 'int8', nullable: false }),
+    id: Object.freeze({ udt: 'int4', nullable: false }),
     is_custom: Object.freeze({ udt: 'bool', nullable: false }),
     grace_period_days: Object.freeze({ udt: 'int4', nullable: false }),
     custom_owner_user_id: Object.freeze({ udt: 'int8', nullable: true }),
@@ -85,52 +83,44 @@ export const CORE_SCHEMA_EXPECTED = Object.freeze({
       refTable: 'plans',
       refColumn: 'id',
       onDelete: 'SET NULL',
-      note: 'migration 002 — trong baseline 001–009 nên có thể chưa bao giờ chạy',
+      note: 'migration 107 — Loại A',
     }),
     Object.freeze({
       table: 'orders',
       column: 'plan_id',
       refTable: 'plans',
       refColumn: 'id',
-      onDelete: 'SET NULL',
+      onDelete: 'NO ACTION',
+      note: 'giữ lịch sử tài chính — PLAN_SCHEMA_BUOC2 3b',
     }),
     Object.freeze({
       table: 'orders',
       column: 'user_id',
       refTable: 'users',
       refColumn: 'id',
-      onDelete: 'SET NULL',
+      onDelete: 'NO ACTION',
+      note: 'giữ lịch sử tài chính — PLAN_SCHEMA_BUOC2 3b',
     }),
-    // voucher_id FK: migration 036 — bootstrap chưa khai REFERENCES; báo riêng khi
-    // đối chiếu prod (bước 2). Không đưa vào expected để test bootstrap không fail oan.
     Object.freeze({
       table: 'plans',
       column: 'custom_owner_user_id',
       refTable: 'users',
       refColumn: 'id',
       onDelete: 'SET NULL',
-      note: 'migration 096 ADD COLUMN IF NOT EXISTS',
+      note: 'migration 096',
     }),
   ]),
 
-  /**
-   * Unique: column set must be covered by a unique index or UNIQUE constraint.
-   */
   uniques: Object.freeze([
     Object.freeze({ table: 'orders', columns: Object.freeze(['order_code']) }),
   ]),
 
-  /**
-   * High-risk facts from `ADD COLUMN IF NOT EXISTS ... CHECK/NOT NULL/REFERENCES`.
-   * If the column already existed when the migration ran, Postgres skipped the
-   * whole clause — migration marked applied, constraint never added.
-   */
   riskyAddColumnFacts: Object.freeze([
     Object.freeze({
       table: 'orders',
       column: 'payment_method',
       kind: 'not_null',
-      migration: '018',
+      migration: '018→107',
     }),
     Object.freeze({
       table: 'orders',
@@ -156,7 +146,7 @@ export const CORE_SCHEMA_EXPECTED = Object.freeze({
       table: 'orders',
       column: 'discount_amount',
       kind: 'not_null',
-      migration: '036',
+      migration: '036→107',
     }),
     Object.freeze({
       table: 'users',
@@ -168,7 +158,7 @@ export const CORE_SCHEMA_EXPECTED = Object.freeze({
       table: 'plans',
       column: 'is_custom',
       kind: 'not_null',
-      migration: '006',
+      migration: '006→107',
     }),
     Object.freeze({
       table: 'plans',
