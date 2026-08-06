@@ -224,8 +224,11 @@ class ZaloRateLimiter {
       }
       // Ghi đè theo tài khoản chỉ được phép làm CHẬM hơn, không bao giờ nhanh hơn
       // mức cấu hình chung. Trước đây `dMin >= 0` cho phép đặt thẳng 0 giây —
-      // tức bỏ qua toàn bộ mặc định an toàn và tự đưa tài khoản Zalo của khách
-      // vào diện chống spam. Sàn = giá trị đang cấu hình ở env/mặc định code.
+      // tức bỏ qua mức an toàn đang cấu hình và tự đưa tài khoản Zalo của khách
+      // vào diện chống spam. Sàn = giá trị env đang chạy.
+      //
+      // Production đang đặt 80.000–150.000ms (~80–150 giây, ~30 tin/giờ), KHÔNG
+      // phải 20–50 giây như mặc định trong code. Xem bảng tham số ở CLAUDE.md.
       const floorMin = policy.minDelayMs;
       const floorMax = policy.maxDelayMs;
       const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
