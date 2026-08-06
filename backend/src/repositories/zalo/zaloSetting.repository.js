@@ -127,6 +127,49 @@ class ZaloSettingRepository {
     return rows[0] || null;
   }
 
+  /**
+   * Kết nối còn sống của cùng zalo_user_id ở workspace khác (PLAN Z-2).
+   * @param {number} userId
+   * @param {string} zaloUserId
+   * @returns {Promise<{ id: number, id_user: number, owner_email: string }|null>}
+   */
+  async findLiveConnectionInOtherWorkspace(userId, zaloUserId) {
+    const id = String(zaloUserId || '').trim();
+    if (!id) return null;
+    const { rows } = await db.query(
+      `SELECT zs.id, zs.id_user, u.email AS owner_email
+       FROM zalo_settings zs
+       JOIN users u ON u.id = zs.id_user
+       WHERE zs.zalo_user_id = $1
+         AND zs.id_user <> $2
+         AND zs.is_active = TRUE
+         AND zs.status = 'connected'
+       LIMIT 1`,
+      [id, userId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Điền zalo_user_id khi đang trống (sau restore / keep-alive).
+   * Không đè giá trị đã có.
+   */
+  async backfillZaloUserIdIfEmpty(accountId, userId, zaloUserId) {
+    const id = String(zaloUserId || '').trim();
+    if (!id) return null;
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET zalo_user_id = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         AND id_user = $3
+         AND (zalo_user_id IS NULL OR zalo_user_id = '')
+       RETURNING id, zalo_user_id`,
+      [id, accountId, userId]
+    );
+    return rows[0] || null;
+  }
+
   async updateQrConnectedById(accountId, { displayName, zaloName, zaloPhone, cookieText }, now) {
     const { rows } = await db.query(
       `UPDATE zalo_settings
@@ -246,7 +289,7 @@ class ZaloSettingRepository {
 
   async findAccountForRestore(accountId, isAdmin, userId) {
     const { rows } = await db.query(
-      `SELECT id, id_user, display_name, cookie_text, is_active
+      `SELECT id, id_user, display_name, cookie_text, is_active, zalo_user_id
        FROM zalo_settings
        WHERE id = $1
          ${isAdmin ? '' : 'AND id_user = $2'}

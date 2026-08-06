@@ -11,7 +11,7 @@ import { generateZaloUUID } from '../../node_modules/zca-js/dist/utils.js';
 import { request as rawRequest } from '../../node_modules/zca-js/dist/utils.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
-import { isAdminRole } from '../utils/roleScope.util.js';
+import { isAdminRole, isSuperAdmin } from '../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
 import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
@@ -19,6 +19,8 @@ import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.js';
+import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 
 
 class ZaloSettingsController {
@@ -341,9 +343,16 @@ class ZaloSettingsController {
     const zaloPhone = String(input?.accountIdentity?.zaloPhone || '').trim();
     const cookieText = String(input?.accountIdentity?.cookieText || '').trim() || String(input?.fallbackCookieText || '').trim();
     const now = new Date();
+    const revealOwner = input?.revealOwner === true;
 
-    const row = await zaloSettingRepository.updateAccountAfterCookieLogin(
-      userId, accountId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, now
+    // Cửa 3: restore cookie → connected (+ backfill zalo_user_id nếu thiếu)
+    await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(userId, zaloUserId, { revealOwner });
+
+    const row = await zaloOneWorkspaceService.withUniqueMapped(
+      () => zaloSettingRepository.updateAccountAfterCookieLogin(
+        userId, accountId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, now
+      ),
+      { revealOwner }
     );
     return row ? this.mapRow(row) : null;
   }
@@ -490,23 +499,36 @@ class ZaloSettingsController {
     const zaloName = String(accountIdentity?.zaloName || '').trim();
     const zaloPhone = String(accountIdentity?.zaloPhone || '').trim();
     const cookieText = String(accountIdentity?.cookieText || '').trim();
+    const revealOwner = isSuperAdmin(roleCode);
 
     if (zaloUserId) {
       const existedById = await zaloSettingRepository.findByZaloUserId(userId, zaloUserId);
 
       if (existedById) {
-        const updated = await zaloSettingRepository.updateQrConnectedById(
-          existedById.id, { displayName, zaloName, zaloPhone, cookieText }, now
+        // Vẫn assert: nếu workspace khác đang giữ live thì không cho "cướp" bằng quét lại.
+        // Cùng workspace / không ai giữ → assert pass (thao tác thường xuyên khi hết phiên).
+        await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(userId, zaloUserId, { revealOwner });
+        const updated = await zaloOneWorkspaceService.withUniqueMapped(
+          () => zaloSettingRepository.updateQrConnectedById(
+            existedById.id, { displayName, zaloName, zaloPhone, cookieText }, now
+          ),
+          { revealOwner }
         );
         return this.mapRow(updated);
       }
     }
 
+    // Cửa 2 + 4: gán zalo_user_id mới / tạo dòng → phải chặn nếu đang sống ở workspace khác
+    await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(userId, zaloUserId, { revealOwner });
+
     const existedByName = await zaloSettingRepository.findByDisplayName(userId, displayName);
 
     if (existedByName) {
-      const updated = await zaloSettingRepository.updateQrConnectedByDisplayNameId(
-        existedByName.id, { zaloUserId, zaloName, zaloPhone, cookieText, displayName }, now
+      const updated = await zaloOneWorkspaceService.withUniqueMapped(
+        () => zaloSettingRepository.updateQrConnectedByDisplayNameId(
+          existedByName.id, { zaloUserId, zaloName, zaloPhone, cookieText, displayName }, now
+        ),
+        { revealOwner }
       );
       return this.mapRow(updated);
     }
@@ -518,8 +540,11 @@ class ZaloSettingsController {
       await client.query('BEGIN');
       await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'zaloAccounts' });
       const isDefault = existingCount === 0;
-      const inserted = await zaloSettingRepository.insertAccount(
-        userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now, client
+      const inserted = await zaloOneWorkspaceService.withUniqueMapped(
+        () => zaloSettingRepository.insertAccount(
+          userId, { displayName, zaloUserId, zaloName, zaloPhone, cookieText }, isDefault, now, client
+        ),
+        { revealOwner }
       );
       await client.query('COMMIT');
       return this.mapRow(inserted);
@@ -549,15 +574,17 @@ class ZaloSettingsController {
     const loginMeta = input?.loginMeta || {};
     if (!sessionKey || !Number.isFinite(userId) || !api) return;
 
+    // Upsert trước — nếu số Zalo đang sống ở workspace khác thì ném 409,
+    // không đánh dấu session connected giả.
+    const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
+    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity, input?.roleCode);
+
     this.patchLoginSession(sessionKey, {
       status: 'connected',
       message: 'Đăng nhập Zalo thành công.',
       api,
+      account,
     });
-
-    const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
-    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity, input?.roleCode);
-    this.patchLoginSession(sessionKey, { account });
     zaloAccountSessionService.setAccountApi(account?.id, api);
     zaloAccountSessionService.startAccountListenerSafely({
       accountId: account?.id,
@@ -1709,11 +1736,40 @@ class ZaloSettingsController {
         return res.status(400).json({ success: false, message: 'ID tài khoản không hợp lệ' });
       }
 
+      const accountRow = await zaloSettingRepository.findAccountForRestore(accountId, isAdmin, userId);
+      if (!accountRow) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy tài khoản Zalo',
+        });
+      }
+
+      const zaloUserId = String(accountRow.zalo_user_id || '').trim();
+      try {
+        await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(
+          accountRow.id_user,
+          zaloUserId,
+          { revealOwner: isAdmin }
+        );
+      } catch (conflictErr) {
+        if (conflictErr?.statusCode === 409 || conflictErr?.code === ZALO_LIVE_ELSEWHERE_CODE) {
+          return res.status(409).json({
+            success: false,
+            message: conflictErr.message,
+            errorCode: ZALO_LIVE_ELSEWHERE_CODE,
+          });
+        }
+        throw conflictErr;
+      }
+
       const campaignZaloSenderRepository = (await import('../repositories/campaign/campaignZaloSender.repository.js')).default;
-      const row = await campaignZaloSenderRepository.resetRestoreForRetry(accountId, {
-        userId,
-        isAdmin,
-      });
+      const row = await zaloOneWorkspaceService.withUniqueMapped(
+        () => campaignZaloSenderRepository.resetRestoreForRetry(accountId, {
+          userId,
+          isAdmin,
+        }),
+        { revealOwner: isAdmin }
+      );
       if (!row) {
         return res.status(404).json({
           success: false,
@@ -1736,6 +1792,13 @@ class ZaloSettingsController {
         },
       });
     } catch (error) {
+      if (error?.statusCode === 409 || error?.code === ZALO_LIVE_ELSEWHERE_CODE) {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+          errorCode: ZALO_LIVE_ELSEWHERE_CODE,
+        });
+      }
       console.error('retryRestore error:', error);
       return res.status(500).json({
         success: false,
@@ -1789,6 +1852,7 @@ class ZaloSettingsController {
           accountIdentity,
           fallbackDisplayName: accountRow.display_name || 'Tài khoản Zalo',
           fallbackCookieText: cookieText,
+          revealOwner: isAdmin,
         });
 
         if (!updatedAccount) {
@@ -1823,6 +1887,14 @@ class ZaloSettingsController {
           },
         });
       } catch (error) {
+        // Trùng workspace khác: không mark disconnected — chỉ báo 409
+        if (error?.statusCode === 409 || error?.code === ZALO_LIVE_ELSEWHERE_CODE) {
+          return res.status(409).json({
+            success: false,
+            message: error.message || 'Số Zalo này đang được kết nối ở một tài khoản khác.',
+            errorCode: ZALO_LIVE_ELSEWHERE_CODE,
+          });
+        }
         if (req.skipMarkDisconnectedOnFail) {
           // Startup / cron restore: giữ nguyên 'connected' trong DB, cron sẽ retry sau 5 phút.
           // Không mark disconnected vì lỗi có thể chỉ là network timeout thoáng qua.
@@ -1999,7 +2071,9 @@ class ZaloSettingsController {
             }
 
             const normalizedLoginMessage =
-              error?.message === 'QR_SESSION_TIMEOUT'
+              error?.statusCode === 409 || error?.code === ZALO_LIVE_ELSEWHERE_CODE
+                ? (error.message || 'Số Zalo này đang được kết nối ở một tài khoản khác.')
+                : error?.message === 'QR_SESSION_TIMEOUT'
                 ? 'Phiên QR đã hết hiệu lực hoặc quá thời gian xác thực. Vui lòng tạo và quét lại mã QR mới.'
                 : `Đăng nhập thất bại: ${error?.message || 'Lỗi không xác định'}`;
 

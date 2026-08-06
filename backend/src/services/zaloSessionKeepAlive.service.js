@@ -18,6 +18,9 @@ import db from '../config/database.js';
 import { restoreZaloSessionFromCookie } from '../utils/zaloSessionRestore.util.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
 import { decryptZaloCookieRows } from '../utils/zaloCookieCrypto.util.js';
+import zaloOneWorkspaceService from './zalo/zaloOneWorkspace.service.js';
+import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
+import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 
 // Track accounts currently being refreshed to avoid concurrent refresh
 const refreshingAccounts = new Set();
@@ -55,7 +58,7 @@ async function isSessionAlive(api, accountId) {
 async function getAccountsWithCookies() {
   try {
     const result = await db.query(
-      `SELECT zs.id, zs.id_user, zs.display_name, zs.cookie_text, zs.status, zs.is_active
+      `SELECT zs.id, zs.id_user, zs.display_name, zs.cookie_text, zs.status, zs.is_active, zs.zalo_user_id
        FROM zalo_settings zs
        WHERE zs.cookie_text IS NOT NULL
          AND zs.cookie_text <> ''
@@ -156,17 +159,48 @@ async function refreshAccountSession(account) {
       });
       console.log(`[ZaloKeepAlive] Account ${accountId}: Listener started`);
 
-      // Cập nhật trạng thái connected trong DB
+      // Cập nhật trạng thái connected trong DB + backfill zalo_user_id nếu thiếu
       try {
-        await campaignZaloSenderRepository.markAccountConnected({
-          accountId,
-          userId,
-          displayName: account.display_name || 'Tài khoản Zalo',
-          cookieText,
-          now: new Date(),
-        });
+        let zaloUserId = String(account.zalo_user_id || '').trim();
+        if (!zaloUserId && typeof restoredApi?.getOwnId === 'function') {
+          try {
+            zaloUserId = String(restoredApi.getOwnId() || '').trim();
+          } catch {
+            zaloUserId = '';
+          }
+        }
+
+        if (zaloUserId) {
+          await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(userId, zaloUserId);
+          await zaloOneWorkspaceService.withUniqueMapped(() =>
+            zaloSettingRepository.backfillZaloUserIdIfEmpty(accountId, userId, zaloUserId)
+          );
+        }
+
+        await zaloOneWorkspaceService.withUniqueMapped(() =>
+          campaignZaloSenderRepository.markAccountConnected({
+            accountId,
+            userId,
+            displayName: account.display_name || 'Tài khoản Zalo',
+            cookieText,
+            now: new Date(),
+          })
+        );
         console.log(`[ZaloKeepAlive] Account ${accountId}: marked as connected in DB ✅`);
       } catch (dbError) {
+        if (dbError?.statusCode === 409 || dbError?.code === ZALO_LIVE_ELSEWHERE_CODE) {
+          console.warn(
+            `[ZaloKeepAlive] Account ${accountId}: Zalo user already live elsewhere — disconnecting this row`
+          );
+          try {
+            await campaignZaloSenderRepository.markAccountDisconnected(accountId, userId);
+            zaloAccountSessionService.clearAccountApi(accountId);
+          } catch (discErr) {
+            console.warn(`[ZaloKeepAlive] Account ${accountId}: disconnect after conflict failed: ${discErr.message}`);
+          }
+          refreshingAccounts.delete(accountKey);
+          return { accountId, status: 'failed', reason: 'zalo_live_elsewhere' };
+        }
         console.warn(`[ZaloKeepAlive] Account ${accountId}: Failed to update DB status: ${dbError.message}`);
       }
 
