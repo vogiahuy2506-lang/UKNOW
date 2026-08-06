@@ -13,7 +13,15 @@ import { useI18n } from '../../../i18n';
 import { normalizeMoneyValue } from './planUtils.jsx';
 
 // ── PriceInput ────────────────────────────────────────────────────────────────
-export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
+/** Money text input with vi-VN grouping. Optional suffix (đ) and allowEmpty ('' instead of 0). */
+export const PriceInput = ({
+  value,
+  onChange,
+  className = 'input w-full',
+  suffix,
+  allowEmpty = false,
+  placeholder,
+}) => {
   const { t } = useI18n();
   const fmt = (n) => {
     const normalized = normalizeMoneyValue(n);
@@ -22,18 +30,33 @@ export const PriceInput = ({ value, onChange, className = 'input w-full' }) => {
 
   const handleChange = (e) => {
     const normalized = normalizeMoneyValue(e.target.value);
-    onChange(normalized === '' ? 0 : normalized);
+    if (normalized === '') {
+      onChange(allowEmpty ? '' : 0);
+      return;
+    }
+    onChange(normalized);
   };
 
-  return (
+  const input = (
     <input
       type="text"
       inputMode="numeric"
-      className={className}
+      className={suffix ? `${className} pr-14`.trim() : className}
       value={fmt(value)}
       onChange={handleChange}
-      placeholder={t('planInputs.pricePlaceholder')}
+      placeholder={placeholder ?? t('planInputs.pricePlaceholder')}
     />
+  );
+
+  if (!suffix) return input;
+
+  return (
+    <div className="relative">
+      {input}
+      <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400">
+        {suffix}
+      </span>
+    </div>
   );
 };
 

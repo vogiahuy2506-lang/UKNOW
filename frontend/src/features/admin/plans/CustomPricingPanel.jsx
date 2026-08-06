@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import adminPlansApiService from '../services/adminPlansApi.service';
+import { PriceInput } from './PlanInputs.jsx';
 
 const CONFIG_KEYS = new Set(['yearly_discount_percent', 'zalo_monthly_capacity_per_account']);
 
@@ -126,12 +127,21 @@ export default function CustomPricingPanel() {
                   <div className="text-xs text-gray-400">{row.itemKey}{row.planColumn ? ` → ${row.planColumn}` : ''}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
-                    className="input w-28"
-                    value={draft.unitPrice}
-                    onChange={(e) => updateDraft(row.itemKey, 'unitPrice', e.target.value)}
-                  />
+                  {isConfig ? (
+                    <input
+                      type="number"
+                      className="input w-28"
+                      value={draft.unitPrice}
+                      onChange={(e) => updateDraft(row.itemKey, 'unitPrice', e.target.value)}
+                    />
+                  ) : (
+                    <PriceInput
+                      value={draft.unitPrice}
+                      onChange={(v) => updateDraft(row.itemKey, 'unitPrice', v)}
+                      className="input w-32"
+                      suffix="đ"
+                    />
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <input

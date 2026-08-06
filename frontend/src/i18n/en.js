@@ -1860,6 +1860,7 @@ export default {
     maxDiscountField: 'Max discount',
     maxDiscountNote: 'Recommended for percentage discounts.',
     maxDiscountPlaceholder: 'Only needed for %',
+    maxDiscountLowWarning: 'Max discount {amount} — are you sure? On a 199,000đ order, the customer only saves this amount.',
     rules: 'Eligibility rules',
     autoRulesDescription: 'Choose all or limit the automatic promotion by plan and billing cycle.',
     manualRulesDescription: 'Limit this code to all plans or selected plans/cycles.',

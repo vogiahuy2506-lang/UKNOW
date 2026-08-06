@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencilAlt, HiOutlineReply } from 'react-icons/hi';
 import adminVouchersApiService from '../../features/admin/services/adminVouchersApi.service';
 import { Field, FormSection, ModalShell } from '../../features/admin/plans/PlanModalsShared.jsx';
+import { PriceInput } from '../../features/admin/plans/PlanInputs.jsx';
 import { MODAL_FORM, renderModal } from '../../features/admin/plans/planUtils.jsx';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { useI18n } from '../../i18n';
@@ -180,17 +181,58 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             <textarea className="input w-full min-h-[80px]" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder={t('voucherAdmin.descriptionPlaceholder')} />
           </Field>
           <Field label={t('voucherAdmin.discountType')}>
-            <select className="input w-full" value={form.discountType} onChange={(e) => setForm((p) => ({ ...p, discountType: e.target.value }))}>
+            <select
+              className="input w-full"
+              value={form.discountType}
+              onChange={(e) => setForm((p) => ({
+                ...p,
+                discountType: e.target.value,
+                discountValue: '',
+                maxDiscountAmount: '',
+              }))}
+            >
               <option value="fixed_amount">{t('voucherAdmin.fixedAmount')}</option>
               <option value="percentage">{t('voucherAdmin.percentage')}</option>
             </select>
           </Field>
           <Field label={t('voucherAdmin.value')}>
-            <input type="number" min="1" className="input w-full" value={form.discountValue} onChange={(e) => setForm((p) => ({ ...p, discountValue: e.target.value }))} required />
+            {form.discountType === 'percentage' ? (
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  className="input w-full pr-14"
+                  value={form.discountValue}
+                  onChange={(e) => setForm((p) => ({ ...p, discountValue: e.target.value }))}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400">%</span>
+              </div>
+            ) : (
+              <PriceInput
+                value={form.discountValue}
+                onChange={(v) => setForm((p) => ({ ...p, discountValue: v }))}
+                className="input w-full"
+                suffix="đ"
+                allowEmpty
+              />
+            )}
           </Field>
           {form.discountType === 'percentage' && (
             <Field label={t('voucherAdmin.maxDiscountField')} note={t('voucherAdmin.maxDiscountNote')}>
-              <input type="number" min="0" className="input w-full" value={form.maxDiscountAmount} onChange={(e) => setForm((p) => ({ ...p, maxDiscountAmount: e.target.value }))} placeholder={t('voucherAdmin.maxDiscountPlaceholder')} />
+              <PriceInput
+                value={form.maxDiscountAmount}
+                onChange={(v) => setForm((p) => ({ ...p, maxDiscountAmount: v }))}
+                className="input w-full"
+                suffix="đ"
+                allowEmpty
+                placeholder={t('voucherAdmin.maxDiscountPlaceholder')}
+              />
+              {Number(form.maxDiscountAmount) > 0 && Number(form.maxDiscountAmount) < 1000 && (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  {t('voucherAdmin.maxDiscountLowWarning', { amount: fmtVnd(form.maxDiscountAmount) })}
+                </p>
+              )}
             </Field>
           )}
         </div>
@@ -203,7 +245,13 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={t('voucherAdmin.minOrder')}>
-            <input type="number" min="0" className="input w-full" value={form.minOrderAmount} onChange={(e) => setForm((p) => ({ ...p, minOrderAmount: e.target.value }))} />
+            <PriceInput
+              value={form.minOrderAmount}
+              onChange={(v) => setForm((p) => ({ ...p, minOrderAmount: v }))}
+              className="input w-full"
+              suffix="đ"
+              allowEmpty
+            />
           </Field>
           <div />
           <Field label={t('voucherAdmin.applicablePlans')} className="md:col-span-2">
@@ -344,6 +392,15 @@ export default function AdminVouchersPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const discountValue = Number(form.discountValue);
+    if (form.discountValue === '' || !Number.isFinite(discountValue) || discountValue <= 0) {
+      toast.error(t('voucherAdmin.errorDiscountValue'));
+      return;
+    }
+    if (form.discountType === 'percentage' && discountValue > 100) {
+      toast.error(t('voucherAdmin.errorPercentageMax'));
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {

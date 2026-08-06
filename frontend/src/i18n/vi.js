@@ -1917,6 +1917,7 @@ export default {
     maxDiscountField: 'Giảm tối đa',
     maxDiscountNote: 'Nên đặt nếu giảm theo phần trăm.',
     maxDiscountPlaceholder: 'Chỉ cần cho %',
+    maxDiscountLowWarning: 'Giảm tối đa {amount} — bạn có chắc không? Với đơn 199.000đ, khách chỉ được giảm đúng số này.',
     rules: 'Điều kiện áp dụng',
     autoRulesDescription: 'Chọn tất cả hoặc giới hạn khuyến mãi tự động theo từng gói và chu kỳ thanh toán.',
     manualRulesDescription: 'Giới hạn code này cho tất cả hoặc một số gói/chu kỳ cụ thể.',

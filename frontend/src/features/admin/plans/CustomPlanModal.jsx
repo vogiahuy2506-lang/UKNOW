@@ -98,10 +98,10 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
               value={form.name} onChange={(e) => set('name', e.target.value)} />
           </Field>
           <Field label={t('planInputs.planPricePerMonth')}>
-            <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" />
+            <PriceInput value={form.price} onChange={(v) => set('price', v)} className="input h-11 w-full" suffix="đ" />
           </Field>
           <Field label={t('planInputs.planPriceYearly')} note={t('adminPlans.yearlyPriceHint')}>
-            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v > 0 ? v : '')} className="input h-11 w-full" />
+            <PriceInput value={form.priceYearly || 0} onChange={(v) => set('priceYearly', v > 0 ? v : '')} className="input h-11 w-full" suffix="đ" allowEmpty />
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
