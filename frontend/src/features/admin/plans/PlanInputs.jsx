@@ -28,13 +28,17 @@ export const PriceInput = ({
     return normalized === '' ? '' : Number(normalized).toLocaleString('vi-VN');
   };
 
+  // Ô tiền VNĐ: dấu chấm LUÔN là phân cách nghìn, không bao giờ là dấu thập phân.
+  // Không dùng normalizeMoneyValue cho chuỗi đang gõ dở — hàm đó chỉ coi dấu chấm là
+  // phân cách khi MỌI nhóm sau nó đúng 3 chữ số, nên "2.000" gõ thêm số 0 thành
+  // "2.0000" sẽ bị đọc là số thập phân 2. Chỉ lấy chữ số là hết mơ hồ.
   const handleChange = (e) => {
-    const normalized = normalizeMoneyValue(e.target.value);
-    if (normalized === '') {
+    const digits = String(e.target.value).replace(/\D/g, '');
+    if (digits === '') {
       onChange(allowEmpty ? '' : 0);
       return;
     }
-    onChange(normalized);
+    onChange(Number(digits));
   };
 
   const input = (
