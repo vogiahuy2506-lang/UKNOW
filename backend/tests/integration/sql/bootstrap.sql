@@ -1309,6 +1309,15 @@ CREATE TABLE alert_rules (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'payos_reconcile_rescued',
+  'Đối soát PayOS cứu được đơn đã trả',
+  'Cron đối soát tìm thấy đơn PAID mà webhook chưa kích hoạt',
+  1, NULL, 'email', 'critical', 30,
+  '{"jobCode": "payos_order_reconcile"}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,

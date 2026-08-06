@@ -179,7 +179,10 @@ describe('POST /api/payments/create-payment', () => {
     expect(Number(order.rows[0].user_id)).toBe(Number(user.id));
   });
 
-  it('PayOS throw lỗi → 500, order vẫn còn pending (không rollback)', async () => {
+  it('PayOS throw lỗi → 502 và KHÔNG để lại đơn pending mồ côi', async () => {
+    // Trước đây đơn được commit trước khi gọi PayOS, lỗi là để lại đơn `pending`
+    // không bao giờ có link — nguồn của 6 đơn mồ côi trong dữ liệu tháng 5/2026.
+    // Nay xoá đơn khi create thất bại, giống đường top-up và gói tự chọn.
     const user = await createUser({ username: 'buyer5' });
     const token = await loginAs(user);
     await createPlan({ code: 'std', price: 50000 });
@@ -191,16 +194,17 @@ describe('POST /api/payments/create-payment', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ planCode: 'std', userEmail: user.email });
 
-    expect(res.status).toBe(500);
-    // createOrder chạy trước payos.create → order vẫn tồn tại với pending
+    // 502 = lỗi từ dịch vụ bên ngoài, không phải lỗi nội bộ của mình
+    expect(res.status).toBe(502);
+
     const pending = await db.query(
       `SELECT COUNT(*)::int AS n FROM orders WHERE user_email = $1 AND status = 'pending'`,
       [user.email]
     );
-    expect(pending.rows[0].n).toBe(1);
+    expect(pending.rows[0].n).toBe(0);
   });
 
-  it('voucher usage_limit_per_user=1 → tạo đơn thứ 2 bị từ chối khi còn pending', async () => {
+  it('voucher usage_limit_per_user=1 → đơn thứ 2 huỷ đơn cũ rồi tạo mới, chỉ còn 1 pending', async () => {
     const user = await createUser({ username: 'voucher-limit' });
     const token = await loginAs(user);
     await createPlan({ code: 'voucher_plan', price: 200000 });
@@ -223,11 +227,27 @@ describe('POST /api/payments/create-payment', () => {
     expect(first.status).toBe(200);
     expect(first.body.result.discountAmount).toBe(100000);
 
+    // Trước đây guard voucher chặn đơn thứ 2 (400) khi còn đơn pending.
+    // Nay luật chống trùng huỷ đơn cũ trước, nên đơn thứ 2 đi qua — và đó là
+    // hành vi mong muốn: người dùng bấm lại được thay vì bị chặn cụt, mà vẫn
+    // chỉ còn đúng MỘT đơn sống. Voucher chỉ thực sự tiêu ở redeemVoucherForOrder
+    // khi thanh toán thành công, nên giới hạn 1 lần/người vẫn nguyên vẹn.
     const second = await request(app)
       .post('/api/payments/create-payment')
       .set('Authorization', `Bearer ${token}`)
       .send({ planCode: 'voucher_plan', voucherCode: 'LAUNCH50' });
-    expect(second.status).toBe(400);
+    expect(second.status).toBe(200);
+    expect(second.body.result.discountAmount).toBe(100000);
+
+    // Điểm mấu chốt: đơn cũ đã bị huỷ, không tồn tại hai đơn pending song song
+    const { rows } = await db.query(
+      `SELECT status, COUNT(*)::int AS n FROM orders
+       WHERE user_email = $1 GROUP BY status ORDER BY status`,
+      [user.email]
+    );
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.n]));
+    expect(byStatus.pending).toBe(1);
+    expect(byStatus.cancelled).toBe(1);
   });
 
   it('voucher 100% → success ngay, redemption ghi trong cùng luồng', async () => {

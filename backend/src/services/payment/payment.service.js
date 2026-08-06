@@ -1,25 +1,23 @@
 import crypto from 'crypto';
-import { findPlanByCode, getPlanByUserId, findPlanById } from '../../repositories/payment/plan.repository.js';
+import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
 import db from '../../config/database.js';
 import { validateVoucherForCheckout } from '../voucher.service.js';
-import { sendSystemEmail, buildPaymentSuccessEmail } from '../../utils/systemEmail.util.js';
 import {
     createOrder,
     findOrderStatusByCode,
     findOrderByCode,
     claimOrderSuccess,
     markOrderFailedForReview,
-    findUserIdByEmail,
     activateUserPlan,
     hasSuccessfulOrderForPlanByUser,
     deleteOrderByCode,
+    cancelRecentPendingPlanOrders,
 } from '../../repositories/payment/payment.repository.js';
 import {
     redeemVoucherForOrder,
     getPayosPendingWindowMinutes,
 } from '../../repositories/voucher.repository.js';
-import { findActiveUserByEmail } from '../../repositories/user/user.repository.js';
 import { createPlan } from '../../repositories/admin/adminPlans.repository.js';
 import {
     findCustomPlanOwnedByUser,
@@ -27,9 +25,11 @@ import {
 } from '../../repositories/payment/customPlan.repository.js';
 import { resolveCustomPlanQuote } from './customPlan.service.js';
 import { CUSTOM_PLAN_VOUCHER_CODE } from '../../utils/customPlanPricing.util.js';
-import { fulfillTopupOrder } from './topup.service.js';
-
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
+import { fulfillPaidOrder } from './payosOrderFulfillment.service.js';
+import {
+    tryFulfillPendingOrderOnStatusCheck,
+} from './payosReconcile.service.js';
+import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -83,7 +83,19 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
 
     const hasVoucher = Boolean(String(voucherCode || '').trim());
     const pendingWindowMinutes = getPayosPendingWindowMinutes();
+    const reuseWindowMinutes = Math.max(1, pendingWindowMinutes - 2);
     const orderCode = generateOrderCode();
+
+    const cancelledDupes = await cancelRecentPendingPlanOrders({
+        userId,
+        userEmail,
+        planId: plan.id,
+        billingPeriod,
+        withinMinutes: reuseWindowMinutes,
+    });
+    if (cancelledDupes.length) {
+        await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
+    }
 
     const client = await db.getClient();
     let order;
@@ -177,27 +189,36 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
 
     const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
 
-    const paymentLink = await payosClient.paymentRequests.create({
-        orderCode: Number(orderCode),
-        amount,
-        description: `TT ${planCode}`.substring(0, 25),
-        returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
-        cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
-        expiredAt,
-    });
+    try {
+        const paymentLink = await payosClient.paymentRequests.create({
+            orderCode: Number(orderCode),
+            amount,
+            description: `TT ${planCode}`.substring(0, 25),
+            returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
+            cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
+            expiredAt,
+        });
 
-    console.log('PayOS response:', JSON.stringify(paymentLink, null, 2));
+        console.log('PayOS response:', JSON.stringify(paymentLink, null, 2));
 
-    return {
-        qrCode: paymentLink.qrCode,
-        checkoutUrl: paymentLink.checkoutUrl,
-        orderCode,
-        originalAmount: Math.round(originalAmount),
-        discountAmount,
-        amount,
-        voucher,
-        expiredAt,
-    };
+        return {
+            qrCode: paymentLink.qrCode,
+            checkoutUrl: paymentLink.checkoutUrl,
+            orderCode,
+            originalAmount: Math.round(originalAmount),
+            discountAmount,
+            amount,
+            voucher,
+            expiredAt,
+        };
+    } catch (err) {
+        try { await deleteOrderByCode(orderCode); } catch { /* best-effort */ }
+        const message = String(err?.message || err?.desc || '').trim();
+        throw {
+            status: 502,
+            message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
+        };
+    }
 };
 
 export const handleWebhook = async (body) => {
@@ -245,42 +266,7 @@ export const handleWebhook = async (body) => {
                 return webhookData;
             }
 
-            const isTopup = order.note === 'topup' || order.topup_config != null;
-
-            if (isTopup) {
-                // Mua lẻ hạn mức — cấp grant, KHÔNG gọi activateUserPlan.
-                await fulfillTopupOrder(order, client);
-                console.log(`[Webhook] Top-up order ${webhookData.orderCode} granted`);
-            } else {
-                const userId = order.user_id || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
-                if (userId && order.plan_id) {
-                    await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
-
-                    // Gửi email xác nhận thanh toán thành công (async)
-                    const user = await findActiveUserByEmail(order.user_email);
-                    const plan = await findPlanById(order.plan_id);
-                    const expiresAt = new Date();
-                    expiresAt.setDate(expiresAt.getDate() + (plan?.duration_days || 30));
-
-                    sendSystemEmail(
-                        buildPaymentSuccessEmail({
-                            fullName: user?.full_name,
-                            email: order.user_email,
-                            planName: plan?.name || 'Unknown Plan',
-                            amount: order.amount,
-                            billingPeriod: order.billing_period || 'monthly',
-                            orderCode: order.order_code,
-                            paymentMethod: order.payment_method,
-                            expiresAt,
-                            invoiceUrl: `${FRONTEND_URL}/invoices/${order.order_code}`,
-                        })
-                    ).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
-                } else {
-                    console.warn(`[Webhook] Không tìm được user cho đơn ${webhookData.orderCode} — plan chưa được kích hoạt`);
-                }
-
-                await redeemVoucherForOrder(order, client);
-            }
+            await fulfillPaidOrder(order, client);
             await client.query('COMMIT');
         } catch (err) {
             await client.query('ROLLBACK');
@@ -326,7 +312,17 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
 };
 
 export const getOrderStatus = async (orderCode) => {
-    return await findOrderStatusByCode(orderCode);
+    const current = await findOrderStatusByCode(orderCode);
+    if (!current) return null;
+    if (current.status !== 'pending') return current;
+
+    const refreshed = await tryFulfillPendingOrderOnStatusCheck(orderCode);
+    if (!refreshed) return current;
+    return {
+        status: refreshed.status,
+        user_id: refreshed.user_id,
+        user_email: refreshed.user_email,
+    };
 };
 
 const configsEqual = (a, b) => {
@@ -387,6 +383,7 @@ export const createCustomPaymentLink = async ({
     };
 
     const pendingWindowMinutes = getPayosPendingWindowMinutes();
+    const reuseWindowMinutes = Math.max(1, pendingWindowMinutes - 2);
     const orderCode = generateOrderCode();
     const hasVoucher = Boolean(String(voucherCode || '').trim());
 
@@ -464,6 +461,19 @@ export const createCustomPaymentLink = async ({
                 customConfig,
             }, client);
             createdNewPlan = true;
+        }
+
+        const cancelledDupes = await cancelRecentPendingPlanOrders({
+            userId,
+            userEmail,
+            planId: plan.id,
+            billingPeriod,
+            withinMinutes: reuseWindowMinutes,
+            queryable: client,
+        });
+        if (cancelledDupes.length) {
+            // PayOS cancel outside txn best-effort after commit — fire now is fine too
+            bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code)).catch(() => {});
         }
 
         if (hasVoucher) {

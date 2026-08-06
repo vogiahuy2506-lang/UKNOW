@@ -171,6 +171,25 @@ export async function metricConsecutiveCronNoops(jobCode, limit = 3) {
   return { consecutive, enough: true };
 }
 
+/**
+ * Latest reconcile run rescued count (webhook gap detector).
+ * @param {string} [jobCode]
+ * @returns {Promise<{ rescued: number, found: boolean, result: object|null }>}
+ */
+export async function metricLatestCronRescued(jobCode = 'payos_order_reconcile') {
+  const { rows } = await db.query(
+    `SELECT status, result
+     FROM cron_job_runs
+     WHERE job_code = $1
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [jobCode]
+  );
+  if (!rows.length) return { rescued: 0, found: false, result: null };
+  const rescued = Number(rows[0].result?.rescued ?? 0);
+  return { rescued, found: true, result: rows[0].result || {} };
+}
+
 export async function metricAiTokenSpike() {
   const { rows } = await db.query(
     `WITH today AS (

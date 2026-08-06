@@ -93,6 +93,26 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'payos_reconcile_rescued': {
+      const jobCode = config.jobCode || 'payos_order_reconcile';
+      const need = Number.isFinite(threshold) ? threshold : 1;
+      const m = await alertRepo.metricLatestCronRescued(jobCode);
+      if (!m.found) return null;
+      if (m.rescued >= need) {
+        const codes = Array.isArray(m.result?.rescuedOrderCodes)
+          ? m.result.rescuedOrderCodes.slice(0, 5).join(', ')
+          : '';
+        return {
+          measuredValue: m.rescued,
+          message:
+            `Đối soát PayOS vừa cứu ${m.rescued} đơn đã trả mà webhook chưa kích hoạt`
+            + (codes ? ` (${codes})` : '')
+            + ' — kiểm tra webhook PayOS',
+          payload: m,
+        };
+      }
+      return null;
+    }
     case 'ai_cost_spike': {
       const m = await alertRepo.metricAiTokenSpike();
       if (m.avgPrev7 <= 0) return null;

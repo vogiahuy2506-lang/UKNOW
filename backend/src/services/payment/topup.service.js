@@ -18,8 +18,10 @@ import { findAllPricingRows } from '../../repositories/payment/customPlan.reposi
 import {
   createOrder,
   deleteOrderByCode,
+  cancelRecentPendingTopupOrders,
 } from '../../repositories/payment/payment.repository.js';
 import { getPayosPendingWindowMinutes } from '../../repositories/voucher.repository.js';
+import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 import { _clearQuotaCache } from '../../utils/userSendLimit.util.js';
 import crypto from 'crypto';
 
@@ -229,12 +231,21 @@ export async function createTopupPaymentLink({
   const amount = Math.round(quote.total);
   const orderCode = generateOrderCode();
   const pendingWindowMinutes = await getPayosPendingWindowMinutes();
+  const reuseWindowMinutes = Math.max(1, Number(pendingWindowMinutes) - 2);
   const topupConfig = {
     quantities: quote.quantities,
     billingUserId: quote.billingUserId,
     items: quote.items,
     total: amount,
   };
+
+  const cancelledDupes = await cancelRecentPendingTopupOrders({
+    userId,
+    withinMinutes: reuseWindowMinutes,
+  });
+  if (cancelledDupes.length) {
+    await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
+  }
 
   const client = await db.getClient();
   let order;

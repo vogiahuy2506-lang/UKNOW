@@ -106,9 +106,137 @@ export const findOrderByCode = async (orderCode, queryable = db) => {
     const { rows } = await queryable.query(
         `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
                 amount, voucher_id, voucher_code, discount_amount, note, topup_config,
-                payment_method
+                payment_method, created_at
          FROM orders WHERE order_code = $1`,
         [orderCode]
+    );
+    return rows[0] || null;
+};
+
+/**
+ * Pending payos orders created within the last `withinHours` hours.
+ * @param {number} withinHours
+ * @returns {Promise<object[]>}
+ */
+export const findPendingPayosOrdersSinceHours = async (withinHours = 48) => {
+    const hours = Math.max(1, Number(withinHours) || 48);
+    const { rows } = await db.query(
+        `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
+                amount, voucher_id, voucher_code, discount_amount, note, topup_config,
+                payment_method, created_at
+         FROM orders
+         WHERE status = 'pending'
+           AND COALESCE(payment_method, 'payos') = 'payos'
+           AND created_at >= NOW() - ($1 || ' hours')::interval
+         ORDER BY created_at ASC`,
+        [String(hours)]
+    );
+    return rows;
+};
+
+/**
+ * Pending payos orders older than `olderThanHours`.
+ * @param {number} olderThanHours
+ */
+export const findStalePendingPayosOrders = async (olderThanHours = 72) => {
+    const hours = Math.max(1, Number(olderThanHours) || 72);
+    const { rows } = await db.query(
+        `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
+                amount, voucher_id, voucher_code, discount_amount, note, topup_config,
+                payment_method, created_at
+         FROM orders
+         WHERE status = 'pending'
+           AND COALESCE(payment_method, 'payos') = 'payos'
+           AND created_at < NOW() - ($1 || ' hours')::interval
+         ORDER BY created_at ASC
+         LIMIT 200`,
+        [String(hours)]
+    );
+    return rows;
+};
+
+/**
+ * Cancel pending plan checkout duplicates for the same user/plan/period.
+ * @returns {Promise<object[]>} cancelled rows
+ */
+export const cancelRecentPendingPlanOrders = async ({
+    userId = null,
+    userEmail = null,
+    planId,
+    billingPeriod = 'monthly',
+    withinMinutes = 13,
+    reason = '[OPS] Replaced by newer checkout attempt',
+    queryable = db,
+} = {}) => {
+    const minutes = Math.max(1, Number(withinMinutes) || 13);
+    const { rows } = await queryable.query(
+        `UPDATE orders
+         SET status = 'cancelled',
+             note = CASE
+               WHEN note IS NULL OR note = '' THEN $5
+               ELSE note || E'\\n' || $5
+             END,
+             updated_at = NOW()
+         WHERE status = 'pending'
+           AND COALESCE(payment_method, 'payos') = 'payos'
+           AND plan_id = $1
+           AND billing_period = $2
+           AND COALESCE(note, '') <> 'topup'
+           AND topup_config IS NULL
+           AND created_at >= NOW() - ($3 || ' minutes')::interval
+           AND (
+             ($4::bigint IS NOT NULL AND user_id = $4)
+             OR ($6::text IS NOT NULL AND LOWER(user_email) = LOWER($6))
+           )
+         RETURNING order_code, id`,
+        [planId, billingPeriod, String(minutes), userId, reason, userEmail]
+    );
+    return rows;
+};
+
+/**
+ * Cancel recent pending top-up orders for the same user.
+ */
+export const cancelRecentPendingTopupOrders = async ({
+    userId,
+    withinMinutes = 13,
+    reason = '[OPS] Replaced by newer top-up checkout attempt',
+    queryable = db,
+} = {}) => {
+    if (!userId) return [];
+    const minutes = Math.max(1, Number(withinMinutes) || 13);
+    const { rows } = await queryable.query(
+        `UPDATE orders
+         SET status = 'cancelled',
+             note = CASE
+               WHEN note IS NULL OR note = '' THEN $2
+               ELSE note || E'\\n' || $2
+             END,
+             updated_at = NOW()
+         WHERE status = 'pending'
+           AND COALESCE(payment_method, 'payos') = 'payos'
+           AND user_id = $1
+           AND (note = 'topup' OR topup_config IS NOT NULL)
+           AND created_at >= NOW() - ($3 || ' minutes')::interval
+         RETURNING order_code, id`,
+        [userId, reason, String(minutes)]
+    );
+    return rows;
+};
+
+export const cancelPendingOrderWithNote = async (orderCode, note, queryable = db) => {
+    const { rows } = await queryable.query(
+        `UPDATE orders
+         SET status = 'cancelled',
+             note = CASE
+               WHEN note IS NULL OR note = '' THEN $2
+               ELSE note || E'\\n' || $2
+             END,
+             updated_at = NOW()
+         WHERE order_code = $1
+           AND status = 'pending'
+         RETURNING id, order_code, status`,
+        [orderCode, note]
     );
     return rows[0] || null;
 };

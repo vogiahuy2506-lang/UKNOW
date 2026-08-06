@@ -755,6 +755,55 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Custom Plan orphan cleanup: mỗi giờ phút 15');
 
+  // ── PayOS order reconcile (webhook backup) — every 10 minutes at :05/:15/... ──
+  cron.schedule('5-59/10 * * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        reconcileRecentPendingOrders,
+        PAYOS_RECONCILE_JOB_CODE,
+      } = await import('../services/payment/payosReconcile.service.js');
+      await cronJobRunRepository.recordRun(PAYOS_RECONCILE_JOB_CODE, async () => {
+        const summary = await reconcileRecentPendingOrders();
+        if (summary.rescued > 0) {
+          console.warn(
+            `[Scheduler][OPS] PayOS reconcile rescued ${summary.rescued} order(s): `
+            + `${summary.rescuedOrderCodes.join(', ')}`
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đối soát PayOS:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo PayOS order reconcile: mỗi 10 phút (phút 5/15/25/…)');
+
+  // ── PayOS expire stale pending — hourly at minute 25 (after reconcile ticks) ──
+  cron.schedule('25 * * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        expireStalePendingOrders,
+        PAYOS_EXPIRE_JOB_CODE,
+      } = await import('../services/payment/payosReconcile.service.js');
+      await cronJobRunRepository.recordRun(PAYOS_EXPIRE_JOB_CODE, async () => {
+        const summary = await expireStalePendingOrders();
+        if (summary.rescued > 0 || summary.cancelled > 0) {
+          console.log(
+            `[Scheduler] PayOS expire: rescued=${summary.rescued} cancelled=${summary.cancelled}`
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi huỷ đơn PayOS quá hạn:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo PayOS stale pending expire: mỗi giờ phút 25');
+
   // ── Ops alerts evaluator (PLAN_DO_LUONG_KPI Phần A) ─────────────────────────
   cron.schedule('*/5 * * * *', async () => {
     try {

@@ -577,7 +577,17 @@ describe('once schedule past / year-rollover guard', () => {
     const c = await insertCampaign({ ownerId: o.id });
     const t = await loginAs(o);
 
-    const v = hanoiParts(new Date(Date.now() + 60 * 1000));
+    // +5 phút, KHÔNG phải +60 giây.
+    //
+    // Backend so mốc ở độ chính xác PHÚT. Với +60 giây, nếu bài chạy vào quanh
+    // giây thứ 59 thì request vượt qua ranh giới phút, mốc đích thành quá khứ —
+    // và vì cron `once` mã hoá ngày+tháng, cron-parser nhảy thẳng sang năm sau,
+    // vượt cửa sổ 180 ngày → 400. Cửa sổ hỏng chỉ ~1 giây mỗi phút nhưng đủ để
+    // làm CI đỏ ngẫu nhiên.
+    //
+    // +5 phút vẫn chứng minh đúng điều cần chứng minh: cửa sổ tương lai ngắn
+    // (luồng "chạy sau N phút", gửi lên dưới dạng `once`) KHÔNG bị chặn.
+    const v = hanoiParts(new Date(Date.now() + 5 * 60 * 1000));
     const cron = `${Number(v.minute)} ${Number(v.hour)} ${Number(v.day)} ${Number(v.month)} *`;
 
     const res = await request(app)
