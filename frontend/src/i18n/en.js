@@ -1652,6 +1652,7 @@ export default {
     aiToggleLabel: 'Enable AI for this chat',
     aiToggleDisabledHint: 'Chatbot is off for this Zalo account',
     aiToggleManualHint: 'You are replying manually. AI will stay off until you turn it back on.',
+    sentAiPausedHint: 'Sent. AI paused on this chat — turn it back on if you want the bot to reply.',
     manualBadge: 'Manual',
     openDeployModal: 'Open Deploy',
     emptyInboxHint: 'No conversations yet. 1-1 chats appear when someone messages you.',
