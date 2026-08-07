@@ -1634,6 +1634,7 @@ export default {
     takeOver: 'I will reply',
     resumeAi: 'Resume AI',
     aiPausedHint: 'AI is paused for this conversation',
+    aiToggleLabel: 'Auto-reply with AI',
     goToSettings: 'Go to Zalo Settings to connect',
     zaloNotConnected: 'Zalo account not connected',
     connectZaloFirst: 'Please connect Zalo to receive messages',

@@ -1649,6 +1649,7 @@ export default {
     takeOver: 'Tôi tự trả lời',
     resumeAi: 'Bật lại AI',
     aiPausedHint: 'AI đang tạm dừng cho hội thoại này',
+    aiToggleLabel: 'Tự động trả lời bằng AI',
     goToSettings: 'Vào Cài đặt Zalo để kết nối',
     zaloNotConnected: 'Tài khoản Zalo chưa kết nối',
     connectZaloFirst: 'Vui lòng kết nối Zalo để nhận tin nhắn',
