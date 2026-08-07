@@ -165,6 +165,73 @@ class UsageTrackingRepository {
 
     return true;
   }
+
+  /**
+   * Deduct credits from user (used in marketplace purchase)
+   * Insert delta = -amount into usage_logs
+   *
+   * @param {number} userId
+   * @param {number} amount - Amount to deduct (must be > 0)
+   * @param {object} metadata - Optional metadata
+   * @param {import('pg').PoolClient} [client] - Transaction client
+   * @returns {Promise<object>} - { success, deducted, newBalance, record }
+   */
+  async deductCredits(userId, amount, metadata = {}, client = null) {
+    if (amount <= 0) {
+      throw new Error('Amount must be positive');
+    }
+
+    const queryable = client || db;
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    // Check current balance
+    const { rows: balanceRows } = await queryable.query(
+      `SELECT COALESCE(SUM(delta), 0) as balance
+       FROM usage_logs
+       WHERE id_user = $1
+         AND resource_type = 'ai_credit'
+         AND period_start >= $2`,
+      [userId, periodStart.toISOString()]
+    );
+
+    const currentBalance = parseInt(balanceRows[0]?.balance || 0, 10);
+    if (currentBalance < amount) {
+      const error = new Error('Không đủ credits');
+      error.code = 'INSUFFICIENT_CREDITS';
+      error.status = 400;
+      error.available = currentBalance;
+      error.required = amount;
+      throw error;
+    }
+
+    // Insert deduction record
+    const usageMetadata = {
+      ...metadata,
+      type: 'marketplace_purchase',
+    };
+
+    const { rows } = await queryable.query(
+      `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
+       VALUES ($1, 'ai_credit', $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        userId,
+        -amount, // negative delta
+        periodStart.toISOString(),
+        periodEnd.toISOString(),
+        JSON.stringify(usageMetadata),
+      ]
+    );
+
+    return {
+      success: true,
+      deducted: amount,
+      newBalance: currentBalance - amount,
+      record: rows[0],
+    };
+  }
 }
 
 export default new UsageTrackingRepository();

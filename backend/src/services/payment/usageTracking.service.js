@@ -194,6 +194,16 @@ class UsageTrackingService {
     return planRepository.getUserFeatures(userId);
   }
 
+  /**
+   * Deduct credits from user (used in marketplace purchase)
+   * @param {number} userId
+   * @param {number} amount - Amount to deduct (must be > 0)
+   * @param {object} metadata - Optional metadata
+   */
+  async deductCredits(userId, amount, metadata = {}) {
+    return usageTrackingRepository.deductCredits(userId, amount, metadata);
+  }
+
   _calculatePercentages(usageMap, limits) {
     if (!limits) return {};
 

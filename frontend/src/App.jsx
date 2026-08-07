@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
-import { useI18n } from './i18n';
+import { useI18n, I18nProvider } from './i18n';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -40,7 +40,6 @@ import Courses from './pages/courses/Courses';
 import Products from './pages/products/Products';
 import Orders from './pages/orders/Orders';
 import TopupPage from './pages/billing/TopupPage';
-import BillingHubPage from './pages/billing/BillingHubPage';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import PublicDPA from './pages/public/PublicDPA';
@@ -85,6 +84,15 @@ import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import Marketplace from './pages/marketplace/Marketplace';
+import { MarketplaceModalProvider } from './contexts/MarketplaceModalContext';
+import MarketplaceListingRedirect from './pages/marketplace/MarketplaceListingRedirect';
+import MyListings from './pages/marketplace/MyListings';
+import MyPurchases from './pages/marketplace/MyPurchases';
+import MyFavorites from './pages/marketplace/MyFavorites';
+import CreateListing from './pages/marketplace/CreateListing';
+import AdminMarketplace from './pages/marketplace/AdminMarketplace';
+import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
 import { getPostAuthPath } from './utils/authRedirect';
 
 const LoadingScreen = () => {
@@ -209,19 +217,23 @@ function App() {
 
   if (typeof window !== 'undefined' && !isPrimaryAppHostname(window.location.hostname)) {
     return (
-      <>
-        {toaster}
-        <LpRendererByHost />
-        {createPortal(<div id="modal-root"></div>, document.body)}
-      </>
+      <I18nProvider>
+        <>
+          {toaster}
+          <LpRendererByHost />
+          {createPortal(<div id="modal-root"></div>, document.body)}
+        </>
+      </I18nProvider>
     );
   }
 
   return (
     <>
-      <Router>
-        {toaster}
-        <Routes>
+      <I18nProvider>
+        <Router>
+          <>
+            {toaster}
+            <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
             <PublicRoute>
@@ -312,7 +324,9 @@ function App() {
           {/* Protected Routes - prefix /app */}
           <Route path="/app" element={
             <ProtectedRoute>
-              <MainLayout />
+              <MarketplaceModalProvider>
+                <MainLayout />
+              </MarketplaceModalProvider>
             </ProtectedRoute>
           }>
             <Route index element={<AiHomePage />} />
@@ -344,8 +358,7 @@ function App() {
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
             <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
-            <Route path="billing" element={<OwnerRoute><BillingHubPage /></OwnerRoute>} />
-            <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />
+            <Route path="topup" element={<TopupPage />} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />
@@ -364,12 +377,24 @@ function App() {
             <Route path="courses" element={<AdminUsernameRoute><Courses /></AdminUsernameRoute>} />
             <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
+
+            {/* Marketplace - unified page with tabs */}
+            <Route path="marketplace" element={<Marketplace />} />
+            <Route path="marketplace/my" element={<Marketplace />} />
+            <Route path="marketplace/my-purchases" element={<Marketplace />} />
+            <Route path="marketplace/my-favorites" element={<Marketplace />} />
+            <Route path="marketplace/create" element={<CreateListing />} />
+            <Route path="marketplace/:id" element={<MarketplaceListingRedirect />} />
+            <Route path="admin/marketplace" element={<AdminMarketplace />} />
+            <Route path="admin/marketplace/analytics" element={<MarketplaceAnalytics />} />
           </Route>
 
           {/* Admin Routes - chỉ super_admin */}
           <Route path="/admin" element={
             <AdminRoute>
-              <MainLayout />
+              <MarketplaceModalProvider>
+                <MainLayout />
+              </MarketplaceModalProvider>
             </AdminRoute>
           }>
             <Route index element={<AdminDashboard />} />
@@ -405,7 +430,9 @@ function App() {
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </>
       </Router>
+      </I18nProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>
   );

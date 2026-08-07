@@ -284,12 +284,7 @@ INSERT INTO topup_pricing (item_key, unit_price, min_qty, step_qty, max_qty, is_
 VALUES
   ('zalo_messages', 100, 50, 50, NULL, TRUE, 10),
   ('emails', 20, 250, 250, 50000, TRUE, 20),
-  ('ai_credits', 200, 25, 25, 5000, TRUE, 30),
-  ('zalo_accounts', 50000, 1, 1, 50, TRUE, 40),
-  ('email_accounts', 50000, 1, 1, 50, TRUE, 50),
-  ('landing_pages', 30000, 1, 1, 200, TRUE, 60),
-  ('chatbots', 100000, 1, 1, 100, TRUE, 70),
-  ('employees', 50000, 1, 1, 100, FALSE, 80);
+  ('ai_credits', 200, 25, 25, 5000, TRUE, 30);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,
@@ -297,43 +292,13 @@ CREATE TABLE topup_grants (
   item_key   VARCHAR(50) NOT NULL,
   qty        INTEGER NOT NULL CHECK (qty > 0),
   order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  cycle_end  TIMESTAMPTZ,
-  reminder_count INTEGER NOT NULL DEFAULT 0,
+  cycle_end  TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key),
-  CONSTRAINT topup_grants_consumable_no_expiry CHECK (
-    item_key NOT IN ('zalo_messages', 'emails', 'ai_credits')
-    OR cycle_end IS NULL
-  )
+  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key)
 );
 
 CREATE INDEX idx_topup_grants_user_item_cycle
   ON topup_grants (user_id, item_key, cycle_end);
-
-CREATE TABLE topup_locked_resources (
-  id            BIGSERIAL PRIMARY KEY,
-  user_id       BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  resource_key  VARCHAR(50) NOT NULL,
-  resource_id   BIGINT      NOT NULL,
-  locked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT topup_locked_unique UNIQUE (resource_key, resource_id)
-);
-
-CREATE INDEX idx_topup_locked_user
-  ON topup_locked_resources (user_id, resource_key);
-
-CREATE TABLE topup_debits (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  item_key    VARCHAR(50) NOT NULL,
-  qty         INTEGER     NOT NULL CHECK (qty > 0),
-  source_key  VARCHAR(120) NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT topup_debits_source_unique UNIQUE (item_key, source_key)
-);
-
-CREATE INDEX idx_topup_debits_user_item
-  ON topup_debits (user_id, item_key);
 
 -- ─── Vouchers (migration 036) ──────────────────────────────────────────
 CREATE TABLE vouchers (
@@ -1383,6 +1348,76 @@ CREATE TABLE cron_job_runs (
   error_message  TEXT
 );
 CREATE INDEX idx_cron_job_runs_job_started ON cron_job_runs (job_code, started_at DESC);
+
+-- ─── Marketplace (migration 108) ──────────────────────────────────────
+CREATE TABLE marketplace_listings (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    resource_type VARCHAR(20) NOT NULL CHECK (resource_type IN ('campaign', 'chatbot')),
+    resource_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50),
+    tags TEXT[],
+    price_credits INTEGER DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'paused')),
+    visibility VARCHAR(20) DEFAULT 'public' CHECK (visibility IN ('public', 'team')),
+    view_count INTEGER DEFAULT 0,
+    purchase_count INTEGER DEFAULT 0,
+    rating_avg DECIMAL(3,2) DEFAULT 0,
+    rating_count INTEGER DEFAULT 0,
+    snapshot_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    published_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_listings_status ON marketplace_listings(status);
+CREATE INDEX idx_listings_type ON marketplace_listings(resource_type);
+CREATE INDEX idx_listings_category ON marketplace_listings(category);
+CREATE INDEX idx_listings_rating ON marketplace_listings(rating_avg DESC);
+CREATE INDEX idx_listings_user ON marketplace_listings(id_user);
+
+CREATE TABLE marketplace_purchases (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    seller_id BIGINT NOT NULL REFERENCES users(id),
+    credits_spent INTEGER NOT NULL,
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('purchase', 'refund')),
+    cloned_resource_id BIGINT,
+    cloned_resource_type VARCHAR(20),
+    purchased_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(id_user, listing_id)
+);
+
+CREATE INDEX idx_purchases_user ON marketplace_purchases(id_user);
+CREATE INDEX idx_purchases_listing ON marketplace_purchases(listing_id);
+CREATE INDEX idx_purchases_seller ON marketplace_purchases(seller_id);
+
+CREATE TABLE marketplace_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(id_user, listing_id)
+);
+
+CREATE INDEX idx_reviews_listing ON marketplace_reviews(listing_id);
+CREATE INDEX idx_reviews_user ON marketplace_reviews(id_user);
+
+CREATE TABLE marketplace_favorites (
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (id_user, listing_id)
+);
+
+CREATE INDEX idx_favorites_user ON marketplace_favorites(id_user);
+CREATE INDEX idx_favorites_listing ON marketplace_favorites(listing_id);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

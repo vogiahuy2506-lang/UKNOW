@@ -156,6 +156,21 @@ export const campaignRunLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKeyForRequest(req, 'campaign:'),
 });
 
+// Marketplace purchase limiter — chống spam mua hàng
+export const marketplacePurchaseLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 60 * 1000, // 1 phút
+  max: 5, // 5 lần mua mỗi phút
+  message: {
+    success: false,
+    message: 'Bạn thực hiện quá nhiều lần mua. Vui lòng thử lại sau.',
+    code: 'MARKETPLACE_PURCHASE_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => rateLimitKeyForRequest(req, 'marketplace:'),
+});
+
 // SSE connect attempts — separate from REST budget
 export const sseLimiter = rateLimit({
   skip: skipInTest,

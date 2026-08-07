@@ -14,10 +14,7 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineViewList,
-  HiOutlinePlusCircle,
-  HiOutlineLogout,
-  HiOutlineLockClosed,
-  HiOutlineUserCircle,
+  HiOutlinePlus,
   HiOutlineAcademicCap,
   HiOutlineCube,
   HiOutlineX,
@@ -33,151 +30,61 @@ import {
   HiOutlineSparkles,
   HiOutlineServer,
   HiOutlineClipboard,
-  HiOutlineTag,
-  HiOutlinePhone,
   HiOutlineMailOpen,
   HiOutlinePencil,
-  HiOutlinePlus,
   HiOutlineDocumentText,
   HiOutlineQuestionMarkCircle,
-  HiOutlineBookOpen,
   HiOutlineBell,
   HiOutlineFilter,
+  HiOutlineShoppingCart,
 } from 'react-icons/hi';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
 
-import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
-import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
-import ContextSwitcher from '../../ContextSwitcher';
+const AVATAR_STYLES = {
+  admin: 'from-purple-500 to-violet-600',
+  super_admin: 'from-purple-500 to-violet-600',
+  user: 'from-orange-500 to-red-500',
+};
 
-// Menu dành cho super_admin — quản trị hệ thống
+// ── Menu data ────────────────────────────────────────────────────────────────
+
 const superAdminMenuItems = (t) => [
-  {
-    name: t('nav.dashboard'),
-    section: t('nav.adminNavOverview'),
-    path: '/admin',
-    icon: HiOutlineHome,
-    end: true,
-  },
-  {
-    name: t('nav.memberManagement'),
-    section: t('nav.adminNavBusiness'),
-    path: '/admin/members',
-    icon: HiOutlineShieldCheck,
-  },
-  {
-    name: t('nav.planManagement'),
-    section: t('nav.adminNavBusiness'),
-    path: '/admin/plans',
-    icon: HiOutlineCurrencyDollar,
-  },
-  {
-    name: t('nav.voucherManagement'),
-    section: t('nav.adminNavBusiness'),
-    path: '/admin/vouchers',
-    icon: HiOutlineTicket,
-  },
-  {
-    name: t('nav.orders'),
-    section: t('nav.adminNavBusiness'),
-    path: '/admin/orders',
-    icon: HiOutlineClipboardList,
-  },
-  {
-    name: t('nav.serverMonitoring'),
-    section: t('nav.adminNavMonitoring'),
-    path: '/admin/health/system',
-    icon: HiOutlineServer,
-  },
-  {
-    name: t('nav.alertCenter'),
-    section: t('nav.adminNavMonitoring'),
-    path: '/admin/alerts',
-    icon: HiOutlineBell,
-  },
-  {
-    name: t('nav.activationFunnel'),
-    section: t('nav.adminNavOverview'),
-    path: '/admin/funnel',
-    icon: HiOutlineFilter,
-  },
-  {
-    name: t('nav.aiUsageAnalytics'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/ai-ops/usage',
-    icon: HiOutlineSparkles,
-  },
-  {
-    name: t('nav.aiModels'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/ai-models',
-    icon: HiOutlineCog,
-  },
-  {
-    name: t('nav.notificationCenter'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/notification-center',
-    icon: HiOutlineMailOpen,
-  },
-  {
-    name: t('nav.helpArticles'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/help-articles',
-    icon: HiOutlineDocumentText,
-  },
-  {
-    name: t('nav.helpUnanswered'),
-    section: t('nav.adminNavMessaging'),
-    path: '/admin/ai-ops/unanswered',
-    icon: HiOutlineQuestionMarkCircle,
-  },
-  {
-    name: t('nav.systemAuditLogs'),
-    section: t('nav.adminNavMonitoring'),
-    path: '/admin/audit-logs',
-    icon: HiOutlineClipboard,
-  },
-  {
-    name: t('nav.landingCustomizer'),
-    section: t('nav.adminNavMonitoring'),
-    path: '/admin/landing-customizer',
-    icon: HiOutlinePencil,
-  },
+  { name: t('nav.dashboard'), section: t('nav.adminNavOverview'), path: '/admin', icon: HiOutlineHome, end: true },
+  { name: t('nav.memberManagement'), section: t('nav.adminNavBusiness'), path: '/admin/members', icon: HiOutlineShieldCheck },
+  { name: t('nav.planManagement'), section: t('nav.adminNavBusiness'), path: '/admin/plans', icon: HiOutlineCurrencyDollar },
+  { name: t('nav.voucherManagement'), section: t('nav.adminNavBusiness'), path: '/admin/vouchers', icon: HiOutlineTicket },
+  { name: t('nav.orders'), section: t('nav.adminNavBusiness'), path: '/admin/orders', icon: HiOutlineClipboardList },
+  { name: t('nav.serverMonitoring'), section: t('nav.adminNavMonitoring'), path: '/admin/health/system', icon: HiOutlineServer },
+  { name: t('nav.alertCenter'), section: t('nav.adminNavMonitoring'), path: '/admin/alerts', icon: HiOutlineBell },
+  { name: t('nav.activationFunnel'), section: t('nav.adminNavOverview'), path: '/admin/funnel', icon: HiOutlineFilter },
+  { name: t('nav.aiUsageAnalytics'), section: t('nav.adminNavMessaging'), path: '/admin/ai-ops/usage', icon: HiOutlineSparkles },
+  { name: t('nav.aiModels'), section: t('nav.adminNavMessaging'), path: '/admin/ai-models', icon: HiOutlineCog },
+  { name: t('nav.notificationCenter'), section: t('nav.adminNavMessaging'), path: '/admin/notification-center', icon: HiOutlineMailOpen },
+  { name: t('nav.helpArticles'), section: t('nav.adminNavMessaging'), path: '/admin/help-articles', icon: HiOutlineDocumentText },
+  { name: t('nav.helpUnanswered'), section: t('nav.adminNavMessaging'), path: '/admin/ai-ops/unanswered', icon: HiOutlineQuestionMarkCircle },
+  { name: t('nav.systemAuditLogs'), section: t('nav.adminNavMonitoring'), path: '/admin/audit-logs', icon: HiOutlineClipboard },
+  { name: t('nav.landingCustomizer'), section: t('nav.adminNavMonitoring'), path: '/admin/landing-customizer', icon: HiOutlinePencil },
+  { name: t('nav.marketplaceManagement'), section: t('nav.adminNavMarketplace'), path: '/app/admin/marketplace', icon: HiOutlineShoppingCart },
+  { name: t('nav.marketplaceAnalytics'), section: t('nav.adminNavMarketplace'), path: '/app/admin/marketplace/analytics', icon: HiOutlineFilter },
 ];
 
-// Menu dành cho user_admin và employee — vận hành marketing
-// ownerOnly: true  → chỉ user_admin thấy
-// permission: [...]  → employee thấy nếu có ÍT NHẤT 1 trong các permission này
 const userMenuItems = (t) => [
+  { name: t('nav.aiAssistant'), path: '/app', icon: HiOutlineSparkles, end: true },
+  { name: t('nav.dashboard'), path: '/app/reports', icon: HiOutlineHome },
   {
-    name: t('nav.aiAssistant'),
-    path: '/app',
-    icon: HiOutlineSparkles,
-    end: true,
-  },
-  {
-    name: t('nav.dashboard'),
-    path: '/app/reports',
-    icon: HiOutlineHome,
-  },
-  // Chatbot cluster
-  {
-    name: t('nav.aiChatbot'),
-    icon: HiOutlineInbox,
+    name: t('nav.aiChatbot'), icon: HiOutlineInbox,
     children: [
-      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, permission: ['chatbot_create'] },
-      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, permission: ['chatbot_view', 'chatbot_create'] },
+      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus },
+      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox },
     ],
   },
   {
-    name: t('nav.campaigns'),
-    icon: HiOutlineLightningBolt,
+    name: t('nav.campaigns'), icon: HiOutlineLightningBolt,
     permission: ['campaigns_view', 'campaigns_create', 'campaigns_run', 'customers', 'email_settings', 'zalo_settings', 'email_templates', 'zalo_templates'],
     children: [
       { name: t('nav.quickSend'), path: '/app/quick-send', icon: HiOutlineMail, permission: ['campaigns_create'] },
       { name: t('nav.channelManagement'), path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
       { name: t('nav.messageTemplates'), path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.createCampaign'), path: '/app/campaigns/new', icon: HiOutlinePlusCircle, action: 'openCreateCampaignModal', permission: ['campaigns_create'] },
       { name: t('nav.campaignManagement'), path: '/app/campaigns', end: true, icon: HiOutlineViewList, permission: ['campaigns_view'] },
       { name: t('nav.runCampaign'), path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
       { name: t('nav.deliveryMonitor'), path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
@@ -185,36 +92,23 @@ const userMenuItems = (t) => [
     ],
   },
   {
-    name: t('nav.landingPage'),
-    icon: HiOutlineGlobeAlt,
+    name: t('nav.landingPage'), icon: HiOutlineGlobeAlt,
     children: [
       { name: t('nav.leadList'), path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
       { name: t('nav.htmlPages'), path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
     ],
   },
-  // Admin-only cluster: chỉ username "admin" mới thấy
   {
-    name: t('nav.adminOnlyCluster'),
-    icon: HiOutlineCube,
-    adminUsernameOnly: true,
+    name: t('nav.adminOnlyCluster'), icon: HiOutlineCube, adminUsernameOnly: true,
     children: [
-      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, adminUsernameOnly: true },
-      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, adminUsernameOnly: true },
-      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, adminUsernameOnly: true },
-      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, adminUsernameOnly: true },
+      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar },
+      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap },
+      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList },
     ],
   },
   {
-    name: t('nav.billing'),
-    icon: HiOutlineCurrencyDollar,
-    children: [
-      { name: t('nav.billingOverview'), path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
-      { name: t('nav.buyTopup'), path: '/app/topup', icon: HiOutlinePlusCircle, ownerOnly: true },
-    ],
-  },
-  {
-    name: t('nav.settings'),
-    icon: HiOutlineCog,
+    name: t('nav.settings'), icon: HiOutlineCog,
     children: [
       { name: t('nav.businessProfile'), path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
       { name: t('nav.employees'), path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
@@ -223,100 +117,113 @@ const userMenuItems = (t) => [
   },
 ];
 
-/**
- * Sidebar navigation component.
- *
- * Supports two display modes:
- * - Desktop: fixed sidebar on the left, collapsible to icon-only mode.
- * - Mobile: overlay drawer that slides in from the left.
- *
- * @param {boolean} isOpen - Whether sidebar is expanded (desktop) or visible (mobile)
- * @param {number} width - Sidebar pixel width (desktop only)
- * @param {boolean} isMobile - Whether the viewport is mobile-sized
- * @param {function} onClose - Callback to close sidebar (mobile only)
- */
-const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
-  const { t, locale, changeLocale } = useI18n();
+// ── Floating Submenu Panel (for collapsed sidebar) ──────────────────────────
+
+function SubmenuPanel({ item, onClose }) {
+  const { t } = useI18n();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useLocalStorageState('founder_sidebar_menus', [t('nav.aiChatbot'), t('nav.campaigns'), t('nav.settings'), t('nav.adminOnlyCluster')]);
-  const { user, logout, activeContext } = useAuthStore();
-  const isSuperAdmin = user?.role === 'admin';
-  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
-  const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
-  // Context-aware filtering: employee context dùng permissions do owner cấp,
-  // self context (chủ tài khoản) thấy hết.
-  const isEmployeeCtx = activeContext?.type === 'employee';
-  const ctxPermissions = activeContext?.permissions || {};
   const navigate = useNavigate();
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showAccountProfile, setShowAccountProfile] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const userMenuRef = useRef(null);
+
+  const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
+
+  const getActiveChild = (child) => {
+    if (child.path === '/app/campaigns/new') {
+      return isBuilderPage || location.pathname === '/app/campaigns/new';
+    }
+    if (child.end) return location.pathname === child.path;
+    return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+  };
+
+  const handleAction = (child) => {
+    if (child.action === 'openCreateCampaignModal') {
+      navigate('/app/campaigns', { state: { openCreateCampaignModal: true } });
+    } else if (child.action === 'openCreateEmployeeModal') {
+      navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } });
+    } else if (child.path) {
+      navigate(child.path);
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed top-0 left-[56px] h-full w-56 bg-white border-r border-gray-100 shadow-xl z-50 flex flex-col">
+      <div className="h-14 flex items-center px-4 border-b border-gray-100 shrink-0">
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
+          <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
+        </button>
+        <span className="text-[13px] font-bold text-gray-900">{item.name}</span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-2 px-2">
+        <div className="space-y-0.5">
+          {item.children.map((child) => {
+            const isActive = getActiveChild(child);
+            const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
+              ? t('sidebar.editCampaign')
+              : child.name;
+            const baseClass = `w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all ${
+              isActive ? 'bg-orange-50 text-orange-600 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`;
+
+            if (child.action) {
+              return (
+                <button key={child.path} type="button" onClick={() => handleAction(child)} className={baseClass}>
+                  {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+                  <span>{displayName}</span>
+                </button>
+              );
+            }
+
+            return (
+              <NavLink
+                key={child.path}
+                to={child.path}
+                end={child.end}
+                onClick={onClose}
+                className={() => baseClass}
+              >
+                {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+                <span>{displayName}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+// ── Sidebar Component ───────────────────────────────────────────────────────
+
+const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
+  const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const navRef = useRef(null);
   useScrollPersistence('founder_sidebar_scroll', navRef);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-        setShowUserMenu(false);
-      }
-    };
+  const { user, activeContext } = useAuthStore();
+  const isSuperAdmin = user?.role === 'admin';
+  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
+  const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
+  const isEmployeeCtx = activeContext?.type === 'employee';
+  const ctxPermissions = activeContext?.permissions || {};
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const [activeSubmenu, setActiveSubmenu] = useState(null);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  useEffect(() => { setActiveSubmenu(null); }, [location.pathname]);
 
-  const toggleMenu = (menuName) => {
-    setExpandedMenus((prev) =>
-      prev.includes(menuName)
-        ? prev.filter((name) => name !== menuName)
-        : [...prev, menuName]
-    );
-  };
-
-  const isActiveParent = (item) => {
-    if (item.children) {
-      return item.children.some((child) => {
-        if (child.end) {
-          return location.pathname === child.path;
-        }
-        return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-      }) ||
-        (item.name === t('nav.campaigns') && (location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder')));
-    }
-    return false;
-  };
-
-  /** Close the sidebar on mobile after navigating to a new route */
   const handleNavClose = () => {
+    setActiveSubmenu(null);
     if (isMobile && onClose) onClose();
   };
 
-  // On mobile: drawer slides in/out via transform; on desktop: fixed with given width
-  const sidebarStyle = isMobile ? { width: '280px' } : { width: `${width}px` };
-  const sidebarTransformClass = isMobile
-    ? isOpen
-      ? 'translate-x-0'
-      : '-translate-x-full'
-    : '';
+  const isDesktopExpanded = !isMobile && isOpen;
 
-  // On mobile the sidebar is always "open" layout (full labels shown), never icon-only
-  const showLabels = isMobile ? true : isOpen;
-
-  // Lọc menu item theo ngữ cảnh hoạt động.
-  // - ownerOnly: chỉ hiện khi đang ở context cá nhân (chủ tài khoản).
-  // - permission: trong employee context phải có ít nhất 1 quyền tương ứng.
-  // - adminUsernameOnly: chỉ hiện cho tài khoản có username = "admin" hoặc nhân viên của account đó.
   const filterItem = (item) => {
     if (item.hideInProd && import.meta.env.MODE === 'production') return false;
     if (item.ownerOnly && isEmployeeCtx) return false;
     if (item.adminUsernameOnly) {
-      // Chỉ hiện cho username = "admin" hoặc nhân viên của account admin
       if (isAdminUsername) return true;
       const ownerUsername = activeContext?.owner?.username?.toLowerCase();
       return ownerUsername === 'admin';
@@ -334,305 +241,188 @@ const Sidebar = ({ isOpen, width, isMobile, onClose }) => {
     })
     .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
 
-  const shouldShowSectionHeader = (item, index) => (
-    showLabels &&
-    isSuperAdmin &&
-    item.section &&
-    visibleMenuItems[index - 1]?.section !== item.section
-  );
+  const isParentActive = (item) => {
+    if (!item.children) return false;
+    return item.children.some((child) => {
+      if (child.end) return location.pathname === child.path;
+      return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+    }) || (item.name === t('nav.campaigns') && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
+  };
+
+  const handleParentClick = (item) => {
+    if (!item.children) {
+      navigate(item.path);
+      handleNavClose();
+      return;
+    }
+    setActiveSubmenu(activeSubmenu?.name === item.name ? null : item);
+  };
+
+  const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
+  const avatarInitial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
+
+  // Which items have their submenu expanded inline
+  const activeInlineSubmenu = isDesktopExpanded ? activeSubmenu : null;
+
+  const renderChildItems = (children) => {
+    return children.map((child) => {
+      const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
+      const isActiveChild = child.path === '/app/campaigns/new'
+        ? isBuilderPage || location.pathname === '/app/campaigns/new'
+        : (child.end ? location.pathname === child.path : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
+      const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
+        ? t('sidebar.editCampaign')
+        : child.name;
+      const baseClassName = `flex items-center gap-2 py-1.5 px-2 text-[13px] rounded-lg transition-colors ${
+        isActiveChild ? 'text-orange-600 font-semibold bg-orange-50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+      }`;
+
+      if (child.action === 'openCreateCampaignModal') {
+        return (
+          <button
+            key={child.path}
+            type="button"
+            onClick={() => { navigate('/app/campaigns', { state: { openCreateCampaignModal: true } }); handleNavClose(); }}
+            className={`${baseClassName} w-full text-left`}
+          >
+            {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+            <span>{displayName}</span>
+          </button>
+        );
+      }
+      if (child.action === 'openCreateEmployeeModal') {
+        return (
+          <button
+            key={child.path}
+            type="button"
+            onClick={() => { navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } }); handleNavClose(); }}
+            className={`${baseClassName} w-full text-left`}
+          >
+            {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+            <span>{displayName}</span>
+          </button>
+        );
+      }
+
+      return (
+        <NavLink
+          key={child.path}
+          to={child.path}
+          end={child.end}
+          onClick={handleNavClose}
+          className={() => baseClassName}
+        >
+          {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          <span>{displayName}</span>
+        </NavLink>
+      );
+    });
+  };
+
+  const sidebarWidth = isMobile ? 280 : (isOpen ? 280 : 56);
 
   return (
-    <aside
-      className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-40 sidebar-transition flex flex-col transition-transform duration-300 ease-in-out ${sidebarTransformClass}`}
-      style={sidebarStyle}
-    >
-      {/* Logo row — includes close button on mobile */}
-      <div className={`h-16 flex items-center border-b border-gray-200 px-4 ${showLabels ? 'justify-between' : 'justify-center'}`}>
-        <Link to="/" className="flex items-center gap-2.5 min-w-0 hover:opacity-75 transition-opacity">
-          <img
-            src={logoIcon}
-            alt="Founder AI"
-            className="w-8 h-8 object-contain shrink-0"
-          />
-          {showLabels && (
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-900 leading-tight truncate">{t('common.appName')}</p>
-              <p className="text-[11px] text-gray-400 leading-tight truncate">
-                {isSuperAdmin ? t('sidebar.systemAdmin') : t('sidebar.campaignManagement')}
-              </p>
-            </div>
-          )}
-        </Link>
-
-        {/* Close button — only on mobile */}
-        {isMobile && showLabels && (
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
-            aria-label={t('sidebar.closeMenu')}
-          >
-            <HiOutlineX className="w-5 h-5 text-gray-500" />
-          </button>
-        )}
-      </div>
-
-      {/* Context Switcher — chuyển giữa tài khoản cá nhân và các tổ chức */}
-      {!isSuperAdmin && (
-        <div className="px-2 pt-2">
-          <ContextSwitcher showLabels={showLabels} />
-        </div>
+    <>
+      {/* Backdrop */}
+      {activeSubmenu && (
+        <div className="fixed inset-0 z-40" onClick={() => setActiveSubmenu(null)} />
       )}
 
-      {/* Navigation */}
-      <nav ref={navRef} className={`p-2 space-y-1 overflow-y-auto flex-1 min-h-0 ${!showLabels ? 'px-2' : ''}`}>
-        {visibleMenuItems.map((item, index) => (
-          <div
-            key={item.name}
-            className={shouldShowSectionHeader(item, index) && index > 0 ? 'pt-3' : ''}
+      {/* Floating submenu panel (for collapsed sidebar) */}
+      {activeSubmenu && !isDesktopExpanded && (
+        <SubmenuPanel item={activeSubmenu} onClose={() => setActiveSubmenu(null)} />
+      )}
+
+      <aside
+        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-100 z-50 flex flex-col transition-all duration-300 ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
+        style={{ width: sidebarWidth }}
+      >
+        {/* Logo */}
+        <div className={`h-14 flex items-center border-b border-gray-100 shrink-0 ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}>
+          <Link
+            to="/"
+            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+            title={t('common.appName')}
           >
-            {shouldShowSectionHeader(item, index) && (
-              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                {item.section}
-              </p>
-            )}
-            {item.children ? (
-              <div>
+            <img src={logoIcon} alt={t('common.appName')} className="w-7 h-7 object-contain" />
+          </Link>
+          {isMobile && (
+            <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0" aria-label={t('sidebar.closeMenu')}>
+              <HiOutlineX className="w-5 h-5 text-gray-500" />
+            </button>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <nav ref={navRef} className={`flex-1 overflow-y-auto py-2 min-h-0 ${isOpen || isMobile ? 'px-2' : 'px-1'}`}>
+          {visibleMenuItems.map((item) => {
+            const active = item.children ? isParentActive(item) : (item.end ? location.pathname === item.path : location.pathname.startsWith(item.path + '/'));
+            const isSubmenuOpen = activeSubmenu?.name === item.name;
+
+            return (
+              <div key={item.name} className="mb-0.5">
                 <button
-                  onClick={() => toggleMenu(item.name)}
-                  className={`w-full flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
-                    } ${isActiveParent(item) ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                  title={!showLabels ? item.name : ''}
+                  onClick={() => handleParentClick(item)}
+                  title={item.name}
+                  className={`w-full flex items-center rounded-xl py-2.5 transition-all ${
+                    isSubmenuOpen ? 'bg-orange-100 text-orange-600' : active ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
+                  } ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}
                 >
-                  <item.icon className={`${showLabels ? 'w-5 h-5' : 'w-6 h-6'} transition-all duration-200`} />
-                  {showLabels && (
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  {(isOpen || isMobile) && (
                     <>
-                      <span className="flex-1 text-left ml-2 text-sm font-medium">{item.name}</span>
-                      {expandedMenus.includes(item.name) ? (
-                        <HiOutlineChevronDown className="w-4 h-4" />
-                      ) : (
-                        <HiOutlineChevronRight className="w-4 h-4" />
+                      <span className="ml-2.5 text-[13px] font-medium flex-1 text-left">{item.name}</span>
+                      {item.children && (
+                        <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`} />
                       )}
                     </>
                   )}
                 </button>
-                {showLabels && expandedMenus.includes(item.name) && (
-                  <div className="mt-1 space-y-0.5 ml-4 pl-2 border-l border-gray-200">
-                    {item.children.map((child) => {
-                      const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
-                      const isActiveChild = child.path === '/app/campaigns/new'
-                        ? isBuilderPage || location.pathname === '/app/campaigns/new'
-                        : (child.end
-                          ? location.pathname === child.path
-                          : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
 
-                      const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
-                        ? t('sidebar.editCampaign')
-                        : child.name;
-
-                      const baseClassName = `flex items-center px-2 py-2 text-sm transition-all duration-200 ${isActiveChild
-                        ? 'text-primary-600 font-medium bg-primary-50 border-l-2 border-primary-500 -ml-[13px] pl-[22px]'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                        }`;
-
-                      if (child.action === 'openCreateCampaignModal') {
-                        return (
-                          <button
-                            key={child.path}
-                            onClick={() => {
-                              navigate('/app/campaigns', { state: { openCreateCampaignModal: true } });
-                              handleNavClose();
-                            }}
-                            className={`${baseClassName} w-full text-left`}
-                            type="button"
-                          >
-                            {child.icon && <child.icon className="w-4 h-4 mr-2 text-gray-400" />}
-                            <span>{displayName}</span>
-                          </button>
-                        );
-                      }
-
-                      if (child.action === 'openCreateEmployeeModal') {
-                        return (
-                          <button
-                            key={child.path}
-                            onClick={() => {
-                              navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } });
-                              handleNavClose();
-                            }}
-                            className={`${baseClassName} w-full text-left`}
-                            type="button"
-                          >
-                            {child.icon && <child.icon className="w-4 h-4 mr-2 text-gray-400" />}
-                            <span>{displayName}</span>
-                          </button>
-                        );
-                      }
-
-                      return (
-                        <NavLink
-                          key={child.path}
-                          to={child.path}
-                          end={child.end}
-                          className={() => baseClassName}
-                          onClick={handleNavClose}
-                        >
-                          {child.icon && <child.icon className="w-4 h-4 mr-2 text-gray-400" />}
-                          <span>{displayName}</span>
-                        </NavLink>
-                      );
-                    })}
+                {/* Inline submenu (expanded sidebar or mobile) */}
+                {item.children && (isOpen || isMobile) && isSubmenuOpen && (
+                  <div className="mt-1 space-y-0.5 ml-4 pl-3 border-l border-gray-200">
+                    {renderChildItems(item.children)}
                   </div>
                 )}
               </div>
-            ) : (
-              <NavLink
-                to={item.path}
-                end={item.end}
-                className={({ isActive }) => {
-                  const isHighlight = item.highlight;
-                  if (isHighlight) {
-                    return `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'} bg-orange-50 text-orange-600 font-medium`;
-                  }
-                  return `flex items-center rounded-lg py-2 transition-all duration-200 ${!showLabels ? 'justify-center px-0' : 'px-2'
-                    } ${isActive
-                      ? 'bg-primary-50 text-primary-600 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
-                    }`;
-                }}
-                title={!showLabels ? item.name : ''}
-                onClick={handleNavClose}
-              >
-                <item.icon className={`${showLabels ? 'w-5 h-5' : 'w-6 h-6'} transition-all duration-200`} />
-                {showLabels && <span className="ml-2 text-sm font-medium">{item.name}</span>}
-              </NavLink>
-            )}
-          </div>
-        ))}
-      </nav>
+            );
+          })}
+        </nav>
 
-      {/* Public website links — chỉ hiển thị cho workspace users */}
-      {!isSuperAdmin && (
-        <div className={`border-t border-gray-100 py-2 ${showLabels ? 'px-3' : 'px-2'}`}>
-          {showLabels && (
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-2 mb-1">
-              {t('nav.website')}
-            </p>
+        {/* Footer */}
+        <div className="border-t border-gray-100 p-1.5 shrink-0">
+          {isMobile ? (
+            <NavLink
+              to={isSuperAdmin ? '/admin' : '/app/settings/ai-profile'}
+              className={({ isActive }) =>
+                `flex items-center rounded-xl py-2 px-3 transition-colors ${isActive ? 'bg-purple-50 text-purple-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'}`
+              }
+              onClick={handleNavClose}
+            >
+              <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${avatarGradient} flex items-center justify-center shrink-0 shadow-sm`}>
+                <span className="text-white font-bold text-[11px] leading-none">{avatarInitial}</span>
+              </div>
+              <div className="ml-2.5 flex flex-col min-w-0">
+                <span className="text-[13px] font-semibold text-gray-900 truncate">{user?.fullName || user?.username}</span>
+                <span className="text-[11px] text-gray-400 capitalize">{isSuperAdmin ? 'Admin' : activeContext?.type === 'employee' ? 'Nhân viên' : 'Chủ tài khoản'}</span>
+              </div>
+            </NavLink>
+          ) : (
+            <button
+              onClick={onToggle}
+              title={isOpen ? t('sidebar.collapseMenu') : t('sidebar.expandMenu')}
+              className="w-full flex items-center justify-center rounded-xl py-2.5 text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              {isOpen
+                ? <HiOutlineChevronRight className="w-5 h-5" />
+                : <HiOutlineChevronDown className="w-5 h-5 -rotate-90" />
+              }
+            </button>
           )}
-          <div className="space-y-0.5">
-            {[
-              // Đặt đầu nhóm: trước đây /huong-dan không có lối vào nào trong app,
-              // người dùng chỉ thấy tài liệu qua icon ? trên từng màn hình.
-              { name: t('nav.siteGuide'), path: '/huong-dan', icon: HiOutlineBookOpen },
-              { name: t('nav.siteHome'), path: '/', icon: HiOutlineHome },
-              { name: t('nav.sitePricing'), path: '/pricing', icon: HiOutlineTag },
-              { name: t('nav.siteContact'), path: '/contact', icon: HiOutlinePhone },
-            ].map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center rounded-lg py-1.5 transition-all text-gray-500 hover:text-gray-700 hover:bg-gray-50 ${!showLabels ? 'justify-center px-0' : 'px-2'}`}
-                title={!showLabels ? item.name : ''}
-                onClick={handleNavClose}
-              >
-                <item.icon className={`${showLabels ? 'w-4 h-4' : 'w-5 h-5'} transition-all shrink-0`} />
-                {showLabels && <span className="ml-2 text-xs">{item.name}</span>}
-              </Link>
-            ))}
-          </div>
         </div>
-      )}
-
-      {/* User section */}
-      <div
-        className={`border-t border-gray-200 p-2 ${showLabels ? 'px-4' : 'px-2'} relative`}
-        ref={userMenuRef}
-      >
-        <button
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className={`w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors ${showLabels ? 'px-2 py-2' : 'p-1 justify-center'
-            }`}
-        >
-          <div className={`${showLabels ? 'w-10 h-10' : 'w-9 h-9'} bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0`}>
-            <span className="text-white font-medium text-sm">
-              {user?.fullName?.[0] || user?.username?.[0] || 'U'}
-            </span>
-          </div>
-          {showLabels && (
-            <div className="ml-3 text-left min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.fullName || user?.username || 'User'}
-              </p>
-              <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
-            </div>
-          )}
-        </button>
-
-        {showUserMenu && (
-          <div className={`absolute ${showLabels ? 'left-4 right-4' : 'left-2 right-2'} bottom-16 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50`}>
-            <button
-              onClick={() => {
-                setShowUserMenu(false);
-                setShowAccountProfile(true);
-              }}
-              className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <HiOutlineUserCircle className="w-4 h-4 mr-3" />
-              {t('sidebar.accountInfo')}
-            </button>
-            <button
-              onClick={() => {
-                setShowUserMenu(false);
-                setShowChangePassword(true);
-              }}
-              className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <HiOutlineLockClosed className="w-4 h-4 mr-3" />
-              {t('sidebar.changePassword')}
-            </button>
-            <div className="border-t border-gray-100 my-1" />
-            <div className="flex items-center justify-between px-4 py-2">
-              <div className="flex items-center gap-3 text-sm text-gray-700">
-                <HiOutlineGlobeAlt className="w-4 h-4" />
-                {t('sidebar.language')}
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => changeLocale('vi')}
-                  className={`text-base px-1 py-0.5 rounded transition-opacity ${locale === 'vi' ? 'opacity-100' : 'opacity-30 hover:opacity-60'}`}
-                  title="Tiếng Việt"
-                >
-                  🇻🇳
-                </button>
-                <button
-                  onClick={() => changeLocale('en')}
-                  className={`text-base px-1 py-0.5 rounded transition-opacity ${locale === 'en' ? 'opacity-100' : 'opacity-30 hover:opacity-60'}`}
-                  title="English"
-                >
-                  🇺🇸
-                </button>
-              </div>
-            </div>
-            <div className="border-t border-gray-100 my-1" />
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-            >
-              <HiOutlineLogout className="w-4 h-4 mr-3" />
-              {t('sidebar.logout')}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <AccountProfileModal
-        isOpen={showAccountProfile}
-        onClose={() => setShowAccountProfile(false)}
-      />
-      <ChangePasswordModal
-        isOpen={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-      />
-    </aside>
+      </aside>
+    </>
   );
 };
 

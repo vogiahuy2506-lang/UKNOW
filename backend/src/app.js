@@ -71,6 +71,8 @@ import auditRoutes from './routes/audit.routes.js';
 import adminAuditLogsRoutes from './routes/adminAuditLogs.routes.js';
 import diagnosticRoutes from './routes/diagnostic.routes.js';
 import templateLabelRoutes from './routes/templateLabel.routes.js';
+import marketplaceRoutes from './routes/marketplace.routes.js';
+import marketplaceAdminRoutes from './routes/marketplaceAdmin.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
 import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
@@ -204,6 +206,8 @@ export function createApp() {
   app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
   app.use('/api/admin/diagnostic', diagnosticRoutes);
   app.use('/api/template-labels', templateLabelRoutes);
+  app.use('/api/marketplace', marketplaceRoutes);
+  app.use('/api/admin/marketplace', marketplaceAdminRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -257,10 +261,6 @@ export function createApp() {
       if (!widgetKey || widgetKey.includes('.')) return next();
       const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
       if (chatbot) {
-        const { resourceIsLocked } = await import('./utils/topupLockGate.util.js');
-        if (await resourceIsLocked('chatbots', chatbot.id)) {
-          return res.status(503).send('Chatbot tạm ngừng');
-        }
         const frontendUrl = process.env.FRONTEND_URL || 'https://app.uknow.vn';
         return res.redirect(302, `${frontendUrl}/chat/${chatbot.id}`);
       }

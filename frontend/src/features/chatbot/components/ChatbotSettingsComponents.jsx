@@ -28,7 +28,7 @@ import QRCode from 'qrcode';
 import chatbotApi from '../services/chatbotApi.service';
 import ZaloPersonalChannelModal from './ZaloPersonalChannelModal';
 
-export function SectionCard({ icon: Icon, title, subtitle, children, accent = 'slate' }) {
+export function SectionCard({ icon: Icon, title, subtitle, children, accent = 'orange' }) {
   const colors = {
     purple: 'bg-purple-50 text-purple-500',
     blue: 'bg-blue-50 text-blue-500',
@@ -38,17 +38,17 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/50">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors[accent]}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-700">{title}</p>
-          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
         </div>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -90,17 +90,17 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               key={style.value}
               type="button"
               onClick={() => update('response_style', style.value)}
-              className={`p-2.5 rounded-lg border text-left transition-all ${
+              className={`p-3 rounded-xl border-2 text-left transition-all hover:scale-[1.02] ${
                 config.response_style === style.value
-                  ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  ? 'border-orange-500 bg-orange-50 shadow-lg shadow-orange-100'
+                  : 'border-gray-200 hover:border-orange-200 hover:bg-orange-50'
               }`}
             >
-              <div className={`text-xs font-medium ${config.response_style === style.value ? 'text-primary-700' : 'text-slate-700'}`}>
+              <div className={`text-sm font-semibold ${config.response_style === style.value ? 'text-orange-700' : 'text-gray-700'}`}>
                 {style.label}
               </div>
               {!compact && (
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{style.desc}</div>
+                <div className="text-xs text-gray-400 mt-1 leading-tight">{style.desc}</div>
               )}
             </button>
           ))}
@@ -214,12 +214,12 @@ export function Toggle({ checked, onChange, id }) {
       aria-checked={checked}
       id={id}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-        checked ? 'bg-primary-600' : 'bg-slate-200'
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+        checked ? 'bg-gradient-to-r from-orange-500 to-orange-400 shadow-lg shadow-orange-200' : 'bg-gray-200'
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-all ${
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       />
