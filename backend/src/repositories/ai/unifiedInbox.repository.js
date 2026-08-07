@@ -496,12 +496,14 @@ class UnifiedInboxRepository {
         [conversationId, userId]
       );
       if (rows[0]) {
-        // Parse visitor_info to extract is_group
+        // Parse visitor_info to extract is_group (not table columns — migration 045)
         const visitorInfo = typeof rows[0].visitor_info === 'string'
-          ? JSON.parse(rows[0].visitor_info)
+          ? (() => { try { return JSON.parse(rows[0].visitor_info); } catch { return {}; } })()
           : (rows[0].visitor_info || {});
         rows[0]._parsedVisitorInfo = visitorInfo;
         rows[0]._isGroup = visitorInfo.is_group === true;
+        rows[0].is_group = visitorInfo.is_group === true;
+        rows[0].group_id = visitorInfo.group_id || null;
       }
       return rows[0] || null;
     } else {
@@ -1198,17 +1200,26 @@ class UnifiedInboxRepository {
    */
   async findAgentMessageForRetry(userId, messageId, conversationType) {
     if (conversationType === 'zalo_personal') {
+      // is_group / group_id live in visitor_info JSONB (not table columns — see migration 045)
       const { rows } = await db.query(
         `SELECT zpm.id, zpm.id_conversation, zpm.id_user, zpm.id_zalo_setting, zpm.role,
                 zpm.content, zpm.attachments, zpm.metadata,
-                zp.external_id, zp.is_group, zp.group_id, zp.id_user AS conversation_user_id,
+                zp.external_id, zp.visitor_info, zp.id_user AS conversation_user_id,
                 'zalo_personal' AS channel
          FROM zalo_personal_messages zpm
          JOIN zalo_personal_conversations zp ON zp.id = zpm.id_conversation
          WHERE zpm.id = $1 AND zp.id_user = $2 AND zpm.role = 'agent'`,
         [messageId, userId]
       );
-      return rows[0] || null;
+      const row = rows[0];
+      if (!row) return null;
+      const visitorInfo = typeof row.visitor_info === 'string'
+        ? (() => { try { return JSON.parse(row.visitor_info); } catch { return {}; } })()
+        : (row.visitor_info || {});
+      row.is_group = visitorInfo.is_group === true;
+      row.group_id = visitorInfo.group_id || null;
+      row._parsedVisitorInfo = visitorInfo;
+      return row;
     }
 
     if (conversationType === 'channel') {

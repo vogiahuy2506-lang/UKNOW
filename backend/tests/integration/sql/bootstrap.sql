@@ -1134,6 +1134,7 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
 
 -- ─── Zalo personal unified inbox (migration 045) ───────────────────────
+-- Khớp migration 045: is_group/group_id nằm trong visitor_info JSONB, không phải cột.
 CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1141,8 +1142,6 @@ CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   external_id      VARCHAR(255) NOT NULL,
   visitor_name     VARCHAR(255),
   visitor_info     JSONB DEFAULT '{}',
-  is_group         BOOLEAN DEFAULT FALSE,
-  group_id         VARCHAR(255),
   status           VARCHAR(20) DEFAULT 'active',
   started_at       TIMESTAMPTZ DEFAULT NOW(),
   last_message_at  TIMESTAMPTZ DEFAULT NOW(),

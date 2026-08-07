@@ -340,6 +340,10 @@ class UnifiedInboxService {
     try {
       const adapter = this._getChannelAdapter(conversation.channel);
       if (adapter?.sendReply) {
+        const visitorInfo = conversation._parsedVisitorInfo
+          || (typeof conversation.visitor_info === 'string'
+            ? (() => { try { return JSON.parse(conversation.visitor_info); } catch { return {}; } })()
+            : (conversation.visitor_info || {}));
         const params = {
           externalId: conversation.external_id,
           message: content.trim(),
@@ -347,8 +351,8 @@ class UnifiedInboxService {
           userId,
           accountId: zaloAccountId,
           conversationInfo: {
-            is_group: conversation.is_group,
-            group_id: conversation.group_id,
+            is_group: conversation._isGroup === true || visitorInfo.is_group === true,
+            group_id: visitorInfo.group_id || conversation.group_id || null,
           },
           forceReply: true,
           persist: false,
@@ -453,8 +457,12 @@ class UnifiedInboxService {
             ? (owned.id_zalo_setting || conversation.id_zalo_setting)
             : undefined,
           conversationInfo: {
-            is_group: conversation.is_group ?? owned.is_group,
-            group_id: conversation.group_id ?? owned.group_id,
+            is_group: conversation._isGroup === true
+              || owned.is_group === true
+              || conversation._parsedVisitorInfo?.is_group === true,
+            group_id: conversation._parsedVisitorInfo?.group_id
+              || owned.group_id
+              || null,
           },
           forceReply: true,
           persist: false,
