@@ -447,4 +447,96 @@ describe('Top-up mid-cycle', () => {
     );
     expect(Number(afterCycle.body.data.monthlyZaloLimit)).toBe(2000);
   });
+
+  it('employees không còn bán; POST employees bị từ chối', async () => {
+    const { user } = await createTopupReadyUser({
+      username: 'topup-no-emp',
+      connectedZaloAccounts: 1,
+    });
+    const token = await loginAs(user);
+
+    const cfg = await request(app)
+      .get('/api/topup/config')
+      .set('Authorization', `Bearer ${token}`);
+    expect(cfg.status).toBe(200);
+    const keys = (cfg.body.result.items || []).map((i) => i.itemKey);
+    expect(keys).not.toContain('employees');
+
+    const quote = await request(app)
+      .post('/api/topup/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { employees: 1 } });
+    expect(quote.status).toBe(400);
+    expect(String(quote.body.message || '')).toMatch(/employees/i);
+  });
+
+  it('mua slot chatbot × 12 tháng — tin không nhân months; lưu months vào topup_config', async () => {
+    const { user } = await createTopupReadyUser({
+      username: 'topup-months-12',
+      connectedZaloAccounts: 1,
+    });
+    await db.query(
+      `UPDATE users SET subscription_expires_at = NOW() + INTERVAL '400 days' WHERE id = $1`,
+      [user.id]
+    );
+    const token = await loginAs(user);
+
+    const quoted = await request(app)
+      .post('/api/topup/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        quantities: { zalo_messages: 500, chatbots: 1 },
+        months: 12,
+      });
+    expect(quoted.status).toBe(200);
+    expect(Number(quoted.body.result.months)).toBe(12);
+    expect(Number(quoted.body.result.total)).toBe(1_250_000);
+    const zaloLine = quoted.body.result.items.find((i) => i.itemKey === 'zalo_messages');
+    const botLine = quoted.body.result.items.find((i) => i.itemKey === 'chatbots');
+    expect(Number(zaloLine.subtotal)).toBe(50_000);
+    expect(Number(botLine.subtotal)).toBe(1_200_000);
+
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: '000201fake',
+      checkoutUrl: 'https://pay.payos.vn/web/fake',
+    });
+
+    const pay = await request(app)
+      .post('/api/topup/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        quantities: { zalo_messages: 500, chatbots: 1 },
+        months: 12,
+      });
+    expect(pay.status).toBe(200);
+    expect(Number(pay.body.result.amount)).toBe(1_250_000);
+    expect(Number(pay.body.result.topupConfig.total)).toBe(1_250_000);
+    expect(Number(pay.body.result.topupConfig.months)).toBe(12);
+  });
+
+  it('gói còn 40 ngày không cho chọn 12 tháng slot', async () => {
+    const { user } = await createTopupReadyUser({
+      username: 'topup-months-cap',
+      connectedZaloAccounts: 1,
+    });
+    await db.query(
+      `UPDATE users SET subscription_expires_at = NOW() + INTERVAL '40 days' WHERE id = $1`,
+      [user.id]
+    );
+    const token = await loginAs(user);
+
+    const cfg = await request(app)
+      .get('/api/topup/config')
+      .set('Authorization', `Bearer ${token}`);
+    expect(cfg.status).toBe(200);
+    expect(Number(cfg.body.result.maxMonths)).toBe(1);
+    expect(cfg.body.result.allowedMonths).toEqual([1]);
+
+    const quoted = await request(app)
+      .post('/api/topup/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { chatbots: 1 }, months: 12 });
+    expect(quoted.status).toBe(400);
+    expect(quoted.body.code).toBe('MONTHS_NOT_ALLOWED');
+  });
 });

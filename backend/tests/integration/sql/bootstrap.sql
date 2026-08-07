@@ -288,7 +288,7 @@ VALUES
   ('email_accounts', 50000, 1, 1, 50, TRUE, 50),
   ('landing_pages', 30000, 1, 1, 200, TRUE, 60),
   ('chatbots', 100000, 1, 1, 100, TRUE, 70),
-  ('employees', 50000, 1, 1, 100, TRUE, 80);
+  ('employees', 50000, 1, 1, 100, FALSE, 80);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,

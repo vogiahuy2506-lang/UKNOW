@@ -3,6 +3,9 @@ import {
   validateTopupQuantities,
   computeTopupPrice,
   checkTopupZaloCapacity,
+  resolveMaxTopupMonths,
+  filterAllowedTopupMonths,
+  resolveTopupMonths,
   TOPUP_MIN_ORDER_AMOUNT,
 } from '../topupPricing.util.js';
 
@@ -10,6 +13,8 @@ const pricingRows = [
   { item_key: 'zalo_messages', unit_price: 100, min_qty: 50, step_qty: 50, max_qty: null, is_active: true, sort_order: 10 },
   { item_key: 'emails', unit_price: 20, min_qty: 250, step_qty: 250, max_qty: 50000, is_active: true, sort_order: 20 },
   { item_key: 'ai_credits', unit_price: 200, min_qty: 25, step_qty: 25, max_qty: 5000, is_active: true, sort_order: 30 },
+  { item_key: 'zalo_accounts', unit_price: 50000, min_qty: 1, step_qty: 1, max_qty: 50, is_active: true, sort_order: 40 },
+  { item_key: 'chatbots', unit_price: 100000, min_qty: 1, step_qty: 1, max_qty: 100, is_active: true, sort_order: 70 },
 ];
 
 describe('topupPricing.util', () => {
@@ -37,6 +42,82 @@ describe('topupPricing.util', () => {
       expect(priced.total).toBe(10000);
       expect(priced.meetsMinimum).toBe(false);
       expect(priced.shortfall).toBe(TOPUP_MIN_ORDER_AMOUNT - 10000);
+    });
+
+    it('đơn trộn: tin không nhân months, slot chatbot nhân 12', () => {
+      const priced = computeTopupPrice(
+        pricingRows,
+        { zalo_messages: 500, chatbots: 1 },
+        12
+      );
+      expect(priced.items.find((i) => i.itemKey === 'zalo_messages').subtotal).toBe(50000);
+      expect(priced.items.find((i) => i.itemKey === 'chatbots').subtotal).toBe(1_200_000);
+      expect(priced.total).toBe(1_250_000);
+    });
+  });
+
+  describe('resolveMaxTopupMonths / allowedMonths', () => {
+    it('ân hạn → maxMonths = 0', () => {
+      const past = new Date(Date.now() - 86400000);
+      expect(resolveMaxTopupMonths({
+        expiresAt: past,
+        isInGracePeriod: true,
+      })).toBe(0);
+      expect(filterAllowedTopupMonths(0)).toEqual([]);
+    });
+
+    it('gói còn 40 ngày → maxMonths = 1', () => {
+      const expiresAt = new Date(Date.now() + 40 * 86400000);
+      expect(resolveMaxTopupMonths({ expiresAt, isInGracePeriod: false })).toBe(1);
+      expect(filterAllowedTopupMonths(1)).toEqual([1]);
+    });
+
+    it('gói còn 25 ngày → maxMonths = 1 (sàn)', () => {
+      const expiresAt = new Date(Date.now() + 25 * 86400000);
+      expect(resolveMaxTopupMonths({ expiresAt, isInGracePeriod: false })).toBe(1);
+    });
+  });
+
+  describe('resolveTopupMonths', () => {
+    it('ân hạn + mua slot → GRACE_NO_STRUCTURAL', () => {
+      const result = resolveTopupMonths({
+        rawMonths: 1,
+        quantities: { zalo_accounts: 1 },
+        subscription: {
+          expiresAt: new Date(Date.now() - 86400000),
+          isInGracePeriod: true,
+        },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('GRACE_NO_STRUCTURAL');
+    });
+
+    it('ân hạn + chỉ mua tin → cho qua, months=1', () => {
+      const result = resolveTopupMonths({
+        rawMonths: 12,
+        quantities: { zalo_messages: 500 },
+        subscription: {
+          expiresAt: new Date(Date.now() - 86400000),
+          isInGracePeriod: true,
+        },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.months).toBe(1);
+      expect(result.hasStructural).toBe(false);
+    });
+
+    it('gói còn 40 ngày chọn 12 tháng → từ chối', () => {
+      const result = resolveTopupMonths({
+        rawMonths: 12,
+        quantities: { zalo_accounts: 1 },
+        subscription: {
+          expiresAt: new Date(Date.now() + 40 * 86400000),
+          isInGracePeriod: false,
+        },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('MONTHS_NOT_ALLOWED');
+      expect(result.maxMonths).toBe(1);
     });
   });
 

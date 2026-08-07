@@ -3631,7 +3631,7 @@ export default {
 
   topup: {
     title: 'Mua thêm hạn mức',
-    subtitle: 'Bổ sung tin Zalo, email, lượt AI hoặc thêm slot tài khoản / landing page / chatbot / nhân viên trong chu kỳ hiện tại.',
+    subtitle: 'Bổ sung tin Zalo, email, lượt AI hoặc thêm slot tài khoản / landing page / chatbot trong chu kỳ hiện tại.',
     loadFailed: 'Không tải được bảng giá mua thêm',
     quoteFailed: 'Không tính được giá mua thêm',
     paymentFailed: 'Không tạo được thanh toán',
@@ -3647,7 +3647,12 @@ export default {
     stepHint: 'Bước {step}',
     zaloRemaining: 'Còn mua được tối đa {n} tin theo năng lực slot tài khoản Zalo của gói',
     zaloConnectFirst: 'Hãy kết nối tài khoản Zalo trước khi mua thêm tin.',
-    structuralHint: 'Cộng thêm slot trong chu kỳ hiện tại (hết hạn cùng gói).',
+    structuralHint: 'Cộng thêm slot — hết hạn sau số tháng đã chọn (không gắn chu kỳ gói).',
+    monthsLabel: 'Số tháng mua slot',
+    monthsOption: '{n} tháng',
+    monthsPlanRemaining: 'Gói còn đủ cho tối đa {n} tháng',
+    graceNoStructural: 'Đang trong thời gian ân hạn — gia hạn gói trước khi mua thêm slot.',
+    structuralDisabledGrace: 'Không mua được slot khi đang trong ân hạn.',
     qtyRequired: 'Vui lòng nhập số lượng.',
     qtyBelowMin: 'Tối thiểu {n}.',
     qtyAboveMax: 'Tối đa {n}.',

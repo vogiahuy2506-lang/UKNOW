@@ -108,4 +108,44 @@ describe('reconcileResourceLocks', () => {
     expect(mockInsertLock).not.toHaveBeenCalled();
     expect(result.locked).toEqual([]);
   });
+
+  it('unlockOnly skips locking when over ceiling but still unlocks under ceiling', async () => {
+    mockCountInUse.mockImplementation(async (_uid, key) => {
+      if (key === 'zalo_accounts') return 3; // over plan ceiling 1
+      if (key === 'landing_pages') return 0;
+      return 0;
+    });
+    mockCountValid.mockImplementation(async (_uid, key) => (
+      key === 'landing_pages' ? 1 : 0
+    ));
+    mockSumActive.mockImplementation(async (_uid, key) => (
+      key === 'landing_pages' ? 1 : 0
+    ));
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'zalo_accounts' ? [30, 20, 10] : []
+    ));
+    mockListLocked.mockImplementation(async (_uid, key) => (
+      key === 'landing_pages' ? [99] : []
+    ));
+    // plan landing 1 + grant 1 = effective 2; inUse 0 locked 1 → running -1 < 2 → unlock
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: 1 }] };
+      }
+      if (String(sql).includes('max_email_accounts')) {
+        return { rows: [{ max_email_accounts: 1 }] };
+      }
+      if (String(sql).includes('max_landing_pages')) {
+        return { rows: [{ max_landing_pages: 1 }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await reconcileResourceLocks(5, mockQueryable, { unlockOnly: true });
+
+    expect(mockInsertLock).not.toHaveBeenCalled();
+    expect(result.locked).toEqual([]);
+    expect(mockDeleteLock).toHaveBeenCalledWith('landing_pages', 99, mockQueryable);
+    expect(result.unlocked).toEqual([{ resourceKey: 'landing_pages', resourceId: 99 }]);
+  });
 });

@@ -26,6 +26,128 @@ export const TOPUP_ITEM_KEYS = Object.freeze([
   ...TOPUP_STRUCTURAL_KEYS,
 ]);
 
+/** Số tháng được phép mua cho slot cấu trúc. */
+export const TOPUP_ALLOWED_MONTHS = Object.freeze([1, 3, 6, 12]);
+
+const STRUCTURAL_KEY_SET = new Set(TOPUP_STRUCTURAL_KEYS);
+
+/**
+ * Trần số tháng mua slot cấu trúc theo trạng thái gói.
+ *
+ * - Ân hạn (`isInGracePeriod`) → 0 (chỉ mua món tiêu hao).
+ * - Gói còn hiệu lực → max(1, floor(remainingDays / 30)).
+ *
+ * @param {{ expiresAt?: Date|string|null, isInGracePeriod?: boolean }|null} subscription
+ * @param {Date} [now]
+ * @returns {number}
+ */
+export function resolveMaxTopupMonths(subscription, now = new Date()) {
+  if (!subscription?.expiresAt) return 0;
+  if (subscription.isInGracePeriod) return 0;
+
+  const expiresAt = subscription.expiresAt instanceof Date
+    ? subscription.expiresAt
+    : new Date(subscription.expiresAt);
+  if (Number.isNaN(expiresAt.getTime())) return 0;
+
+  const remainingMs = expiresAt.getTime() - now.getTime();
+  if (remainingMs <= 0) return 0;
+
+  const remainingDays = remainingMs / 86_400_000;
+  return Math.max(1, Math.floor(remainingDays / 30));
+}
+
+/**
+ * @param {number} maxMonths
+ * @returns {number[]}
+ */
+export function filterAllowedTopupMonths(maxMonths) {
+  const max = Math.max(0, Number(maxMonths) || 0);
+  return TOPUP_ALLOWED_MONTHS.filter((m) => m <= max);
+}
+
+/**
+ * Chuẩn hoá + kiểm months. Chỉ bắt buộc khi giỏ có món cấu trúc.
+ *
+ * @returns {{
+ *   ok: true,
+ *   months: number,
+ *   maxMonths: number,
+ *   allowedMonths: number[],
+ *   hasStructural: boolean,
+ * } | {
+ *   ok: false,
+ *   status: number,
+ *   code: string,
+ *   message: string,
+ *   months: number,
+ *   maxMonths: number,
+ *   allowedMonths: number[],
+ *   hasStructural: boolean,
+ * }}
+ */
+export function resolveTopupMonths({
+  rawMonths,
+  quantities = {},
+  subscription,
+  now = new Date(),
+} = {}) {
+  const maxMonths = resolveMaxTopupMonths(subscription, now);
+  const allowedMonths = filterAllowedTopupMonths(maxMonths);
+  const hasStructural = Object.entries(quantities || {}).some(
+    ([key, qty]) => STRUCTURAL_KEY_SET.has(key) && Number(qty) > 0
+  );
+
+  let months = rawMonths == null || rawMonths === '' ? 1 : Number(rawMonths);
+  if (!Number.isFinite(months) || !Number.isInteger(months)) {
+    months = 1;
+  }
+
+  if (!hasStructural) {
+    return {
+      ok: true,
+      months: 1,
+      maxMonths,
+      allowedMonths,
+      hasStructural: false,
+    };
+  }
+
+  if (maxMonths < 1) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'GRACE_NO_STRUCTURAL',
+      message: 'Đang trong thời gian ân hạn — vui lòng gia hạn gói trước khi mua thêm slot.',
+      months,
+      maxMonths,
+      allowedMonths,
+      hasStructural: true,
+    };
+  }
+
+  if (!allowedMonths.includes(months)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'MONTHS_NOT_ALLOWED',
+      message: `Số tháng không hợp lệ. Gói còn đủ cho tối đa ${maxMonths} tháng — chọn: ${allowedMonths.join(', ')}.`,
+      months,
+      maxMonths,
+      allowedMonths,
+      hasStructural: true,
+    };
+  }
+
+  return {
+    ok: true,
+    months,
+    maxMonths,
+    allowedMonths,
+    hasStructural: true,
+  };
+}
+
 /** resourceKey (userResourceLimit) → topup_grants.item_key */
 export const TOPUP_GRANT_KEY_BY_RESOURCE = Object.freeze({
   zaloAccounts: 'zalo_accounts',
@@ -101,28 +223,33 @@ export function validateTopupQuantities(pricingRows, rawQuantities = {}) {
 }
 
 /**
- * Linear price: subtotal = qty * unit_price (no block ceil).
+ * Linear price: subtotal = qty * unit_price [* months for structural].
+ * Consumable never multiplies by months.
  *
  * @returns {{
- *   items: Array<{ itemKey: string, qty: number, unitPrice: number, subtotal: number }>,
+ *   items: Array<{ itemKey: string, qty: number, unitPrice: number, months: number, subtotal: number }>,
  *   total: number,
  *   meetsMinimum: boolean,
  *   shortfall: number,
+ *   minOrderAmount: number,
  * }}
  */
-export function computeTopupPrice(pricingRows, quantities = {}) {
+export function computeTopupPrice(pricingRows, quantities = {}, months = 1) {
   const billable = (pricingRows || [])
     .map(normalizeRow)
     .filter((r) => r.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder || String(a.itemKey).localeCompare(String(b.itemKey)));
 
+  const monthsFactor = Math.max(1, Number(months) || 1);
   const items = [];
   let total = 0;
 
   for (const row of billable) {
     const qty = Math.max(0, Number(quantities?.[row.itemKey] || 0));
     if (qty <= 0) continue;
-    const subtotal = qty * row.unitPrice;
+    const isStructural = STRUCTURAL_KEY_SET.has(row.itemKey);
+    const appliedMonths = isStructural ? monthsFactor : 1;
+    const subtotal = qty * row.unitPrice * appliedMonths;
     items.push({
       itemKey: row.itemKey,
       qty,
@@ -130,6 +257,7 @@ export function computeTopupPrice(pricingRows, quantities = {}) {
       minQty: row.minQty,
       stepQty: row.stepQty,
       maxQty: row.maxQty,
+      months: appliedMonths,
       subtotal,
     });
     total += subtotal;

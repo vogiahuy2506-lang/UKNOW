@@ -7,6 +7,9 @@ import {
   validateTopupQuantities,
   computeTopupPrice,
   checkTopupZaloCapacity,
+  resolveMaxTopupMonths,
+  filterAllowedTopupMonths,
+  resolveTopupMonths,
   TOPUP_MIN_ORDER_AMOUNT,
   TOPUP_CONSUMABLE_KEYS,
 } from '../../utils/topupPricing.util.js';
@@ -138,6 +141,7 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
   const subscription = await getSubscriptionStatus(userId, billingOptions);
   const zaloCapacity = await buildZaloCapacityContext(billingUserId, 0);
 
+  const maxMonths = resolveMaxTopupMonths(subscription);
   return {
     minOrderAmount: TOPUP_MIN_ORDER_AMOUNT,
     items: pricingRows.map((r) => ({
@@ -154,6 +158,8 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
       isInGracePeriod: subscription.isInGracePeriod,
       expiresAt: subscription.expiresAt,
     },
+    maxMonths,
+    allowedMonths: filterAllowedTopupMonths(maxMonths),
     zaloCapacity,
     billingUserId,
   };
@@ -162,11 +168,11 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
 /**
  * Server-side quote — always recomputes price.
  */
-export async function quoteTopup({ userId, ownerContextId, quantities = {} } = {}) {
+export async function quoteTopup({ userId, ownerContextId, quantities = {}, months: rawMonths } = {}) {
   if (!userId) throw { status: 401, message: 'Yêu cầu đăng nhập' };
 
   const billingOptions = ownerContextId != null ? { ownerContextId } : {};
-  await assertSubscriptionAllowsTopup(userId, billingOptions);
+  const subscription = await assertSubscriptionAllowsTopup(userId, billingOptions);
   const billingUserId = await resolveBillingUserId(userId, billingOptions);
 
   const pricingRows = await findAllTopupPricing();
@@ -175,7 +181,22 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {} } = {
     throw { status: 400, message: validation.errors.join('; '), errors: validation.errors };
   }
 
-  const priced = computeTopupPrice(pricingRows, validation.quantities);
+  const monthsResolved = resolveTopupMonths({
+    rawMonths,
+    quantities: validation.quantities,
+    subscription,
+  });
+  if (!monthsResolved.ok) {
+    throw {
+      status: monthsResolved.status,
+      message: monthsResolved.message,
+      code: monthsResolved.code,
+      maxMonths: monthsResolved.maxMonths,
+      allowedMonths: monthsResolved.allowedMonths,
+    };
+  }
+
+  const priced = computeTopupPrice(pricingRows, validation.quantities, monthsResolved.months);
   const zaloCapacity = await buildZaloCapacityContext(
     billingUserId,
     validation.quantities.zalo_messages || 0
@@ -211,6 +232,9 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {} } = {
     minOrderAmount: priced.minOrderAmount,
     zaloCapacity,
     billingUserId,
+    months: monthsResolved.months,
+    maxMonths: monthsResolved.maxMonths,
+    allowedMonths: monthsResolved.allowedMonths,
   };
 }
 
@@ -222,10 +246,11 @@ export async function createTopupPaymentLink({
   userEmail,
   ownerContextId,
   quantities = {},
+  months: rawMonths,
 } = {}) {
   if (!userId || !userEmail) throw { status: 401, message: 'Yêu cầu đăng nhập' };
 
-  const quote = await quoteTopup({ userId, ownerContextId, quantities });
+  const quote = await quoteTopup({ userId, ownerContextId, quantities, months: rawMonths });
   if (!quote.items.length) {
     throw { status: 400, message: 'Chọn ít nhất một hạng mục để mua thêm' };
   }
@@ -247,6 +272,7 @@ export async function createTopupPaymentLink({
     billingUserId: quote.billingUserId,
     items: quote.items,
     total: amount,
+    months: quote.months,
   };
 
   const cancelledDupes = await cancelRecentPendingTopupOrders({
@@ -347,9 +373,14 @@ export async function fulfillTopupOrder(order, queryable = db) {
     inserted.push(...rows);
   }
 
-  // Structural: mốc hết hạn độc lập — NOW() + 30 days (không neo subscription_expires_at)
+  // Structural: mốc hết hạn độc lập — NOW() + 30×months days (không neo subscription_expires_at)
   if (Object.keys(structuralQty).length > 0) {
-    const { rows } = await queryable.query(`SELECT NOW() + INTERVAL '30 days' AS cycle_end`);
+    const rawMonths = config.months == null || config.months === '' ? 1 : Number(config.months);
+    const months = Number.isInteger(rawMonths) && rawMonths > 0 ? rawMonths : 1;
+    const { rows } = await queryable.query(
+      `SELECT NOW() + ($1 * INTERVAL '30 days') AS cycle_end`,
+      [months]
+    );
     const cycleEnd = rows[0]?.cycle_end;
     const rowsInserted = await insertTopupGrants({
       userId: billingUserId,
@@ -362,7 +393,7 @@ export async function fulfillTopupOrder(order, queryable = db) {
 
   // Mở/khoá tài nguyên theo trần hiệu dụng ngay trong cùng transaction
   const { reconcileResourceLocks } = await import('./topupLock.service.js');
-  await reconcileResourceLocks(billingUserId, queryable);
+  await reconcileResourceLocks(billingUserId, queryable, { unlockOnly: true });
 
   _clearQuotaCache();
   return inserted;

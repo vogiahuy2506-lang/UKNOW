@@ -3586,7 +3586,7 @@ export default {
 
   topup: {
     title: 'Buy more quota',
-    subtitle: 'Add Zalo messages, emails, AI credits, or extra account / landing page / chatbot / staff slots for the current billing cycle.',
+    subtitle: 'Add Zalo messages, emails, AI credits, or extra account / landing page / chatbot slots for the current billing cycle.',
     loadFailed: 'Could not load top-up pricing',
     quoteFailed: 'Could not quote top-up',
     paymentFailed: 'Could not start payment',
@@ -3602,7 +3602,12 @@ export default {
     stepHint: 'Step {step}',
     zaloRemaining: 'You can buy up to {n} more messages based on your plan’s Zalo account slots',
     zaloConnectFirst: 'Connect a Zalo account before buying more messages.',
-    structuralHint: 'Adds slots for the current cycle (expires with your plan).',
+    structuralHint: 'Adds slots for the selected months (independent of plan billing cycle).',
+    monthsLabel: 'Months for structural slots',
+    monthsOption: '{n} months',
+    monthsPlanRemaining: 'Your plan allows up to {n} months',
+    graceNoStructural: 'You are in the grace period — renew your plan before buying more slots.',
+    structuralDisabledGrace: 'Structural slots are unavailable during the grace period.',
     qtyRequired: 'Please enter a quantity.',
     qtyBelowMin: 'Minimum {n}.',
     qtyAboveMax: 'Maximum {n}.',

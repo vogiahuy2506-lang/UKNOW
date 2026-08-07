@@ -40,7 +40,7 @@ export async function fulfillPaidOrder(order, client) {
 
     // Trần vừa tăng trở lại — mở khoá tài nguyên đã bị khoá khi gói hết hạn
     const { reconcileResourceLocks } = await import('./topupLock.service.js');
-    await reconcileResourceLocks(userId, client);
+    await reconcileResourceLocks(userId, client, { unlockOnly: true });
 
     const user = await findActiveUserByEmail(order.user_email);
     const plan = await findPlanById(order.plan_id);

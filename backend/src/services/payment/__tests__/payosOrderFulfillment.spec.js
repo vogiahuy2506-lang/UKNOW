@@ -96,6 +96,6 @@ describe('fulfillPaidOrder', () => {
       payment_method: 'payos',
     }, client);
 
-    expect(mockReconcileResourceLocks).toHaveBeenCalledWith(9, client);
+    expect(mockReconcileResourceLocks).toHaveBeenCalledWith(9, client, { unlockOnly: true });
   });
 });

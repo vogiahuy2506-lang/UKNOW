@@ -32,7 +32,7 @@ export const getConfig = async (req, res) => {
 
 export const quote = async (req, res) => {
   try {
-    const { quantities } = req.body || {};
+    const { quantities, months } = req.body || {};
     if (!quantities || typeof quantities !== 'object') {
       return res.status(400).json({ success: false, message: 'Thiếu quantities' });
     }
@@ -40,6 +40,7 @@ export const quote = async (req, res) => {
       userId: req.user.id,
       ownerContextId: ownerContextId(req),
       quantities,
+      months,
     });
     res.json({ success: true, result });
   } catch (err) {
@@ -52,13 +53,15 @@ export const quote = async (req, res) => {
       capacity: err.capacity,
       shortfall: err.shortfall,
       minOrderAmount: err.minOrderAmount,
+      maxMonths: err.maxMonths,
+      allowedMonths: err.allowedMonths,
     });
   }
 };
 
 export const createPayment = async (req, res) => {
   try {
-    const { quantities } = req.body || {};
+    const { quantities, months } = req.body || {};
     if (!quantities || typeof quantities !== 'object') {
       return res.status(400).json({ success: false, message: 'Thiếu quantities' });
     }
@@ -67,6 +70,7 @@ export const createPayment = async (req, res) => {
       userEmail: req.user.email,
       ownerContextId: ownerContextId(req),
       quantities,
+      months,
     });
     res.json({ success: true, message: 'Tạo liên kết thanh toán mua thêm thành công', result });
   } catch (err) {
@@ -79,6 +83,8 @@ export const createPayment = async (req, res) => {
       capacity: err.capacity,
       shortfall: err.shortfall,
       minOrderAmount: err.minOrderAmount,
+      maxMonths: err.maxMonths,
+      allowedMonths: err.allowedMonths,
     });
   }
 };

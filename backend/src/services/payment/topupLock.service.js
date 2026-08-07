@@ -88,9 +88,10 @@ export async function resolveEffectiveCeiling(userId, resourceKey, queryable = d
  *
  * @param {number|string} userId
  * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @param {{ unlockOnly?: boolean }} [options] — payment paths set unlockOnly=true (never lock on pay)
  * @returns {Promise<{ locked: Array<{resourceKey:string, resourceId:number}>, unlocked: Array<{resourceKey:string, resourceId:number}> }>}
  */
-export async function reconcileResourceLocks(userId, queryable = db) {
+export async function reconcileResourceLocks(userId, queryable = db, { unlockOnly = false } = {}) {
   const locked = [];
   const unlocked = [];
 
@@ -102,7 +103,7 @@ export async function reconcileResourceLocks(userId, queryable = db) {
     const lockedCount = await countValidLocks(userId, resourceKey, queryable);
     const running = inUse - lockedCount;
 
-    if (running > effective) {
+    if (!unlockOnly && running > effective) {
       const need = running - effective;
       const candidates = await listUnlockedResourceIds(userId, resourceKey, queryable);
       for (const resourceId of candidates.slice(0, need)) {
