@@ -146,8 +146,8 @@ function SubmenuPanel({ item, onClose }) {
   };
 
   return (
-    <div className="fixed top-0 left-[56px] h-full w-56 bg-white border-r border-gray-100 shadow-xl z-50 flex flex-col">
-      <div className="h-14 flex items-center px-4 border-b border-gray-100 shrink-0">
+    <div className="fixed top-0 left-[56px] h-full w-56 bg-white border-r border-gray-200 shadow-xl z-50 flex flex-col">
+      <div className="h-14 flex items-center px-4 border-b border-gray-200 shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
           <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
         </button>
@@ -334,11 +334,11 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-100 z-50 flex flex-col transition-all duration-300 ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
+        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
         style={{ width: sidebarWidth }}
       >
         {/* Logo */}
-        <div className={`h-14 flex items-center border-b border-gray-100 shrink-0 ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}>
+        <div className={`h-14 flex items-center border-b border-gray-200 shrink-0 ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}>
           <Link
             to="/"
             className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"

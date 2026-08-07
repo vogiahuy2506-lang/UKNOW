@@ -60,7 +60,7 @@ const Header = () => {
 
   return (
     <>
-      <header className="w-full h-12 bg-white flex items-center px-4 border-b border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <header className="w-full h-12 bg-white flex items-center px-4">
         {/* Left spacer */}
         <div className="flex-1" />
 

@@ -185,7 +185,7 @@ const MainLayout = () => {
 
       {/* Header: fixed to viewport, top, spanning content area */}
       <div
-        className="fixed z-40 bg-white border-b border-gray-100 flex items-center transition-all duration-300"
+        className="fixed z-40 bg-white border-b border-gray-200 flex items-center transition-all duration-300"
         style={{
           top: 0,
           left: sidebarOpen ? 280 : 56,
