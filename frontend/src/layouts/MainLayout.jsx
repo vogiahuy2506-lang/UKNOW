@@ -176,7 +176,7 @@ const MainLayout = () => {
 
   // Desktop layout
   return (
-    <div className="h-screen overflow-hidden bg-gray-50 flex" style={{ zoom: 1 }}>
+    <div className="h-screen overflow-hidden bg-slate-100/80 flex" style={{ zoom: 1 }}>
       <Sidebar
         isOpen={sidebarOpen}
         width={sidebarOpen ? 280 : 56}
@@ -185,14 +185,14 @@ const MainLayout = () => {
 
       {/* Header: fixed to viewport, top, spanning content area */}
       <div
-        className="fixed z-40 bg-white border-b border-gray-200 flex items-center transition-all duration-300"
+        className="fixed z-40 bg-white flex items-center transition-all duration-300"
         style={{
           top: 0,
           left: sidebarOpen ? 280 : 56,
           right: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
           height: HEADER_HEIGHT,
-          paddingLeft: 16,
-          paddingRight: 16,
+          paddingLeft: 20,
+          paddingRight: 20,
         }}
       >
         <Header />
@@ -204,13 +204,14 @@ const MainLayout = () => {
           marginLeft: sidebarOpen ? 280 : 56,
           marginRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
           paddingTop: HEADER_HEIGHT,
+          padding: `${HEADER_HEIGHT + 12}px 12px 12px 12px`,
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto ${isSpecialPage ? '' : 'p-6 pt-2'}`}
+          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-slate-200/60 ${isSpecialPage ? '' : 'p-6'}`}
         >
           <div className={isSpecialPage ? 'h-full' : ''}>
             <Outlet />

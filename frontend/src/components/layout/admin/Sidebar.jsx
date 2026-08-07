@@ -146,8 +146,8 @@ function SubmenuPanel({ item, onClose }) {
   };
 
   return (
-    <div className="fixed top-0 left-[56px] h-full w-56 bg-white border-r border-gray-200 shadow-xl z-50 flex flex-col">
-      <div className="h-12 flex items-center px-4 border-b border-gray-200 shrink-0">
+    <div className="fixed top-0 left-[56px] h-full w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl">
+      <div className="h-12 flex items-center px-4 shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
           <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
         </button>
@@ -334,11 +334,11 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
+        className={`fixed top-0 left-0 h-full bg-white z-50 flex flex-col transition-all duration-300 shadow-[inset_-1px_0_0_rgba(15,23,42,0.05)] ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
         style={{ width: sidebarWidth }}
       >
         {/* Logo */}
-        <div className={`h-12 flex items-center border-b border-gray-200 shrink-0 ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}>
+        <div className={`h-12 flex items-center shrink-0 ${isOpen || isMobile ? 'px-4' : 'justify-center'}`}>
           <Link
             to="/"
             className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
@@ -354,44 +354,46 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
         </div>
 
         {/* Navigation */}
-        <nav ref={navRef} className={`flex-1 overflow-y-auto py-2 min-h-0 ${isOpen || isMobile ? 'px-2' : 'px-1'}`}>
-          {visibleMenuItems.map((item) => {
-            const active = item.children ? isParentActive(item) : (item.end ? location.pathname === item.path : location.pathname.startsWith(item.path + '/'));
-            const isSubmenuOpen = activeSubmenu?.name === item.name;
+        <nav ref={navRef} className={`flex-1 overflow-y-auto py-3 min-h-0 ${isOpen || isMobile ? 'px-3' : 'px-2'}`}>
+          <div className="flex flex-col gap-1">
+            {visibleMenuItems.map((item) => {
+              const active = item.children ? isParentActive(item) : (item.end ? location.pathname === item.path : location.pathname.startsWith(item.path + '/'));
+              const isSubmenuOpen = activeSubmenu?.name === item.name;
 
-            return (
-              <div key={item.name} className="mb-0.5">
-                <button
-                  onClick={() => handleParentClick(item)}
-                  title={item.name}
-                  className={`w-full flex items-center rounded-xl py-2.5 transition-all ${
-                    isSubmenuOpen ? 'bg-orange-100 text-orange-600' : active ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
-                  } ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {(isOpen || isMobile) && (
-                    <>
-                      <span className="ml-2.5 text-[13px] font-medium flex-1 text-left">{item.name}</span>
-                      {item.children && (
-                        <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`} />
-                      )}
-                    </>
+              return (
+                <div key={item.name}>
+                  <button
+                    onClick={() => handleParentClick(item)}
+                    title={item.name}
+                    className={`w-full flex items-center rounded-xl py-2.5 transition-all ${
+                      isSubmenuOpen ? 'bg-orange-100 text-orange-600' : active ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
+                    } ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}
+                  >
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    {(isOpen || isMobile) && (
+                      <>
+                        <span className="ml-2.5 text-[13px] font-medium flex-1 text-left">{item.name}</span>
+                        {item.children && (
+                          <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`} />
+                        )}
+                      </>
+                    )}
+                  </button>
+
+                  {/* Inline submenu (expanded sidebar or mobile) */}
+                  {item.children && (isOpen || isMobile) && isSubmenuOpen && (
+                    <div className="mt-1 ml-4 pl-3 border-l border-gray-200 flex flex-col gap-1">
+                      {renderChildItems(item.children)}
+                    </div>
                   )}
-                </button>
-
-                {/* Inline submenu (expanded sidebar or mobile) */}
-                {item.children && (isOpen || isMobile) && isSubmenuOpen && (
-                  <div className="mt-1 space-y-0.5 ml-4 pl-3 border-l border-gray-200">
-                    {renderChildItems(item.children)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 p-1.5 shrink-0">
+        <div className="p-2 shrink-0">
           {isMobile ? (
             <NavLink
               to={isSuperAdmin ? '/admin' : '/app/settings/ai-profile'}
