@@ -14,7 +14,9 @@ import campaignZaloSenderService from '../campaign/campaignZaloSender.service.js
 import {
   extractGroupNameFromApiResult,
   isPlaceholderGroupName,
+  normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
+
 
 /** Log từng nhóm chỉ khi bật cờ — cron 10 phút/lần sẽ ngập log nếu để mặc định. */
 const SYNC_VERBOSE = String(process.env.ZALO_SYNC_VERBOSE || '').toLowerCase() === 'true';
@@ -36,6 +38,49 @@ function isGroupNotFoundError(error) {
   if (error?.response?.status === 404) return true;
   return /status code 404/i.test(String(error?.message || ''));
 }
+
+/**
+ * zca-js getGroupChatHistory trả { groupMsgs: GroupMessage[] }, không phải mảng thuần.
+ * GroupMessage bọc raw ở `.data` + `isSelf` trên wrapper.
+ * @param {unknown} history
+ * @returns {object[]}
+ */
+export function extractGroupHistoryMessages(history) {
+  if (!history) return [];
+  if (Array.isArray(history)) return history.map(normalizeGroupHistoryItem).filter(Boolean);
+  const list = history.groupMsgs || history.messages || history.data?.groupMsgs || [];
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeGroupHistoryItem).filter(Boolean);
+}
+
+/**
+ * @param {unknown} msg
+ * @returns {object|null}
+ */
+export function normalizeGroupHistoryItem(msg) {
+  if (!msg || typeof msg !== 'object') return null;
+  const data = msg.data && typeof msg.data === 'object' ? msg.data : msg;
+  let content = data.content ?? data.msg ?? data.message ?? '';
+  if (typeof content === 'object' && content !== null) {
+    content = content.title || content.text || content.description || JSON.stringify(content);
+  }
+  const msgId = data.msgId ?? data.id ?? msg.msgId ?? null;
+  if (msgId == null || msgId === '') return null;
+  const tsRaw = data.ts ?? data.timestamp ?? data.createdAt ?? msg.timestamp;
+  const tsNum = Number(tsRaw);
+  return {
+    msgId: String(msgId),
+    content: String(content || ''),
+    uidFrom: data.uidFrom ?? data.fromUid ?? msg.uidFrom,
+    displayName: data.dName || data.displayName || data.alias || null,
+    avatarThumb: data.avatarThumb || data.avatar || null,
+    timestamp: Number.isFinite(tsNum) && tsNum > 0 ? tsNum : Date.now(),
+    msgType: data.msgType,
+    isSelf: msg.isSelf === true,
+    stickerData: data.stickerData,
+  };
+}
+
 
 /** @internal test helper — Map sống theo vòng đời tiến trình nên phải dọn giữa các bài test. */
 export function _resetGroupAvailabilityForTests() {
@@ -256,33 +301,41 @@ class ZaloPersonalSyncService {
     try {
       // For group messages, use getGroupChatHistory
       if (isGroup) {
-        if (SYNC_VERBOSE) {
-          console.log(`[ZaloSync] Calling api.getGroupChatHistory(${externalId}, ${limit})...`);
+        const { bare, prefixed } = normalizeZaloGroupId(externalId);
+        const grid = bare || String(externalId || '').trim();
+        if (!grid) {
+          throw new Error('Thiếu group id để đồng bộ lịch sử nhóm');
         }
 
-        // zca-js getGroupChatHistory signature: getGroupChatHistory(groupId, limit, beforeMsgId?)
-        const history = await api.getGroupChatHistory(externalId, limit, beforeMsgId);
-
         if (SYNC_VERBOSE) {
-          console.log(`[ZaloSync] getGroupChatHistory returned ${history?.length || 0} messages`);
+          console.log(`[ZaloSync] Calling api.getGroupChatHistory(${grid}, ${limit})...`);
         }
 
-        // Save to database
-        const saved = await this.saveGroupChatHistory(accountId, userId, externalId, history || []);
-        
-        return { 
-          synced: saved, 
-          total: history?.length || 0,
+        // zca-js: getGroupChatHistory(groupId, count) → { groupMsgs: GroupMessage[] }
+        // (không nhận beforeMsgId; tham số 3 từng truyền là dead code)
+        void beforeMsgId;
+        const history = await api.getGroupChatHistory(grid, limit);
+        const messages = extractGroupHistoryMessages(history);
+
+        if (SYNC_VERBOSE) {
+          console.log(`[ZaloSync] getGroupChatHistory returned ${messages.length} messages`);
+        }
+
+        const saved = await this.saveGroupChatHistory(accountId, userId, prefixed || `group_${grid}`, messages);
+
+        return {
+          synced: saved,
+          total: messages.length,
           type: 'group',
-          groupId: externalId 
+          groupId: prefixed || `group_${grid}`,
         };
       }
 
       // For personal messages - zca-js doesn't have direct personal chat history API
       // Fallback: get context from Zalo Web
       console.log(`[ZaloSync] Personal chat history sync for ${externalId} - zca-js limitation`);
-      return { 
-        synced: 0, 
+      return {
+        synced: 0,
         message: 'Personal chat history sync requires zca-js browser interaction',
         type: 'personal'
       };
@@ -299,14 +352,21 @@ class ZaloPersonalSyncService {
 
   /**
    * Save group chat history to database
+   * @param {number} accountId
+   * @param {number} userId
+   * @param {string} groupIdOrExternalId - bare hoặc group_<id>
+   * @param {object[]} messages - đã normalize qua extractGroupHistoryMessages
    */
-  async saveGroupChatHistory(accountId, userId, groupId, messages) {
+  async saveGroupChatHistory(accountId, userId, groupIdOrExternalId, messages) {
     const zaloPersonalRepo = (await import('../../repositories/chatbot/zaloPersonal.repository.js')).default;
-    
+
     let saved = 0;
     const now = new Date().toISOString();
+    const { bare, prefixed } = normalizeZaloGroupId(groupIdOrExternalId);
+    const conversationExternalId = prefixed || `group_${String(groupIdOrExternalId || '').trim()}`;
+    const list = Array.isArray(messages) ? messages : [];
 
-    for (const msg of messages) {
+    for (const msg of list) {
       try {
         // Check if message already exists
         const existing = await zaloPersonalRepo.findMessageByExternalId(msg.msgId, accountId);
@@ -314,30 +374,30 @@ class ZaloPersonalSyncService {
 
         // Extract sender info
         const senderInfo = this.extractSenderInfo(msg);
-        
-        // Create externalId format for group: "group_{groupId}" — all members share ONE conversation
-        const senderId = senderInfo.senderId || msg.uidFrom;
-        const externalId = `group_${groupId}`;
 
-        // Get or create conversation
+        // Create externalId format for group: "group_{bare}" — all members share ONE conversation
+        const senderId = senderInfo.senderId || msg.uidFrom;
+        const externalId = conversationExternalId;
+
+        // Get or create conversation (alias-aware)
         let conversation = await zaloPersonalRepo.findConversation(accountId, externalId);
-        
+
         if (!conversation) {
           const visitorInfo = {
             source: 'zalo_group',
             is_group: true,
-            group_id: groupId,
+            group_id: bare || groupIdOrExternalId,
             group_name: null, // Will be backfilled later
             sender_id: senderId,
             sender_name: senderInfo.name,
           };
-          
+
           conversation = await zaloPersonalRepo.insertConversation({
             userId,
             zaloSettingId: accountId,
             externalId,
             // Use group name as visitorName so all members land in the same conversation
-            visitorName: `Nhóm ${groupId}`,
+            visitorName: `Nhóm ${bare || groupIdOrExternalId}`,
             visitorInfo: JSON.stringify(visitorInfo),
             now,
           });
@@ -359,7 +419,7 @@ class ZaloPersonalSyncService {
             sender_name: senderInfo.name,
             sender_id: senderId,
             is_group: true,
-            group_id: groupId,
+            group_id: bare || groupIdOrExternalId,
             msg_type: msg.msgType,
             attachments,
           }),
@@ -474,6 +534,12 @@ class ZaloPersonalSyncService {
     // Pull older GROUP chat history when supported (1-1 history is not available via zca-js)
     try {
       results.groupHistory = await this.syncAllGroupHistory(accountId, userId, { limit: 50 });
+      if (results.groupHistory?.errors?.length) {
+        results.errors.push({
+          type: 'groupHistory',
+          error: `${results.groupHistory.errors.length} nhóm lỗi khi kéo tin`,
+        });
+      }
     } catch (e) {
       results.errors.push({ type: 'groupHistory', error: e.message });
     }
@@ -580,7 +646,11 @@ class ZaloPersonalSyncService {
         [accountId]
       );
       for (const row of rows) {
-        if (row.group_id) ids.add(String(row.group_id));
+        if (row.group_id) {
+          const { bare } = normalizeZaloGroupId(row.group_id);
+          if (bare) ids.add(bare);
+          else ids.add(String(row.group_id));
+        }
       }
     } catch (err) {
       // zalo_groups may be absent in slim test schemas
@@ -606,7 +676,11 @@ class ZaloPersonalSyncService {
       [accountId]
     );
     for (const row of convRows) {
-      if (row.group_id) ids.add(String(row.group_id));
+      if (row.group_id) {
+        const { bare } = normalizeZaloGroupId(row.group_id);
+        if (bare) ids.add(bare);
+        else ids.add(String(row.group_id).replace(/^g_/, ''));
+      }
     }
 
     return [...ids].filter((id) => id && id !== 'null');

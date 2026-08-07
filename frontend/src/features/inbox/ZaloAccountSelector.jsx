@@ -98,7 +98,13 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
       if (payload?.success) {
         const totalGroups = payload?.data?.groups?.totalGroups ?? payload?.data?.groups?.synced;
         const synced = payload?.data?.groups?.synced;
-        if (totalGroups != null && synced != null && Number(synced) < Number(totalGroups)) {
+        const historySynced = Number(payload?.data?.groupHistory?.synced || 0);
+        if (historySynced > 0) {
+          toast.success(
+            t('inbox.syncSuccessWithHistory', { count: historySynced })
+            || `Đã đồng bộ. Kéo thêm ${historySynced} tin nhóm từ Zalo.`
+          );
+        } else if (totalGroups != null && synced != null && Number(synced) < Number(totalGroups)) {
           toast.success(
             t('inbox.syncPartialGroups', { synced, total: totalGroups })
             || `Đã đồng bộ ${synced}/${totalGroups} nhóm. Hệ thống lấy tối đa 200 nhóm mỗi lần.`

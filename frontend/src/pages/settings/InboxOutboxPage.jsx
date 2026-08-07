@@ -51,6 +51,7 @@ const InboxPage = () => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [retryingMessageId, setRetryingMessageId] = useState(null);
+  const [isSyncingThread, setIsSyncingThread] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [typingSender, setTypingSender] = useState(null);
   const [page, setPage] = useState(0);
@@ -668,6 +669,9 @@ const InboxPage = () => {
                 onSyncComplete={() => {
                   fetchSessionStatus();
                   fetchConversations(true);
+                  if (selectedConversationRef.current) {
+                    fetchMessages(selectedConversationRef.current);
+                  }
                 }}
               />
             )}
@@ -797,14 +801,54 @@ const InboxPage = () => {
               </div>
 
               <button
-                onClick={() => {
-                  fetchMessages(selectedConversation);
+                type="button"
+                disabled={isSyncingThread}
+                onClick={async () => {
+                  const conv = selectedConversation;
+                  if (!conv) return;
+                  const channel = conv.channel || conv.type;
+                  const visitorInfo = conv.visitorInfo || conv.visitor_info || {};
+                  const parsed = typeof visitorInfo === 'string'
+                    ? (() => { try { return JSON.parse(visitorInfo || '{}'); } catch { return {}; } })()
+                    : visitorInfo;
+                  const isZalo = channel === 'zalo_personal';
+                  const isGroup = conv.isGroup === true
+                    || parsed.is_group === true
+                    || String(conv.externalId || '').startsWith('group_')
+                    || String(conv.externalId || '').startsWith('g_');
+
+                  if (isZalo && isGroup && conv.externalId) {
+                    setIsSyncingThread(true);
+                    try {
+                      const response = await chatbotApi.syncZaloChatHistory(conv.externalId, true, {
+                        limit: 50,
+                        accountId: selectedAccountId || conv.idZaloSetting,
+                      });
+                      const payload = response?.data || response;
+                      if (payload?.success === false) {
+                        toast.error(payload?.message || t('inbox.syncFailed'));
+                      } else {
+                        const synced = Number(payload?.data?.synced || 0);
+                        toast.success(
+                          synced > 0
+                            ? (t('inbox.syncThreadPulled', { count: synced }) || `Đã kéo ${synced} tin từ Zalo`)
+                            : (t('inbox.syncThreadEmpty') || 'Không có tin mới từ Zalo')
+                        );
+                      }
+                    } catch (err) {
+                      toast.error(err?.response?.data?.message || err.message || t('inbox.syncFailed'));
+                    } finally {
+                      setIsSyncingThread(false);
+                    }
+                  }
+
+                  await fetchMessages(conv);
                   fetchConversations(true);
                 }}
-                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-                title="Làm mới"
+                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50"
+                title={t('inbox.syncNow') || 'Đồng bộ'}
               >
-                <HiOutlineRefresh className="w-5 h-5" />
+                <HiOutlineRefresh className={`w-5 h-5 ${isSyncingThread ? 'animate-spin' : ''}`} />
               </button>
 
               <button
