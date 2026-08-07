@@ -332,9 +332,15 @@
       typing.remove();
 
       if (data.success && data.data) {
-        addMessage('assistant', data.data.content);
-        chatHistory.push({ role: 'assistant', content: data.data.content });
-        localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+        // Rate-limited silent (minute/hour): no bubble, no localStorage ghost
+        if (data.data.rateLimited && !data.data.content) {
+          return;
+        }
+        if (data.data.content) {
+          addMessage('assistant', data.data.content);
+          chatHistory.push({ role: 'assistant', content: data.data.content });
+          localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+        }
       } else {
         // Show error from server or default message
         const errorMsg = data.message || data.error?.message || 'Xin lỗi, tôi đang bận. Vui lòng thử lại sau.';

@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import PlanSection from '../../features/billing/PlanSection';
+import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
 import OrderHistoryTab from '../../features/billing/OrderHistoryTab';
 import ResourceLocksTab from '../../features/billing/ResourceLocksTab';
 
@@ -89,6 +90,15 @@ const BillingHubPage = () => {
       ) : (
         <div className="space-y-4">
           <PlanSection data={profileData} t={t} />
+          {isUserAdmin && (
+            <BotDailyReplyCapCard
+              data={profileData}
+              t={t}
+              onSaved={(next) => {
+                setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
+              }}
+            />
+          )}
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link

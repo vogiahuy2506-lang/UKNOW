@@ -507,13 +507,24 @@ class ZaloPersonalInboxService {
         senderKey: senderId,
       });
       if (!rate.allowed) {
-        await zaloPersonalAdapter.sendReply({
-          externalId: String(senderId),
-          message: rate.staticReply,
-          userId,
-          accountId: zaloSettingId,
-          persist: true,
-        });
+        if (rate.shouldNotify) {
+          const sent = await zaloPersonalAdapter.sendReply({
+            externalId: String(senderId),
+            message: rate.staticReply,
+            userId,
+            accountId: zaloSettingId,
+            persist: true,
+          });
+          if (sent?.success !== false) {
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'zalo_personal',
+              ownerUserId: userId,
+              chatbotId: zaloSettingId,
+              senderKey: senderId,
+              reason: rate.reason,
+            });
+          }
+        }
         return;
       }
 

@@ -50,6 +50,7 @@ const InboxPage = () => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [retryingMessageId, setRetryingMessageId] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [typingSender, setTypingSender] = useState(null);
   const [page, setPage] = useState(0);
@@ -389,17 +390,33 @@ const InboxPage = () => {
       });
 
       if (response.success) {
+        const sendStatus = response.sendStatus || 'sent';
         const newMessage = {
-          id: Date.now(),
+          id: response.messageId || Date.now(),
           role: 'agent',
           content,
           createdAt: new Date().toISOString(),
           isRead: true,
           replyTo,
+          metadata: {
+            source: 'manual_inbox',
+            send: sendStatus === 'failed'
+              ? {
+                  status: 'failed',
+                  error: response.error || t('inbox.sendFailed'),
+                  attempts: 1,
+                  failedAt: new Date().toISOString(),
+                }
+              : { status: 'sent', attempts: 1 },
+          },
         };
         setMessages(prev => [...prev, newMessage]);
         setReplyingTo(null);
-        toast.success(t('common.success'));
+        if (sendStatus === 'failed') {
+          toast.error(response.error || t('inbox.sendFailed'));
+        } else {
+          toast.success(t('common.success'));
+        }
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -409,6 +426,45 @@ const InboxPage = () => {
       setIsSending(false);
     }
   }, [selectedConversation, isSending, t]);
+
+  const handleRetryMessage = useCallback(async (message) => {
+    if (!selectedConversation || !message?.id || retryingMessageId) return;
+    setRetryingMessageId(message.id);
+    try {
+      const response = await chatbotApi.retryMessage(message.id, {
+        type: selectedConversation.type,
+      });
+      if (response.success) {
+        setMessages((prev) => prev.map((m) => {
+          if (Number(m.id) !== Number(message.id)) return m;
+          const prevMeta = typeof m.metadata === 'string'
+            ? JSON.parse(m.metadata || '{}')
+            : (m.metadata || {});
+          return {
+            ...m,
+            metadata: response.metadata || {
+              ...prevMeta,
+              send: {
+                ...(prevMeta.send || {}),
+                status: response.sendStatus,
+                error: response.error || null,
+              },
+            },
+          };
+        }));
+        if (response.sendStatus === 'failed') {
+          toast.error(response.error || t('inbox.retryFailed'));
+        } else {
+          toast.success(t('inbox.retrySuccess'));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to retry message:', err);
+      toast.error(err.response?.data?.message || t('inbox.retryFailed'));
+    } finally {
+      setRetryingMessageId(null);
+    }
+  }, [selectedConversation, retryingMessageId, t]);
 
   const handleReply = useCallback((message) => {
     setReplyingTo(message);
@@ -766,6 +822,8 @@ const InboxPage = () => {
                 isLoading={isLoadingMessages}
                 conversation={selectedConversation}
                 onReply={handleReply}
+                onRetry={handleRetryMessage}
+                retryingMessageId={retryingMessageId}
                 replyingTo={replyingTo}
               />
             </div>

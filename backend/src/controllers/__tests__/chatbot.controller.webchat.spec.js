@@ -46,7 +46,7 @@ jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({
   default: { chat },
 }));
 jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', () => ({
-  default: { checkBeforeAi },
+  default: { checkBeforeAi, markRateLimitNotified: jest.fn() },
 }));
 jest.unstable_mockModule('../../repositories/ai/unifiedInbox.repository.js', () => ({
   default: { isAiPaused },

@@ -186,7 +186,7 @@ class UnifiedInboxController {
         }
       }
 
-      await unifiedInboxService.sendMessage(
+      const result = await unifiedInboxService.sendMessage(
         req.user.id,
         id,
         type,
@@ -202,6 +202,9 @@ class UnifiedInboxController {
       return res.json({
         success: true,
         message: 'Message sent',
+        messageId: result.messageId,
+        sendStatus: result.sendStatus,
+        error: result.error,
       });
     } catch (err) {
       console.error('[UnifiedInbox] Send message error:', err);
@@ -209,6 +212,48 @@ class UnifiedInboxController {
         return res.status(404).json({ success: false, message: err.message });
       }
       return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Retry a failed outbound agent message.
+   * POST /api/ai/chatbot/inbox/messages/:messageId/retry
+   * body: { type: 'zalo_personal' | 'channel' }
+   * Không gọi checkSendQuota — tin đã tính hạn mức lúc lưu.
+   */
+  async retryMessage(req, res) {
+    try {
+      const { messageId } = req.params;
+      const { type } = req.body || {};
+      if (!messageId) {
+        return res.status(400).json({ success: false, message: 'Message ID is required' });
+      }
+      if (!type || !['zalo_personal', 'channel'].includes(String(type))) {
+        return res.status(400).json({
+          success: false,
+          message: 'type must be zalo_personal or channel',
+          code: 'INVALID_TYPE',
+        });
+      }
+
+      const result = await unifiedInboxService.retryMessage(req.user.id, messageId, type);
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        sendStatus: result.sendStatus,
+        error: result.error,
+        metadata: result.metadata,
+      });
+    } catch (err) {
+      console.error('[UnifiedInbox] Retry message error:', err);
+      const status = err.status || (err.message === 'Message not found' || err.message === 'Conversation not found'
+        ? 404
+        : 500);
+      return res.status(status).json({
+        success: false,
+        message: err.message,
+        code: err.code,
+      });
     }
   }
 

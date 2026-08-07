@@ -57,6 +57,7 @@ export async function findProfileBase(userId) {
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
             u.role, u.active_plan_id, u.subscription_expires_at,
             ${PROFILE_LIMIT_COLUMNS},
+            u.bot_daily_reply_cap,
             u.created_at, u.last_login_at, r.role_code, r.role_name
      FROM users u
      LEFT JOIN roles r ON u.id_role = r.id
@@ -74,6 +75,7 @@ export async function findProfileBaseFallback(userId) {
             NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
             NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
             NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
+            NULL::int AS bot_daily_reply_cap,
             u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
      FROM users u WHERE u.id = $1`,
     [userId]
@@ -164,6 +166,23 @@ export async function updateProfile(userId, { fullName, email, phone, avatarUrl 
      WHERE id = $5
      RETURNING id, username, email, full_name, avatar_url, phone`,
     [fullName, email, phone, avatarUrl, userId]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Owner-only daily bot reply cap. Pass null to clear (system limits only).
+ * @param {number} userId
+ * @param {number|null} cap
+ */
+export async function updateBotDailyReplyCap(userId, cap) {
+  const { rows } = await db.query(
+    `UPDATE users
+     SET bot_daily_reply_cap = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING id, bot_daily_reply_cap`,
+    [userId, cap]
   );
   return rows[0] || null;
 }

@@ -13,7 +13,19 @@ async function gateChannelAi({ channel, userId, channelId, senderKey, staticSend
     senderKey,
   });
   if (rate.allowed) return null;
-  await staticSend(rate.staticReply);
+  if (rate.shouldNotify) {
+    const delivered = await staticSend(rate.staticReply);
+    // Adapters return { success: false } on failure (no throw) — only mark after real delivery.
+    if (delivered) {
+      await chatbotRateLimitService.markRateLimitNotified({
+        channel,
+        ownerUserId: userId,
+        chatbotId: channelId,
+        senderKey,
+        reason: rate.reason,
+      });
+    }
+  }
   return rate;
 }
 
@@ -95,18 +107,20 @@ class ChatbotWebhookController {
         channelId: channel.id,
         senderKey: senderId,
         staticSend: async (text) => {
-          await zaloOAAdapter.sendReply({
+          const sent = await zaloOAAdapter.sendReply({
             conversationId: conv.id,
             message: text,
             userId: channel.user_id,
             channelId: channel.id,
             externalId: senderId,
           });
+          if (sent?.success === false) return false;
           await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
             role: 'bot',
             content: text,
             message_type: 'text',
           });
+          return true;
         },
       });
       if (blocked) return;
@@ -214,16 +228,18 @@ class ChatbotWebhookController {
           channelId: channel.id,
           senderKey: msg.senderId,
           staticSend: async (text) => {
-            await facebookAdapter.sendReply({
+            const sent = await facebookAdapter.sendReply({
               externalId: msg.senderId,
               message: text,
               userId: channel.user_id,
             });
+            if (sent?.success === false) return false;
             await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
               role: 'bot',
               content: text,
               message_type: 'text',
             });
+            return true;
           },
         });
         if (blocked) continue;
@@ -318,18 +334,20 @@ class ChatbotWebhookController {
         channelId: channel.id,
         senderKey: senderId,
         staticSend: async (text) => {
-          await zaloOAAdapter.sendReply({
+          const sent = await zaloOAAdapter.sendReply({
             conversationId: conv.id,
             message: text,
             userId: channel.user_id,
             channelId: channel.id,
             externalId: senderId,
           });
+          if (sent?.success === false) return false;
           await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
             role: 'bot',
             content: text,
             message_type: 'text',
           });
+          return true;
         },
       });
       if (blocked) return;
@@ -413,16 +431,18 @@ class ChatbotWebhookController {
           channelId: channel.id,
           senderKey: msg.senderId,
           staticSend: async (text) => {
-            await facebookAdapter.sendReply({
+            const sent = await facebookAdapter.sendReply({
               externalId: msg.senderId,
               message: text,
               userId: channel.user_id,
             });
+            if (sent?.success === false) return false;
             await chatbotRepository.addChannelMessage(conv.id, channel.user_id, channel.id, {
               role: 'bot',
               content: text,
               message_type: 'text',
             });
+            return true;
           },
         });
         if (blocked) continue;

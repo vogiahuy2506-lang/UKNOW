@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { HiCheck, HiDownload, HiReply, HiX, HiSearch } from 'react-icons/hi';
+import { HiCheck, HiDownload, HiReply, HiX, HiSearch, HiExclamationCircle } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import {
   getMessagePreviewText,
@@ -7,11 +7,41 @@ import {
   normalizeMessageContent,
 } from './utils/normalizeMessageContent';
 
+const RETRYING_STALE_MS = 2 * 60 * 1000;
+
 const formatMessageTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
+
+function parseMessageMetadata(message) {
+  const raw = typeof message.metadata === 'string'
+    ? JSON.parse(message.metadata || '{}')
+    : (message.metadata || {});
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+function getSendState(metadata, now = Date.now()) {
+  const send = metadata?.send;
+  if (!send || typeof send !== 'object') return { kind: 'ok' };
+  const status = send.status;
+  if (status === 'failed') {
+    return { kind: 'failed', error: send.error || '', canRetry: true };
+  }
+  if (status === 'retrying') {
+    const lockedAt = send.lockedAt ? new Date(send.lockedAt).getTime() : NaN;
+    const failedAt = send.failedAt ? new Date(send.failedAt).getTime() : NaN;
+    const anchor = Number.isFinite(lockedAt) ? lockedAt : failedAt;
+    const stale = !Number.isFinite(anchor) || (now - anchor) >= RETRYING_STALE_MS;
+    return {
+      kind: stale ? 'failed' : 'retrying',
+      error: send.error || '',
+      canRetry: stale,
+    };
+  }
+  return { kind: 'ok' };
+}
 
 const formatMessageDate = (dateString) => {
   if (!dateString) return '';
@@ -162,22 +192,29 @@ const getFileIcon = (fileName) => {
   return iconMap[ext] || '📎';
 };
 
-const MessageBubble = ({ 
-  message, 
-  isOwn, 
-  showDate, 
-  isGroupConversation, 
+const MessageBubble = ({
+  message,
+  isOwn,
+  showDate,
+  isGroupConversation,
   isGroupChannel, 
   onReply,
+  onRetry,
+  retryingMessageId,
   replyingTo,
   messageLabels,
 }) => {
+  const { t } = useI18n();
   const isBot = message.role === 'bot';
   const isAgent = message.role === 'agent';
   const isVisitor = message.role === 'visitor';
   
-  const metadata = typeof message.metadata === 'string' ? JSON.parse(message.metadata || '{}') : (message.metadata || {});
+  const metadata = parseMessageMetadata(message);
   const visitorInfo = typeof message.visitor_info === 'string' ? JSON.parse(message.visitor_info || '{}') : (message.visitor_info || {});
+  const sendState = isAgent ? getSendState(metadata) : { kind: 'ok' };
+  const sendFailed = sendState.kind === 'failed';
+  const sendRetrying = sendState.kind === 'retrying';
+  const isRetryBusy = retryingMessageId != null && Number(retryingMessageId) === Number(message.id);
   
   const senderName = metadata.sender_name || visitorInfo.sender_name || message.sender_name;
   
@@ -267,14 +304,22 @@ const MessageBubble = ({
           {/* Message bubble */}
           <div
             className={`relative group min-w-0 ${
-              isAgentMessage
+              sendFailed
+                ? 'bg-red-50 text-red-900 rounded-3xl rounded-br-sm border border-red-200 shadow-sm'
+                : sendRetrying
+                  ? 'bg-amber-50 text-amber-950 rounded-3xl rounded-br-sm border border-amber-200 shadow-sm'
+                : isAgentMessage
                 ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-3xl rounded-br-sm shadow-lg shadow-primary-500/20'
                 : 'bg-white text-gray-800 rounded-3xl rounded-bl-sm border border-gray-100 shadow-sm'
             } ${isReplyingToThis ? 'ring-2 ring-primary-300 ring-offset-2' : ''}`}
           >
             {/* Tail */}
             <div className={`absolute top-3 w-3 h-3 ${
-              isAgentMessage 
+              sendFailed
+                ? '-right-1.5 bg-red-50 rotate-45 border-r border-t border-red-200'
+                : sendRetrying
+                  ? '-right-1.5 bg-amber-50 rotate-45 border-r border-t border-amber-200'
+                : isAgentMessage 
                 ? '-right-1.5 bg-primary-500 rotate-45' 
                 : '-left-1.5 bg-white rotate-45 border-l border-b border-gray-100'
             }`} />
@@ -295,7 +340,9 @@ const MessageBubble = ({
                     </p>
                   )}
                   {normalizedContent.description && (
-                    <p className={`text-sm leading-snug break-words ${isAgentMessage ? 'text-white/80' : 'text-gray-500'}`} style={{ overflowWrap: 'anywhere' }}>
+                    <p className={`text-sm leading-snug break-words ${
+                      sendFailed || sendRetrying ? 'text-red-700/80' : isAgentMessage ? 'text-white/80' : 'text-gray-500'
+                    }`} style={{ overflowWrap: 'anywhere' }}>
                       {normalizedContent.description}
                     </p>
                   )}
@@ -303,7 +350,9 @@ const MessageBubble = ({
                     href={normalizedContent.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`block break-all text-sm underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
+                    className={`block break-all text-sm underline font-medium hover:opacity-80 transition-opacity ${
+                      sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600'
+                    }`}
                   >
                     {normalizedContent.href}
                   </a>
@@ -319,10 +368,22 @@ const MessageBubble = ({
 
             {/* Time and status */}
             <div className={`flex items-center gap-1.5 px-4 pb-2 ${isAgentMessage ? 'justify-end' : 'justify-start'}`}>
-              <span className={`text-[11px] ${isAgentMessage ? 'text-white/70' : 'text-gray-400'}`}>
+              <span className={`text-[11px] ${
+                sendFailed || sendRetrying ? 'text-red-500' : isAgentMessage ? 'text-white/70' : 'text-gray-400'
+              }`}>
                 {formatMessageTime(message.createdAt)}
               </span>
-              {isAgentMessage && (
+              {isAgent && sendFailed && (
+                <span title={sendState.error || t('inbox.sendFailed')} className="text-red-600">
+                  <HiExclamationCircle className="w-4 h-4" />
+                </span>
+              )}
+              {isAgent && sendRetrying && (
+                <span title={t('inbox.sendRetrying')} className="text-amber-600 text-[11px] font-medium">
+                  {t('inbox.sendRetrying')}
+                </span>
+              )}
+              {isAgentMessage && !sendFailed && !sendRetrying && (
                 message.isRead ? (
                   <span className="text-white/80">
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -336,6 +397,19 @@ const MessageBubble = ({
                 )
               )}
             </div>
+
+            {isAgent && sendFailed && sendState.canRetry && onRetry && (
+              <div className="px-4 pb-3">
+                <button
+                  type="button"
+                  disabled={isRetryBusy}
+                  onClick={() => onRetry(message)}
+                  className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRetryBusy ? t('inbox.retrying') : t('inbox.retrySend')}
+                </button>
+              </div>
+            )}
 
             {/* Reply button */}
             {isVisitor && onReply && (
@@ -355,7 +429,7 @@ const MessageBubble = ({
   );
 };
 
-const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo }) => {
+const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, retryingMessageId, replyingTo }) => {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -509,6 +583,8 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, replyingTo 
                 isGroupChannel={isGroupChannel}
                 conversation={conversation}
                 onReply={onReply}
+                onRetry={onRetry}
+                retryingMessageId={retryingMessageId}
                 replyingTo={replyingTo}
                 messageLabels={messageLabels}
               />

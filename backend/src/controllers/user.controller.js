@@ -17,6 +17,7 @@ import {
   updateLegacyEmployeeStatus,
   updatePasswordHash,
   updateProfile as updateProfileInDb,
+  updateBotDailyReplyCap,
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
@@ -27,6 +28,7 @@ import {
   isTopupOrderRow,
   mapTopupItemsFromConfig,
 } from '../utils/topupDisplay.util.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 
 const EMPLOYEE_LIMIT_KEYS = {
   maxCampaigns: 'max_campaigns',
@@ -149,6 +151,7 @@ const mapProfileResponse = (userRow) => ({
   aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
   aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
+  botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
   planGracePeriodDays: userRow.grace_period_days ?? 0,
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
@@ -247,6 +250,7 @@ class UserController {
       const profileRow = {
         ...userRow,
         ...(employeeCtx ? { subscription_expires_at: billingRow.subscription_expires_at } : {}),
+        bot_daily_reply_cap: billingRow.bot_daily_reply_cap ?? userRow.bot_daily_reply_cap ?? null,
         ...(planRow || {}),
         ...usageCounts,
         ai_tokens_used: aiTokenUsage.used,
@@ -351,6 +355,51 @@ class UserController {
         success: false,
         message: 'Lỗi server'
       });
+    }
+  }
+
+  /**
+   * PATCH /api/users/bot-daily-reply-cap
+   * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày (null = không giới hạn thêm).
+   * Guard requireSelfContext trên route.
+   */
+  async updateBotDailyReplyCap(req, res) {
+    try {
+      const userId = req.user.id;
+      const raw = req.body?.botDailyReplyCap;
+
+      let cap = null;
+      if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+        const n = Number.parseInt(String(raw), 10);
+        if (!Number.isFinite(n) || n <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn',
+          });
+        }
+        cap = n;
+      }
+
+      const row = await updateBotDailyReplyCap(userId, cap);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      chatbotRateLimitService.invalidateOwnerCapCache(userId);
+
+      return res.json({
+        success: true,
+        data: { botDailyReplyCap: row.bot_daily_reply_cap ?? null },
+      });
+    } catch (error) {
+      console.error('Update bot daily reply cap error:', error);
+      if (error?.code === '23514') {
+        return res.status(400).json({
+          success: false,
+          message: 'Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn',
+        });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 

@@ -1240,13 +1240,24 @@ class ChatbotController {
         senderKey: visitorKey,
       });
       if (!rate.allowed) {
+        const content = rate.shouldNotify ? rate.staticReply : null;
+        if (rate.shouldNotify) {
+          await chatbotRateLimitService.markRateLimitNotified({
+            channel: 'web',
+            ownerUserId: chatbot.id_user,
+            chatbotId: chatbot.id,
+            senderKey: visitorKey,
+            reason: rate.reason,
+          });
+        }
         return res.json({
           success: true,
           data: {
             role: 'assistant',
-            content: rate.staticReply,
+            content,
             created_at: new Date().toISOString(),
             rateLimited: true,
+            reason: rate.reason,
           },
         });
       }
@@ -1373,14 +1384,25 @@ class ChatbotController {
         senderKey: visitorSessionId,
       });
       if (!rate.allowed) {
+        const content = rate.shouldNotify ? rate.staticReply : null;
+        if (rate.shouldNotify) {
+          await chatbotRateLimitService.markRateLimitNotified({
+            channel: 'web',
+            ownerUserId: chatbotUserId,
+            chatbotId: chatbot.id,
+            senderKey: visitorSessionId,
+            reason: rate.reason,
+          });
+        }
         return res.json({
           success: true,
           data: {
             role: 'assistant',
-            content: rate.staticReply,
+            content,
             created_at: new Date().toISOString(),
             sessionId: visitorSessionId,
             rateLimited: true,
+            reason: rate.reason,
           },
         });
       }

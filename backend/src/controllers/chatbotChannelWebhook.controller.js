@@ -102,17 +102,28 @@ class ChatbotChannelWebhookController {
         senderKey: senderId,
       });
       if (!rate.allowed) {
-        await zaloOAAdapter.sendReply({
-          conversationId: conv.id,
-          message: rate.staticReply,
-          channelId: channel.id,
-          externalId: senderId,
-        });
-        await chatbotChannelRepository.addMessage(conv.id, {
-          role: 'bot',
-          content: rate.staticReply,
-          message_type: 'text',
-        });
+        if (rate.shouldNotify) {
+          const sent = await zaloOAAdapter.sendReply({
+            conversationId: conv.id,
+            message: rate.staticReply,
+            channelId: channel.id,
+            externalId: senderId,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: rate.staticReply,
+              message_type: 'text',
+            });
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'zalo_oa',
+              ownerUserId: chatbot.id_user,
+              chatbotId,
+              senderKey: senderId,
+              reason: rate.reason,
+            });
+          }
+        }
         return;
       }
 
@@ -245,16 +256,27 @@ class ChatbotChannelWebhookController {
           senderKey: msg.senderId,
         });
         if (!rate.allowed) {
-          await facebookAdapter.sendReply({
-            externalId: msg.senderId,
-            message: rate.staticReply,
-            channelId: channel.id,
-          });
-          await chatbotChannelRepository.addMessage(conv.id, {
-            role: 'bot',
-            content: rate.staticReply,
-            message_type: 'text',
-          });
+          if (rate.shouldNotify) {
+            const sent = await facebookAdapter.sendReply({
+              externalId: msg.senderId,
+              message: rate.staticReply,
+              channelId: channel.id,
+            });
+            if (sent?.success !== false) {
+              await chatbotChannelRepository.addMessage(conv.id, {
+                role: 'bot',
+                content: rate.staticReply,
+                message_type: 'text',
+              });
+              await chatbotRateLimitService.markRateLimitNotified({
+                channel: 'facebook',
+                ownerUserId: chatbot.id_user,
+                chatbotId,
+                senderKey: msg.senderId,
+                reason: rate.reason,
+              });
+            }
+          }
           continue;
         }
 

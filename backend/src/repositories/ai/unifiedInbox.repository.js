@@ -665,16 +665,17 @@ class UnifiedInboxRepository {
     const metadataJson = JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
 
     if (conversationType === 'channel') {
-      await db.query(
+      const { rows } = await db.query(
         `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+         RETURNING id`,
         [conversationId, userId, channelId, role, content, JSON.stringify(attachments), metadataJson, now]
       );
       await db.query(
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
         [conversationId, now]
       );
-      return null;
+      return rows[0]?.id ?? null;
     }
 
     if (conversationType === 'zalo_personal') {
@@ -1067,6 +1068,165 @@ class UnifiedInboxRepository {
     ));
 
     return rows[0] || null;
+  }
+
+  /**
+   * Patch metadata.send via jsonb_set (never overwrite whole metadata — preserves source).
+   * @param {'zalo_personal'|'channel'} conversationType
+   * @param {number|string} messageId
+   * @param {{ status: string, error?: string|null, attempts?: number|null, setLockedAt?: boolean }} patch
+   */
+  async updateMessageSendStatus(conversationType, messageId, patch = {}) {
+    const table = conversationType === 'zalo_personal'
+      ? 'zalo_personal_messages'
+      : 'channel_messages';
+    const status = String(patch.status || 'failed');
+    const error = patch.error == null ? null : String(patch.error);
+    const attempts = patch.attempts == null ? null : Number(patch.attempts);
+    const setLockedAt = Boolean(patch.setLockedAt);
+
+    const { rows } = await db.query(
+      `UPDATE ${table} m
+       SET metadata = (
+         WITH base AS (
+           SELECT jsonb_set(
+                    COALESCE(m.metadata, '{}'::jsonb),
+                    '{send}',
+                    COALESCE(m.metadata->'send', '{}'::jsonb),
+                    true
+                  ) AS meta
+         ),
+         with_status AS (
+           SELECT jsonb_set(base.meta, '{send,status}', to_jsonb($2::text), true) AS meta FROM base
+         ),
+         with_error AS (
+           SELECT jsonb_set(
+                    with_status.meta,
+                    '{send,error}',
+                    CASE WHEN $3::text IS NULL THEN 'null'::jsonb ELSE to_jsonb($3::text) END,
+                    true
+                  ) AS meta
+           FROM with_status
+         ),
+         with_attempts AS (
+           SELECT jsonb_set(
+                    with_error.meta,
+                    '{send,attempts}',
+                    CASE
+                      WHEN $4::int IS NOT NULL THEN to_jsonb($4::int)
+                      WHEN $2::text = 'failed' THEN to_jsonb(
+                        COALESCE((with_error.meta->'send'->>'attempts')::int, 0) + 1
+                      )
+                      ELSE COALESCE(with_error.meta->'send'->'attempts', to_jsonb(1))
+                    END,
+                    true
+                  ) AS meta
+           FROM with_error
+         ),
+         with_failed_at AS (
+           SELECT CASE
+                    WHEN $2::text = 'failed'
+                      THEN jsonb_set(with_attempts.meta, '{send,failedAt}', to_jsonb(NOW()), true)
+                    ELSE with_attempts.meta
+                  END AS meta
+           FROM with_attempts
+         ),
+         with_locked_at AS (
+           SELECT CASE
+                    WHEN $5::boolean
+                      THEN jsonb_set(with_failed_at.meta, '{send,lockedAt}', to_jsonb(NOW()), true)
+                    ELSE with_failed_at.meta
+                  END AS meta
+           FROM with_failed_at
+         )
+         SELECT meta FROM with_locked_at
+       )
+       WHERE m.id = $1
+       RETURNING m.id, m.metadata`,
+      [messageId, status, error, Number.isFinite(attempts) ? attempts : null, setLockedAt]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Atomically claim a failed/stale-retrying agent message for retry.
+   * @returns {Promise<object|null>} claimed row or null
+   */
+  async claimMessageForRetry(conversationType, messageId) {
+    const table = conversationType === 'zalo_personal'
+      ? 'zalo_personal_messages'
+      : 'channel_messages';
+    const { rows } = await db.query(
+      `UPDATE ${table}
+       SET metadata = jsonb_set(
+             jsonb_set(
+               jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb),
+                 '{send}',
+                 COALESCE(metadata->'send', '{}'::jsonb),
+                 true
+               ),
+               '{send,status}',
+               '"retrying"',
+               true
+             ),
+             '{send,lockedAt}',
+             to_jsonb(NOW()),
+             true
+           )
+       WHERE id = $1
+         AND role = 'agent'
+         AND (
+           metadata->'send'->>'status' = 'failed'
+           OR (
+             metadata->'send'->>'status' = 'retrying'
+             AND COALESCE(
+                   (metadata->'send'->>'lockedAt')::timestamptz,
+                   (metadata->'send'->>'failedAt')::timestamptz
+                 ) < NOW() - INTERVAL '2 minutes'
+           )
+         )
+       RETURNING id, id_conversation, id_user, role, content, attachments, metadata,
+                 ${conversationType === 'zalo_personal' ? 'id_zalo_setting' : 'id_channel'}`,
+      [messageId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Load agent message + conversation for retry, scoped to workspace owner userId.
+   */
+  async findAgentMessageForRetry(userId, messageId, conversationType) {
+    if (conversationType === 'zalo_personal') {
+      const { rows } = await db.query(
+        `SELECT zpm.id, zpm.id_conversation, zpm.id_user, zpm.id_zalo_setting, zpm.role,
+                zpm.content, zpm.attachments, zpm.metadata,
+                zp.external_id, zp.is_group, zp.group_id, zp.id_user AS conversation_user_id,
+                'zalo_personal' AS channel
+         FROM zalo_personal_messages zpm
+         JOIN zalo_personal_conversations zp ON zp.id = zpm.id_conversation
+         WHERE zpm.id = $1 AND zp.id_user = $2 AND zpm.role = 'agent'`,
+        [messageId, userId]
+      );
+      return rows[0] || null;
+    }
+
+    if (conversationType === 'channel') {
+      const { rows } = await db.query(
+        `SELECT cm.id, cm.id_conversation, cm.id_user, cm.id_channel, cm.role,
+                cm.content, cm.attachments, cm.metadata,
+                cc.external_id, cc.id_user AS conversation_user_id,
+                ch.channel AS channel
+         FROM channel_messages cm
+         JOIN channel_conversations cc ON cc.id = cm.id_conversation
+         JOIN channel_connections ch ON ch.id = cm.id_channel
+         WHERE cm.id = $1 AND cc.id_user = $2 AND cm.role = 'agent'`,
+        [messageId, userId]
+      );
+      return rows[0] || null;
+    }
+
+    return null;
   }
 }
 

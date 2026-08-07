@@ -2,7 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
 import userController from '../controllers/user.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requireAdmin } from '../middleware/authorization.middleware.js';
+import { requireAdmin, requireSelfContext } from '../middleware/authorization.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 
 const router = express.Router();
@@ -14,6 +14,29 @@ router.get('/profile', userController.getProfile.bind(userController));
 
 // Lịch sử mua gói dịch vụ của user đang đăng nhập
 router.get('/my-orders', userController.getMyOrders.bind(userController));
+
+/**
+ * PATCH /api/users/bot-daily-reply-cap
+ * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày (null/empty = bỏ giới hạn).
+ */
+router.patch(
+  '/bot-daily-reply-cap',
+  requireSelfContext,
+  [
+    body('botDailyReplyCap')
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === null || value === undefined || String(value).trim() === '') return true;
+        const n = Number.parseInt(String(value), 10);
+        if (!Number.isFinite(n) || n <= 0) {
+          throw new Error('Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn');
+        }
+        return true;
+      }),
+  ],
+  handleValidationErrors,
+  userController.updateBotDailyReplyCap.bind(userController)
+);
 
 // Update profile
 /**

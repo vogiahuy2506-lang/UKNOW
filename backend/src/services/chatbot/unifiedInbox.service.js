@@ -290,12 +290,13 @@ class UnifiedInboxService {
     };
 
     // Zalo Personal: insert + trừ ví cùng transaction (đếm vào hạn mức tháng)
+    let messageId = null;
     if (conversationType === 'zalo_personal') {
       const billingOptions = options.ownerContextId != null && options.ownerContextId !== ''
         ? { ownerContextId: options.ownerContextId }
         : {};
       const billingUserId = await resolveBillingUserId(userId, billingOptions);
-      await unifiedInboxRepository.withTransaction(async (client) => {
+      messageId = await unifiedInboxRepository.withTransaction(async (client) => {
         const msgId = await unifiedInboxRepository.insertZaloPersonalAgentMessage(
           client,
           parseInt(conversationId),
@@ -308,9 +309,10 @@ class UnifiedInboxService {
             messageId: msgId,
           });
         }
+        return msgId;
       });
     } else {
-      await unifiedInboxRepository.sendMessage(
+      messageId = await unifiedInboxRepository.sendMessage(
         parseInt(conversationId),
         userId,
         conversationType,
@@ -329,12 +331,15 @@ class UnifiedInboxService {
     // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.
     // Broadcasting causes frontend to create duplicate "Agent" conversations.
 
-    // Send via channel adapter
+    // Send via channel adapter — đọc kết quả (cả ba kênh return {success}, hiếm khi ném)
+    let sendStatus = 'sent';
+    let sendError = null;
+    const canTrackSend = messageId
+      && (conversationType === 'zalo_personal' || conversationType === 'channel');
+
     try {
       const adapter = this._getChannelAdapter(conversation.channel);
       if (adapter?.sendReply) {
-        // Zalo Personal cần externalId (uid của người nhận), không phải conversationId
-        // Cần pass accountId (zalo_setting.id) cho Zalo Personal adapter
         const params = {
           externalId: conversation.external_id,
           message: content.trim(),
@@ -345,22 +350,141 @@ class UnifiedInboxService {
             is_group: conversation.is_group,
             group_id: conversation.group_id,
           },
-          forceReply: true, // Manual reply from inbox should always send
-          persist: false, // already saved above
+          forceReply: true,
+          persist: false,
         };
 
         if (conversationType === 'channel') {
           params.channelId = channelId;
         }
 
-        await adapter.sendReply(params);
+        const sendResult = await adapter.sendReply(params);
+        if (sendResult && sendResult.success === false) {
+          sendStatus = 'failed';
+          sendError = sendResult.error || 'Send failed';
+        }
       }
-    } catch (sendError) {
-      console.warn('[UnifiedInbox] Failed to send via channel adapter:', sendError.message);
-      // Message is still saved, will need manual retry
+    } catch (err) {
+      sendStatus = 'failed';
+      sendError = err.message || 'Send failed';
+      console.warn('[UnifiedInbox] Failed to send via channel adapter:', sendError);
     }
 
-    return { success: true };
+    if (canTrackSend) {
+      try {
+        await unifiedInboxRepository.updateMessageSendStatus(conversationType, messageId, {
+          status: sendStatus,
+          error: sendStatus === 'failed' ? sendError : null,
+          attempts: sendStatus === 'failed' ? 1 : 1,
+        });
+      } catch (metaErr) {
+        console.warn('[UnifiedInbox] Failed to update send metadata:', metaErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      messageId,
+      sendStatus: canTrackSend ? sendStatus : 'sent',
+      error: sendStatus === 'failed' ? sendError : undefined,
+    };
+  }
+
+  /**
+   * Retry a previously failed agent outbound message (same DB row — no double wallet debit).
+   */
+  async retryMessage(userId, messageId, conversationType) {
+    const type = String(conversationType || '');
+    if (type !== 'zalo_personal' && type !== 'channel') {
+      const err = new Error('type must be zalo_personal or channel');
+      err.status = 400;
+      err.code = 'INVALID_TYPE';
+      throw err;
+    }
+
+    const owned = await unifiedInboxRepository.findAgentMessageForRetry(
+      userId,
+      parseInt(messageId, 10),
+      type
+    );
+    if (!owned) {
+      const err = new Error('Message not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const claimed = await unifiedInboxRepository.claimMessageForRetry(type, owned.id);
+    if (!claimed) {
+      const err = new Error('Tin đang được gửi lại hoặc không ở trạng thái thất bại');
+      err.status = 409;
+      err.code = 'RETRY_NOT_AVAILABLE';
+      throw err;
+    }
+
+    const conversation = await unifiedInboxRepository.getConversationById(
+      userId,
+      Number(owned.id_conversation),
+      type
+    );
+    if (!conversation) {
+      await unifiedInboxRepository.updateMessageSendStatus(type, owned.id, {
+        status: 'failed',
+        error: 'Conversation not found',
+      }).catch(() => {});
+      const err = new Error('Conversation not found');
+      err.status = 404;
+      throw err;
+    }
+
+    let sendStatus = 'sent';
+    let sendError = null;
+    try {
+      const adapter = this._getChannelAdapter(conversation.channel || owned.channel);
+      if (!adapter?.sendReply) {
+        sendStatus = 'failed';
+        sendError = 'Channel adapter not available';
+      } else {
+        const params = {
+          externalId: conversation.external_id || owned.external_id,
+          message: owned.content,
+          attachments: owned.attachments || [],
+          userId,
+          accountId: type === 'zalo_personal'
+            ? (owned.id_zalo_setting || conversation.id_zalo_setting)
+            : undefined,
+          conversationInfo: {
+            is_group: conversation.is_group ?? owned.is_group,
+            group_id: conversation.group_id ?? owned.group_id,
+          },
+          forceReply: true,
+          persist: false,
+        };
+        if (type === 'channel') {
+          params.channelId = owned.id_channel || conversation.id_channel;
+        }
+        const sendResult = await adapter.sendReply(params);
+        if (sendResult && sendResult.success === false) {
+          sendStatus = 'failed';
+          sendError = sendResult.error || 'Send failed';
+        }
+      }
+    } catch (err) {
+      sendStatus = 'failed';
+      sendError = err.message || 'Send failed';
+    }
+
+    const updated = await unifiedInboxRepository.updateMessageSendStatus(type, owned.id, {
+      status: sendStatus,
+      error: sendStatus === 'failed' ? sendError : null,
+    });
+
+    return {
+      success: true,
+      messageId: owned.id,
+      sendStatus,
+      error: sendStatus === 'failed' ? sendError : undefined,
+      metadata: updated?.metadata || null,
+    };
   }
 
   /**

@@ -29,6 +29,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   revokeAllRefreshTokensForUser: jest.fn(),
   updateLegacyEmployeeLimits: jest.fn(),
   updateLegacyEmployeeStatus: jest.fn(),
+  updateBotDailyReplyCap: jest.fn(),
   updatePasswordHash: jest.fn(),
   updateProfile: jest.fn(),
 }));

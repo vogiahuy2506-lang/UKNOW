@@ -1,7 +1,10 @@
 import IORedis from 'ioredis';
 
 const DEFAULT_STATIC_REPLY =
-  'Bạn gửi hơi nhanh, vui lòng chờ chút rồi thử lại nhé.';
+  'Trợ lý đang bận, chưa trả lời thêm được lúc này. Bạn cứ để lại câu hỏi, chúng tôi sẽ xem và phản hồi.';
+
+const NOTIFY_REASONS = new Set(['sender_day', 'chatbot_hour', 'owner_cap']);
+const OWNER_CAP_CACHE_TTL_MS = 60_000;
 
 function envInt(name, fallback) {
   const parsed = Number.parseInt(String(process.env[name] || '').trim(), 10);
@@ -32,6 +35,9 @@ function buildRedisConfig() {
  */
 const memoryCounters = new Map();
 
+/** ownerUserId → { value: number|null, expiresAt } */
+const ownerCapCache = new Map();
+
 function memoryIncr(key, windowSec) {
   const now = Date.now();
   const existing = memoryCounters.get(key);
@@ -41,6 +47,19 @@ function memoryIncr(key, windowSec) {
   }
   existing.count += 1;
   return existing.count;
+}
+
+function memoryHas(key) {
+  const existing = memoryCounters.get(key);
+  return !!(existing && existing.expiresAt > Date.now());
+}
+
+function memorySet(key, windowSec) {
+  memoryCounters.set(key, { count: 1, expiresAt: Date.now() + windowSec * 1000 });
+}
+
+function notifyWindowSec(reason) {
+  return reason === 'chatbot_hour' ? 3600 : 86400;
 }
 
 class ChatbotRateLimitService {
@@ -57,6 +76,10 @@ class ChatbotRateLimitService {
 
   get perSenderPerMin() {
     return envInt('CHATBOT_RATE_LIMIT_PER_SENDER_PER_MIN', 8);
+  }
+
+  get perSenderPerHour() {
+    return envInt('CHATBOT_RATE_LIMIT_PER_SENDER_PER_HOUR', 20);
   }
 
   get perSenderPerDay() {
@@ -115,16 +138,126 @@ class ChatbotRateLimitService {
     }
   }
 
+  async hasKey(key) {
+    const redis = await this.getRedis();
+    if (!redis) return memoryHas(key);
+
+    try {
+      return (await redis.exists(key)) === 1;
+    } catch (err) {
+      console.warn('[ChatbotRateLimit] exists failed, memory fallback:', err.message);
+      return memoryHas(key);
+    }
+  }
+
+  async setKeyWithTtl(key, windowSec) {
+    const redis = await this.getRedis();
+    if (!redis) {
+      memorySet(key, windowSec);
+      return;
+    }
+
+    try {
+      await redis.set(key, '1', 'EX', windowSec);
+    } catch (err) {
+      console.warn('[ChatbotRateLimit] set failed, memory fallback:', err.message);
+      memorySet(key, windowSec);
+    }
+  }
+
+  notifiedKey({ channel, chatbotId, ownerUserId, senderKey, reason }) {
+    const sender = String(senderKey || '').trim() || 'unknown';
+    const owner = String(ownerUserId || '').trim();
+    const bot = String(chatbotId || owner || 'unknown').trim();
+    const ch = String(channel || 'unknown').trim();
+    return `cbrl:notified:${ch}:${bot}:${sender}:${reason}`;
+  }
+
+  async resolveShouldNotify(params) {
+    const { reason } = params;
+    if (!NOTIFY_REASONS.has(reason)) return false;
+    const already = await this.hasKey(this.notifiedKey(params));
+    return !already;
+  }
+
+  /**
+   * Mark that a rate-limit notice was successfully delivered.
+   * Call ONLY after send/response succeeds.
+   */
+  async markRateLimitNotified({ channel, ownerUserId, chatbotId, senderKey, reason }) {
+    if (!NOTIFY_REASONS.has(reason)) return;
+    await this.setKeyWithTtl(
+      this.notifiedKey({ channel, ownerUserId, chatbotId, senderKey, reason }),
+      notifyWindowSec(reason)
+    );
+  }
+
+  /**
+   * Owner daily reply cap from users.bot_daily_reply_cap (cached ~60s).
+   * NULL / missing column / DB error → no owner cap.
+   */
+  async getOwnerDailyCap(ownerUserId) {
+    const owner = String(ownerUserId || '').trim();
+    if (!owner) return null;
+
+    const cached = ownerCapCache.get(owner);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
+    // Unit tests force memory path — never hit Postgres (CI has no DB).
+    if (this._skipDbOwnerCap) {
+      return null;
+    }
+
+    let value = null;
+    try {
+      const db = (await import('../../config/database.js')).default;
+      const { rows } = await db.query(
+        'SELECT bot_daily_reply_cap FROM users WHERE id = $1',
+        [owner]
+      );
+      const raw = rows[0]?.bot_daily_reply_cap;
+      const n = Number(raw);
+      value = Number.isFinite(n) && n > 0 ? n : null;
+    } catch (err) {
+      // Column missing before migration, or DB down — skip owner cap.
+      console.warn('[ChatbotRateLimit] bot_daily_reply_cap read failed:', err.message);
+      value = null;
+    }
+
+    ownerCapCache.set(owner, { value, expiresAt: Date.now() + OWNER_CAP_CACHE_TTL_MS });
+    return value;
+  }
+
+  /** Invalidate cache after owner updates cap (also used in tests). */
+  invalidateOwnerCapCache(ownerUserId) {
+    if (ownerUserId == null) {
+      ownerCapCache.clear();
+      return;
+    }
+    ownerCapCache.delete(String(ownerUserId));
+  }
+
+  async buildBlockedResult({ channel, ownerUserId, chatbotId, senderKey, reason, staticReply }) {
+    const shouldNotify = await this.resolveShouldNotify({
+      channel,
+      ownerUserId,
+      chatbotId,
+      senderKey,
+      reason,
+    });
+    return { allowed: false, reason, shouldNotify, staticReply };
+  }
+
   /**
    * Check + consume AI request quota for a sender / chatbot.
    * Call BEFORE invoking Gemini. Blocked requests must not charge credits.
    *
-   * @param {object} params
-   * @param {string} params.channel - web | zalo_oa | facebook | zalo_personal
-   * @param {string|number} params.ownerUserId
-   * @param {string|number} [params.chatbotId] - chatbot or account scope id
-   * @param {string|number} params.senderKey - sessionId / Zalo uid / PSID
-   * @returns {Promise<{ allowed: boolean, reason?: string, staticReply: string }>}
+   * Order: sender_minute → sender_hour → sender_day → owner_cap → chatbot_hour
+   * Early return does NOT increment later counters.
+   *
+   * @returns {Promise<{ allowed: boolean, reason?: string, shouldNotify: boolean, staticReply: string }>}
    */
   async checkBeforeAi({ channel, ownerUserId, chatbotId, senderKey }) {
     const staticReply = this.staticReply;
@@ -132,17 +265,23 @@ class ChatbotRateLimitService {
     const owner = String(ownerUserId || '').trim();
     const bot = String(chatbotId || owner || 'unknown').trim();
     const ch = String(channel || 'unknown').trim();
+    const scope = { channel: ch, ownerUserId: owner, chatbotId: bot, senderKey: sender };
 
     if (!sender || sender === 'unknown') {
-      // No stable identity — still apply chatbot hourly ceiling only.
-      const hourCount = await this.incrWithTtl(
-        `cbrl:bot:${ch}:${bot}:h`,
-        3600
-      );
-      if (hourCount > this.perChatbotPerHour) {
-        return { allowed: false, reason: 'chatbot_hour', staticReply };
+      // No stable identity — chatbot hourly + optional owner cap only.
+      const ownerCap = await this.getOwnerDailyCap(owner);
+      if (ownerCap != null) {
+        const ownerCount = await this.incrWithTtl(`cbrl:owner:${owner}:d`, 86400);
+        if (ownerCount > ownerCap) {
+          return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
+        }
       }
-      return { allowed: true, staticReply };
+
+      const hourCount = await this.incrWithTtl(`cbrl:bot:${ch}:${bot}:h`, 3600);
+      if (hourCount > this.perChatbotPerHour) {
+        return this.buildBlockedResult({ ...scope, reason: 'chatbot_hour', staticReply });
+      }
+      return { allowed: true, shouldNotify: false, staticReply };
     }
 
     const minCount = await this.incrWithTtl(
@@ -150,7 +289,15 @@ class ChatbotRateLimitService {
       60
     );
     if (minCount > this.perSenderPerMin) {
-      return { allowed: false, reason: 'sender_minute', staticReply };
+      return this.buildBlockedResult({ ...scope, reason: 'sender_minute', staticReply });
+    }
+
+    const senderHourCount = await this.incrWithTtl(
+      `cbrl:sender:${ch}:${bot}:${sender}:h`,
+      3600
+    );
+    if (senderHourCount > this.perSenderPerHour) {
+      return this.buildBlockedResult({ ...scope, reason: 'sender_hour', staticReply });
     }
 
     const dayCount = await this.incrWithTtl(
@@ -158,25 +305,40 @@ class ChatbotRateLimitService {
       86400
     );
     if (dayCount > this.perSenderPerDay) {
-      return { allowed: false, reason: 'sender_day', staticReply };
+      return this.buildBlockedResult({ ...scope, reason: 'sender_day', staticReply });
     }
 
-    const hourCount = await this.incrWithTtl(
-      `cbrl:bot:${ch}:${bot}:h`,
-      3600
-    );
-    if (hourCount > this.perChatbotPerHour) {
-      return { allowed: false, reason: 'chatbot_hour', staticReply };
+    const ownerCap = await this.getOwnerDailyCap(owner);
+    if (ownerCap != null) {
+      const ownerCount = await this.incrWithTtl(`cbrl:owner:${owner}:d`, 86400);
+      if (ownerCount > ownerCap) {
+        return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
+      }
     }
 
-    return { allowed: true, staticReply };
+    const botHourCount = await this.incrWithTtl(`cbrl:bot:${ch}:${bot}:h`, 3600);
+    if (botHourCount > this.perChatbotPerHour) {
+      return this.buildBlockedResult({ ...scope, reason: 'chatbot_hour', staticReply });
+    }
+
+    return { allowed: true, shouldNotify: false, staticReply };
   }
 
-  /** Test helper — clear memory counters. */
+  /** Test helper — clear memory counters + force memory path (no Redis/DB). */
   _resetMemoryForTests() {
     memoryCounters.clear();
-    this.redisFailed = true; // force memory path in unit tests
+    ownerCapCache.clear();
+    this.redisFailed = true;
     this.redis = null;
+    this._skipDbOwnerCap = true;
+  }
+
+  /** Test helper — set owner cap without DB. */
+  _setOwnerCapForTests(ownerUserId, cap) {
+    const owner = String(ownerUserId);
+    const n = Number(cap);
+    const value = Number.isFinite(n) && n > 0 ? n : null;
+    ownerCapCache.set(owner, { value, expiresAt: Date.now() + OWNER_CAP_CACHE_TTL_MS });
   }
 }
 

@@ -46,6 +46,7 @@ CREATE TABLE users (
   max_email_templates     INTEGER,
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
+  bot_daily_reply_cap     INTEGER CHECK (bot_daily_reply_cap IS NULL OR bot_daily_reply_cap > 0),
   subscription_reminder_count SMALLINT NOT NULL DEFAULT 0,
   -- migration 094: buộc đổi mật khẩu sau khi chủ shop reset cho nhân viên
   must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,

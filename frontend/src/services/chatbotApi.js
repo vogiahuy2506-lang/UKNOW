@@ -301,6 +301,11 @@ const chatbotApi = {
     return response.data;
   },
 
+  retryMessage: async (messageId, { type }) => {
+    const response = await api.post(`/ai/chatbot/inbox/messages/${messageId}/retry`, { type });
+    return response.data;
+  },
+
   // ── Outbox ───────────────────────────────────────────────────────
 
   getOutboxMessages: async ({ channel, search, startDate, endDate, limit = 20, offset = 0 } = {}) => {

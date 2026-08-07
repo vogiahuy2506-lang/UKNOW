@@ -37,6 +37,15 @@ export async function getMyOrders() {
   return response.data;
 }
 
+/**
+ * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày.
+ * @param {{ botDailyReplyCap: number|null }} payload
+ */
+export async function updateBotDailyReplyCap(payload) {
+  const response = await api.patch('/users/bot-daily-reply-cap', payload);
+  return response.data;
+}
+
 export function activateAccount(payload) {
   return api.post('/auth/activate', payload);
 }
