@@ -1,5 +1,9 @@
 import db from '../../config/database.js';
 import { decryptZaloCookieRow } from '../../utils/zaloCookieCrypto.util.js';
+import {
+  buildZaloGroupExternalIdCandidates,
+  normalizeZaloGroupId,
+} from '../../utils/zaloGroupName.util.js';
 
 class ZaloPersonalRepository {
   /**
@@ -38,16 +42,32 @@ class ZaloPersonalRepository {
 
   /**
    * Find an existing conversation by zalo setting and external uid.
+   * Với nhóm: tìm cả các biến thể g_/group_/group_g_ đã lưu lệch trước đây.
    *
    * @param {number} zaloSettingId
    * @param {string} externalId
    * @returns {Promise<object|null>}
    */
   async findConversation(zaloSettingId, externalId) {
+    const ext = String(externalId || '').trim();
+    if (!ext) return null;
+
+    const candidates = (ext.startsWith('group_') || ext.startsWith('g_'))
+      ? buildZaloGroupExternalIdCandidates(ext)
+      : [ext];
+    const preferred = (ext.startsWith('group_') || ext.startsWith('g_'))
+      ? (normalizeZaloGroupId(ext).prefixed || ext)
+      : ext;
+
     const { rows } = await db.query(
       `SELECT * FROM zalo_personal_conversations
-       WHERE id_zalo_setting = $1 AND external_id = $2`,
-      [zaloSettingId, externalId]
+       WHERE id_zalo_setting = $1
+         AND external_id = ANY($2::text[])
+       ORDER BY
+         CASE WHEN external_id = $3 THEN 0 ELSE 1 END,
+         id ASC
+       LIMIT 1`,
+      [zaloSettingId, candidates, preferred]
     );
     return rows[0] || null;
   }

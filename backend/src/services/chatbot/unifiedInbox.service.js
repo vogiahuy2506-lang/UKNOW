@@ -394,6 +394,15 @@ class UnifiedInboxService {
         if (sendResult && sendResult.success === false) {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
+        } else if (conversation.channel === 'zalo_personal' && zaloAccountId) {
+          // Gửi OK chứng tỏ session API còn; inbox handler có thể đã lệch listener sau restore.
+          // Gắn lại ngay (không đợi cron 5 phút) để tin bạn bè / app về hộp thư.
+          try {
+            const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
+            await zaloPersonalInboxService.registerAccountListener(zaloAccountId);
+          } catch (rebindErr) {
+            console.warn('[UnifiedInbox] Re-bind inbox listener after send failed:', rebindErr.message);
+          }
         }
       }
     } catch (err) {
@@ -495,6 +504,13 @@ class UnifiedInboxService {
         if (sendResult && sendResult.success === false) {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
+        } else if (type === 'zalo_personal' && params.accountId) {
+          try {
+            const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
+            await zaloPersonalInboxService.registerAccountListener(params.accountId);
+          } catch (rebindErr) {
+            console.warn('[UnifiedInbox] Re-bind inbox listener after retry send failed:', rebindErr.message);
+          }
         }
       }
     } catch (err) {

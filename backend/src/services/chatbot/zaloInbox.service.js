@@ -24,7 +24,10 @@ import { isZaloAccountChatbotEnabled } from '../../utils/zaloAccountChatbotGate.
 import {
   drainPendingAccounts,
   markAccountRegistered,
-  isAccountRegistered
+  isAccountRegistered,
+  unmarkAccountRegistered,
+  removeAccount,
+  listRegisteredAccounts,
 } from '../zalo/zaloAccountRegistry.service.js';
 import {
   buildPlaceholderGroupName,
@@ -769,8 +772,17 @@ class ZaloPersonalInboxService {
       const { id_user: userId } = account;
       console.log(`[ZaloInbox] Processing account ${accountId}, user ${userId}`);
 
-      if (isAccountRegistered(accountId)) {
-        console.log(`[ZaloInbox] Account ${accountId} already registered (skipping)`);
+      const session = await zaloPersonalAdapter.getSessionByAccountId(accountId);
+      const currentListener = session?.api?.listener || null;
+      // Chỉ skip khi handler còn gắn đúng listener của session HIỆN TẠI.
+      // Sau websocket close + restore API mới, cờ registered cũ từng khiến skip
+      // → gửi từ web vẫn được (api.sendMessage) nhưng tin bạn bè không về hộp thư.
+      if (
+        isAccountRegistered(accountId)
+        && currentListener
+        && zaloPersonalAdapter.isHandlerAttachedTo(accountId, currentListener)
+      ) {
+        console.log(`[ZaloInbox] Account ${accountId} already registered on current listener (skipping)`);
         return true;
       }
 
@@ -778,6 +790,11 @@ class ZaloPersonalInboxService {
       if (!zaloSettingId) {
         console.warn(`[ZaloInbox] Không tìm thấy zalo_setting cho account ${accountId}`);
         return false;
+      }
+
+      if (isAccountRegistered(accountId)) {
+        console.log(`[ZaloInbox] Re-binding inbox handler for account ${accountId} (session/listener changed)`);
+        unmarkAccountRegistered(accountId);
       }
 
       console.log(`[ZaloInbox] Registering message handler for account ${accountId}`);
@@ -849,10 +866,14 @@ class ZaloPersonalInboxService {
       const accounts = await this.getActiveZaloPersonalAccounts(forceAccountRefresh);
       if (accounts.length === 0) return;
 
-      // Invalidate registry cho accounts không còn active
-      const currentActiveIds = new Set(accounts.map((a) => a.account_id));
+      const activeKeys = new Set(accounts.map((a) => String(a.account_id)));
+      for (const registeredId of listRegisteredAccounts()) {
+        if (!activeKeys.has(String(registeredId))) {
+          removeAccount(registeredId);
+        }
+      }
       for (const registeredId of this._registeredAccounts) {
-        if (!currentActiveIds.has(registeredId)) {
+        if (!activeKeys.has(String(registeredId))) {
           this._registeredAccounts.delete(registeredId);
         }
       }

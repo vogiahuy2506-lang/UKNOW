@@ -245,17 +245,14 @@ class ZaloPersonalAdapter {
       return false;
     }
 
-    // Remove existing handler if any
+    // Detach previous boundFn from its listener (nếu còn) — tránh chồng nhiều .on('message')
     this.removeMessageHandler(accountId);
 
-    // Store handler
-    ZaloPersonalAdapter.messageHandlers.set(String(accountId), { userId, handler });
+    const accountKey = String(accountId);
+    const boundFn = async (message) => {
+      const stored = ZaloPersonalAdapter.messageHandlers.get(accountKey);
+      if (!stored?.handler) return;
 
-    // Attach to listener - listener may already be started by startAccountListenerSafely
-    // so we just attach the handler without calling start() again
-    listener.on('message', async (message) => {
-      const stored = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
-      if (stored?.handler) {
         // zca-js has TWO separate message types:
         // - UserMessage (type=0, ThreadType.User) = personal chat
         // - GroupMessage (type=1, ThreadType.Group) = group chat
@@ -380,8 +377,16 @@ class ZaloPersonalAdapter {
             });
           }
         }
-      }
+    };
+
+    ZaloPersonalAdapter.messageHandlers.set(accountKey, {
+      userId,
+      handler,
+      listener,
+      boundFn,
     });
+
+    listener.on('message', boundFn);
 
     // Start the listener to receive messages (only if not already started)
     if (typeof listener.start === 'function') {
@@ -410,11 +415,35 @@ class ZaloPersonalAdapter {
   }
 
   /**
+   * True when inbox handler is bound to this exact listener instance.
+   * @param {string|number} accountId
+   * @param {object|null} listener
+   * @returns {boolean}
+   */
+  isHandlerAttachedTo(accountId, listener) {
+    if (!listener) return false;
+    const meta = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
+    return !!(meta?.handler && meta.listener === listener && meta.boundFn);
+  }
+
+  /**
    * Remove message handler for an account.
    * @param {string|number} accountId
    */
   removeMessageHandler(accountId) {
     const key = String(accountId);
+    const prev = ZaloPersonalAdapter.messageHandlers.get(key);
+    if (prev?.boundFn && prev.listener) {
+      try {
+        if (typeof prev.listener.off === 'function') {
+          prev.listener.off('message', prev.boundFn);
+        } else if (typeof prev.listener.removeListener === 'function') {
+          prev.listener.removeListener('message', prev.boundFn);
+        }
+      } catch (err) {
+        console.warn(`[ZaloPersonalAdapter] Failed to detach message handler for ${key}:`, err.message);
+      }
+    }
     ZaloPersonalAdapter.messageHandlers.delete(key);
   }
 
@@ -559,7 +588,7 @@ class ZaloPersonalAdapter {
         sender_id: msgData.senderId,
         sender_avatar: msgData.senderAvatar,
         is_group: isGroup,
-        group_id: isGroup ? groupId : null,
+        group_id: isGroup ? (bare || groupId) : null,
         group_name: isGroup ? finalGroupName : null,
         msg_type: msgData.msgType,
         msg_type_raw: msgData.msgTypeRaw,

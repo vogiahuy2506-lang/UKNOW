@@ -49,6 +49,26 @@ export function isZaloGroupConversation({ externalId, conversationInfo } = {}) {
 }
 
 /**
+ * Các dạng external_id có thể đã lưu cho cùng một nhóm (lệch g_/group_ trước đây).
+ * @param {string|number|null|undefined} groupIdOrExternalId
+ * @returns {string[]}
+ */
+export function buildZaloGroupExternalIdCandidates(groupIdOrExternalId) {
+  const { bare, prefixed } = normalizeZaloGroupId(groupIdOrExternalId);
+  if (!bare) {
+    const raw = String(groupIdOrExternalId || '').trim();
+    return raw ? [raw] : [];
+  }
+  return [...new Set([
+    prefixed,
+    `g_${bare}`,
+    `group_g_${bare}`,
+    bare,
+    String(groupIdOrExternalId || '').trim(),
+  ].filter(Boolean))];
+}
+
+/**
  * ID gửi vào Zalo (tham số grid của zca-js).
  * Dùng bare canonical (không `group_`, không `g_`) — khớp key getAllGroups/gridVerMap.
  *
