@@ -817,16 +817,23 @@ const InboxPage = () => {
                     || String(conv.externalId || '').startsWith('group_')
                     || String(conv.externalId || '').startsWith('g_');
 
-                  if (isZalo && isGroup && conv.externalId) {
+                  if (isZalo && conv.externalId) {
                     setIsSyncingThread(true);
                     try {
-                      const response = await chatbotApi.syncZaloChatHistory(conv.externalId, true, {
+                      const response = await chatbotApi.syncZaloChatHistory(conv.externalId, isGroup, {
                         limit: 50,
                         accountId: selectedAccountId || conv.idZaloSetting,
                       });
                       const payload = response?.data || response;
                       if (payload?.success === false) {
                         toast.error(payload?.message || t('inbox.syncFailed'));
+                      } else if (!isGroup) {
+                        toast(
+                          payload?.data?.message
+                            || t('inbox.syncPersonalNoHistory')
+                            || 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
+                          { icon: 'ℹ️', duration: 6000 }
+                        );
                       } else {
                         const synced = Number(payload?.data?.synced || 0);
                         toast.success(

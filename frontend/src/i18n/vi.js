@@ -1651,6 +1651,7 @@ export default {
     syncSuccessHistoryPartial: 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).',
     syncThreadPulled: 'Đã kéo {{count}} tin từ Zalo',
     syncThreadEmpty: 'Không có tin mới từ Zalo',
+    syncPersonalNoHistory: 'Chat 1-1 không kéo lịch sử được (giới hạn Zalo). Đã làm mới kết nối realtime — nhờ đối phương nhắn một tin mới.',
     syncFailed: 'Đồng bộ thất bại',
     zaloAccounts: 'Tài khoản Zalo',
     conversations: 'hội thoại',

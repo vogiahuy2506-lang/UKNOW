@@ -702,6 +702,22 @@ class ZaloPersonalInboxService {
   }
 
   /**
+   * Force detach + đăng ký lại inbox handler trên session hiện tại.
+   * Dùng khi user bấm đồng bộ chat 1-1 (zca-js không có API lịch sử cá nhân).
+   * @param {number|string} accountId
+   * @returns {Promise<boolean>}
+   */
+  async forceRebindListener(accountId) {
+    unmarkAccountRegistered(accountId);
+    try {
+      zaloPersonalAdapter.removeMessageHandler(accountId);
+    } catch {
+      // ignore
+    }
+    return this._registerSingleListener(accountId);
+  }
+
+  /**
    * Register listener cho một account cụ thể (public API — delegates to internal).
    * No mutex here; callers (start, refreshListeners) manage concurrency.
    * @param {number} accountId
@@ -820,13 +836,6 @@ class ZaloPersonalInboxService {
       // Don't throw - just log and return false to prevent server crash
       return false;
     }
-  }
-
-  /**
-   * Register listener cho một account cụ thể (public API)
-   */
-  async registerAccountListener(accountId, accountRow = null) {
-    return this._registerSingleListener(accountId, accountRow);
   }
 
   /**

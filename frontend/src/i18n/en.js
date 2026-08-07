@@ -1636,6 +1636,7 @@ export default {
     syncSuccessHistoryPartial: 'Synced contacts & groups. Some groups could not pull history (left group / Zalo limit).',
     syncThreadPulled: 'Pulled {{count}} messages from Zalo',
     syncThreadEmpty: 'No new messages from Zalo',
+    syncPersonalNoHistory: '1-1 chats cannot pull history (Zalo limit). Realtime connection refreshed — ask them to send a new message.',
     syncFailed: 'Sync failed',
     zaloAccounts: 'Zalo Accounts',
     conversations: 'conversations',

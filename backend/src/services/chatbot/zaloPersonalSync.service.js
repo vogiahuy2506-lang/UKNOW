@@ -356,13 +356,21 @@ class ZaloPersonalSyncService {
         };
       }
 
-      // For personal messages - zca-js doesn't have direct personal chat history API
-      // Fallback: get context from Zalo Web
-      console.log(`[ZaloSync] Personal chat history sync for ${externalId} - zca-js limitation`);
+      // For personal messages — zca-js không có API lịch sử 1-1.
+      // Gắn lại listener realtime để tin mới về hộp thư (tin cũ không kéo được).
+      console.log(`[ZaloSync] Personal chat: no history API — rebinding inbox listener for ${accountId}`);
+      let listenerRebound = false;
+      try {
+        const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
+        listenerRebound = !!(await zaloPersonalInboxService.forceRebindListener(accountId));
+      } catch (rebindErr) {
+        console.warn(`[ZaloSync] forceRebindListener failed for ${accountId}:`, rebindErr.message);
+      }
       return {
         synced: 0,
-        message: 'Personal chat history sync requires zca-js browser interaction',
-        type: 'personal'
+        message: 'Chat 1-1 không kéo lịch sử được (giới hạn Zalo). Đã làm mới kết nối realtime — nhờ đối phương nhắn tin mới.',
+        type: 'personal',
+        listenerRebound,
       };
     } catch (error) {
       // 404 = nhóm không còn truy cập được. Chỗ gọi gộp lại thành một dòng tổng kết,
@@ -538,7 +546,17 @@ class ZaloPersonalSyncService {
       groups: null,
       groupHistory: null,
       errors: [],
+      listenerRebound: false,
     };
+
+    // Luôn gắn lại listener trước — tin 1-1 chỉ về qua realtime, không qua history API
+    try {
+      const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
+      results.listenerRebound = !!(await zaloPersonalInboxService.forceRebindListener(accountId));
+    } catch (e) {
+      results.warnings = results.warnings || [];
+      results.warnings.push({ type: 'listener', error: e.message });
+    }
 
     // Sync contacts
     try {
