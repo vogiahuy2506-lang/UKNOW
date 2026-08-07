@@ -418,10 +418,18 @@ const InboxPage = () => {
         };
         setMessages(prev => [...prev, newMessage]);
         setReplyingTo(null);
+        // Backend luôn pause AI khi chủ trả lời từ hộp thư — cập nhật UI cho khớp
+        // (trước đây toggle vẫn hiện "Bật" → user tưởng AI chạy nhưng bot im).
+        setSelectedConversation((prev) => (prev ? { ...prev, aiPaused: true } : prev));
+        setConversations((prev) => prev.map((c) => (
+          c.id === selectedConversation.id && c.type === selectedConversation.type
+            ? { ...c, aiPaused: true }
+            : c
+        )));
         if (sendStatus === 'failed') {
           toast.error(response.error || t('inbox.sendFailed'));
         } else {
-          toast.success(t('common.success'));
+          toast.success(t('inbox.sentAiPausedHint') || t('common.success'));
         }
       }
     } catch (err) {

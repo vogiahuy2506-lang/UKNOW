@@ -1667,6 +1667,7 @@ export default {
     aiToggleLabel: 'Bật AI cho đoạn chat này',
     aiToggleDisabledHint: 'Chatbot đang tắt cho tài khoản Zalo này',
     aiToggleManualHint: 'Bạn đang tự trả lời đoạn chat này. AI sẽ không trả lời cho tới khi bạn bật lại.',
+    sentAiPausedHint: 'Đã gửi. AI tạm dừng trên đoạn chat này — bật lại nếu muốn bot trả lời.',
     manualBadge: 'Thủ công',
     openDeployModal: 'Mở Triển khai',
     emptyInboxHint: 'Chưa có hội thoại nào. Chat 1-1 sẽ hiện khi có người nhắn tới bạn.',
