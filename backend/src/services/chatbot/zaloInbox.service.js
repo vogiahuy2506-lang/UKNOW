@@ -298,13 +298,10 @@ class ZaloPersonalInboxService {
       const rawData = rawMessage?._raw || rawMessage;
       const isGroup = zaloThreadType === 1 || zaloThreadType === 2;
 
-      // Extract groupId for group messages
+      // Extract groupId for group messages — luôn chuẩn hoá qua resolveConversationExternalId
       let groupId = null;
       if (isGroup) {
         groupId = rawData?.clientGroupId || rawData?.threadId || rawData?.idTo || null;
-        if (groupId && !String(groupId).startsWith('g_') && !String(groupId).startsWith('group_')) {
-          groupId = `group_${groupId}`;
-        }
       }
 
       // Lấy tên sender từ raw message
@@ -356,11 +353,16 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Determine externalId
-      // FIX: groupId already has 'group_' prefix, don't add again
-      const externalId = isGroup 
-        ? groupId  // groupId is already like "group_7445330951687908000"
-        : String(senderId);
+      // Determine externalId — cùng công thức với adapter.saveMessageToDatabase
+      const externalId = resolveConversationExternalId({
+        isGroup,
+        groupId,
+        threadId: rawMessage.threadId,
+        fromUid: senderId,
+      });
+      const { bare: bareGroupId } = isGroup
+        ? normalizeZaloGroupId(groupId)
+        : { bare: null };
 
       // Check existing conversation
       let existingConv = null;
@@ -435,7 +437,7 @@ class ZaloPersonalInboxService {
         message_id: messageId,
         account_id: accountId,
         is_group: isGroup,
-        group_id: isGroup ? groupId : null,
+        group_id: isGroup ? (bareGroupId || groupId) : null,
         group_name: isGroup ? (resolvedGroupName || groupName) : null,
         sender_id: senderId,
         sender_name: resolvedSenderName || senderName,

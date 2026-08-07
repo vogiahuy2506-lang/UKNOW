@@ -18,6 +18,16 @@ describe('zaloGroupName.util', () => {
       bare: '12345',
       prefixed: 'group_12345',
     });
+    expect(normalizeZaloGroupId('g_12345')).toEqual({
+      raw: 'g_12345',
+      bare: '12345',
+      prefixed: 'group_12345',
+    });
+    expect(normalizeZaloGroupId('group_g_12345')).toEqual({
+      raw: 'group_g_12345',
+      bare: '12345',
+      prefixed: 'group_12345',
+    });
   });
 
   it('extracts group name from gridInfoMap using name field', () => {
@@ -41,7 +51,7 @@ describe('zaloGroupName.util', () => {
     expect(resolveZaloGroupSendId('group_7445330951687908000')).toBe('7445330951687908000');
     expect(resolveZaloGroupSendId(null, 'group_99')).toBe('99');
     expect(resolveZaloGroupSendId('7445', 'group_ignored')).toBe('7445');
-    expect(resolveZaloGroupSendId('g_abc')).toBe('g_abc');
+    expect(resolveZaloGroupSendId('g_abc')).toBe('abc');
     expect(isZaloGroupConversation({ externalId: 'group_1' })).toBe(true);
     expect(isZaloGroupConversation({ conversationInfo: { is_group: true } })).toBe(true);
     expect(isZaloGroupConversation({ externalId: 'user_1' })).toBe(false);

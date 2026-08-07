@@ -13,7 +13,16 @@ export function normalizeZaloGroupId(groupId) {
   if (!raw) {
     return { raw: '', bare: '', prefixed: '' };
   }
-  const bare = raw.replace(/^group_/, '');
+  // Canonical bare: bỏ prefix nội bộ `group_` và marker Zalo `g_`
+  // (tránh tách hội thoại: group_123 vs group_g_123 vs g_123).
+  let bare = raw.replace(/^group_/, '');
+  if (bare.startsWith('g_')) {
+    bare = bare.slice(2);
+  }
+  bare = bare.replace(/^group_/, '');
+  if (bare.startsWith('g_')) {
+    bare = bare.slice(2);
+  }
   return {
     raw,
     bare,
@@ -40,8 +49,8 @@ export function isZaloGroupConversation({ externalId, conversationInfo } = {}) {
 }
 
 /**
- * ID gửi vào Zalo (tham số grid của zca-js). Bỏ prefix nội bộ `group_`.
- * Không bỏ `g_` — một số payload Zalo dùng dạng đó.
+ * ID gửi vào Zalo (tham số grid của zca-js).
+ * Dùng bare canonical (không `group_`, không `g_`) — khớp key getAllGroups/gridVerMap.
  *
  * @param {...(string|number|null|undefined)} candidates
  * @returns {string}

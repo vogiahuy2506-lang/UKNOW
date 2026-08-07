@@ -495,7 +495,7 @@ class ZaloPersonalAdapter {
           sender_name: msgData.senderName,
           sender_avatar: msgData.senderAvatar,
           is_group: isGroup,
-          group_id: isGroup ? groupId : null,
+          group_id: isGroup ? (bare || groupId) : null,
           group_name: isGroup ? finalGroupName : null,
         }),
         now,
@@ -508,10 +508,12 @@ class ZaloPersonalAdapter {
         ? JSON.parse(conversation.visitor_info)
         : (conversation.visitor_info || {});
 
+      const canonicalGroupId = isGroup ? (bare || groupId) : null;
+
       // Update if is_group status changed or group info is new
       const needsUpdate = (
         existingInfo.is_group !== isGroup ||
-        (isGroup && existingInfo.group_id !== groupId) ||
+        (isGroup && existingInfo.group_id !== canonicalGroupId) ||
         (isGroup && !existingInfo.group_name && finalGroupName)
       );
 
@@ -524,7 +526,7 @@ class ZaloPersonalAdapter {
             sender_name: msgData.senderName,
             sender_avatar: msgData.senderAvatar,
             is_group: isGroup,
-            group_id: isGroup ? groupId : null,
+            group_id: canonicalGroupId,
             group_name: isGroup ? finalGroupName : null,
           }
         );

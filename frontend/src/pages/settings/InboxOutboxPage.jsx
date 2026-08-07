@@ -252,7 +252,7 @@ const InboxPage = () => {
     const displayMessage = getDisplayMessage(data.message, data.messageType);
 
     setConversations(prev => {
-      const existingIndex = prev.findIndex(c => c.id === data.conversationId);
+      const existingIndex = prev.findIndex(c => Number(c.id) === Number(data.conversationId));
       
       if (existingIndex !== -1) {
         const existing = prev[existingIndex];
@@ -261,7 +261,9 @@ const InboxPage = () => {
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : (existing.unreadCount || 0) + 1,
+          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
+            ? 0
+            : (existing.unreadCount || 0) + 1,
         };
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
@@ -276,7 +278,7 @@ const InboxPage = () => {
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : 1,
+          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId)) ? 0 : 1,
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
@@ -290,7 +292,9 @@ const InboxPage = () => {
         body: `${data.senderName || t('inbox.customer')}: ${displayMessage.substring(0, 100)}`,
         tag: `conv-${data.conversationId}`,
       });
-    } else if (!document.hidden && displayMessage && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
+    } else if (!document.hidden && displayMessage && (
+      !selectedConversation || Number(data.conversationId) !== Number(selectedConversation.id)
+    )) {
       const sender = data.senderName || t('inbox.customer');
       const msgPreview = displayMessage.length > 50 ? displayMessage.substring(0, 50) + '...' : displayMessage;
       toast.success(`${sender}: ${msgPreview}`, {
@@ -306,7 +310,8 @@ const InboxPage = () => {
       return;
     }
     
-    const isThisConversation = selectedConversation && data.conversationId === selectedConversation.id;
+    const isThisConversation = selectedConversation
+      && Number(data.conversationId) === Number(selectedConversation.id);
     
     if (isThisConversation) {
       const msgRole = data.role || 'visitor';
