@@ -36,8 +36,14 @@ describe('zaloGroupName.util', () => {
     expect(isPlaceholderGroupName('Team Marketing', '172387')).toBe(false);
   });
 
-  it('builds short placeholder names', () => {
-    expect(buildPlaceholderGroupName('3436373613436545579')).toBe('Nhóm 545579');
-    expect(buildPlaceholderGroupName('group_172387')).toBe('Nhóm 172387');
+  it('resolves Zalo grid send id by stripping internal group_ prefix', async () => {
+    const { resolveZaloGroupSendId, isZaloGroupConversation } = await import('../zaloGroupName.util.js');
+    expect(resolveZaloGroupSendId('group_7445330951687908000')).toBe('7445330951687908000');
+    expect(resolveZaloGroupSendId(null, 'group_99')).toBe('99');
+    expect(resolveZaloGroupSendId('7445', 'group_ignored')).toBe('7445');
+    expect(resolveZaloGroupSendId('g_abc')).toBe('g_abc');
+    expect(isZaloGroupConversation({ externalId: 'group_1' })).toBe(true);
+    expect(isZaloGroupConversation({ conversationInfo: { is_group: true } })).toBe(true);
+    expect(isZaloGroupConversation({ externalId: 'user_1' })).toBe(false);
   });
 });

@@ -19,7 +19,9 @@ import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
 import {
   buildPlaceholderGroupName,
   extractGroupNameFromApiResult,
+  isZaloGroupConversation,
   normalizeZaloGroupId,
+  resolveZaloGroupSendId,
 } from '../../../utils/zaloGroupName.util.js';
 import {
   extractSendMsgId,
@@ -605,9 +607,9 @@ class ZaloPersonalAdapter {
       const api = session.api;
       const payload = String(message || '').slice(0, 4000);
 
-      // Check if this is a group conversation
-      const isGroup = conversationInfo?.is_group;
-      let sendTarget = externalId;
+      // Nhóm: nhận diện từ visitor_info HOẶC external_id dạng group_<id>
+      // (thiếu is_group/group_id vẫn phải gửi đúng — nếu không Zalo trả "Tham số không hợp lệ")
+      const isGroup = isZaloGroupConversation({ externalId, conversationInfo });
 
       // IMPORTANT: For group messages, we should NOT auto-reply!
       // Group messages should be handled by the group chatbot, not personal chatbot
@@ -616,21 +618,26 @@ class ZaloPersonalAdapter {
         console.log(`[ZaloPersonalAdapter] Blocked auto-reply to group message`);
         return { success: false, error: 'Group messages should not trigger personal chatbot replies' };
       }
-      
-      // For personal messages, send to the sender directly
-      // If externalId is in group format, extract the actual sender ID
-      if (externalId?.startsWith('group_')) {
-        const parts = externalId.split('_');
-        if (parts.length >= 3) {
-          sendTarget = parts.slice(2).join('_'); // Get sender ID after "group_{groupId}_{senderId}"
-        }
-      }
 
-      // For group messages with forceReply, send to the GROUP instead of individual
+      let sendTarget = externalId;
       let sendToGroup = false;
-      if (isGroup && conversationInfo?.group_id) {
-        sendTarget = conversationInfo.group_id;
+
+      if (isGroup && forceReply) {
+        // grid của zca-js cần id nhóm thật — bỏ prefix nội bộ `group_`
+        sendTarget = resolveZaloGroupSendId(
+          conversationInfo?.group_id,
+          externalId
+        );
+        if (!sendTarget) {
+          return { success: false, error: 'Thiếu group id để gửi vào nhóm Zalo' };
+        }
         sendToGroup = true;
+      } else if (externalId?.startsWith('group_')) {
+        // Legacy: external_id dạng group_{groupId}_{senderId} → gửi 1-1 cho sender
+        const parts = String(externalId).split('_');
+        if (parts.length >= 3) {
+          sendTarget = parts.slice(2).join('_');
+        }
       }
 
       // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định

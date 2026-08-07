@@ -22,6 +22,39 @@ export function normalizeZaloGroupId(groupId) {
 }
 
 /**
+ * Hội thoại nhóm trên hộp thư: external_id dạng group_<id>, hoặc visitor_info.is_group / group_id.
+ * @param {{ externalId?: string|null, conversationInfo?: object|null }} params
+ * @returns {boolean}
+ */
+export function isZaloGroupConversation({ externalId, conversationInfo } = {}) {
+  const info = conversationInfo || {};
+  const flag = info.is_group;
+  if (flag === true || flag === 1 || flag === 'true' || flag === 't' || flag === '1') {
+    return true;
+  }
+  if (info.group_id != null && String(info.group_id).trim() !== '') {
+    return true;
+  }
+  const ext = String(externalId || '').trim();
+  return ext.startsWith('group_') || ext.startsWith('g_');
+}
+
+/**
+ * ID gửi vào Zalo (tham số grid của zca-js). Bỏ prefix nội bộ `group_`.
+ * Không bỏ `g_` — một số payload Zalo dùng dạng đó.
+ *
+ * @param {...(string|number|null|undefined)} candidates
+ * @returns {string}
+ */
+export function resolveZaloGroupSendId(...candidates) {
+  for (const candidate of candidates) {
+    const { bare } = normalizeZaloGroupId(candidate);
+    if (bare) return bare;
+  }
+  return '';
+}
+
+/**
  * @param {unknown} record
  * @returns {string}
  */

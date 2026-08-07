@@ -8,8 +8,34 @@ import sseService from '../sse.service.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { resolveBillingUserId } from '../../utils/billingCycle.util.js';
 import { debitZaloPersonalInboxIfNeeded } from '../payment/topupWallet.service.js';
+import {
+  isZaloGroupConversation,
+  resolveZaloGroupSendId,
+} from '../../utils/zaloGroupName.util.js';
 
 class UnifiedInboxService {
+  /**
+   * Build conversationInfo for Zalo Personal send/retry (group vs 1-1).
+   */
+  _buildZaloConversationInfo(conversation, owned = null) {
+    const visitorInfo = conversation?._parsedVisitorInfo
+      || owned?._parsedVisitorInfo
+      || (typeof conversation?.visitor_info === 'string'
+        ? (() => { try { return JSON.parse(conversation.visitor_info); } catch { return {}; } })()
+        : (conversation?.visitor_info || {}));
+    const externalId = conversation?.external_id || owned?.external_id || null;
+    const info = {
+      is_group: conversation?._isGroup === true
+        || owned?.is_group === true
+        || visitorInfo.is_group === true,
+      group_id: visitorInfo.group_id || owned?.group_id || conversation?.group_id || null,
+    };
+    if (isZaloGroupConversation({ externalId, conversationInfo: info })) {
+      info.is_group = true;
+      info.group_id = resolveZaloGroupSendId(info.group_id, externalId) || info.group_id;
+    }
+    return info;
+  }
   /**
    * Map id_zalo_setting → is_enabled for a user (single query, no N+1).
    */
@@ -350,10 +376,12 @@ class UnifiedInboxService {
           attachments,
           userId,
           accountId: zaloAccountId,
-          conversationInfo: {
-            is_group: conversation._isGroup === true || visitorInfo.is_group === true,
-            group_id: visitorInfo.group_id || conversation.group_id || null,
-          },
+          conversationInfo: conversation.channel === 'zalo_personal'
+            ? this._buildZaloConversationInfo(conversation)
+            : {
+              is_group: conversation._isGroup === true || visitorInfo.is_group === true,
+              group_id: visitorInfo.group_id || conversation.group_id || null,
+            },
           forceReply: true,
           persist: false,
         };
@@ -456,14 +484,7 @@ class UnifiedInboxService {
           accountId: type === 'zalo_personal'
             ? (owned.id_zalo_setting || conversation.id_zalo_setting)
             : undefined,
-          conversationInfo: {
-            is_group: conversation._isGroup === true
-              || owned.is_group === true
-              || conversation._parsedVisitorInfo?.is_group === true,
-            group_id: conversation._parsedVisitorInfo?.group_id
-              || owned.group_id
-              || null,
-          },
+          conversationInfo: this._buildZaloConversationInfo(conversation, owned),
           forceReply: true,
           persist: false,
         };
