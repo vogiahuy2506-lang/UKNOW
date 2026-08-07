@@ -51,7 +51,7 @@ const BillingHubPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-4 sm:p-6 lg:p-8">
+    <div className="w-full space-y-8 p-4 sm:p-6 lg:p-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{t('billingHub.title')}</h1>
         <p className="mt-1 text-sm text-slate-500">{t('billingHub.subtitle')}</p>
