@@ -44,6 +44,15 @@ router.post('/', publicLeadLimiter, async (req, res) => {
       });
     }
 
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', landingRows[0].id)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Landing page tạm ngừng',
+        code: 'RESOURCE_LOCKED',
+      });
+    }
+
     const idUser = landingRows[0].id_user;
     await db.query(
       `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)

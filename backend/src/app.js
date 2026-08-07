@@ -257,6 +257,10 @@ export function createApp() {
       if (!widgetKey || widgetKey.includes('.')) return next();
       const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
       if (chatbot) {
+        const { resourceIsLocked } = await import('./utils/topupLockGate.util.js');
+        if (await resourceIsLocked('chatbots', chatbot.id)) {
+          return res.status(503).send('Chatbot tạm ngừng');
+        }
         const frontendUrl = process.env.FRONTEND_URL || 'https://app.uknow.vn';
         return res.redirect(302, `${frontendUrl}/chat/${chatbot.id}`);
       }

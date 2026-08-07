@@ -942,6 +942,15 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbot.id)) {
+        return res.status(503).json({
+          success: false,
+          message: 'Chatbot tạm ngừng do hết hạn slot mua thêm',
+          code: 'RESOURCE_LOCKED',
+        });
+      }
+
       return res.json({
         success: true,
         data: {
@@ -984,6 +993,15 @@ class ChatbotController {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy chatbot',
+        });
+      }
+
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbot.id)) {
+        return res.status(503).json({
+          success: false,
+          message: 'Chatbot tạm ngừng do hết hạn slot mua thêm',
+          code: 'RESOURCE_LOCKED',
         });
       }
 
@@ -1202,6 +1220,17 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
+      {
+        const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+        if (await resourceIsLocked('chatbots', chatbot.id)) {
+          return res.status(503).json({
+            success: false,
+            message: 'Chatbot tạm ngừng do hết hạn slot mua thêm',
+            code: 'RESOURCE_LOCKED',
+          });
+        }
+      }
+
       const visitorKey = String(sessionId || '').trim()
         || `widget_${widgetKey}_${String(req.ip || 'anon').slice(0, 64)}`;
       const rate = await chatbotRateLimitService.checkBeforeAi({
@@ -1316,6 +1345,17 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
       chatbotUserId = chatbot.id_user;
+
+      {
+        const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+        if (await resourceIsLocked('chatbots', chatbot.id)) {
+          return res.status(503).json({
+            success: false,
+            message: 'Chatbot tạm ngừng do hết hạn slot mua thêm',
+            code: 'RESOURCE_LOCKED',
+          });
+        }
+      }
 
       const { message, history, sessionId } = req.body;
 

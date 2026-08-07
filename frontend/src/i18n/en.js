@@ -6,6 +6,7 @@ export default {
     loading: 'Loading...',
     processing: 'Processing...',
     save: 'Save',
+    saving: 'Saving...',
     cancel: 'Cancel',
     delete: 'Delete',
     deleting: 'Deleting...',
@@ -3563,9 +3564,24 @@ export default {
     subtitle: 'View usage, add-on wallet, and order history.',
     loadFailed: 'Could not load plan information',
     tabOverview: 'Overview',
+    tabLocks: 'Locked resources',
     tabOrders: 'Order history',
     ctaTopup: 'Buy more quota',
     ctaUpgrade: 'Upgrade plan',
+  },
+
+  resourceLocks: {
+    help: 'When add-on slots expire, the newest resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
+    loadFailed: 'Could not load lock list',
+    saveFailed: 'Could not save selection',
+    empty: 'No resources in these categories yet.',
+    zaloAccounts: 'Zalo accounts',
+    emailAccounts: 'Email accounts',
+    landingPages: 'Landing pages',
+    chatbots: 'Chatbots',
+    ceiling: 'Keeping {keep}/{max} (includes {grants} active add-on slots)',
+    locked: 'Locked',
+    save: 'Save selection',
   },
 
   topup: {

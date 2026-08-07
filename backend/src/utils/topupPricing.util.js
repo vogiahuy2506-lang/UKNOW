@@ -221,7 +221,7 @@ export function checkTopupZaloCapacity({
       message:
         `Số tin Zalo mua thêm (${requested.toLocaleString('vi-VN')}) vượt năng lực còn lại ` +
         `(${remaining.toLocaleString('vi-VN')} tin). ` +
-        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng cho ${acct} tài khoản đã kết nối ` +
+        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng cho ${acct} slot tài khoản Zalo ` +
         `(đã cấp gói ${planLimit.toLocaleString('vi-VN')}` +
         (grants > 0 ? ` + đã mua thêm ${grants.toLocaleString('vi-VN')}` : '') +
         ').',

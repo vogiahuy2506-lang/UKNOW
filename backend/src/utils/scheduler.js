@@ -561,6 +561,54 @@ export const initScheduler = () => {
         await incrementReminderCount(user.id);
         console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
       }
+
+      // 4. Khoá / mở khoá tài nguyên mua thêm hết hạn (còn gói hoặc hết gói)
+      try {
+        const {
+          reconcileAllDueUsers,
+          sendStructuralGrantReminders,
+          structuralItemLabelVi,
+        } = await import('../services/payment/topupLock.service.js');
+        const lockResults = await reconcileAllDueUsers();
+        for (const r of lockResults) {
+          if (r.locked?.length) {
+            console.log(
+              `[TopupLock] user=${r.userId} locked=${r.locked.length} unlocked=${r.unlocked?.length || 0}`
+            );
+            // Email báo khoá (nếu có)
+            try {
+              const { rows } = await (await import('../config/database.js')).default.query(
+                `SELECT email, full_name FROM users WHERE id = $1`,
+                [r.userId]
+              );
+              const u = rows[0];
+              if (u?.email) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+                const counts = r.locked.reduce((acc, x) => {
+                  acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
+                  return acc;
+                }, {});
+                const detail = Object.entries(counts)
+                  .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
+                  .join(', ');
+                await sendSystemEmail({
+                  to: u.email,
+                  subject: '[Founder AI] Một số tài nguyên mua thêm đã bị khoá',
+                  html: `<p>Xin chào ${u.full_name || 'bạn'},</p>
+                    <p>Các tài nguyên sau đã bị khoá vì slot mua thêm hết hạn: <strong>${detail}</strong>.</p>
+                    <p><a href="${frontendUrl}/app/billing?tab=locks">Chọn tài nguyên giữ lại / gia hạn</a></p>`,
+                });
+              }
+            } catch (mailErr) {
+              console.error('[TopupLock] lock notify email failed:', mailErr.message);
+            }
+          }
+        }
+        const rem = await sendStructuralGrantReminders();
+        console.log(`[TopupLock] reminders week=${rem.week} three=${rem.three}`);
+      } catch (lockErr) {
+        console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
+      }
     } catch (error) {
       console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);
     }

@@ -589,6 +589,12 @@ class ZaloPersonalAdapter {
    * @param {boolean} params.forceReply - if true, send even for group messages (for manual inbox replies)
    */
   async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false, persist = true }) {
+    if (accountId != null) {
+      const { resourceIsLocked } = await import('../../../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('zalo_accounts', accountId)) {
+        return { success: false, error: 'Tài khoản Zalo đang bị khoá do hết hạn slot mua thêm', code: 'RESOURCE_LOCKED' };
+      }
+    }
     const session = await this.getSessionByAccountId(accountId);
     if (!session?.api) {
       return { success: false, error: 'No active Zalo personal session' };

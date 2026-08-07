@@ -297,6 +297,7 @@ CREATE TABLE topup_grants (
   qty        INTEGER NOT NULL CHECK (qty > 0),
   order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   cycle_end  TIMESTAMPTZ,
+  reminder_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key),
   CONSTRAINT topup_grants_consumable_no_expiry CHECK (
@@ -307,6 +308,18 @@ CREATE TABLE topup_grants (
 
 CREATE INDEX idx_topup_grants_user_item_cycle
   ON topup_grants (user_id, item_key, cycle_end);
+
+CREATE TABLE topup_locked_resources (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_key  VARCHAR(50) NOT NULL,
+  resource_id   BIGINT      NOT NULL,
+  locked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_locked_unique UNIQUE (resource_key, resource_id)
+);
+
+CREATE INDEX idx_topup_locked_user
+  ON topup_locked_resources (user_id, resource_key);
 
 CREATE TABLE topup_debits (
   id          BIGSERIAL PRIMARY KEY,

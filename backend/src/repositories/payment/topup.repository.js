@@ -17,7 +17,7 @@ export async function findAllTopupPricing(queryable = db) {
 }
 
 /**
- * Sum cycle-scoped grants (structural slots). Neo theo subscription_expires_at hiện tại.
+ * Sum active structural grants (cycle_end > NOW()) or wallet grants for consumables.
  *
  * @param {number|string} userId
  * @param {string} itemKey
@@ -33,9 +33,8 @@ export async function sumActiveTopupGrants(userId, itemKey, queryable = db) {
      FROM topup_grants tg
      WHERE tg.user_id = $1
        AND tg.item_key = $2
-       AND tg.cycle_end = (
-         SELECT u.subscription_expires_at FROM users u WHERE u.id = $1
-       )`,
+       AND tg.cycle_end IS NOT NULL
+       AND tg.cycle_end > NOW()`,
     [userId, itemKey]
   );
   return Number(rows[0]?.total) || 0;

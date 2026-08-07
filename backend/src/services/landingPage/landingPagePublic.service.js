@@ -30,6 +30,16 @@ class LandingPagePublicService {
   async getPublishedPayload(slug) {
     const row = await landingPageRepository.findPublishedBySlug(slug);
     if (!row) return null;
+    const { resourceIsLocked, pausedLandingHtml } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', row.id)) {
+      return {
+        id: row.id,
+        slug: row.slug,
+        title: row.title || 'Trang tạm ngừng',
+        htmlContent: pausedLandingHtml(row.title),
+        isLocked: true,
+      };
+    }
     /** HTML trong DB đã được chuẩn hóa khi admin Lưu (link tracking + lp-track.js; iframe form do admin dán). */
     const htmlContent = row.htmlContent || '';
     return {
@@ -50,6 +60,17 @@ class LandingPagePublicService {
   async getPublishedPayloadById(landingPageId) {
     const row = await landingPageRepository.findById(landingPageId);
     if (!row || !row.isPublished) return null;
+
+    const { resourceIsLocked, pausedLandingHtml } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', row.id)) {
+      return {
+        id: row.id,
+        title: row.title || 'Trang tạm ngừng',
+        slug: row.slug,
+        htmlContent: pausedLandingHtml(row.title),
+        isLocked: true,
+      };
+    }
 
     return {
       id: row.id,
@@ -78,6 +99,13 @@ class LandingPagePublicService {
       if (!published) {
         const err = new Error('Landing page không tồn tại hoặc chưa được công bố');
         err.statusCode = 404;
+        throw err;
+      }
+      const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('landing_pages', published.id)) {
+        const err = new Error('Landing page tạm ngừng');
+        err.statusCode = 503;
+        err.code = 'RESOURCE_LOCKED';
         throw err;
       }
     }
@@ -129,6 +157,13 @@ class LandingPagePublicService {
       if (!published) {
         const err = new Error('Landing page không tồn tại hoặc chưa được công bố');
         err.statusCode = 404;
+        throw err;
+      }
+      const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('landing_pages', published.id)) {
+        const err = new Error('Landing page tạm ngừng');
+        err.statusCode = 503;
+        err.code = 'RESOURCE_LOCKED';
         throw err;
       }
     }

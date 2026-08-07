@@ -165,7 +165,11 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
 
         if (amount <= 0) {
             await redeemVoucherForOrder(order, client);
-            if (userId) await activateUserPlan(userId, plan.id, billingPeriod, client);
+            if (userId) {
+                await activateUserPlan(userId, plan.id, billingPeriod, client);
+                const { reconcileResourceLocks } = await import('./topupLock.service.js');
+                await reconcileResourceLocks(userId, client);
+            }
         }
 
         await client.query('COMMIT');
@@ -306,6 +310,8 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
 
     if (userId) {
         await activateUserPlan(userId, plan.id, billingPeriod);
+        const { reconcileResourceLocks } = await import('./topupLock.service.js');
+        await reconcileResourceLocks(userId);
     }
 
     return { orderCode };
@@ -539,6 +545,8 @@ export const createCustomPaymentLink = async ({
         if (amount <= 0) {
             await redeemVoucherForOrder(order, client);
             await activateUserPlan(userId, plan.id, billingPeriod, client);
+            const { reconcileResourceLocks } = await import('./topupLock.service.js');
+            await reconcileResourceLocks(userId, client);
         }
 
         await client.query('COMMIT');

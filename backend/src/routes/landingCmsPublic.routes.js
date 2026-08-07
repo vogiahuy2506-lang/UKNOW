@@ -14,7 +14,7 @@ router.get('/landing-pages/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
     const { rows } = await db.query(
-      `SELECT title, html_content as "htmlContent"
+      `SELECT id, title, html_content as "htmlContent"
        FROM landing_pages
        WHERE slug = $1 AND is_published = true`,
       [slug]
@@ -22,7 +22,14 @@ router.get('/landing-pages/:slug', async (req, res) => {
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
     }
-    return res.json({ success: true, data: rows[0] });
+    const { resourceIsLocked, pausedLandingHtml } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.json({
+        success: true,
+        data: { title: rows[0].title || 'Trang tạm ngừng', htmlContent: pausedLandingHtml(rows[0].title) },
+      });
+    }
+    return res.json({ success: true, data: { title: rows[0].title, htmlContent: rows[0].htmlContent } });
   } catch (error) {
     console.error('Get landing page error:', error);
     return res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -52,6 +59,10 @@ router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req
     );
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
     }
 
     await db.query(
@@ -108,6 +119,10 @@ router.get('/landing-track/go', async (req, res) => {
     );
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
     }
 
     if (!targetUrl.searchParams.has('utm_source')) {
@@ -195,6 +210,10 @@ router.post('/leads', publicLeadLimiter, async (req, res) => {
     );
     if (!landingRows[0]?.id_user) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', landingRows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
     }
 
     const idUser = landingRows[0].id_user;

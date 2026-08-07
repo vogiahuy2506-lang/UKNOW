@@ -89,6 +89,12 @@ class ChatbotChannelWebhookController {
         external_id: messageId,
       });
 
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`[ZaloOA] Chatbot ${chatbotId} locked — message saved, no reply`);
+        return;
+      }
+
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'zalo_oa',
         ownerUserId: chatbot.id_user,
@@ -225,6 +231,12 @@ class ChatbotChannelWebhookController {
           message_type: 'text',
           external_id: msg.messageId,
         });
+
+        const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+        if (await resourceIsLocked('chatbots', chatbotId)) {
+          console.log(`[Facebook] Chatbot ${chatbotId} locked — message saved, no reply`);
+          continue;
+        }
 
         const rate = await chatbotRateLimitService.checkBeforeAi({
           channel: 'facebook',

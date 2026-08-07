@@ -102,11 +102,12 @@ const QuickSend = () => {
         zaloSettingsApiService.listAccounts(),
       ]);
       setEmailAccounts(emailRes?.data?.data?.items || []);
-      setZaloAccounts(zaloRes?.data?.data?.items || []);
+      const zaloItemsRaw = zaloRes?.data?.data?.items || [];
+      const zaloItems = zaloItemsRaw.filter((a) => !a.isLocked);
+      setZaloAccounts(zaloItems);
 
       // Auto-select default account if exists
       const emailItems = emailRes?.data?.data?.items || [];
-      const zaloItems = zaloRes?.data?.data?.items || [];
       const defaultEmail = emailItems.find((a) => a.isDefault || a.is_active);
       const defaultZalo = zaloItems.find((a) => a.isDefault || a.is_default);
       if (defaultEmail) setSelectedEmailAccount(defaultEmail);

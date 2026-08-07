@@ -250,7 +250,11 @@ class ZaloSettingRepository {
               zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
               zs.last_restore_attempt_at::timestamptz AS last_restore_attempt_at,
               zs.restore_fail_count,
-              COALESCE(u.full_name, u.username) AS creator_name
+              COALESCE(u.full_name, u.username) AS creator_name,
+              EXISTS (
+                SELECT 1 FROM topup_locked_resources tlr
+                WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zs.id
+              ) AS is_locked
        FROM zalo_settings zs
        LEFT JOIN users u ON zs.id_user = u.id
        WHERE 1 = 1
@@ -258,7 +262,7 @@ class ZaloSettingRepository {
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
       isAdmin ? [] : [userId]
     );
-    return rows;
+    return rows.map((r) => ({ ...r, is_locked: Boolean(r.is_locked) }));
   }
 
   async deleteAccount(accountId, isAdmin, userId) {

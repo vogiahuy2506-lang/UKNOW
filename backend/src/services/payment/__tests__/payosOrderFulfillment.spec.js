@@ -7,6 +7,7 @@ const mockFindUserIdByEmail = jest.fn();
 const mockFindActiveUserByEmail = jest.fn();
 const mockFindPlanById = jest.fn();
 const mockSendSystemEmail = jest.fn().mockResolvedValue(undefined);
+const mockReconcileResourceLocks = jest.fn().mockResolvedValue({ locked: [], unlocked: [] });
 
 jest.unstable_mockModule('../topup.service.js', () => ({
   fulfillTopupOrder: mockFulfillTopupOrder,
@@ -27,6 +28,10 @@ jest.unstable_mockModule('../../../repositories/user/user.repository.js', () => 
 
 jest.unstable_mockModule('../../../repositories/payment/plan.repository.js', () => ({
   findPlanById: mockFindPlanById,
+}));
+
+jest.unstable_mockModule('../topupLock.service.js', () => ({
+  reconcileResourceLocks: mockReconcileResourceLocks,
 }));
 
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
@@ -74,5 +79,23 @@ describe('fulfillPaidOrder', () => {
     expect(mockFulfillTopupOrder).not.toHaveBeenCalled();
     expect(mockActivateUserPlan).toHaveBeenCalledWith(9, 3, 'monthly', client);
     expect(mockRedeemVoucher).toHaveBeenCalledTimes(1);
+  });
+
+  it('gia hạn gói mở khoá tài nguyên bị khoá lúc gói hết hạn', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
+    mockFindPlanById.mockResolvedValue({ name: 'Starter', duration_days: 30 });
+
+    await fulfillPaidOrder({
+      order_code: 3,
+      user_id: 9,
+      plan_id: 3,
+      user_email: 'a@test.com',
+      billing_period: 'monthly',
+      amount: 99000,
+      payment_method: 'payos',
+    }, client);
+
+    expect(mockReconcileResourceLocks).toHaveBeenCalledWith(9, client);
   });
 });

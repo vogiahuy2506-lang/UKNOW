@@ -347,29 +347,22 @@ export async function fulfillTopupOrder(order, queryable = db) {
     inserted.push(...rows);
   }
 
-  // Structural: vẫn neo chu kỳ; thiếu expires_at → log OPS, không cấp
+  // Structural: mốc hết hạn độc lập — NOW() + 30 days (không neo subscription_expires_at)
   if (Object.keys(structuralQty).length > 0) {
-    const { rows } = await queryable.query(
-      `SELECT subscription_expires_at FROM users WHERE id = $1 LIMIT 1`,
-      [billingUserId]
-    );
-    const cycleEnd = rows[0]?.subscription_expires_at;
-    if (!cycleEnd) {
-      console.error(
-        `[Webhook][OPS ALERT] Top-up order ${order.order_code || order.id} ` +
-        `claimed but user ${billingUserId} has no subscription_expires_at — ` +
-        `structural grants NOT written. Manual grant needed. quantities=${JSON.stringify(structuralQty)}`
-      );
-    } else {
-      const rowsInserted = await insertTopupGrants({
-        userId: billingUserId,
-        orderId: order.id,
-        cycleEnd,
-        quantities: structuralQty,
-      }, queryable);
-      inserted.push(...rowsInserted);
-    }
+    const { rows } = await queryable.query(`SELECT NOW() + INTERVAL '30 days' AS cycle_end`);
+    const cycleEnd = rows[0]?.cycle_end;
+    const rowsInserted = await insertTopupGrants({
+      userId: billingUserId,
+      orderId: order.id,
+      cycleEnd,
+      quantities: structuralQty,
+    }, queryable);
+    inserted.push(...rowsInserted);
   }
+
+  // Mở/khoá tài nguyên theo trần hiệu dụng ngay trong cùng transaction
+  const { reconcileResourceLocks } = await import('./topupLock.service.js');
+  await reconcileResourceLocks(billingUserId, queryable);
 
   _clearQuotaCache();
   return inserted;

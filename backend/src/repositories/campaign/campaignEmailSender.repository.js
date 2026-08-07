@@ -101,7 +101,11 @@ class CampaignEmailSenderRepository {
       "SELECT * FROM email_settings WHERE id = $1 AND id_user = $2 AND status = 'active'",
       [fromEmailId, userId]
     );
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (!row) return null;
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('email_accounts', row.id)) return null;
+    return row;
   }
 
   /**
@@ -115,10 +119,14 @@ class CampaignEmailSenderRepository {
       `SELECT * FROM email_settings
        WHERE id_user = $1
          AND status = 'active'
-       LIMIT 1`,
+       ORDER BY id ASC`,
       [userId]
     );
-    return result.rows[0] || null;
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    for (const row of result.rows) {
+      if (!(await resourceIsLocked('email_accounts', row.id))) return row;
+    }
+    return null;
   }
 }
 

@@ -126,10 +126,9 @@ describe('Top-up mid-cycle', () => {
     expect(overCap.body.code).toBe('ZALO_CAPACITY_EXCEEDED');
   });
 
-  it('Pro 5 slot nhưng chỉ nối 1 TK → không bán vượt năng lực TK thật', async () => {
-    // Gói kiểu Pro: 5 slot, 25.000 tin/tháng — nhưng khách mới nối 1 tài khoản.
-    // Năng lực thật = 1 × 16.000; plan đã 25.000 → remaining = 0.
-    // Mua 55.000 theo slot (5×16k−25k) từng CHO QUA — phải CHẶN.
+  it('Pro 5 slot mới nối 1 TK → năng lực tính theo slot gói, chặn khi vượt trần', async () => {
+    // Năng lực = slot gói (5 × 16.000 = 80.000), không phụ thuộc đã quét QR bao nhiêu TK.
+    // Gói đã cấp 25.000 → còn bán được đúng 55.000.
     const { user } = await createTopupReadyUser({
       username: 'topup-pro-1tk',
       monthlyZaloLimit: 25000,
@@ -142,18 +141,25 @@ describe('Top-up mid-cycle', () => {
       .get('/api/topup/config')
       .set('Authorization', `Bearer ${token}`);
     expect(cfg.status).toBe(200);
-    expect(Number(cfg.body.result.zaloCapacity.accounts)).toBe(1);
-    expect(Number(cfg.body.result.zaloCapacity.remaining)).toBe(0);
+    expect(Number(cfg.body.result.zaloCapacity.accounts)).toBe(5);
+    expect(Number(cfg.body.result.zaloCapacity.remaining)).toBe(55000);
 
-    const res = await request(app)
+    const atCeiling = await request(app)
       .post('/api/topup/quote')
       .set('Authorization', `Bearer ${token}`)
       .send({ quantities: { zalo_messages: 55000 } });
-    expect(res.status).toBe(400);
-    expect(['ZALO_CAPACITY_EXCEEDED', 'ZALO_NOT_CONNECTED']).toContain(res.body.code);
+    expect(atCeiling.status).toBe(200);
+
+    const overCeiling = await request(app)
+      .post('/api/topup/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { zalo_messages: 55050 } });
+    expect(overCeiling.status).toBe(400);
+    expect(overCeiling.body.code).toBe('ZALO_CAPACITY_EXCEEDED');
   });
 
-  it('chưa nối Zalo → chặn mua tin kèm hướng dẫn kết nối', async () => {
+  it('chưa nối Zalo vẫn mua được tin — kết nối sau', async () => {
+    // Chủ ý thương mại: slot gói là trần bán, khách mua trước rồi quét QR sau.
     const { user } = await createTopupReadyUser({
       username: 'topup-no-zalo',
       connectedZaloAccounts: 0,
@@ -164,9 +170,23 @@ describe('Top-up mid-cycle', () => {
       .post('/api/topup/quote')
       .set('Authorization', `Bearer ${token}`)
       .send({ quantities: { zalo_messages: 500 } });
+    expect(res.status).toBe(200);
+  });
+
+  it('gói không có slot Zalo → chặn mua tin', async () => {
+    const { user } = await createTopupReadyUser({
+      username: 'topup-no-slot',
+      maxZaloAccounts: 0,
+      connectedZaloAccounts: 0,
+    });
+    const token = await loginAs(user);
+
+    const res = await request(app)
+      .post('/api/topup/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { zalo_messages: 500 } });
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('ZALO_NOT_CONNECTED');
-    expect(res.body.message).toMatch(/kết nối tài khoản Zalo/i);
+    expect(res.body.code).toBe('ZALO_NO_SLOT');
   });
 
   it('create-payment ignores client amount; webhook grants once; no plan extension', async () => {

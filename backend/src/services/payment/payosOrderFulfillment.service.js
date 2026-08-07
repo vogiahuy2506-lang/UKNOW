@@ -38,6 +38,10 @@ export async function fulfillPaidOrder(order, client) {
   if (userId && order.plan_id) {
     await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
 
+    // Trần vừa tăng trở lại — mở khoá tài nguyên đã bị khoá khi gói hết hạn
+    const { reconcileResourceLocks } = await import('./topupLock.service.js');
+    await reconcileResourceLocks(userId, client);
+
     const user = await findActiveUserByEmail(order.user_email);
     const plan = await findPlanById(order.plan_id);
     const expiresAt = new Date();

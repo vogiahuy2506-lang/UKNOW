@@ -6,6 +6,7 @@ export default {
     loading: 'Đang tải...',
     processing: 'Đang xử lý...',
     save: 'Lưu',
+    saving: 'Đang lưu...',
     cancel: 'Hủy',
     delete: 'Xóa',
     deleting: 'Đang xóa...',
@@ -3608,9 +3609,24 @@ export default {
     subtitle: 'Xem hạn mức đang dùng, ví mua thêm và lịch sử đơn hàng.',
     loadFailed: 'Không tải được thông tin gói',
     tabOverview: 'Tổng quan',
+    tabLocks: 'Tài nguyên khoá',
     tabOrders: 'Lịch sử đơn',
     ctaTopup: 'Mua thêm hạn mức',
     ctaUpgrade: 'Nâng gói',
+  },
+
+  resourceLocks: {
+    help: 'Khi slot mua thêm hết hạn, hệ thống khoá bớt tài nguyên mới nhất. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
+    loadFailed: 'Không tải được danh sách khoá',
+    saveFailed: 'Không lưu được lựa chọn',
+    empty: 'Chưa có tài nguyên nào trong các mục này.',
+    zaloAccounts: 'Tài khoản Zalo',
+    emailAccounts: 'Tài khoản Email',
+    landingPages: 'Landing page',
+    chatbots: 'Chatbot',
+    ceiling: 'Đang giữ {keep}/{max} (gồm {grants} slot mua thêm còn hạn)',
+    locked: 'Đã khoá',
+    save: 'Lưu lựa chọn',
   },
 
   topup: {

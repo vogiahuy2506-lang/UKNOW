@@ -22,7 +22,13 @@ class AiCampaignDraftRepository {
 
   async findDefaultEmailSettingId(userId) {
     const { rows } = await db.query(
-      `SELECT id FROM email_settings WHERE id_user = $1 AND status = 'active' ORDER BY id ASC LIMIT 1`,
+      `SELECT id FROM email_settings
+       WHERE id_user = $1 AND status = 'active'
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'email_accounts' AND tlr.resource_id = email_settings.id
+         )
+       ORDER BY id ASC LIMIT 1`,
       [userId]
     );
     return rows[0]?.id || null;
@@ -30,7 +36,13 @@ class AiCampaignDraftRepository {
 
   async findDefaultZaloSettingId(userId) {
     const { rows } = await db.query(
-      `SELECT id FROM zalo_settings WHERE id_user = $1 AND is_active = true ORDER BY id ASC LIMIT 1`,
+      `SELECT id FROM zalo_settings
+       WHERE id_user = $1 AND is_active = true
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
+         )
+       ORDER BY id ASC LIMIT 1`,
       [userId]
     );
     return rows[0]?.id || null;

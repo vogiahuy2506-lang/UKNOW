@@ -163,7 +163,11 @@ class CampaignZaloSenderRepository {
        LIMIT 1`,
       isAdmin ? [accountId] : [accountId, userId]
     );
-    return decryptZaloCookieRow(result.rows[0] || null);
+    const row = decryptZaloCookieRow(result.rows[0] || null);
+    if (!row) return null;
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('zalo_accounts', row.id)) return null;
+    return row;
   }
 
   /**

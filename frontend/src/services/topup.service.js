@@ -9,3 +9,9 @@ export const quoteTopup = ({ quantities }) => (
 export const createTopupPayment = (payload) => (
   api.post('/topup/create-payment', payload)
 );
+
+export const getTopupLocks = () => api.get('/topup/locks');
+
+export const putTopupLocks = ({ resourceKey, keepIds }) => (
+  api.put('/topup/locks', { resourceKey, keepIds })
+);

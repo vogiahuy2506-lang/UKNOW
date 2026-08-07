@@ -129,6 +129,7 @@ class ZaloSettingsController {
       status: item.status,
       isActive: item.is_active,
       isDefault: item.is_default,
+      isLocked: Boolean(item.is_locked),
       notes: item.notes || '',
       creatorName: item.creator_name || '',
       createdBy: item.creator_name ? { name: item.creator_name } : null,

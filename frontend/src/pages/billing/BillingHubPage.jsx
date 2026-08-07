@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { HiOutlineCurrencyDollar, HiOutlineTag } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import PlanSection from '../../features/billing/PlanSection';
 import OrderHistoryTab from '../../features/billing/OrderHistoryTab';
+import ResourceLocksTab from '../../features/billing/ResourceLocksTab';
 
 const BillingHubPage = () => {
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
   const syncBillingFromProfile = useAuthStore((s) => s.syncBillingFromProfile);
   const user = useAuthStore((s) => s.user);
   const isUserAdmin = user?.role === 'user';
   const [profileData, setProfileData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const initialTab = searchParams.get('tab') === 'locks' ? 'locks' : 'overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +64,7 @@ const BillingHubPage = () => {
       <div className="flex gap-1 border-b border-gray-100">
         {[
           { key: 'overview', label: t('billingHub.tabOverview') },
+          { key: 'locks', label: t('billingHub.tabLocks') },
           { key: 'orders', label: t('billingHub.tabOrders') },
         ].map((tab) => (
           <button
@@ -80,6 +84,8 @@ const BillingHubPage = () => {
 
       {activeTab === 'orders' ? (
         <OrderHistoryTab isUserAdmin={isUserAdmin} t={t} />
+      ) : activeTab === 'locks' ? (
+        <ResourceLocksTab t={t} />
       ) : (
         <div className="space-y-4">
           <PlanSection data={profileData} t={t} />

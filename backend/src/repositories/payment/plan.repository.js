@@ -40,8 +40,8 @@ export const getUserFeatures = async (userId) => {
     return [];
 };
 
-export const getPlanByUserId = async (userId) => {
-    const { rows } = await db.query(
+export const getPlanByUserId = async (userId, queryable = db) => {
+    const { rows } = await queryable.query(
         `SELECT p.*
          FROM users u
          JOIN plans p ON p.id = u.active_plan_id
