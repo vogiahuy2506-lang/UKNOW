@@ -68,6 +68,13 @@ jest.unstable_mockModule('../../repositories/payment/plan.repository.js', () => 
   getPlanByUserId: jest.fn(),
 }));
 jest.unstable_mockModule('../upload.controller.js', () => ({ default: {} }));
+// Cổng khoá mua thêm chạm DB thật. Không mock thì unit test phụ thuộc Postgres cục bộ:
+// máy dev có Postgres nên xanh, CI không có nên retry tới quá 5s rồi timeout.
+jest.unstable_mockModule('../../utils/topupLockGate.util.js', () => ({
+  resourceIsLocked: jest.fn(async () => false),
+  getLandingLockBySlug: jest.fn(async () => null),
+  pausedLandingHtml: jest.fn(() => ''),
+}));
 
 const { default: chatbotController } = await import('../chatbot.controller.js');
 
