@@ -10,13 +10,18 @@ import 'dotenv/config';
 
 const { Pool } = pg;
 
+const dbHost = process.env.DB_HOST || 'localhost';
+const needsSsl =
+  process.env.DB_SSL === 'true' ||
+  String(dbHost).includes('neon.tech');
+
 const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
+  host:     dbHost,
   port:     process.env.DB_PORT     || 5432,
   database: process.env.DB_NAME     || 'uknow-campaign',
   user:     process.env.DB_USER     || 'postgres',
   password: process.env.DB_WORD     || process.env.DB_PASSWORD || '',
-  ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  ssl:      needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 async function resetPassword(newPassword) {

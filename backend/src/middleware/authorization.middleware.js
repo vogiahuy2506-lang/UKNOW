@@ -102,6 +102,21 @@ export function requireActivePlan(req, res, next) {
 }
 
 /**
+ * Chỉ cho phép self context (chủ tài khoản) — chặn employee context.
+ * Dùng cho billing/topup: nhân viên không được mua ghi vào ví của chủ.
+ */
+export function requireSelfContext(req, res, next) {
+  if (isEmployeeContext(req.user?.activeContext)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Chỉ chủ tài khoản mới có thể thực hiện thao tác này',
+      code: 'OWNER_ONLY',
+    });
+  }
+  return next();
+}
+
+/**
  * Middleware kiểm tra permission cụ thể.
  * - superadmin và user_admin (self context): luôn được phép.
  * - employee context: kiểm tra key tương ứng trong activeContext.permissions.

@@ -10,6 +10,7 @@ const ROUTE_FEATURE_MAP = [
   { test: (p) => p.includes('/settings/channels'), key: 'channels' },
   { test: (p) => p.includes('/quick-send'), key: 'quick-send' },
   { test: (p) => p.includes('/campaigns/new') || /\/campaigns\/[^/]+\/builder/.test(p), key: 'campaign-create' },
+  { test: (p) => p.includes('/billing'), key: 'plan-and-billing' },
   { test: (p) => p.includes('/topup'), key: 'plan-and-billing' },
 ];
 

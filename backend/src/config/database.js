@@ -74,8 +74,9 @@ const poolConfig = {
   statement_timeout: isNeon ? 10000 : 30000,
 };
 
-// SSL configuration for Neon and other cloud providers
-if (process.env.DB_SSL === 'true' || process.env.DB_SSL === true) {
+// SSL: Neon bắt buộc; hoặc bật qua DB_SSL=true.
+// Lưu ý: nếu .env khai báo DB_SSL hai lần, dotenv lấy giá trị CUỐI — tránh DB_SSL=false ghi đè.
+if (isNeon || process.env.DB_SSL === 'true' || process.env.DB_SSL === true) {
   poolConfig.ssl = {
     rejectUnauthorized: false,
   };

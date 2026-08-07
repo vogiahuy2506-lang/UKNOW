@@ -48,9 +48,15 @@ export function getSubscriptionUiStatus({
  * @param {boolean} [input.isAdmin]
  * @param {object|null} [input.billingStatus]
  * @param {{ used?: number, limit?: number|null }} [input.aiCredits]
+ * @param {number|null|undefined} [input.walletRemaining] — addons.aiCredits.remaining
  * @returns {{ type: 'expired'|'credits' }|null}
  */
-export function getAiBillingBlockState({ isAdmin, billingStatus, aiCredits } = {}) {
+export function getAiBillingBlockState({
+  isAdmin,
+  billingStatus,
+  aiCredits,
+  walletRemaining = 0,
+} = {}) {
   if (isAdmin) return null;
   if (billingStatus?.isFullyExpired) {
     return { type: 'expired' };
@@ -58,7 +64,9 @@ export function getAiBillingBlockState({ isAdmin, billingStatus, aiCredits } = {
   const limit = Number(aiCredits?.limit);
   if (Number.isFinite(limit) && limit > 0) {
     const used = Math.max(0, Number(aiCredits?.used) || 0);
-    if (used >= limit) return { type: 'credits' };
+    if (used >= limit && !(Number(walletRemaining) > 0)) {
+      return { type: 'credits' };
+    }
   }
   return null;
 }

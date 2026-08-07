@@ -65,13 +65,18 @@ export default {
   },
 
   creditBanner: {
-    low: 'AI credits are running low — {remaining} left ({percent}%).',
-    empty: 'AI credits are used up for this period — upgrade to continue.',
+    low: '{resource} running low — {remaining} left ({percent}%).',
+    empty: '{resource} used up for this period — buy more or upgrade to continue.',
     expired: 'Your plan has expired — messaging and AI are paused until renewal.',
-    upgrade: 'Upgrade',
     buyTopup: 'Buy more',
     viewPricing: 'View pricing',
-    dismiss: 'Dismiss AI credit warning',
+    dismiss: 'Dismiss warning',
+    goBilling: 'View plan & billing',
+    resources: {
+      ai: 'AI credits',
+      email: 'monthly email quota',
+      zalo: 'monthly Zalo quota',
+    },
   },
 
   auth: {
@@ -203,6 +208,9 @@ export default {
     customers: 'Customers from campaigns',
     orders: 'Orders',
     settings: 'Settings',
+    billing: 'Plan & Billing',
+    billingOverview: 'Plan overview',
+    buyTopup: 'Buy more quota',
     employees: 'Employees',
     profile: 'Business Profile',
     channels: 'Channels',
@@ -3548,6 +3556,16 @@ export default {
       emailTemplates: 'Email templates',
       zaloTemplates: 'Zalo templates',
     },
+  },
+
+  billingHub: {
+    title: 'Plan & Billing',
+    subtitle: 'View usage, add-on wallet, and order history.',
+    loadFailed: 'Could not load plan information',
+    tabOverview: 'Overview',
+    tabOrders: 'Order history',
+    ctaTopup: 'Buy more quota',
+    ctaUpgrade: 'Upgrade plan',
   },
 
   topup: {

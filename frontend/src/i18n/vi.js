@@ -65,13 +65,18 @@ export default {
   },
 
   creditBanner: {
-    low: 'Sắp hết credit AI — còn {remaining} lượt ({percent}%).',
-    empty: 'Đã hết credit AI kỳ này — nâng cấp để tiếp tục.',
+    low: 'Sắp hết {resource} — còn {remaining} ({percent}%).',
+    empty: 'Đã hết {resource} kỳ này — mua thêm hoặc nâng gói để tiếp tục.',
     expired: 'Gói đã hết hạn — gửi tin & AI tạm dừng cho đến khi gia hạn.',
-    upgrade: 'Nâng cấp',
     buyTopup: 'Mua thêm',
     viewPricing: 'Xem bảng giá',
-    dismiss: 'Ẩn cảnh báo credit AI',
+    dismiss: 'Ẩn cảnh báo',
+    goBilling: 'Xem gói & thanh toán',
+    resources: {
+      ai: 'credit AI',
+      email: 'hạn mức email tháng',
+      zalo: 'hạn mức Zalo tháng',
+    },
   },
 
   auth: {
@@ -203,6 +208,9 @@ export default {
     customers: 'Khách hàng từ chiến dịch',
     orders: 'Đơn hàng',
     settings: 'Cài đặt',
+    billing: 'Gói & Thanh toán',
+    billingOverview: 'Tổng quan gói',
+    buyTopup: 'Mua thêm hạn mức',
     employees: 'Nhân viên',
     profile: 'Hồ sơ doanh nghiệp',
     channels: 'Kênh',
@@ -3593,6 +3601,16 @@ export default {
       emailTemplates: 'Email template',
       zaloTemplates: 'Zalo template',
     },
+  },
+
+  billingHub: {
+    title: 'Gói & Thanh toán',
+    subtitle: 'Xem hạn mức đang dùng, ví mua thêm và lịch sử đơn hàng.',
+    loadFailed: 'Không tải được thông tin gói',
+    tabOverview: 'Tổng quan',
+    tabOrders: 'Lịch sử đơn',
+    ctaTopup: 'Mua thêm hạn mức',
+    ctaUpgrade: 'Nâng gói',
   },
 
   topup: {

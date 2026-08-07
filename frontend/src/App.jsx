@@ -40,6 +40,7 @@ import Courses from './pages/courses/Courses';
 import Products from './pages/products/Products';
 import Orders from './pages/orders/Orders';
 import TopupPage from './pages/billing/TopupPage';
+import BillingHubPage from './pages/billing/BillingHubPage';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import PublicDPA from './pages/public/PublicDPA';
@@ -343,7 +344,8 @@ function App() {
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
             <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
-            <Route path="topup" element={<TopupPage />} />
+            <Route path="billing" element={<OwnerRoute><BillingHubPage /></OwnerRoute>} />
+            <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />

@@ -98,11 +98,37 @@ const normalizeUser = (user) => {
   };
 };
 
+const EMPTY_SEND_USAGE = {
+  email: { used: 0, limit: null },
+  zalo: { used: 0, limit: null },
+};
+
+const billingSliceFromProfile = (profile = {}) => ({
+  aiCredits: {
+    used: Number(profile.aiCreditsUsed || 0),
+    limit: profile.aiCreditsPerPeriod ?? null,
+  },
+  sendUsage: {
+    email: {
+      used: Number(profile.emailSentMonth || 0),
+      limit: profile.monthlyEmailLimit ?? null,
+    },
+    zalo: {
+      used: Number(profile.zaloSentMonth || 0),
+      limit: profile.monthlyZaloLimit ?? null,
+    },
+  },
+  addons: profile.addons ?? null,
+  billingStatus: buildBillingStatusFromProfile(profile),
+});
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
   aiCredits: { used: 0, limit: null },
+  sendUsage: { ...EMPTY_SEND_USAGE },
+  addons: null,
   billingStatus: null,
   /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
   activeContext: { type: 'self' },
@@ -150,6 +176,8 @@ export const useAuthStore = create((set, get) => ({
           isAuthenticated: false,
           isLoading: false,
           aiCredits: { used: 0, limit: null },
+          sendUsage: { ...EMPTY_SEND_USAGE },
+          addons: null,
           billingStatus: null,
           activeContext: { type: 'self' },
         });
@@ -225,6 +253,8 @@ export const useAuthStore = create((set, get) => ({
         user: null,
         isAuthenticated: false,
         aiCredits: { used: 0, limit: null },
+        sendUsage: { ...EMPTY_SEND_USAGE },
+        addons: null,
         billingStatus: null,
         activeContext: { type: 'self' },
       });
@@ -234,30 +264,25 @@ export const useAuthStore = create((set, get) => ({
   /** Lấy credit AI + trạng thái gói từ profile tài khoản/billing owner. */
   fetchAiCredits: async () => {
     if (!get().isAuthenticated) {
-      set({ aiCredits: { used: 0, limit: null }, billingStatus: null });
+      set({
+        aiCredits: { used: 0, limit: null },
+        sendUsage: { ...EMPTY_SEND_USAGE },
+        addons: null,
+        billingStatus: null,
+      });
       return { used: 0, limit: null };
     }
 
     const response = await api.get('/users/profile');
     const profile = response?.data?.data || {};
-    const nextCredits = {
-      used: Number(profile.aiCreditsUsed || 0),
-      limit: profile.aiCreditsPerPeriod ?? null,
-    };
-    const billingStatus = buildBillingStatusFromProfile(profile);
-    set({ aiCredits: nextCredits, billingStatus });
-    return nextCredits;
+    const slice = billingSliceFromProfile(profile);
+    set(slice);
+    return slice.aiCredits;
   },
 
   /** Đồng bộ billing từ payload profile đã có (tránh gọi API trùng). */
   syncBillingFromProfile: (profile = {}) => {
-    set({
-      aiCredits: {
-        used: Number(profile.aiCreditsUsed || 0),
-        limit: profile.aiCreditsPerPeriod ?? null,
-      },
-      billingStatus: buildBillingStatusFromProfile(profile),
-    });
+    set(billingSliceFromProfile(profile));
   },
 
   /**

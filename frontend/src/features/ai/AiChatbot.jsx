@@ -403,12 +403,18 @@ const normalizeContentPlanData = (rawData) => {
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd, variant = 'panel' }) => {
   const { t, locale } = useI18n();
-  const { user, fetchAiCredits, aiCredits, billingStatus } = useAuthStore();
+  const { user, fetchAiCredits, aiCredits, billingStatus, addons, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
+  const isEmployeeCtx = activeContext?.type === 'employee';
 
   const aiBillingBlock = useMemo(
-    () => getAiBillingBlockState({ isAdmin: isSuperAdmin, billingStatus, aiCredits }),
-    [aiCredits, billingStatus, isSuperAdmin],
+    () => getAiBillingBlockState({
+      isAdmin: isSuperAdmin,
+      billingStatus,
+      aiCredits,
+      walletRemaining: Number(addons?.aiCredits?.remaining) || 0,
+    }),
+    [addons, aiCredits, billingStatus, isSuperAdmin],
   );
 
   const welcomeMessage = isSuperAdmin
@@ -2742,7 +2748,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 : t('aiChatbot.creditsEmptyBanner')}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-3">
-              {aiBillingBlock.type !== 'expired' && (
+              {aiBillingBlock.type !== 'expired' && !isEmployeeCtx && (
                 <button
                   type="button"
                   onClick={() => navigate('/app/topup')}

@@ -205,6 +205,14 @@ const userMenuItems = (t) => [
     ],
   },
   {
+    name: t('nav.billing'),
+    icon: HiOutlineCurrencyDollar,
+    children: [
+      { name: t('nav.billingOverview'), path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
+      { name: t('nav.buyTopup'), path: '/app/topup', icon: HiOutlinePlusCircle, ownerOnly: true },
+    ],
+  },
+  {
     name: t('nav.settings'),
     icon: HiOutlineCog,
     children: [

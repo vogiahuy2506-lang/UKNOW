@@ -156,7 +156,11 @@ api.interceptors.response.use(
           React.createElement(
             'button',
             {
-              onClick: () => { toast.dismiss(tst.id); window.location.href = '/pricing'; },
+              onClick: () => {
+                toast.dismiss(tst.id);
+                const isEmployee = useAuthStore.getState().activeContext?.type === 'employee';
+                window.location.href = isEmployee ? '/pricing' : '/app/billing';
+              },
               style: {
                 alignSelf: 'flex-start', fontSize: 12, fontWeight: 600,
                 color: '#f97316', background: 'none', border: 'none',
