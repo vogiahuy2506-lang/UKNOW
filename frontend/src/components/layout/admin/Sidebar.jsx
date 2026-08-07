@@ -38,7 +38,6 @@ import {
   HiOutlineFilter,
   HiOutlineShoppingCart,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/founderai-logo.png';
 
 const AVATAR_STYLES = {
   admin: 'from-purple-500 to-violet-600',
@@ -146,7 +145,8 @@ function SubmenuPanel({ item, onClose }) {
   };
 
   return (
-    <div className="fixed top-0 left-[56px] h-full w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl">
+    <div className="fixed left-[56px] w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl border border-gray-200 border-l-0"
+      style={{ top: 56, height: 'calc(100vh - 56px)' }}>
       <div className="h-12 flex items-center px-4 shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
           <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
@@ -155,7 +155,7 @@ function SubmenuPanel({ item, onClose }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        <div className="space-y-0.5">
+        <div className="flex flex-col gap-1">
           {item.children.map((child) => {
             const isActive = getActiveChild(child);
             const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
@@ -195,7 +195,7 @@ function SubmenuPanel({ item, onClose }) {
 
 // ── Sidebar Component ───────────────────────────────────────────────────────
 
-const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
+const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) => {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -334,24 +334,21 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle }) => {
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full bg-white z-50 flex flex-col transition-all duration-300 shadow-[inset_-1px_0_0_rgba(15,23,42,0.05)] ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}`}
-        style={{ width: sidebarWidth }}
+        className={`fixed left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? 'top-0' : ''}`}
+        style={{
+          width: sidebarWidth,
+          top: isMobile ? 0 : topOffset,
+          height: isMobile ? '100%' : `calc(100vh - ${topOffset}px)`,
+        }}
       >
-        {/* Logo */}
-        <div className={`h-12 flex items-center shrink-0 ${isOpen || isMobile ? 'px-4' : 'justify-center'}`}>
-          <Link
-            to="/"
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
-            title={t('common.appName')}
-          >
-            <img src={logoIcon} alt={t('common.appName')} className="w-7 h-7 object-contain" />
-          </Link>
-          {isMobile && (
+        {/* Mobile: show close button only */}
+        {isMobile && (
+          <div className="h-12 flex items-center px-4 shrink-0">
             <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0" aria-label={t('sidebar.closeMenu')}>
               <HiOutlineX className="w-5 h-5 text-gray-500" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav ref={navRef} className={`flex-1 overflow-y-auto py-3 min-h-0 ${isOpen || isMobile ? 'px-3' : 'px-2'}`}>

@@ -12,7 +12,7 @@ import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
 
 const SIDEBAR_WIDTH = 56; // icon-only desktop width
-const HEADER_HEIGHT = 48; // topbar height
+const HEADER_HEIGHT = 56; // topbar height
 
 const MainLayout = () => {
   const { t } = useI18n();
@@ -176,42 +176,39 @@ const MainLayout = () => {
 
   // Desktop layout
   return (
-    <div className="h-screen overflow-hidden bg-slate-100/80 flex" style={{ zoom: 1 }}>
-      <Sidebar
-        isOpen={sidebarOpen}
-        width={sidebarOpen ? 280 : 56}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-      />
-
-      {/* Header: fixed to viewport, top, spanning content area */}
+    <div className="h-screen overflow-hidden bg-[#f9fafb] flex flex-col" style={{ zoom: 1 }}>
+      {/* Topbar: full-width, fixed top */}
       <div
-        className="fixed z-40 bg-white flex items-center transition-all duration-300"
+        className="fixed top-0 left-0 right-0 z-40 bg-white flex items-center transition-all duration-300"
         style={{
-          top: 0,
-          left: sidebarOpen ? 280 : 56,
-          right: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
           height: HEADER_HEIGHT,
-          paddingLeft: 20,
-          paddingRight: 20,
+          paddingRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
         }}
       >
         <Header />
       </div>
+
+      {/* Sidebar: starts below topbar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        width={sidebarOpen ? 280 : 56}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        topOffset={HEADER_HEIGHT}
+      />
 
       <div
         className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}`}
         style={{
           marginLeft: sidebarOpen ? 280 : 56,
           marginRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
-          paddingTop: HEADER_HEIGHT,
-          padding: `${HEADER_HEIGHT + 12}px 12px 12px 12px`,
+          padding: `${HEADER_HEIGHT + 12}px 12px 12px ${(sidebarOpen ? 280 : 56) + 12}px`,
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-slate-200/60 ${isSpecialPage ? '' : 'p-6'}`}
+          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 ${isSpecialPage ? '' : 'p-6'}`}
         >
           <div className={isSpecialPage ? 'h-full' : ''}>
             <Outlet />

@@ -60,9 +60,19 @@ const Header = () => {
 
   return (
     <>
-      <header className="w-full h-12 bg-white flex items-center px-4">
-        {/* Left spacer */}
-        <div className="flex-1" />
+      <header className="w-full h-14 bg-white flex items-center px-5 border-b border-gray-200">
+        {/* Left: Logo + Brand */}
+        <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+          <span className="w-9 h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500 shadow-sm overflow-hidden">
+            <img src={logoIcon} alt="Founder AI" className="w-7 h-7 object-contain" />
+          </span>
+          <span className="text-[19px] font-bold text-gray-900 tracking-tight hidden sm:inline">
+            Founder AI
+          </span>
+        </Link>
+
+        {/* Spacer */}
+        <div className="flex-1 min-w-[16px]" />
 
         {/* Center: quick nav */}
         <nav className="hidden lg:flex items-center gap-1">
