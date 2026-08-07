@@ -265,6 +265,9 @@ const InboxPage = () => {
           unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
             ? 0
             : (existing.unreadCount || 0) + 1,
+          // Chủ nhắn từ app Zalo (isSelf) → backend pause AI; cập nhật toggle cho khớp.
+          // Không dùng role===agent: tin bot cũng là agent.
+          ...(data.isSelf === true ? { aiPaused: true } : {}),
         };
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
@@ -283,11 +286,18 @@ const InboxPage = () => {
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
+          ...(data.isSelf === true ? { aiPaused: true } : {}),
         };
         return [newConv, ...prev];
       }
     });
 
+    if (data.isSelf === true) {
+      setSelectedConversation((prev) => {
+        if (!prev || Number(prev.id) !== Number(data.conversationId)) return prev;
+        return { ...prev, aiPaused: true };
+      });
+    }
     if (document.hidden && displayMessage) {
       showNotification(t('inbox.newMessage'), {
         body: `${data.senderName || t('inbox.customer')}: ${displayMessage.substring(0, 100)}`,
