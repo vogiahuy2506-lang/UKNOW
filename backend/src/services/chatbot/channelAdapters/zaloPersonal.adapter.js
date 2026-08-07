@@ -12,6 +12,7 @@
  * Note: This is a "bridge" because Zalo does NOT have an official public API
  * for personal accounts. This approach simulates interaction via browser automation.
  */
+import { ThreadType } from 'zca-js';
 import zaloPersonalRepository from '../../../repositories/chatbot/zaloPersonal.repository.js';
 import zaloAccountSessionService from '../../zalo/zaloAccountSession.service.js';
 import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
@@ -626,11 +627,18 @@ class ZaloPersonalAdapter {
       }
 
       // For group messages with forceReply, send to the GROUP instead of individual
+      let sendToGroup = false;
       if (isGroup && conversationInfo?.group_id) {
         sendTarget = conversationInfo.group_id;
+        sendToGroup = true;
       }
 
-      const sent = await api.sendMessage(payload, sendTarget);
+      // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
+      // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
+      // Cùng cách gọi với đường chiến dịch (campaignZaloSender.service.js:2165).
+      const sent = sendToGroup
+        ? await api.sendMessage(payload, sendTarget, ThreadType.Group)
+        : await api.sendMessage(payload, sendTarget);
       const outboundMsgId = extractSendMsgId(sent);
       ZaloPersonalAdapter.markBotOutbound(session.accountId, {
         msgId: outboundMsgId,
