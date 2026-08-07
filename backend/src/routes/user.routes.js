@@ -38,6 +38,29 @@ router.patch(
   userController.updateBotDailyReplyCap.bind(userController)
 );
 
+/**
+ * PATCH /api/users/ai-handoff-auto-resume
+ * Chủ tài khoản đặt phút tự bật lại AI sau handoff (null = tắt / bật tay).
+ */
+router.patch(
+  '/ai-handoff-auto-resume',
+  requireSelfContext,
+  [
+    body('aiHandoffAutoResumeMinutes')
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === null || value === undefined || String(value).trim() === '') return true;
+        const n = Number.parseInt(String(value), 10);
+        if (![5, 15, 30, 60].includes(n)) {
+          throw new Error('Giá trị phải là 5, 15, 30, 60 phút, hoặc để trống để tắt');
+        }
+        return true;
+      }),
+  ],
+  handleValidationErrors,
+  userController.updateAiHandoffAutoResume.bind(userController)
+);
+
 // Update profile
 /**
  * PUT /api/users/profile

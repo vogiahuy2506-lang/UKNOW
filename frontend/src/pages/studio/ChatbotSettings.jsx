@@ -27,6 +27,7 @@ import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
+import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import { useI18n } from '../../i18n';
 import {
   ChannelGuideModal,
@@ -733,13 +734,24 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
             <div className="space-y-5">
 
               {profileData && (
-                <BotDailyReplyCapCard
-                  data={profileData}
-                  t={t}
-                  onSaved={(next) => {
-                    setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
-                  }}
-                />
+                <>
+                  <BotDailyReplyCapCard
+                    data={profileData}
+                    t={t}
+                    onSaved={(next) => {
+                      setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
+                    }}
+                  />
+                  <AiHandoffAutoResumeCard
+                    data={profileData}
+                    t={t}
+                    onSaved={(next) => {
+                      setProfileData((prev) => (
+                        prev ? { ...prev, aiHandoffAutoResumeMinutes: next } : prev
+                      ));
+                    }}
+                  />
+                </>
               )}
 
               {/* Gộp: Thông tin + AI + Câu hỏi gợi ý */}

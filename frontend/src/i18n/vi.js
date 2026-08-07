@@ -3635,6 +3635,18 @@ export default {
     botCapSaved: 'Đã lưu giới hạn',
   },
 
+  aiHandoffResume: {
+    title: 'Tự bật lại AI sau khi bạn trả lời',
+    help: 'Khi bạn trả lời khách, AI tạm dừng. Sau khoảng thời gian này (tính từ lần bạn nhắn gần nhất), AI tự bật lại. Chọn Tắt nếu muốn bật tay.',
+    scopeNote: 'Áp dụng mọi chatbot và mọi kênh (Zalo, web, OA/FB).',
+    toggleNote: 'Cả khi bạn tạm dừng AI bằng nút trên hộp thư.',
+    off: 'Tắt (bật tay)',
+    minutes: '{n} phút',
+    invalid: 'Chọn Tắt hoặc 5 / 15 / 30 / 60 phút.',
+    saveFailed: 'Không lưu được cài đặt',
+    saved: 'Đã lưu cài đặt',
+  },
+
   resourceLocks: {
     help: 'Khi slot mua thêm hết hạn, hệ thống khoá bớt tài nguyên mới nhất. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
     loadFailed: 'Không tải được danh sách khoá',

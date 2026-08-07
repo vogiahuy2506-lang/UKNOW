@@ -3590,6 +3590,18 @@ export default {
     botCapSaved: 'Limit saved',
   },
 
+  aiHandoffResume: {
+    title: 'Auto-resume AI after you reply',
+    help: 'When you reply to a customer, AI pauses. After this period (from your latest message), AI turns back on. Choose Off to resume manually.',
+    scopeNote: 'Applies to every chatbot and channel (Zalo, web, OA/FB).',
+    toggleNote: 'Also applies when you pause AI with the inbox toggle.',
+    off: 'Off (manual)',
+    minutes: '{n} minutes',
+    invalid: 'Choose Off or 5 / 15 / 30 / 60 minutes.',
+    saveFailed: 'Could not save setting',
+    saved: 'Setting saved',
+  },
+
   resourceLocks: {
     help: 'When add-on slots expire, the newest resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
     loadFailed: 'Could not load lock list',

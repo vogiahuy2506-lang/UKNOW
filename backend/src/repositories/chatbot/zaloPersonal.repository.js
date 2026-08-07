@@ -248,11 +248,38 @@ class ZaloPersonalRepository {
   }
 
   async isAiPaused(conversationId) {
-    const { rows } = await db.query(
-      `SELECT ai_paused FROM zalo_personal_conversations WHERE id = $1`,
-      [conversationId]
-    );
-    return rows[0]?.ai_paused === true;
+    if (!conversationId) return false;
+    try {
+      const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(
+        '../../utils/aiHandoffResume.util.js'
+      );
+      const { rows } = await db.query(
+        `SELECT ai_paused, ai_paused_at, id_user FROM zalo_personal_conversations WHERE id = $1`,
+        [conversationId]
+      );
+      const row = rows[0];
+      if (!row || row.ai_paused !== true) return false;
+
+      const minutes = await getCachedAutoResumeMinutes(row.id_user);
+      if (shouldStayAiPaused({
+        aiPaused: true,
+        aiPausedAt: row.ai_paused_at,
+        autoResumeMinutes: minutes,
+      })) {
+        return true;
+      }
+
+      await db.query(
+        `UPDATE zalo_personal_conversations
+         SET ai_paused = false, ai_paused_at = NULL
+         WHERE id = $1 AND ai_paused = true`,
+        [conversationId]
+      );
+      return false;
+    } catch (err) {
+      console.warn('[ZaloPersonal] isAiPaused check failed:', err.message);
+      return false;
+    }
   }
 
   /**
