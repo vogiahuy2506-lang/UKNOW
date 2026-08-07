@@ -99,10 +99,17 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
         const totalGroups = payload?.data?.groups?.totalGroups ?? payload?.data?.groups?.synced;
         const synced = payload?.data?.groups?.synced;
         const historySynced = Number(payload?.data?.groupHistory?.synced || 0);
+        const historyErrors = payload?.data?.groupHistory?.errors?.length || 0;
+        const historyNotFound = payload?.data?.groupHistory?.notFound || 0;
         if (historySynced > 0) {
           toast.success(
             t('inbox.syncSuccessWithHistory', { count: historySynced })
             || `Đã đồng bộ. Kéo thêm ${historySynced} tin nhóm từ Zalo.`
+          );
+        } else if (historyErrors > 0 || historyNotFound > 0) {
+          toast.success(
+            t('inbox.syncSuccessHistoryPartial')
+            || 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).'
           );
         } else if (totalGroups != null && synced != null && Number(synced) < Number(totalGroups)) {
           toast.success(

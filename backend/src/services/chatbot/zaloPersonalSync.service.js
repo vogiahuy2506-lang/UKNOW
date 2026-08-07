@@ -40,6 +40,15 @@ function isGroupNotFoundError(error) {
 }
 
 /**
+ * zca-js bug: một số nhóm trả data thiếu groupMsgs → crash trong SDK
+ * ("Cannot read properties of undefined (reading 'length')").
+ * @returns {boolean}
+ */
+function isGroupHistoryMalformedError(error) {
+  return /reading 'length'|groupMsgs/i.test(String(error?.message || ''));
+}
+
+/**
  * zca-js getGroupChatHistory trả { groupMsgs: GroupMessage[] }, không phải mảng thuần.
  * GroupMessage bọc raw ở `.data` + `isSelf` trên wrapper.
  * @param {unknown} history
@@ -314,7 +323,23 @@ class ZaloPersonalSyncService {
         // zca-js: getGroupChatHistory(groupId, count) → { groupMsgs: GroupMessage[] }
         // (không nhận beforeMsgId; tham số 3 từng truyền là dead code)
         void beforeMsgId;
-        const history = await api.getGroupChatHistory(grid, limit);
+        let history;
+        try {
+          history = await api.getGroupChatHistory(grid, limit);
+        } catch (apiErr) {
+          // zca-js: data.groupMsgs undefined → throw trước khi trả về
+          if (isGroupHistoryMalformedError(apiErr)) {
+            console.warn(`[ZaloSync] Bỏ qua nhóm ${grid}: response thiếu groupMsgs (${apiErr.message})`);
+            return {
+              synced: 0,
+              total: 0,
+              type: 'group',
+              groupId: prefixed || `group_${grid}`,
+              skippedMalformed: true,
+            };
+          }
+          throw apiErr;
+        }
         const messages = extractGroupHistoryMessages(history);
 
         if (SYNC_VERBOSE) {
@@ -531,20 +556,79 @@ class ZaloPersonalSyncService {
       results.errors.push({ type: 'groups', error: e.message });
     }
 
-    // Pull older GROUP chat history when supported (1-1 history is not available via zca-js)
+    // Pull history chỉ cho nhóm đã có hội thoại trong hộp thư (không quét 200 nhóm).
+    // Quét all → nhiều 404 / lỗi zca-js "groupMsgs.length" → toast đỏ dù danh bạ/nhóm OK.
     try {
-      results.groupHistory = await this.syncAllGroupHistory(accountId, userId, { limit: 50 });
-      if (results.groupHistory?.errors?.length) {
-        results.errors.push({
-          type: 'groupHistory',
-          error: `${results.groupHistory.errors.length} nhóm lỗi khi kéo tin`,
-        });
-      }
+      results.groupHistory = await this.syncInboxConversationGroupHistory(accountId, userId, { limit: 50 });
     } catch (e) {
-      results.errors.push({ type: 'groupHistory', error: e.message });
+      results.warnings = results.warnings || [];
+      results.warnings.push({ type: 'groupHistory', error: e.message });
     }
 
     return results;
+  }
+
+  /**
+   * Kéo lịch sử chỉ cho các nhóm đã xuất hiện trong hộp thư (external_id group_*).
+   * Dùng cho nút Đồng bộ tài khoản — nhanh, ít lỗi hơn syncAllGroupHistory.
+   */
+  async syncInboxConversationGroupHistory(accountId, userId, { limit = 50 } = {}) {
+    const groupIds = await this.listInboxGroupIds(accountId);
+    const results = {
+      totalGroups: groupIds.length,
+      synced: 0,
+      errors: [],
+      notFound: 0,
+      skippedMalformed: 0,
+    };
+
+    for (const groupId of groupIds) {
+      try {
+        const result = await this.syncChatHistory(accountId, userId, groupId, true, { limit });
+        results.synced += result.synced || 0;
+        if (result.skippedMalformed) results.skippedMalformed += 1;
+      } catch (err) {
+        if (isGroupNotFoundError(err)) {
+          results.notFound += 1;
+        } else if (isGroupHistoryMalformedError(err)) {
+          results.skippedMalformed += 1;
+        } else {
+          results.errors.push({ groupId, error: err.message });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Group ids from existing inbox conversations only (canonical bare).
+   * @param {number} accountId
+   * @returns {Promise<string[]>}
+   */
+  async listInboxGroupIds(accountId) {
+    const { rows } = await db.query(
+      `SELECT DISTINCT external_id, visitor_info
+       FROM zalo_personal_conversations
+       WHERE id_zalo_setting = $1
+         AND (
+           external_id LIKE 'group_%'
+           OR external_id LIKE 'g_%'
+           OR COALESCE(visitor_info::jsonb->>'is_group', '') IN ('true', 't', '1')
+         )`,
+      [accountId]
+    );
+    const ids = new Set();
+    for (const row of rows) {
+      let info = row.visitor_info;
+      if (typeof info === 'string') {
+        try { info = JSON.parse(info); } catch { info = {}; }
+      }
+      const raw = info?.group_id || info?.groupId || row.external_id;
+      const { bare } = normalizeZaloGroupId(raw);
+      if (bare) ids.add(bare);
+    }
+    return [...ids];
   }
 
   /**
@@ -553,7 +637,13 @@ class ZaloPersonalSyncService {
   async syncAllGroupHistory(accountId, userId, { limit = 50 } = {}) {
     const groupsResult = await this.syncGroups(accountId, userId);
     const groups = groupsResult.groups || [];
-    const results = { totalGroups: groups.length, synced: 0, errors: [] };
+    const results = {
+      totalGroups: groups.length,
+      synced: 0,
+      errors: [],
+      notFound: 0,
+      skippedMalformed: 0,
+    };
 
     for (const group of groups) {
       try {
@@ -565,8 +655,15 @@ class ZaloPersonalSyncService {
           { limit }
         );
         results.synced += result.synced || 0;
+        if (result.skippedMalformed) results.skippedMalformed += 1;
       } catch (err) {
-        results.errors.push({ groupId: group.groupId, error: err.message });
+        if (isGroupNotFoundError(err)) {
+          results.notFound += 1;
+        } else if (isGroupHistoryMalformedError(err)) {
+          results.skippedMalformed += 1;
+        } else {
+          results.errors.push({ groupId: group.groupId, error: err.message });
+        }
       }
     }
     return results;

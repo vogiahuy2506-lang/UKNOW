@@ -53,4 +53,8 @@ describe('extractGroupHistoryMessages', () => {
     expect(extractGroupHistoryMessages({ lastActionId: 'x', groupMsgs: null })).toEqual([]);
     expect(normalizeGroupHistoryItem(null)).toBeNull();
   });
+
+  it('treats missing groupMsgs as empty list (zca-js sometimes omits it)', () => {
+    expect(extractGroupHistoryMessages({ lastActionId: '1', more: 0 })).toEqual([]);
+  });
 });

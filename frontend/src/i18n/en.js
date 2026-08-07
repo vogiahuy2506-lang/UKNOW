@@ -1633,6 +1633,7 @@ export default {
     syncing: 'Syncing...',
     syncSuccess: 'Synced contacts & groups. Old 1-1 chats cannot be synced (Zalo API limit); conversations appear when new messages arrive.',
     syncSuccessWithHistory: 'Synced. Pulled {{count}} more group messages from Zalo.',
+    syncSuccessHistoryPartial: 'Synced contacts & groups. Some groups could not pull history (left group / Zalo limit).',
     syncThreadPulled: 'Pulled {{count}} messages from Zalo',
     syncThreadEmpty: 'No new messages from Zalo',
     syncFailed: 'Sync failed',

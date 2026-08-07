@@ -1648,6 +1648,7 @@ export default {
     syncing: 'Đang đồng bộ...',
     syncSuccess: 'Đã đồng bộ danh bạ & nhóm. Chat 1-1 cũ không đồng bộ được (giới hạn Zalo); hội thoại hiện khi có tin mới.',
     syncSuccessWithHistory: 'Đã đồng bộ. Kéo thêm {{count}} tin nhóm từ Zalo.',
+    syncSuccessHistoryPartial: 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).',
     syncThreadPulled: 'Đã kéo {{count}} tin từ Zalo',
     syncThreadEmpty: 'Không có tin mới từ Zalo',
     syncFailed: 'Đồng bộ thất bại',
