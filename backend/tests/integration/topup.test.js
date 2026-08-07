@@ -243,7 +243,7 @@ describe('Top-up mid-cycle', () => {
     expect(quota.allowed).toBe(true);
   });
 
-  it('employee purchase grants to owner billing account', async () => {
+  it('employee context bị chặn mua topup (owner-only)', async () => {
     const { user: owner } = await createTopupReadyUser({ username: 'topup-owner' });
     const employee = await createUser({ username: 'topup-emp', withPlan: false });
     await db.query(
@@ -264,26 +264,9 @@ describe('Top-up mid-cycle', () => {
       .set('X-Owner-Context', String(owner.id))
       .send({ quantities: { emails: 2500 } });
 
-    expect(created.status).toBe(200);
-    const orderCode = created.body.result.orderCode;
-    expect(Number(created.body.result.topupConfig.billingUserId)).toBe(Number(owner.id));
-
-    mockWebhooksVerify.mockResolvedValue({
-      code: '00',
-      orderCode,
-      amount: created.body.result.amount,
-    });
-    await request(app).post('/api/payments/webhook').send({});
-
-    const grants = await db.query(
-      `SELECT user_id, item_key, qty FROM topup_grants WHERE order_id = (
-         SELECT id FROM orders WHERE order_code = $1
-       )`,
-      [orderCode]
-    );
-    expect(grants.rows).toHaveLength(1);
-    expect(Number(grants.rows[0].user_id)).toBe(Number(owner.id));
-    expect(grants.rows[0].item_key).toBe('emails');
+    expect(created.status).toBe(403);
+    expect(created.body.code).toBe('OWNER_ONLY');
+    expect(mockPaymentRequestsCreate).not.toHaveBeenCalled();
   });
 
   it('early renewal keeps wallet grants (cycle_end NULL)', async () => {
