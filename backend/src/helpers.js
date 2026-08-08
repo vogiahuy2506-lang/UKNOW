@@ -11,17 +11,33 @@ export const serverError = (res, label, error) => {
 
 /**
  * Tính toán metadata phân trang.
- * @param {number|string} page - Trang hiện tại
- * @param {number|string} limit - Số bản ghi mỗi trang
- * @param {number|string} total - Tổng số bản ghi
- * @returns {{ page: number, limit: number, total: number, totalPages: number }}
+ * Hỗ trợ cả dạng positional `paginate(page, limit, total)` và object
+ * `paginate({ page, limit, total })` (marketplace controllers dùng object + `.offset`).
+ * @param {number|string|{page?:*,limit?:*,total?:*}} pageOrOpts
+ * @param {number|string} [limit]
+ * @param {number|string} [total]
+ * @returns {{ page: number, limit: number, total: number, totalPages: number, offset: number }}
  */
-export const paginate = (page, limit, total) => ({
-  page: parseInt(page),
-  limit: parseInt(limit),
-  total: parseInt(total),
-  totalPages: Math.ceil(parseInt(total) / parseInt(limit)),
-});
+export const paginate = (pageOrOpts, limit, total) => {
+  let page = pageOrOpts;
+  let lim = limit;
+  let tot = total;
+  if (pageOrOpts && typeof pageOrOpts === 'object') {
+    page = pageOrOpts.page;
+    lim = pageOrOpts.limit;
+    tot = pageOrOpts.total;
+  }
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.max(parseInt(lim, 10) || 20, 1);
+  const totalNum = Number.isFinite(parseInt(tot, 10)) ? parseInt(tot, 10) : 0;
+  return {
+    page: pageNum,
+    limit: limitNum,
+    total: totalNum,
+    totalPages: limitNum > 0 ? Math.ceil(totalNum / limitNum) : 0,
+    offset: (pageNum - 1) * limitNum,
+  };
+};
 
 /**
  * Chuẩn hóa giá trị tiền tệ thành số thực.
