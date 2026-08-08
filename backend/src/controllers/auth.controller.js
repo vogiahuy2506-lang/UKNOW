@@ -23,6 +23,14 @@ const REFRESH_TOKEN_COOKIE = 'refreshToken';
 const REFRESH_TOKEN_PATH = '/api/auth';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
+/**
+ * Cửa sổ bỏ qua khi token vừa bị thu hồi — hai tab dùng chung cookie sẽ cùng gửi
+ * một token, tab chậm hơn không phải kẻ trộm.
+ * Hằng số trải nghiệm, KHÔNG đọc từ env: nới rộng là mở đường cho kẻ trộm thật.
+ * So sánh grace diễn ra trong SQL (`INTERVAL '1 second' * $2`) — một nguồn duy nhất.
+ */
+const REFRESH_REUSE_GRACE_SECONDS = 10;
+
 class AuthController {
   setRefreshTokenCookie(res, token, rememberMe = true) {
     res.cookie(REFRESH_TOKEN_COOKIE, token, {
@@ -457,6 +465,40 @@ class AuthController {
       );
 
       if (tokenResult.rows.length === 0) {
+        const presentedHash = this.hashToken(refreshToken);
+        // Chỉ coi là reuse khi token bị thu hồi do *xoay* (revoked_reason NULL).
+        // logout / password_changed / reuse_detected không phải dấu hiệu trộm —
+        // thiết bị cũ gửi lại token đó không được đá các phiên mới.
+        // Token đã quá expires_at cũng bỏ qua: không còn mối đe doạ.
+        const reuseLookup = await client.query(
+          `SELECT id_user AS "userId",
+                  revoked_at AS "revokedAt",
+                  ip_address AS "ipAddress",
+                  device_info AS "deviceInfo",
+                  (
+                    is_revoked = TRUE
+                    AND revoked_reason IS NULL
+                    AND expires_at > NOW()
+                    AND revoked_at IS NOT NULL
+                    AND revoked_at <= NOW() - make_interval(secs => $2)
+                  ) AS "reuseSuspect"
+           FROM refresh_tokens
+           WHERE token_hash = $1
+           LIMIT 1`,
+          [presentedHash, REFRESH_REUSE_GRACE_SECONDS]
+        );
+
+        const hit = reuseLookup.rows[0];
+        if (hit?.reuseSuspect === true) {
+          console.warn('[Auth][ReuseDetected]', {
+            userId: hit.userId,
+            ipAddress: hit.ipAddress,
+            deviceInfo: hit.deviceInfo,
+            revokedAt: hit.revokedAt,
+          });
+          await revokeAllRefreshTokensForUser(hit.userId, 'reuse_detected');
+        }
+
         this.clearRefreshTokenCookie(res);
         return res.status(401).json({
           success: false,
