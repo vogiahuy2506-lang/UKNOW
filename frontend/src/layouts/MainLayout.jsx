@@ -11,8 +11,10 @@ import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
 
-const SIDEBAR_WIDTH = 56; // icon-only desktop width
-const HEADER_HEIGHT = 56; // topbar height
+const SIDEBAR_WIDTH_COLLAPSED = 44; // icon-only desktop width
+const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
+const SIDEBAR_GAP = 6; // gap between sidebar and main content
+const HEADER_HEIGHT = 44; // topbar height — matches h-[44px] in Header.jsx
 
 const MainLayout = () => {
   const { t } = useI18n();
@@ -114,7 +116,7 @@ const MainLayout = () => {
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
-    document.documentElement.style.setProperty('--sidebar-w', `${sidebarOpen ? 280 : 56}px`);
+    document.documentElement.style.setProperty('--sidebar-w', `${sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED}px`);
   }, [sidebarOpen]);
 
   // Mobile layout
@@ -191,7 +193,7 @@ const MainLayout = () => {
       {/* Sidebar: starts below topbar */}
       <Sidebar
         isOpen={sidebarOpen}
-        width={sidebarOpen ? 280 : 56}
+        width={sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         topOffset={HEADER_HEIGHT}
       />
@@ -199,16 +201,16 @@ const MainLayout = () => {
       <div
         className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}`}
         style={{
-          marginLeft: sidebarOpen ? 280 : 56,
+          marginLeft: sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
           marginRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
-          padding: `${HEADER_HEIGHT + 12}px 12px 12px ${(sidebarOpen ? 280 : 56) + 12}px`,
+          padding: `${HEADER_HEIGHT + 6}px 6px 6px ${SIDEBAR_GAP}px`,
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 ${isSpecialPage ? '' : 'p-6'}`}
+          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className={isSpecialPage ? 'h-full' : ''}>
             <Outlet />

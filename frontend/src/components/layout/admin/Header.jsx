@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   HiOutlineLogout,
   HiOutlineLockClosed,
@@ -60,13 +60,13 @@ const Header = () => {
 
   return (
     <>
-      <header className="w-full h-14 bg-white flex items-center px-5 border-b border-gray-200">
-        {/* Left: Logo + Brand */}
-        <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
-          <span className="w-9 h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500 shadow-sm overflow-hidden">
+      <header className="w-full h-[44px] bg-white flex items-center pl-3 pr-3 border-b border-gray-200">
+        {/* Left: Logo + Brand — icon's left edge aligned with sidebar icons */}
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+          <span className="w-7 h-7 flex items-center justify-center shrink-0">
             <img src={logoIcon} alt="Founder AI" className="w-7 h-7 object-contain" />
           </span>
-          <span className="text-[19px] font-bold text-gray-900 tracking-tight hidden sm:inline">
+          <span className="text-[16px] font-bold text-gray-900 tracking-tight hidden sm:inline leading-none">
             Founder AI
           </span>
         </Link>
@@ -81,7 +81,7 @@ const Header = () => {
               key={item.key}
               type="button"
               onClick={item.onClick}
-              className={`inline-flex items-center h-7 px-3 rounded-lg text-[13px] font-medium whitespace-nowrap transition-all ${
+              className={`inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap transition-all ${
                 item.accent
                   ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -93,12 +93,22 @@ const Header = () => {
           ))}
         </nav>
 
+        {/* Mobile: compact marketplace icon */}
+        <button
+          type="button"
+          onClick={() => showMarketplace()}
+          className="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-600 text-white hover:bg-orange-700 shadow-sm transition-colors"
+          aria-label="Marketplace"
+        >
+          <HiOutlineShoppingCart className="w-4 h-4" />
+        </button>
+
         {/* Right: profile dropdown */}
         <div className="relative shrink-0" ref={profileRef}>
           <button
             type="button"
             onClick={() => setProfileOpen((o) => !o)}
-            className="flex items-center gap-2 h-9 px-2 rounded-xl hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <div
               className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarGradient} flex items-center justify-center shrink-0 shadow-sm`}

@@ -366,17 +366,17 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                       key={tpl.label}
                       type="button"
                       onClick={() => setNewName(tpl.label)}
-                      className={`text-left p-2.5 rounded-xl border-2 transition-all hover:border-primary-300 ${
+                      className={`text-left p-3 rounded-xl border-2 transition-all hover:border-primary-300 ${
                         newName === tpl.label
                           ? 'border-primary-400 bg-primary-50'
                           : 'border-slate-200 hover:border-primary-200'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-base">{tpl.emoji}</span>
+                      <div className="flex items-center gap-2.5 mb-1.5">
+                        <span className="text-base shrink-0">{tpl.emoji}</span>
                         <span className="text-xs font-semibold text-slate-700">{tpl.label}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400">{tpl.desc}</p>
+                      <p className="text-[10px] text-slate-400 pl-7">{tpl.desc}</p>
                     </button>
                   ))}
                 </div>

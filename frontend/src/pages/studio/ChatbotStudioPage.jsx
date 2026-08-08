@@ -550,10 +550,10 @@ function ChatbotStudioPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">AI Chatbot</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 mt-2">
           Quản lý và thiết lập chatbot AI cho doanh nghiệp của bạn.
         </p>
       </div>

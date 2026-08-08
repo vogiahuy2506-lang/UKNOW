@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
@@ -145,8 +145,8 @@ function SubmenuPanel({ item, onClose }) {
   };
 
   return (
-    <div className="fixed left-[56px] w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl border border-gray-200 border-l-0"
-      style={{ top: 56, height: 'calc(100vh - 56px)' }}>
+    <div className="fixed left-[44px] w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl border border-gray-200 border-l-0"
+      style={{ top: 44, height: 'calc(100vh - 44px)' }}>
       <div className="h-12 flex items-center px-4 shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
           <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
@@ -273,7 +273,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
         ? t('sidebar.editCampaign')
         : child.name;
-      const baseClassName = `flex items-center gap-2 py-1.5 px-2 text-[13px] rounded-lg transition-colors ${
+      const baseClassName = `flex items-center gap-2 py-1.5 px-2 text-[13px] rounded-xl transition-colors ${
         isActiveChild ? 'text-orange-600 font-semibold bg-orange-50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
       }`;
 
@@ -319,7 +319,8 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
     });
   };
 
-  const sidebarWidth = isMobile ? 280 : (isOpen ? 280 : 56);
+  const sidebarWidth = isMobile ? 280 : (isOpen ? 220 : 44);
+  const mobileHidden = isMobile && !isOpen;
 
   return (
     <>
@@ -334,7 +335,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
       )}
 
       <aside
-        className={`fixed left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? 'top-0' : ''}`}
+        className={`fixed left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? 'top-0' : ''} ${mobileHidden ? '-translate-x-full' : 'translate-x-0'}`}
         style={{
           width: sidebarWidth,
           top: isMobile ? 0 : topOffset,
@@ -379,7 +380,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
 
                   {/* Inline submenu (expanded sidebar or mobile) */}
                   {item.children && (isOpen || isMobile) && isSubmenuOpen && (
-                    <div className="mt-1 ml-4 pl-3 border-l border-gray-200 flex flex-col gap-1">
+                    <div className="mt-1 ml-0 pl-0 border-l-0 flex flex-col gap-1">
                       {renderChildItems(item.children)}
                     </div>
                   )}
