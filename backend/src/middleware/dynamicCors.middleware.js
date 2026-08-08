@@ -9,6 +9,15 @@ import db from '../config/database.js';
  * 3. *.founderai.biz → đã resolve qua domainResolver
  */
 
+/**
+ * Header được phép gửi kèm. `X-Owner-Context` là bắt buộc — frontend gắn nó khi
+ * nhân viên thao tác trong ngữ cảnh của chủ (`services/api.js`), backend đọc ở
+ * `auth.middleware.js`. Thiếu ở đây thì preflight chặn và ngữ cảnh nhân viên
+ * hỏng im lặng trên mọi request khác origin.
+ * Khai một chỗ — trước đây chuỗi này bị chép cứng ra 6 nơi và đã lệch một lần.
+ */
+const ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With, X-Owner-Context';
+
 const defaultAllowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -166,7 +175,7 @@ export function createDynamicCorsMiddleware() {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
       return next();
     }
 
@@ -185,7 +194,7 @@ export function createDynamicCorsMiddleware() {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
       return next();
     }
 
@@ -197,7 +206,7 @@ export function createDynamicCorsMiddleware() {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
         return next();
       }
 
@@ -213,7 +222,7 @@ export function createDynamicCorsMiddleware() {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
         console.log(`[DynamicCors] Allowed platform subdomain: ${hostname}`);
         return next();
       }
@@ -240,7 +249,7 @@ export function publicCorsMiddleware(req, res, next) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
   } else {
     // Allow requests without origin (curl, Postman, etc.)
     res.setHeader('Access-Control-Allow-Origin', '*');

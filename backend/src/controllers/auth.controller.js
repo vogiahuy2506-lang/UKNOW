@@ -272,6 +272,11 @@ class AuthController {
           audience: process.env.GOOGLE_CLIENT_ID,
         });
         const payload = ticket.getPayload();
+        // Cùng luật với nhánh access_token bên dưới — email chưa xác thực thì bất kỳ
+        // ai cũng khai được địa chỉ của người khác rồi chiếm tài khoản qua email đó.
+        if (!payload.email_verified) {
+          return res.status(401).json({ success: false, message: 'Email Google chưa được xác thực' });
+        }
         email = payload.email;
         name = payload.name;
         picture = payload.picture;
@@ -444,7 +449,10 @@ class AuthController {
         `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.status, u.role, u.active_plan_id
          FROM refresh_tokens rt
          JOIN users u ON rt.id_user = u.id
-         WHERE rt.token_hash = $1 AND rt.is_revoked = FALSE AND rt.expires_at > NOW()`,
+         -- u.status BẮT BUỘC có ở đây: thiếu nó thì khoá tài khoản không cắt được
+         -- phiên, họ vẫn xoay token mới đều tới khi refresh token hết hạn (7 ngày).
+         WHERE rt.token_hash = $1 AND rt.is_revoked = FALSE AND rt.expires_at > NOW()
+           AND u.status = 'active'`,
         [this.hashToken(refreshToken)]
       );
 
