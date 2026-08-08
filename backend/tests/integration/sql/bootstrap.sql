@@ -1461,7 +1461,7 @@ CREATE INDEX IF NOT EXISTS idx_topup_locked_user
 
 -- ─── Misc columns required by newer services ────────────────────────────
 -- usage_tracking.findProfileUsageCounts cần cj.campaign_id
-ALTER TABLE campaign_journey ADD COLUMN IF NOT EXISTS campaign_id BIGINT;
+ALTER TABLE customer_journey ADD COLUMN IF NOT EXISTS campaign_id BIGINT;
 
 -- Plans AI tokens pricing (migration 064)
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS ai_tokens_per_period INTEGER;
