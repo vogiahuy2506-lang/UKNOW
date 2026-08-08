@@ -20,7 +20,6 @@ import {
   HiOutlineTag,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
 
 const RESOURCE_VISUAL = {
   campaign: {
@@ -64,7 +63,6 @@ const formatDate = (iso) => {
 };
 
 const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
-  const { t } = useI18n();
   const params = useParams();
   const id = idProp ?? params.id;
   const navigate = useNavigate();
@@ -77,6 +75,7 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
 
   useEffect(() => {
     fetchListing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchListing = async () => {

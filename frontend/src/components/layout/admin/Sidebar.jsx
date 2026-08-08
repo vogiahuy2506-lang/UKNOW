@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
-import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
 import { useI18n } from '../../../i18n';
 import {
@@ -195,7 +194,7 @@ function SubmenuPanel({ item, onClose }) {
 
 // ── Sidebar Component ───────────────────────────────────────────────────────
 
-const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) => {
+const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -260,9 +259,6 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
 
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
   const avatarInitial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
-
-  // Which items have their submenu expanded inline
-  const activeInlineSubmenu = isDesktopExpanded ? activeSubmenu : null;
 
   const renderChildItems = (children) => {
     return children.map((child) => {

@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { HiOutlineHeart, HiOutlineEye } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
 import Pagination from '../../components/common/Pagination';
-import { useMarketplaceModal } from '../../contexts/MarketplaceModalContext';
+import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const MyFavorites = () => {
-  const { t } = useI18n();
   const { showListing } = useMarketplaceModal();
   const [favorites, setFavorites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,6 +14,7 @@ const MyFavorites = () => {
 
   useEffect(() => {
     fetchFavorites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page]);
 
   const fetchFavorites = async () => {

@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
-import { useI18n } from '../../i18n';
 import { FormField, FormSection, FormActions, TagInput } from '../../components/common/FormComponents';
 
 const CATEGORIES = [
@@ -19,7 +18,6 @@ const VISIBILITY_OPTIONS = [
 ];
 
 const CreateListing = () => {
-  const { t } = useI18n();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
@@ -81,7 +79,7 @@ const CreateListing = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await marketplaceService.createListing({
+      await marketplaceService.createListing({
         campaignId: parseInt(form.campaignId, 10),
         title: form.title.trim(),
         description: form.description?.trim() || null,

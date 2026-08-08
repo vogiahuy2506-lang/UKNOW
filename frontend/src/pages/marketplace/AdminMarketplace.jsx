@@ -10,12 +10,10 @@ import {
   HiOutlineCurrencyDollar,
 } from 'react-icons/hi';
 import api from '../../services/api';
-import { useI18n } from '../../i18n';
 import Pagination from '../../components/common/Pagination';
-import { useMarketplaceModal } from '../../contexts/MarketplaceModalContext';
+import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const AdminMarketplace = () => {
-  const { t } = useI18n();
   const { showListing } = useMarketplaceModal();
   const [stats, setStats] = useState(null);
   const [listings, setListings] = useState([]);
@@ -27,6 +25,7 @@ const AdminMarketplace = () => {
   useEffect(() => {
     fetchStats();
     fetchListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, filters]);
 
   const fetchStats = async () => {

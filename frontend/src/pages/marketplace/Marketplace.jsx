@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useMarketplaceModal } from '../../contexts/MarketplaceModalContext';
+import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const MarketplacePage = () => {
   const navigate = useNavigate();

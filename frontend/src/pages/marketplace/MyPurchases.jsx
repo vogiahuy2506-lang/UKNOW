@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineShoppingCart,
@@ -6,12 +7,10 @@ import {
   HiOutlineClock,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
 import Pagination from '../../components/common/Pagination';
-import { useMarketplaceModal } from '../../contexts/MarketplaceModalContext';
+import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const MyPurchases = () => {
-  const { t } = useI18n();
   const { showListing } = useMarketplaceModal();
   const [purchases, setPurchases] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,6 +18,7 @@ const MyPurchases = () => {
 
   useEffect(() => {
     fetchPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page]);
 
   const fetchPurchases = async () => {

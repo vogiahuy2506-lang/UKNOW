@@ -14,7 +14,6 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
 import Pagination from '../../components/common/Pagination';
 
 const TABS = [
@@ -41,7 +40,6 @@ const SORT_OPTIONS = [
 ];
 
 const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing }) => {
-  const { t } = useI18n();
   const navigate = useNavigate();
   const [listings, setListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);

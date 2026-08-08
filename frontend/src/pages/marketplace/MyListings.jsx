@@ -1,21 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlinePlus,
-  HiOutlinePencil,
   HiOutlineTrash,
   HiOutlineEye,
   HiOutlinePlay,
   HiOutlinePause,
+  HiOutlineStar,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
-import { useMarketplaceModal } from '../../contexts/MarketplaceModalContext';
+import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const MyListings = () => {
-  const { t } = useI18n();
-  const navigate = useNavigate();
   const { showListing } = useMarketplaceModal();
   const [listings, setListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +20,7 @@ const MyListings = () => {
 
   useEffect(() => {
     fetchListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   const fetchListings = async () => {

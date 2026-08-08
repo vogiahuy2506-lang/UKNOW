@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { HiOutlineViewGrid, HiOutlineViewList, HiOutlineViewBoards } from 'react-icons/hi';
 
 const VIEW_TYPES = {

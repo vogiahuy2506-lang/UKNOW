@@ -86,11 +86,9 @@ import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import Marketplace from './pages/marketplace/Marketplace';
-import { MarketplaceModalProvider } from './contexts/MarketplaceModalContext';
+import { MarketplaceModalProvider } from './contexts/MarketplaceModalProvider';
+import { ComingSoonProvider } from './contexts/ComingSoonProvider';
 import MarketplaceListingRedirect from './pages/marketplace/MarketplaceListingRedirect';
-import MyListings from './pages/marketplace/MyListings';
-import MyPurchases from './pages/marketplace/MyPurchases';
-import MyFavorites from './pages/marketplace/MyFavorites';
 import CreateListing from './pages/marketplace/CreateListing';
 import AdminMarketplace from './pages/marketplace/AdminMarketplace';
 import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
@@ -232,6 +230,8 @@ function App() {
   return (
     <>
       <I18nProvider>
+        <MarketplaceModalProvider>
+        <ComingSoonProvider>
         <Router>
           <RouteAnalytics />
           {toaster}
@@ -326,9 +326,7 @@ function App() {
           {/* Protected Routes - prefix /app */}
           <Route path="/app" element={
             <ProtectedRoute>
-              <MarketplaceModalProvider>
-                <MainLayout />
-              </MarketplaceModalProvider>
+              <MainLayout />
             </ProtectedRoute>
           }>
             <Route index element={<AiHomePage />} />
@@ -394,9 +392,7 @@ function App() {
           {/* Admin Routes - chỉ super_admin */}
           <Route path="/admin" element={
             <AdminRoute>
-              <MarketplaceModalProvider>
-                <MainLayout />
-              </MarketplaceModalProvider>
+              <MainLayout />
             </AdminRoute>
           }>
             <Route index element={<AdminDashboard />} />
@@ -433,6 +429,8 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
+        </ComingSoonProvider>
+        </MarketplaceModalProvider>
       </I18nProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>

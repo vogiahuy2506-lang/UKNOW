@@ -1,7 +1,6 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import MarketplaceModal from '../components/marketplace/MarketplaceModal';
-
-const MarketplaceModalContext = createContext(null);
+import { MarketplaceModalContext } from './MarketplaceModalContext.js';
 
 export const MarketplaceModalProvider = ({ children }) => {
   const [open, setOpen] = useState(false);
@@ -38,12 +37,4 @@ export const MarketplaceModalProvider = ({ children }) => {
       />
     </MarketplaceModalContext.Provider>
   );
-};
-
-export const useMarketplaceModal = () => {
-  const ctx = useContext(MarketplaceModalContext);
-  if (!ctx) {
-    throw new Error('useMarketplaceModal must be used inside MarketplaceModalProvider');
-  }
-  return ctx;
 };

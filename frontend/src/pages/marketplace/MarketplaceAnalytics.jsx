@@ -9,10 +9,8 @@ import {
   HiOutlineUser,
 } from 'react-icons/hi';
 import api from '../../services/api';
-import { useI18n } from '../../i18n';
 
 const MarketplaceAnalytics = () => {
-  const { t } = useI18n();
   const [stats, setStats] = useState(null);
   const [topSellers, setTopSellers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
