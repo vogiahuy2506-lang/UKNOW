@@ -188,9 +188,10 @@ describe('Help center', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ reindex: false });
     expect(res.status).toBe(200);
-    expect(res.body.result.length).toBe(7);
+    // 9 nhóm-1 articles trong helpSeed.data.js
+    expect(res.body.result.length).toBe(9);
     const pub = await request(app).get('/api/help/articles');
-    expect(pub.body.result.length).toBe(7);
+    expect(pub.body.result.length).toBe(9);
   });
 
   it('body_html persists through create/update/public API and is sanitized', async () => {

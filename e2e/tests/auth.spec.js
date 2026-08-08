@@ -43,9 +43,10 @@ test.describe('Session', () => {
     await expect(page.locator('aside').first()).toBeVisible();
   });
 
-  test('đăng xuất từ sidebar', async ({ page }) => {
+  test('đăng xuất từ header', async ({ page }) => {
     await page.goto('/app');
-    await page.locator('aside').first().getByText(/E2E Test User|e2etest/i).first().click();
+    // SaaS layout: user button đã chuyển sang Header (top-right), không còn ở sidebar
+    await page.locator('header').getByText(/E2E Test User|e2etest/i).first().click();
     await page.getByRole('button', { name: /Đăng xuất/ }).click();
     await page.waitForURL(/\/login/, { timeout: 15_000 });
   });

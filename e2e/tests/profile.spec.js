@@ -3,7 +3,9 @@ import { test, expect } from '@playwright/test';
 test.describe('Thông tin tài khoản', () => {
   test('mở modal, sửa họ tên, lưu', async ({ page }) => {
     await page.goto('/app');
-    await page.locator('aside div.border-t').getByRole('button').first().click();
+    // User button ở Header (SaaS-style), không còn ở sidebar.
+    // Click avatar/user-group button ở góc phải top-bar.
+    await page.locator('header button:has(.rounded-lg.bg-gradient-to-br)').first().click();
     await page.getByRole('button', { name: /Thông tin tài khoản/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Hồ sơ' })).toBeVisible();

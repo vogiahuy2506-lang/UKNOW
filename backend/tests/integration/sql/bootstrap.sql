@@ -1429,3 +1429,72 @@ CREATE TABLE schema_migrations (
   filename VARCHAR(255) PRIMARY KEY,
   ran_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── Top-up wallet (migrations 110/111) ──────────────────────────────────
+-- cycle_end NULL = ví vĩnh viễn (consumable). Có giá trị = structural.
+ALTER TABLE topup_grants ALTER COLUMN cycle_end DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS topup_debits (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key    VARCHAR(50) NOT NULL,
+  qty         INTEGER     NOT NULL CHECK (qty > 0),
+  source_key  VARCHAR(120) NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_debits_source_unique UNIQUE (item_key, source_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_topup_debits_user_item
+  ON topup_debits (user_id, item_key);
+
+CREATE TABLE IF NOT EXISTS topup_locked_resources (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_key  VARCHAR(50) NOT NULL,
+  resource_id   BIGINT      NOT NULL,
+  locked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_locked_unique UNIQUE (resource_key, resource_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_topup_locked_user
+  ON topup_locked_resources (user_id, resource_key);
+
+-- ─── Misc columns required by newer services ────────────────────────────
+-- usage_tracking.findProfileUsageCounts cần cj.campaign_id
+ALTER TABLE campaign_journey ADD COLUMN IF NOT EXISTS campaign_id BIGINT;
+
+-- Plans AI tokens pricing (migration 064)
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS ai_tokens_per_period INTEGER;
+
+-- Help center: ensure status column exists
+ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'published';
+ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0;
+ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS helpful_yes INTEGER DEFAULT 0;
+ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS helpful_no INTEGER DEFAULT 0;
+
+-- Webchat widget tables (dùng bởi webchatWidgetDedupe)
+CREATE TABLE IF NOT EXISTS web_widget_configs (
+  id            BIGSERIAL PRIMARY KEY,
+  chatbot_id    BIGINT NOT NULL UNIQUE,
+  widget_key    VARCHAR(100) NOT NULL UNIQUE,
+  enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS webchat_conversations (
+  id            BIGSERIAL PRIMARY KEY,
+  widget_key    VARCHAR(100) NOT NULL,
+  session_id    VARCHAR(120) NOT NULL,
+  ai_paused     BOOLEAN NOT NULL DEFAULT FALSE,
+  ai_paused_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_webchat_conv_widget_session
+  ON webchat_conversations (widget_key, session_id);
+
+-- Zalo restore tracking (zaloSettings test expects lastRestoreAttemptAt + restoreFailCount)
+ALTER TABLE zalo_settings ADD COLUMN IF NOT EXISTS last_restore_attempt_at TIMESTAMPTZ;
+ALTER TABLE zalo_settings ADD COLUMN IF NOT EXISTS restore_fail_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE zalo_settings ADD COLUMN IF NOT EXISTS needs_reauth BOOLEAN NOT NULL DEFAULT FALSE;

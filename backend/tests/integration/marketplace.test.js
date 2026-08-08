@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import usageTrackingService from '../../src/services/payment/usageTracking.service.js';
@@ -45,11 +46,12 @@ async function truncateAll() {
 }
 
 async function createUser(username = 'testuser', password = 'Test123!') {
+  const passwordHash = await bcrypt.hash(password, 10);
   const { rows } = await db.query(
     `INSERT INTO users (username, email, password_hash, role, status, subscription_expires_at)
-     VALUES ($1, $2, $3, 'user', 'active', NOW() + INTERVAL '30 days')
+    VALUES ($1, $2, $3, 'user', 'active', NOW() + INTERVAL '30 days')
      RETURNING *`,
-    [username, `${username}@test.com`, `hash_${username}`]
+    [username, `${username}@test.com`, passwordHash]
   );
   const user = rows[0];
   user.plainPassword = password;
@@ -129,8 +131,16 @@ async function loginAs(user) {
 
 describe('Marketplace API', () => {
   describe('GET /api/marketplace/browse', () => {
+    let token;
+    beforeEach(async () => {
+      const user = await createUser();
+      token = await loginAs(user);
+    });
+
     it('should return empty list when no listings', async () => {
-      const res = await request(app).get('/api/marketplace/browse');
+      const res = await request(app)
+        .get('/api/marketplace/browse')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toEqual([]);
@@ -141,17 +151,21 @@ describe('Marketplace API', () => {
       await insertListing({ userId: user.id, status: 'published' });
       await insertListing({ userId: user.id, status: 'draft' });
 
-      const res = await request(app).get('/api/marketplace/browse');
+      const res = await request(app)
+        .get('/api/marketplace/browse')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
     });
 
     it('should filter by resource type', async () => {
-      const user = await createUser();
-      await insertListing({ userId: user.id, resourceType: 'campaign', status: 'published' });
-      await insertListing({ userId: user.id, resourceType: 'chatbot', status: 'published' });
+      const listingUser = await createUser('listingowner');
+      await insertListing({ userId: listingUser.id, resourceType: 'campaign', status: 'published' });
+      await insertListing({ userId: listingUser.id, resourceType: 'chatbot', status: 'published' });
 
-      const res = await request(app).get('/api/marketplace/browse?type=campaign');
+      const res = await request(app)
+        .get('/api/marketplace/browse?type=campaign')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
       expect(res.body.data[0].resource_type).toBe('campaign');
@@ -162,7 +176,9 @@ describe('Marketplace API', () => {
       await insertListing({ userId: user.id, status: 'published', snapshotData: { category: 'marketing' } });
       await insertListing({ userId: user.id, status: 'published', snapshotData: { category: 'support' } });
 
-      const res = await request(app).get('/api/marketplace/browse?category=marketing');
+      const res = await request(app)
+        .get('/api/marketplace/browse?category=marketing')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
     });
@@ -172,7 +188,9 @@ describe('Marketplace API', () => {
       await insertListing({ userId: user.id, status: 'published', snapshotData: { ratingAvg: 3 } });
       await insertListing({ userId: user.id, status: 'published', snapshotData: { ratingAvg: 5 } });
 
-      const res = await request(app).get('/api/marketplace/browse?sort=rating');
+      const res = await request(app)
+        .get('/api/marketplace/browse?sort=rating')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data[0].rating_avg).toBe(5);
     });
@@ -183,7 +201,9 @@ describe('Marketplace API', () => {
         await insertListing({ userId: user.id, status: 'published', title: `Listing ${i}` });
       }
 
-      const res = await request(app).get('/api/marketplace/browse?page=1&limit=10');
+      const res = await request(app)
+        .get('/api/marketplace/browse?page=1&limit=10')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(10);
       expect(res.body.pagination.total).toBe(15);
@@ -195,7 +215,9 @@ describe('Marketplace API', () => {
       await insertListing({ userId: user.id, status: 'published', title: 'Email Campaign Template' });
       await insertListing({ userId: user.id, status: 'published', title: 'Zalo Auto Reply' });
 
-      const res = await request(app).get('/api/marketplace/browse?search=email');
+      const res = await request(app)
+        .get('/api/marketplace/browse?search=email')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
       expect(res.body.data[0].title).toContain('Email');
