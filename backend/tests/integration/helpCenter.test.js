@@ -34,6 +34,7 @@ const { truncateAll, createUser } = await import('./helpers/db.js');
 const { reindexArticle, _clearCapabilityMapCache } = await import('../../src/services/help/helpCenter.service.js');
 const helpRepo = await import('../../src/repositories/help/helpArticle.repository.js');
 const { tryHandleHelpChat } = await import('../../src/services/help/helpAssistant.service.js');
+const { default: HELP_SEED_ARTICLES } = await import('../../src/services/help/helpSeed.data.js');
 
 let app;
 
@@ -188,10 +189,19 @@ describe('Help center', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ reindex: false });
     expect(res.status).toBe(200);
-    // 9 nhóm-1 articles trong helpSeed.data.js
-    expect(res.body.result.length).toBe(9);
+    // Đếm từ chính file seed — viết cứng số sẽ đỏ mỗi lần thêm bài hướng dẫn mới.
+    const seedCount = HELP_SEED_ARTICLES.length;
+    expect(seedCount).toBeGreaterThan(0);
+    expect(res.body.result.length).toBe(seedCount);
     const pub = await request(app).get('/api/help/articles');
-    expect(pub.body.result.length).toBe(9);
+    expect(pub.body.result.length).toBe(seedCount);
+    // Seed phải là upsert theo slug: chạy lần hai không được nhân đôi bài.
+    await request(app)
+      .post('/api/help/admin/seed')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reindex: false });
+    const pubAgain = await request(app).get('/api/help/articles');
+    expect(pubAgain.body.result.length).toBe(seedCount);
   });
 
   it('body_html persists through create/update/public API and is sanitized', async () => {
