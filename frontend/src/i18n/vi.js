@@ -6384,6 +6384,9 @@ export default {
     default: 'Mặc định',
     noEmailAccountSelected: 'Vui lòng chọn tài khoản gửi email',
     noZaloAccountSelected: 'Vui lòng chọn tài khoản gửi Zalo',
+    comingSoonTitle: 'Tính năng đang phát triển',
+    comingSoonDesc: 'Marketplace đang được xây dựng. Vui lòng quay lại sau!',
+    comingSoonClose: 'Đã hiểu',
   },
 
   helpDocs: {

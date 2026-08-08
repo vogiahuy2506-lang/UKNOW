@@ -6421,6 +6421,9 @@ export default {
     default: 'Default',
     noEmailAccountSelected: 'Please select an email sender account',
     noZaloAccountSelected: 'Please select a Zalo sender account',
+    comingSoonTitle: 'Feature in development',
+    comingSoonDesc: 'Marketplace is being built. Please come back later!',
+    comingSoonClose: 'Got it',
   },
 
   helpDocs: {
