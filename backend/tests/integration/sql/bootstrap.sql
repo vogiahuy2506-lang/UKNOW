@@ -1214,7 +1214,8 @@ CREATE TABLE IF NOT EXISTS webchat_conversations (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   id_widget_config BIGINT NOT NULL REFERENCES web_widget_configs(id) ON DELETE CASCADE,
-  session_id       VARCHAR(100),
+  widget_key       VARCHAR(100),
+  session_id       VARCHAR(120),
   visitor_name     VARCHAR(255),
   visitor_email    VARCHAR(255),
   visitor_info     JSONB DEFAULT '{}',
@@ -1473,23 +1474,8 @@ ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS helpful_yes INTEGER DEFAULT 0
 ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS helpful_no INTEGER DEFAULT 0;
 
 -- Webchat widget tables (dùng bởi webchatWidgetDedupe)
-CREATE TABLE IF NOT EXISTS web_widget_configs (
-  id            BIGSERIAL PRIMARY KEY,
-  chatbot_id    BIGINT NOT NULL UNIQUE,
-  widget_key    VARCHAR(100) NOT NULL UNIQUE,
-  enabled       BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS webchat_conversations (
-  id            BIGSERIAL PRIMARY KEY,
-  widget_key    VARCHAR(100) NOT NULL,
-  session_id    VARCHAR(120) NOT NULL,
-  ai_paused     BOOLEAN NOT NULL DEFAULT FALSE,
-  ai_paused_at  TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- web_widget_configs và webchat_conversations đã được tạo ở phần trên (line 1188, 1213).
+-- webchat_conversations đã có widget_key + ai_paused + ai_paused_at; chỉ thêm index.
 
 CREATE INDEX IF NOT EXISTS idx_webchat_conv_widget_session
   ON webchat_conversations (widget_key, session_id);
