@@ -52,6 +52,7 @@ jobs:
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
             VITE_PRIMARY_APP_HOSTS=localhost,127.0.0.1,founderai.biz,www.founderai.biz
             VITE_DEFAULT_FROM_DOMAIN=digiso.vn
+            VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

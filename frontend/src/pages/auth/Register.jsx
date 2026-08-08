@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 import { sendVerificationCode } from '../../features/auth/services/authApi.service';
+import { trackEvent } from '../../utils/analytics';
 import {
   HiOutlineLockClosed,
   HiOutlineEye,
@@ -121,6 +122,7 @@ const OtpStep = ({ email, formData, onBack }) => {
     setIsSubmitting(true);
     try {
       await registerUser({ ...formData, emailVerificationCode: code });
+      trackEvent('sign_up', { method: 'email' });
       toast.success(t('auth.registerSuccess'));
       navigate('/');
     } catch (err) {

@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
 import { useI18n } from './i18n';
+import RouteAnalytics from './components/RouteAnalytics';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -220,6 +221,7 @@ function App() {
   return (
     <>
       <Router>
+        <RouteAnalytics />
         {toaster}
         <Routes>
           {/* Auth Routes */}
