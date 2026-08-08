@@ -57,11 +57,25 @@ export default {
     copy: 'Sao chép',
     copied: 'Đã sao chép',
     copyCode: 'Sao chép mã',
+    retry: 'Thử lại',
+    saving: 'Đang lưu...',
+    selectOption: 'Chọn...',
+    addTag: 'Thêm tag...',
     selectFirst: 'Vui lòng chọn {name} trước',
     basicInfo: 'Thông tin cơ bản',
     sheetConfig: 'Cấu hình Sheet',
     connection: 'Kết nối',
     nodeName: 'Tên node',
+  },
+
+  navbar: {
+    account: 'Tài khoản',
+  },
+
+  pagination: {
+    previous: 'Trang trước',
+    next: 'Trang sau',
+    pageInfo: 'Trang {current} / {total}',
   },
 
   creditBanner: {
@@ -71,7 +85,11 @@ export default {
     upgrade: 'Nâng cấp',
     buyTopup: 'Mua thêm',
     viewPricing: 'Xem bảng giá',
+    goBilling: 'Đi tới trang Thanh toán',
     dismiss: 'Ẩn cảnh báo credit AI',
+    resources: {
+      ai: 'credit AI',
+    },
   },
 
   auth: {
@@ -107,6 +125,10 @@ export default {
     invalidEmail: 'Email không hợp lệ',
     passwordRequired: 'Vui lòng nhập mật khẩu',
     passwordMinLength: 'Mật khẩu phải có ít nhất 6 ký tự',
+    passwordNeedLetter: 'Mật khẩu phải có ít nhất 1 chữ cái',
+    passwordNeedNumber: 'Mật khẩu phải có ít nhất 1 chữ số',
+    enterNewPassword: 'Nhập mật khẩu mới',
+    confirmNewPassword: 'Xác nhận mật khẩu mới',
     loginWithGoogle: 'Đăng nhập với Google',
     registerWithGoogle: 'Đăng ký với Google',
     passwordMismatch: 'Mật khẩu xác nhận không khớp',
@@ -275,6 +297,7 @@ export default {
     // Basic
     title: 'Tổng quan',
     welcome: 'Chào mừng trở lại',
+    insightTooltip: 'Tạo insight AI từ dữ liệu gần đây của bạn',
     overview: 'Tổng quan',
     recentActivity: 'Hoạt động gần đây',
     quickActions: 'Thao tác nhanh',
@@ -592,6 +615,7 @@ export default {
 
   campaigns: {
     title: 'Chiến dịch',
+    totalCustomers: 'Tổng khách hàng',
     newCampaign: 'Tạo chiến dịch mới',
     editCampaign: 'Chỉnh sửa chiến dịch',
     campaignName: 'Tên chiến dịch',
@@ -864,6 +888,7 @@ export default {
   },
 
   customerDetail: {
+    customer: 'Khách hàng',
     loadFailed: 'Không thể tải thông tin khách hàng',
     loadCampaignFailed: 'Không thể tải chi tiết chiến dịch của khách hàng',
     emailSent: 'Đã gửi email',
@@ -919,6 +944,8 @@ export default {
     emailName: 'Tên email',
     sentSubject: 'Tiêu đề gửi',
     sentAt: 'Gửi lúc',
+    email: 'Email',
+    emailSubject: 'Tiêu đề',
     emailContent: 'Nội dung email',
     noHtmlContent: 'Không có nội dung HTML',
     journeyTimeline: 'Timeline hành trình',
@@ -1002,6 +1029,7 @@ export default {
     joined: 'Tham gia',
     coursesFromCampaign: 'Khóa học quan tâm / đã mua từ chiến dịch',
     noCourseData: 'Chưa có dữ liệu khóa học từ chiến dịch này',
+    emailSubject: 'Tiêu đề',
     noOrderCode: 'Chưa có mã ĐH',
     orderCode: 'Mã đơn hàng',
     productCode: 'Mã SP',
@@ -1107,6 +1135,11 @@ export default {
 
   orders: {
     title: 'Đơn hàng',
+    description: 'Theo dõi đơn hàng và thanh toán của khách',
+    today: 'Hôm nay',
+    filterButton: 'Bộ lọc',
+    panelTitle: 'Bộ lọc đơn hàng',
+    panelDescription: 'Lọc theo khoảng ngày, trạng thái, phương thức thanh toán hoặc sản phẩm',
     orderList: 'Danh sách đơn hàng',
     orderId: 'Mã đơn hàng',
     customer: 'Khách hàng',
@@ -1466,6 +1499,7 @@ export default {
   zaloSettings: {
     title: 'Quản lý Workspace Zalo',
     description: 'Đăng nhập nhiều tài khoản và chọn tài khoản gửi tin nhắn mặc định',
+    loginFailed: 'Đăng nhập Zalo thất bại',
     refresh: 'Làm mới',
     refreshing: 'Đang tải...',
     backendNotReadyTitle: 'Backend Zalo chưa sẵn sàng',
@@ -1595,10 +1629,14 @@ export default {
     zaloPersonal: 'Zalo Cá nhân',
     zaloPersonalShort: 'Zalo',
     zaloGroup: 'Zalo Nhóm',
+    zaloConversations: 'cuộc trò chuyện',
+    zaloAccounts: 'Tài khoản Zalo',
     searchConversations: 'Tìm kiếm hội thoại...',
     noConversations: 'Chưa có hội thoại nào',
     noMessages: 'Chưa có tin nhắn nào',
+    emptyInboxHint: 'Chưa có cuộc trò chuyện. Đồng bộ Zalo hoặc chờ tin mới.',
     messages: 'Tin nhắn',
+    conversations: 'Hội thoại',
     anonymousCustomer: 'Khách hàng ẩn danh',
     anonymousUser: 'Người dùng',
     loadMore: 'Tải thêm tin nhắn',
@@ -1609,6 +1647,7 @@ export default {
     send: 'Gửi',
     you: 'Bạn',
     customer: 'Khách hàng',
+    agent: 'Nhân viên',
     bot: 'Bot',
     group: 'Nhóm',
     today: 'Hôm nay',
@@ -1616,6 +1655,67 @@ export default {
     unread: 'chưa đọc',
     markAsRead: 'Đánh dấu đã đọc',
     reply: 'Trả lời',
+    conversationDetails: 'Chi tiết hội thoại',
+    info: 'Thông tin',
+    notes: 'Ghi chú',
+    addNote: 'Thêm ghi chú',
+    saveNote: 'Lưu ghi chú',
+    noNotes: 'Chưa có ghi chú',
+    timeline: 'Mốc thời gian',
+    startedAt: 'Bắt đầu lúc',
+    lastMessage: 'Tin nhắn cuối',
+    status: 'Trạng thái',
+    active: 'Đang hoạt động',
+    closed: 'Đã đóng',
+    tags: 'Thẻ',
+    noTags: 'Chưa có thẻ',
+    addTag: 'Thêm thẻ...',
+    groupInfo: 'Thông tin nhóm',
+    groupName: 'Tên nhóm',
+    sender: 'Người gửi',
+    isTyping: 'đang nhập...',
+    customerTyping: 'Khách đang nhập...',
+    manualBadge: 'Thủ công',
+    newMessage: 'Tin nhắn mới',
+    sendFailed: 'Gửi thất bại',
+    sendRetrying: 'Đang thử lại...',
+    retrying: 'Đang thử lại',
+    retrySend: 'Thử gửi lại',
+    retryFailed: 'Thử lại thất bại',
+    retrySuccess: 'Thử lại thành công',
+    sentAiPausedHint: 'AI đang tạm dừng, tin đã gửi ở chế độ thủ công',
+    aiToggleDisabledHint: 'AI không thể trả lời ở đây',
+    aiToggleManualHint: 'Trả lời thủ công khi AI đang tạm dừng',
+    openDeployModal: 'Mở cài đặt deploy',
+    syncNow: 'Đồng bộ ngay',
+    syncFailed: 'Đồng bộ thất bại',
+    syncSuccess: 'Đồng bộ thành công',
+    syncSuccessWithHistory: 'Đã đồng bộ {count} tin nhóm từ Zalo',
+    syncSuccessHistoryPartial: 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).',
+    syncPersonalNoHistory: 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
+    syncPartialGroups: 'Đã đồng bộ {synced}/{total} nhóm. Hệ thống lấy tối đa 200 nhóm mỗi lần.',
+    syncThreadPulled: 'Đã kéo {count} tin từ Zalo',
+    syncThreadEmpty: 'Không có tin mới từ Zalo',
+    syncTipShort: 'Đồng bộ để làm mới danh sách và kéo tin nhắn gần đây.',
+    syncTip: 'Mẹo: bấm đồng bộ để làm mới danh sách hội thoại và kéo tin nhắn mới từ Zalo.',
+    manageZaloAccounts: 'Quản lý tài khoản Zalo',
+    sessionExpired: 'Phiên đã hết hạn',
+    rescanQR: 'Quét lại QR',
+    sseDisconnected: 'Mất kết nối thời gian thực',
+    sseRetry: 'Thử lại',
+    aiPausedHint: 'AI đang tạm dừng',
+    aiToggleLabel: 'AI tự động trả lời',
+    zaloNotConnected: 'Chưa kết nối Zalo',
+    connectZaloFirst: 'Kết nối tài khoản Zalo trước để nhận tin nhắn',
+    manualBadgeTitle: 'Chế độ thủ công',
+    messageSticker: 'Sticker',
+    messageGroupEvent: 'Sự kiện nhóm',
+    messageLink: 'Liên kết',
+    messageCall: 'Cuộc gọi',
+    messageZaloEvent: 'Sự kiện Zalo',
+    messageImage: 'Hình ảnh',
+    confirmDeleteTitle: 'Xóa cuộc trò chuyện',
+    confirmDelete: 'Bạn có chắc muốn xóa cuộc trò chuyện này?',
     confirmDelete: 'Bạn có chắc muốn xóa cuộc trò chuyện này?',
     confirmDeleteTitle: 'Xóa cuộc trò chuyện',
     sent: 'Đã gửi',
@@ -1754,6 +1854,7 @@ export default {
 
   courses: {
     title: 'Khóa học',
+    courseDescription: 'Quản lý khóa học, giá bán và trạng thái hiển thị.',
     courseManagement: 'Quản lý khóa học',
     loadFailed: 'Không thể tải danh sách khóa học',
     syncSuccess: 'Đồng bộ thành công',
@@ -1883,6 +1984,7 @@ export default {
   voucherAdmin: {
     title: 'Quản lý voucher',
     subtitle: 'Tạo code giảm giá và ưu đãi tự động cho checkout.',
+    maxDiscountLowWarning: 'Giảm tối đa ({amount}) có vẻ quá thấp cho voucher — khách có thể không thấy lợi ích.',
     refresh: 'Làm mới',
     createButton: 'Tạo voucher',
     totalVouchers: 'Tổng voucher',
@@ -2416,6 +2518,7 @@ export default {
   },
 
   chatbot: {
+    zaloOaDescription: 'Kết nối Zalo Official Account để nhận tin nhắn khách hàng qua Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
       description: 'Huấn luyện trợ lý con bằng Knowledge Base. Upload tài liệu, chatbot trả lời đúng theo dữ liệu của bạn.',
@@ -2445,6 +2548,7 @@ export default {
       fileTooLarge: 'File quá lớn (tối đa 10MB)',
       error: 'Lỗi',
       reprocess: 'Xử lý lại',
+      reprocessSuccess: 'Đã gửi yêu cầu xử lý lại',
       viewChunks: 'Xem chunks',
       chars: 'chars',
       noDocuments: 'Chưa có tài liệu nào.',
@@ -3067,6 +3171,7 @@ export default {
     sending: 'Đang gửi...',
     thankYou: 'Cảm ơn bạn!',
     thankYouMessage: 'Chúng tôi đã nhận được tin nhắn và sẽ phản hồi sớm nhất có thể.',
+    successMessage: 'Chúng tôi đã nhận được tin nhắn và sẽ phản hồi sớm nhất có thể.',
     backHome: 'Quay về trang chủ',
     contactChannels: 'Kênh liên hệ',
     readyToStart: 'Đã sẵn sàng bắt đầu?',
@@ -3195,11 +3300,16 @@ export default {
     systemAdmin: 'Quản trị hệ thống',
     campaignManagement: 'Quản lý chiến dịch',
     closeMenu: 'Đóng menu',
+    collapseMenu: 'Thu gọn sidebar',
+    expandMenu: 'Mở rộng sidebar',
     editCampaign: 'Chỉnh sửa chiến dịch',
     accountInfo: 'Thông tin tài khoản',
     changePassword: 'Đổi mật khẩu',
     logout: 'Đăng xuất',
     language: 'Ngôn ngữ',
+    employee: 'Nhân viên',
+    owner: 'Chủ tài khoản',
+    superAdmin: 'Quản trị viên',
   },
 
   // Header
@@ -3207,6 +3317,10 @@ export default {
     openMenu: 'Mở menu',
     activeContext: 'Ngữ cảnh hoạt động',
     personal: 'Cá nhân',
+    docs: 'Hướng dẫn',
+    home: 'Trang chủ',
+    pricing: 'Bảng giá',
+    contact: 'Liên hệ',
     changePassword: 'Đổi mật khẩu',
     logout: 'Đăng xuất',
   },
@@ -3544,6 +3658,12 @@ export default {
     checkoutPlanName: 'Gói tự chọn',
     includedInBase: '(đã gồm {n} trong phí nền)',
     baseFeeIncludes: 'đã gồm {list}',
+    qtyRequired: 'Vui lòng nhập số lượng',
+    qtyBelowIncluded: 'Phải tối thiểu bằng mức đã gồm ({n})',
+    qtyBelowMin: 'Phải tối thiểu {n}',
+    qtyAboveMax: 'Phải tối đa {n}',
+    qtyStep: 'Phải là bội số của {n}',
+    fixQtyToSeePrice: 'Sửa số lượng phía trên để xem giá',
     units: {
       generic: 'đơn vị',
       zaloMessages: 'tin',
@@ -3650,6 +3770,17 @@ export default {
     stepHint: 'Bước {step}',
     zaloRemaining: 'Còn mua được tối đa {n} tin theo năng lực tài khoản đã kết nối',
     zaloConnectFirst: 'Hãy kết nối tài khoản Zalo trước khi mua thêm tin.',
+    qtyRequired: 'Vui lòng nhập số lượng',
+    qtyBelowMin: 'Phải tối thiểu {n}',
+    qtyAboveMax: 'Phải tối đa {n}',
+    qtyStep: 'Phải là bội số của {n}',
+    fixQtyToSeePrice: 'Sửa số lượng để xem giá',
+    monthsLabel: 'Số tháng',
+    monthsPlanRemaining: 'Gói của bạn còn {n} tháng',
+    monthsOption: '{n} tháng',
+    structuralHint: 'Add-on cấu trúc — tính phí theo số tháng còn lại của kỳ hiện tại.',
+    structuralDisabledGrace: 'Add-on cấu trúc đang tắt trong thời gian ân hạn.',
+    graceNoStructural: 'Đang trong thời gian ân hạn — chỉ mua được add-on không cấu trúc.',
     units: {
       generic: 'đơn vị',
       zaloMessages: 'tin',
@@ -3907,6 +4038,14 @@ export default {
 
   // Save Customer
   saveCustomer: {
+    email: 'Email',
+    phone: 'Số điện thoại',
+    fullName: 'Họ và tên',
+    gender: 'Giới tính',
+    customerSource: 'Nguồn khách',
+    zaloIdLabel: 'Zalo ID',
+    zaloPhoneLabel: 'Số Zalo',
+    columnPlaceholder: 'Tên cột',
     saveCustomerPlaceholder: 'Lưu khách hàng',
     columnNamePlaceholder: 'Tên cột (vd: email)',
     fieldNamePlaceholder: 'Tên field (vd: khoa_hoc)',
@@ -4034,6 +4173,8 @@ export default {
   // Node Config - Interested Customers
   nodeConfig: {
     basicInfo: 'Thông tin cơ bản',
+    noCourses: 'Không có khóa học nào',
+    takingAll: 'Lấy tất cả khóa học',
     filterCourses: 'Lọc khóa học',
     dataColumns: 'Cột dữ liệu',
     selectCustomers: 'Lựa chọn khách',
@@ -4477,6 +4618,7 @@ export default {
 
   // Landing Page Editor
   landingPageEditor: {
+    deleteFailed: 'Xóa thất bại',
     editTemplate: 'Chỉnh sửa template',
     createTemplate: 'Tạo template mới',
     fillInfoAndDesign: 'Điền thông tin và thiết kế nội dung',
@@ -4833,6 +4975,10 @@ export default {
     email: 'Email',
     zalo: 'Zalo',
     zaloGroup: 'Zalo Group',
+    // Mirrored key for namespaced access
+    channelTabs: {
+      insightByChannel: 'Insight · Tương tác theo kênh',
+    },
     sent: 'Gửi',
     opened: 'Mở',
     clicked: 'Click',
@@ -4950,6 +5096,8 @@ export default {
     dataSource: 'Nguồn dữ liệu',
     manualInput: 'Nhập thủ công',
     getFromPreviousNode: 'Lấy từ node trước đó',
+    sendZaloFriendRequestPlaceholder: 'vd: 0987654321',
+    sendZaloGroupPlaceholder: 'vd: https://zalo.me/g/xxxxxx',
     dataNode: 'Node dữ liệu',
     selectNode: '-- Chọn node --',
     selectColumn: '-- Chọn cột --',
@@ -5018,6 +5166,15 @@ export default {
     readSheetPlaceholder: 'Đọc dữ liệu Sheet',
     sheetUrl: 'URL Google Sheet',
     sheetUrlPlaceholder: 'https://docs.google.com/spreadsheets/d/...',
+    // Mirrored keys for namespaced access
+    campaignNodeConfig: {
+      trigger: {
+        note: 'Ghi chú',
+      },
+    },
+    common: {
+      success: 'Thành công',
+    },
     sharePermission: 'Đảm bảo sheet đã được chia sẻ quyền đọc',
     readSheetNote: 'Đọc dữ liệu từ Google Sheet để sử dụng trong các bước tiếp theo của chiến dịch.',
     sheetName: 'Tên Sheet',
@@ -5607,7 +5764,9 @@ export default {
 
   // Activate Page
   activate: {
+    title: 'Kích hoạt tài khoản',
     activating: 'Đang kích hoạt tài khoản...',
+    activateButton: 'Kích hoạt',
     successTitle: 'Tài khoản đã được kích hoạt!',
     successMessage: 'Đăng nhập với tài khoản',
     successDefaultPassword: 'và mật khẩu mặc định:',
@@ -5660,6 +5819,10 @@ export default {
   // App loading
   app: {
     loading: 'Loading...',
+    pageTitle: {
+      pricing: 'Bảng giá — Founder AI',
+      contact: 'Liên hệ — Founder AI',
+    },
   },
 
   // Error Boundary
@@ -6218,6 +6381,7 @@ export default {
   quickSend: {
     title: 'Gửi nhanh',
     subtitle: 'Gửi tin nhắn nhanh chóng dưới 10 phút',
+    sendSuccess: 'Đã gửi tin nhắn thành công',
     selectChannel: 'Chọn kênh gửi',
     selectRecipients: 'Chọn người nhận',
     selectTemplate: 'Chọn mẫu tin nhắn',

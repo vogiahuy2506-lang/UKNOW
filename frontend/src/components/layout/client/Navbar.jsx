@@ -14,9 +14,9 @@ import founderaiLogo from '../../../assets/icons/founderai-logo.png';
  */
 
 const NAV_LINKS = [
-  { kind: 'route', to: '/',        label: 'Trang chủ', matchPaths: ['/'] },
-  { kind: 'route', to: '/pricing', label: 'Bảng giá',  matchPaths: ['/pricing'] },
-  { kind: 'route', to: '/contact', label: 'Liên hệ',   matchPaths: ['/contact'] },
+  { kind: 'route', to: '/',        labelKey: 'header.home', matchPaths: ['/'] },
+  { kind: 'route', to: '/pricing', labelKey: 'header.pricing', matchPaths: ['/pricing'] },
+  { kind: 'route', to: '/contact', labelKey: 'header.contact', matchPaths: ['/contact'] },
 ];
 
 const AVATAR_STYLES = {
@@ -46,7 +46,7 @@ function UserMenu({ user, logout }) {
   const dashboardPath = user?.role === 'admin' ? '/admin' : '/app';
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
   const initial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
-  const displayName = user?.fullName || user?.username || 'Tài khoản';
+  const displayName = user?.fullName || user?.username || t('navbar.account');
 
   return (
     <div className="relative" ref={ref}>
@@ -85,7 +85,7 @@ function UserMenu({ user, logout }) {
             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
           >
             <HiOutlineLogout className="w-4 h-4" />
-            Đăng xuất
+            {t('common.logout')}
           </button>
         </div>
       )}
@@ -94,6 +94,7 @@ function UserMenu({ user, logout }) {
 }
 
 function MobileMenu({ isOpen, onClose }) {
+  const { t } = useI18n();
   const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -133,7 +134,7 @@ function MobileMenu({ isOpen, onClose }) {
               onClick={onClose}
               className="block px-4 py-3 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
             >
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           ))}
         </nav>
@@ -185,6 +186,7 @@ function MobileMenu({ isOpen, onClose }) {
 }
 
 export default function Navbar() {
+  const { t } = useI18n();
   const { user, isAuthenticated, logout } = useAuthStore();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -221,7 +223,7 @@ export default function Navbar() {
                       active ? 'text-orange-600' : 'text-slate-600 hover:text-orange-600'
                     }`}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                     <span 
                       className={`absolute -bottom-1 left-0 h-0.5 bg-orange-500 transition-all duration-200 ${
                         active ? 'w-full' : 'w-0 group-hover:w-full'

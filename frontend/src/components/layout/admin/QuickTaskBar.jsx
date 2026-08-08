@@ -39,10 +39,10 @@ const QuickTaskBar = ({ className = '' }) => {
 
   const quickItems = [
     { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
-    { key: 'docs', label: 'Hướng dẫn', onClick: () => navigate('/huong-dan') },
-    { key: 'home', label: 'Trang chủ', onClick: () => navigate('/') },
-    { key: 'pricing', label: 'Bảng giá', onClick: () => navigate('/pricing') },
-    { key: 'contact', label: 'Liên hệ', onClick: () => navigate('/contact') },
+    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
+    { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
+    { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
+    { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
   ];
 
   return (

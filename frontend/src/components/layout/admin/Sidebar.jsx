@@ -405,7 +405,7 @@ const Sidebar = ({ isOpen, width, isMobile, onClose, onToggle, topOffset = 0 }) 
               </div>
               <div className="ml-2.5 flex flex-col min-w-0">
                 <span className="text-[13px] font-semibold text-gray-900 truncate">{user?.fullName || user?.username}</span>
-                <span className="text-[11px] text-gray-400 capitalize">{isSuperAdmin ? 'Admin' : activeContext?.type === 'employee' ? 'Nhân viên' : 'Chủ tài khoản'}</span>
+                <span className="text-[11px] text-gray-400 capitalize">{isSuperAdmin ? t('sidebar.superAdmin') : activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}</span>
               </div>
             </NavLink>
           ) : (

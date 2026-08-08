@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { HiOutlineExclamationCircle, HiOutlineCheckCircle, HiOutlineX } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 
 const FormField = ({
   label,
@@ -17,6 +18,7 @@ const FormField = ({
   className = '',
   ...props
 }) => {
+  const { t } = useI18n();
   const [focused, setFocused] = useState(false);
 
   const inputClasses = `
@@ -62,7 +64,7 @@ const FormField = ({
           className={inputClasses}
           {...props}
         >
-          <option value="">{placeholder || 'Chọn...'}</option>
+          <option value="">{placeholder || t('common.selectOption')}</option>
           {options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -194,7 +196,7 @@ const FormSuccess = ({ message, onDismiss }) => (
   </div>
 );
 
-const TagInput = ({ value = [], onChange, placeholder = 'Thêm tag...', maxTags = 10 }) => {
+const TagInput = ({ value = [], onChange, placeholder = 'Add tag...', maxTags = 10 }) => {
   const [inputValue, setInputValue] = useState('');
 
   const handleKeyDown = (e) => {

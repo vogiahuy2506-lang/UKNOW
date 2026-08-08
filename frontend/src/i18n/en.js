@@ -57,11 +57,25 @@ export default {
     copy: 'Copy',
     copied: 'Copied',
     copyCode: 'Copy code',
+    retry: 'Retry',
+    saving: 'Saving...',
+    selectOption: 'Select...',
+    addTag: 'Add tag...',
     selectFirst: 'Please select {name} first',
     basicInfo: 'Basic Info',
     sheetConfig: 'Sheet Config',
     connection: 'Connection',
     nodeName: 'Node name',
+  },
+
+  navbar: {
+    account: 'Account',
+  },
+
+  pagination: {
+    previous: 'Previous page',
+    next: 'Next page',
+    pageInfo: 'Page {current} / {total}',
   },
 
   creditBanner: {
@@ -71,7 +85,11 @@ export default {
     upgrade: 'Upgrade',
     buyTopup: 'Buy more',
     viewPricing: 'View pricing',
+    goBilling: 'Go to billing',
     dismiss: 'Dismiss AI credit warning',
+    resources: {
+      ai: 'AI credits',
+    },
   },
 
   auth: {
@@ -107,6 +125,10 @@ export default {
     invalidEmail: 'Invalid email address',
     passwordRequired: 'Password is required',
     passwordMinLength: 'Password must be at least 6 characters',
+    passwordNeedLetter: 'Password must contain at least one letter',
+    passwordNeedNumber: 'Password must contain at least one number',
+    enterNewPassword: 'Enter new password',
+    confirmNewPassword: 'Confirm new password',
     passwordMismatch: 'Passwords do not match',
     loginWithGoogle: 'Continue with Google',
     registerWithGoogle: 'Sign up with Google',
@@ -275,6 +297,7 @@ export default {
     // Basic
     title: 'Dashboard',
     welcome: 'Welcome back',
+    insightTooltip: 'Generate AI insights from your recent data',
     overview: 'Overview',
     recentActivity: 'Recent Activity',
     quickActions: 'Quick Actions',
@@ -592,6 +615,7 @@ export default {
 
   campaigns: {
     title: 'Campaigns',
+    totalCustomers: 'Total customers',
     newCampaign: 'Create New Campaign',
     editCampaign: 'Edit Campaign',
     campaignName: 'Campaign Name',
@@ -864,6 +888,7 @@ export default {
   },
 
   customerDetail: {
+    customer: 'Customer',
     loadFailed: 'Failed to load customer information',
     loadCampaignFailed: 'Failed to load customer campaign details',
     emailSent: 'Email sent',
@@ -918,7 +943,9 @@ export default {
     emailId: 'Email ID',
     emailName: 'Email name',
     sentSubject: 'Subject',
+    emailSubject: 'Subject',
     sentAt: 'Sent at',
+    email: 'Email',
     emailContent: 'Email content',
     noHtmlContent: 'No HTML content',
     journeyTimeline: 'Journey timeline',
@@ -1002,6 +1029,7 @@ export default {
     joined: 'Joined',
     coursesFromCampaign: 'Courses of interest / purchased from campaign',
     noCourseData: 'No course data from this campaign',
+    emailSubject: 'Subject',
     noOrderCode: 'No order code',
     orderCode: 'Order code',
     productCode: 'Product code',
@@ -1107,6 +1135,11 @@ export default {
 
   orders: {
     title: 'Orders',
+    description: 'Track customer orders and payments',
+    today: 'Today',
+    filterButton: 'Filters',
+    panelTitle: 'Order filters',
+    panelDescription: 'Filter by date range, status, payment method, or product',
     orderList: 'Order List',
     orderId: 'Order ID',
     customer: 'Customer',
@@ -1459,6 +1492,7 @@ export default {
   zaloSettings: {
     title: 'Manage Zalo Workspace',
     description: 'Login multiple accounts and choose the default messaging account',
+    loginFailed: 'Zalo login failed',
     refresh: 'Refresh',
     refreshing: 'Loading...',
     backendNotReadyTitle: 'Zalo Backend Not Ready',
@@ -1587,10 +1621,14 @@ export default {
     zaloPersonal: 'Zalo Personal',
     zaloPersonalShort: 'Zalo',
     zaloGroup: 'Zalo Group',
+    zaloConversations: 'conversations',
+    zaloAccounts: 'Zalo accounts',
     searchConversations: 'Search conversations...',
     noConversations: 'No conversations yet',
     noMessages: 'No messages yet',
+    emptyInboxHint: 'No conversations yet. Sync Zalo or wait for new messages.',
     messages: 'Messages',
+    conversations: 'Conversations',
     anonymousCustomer: 'Anonymous Customer',
     loadMore: 'Load more messages',
     selectConversation: 'Select a conversation',
@@ -1600,12 +1638,74 @@ export default {
     send: 'Send',
     you: 'You',
     customer: 'Customer',
+    agent: 'Agent',
     bot: 'Bot',
     today: 'Today',
     yesterday: 'Yesterday',
     unread: 'unread',
     markAsRead: 'Mark as read',
     reply: 'Reply',
+    conversationDetails: 'Conversation Details',
+    info: 'Info',
+    notes: 'Notes',
+    addNote: 'Add a note',
+    saveNote: 'Save note',
+    noNotes: 'No notes yet',
+    timeline: 'Timeline',
+    startedAt: 'Started at',
+    lastMessage: 'Last message',
+    status: 'Status',
+    active: 'Active',
+    closed: 'Closed',
+    tags: 'Tags',
+    noTags: 'No tags yet',
+    addTag: 'Add tag...',
+    groupInfo: 'Group info',
+    groupName: 'Group name',
+    sender: 'Sender',
+    isTyping: 'is typing...',
+    customerTyping: 'Customer is typing...',
+    manualBadge: 'Manual',
+    newMessage: 'New message',
+    sendFailed: 'Send failed',
+    sendRetrying: 'Retrying...',
+    retrying: 'Retrying',
+    retrySend: 'Retry send',
+    retryFailed: 'Retry failed',
+    retrySuccess: 'Retry succeeded',
+    sentAiPausedHint: 'AI is paused, sent as a manual message',
+    aiToggleDisabledHint: 'AI cannot reply here',
+    aiToggleManualHint: 'Reply manually while AI is paused',
+    openDeployModal: 'Open deploy settings',
+    syncNow: 'Sync now',
+    syncFailed: 'Sync failed',
+    syncSuccess: 'Sync succeeded',
+    syncSuccessWithHistory: 'Synced {count} Zalo group messages',
+    syncSuccessHistoryPartial: 'Synced contacts & groups. Some groups could not pull history (left/limited by Zalo).',
+    syncPersonalNoHistory: 'Personal chats do not support history pull. Connection refreshed — wait for a new message.',
+    syncPartialGroups: 'Synced {synced}/{total} groups. The system pulls up to 200 groups at a time.',
+    syncThreadPulled: 'Pulled {count} messages from Zalo',
+    syncThreadEmpty: 'No new messages from Zalo',
+    syncTipShort: 'Sync to refresh the list and pull recent messages.',
+    syncTip: 'Tip: click sync to refresh the conversation list and pull new messages from Zalo.',
+    manageZaloAccounts: 'Manage Zalo accounts',
+    sessionExpired: 'Session expired',
+    rescanQR: 'Rescan QR code',
+    sseDisconnected: 'Real-time connection lost',
+    sseRetry: 'Retry',
+    aiPausedHint: 'AI is paused',
+    aiToggleLabel: 'AI auto-reply',
+    zaloNotConnected: 'Zalo is not connected',
+    connectZaloFirst: 'Connect a Zalo account first to receive messages',
+    manualBadgeTitle: 'Manual mode',
+    messageSticker: 'Sticker',
+    messageGroupEvent: 'Group event',
+    messageLink: 'Link',
+    messageCall: 'Call',
+    messageZaloEvent: 'Zalo event',
+    messageImage: 'Image',
+    confirmDeleteTitle: 'Delete conversation',
+    confirmDelete: 'Are you sure you want to delete this conversation?',
     confirmDelete: 'Are you sure you want to delete this conversation?',
     confirmDeleteTitle: 'Delete conversation',
     messageSticker: '[Sticker]',
@@ -1697,6 +1797,7 @@ export default {
 
   courses: {
     title: 'Courses',
+    courseDescription: 'Manage your training courses, pricing, and visibility.',
     courseManagement: 'Course Management',
     loadFailed: 'Failed to load course list',
     syncSuccess: 'Synchronized successfully',
@@ -1826,6 +1927,7 @@ export default {
   voucherAdmin: {
     title: 'Voucher Management',
     subtitle: 'Create discount codes and automatic promotions for checkout.',
+    maxDiscountLowWarning: 'Max discount ({amount}) looks too low for a voucher. Customers may not see the benefit.',
     refresh: 'Refresh',
     createButton: 'Create voucher',
     totalVouchers: 'Total vouchers',
@@ -2356,6 +2458,7 @@ export default {
   },
 
   chatbot: {
+    zaloOaDescription: 'Connect Zalo Official Account to receive customer messages via Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
       description: 'Train sub-assistants with Knowledge Base. Upload documents, chatbot answers based on your data.',
@@ -2385,6 +2488,7 @@ export default {
       fileTooLarge: 'File too large (max 10MB)',
       error: 'Error',
       reprocess: 'Reprocess',
+      reprocessSuccess: 'Reprocess triggered',
       viewChunks: 'View chunks',
       chars: 'chars',
       noDocuments: 'No documents yet.',
@@ -2970,6 +3074,8 @@ export default {
     email: 'Email',
     phone: 'Phone',
     landingSlug: 'Source page',
+    allSlugs: 'All source pages',
+    searchPlaceholder: 'Search by name, email, phone...',
     occupation: 'Occupation',
     interestArea: 'Interest Area',
     marketingConsent: 'Marketing Consent',
@@ -3024,6 +3130,7 @@ export default {
     sending: 'Sending...',
     thankYou: 'Thank you!',
     thankYouMessage: 'We received your message and will respond as soon as possible.',
+    successMessage: 'We received your message and will respond as soon as possible.',
     backHome: 'Back to home',
     contactChannels: 'Contact Channels',
     readyToStart: 'Ready to get started?',
@@ -3150,11 +3257,16 @@ export default {
     systemAdmin: 'System Admin',
     campaignManagement: 'Campaign Management',
     closeMenu: 'Close menu',
+    collapseMenu: 'Collapse sidebar',
+    expandMenu: 'Expand sidebar',
     editCampaign: 'Edit Campaign',
     accountInfo: 'Account Info',
     changePassword: 'Change Password',
     logout: 'Logout',
     language: 'Language',
+    employee: 'Employee',
+    owner: 'Account owner',
+    superAdmin: 'Super Admin',
   },
 
   // Header
@@ -3162,6 +3274,10 @@ export default {
     openMenu: 'Open menu',
     activeContext: 'Active Context',
     personal: 'Personal',
+    docs: 'Docs',
+    home: 'Home',
+    pricing: 'Pricing',
+    contact: 'Contact',
     changePassword: 'Change Password',
     logout: 'Logout',
   },
@@ -3499,6 +3615,12 @@ export default {
     checkoutPlanName: 'Custom plan',
     includedInBase: '(includes {n} in the base fee)',
     baseFeeIncludes: 'includes {list}',
+    qtyRequired: 'Please enter a quantity',
+    qtyBelowIncluded: 'Must be at least the included amount ({n})',
+    qtyBelowMin: 'Must be at least {n}',
+    qtyAboveMax: 'Must be at most {n}',
+    qtyStep: 'Must be a multiple of {n}',
+    fixQtyToSeePrice: 'Fix the quantities above to see the price',
     units: {
       generic: 'unit',
       zaloMessages: 'messages',
@@ -3605,6 +3727,17 @@ export default {
     stepHint: 'Step {step}',
     zaloRemaining: 'You can buy up to {n} more messages based on connected account capacity',
     zaloConnectFirst: 'Connect a Zalo account before buying more messages.',
+    qtyRequired: 'Please enter a quantity',
+    qtyBelowMin: 'Must be at least {n}',
+    qtyAboveMax: 'Must be at most {n}',
+    qtyStep: 'Must be a multiple of {n}',
+    fixQtyToSeePrice: 'Fix the quantities to see the price',
+    monthsLabel: 'Number of months',
+    monthsPlanRemaining: 'Your plan has {n} month(s) remaining',
+    monthsOption: '{n} month(s)',
+    structuralHint: 'Structural add-on — billed for the remaining months of your current cycle.',
+    structuralDisabledGrace: 'Structural add-on disabled while in grace period.',
+    graceNoStructural: 'In grace period — only non-structural top-ups are available.',
     units: {
       generic: 'unit',
       zaloMessages: 'messages',
@@ -3862,6 +3995,14 @@ export default {
 
   // Save Customer
   saveCustomer: {
+    email: 'Email',
+    phone: 'Phone',
+    fullName: 'Full Name',
+    gender: 'Gender',
+    customerSource: 'Customer Source',
+    zaloIdLabel: 'Zalo ID',
+    zaloPhoneLabel: 'Zalo Phone',
+    columnPlaceholder: 'Column name',
     saveCustomerPlaceholder: 'Save Customer',
     columnNamePlaceholder: 'Column name (e.g: email)',
     fieldNamePlaceholder: 'Field name (e.g: course)',
@@ -3989,6 +4130,8 @@ export default {
   // Node Config - Interested Customers
   nodeConfig: {
     basicInfo: 'Basic Info',
+    noCourses: 'No courses found',
+    takingAll: 'Taking all courses',
     filterCourses: 'Filter Courses',
     dataColumns: 'Data Columns',
     selectCustomers: 'Select Customers',
@@ -4425,6 +4568,7 @@ export default {
 
   // Landing Page Editor
   landingPageEditor: {
+    deleteFailed: 'Delete failed',
     editTemplate: 'Edit Template',
     createTemplate: 'Create Template',
     fillInfoAndDesign: 'Fill in information and design content',
@@ -4780,6 +4924,10 @@ export default {
     email: 'Email',
     zalo: 'Zalo',
     zaloGroup: 'Zalo Group',
+    // Mirrored key for namespaced access (useI18n('dashboardChannelTabs') + flat key)
+    channelTabs: {
+      insightByChannel: 'Insight · Interaction by channel',
+    },
     sent: 'Sent',
     opened: 'Opened',
     clicked: 'Click',
@@ -4897,6 +5045,8 @@ export default {
     dataSource: 'Data source',
     manualInput: 'Manual input',
     getFromPreviousNode: 'Get from previous node',
+    sendZaloFriendRequestPlaceholder: 'e.g.: 0987654321',
+    sendZaloGroupPlaceholder: 'e.g.: https://zalo.me/g/xxxxxx',
     dataNode: 'Data node',
     selectNode: '-- Select node --',
     selectColumn: '-- Select column --',
@@ -4965,6 +5115,15 @@ export default {
     readSheetPlaceholder: 'Read Sheet Data',
     sheetUrl: 'Google Sheet URL',
     sheetUrlPlaceholder: 'https://docs.google.com/spreadsheets/d/...',
+    // Mirrored keys for namespaced access (useI18n('readSheetSection') + flat key)
+    campaignNodeConfig: {
+      trigger: {
+        note: 'Note',
+      },
+    },
+    common: {
+      success: 'Success',
+    },
     sharePermission: 'Make sure the sheet is shared with read permission',
     readSheetNote: 'Read data from Google Sheet to use in subsequent campaign steps.',
     sheetName: 'Sheet name',
@@ -5612,7 +5771,9 @@ export default {
 
   // Activate Page
   activate: {
+    title: 'Activate Account',
     activating: 'Activating account...',
+    activateButton: 'Activate',
     successTitle: 'Account Activated!',
     successMessage: 'Login with username',
     successDefaultPassword: 'and default password:',
@@ -5665,6 +5826,10 @@ export default {
   // App loading
   app: {
     loading: 'Loading...',
+    pageTitle: {
+      pricing: 'Pricing — Founder AI',
+      contact: 'Contact — Founder AI',
+    },
   },
 
   // Error Boundary
@@ -5839,6 +6004,8 @@ export default {
     signalValue: 'Value: {value}',
     topRuns: 'Runs to inspect',
     topRunsDesc: 'Prioritizes runs with high failure rate or long duration.',
+    recentRuns: 'Recent runs',
+    recentRunsDesc: 'Latest runs with status, throughput, and failure rate.',
     failureGroups: 'Common failure groups',
     recentErrors: 'Recent errors',
     noFailures: 'No failures recorded.',
@@ -5852,6 +6019,8 @@ export default {
       successRate: 'Success rate: {rate}',
       opened: 'Opened: {opened}',
       totalRuns: 'Total runs: {total}',
+      reachRate: 'Reach rate {rate} of {total} intended',
+      runBreakdown: '{total} total · {failed} failed · {running} running',
     },
     chart: {
       email: 'Email',
@@ -6219,6 +6388,7 @@ export default {
   quickSend: {
     title: 'Quick Send',
     subtitle: 'Send messages quickly in under 10 minutes',
+    sendSuccess: 'Messages sent successfully',
     selectChannel: 'Select Channel',
     selectRecipients: 'Select Recipients',
     selectTemplate: 'Select Template',

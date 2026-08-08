@@ -200,6 +200,7 @@ const PublicRoute = ({ children }) => {
 };
 
 function App() {
+  const { t } = useI18n();
   const toaster = (
     <Toaster
       position="top-center"
@@ -266,7 +267,7 @@ function App() {
             <Route
               path="/pricing"
               element={(
-                <LandingHtmlModeGate page="pricing" title="Bảng giá — Founder AI">
+                <LandingHtmlModeGate page="pricing" title={t('app.pageTitle.pricing')}>
                   <PricingPage />
                 </LandingHtmlModeGate>
               )}
@@ -274,7 +275,7 @@ function App() {
             <Route
               path="/contact"
               element={(
-                <LandingHtmlModeGate page="contact" title="Liên hệ — Founder AI">
+                <LandingHtmlModeGate page="contact" title={t('app.pageTitle.contact')}>
                   <ContactPage />
                 </LandingHtmlModeGate>
               )}
@@ -431,7 +432,6 @@ function App() {
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        </>
       </Router>
       </I18nProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}

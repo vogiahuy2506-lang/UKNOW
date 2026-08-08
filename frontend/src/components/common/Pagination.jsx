@@ -1,4 +1,5 @@
 import { HiOutlineChevronLeft, HiOutlineChevronRight } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 
 const Pagination = ({
   currentPage = 1,
@@ -8,6 +9,7 @@ const Pagination = ({
   showInfo = true,
   className = '',
 }) => {
+  const { t } = useI18n();
   const pages = [];
   const halfVisible = Math.floor(maxVisible / 2);
   let startPage = Math.max(1, currentPage - halfVisible);
@@ -30,7 +32,7 @@ const Pagination = ({
         onClick={() => onPageChange?.(currentPage - 1)}
         disabled={currentPage === 1}
         className="p-2 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        aria-label="Trang trước"
+        aria-label={t('pagination.previous')}
       >
         <HiOutlineChevronLeft className="w-5 h-5" />
       </button>
@@ -93,7 +95,7 @@ const Pagination = ({
         onClick={() => onPageChange?.(currentPage + 1)}
         disabled={currentPage === totalPages}
         className="p-2 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        aria-label="Trang sau"
+        aria-label={t('pagination.next')}
       >
         <HiOutlineChevronRight className="w-5 h-5" />
       </button>
@@ -101,7 +103,7 @@ const Pagination = ({
       {/* Page info */}
       {showInfo && (
         <span className="ml-4 text-sm text-gray-500 hidden sm:inline">
-          Trang {currentPage} / {totalPages}
+          {t('pagination.pageInfo', { current: currentPage, total: totalPages })}
         </span>
       )}
     </div>

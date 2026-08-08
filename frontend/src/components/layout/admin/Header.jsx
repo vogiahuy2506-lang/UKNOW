@@ -48,10 +48,10 @@ const Header = () => {
 
   const quickItems = [
     { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
-    { key: 'docs', label: 'Hướng dẫn', onClick: () => navigate('/huong-dan') },
-    { key: 'home', label: 'Trang chủ', onClick: () => navigate('/') },
-    { key: 'pricing', label: 'Bảng giá', onClick: () => navigate('/pricing') },
-    { key: 'contact', label: 'Liên hệ', onClick: () => navigate('/contact') },
+    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
+    { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
+    { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
+    { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
   ];
 
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
@@ -118,7 +118,7 @@ const Header = () => {
             <div className="hidden lg:flex flex-col items-start flex-1 min-w-0">
               <span className="text-[13px] font-semibold text-gray-900 leading-tight truncate">{displayName}</span>
               <span className="text-[10px] text-gray-400 leading-tight capitalize">
-                {activeContext?.type === 'employee' ? 'Nhân viên' : 'Chủ tài khoản'}
+                {activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}
               </span>
             </div>
             <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${profileOpen ? 'rotate-180' : ''}`} />
