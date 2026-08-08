@@ -1,8 +1,59 @@
 /**
- * Seed 7 Nhóm-1 help articles (Vietnamese).
+ * Seed 9 Nhóm-1 help articles (Vietnamese).
  * Embeddings are created via reindexArticle when published — call seedHelpArticles() after migration.
  */
 export const HELP_SEED_ARTICLES = [
+  {
+    slug: 'getting-started',
+    feature_key: 'getting-started',
+    primary_route: '/app',
+    sort_order: 5,
+    title: 'Bắt đầu với Founder AI — 4 bước',
+    summary: 'Người mới bắt đầu từ đâu: khai báo hồ sơ, kết nối kênh gửi, gửi thử, rồi tạo chiến dịch đầu tiên.',
+    body_md: `# Bắt đầu với Founder AI — 4 bước
+Mới tạo tài khoản và chưa biết làm gì trước? Làm đúng 4 bước dưới đây là gửi được tin đầu tiên. Mỗi bước có bài hướng dẫn riêng nếu bạn cần chi tiết.
+
+## Bước 1 — Khai báo hồ sơ doanh nghiệp
+Vào [/app/settings/ai-profile](/app/settings/ai-profile), điền tên doanh nghiệp, sản phẩm, đối tượng khách và giọng điệu muốn dùng.
+
+Làm bước này trước vì trợ lý AI lấy hồ sơ làm ngữ cảnh. Bỏ qua thì mọi nội dung AI viết ra đều chung chung, không nhắc đúng tên sản phẩm của bạn.
+
+→ Chi tiết: [Hồ sơ doanh nghiệp](ai-profile)
+
+## Bước 2 — Kết nối kênh gửi
+Vào [/app/settings/channels](/app/settings/channels), thêm ít nhất **một** kênh:
+- **Email**: khai báo SMTP hoặc SendGrid, gửi thử một email để chắc chắn chạy.
+- **Zalo**: quét QR đăng nhập, đợi trạng thái hiện **connected**.
+
+Chưa có kênh nào kết nối thì các bước sau đều bị khoá — hệ thống không có gì để gửi đi.
+
+→ Chi tiết: [Kết nối kênh gửi](channels) · [Thêm tài khoản Email](email-account) · [Thêm tài khoản Zalo](zalo-account)
+
+## Bước 3 — Gửi thử bằng Gửi nhanh
+Vào [/app/quick-send](/app/quick-send), chọn kênh vừa kết nối, gửi thử cho **chính số/email của bạn**.
+
+Đừng bỏ qua bước này. Gửi thử mất 2 phút và cho biết ngay kênh đã chạy thật hay chưa — phát hiện lỗi ở đây rẻ hơn nhiều so với phát hiện lúc chiến dịch đã chạy được nửa danh sách.
+
+→ Chi tiết: [Gửi nhanh](quick-send)
+
+## Bước 4 — Tạo chiến dịch đầu tiên
+Vào [/app/campaigns/new](/app/campaigns/new), dựng luồng gửi: lấy dữ liệu khách → gửi email hoặc Zalo → kết thúc. Lưu rồi chạy ngay hoặc hẹn lịch.
+
+Nếu chưa quen builder, gõ cho trợ lý AI một câu kiểu "tạo giúp tôi chiến dịch giới thiệu sản phẩm mới cho khách cũ" — trợ lý dựng nháp để bạn sửa lại.
+
+→ Chi tiết: [Tạo chiến dịch](campaign-create)
+
+## Sau 4 bước thì làm gì
+- Xem hạn mức còn lại và lịch sử đơn tại [/app/billing](/app/billing).
+- Sắp hết tin/email/lượt AI thì mua thêm — xem [Gói dịch vụ & thanh toán](plan-and-billing).
+- Thắc mắc về tiền bạc, hoá đơn: [Câu hỏi thường gặp về thanh toán](faq-billing).
+
+## Lỗi thường gặp khi mới bắt đầu
+- **Không thấy trang Hồ sơ AI hay Mua thêm** → hai trang này chỉ chủ tài khoản vào được, nhân viên không thấy.
+- **Zalo gửi không đi vào buổi tối** → hệ thống không gửi Zalo từ 23:00 đến 06:00 để tránh bị đánh dấu spam. Đợi sáng hôm sau, chiến dịch tự chạy tiếp.
+- **Zalo gửi rất chậm** → đúng như thiết kế, mỗi tin cách nhau hơn một phút để tài khoản không bị khoá. Danh sách lớn cần vài giờ.
+`,
+  },
   {
     slug: 'ai-profile',
     feature_key: 'ai-profile',
@@ -218,6 +269,66 @@ Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, emai
 
 ## Liên quan
 - [Thêm tài khoản Zalo](zalo-account)
+- [Kết nối kênh gửi](channels)
+- [Câu hỏi thường gặp về thanh toán](faq-billing)
+`,
+  },
+  {
+    slug: 'faq-billing',
+    feature_key: 'faq-billing',
+    primary_route: '/app/billing',
+    sort_order: 75,
+    title: 'Câu hỏi thường gặp về thanh toán & hoá đơn',
+    summary: 'Ai được mua, mua thêm có hết hạn không, slot hết hạn thì mất dữ liệu không, và tình trạng hoá đơn VAT.',
+    body_md: `# Câu hỏi thường gặp về thanh toán & hoá đơn
+Các câu hỏi hay gặp nhất về tiền bạc. Xem trước phần này thì đỡ phải hỏi hỗ trợ.
+
+## Ai được mua gói và mua thêm?
+Chỉ **chủ tài khoản**. Nhân viên được cấp quyền vẫn dùng được sản phẩm nhưng không thấy trang mua và không tự thanh toán được — để không ai tiêu tiền thay chủ.
+
+## Mua thêm tin nhắn / email / lượt AI có hết hạn không?
+**Không.** Số dư mua thêm nằm ở một ví riêng, không làm mới theo chu kỳ và không mất khi sang kỳ mới. Điều kiện duy nhất là gói phải còn hiệu lực mới tiêu được.
+
+Hệ thống luôn **tiêu hạn mức của gói trước**, hết mới trừ vào ví — để phần bạn đã bỏ tiền mua được giữ lâu nhất có thể.
+
+## Vậy còn tài khoản Zalo, landing page, chatbot mua thêm?
+Nhóm này **khác hẳn**: đây là thuê chỗ theo tháng, không phải ví. Khi mua bạn chọn 1, 3, 6 hoặc 12 tháng. Thời hạn tính từ ngày mua, không gắn với ngày hết hạn gói — nên mua sát cuối kỳ cũng không bị thiệt, và gia hạn gói không làm mất slot vừa mua.
+
+## Hết hạn slot thì tôi có mất dữ liệu không?
+**Không mất gì.** Hệ thống chỉ **tạm khoá**, toàn bộ nội dung landing page, chatbot và kết nối tài khoản vẫn còn nguyên. Trả tiền là dùng lại được ngay.
+
+Bạn còn được **tự chọn giữ cái nào**: vào [/app/billing](/app/billing), mục **Tài nguyên khoá**, tick những thứ quan trọng để giữ trong hạn mức còn hiệu lực. Hệ thống cũng gửi email nhắc trước **7 ngày** và **3 ngày**.
+
+Lưu ý: tài nguyên bị khoá vẫn chiếm chỗ. Muốn tạo cái mới thì xoá cái đang khoá trước.
+
+## Vì sao tôi không mua thêm tin Zalo được?
+Hai lý do thường gặp:
+- **Chưa kết nối tài khoản Zalo nào.** Mua tin mà không có tài khoản để gửi thì tiền nằm chết — hãy kết nối trước tại [/app/settings/channels](/app/settings/channels).
+- **Mua vượt năng lực gửi thật.** Mỗi tài khoản Zalo chỉ gửi được khoảng 16.000 tin/tháng. Cần nhiều hơn thì mua thêm tài khoản Zalo, không phải mua thêm tin.
+
+## Đơn tối thiểu là bao nhiêu?
+**50.000đ** một đơn mua thêm. Dưới mức này phí thanh toán ăn gần hết giá trị đơn.
+
+## Gói tôi hết hạn, đang trong thời gian ân hạn thì mua được gì?
+Chỉ mua được **tin nhắn, email, lượt AI**. Không mua được thêm tài khoản Zalo/Email, landing page hay chatbot cho tới khi gia hạn gói.
+
+## Đã thanh toán nhưng hạn mức chưa tăng?
+Đợi vài phút rồi tải lại trang — hệ thống cần nhận xác nhận từ cổng thanh toán. Quá 15 phút vẫn chưa thấy thì liên hệ hỗ trợ kèm **mã đơn**, đơn không bị mất.
+
+## Có xuất hoá đơn VAT không?
+**Hiện chưa.** Sau khi thanh toán bạn nhận được email xác nhận có đầy đủ mã đơn, số tiền, gói đã mua và ngày hết hạn — dùng để đối chiếu nội bộ được, nhưng **chưa phải hoá đơn giá trị gia tăng hợp lệ**.
+
+Chức năng xuất hoá đơn điện tử tự động đang chờ hoàn thiện. Nếu bạn cần hoá đơn VAT cho đơn đã thanh toán, hãy liên hệ hỗ trợ kèm mã đơn và mã số thuế để được xử lý thủ công.
+
+## Có hoàn tiền không?
+Hệ thống **không có luồng hoàn tiền tự động**. Trường hợp đặc biệt (thanh toán nhầm, trừ tiền hai lần) vui lòng liên hệ hỗ trợ kèm mã đơn.
+
+## Xem lại đơn đã mua ở đâu?
+Vào [/app/billing](/app/billing), mục **Lịch sử đơn** — có đủ đơn mua gói và đơn mua thêm.
+
+## Liên quan
+- [Gói dịch vụ & thanh toán](plan-and-billing)
+- [Bắt đầu với Founder AI — 4 bước](getting-started)
 - [Kết nối kênh gửi](channels)
 `,
   },
