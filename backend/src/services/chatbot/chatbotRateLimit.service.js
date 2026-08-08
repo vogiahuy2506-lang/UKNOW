@@ -1,10 +1,13 @@
 import IORedis from 'ioredis';
+import { vnDayKey } from '../../utils/vnTimeFormat.util.js';
 
 const DEFAULT_STATIC_REPLY =
   'Trợ lý đang bận, chưa trả lời thêm được lúc này. Bạn cứ để lại câu hỏi, chúng tôi sẽ xem và phản hồi.';
 
 const NOTIFY_REASONS = new Set(['sender_day', 'chatbot_hour', 'owner_cap']);
 const OWNER_CAP_CACHE_TTL_MS = 60_000;
+/** TTL cho khoá ngày lịch VN — đủ dài để khoá hôm qua tự dọn sau nửa đêm. */
+const DAY_COUNTER_TTL_SEC = 172800;
 
 function envInt(name, fallback) {
   const parsed = Number.parseInt(String(process.env[name] || '').trim(), 10);
@@ -54,12 +57,26 @@ function memoryHas(key) {
   return !!(existing && existing.expiresAt > Date.now());
 }
 
+function memoryGetCount(key) {
+  const existing = memoryCounters.get(key);
+  if (!existing || existing.expiresAt <= Date.now()) return 0;
+  return Number(existing.count) || 0;
+}
+
 function memorySet(key, windowSec) {
   memoryCounters.set(key, { count: 1, expiresAt: Date.now() + windowSec * 1000 });
 }
 
 function notifyWindowSec(reason) {
   return reason === 'chatbot_hour' ? 3600 : 86400;
+}
+
+function ownerDayCounterKey(ownerUserId) {
+  return `cbrl:owner:${ownerUserId}:d:${vnDayKey()}`;
+}
+
+function senderDayCounterKey(ch, bot, sender) {
+  return `cbrl:sender:${ch}:${bot}:${sender}:d:${vnDayKey()}`;
 }
 
 class ChatbotRateLimitService {
@@ -88,6 +105,16 @@ class ChatbotRateLimitService {
 
   get perChatbotPerHour() {
     return envInt('CHATBOT_RATE_LIMIT_PER_CHATBOT_PER_HOUR', 500);
+  }
+
+  /** Live system limits (from env) — for owner-facing UI. */
+  get systemLimits() {
+    return {
+      perSenderPerMin: this.perSenderPerMin,
+      perSenderPerHour: this.perSenderPerHour,
+      perSenderPerDay: this.perSenderPerDay,
+      perChatbotPerHour: this.perChatbotPerHour,
+    };
   }
 
   async getRedis() {
@@ -147,6 +174,21 @@ class ChatbotRateLimitService {
     } catch (err) {
       console.warn('[ChatbotRateLimit] exists failed, memory fallback:', err.message);
       return memoryHas(key);
+    }
+  }
+
+  async getCounter(key) {
+    const redis = await this.getRedis();
+    if (!redis) return memoryGetCount(key);
+
+    try {
+      const raw = await redis.get(key);
+      if (raw == null) return 0;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch (err) {
+      console.warn('[ChatbotRateLimit] get failed, memory fallback:', err.message);
+      return memoryGetCount(key);
     }
   }
 
@@ -239,6 +281,21 @@ class ChatbotRateLimitService {
     ownerCapCache.delete(String(ownerUserId));
   }
 
+  /**
+   * Số lượt bot đã trả lời trong ngày lịch VN của một chủ tài khoản.
+   * Chỉ đọc — không tăng bộ đếm.
+   */
+  async getOwnerUsedToday(ownerUserId) {
+    const owner = String(ownerUserId || '').trim();
+    if (!owner) return 0;
+    try {
+      return await this.getCounter(ownerDayCounterKey(owner));
+    } catch (err) {
+      console.warn('[ChatbotRateLimit] getOwnerUsedToday failed:', err.message);
+      return 0;
+    }
+  }
+
   async buildBlockedResult({ channel, ownerUserId, chatbotId, senderKey, reason, staticReply }) {
     const shouldNotify = await this.resolveShouldNotify({
       channel,
@@ -268,13 +325,14 @@ class ChatbotRateLimitService {
     const scope = { channel: ch, ownerUserId: owner, chatbotId: bot, senderKey: sender };
 
     if (!sender || sender === 'unknown') {
-      // No stable identity — chatbot hourly + optional owner cap only.
+      // No stable identity — owner day count + chatbot hourly only.
+      let ownerCount = 0;
+      if (owner) {
+        ownerCount = await this.incrWithTtl(ownerDayCounterKey(owner), DAY_COUNTER_TTL_SEC);
+      }
       const ownerCap = await this.getOwnerDailyCap(owner);
-      if (ownerCap != null) {
-        const ownerCount = await this.incrWithTtl(`cbrl:owner:${owner}:d`, 86400);
-        if (ownerCount > ownerCap) {
-          return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
-        }
+      if (ownerCap != null && ownerCount > ownerCap) {
+        return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
       }
 
       const hourCount = await this.incrWithTtl(`cbrl:bot:${ch}:${bot}:h`, 3600);
@@ -301,19 +359,19 @@ class ChatbotRateLimitService {
     }
 
     const dayCount = await this.incrWithTtl(
-      `cbrl:sender:${ch}:${bot}:${sender}:d`,
-      86400
+      senderDayCounterKey(ch, bot, sender),
+      DAY_COUNTER_TTL_SEC
     );
     if (dayCount > this.perSenderPerDay) {
       return this.buildBlockedResult({ ...scope, reason: 'sender_day', staticReply });
     }
 
+    const ownerCount = owner
+      ? await this.incrWithTtl(ownerDayCounterKey(owner), DAY_COUNTER_TTL_SEC)
+      : 0;
     const ownerCap = await this.getOwnerDailyCap(owner);
-    if (ownerCap != null) {
-      const ownerCount = await this.incrWithTtl(`cbrl:owner:${owner}:d`, 86400);
-      if (ownerCount > ownerCap) {
-        return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
-      }
+    if (ownerCap != null && ownerCount > ownerCap) {
+      return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
     }
 
     const botHourCount = await this.incrWithTtl(`cbrl:bot:${ch}:${bot}:h`, 3600);

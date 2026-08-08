@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { HiOutlineChatAlt2 } from 'react-icons/hi';
 import { updateBotDailyReplyCap } from '../auth/services/authApi.service';
 
+/** UX-only: dưới mức này gần như chắc đang gõ nhầm — không lấy từ env. */
+const LOW_CAP_WARN_BELOW = 20;
+
 /**
  * Owner-only control: daily cap on bot AI replies across all channels/chatbots.
  */
@@ -19,6 +22,27 @@ export default function BotDailyReplyCapCard({ data, t, onSaved }) {
   const aiUsed = Number(data?.aiCreditsUsed) || 0;
   const aiLimit = data?.aiCreditsPerPeriod;
   const aiRemaining = aiLimit == null ? null : Math.max(0, Number(aiLimit) - aiUsed);
+
+  const usedToday = Number(data?.botRepliesUsedToday);
+  const usedTodaySafe = Number.isFinite(usedToday) && usedToday >= 0 ? usedToday : 0;
+  const savedCap = data?.botDailyReplyCap != null && Number(data.botDailyReplyCap) > 0
+    ? Number(data.botDailyReplyCap)
+    : null;
+
+  const typedCap = (() => {
+    const trimmed = String(value || '').trim();
+    if (trimmed === '') return null;
+    const n = Number.parseInt(trimmed, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+  const showLowCapWarn = typedCap != null && typedCap < LOW_CAP_WARN_BELOW;
+
+  const limits = data?.chatbotRateLimits;
+  const showSystemLimits = limits
+    && Number.isFinite(Number(limits.perSenderPerMin))
+    && Number.isFinite(Number(limits.perSenderPerHour))
+    && Number.isFinite(Number(limits.perSenderPerDay))
+    && Number.isFinite(Number(limits.perChatbotPerHour));
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -68,6 +92,16 @@ export default function BotDailyReplyCapCard({ data, t, onSaved }) {
               })}
             </p>
           )}
+          <p className="mt-1 text-xs text-slate-600">
+            {savedCap != null
+              ? t('billingHub.botCapUsedTodayWithCap', {
+                used: usedTodaySafe.toLocaleString('vi-VN'),
+                cap: savedCap.toLocaleString('vi-VN'),
+              })
+              : t('billingHub.botCapUsedToday', {
+                used: usedTodaySafe.toLocaleString('vi-VN'),
+              })}
+          </p>
           <p className="mt-1 text-xs text-amber-700/90">
             {t('billingHub.botCapCacheNote')}
           </p>
@@ -101,9 +135,46 @@ export default function BotDailyReplyCapCard({ data, t, onSaved }) {
         </button>
       </div>
 
+      {showLowCapWarn && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 leading-relaxed">
+          {t('billingHub.botCapLowWarn', { n: typedCap })}
+        </p>
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       {savedOk && !error && (
         <p className="text-sm text-green-600">{t('billingHub.botCapSaved')}</p>
+      )}
+
+      {showSystemLimits && (
+        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 space-y-2">
+          <p className="text-xs font-semibold text-slate-700">
+            {t('billingHub.botCapSystemTitle')}
+          </p>
+          <p className="text-[11px] text-slate-500">
+            {t('billingHub.botCapSystemSubtitle')}
+          </p>
+          <ul className="text-xs text-slate-600 space-y-1">
+            <li>
+              {t('billingHub.botCapSystemPerSender', {
+                min: limits.perSenderPerMin,
+                hour: limits.perSenderPerHour,
+                day: limits.perSenderPerDay,
+              })}
+            </li>
+            <li>
+              {t('billingHub.botCapSystemPerBot', {
+                hour: limits.perChatbotPerHour,
+              })}
+            </li>
+          </ul>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            {t('billingHub.botCapSystemSilent')}
+          </p>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            {t('billingHub.botCapSystemNotify')}
+          </p>
+        </div>
       )}
     </form>
   );
