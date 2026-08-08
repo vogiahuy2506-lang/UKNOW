@@ -23,6 +23,8 @@ export default function BotDailyReplyCapCard({ data, t, onSaved }) {
   const aiLimit = data?.aiCreditsPerPeriod;
   const aiRemaining = aiLimit == null ? null : Math.max(0, Number(aiLimit) - aiUsed);
 
+  // Backend cũ chưa trả trường này → ẩn hẳn dòng, đừng hiện "đã dùng 0 lượt" (sai).
+  const hasUsedToday = data?.botRepliesUsedToday != null;
   const usedToday = Number(data?.botRepliesUsedToday);
   const usedTodaySafe = Number.isFinite(usedToday) && usedToday >= 0 ? usedToday : 0;
   const savedCap = data?.botDailyReplyCap != null && Number(data.botDailyReplyCap) > 0
@@ -92,16 +94,18 @@ export default function BotDailyReplyCapCard({ data, t, onSaved }) {
               })}
             </p>
           )}
-          <p className="mt-1 text-xs text-slate-600">
-            {savedCap != null
-              ? t('billingHub.botCapUsedTodayWithCap', {
-                used: usedTodaySafe.toLocaleString('vi-VN'),
-                cap: savedCap.toLocaleString('vi-VN'),
-              })
-              : t('billingHub.botCapUsedToday', {
-                used: usedTodaySafe.toLocaleString('vi-VN'),
-              })}
-          </p>
+          {hasUsedToday && (
+            <p className="mt-1 text-xs text-slate-600">
+              {savedCap != null
+                ? t('billingHub.botCapUsedTodayWithCap', {
+                  used: usedTodaySafe.toLocaleString('vi-VN'),
+                  cap: savedCap.toLocaleString('vi-VN'),
+                })
+                : t('billingHub.botCapUsedToday', {
+                  used: usedTodaySafe.toLocaleString('vi-VN'),
+                })}
+            </p>
+          )}
           <p className="mt-1 text-xs text-amber-700/90">
             {t('billingHub.botCapCacheNote')}
           </p>
