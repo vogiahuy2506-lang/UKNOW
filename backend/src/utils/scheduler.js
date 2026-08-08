@@ -240,7 +240,7 @@ const triggerCampaignSchedule = async (schedule) => {
 
 const refreshCampaignSchedules = async () => {
   if (isRefreshingCampaignSchedules) {
-    return;
+    return { schedules: campaignScheduleTasks.size, skipped: true };
   }
   isRefreshingCampaignSchedules = true;
 
@@ -275,6 +275,7 @@ const refreshCampaignSchedules = async () => {
       campaignScheduleTasks.set(schedule.id, task);
     }
     console.log(`[Scheduler] Đã nạp ${campaignScheduleTasks.size} lịch chạy chiến dịch`);
+    return { schedules: campaignScheduleTasks.size };
   } finally {
     isRefreshingCampaignSchedules = false;
   }
@@ -308,8 +309,9 @@ const recoverContinuousCampaignRuns = async () => {
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
        ${QUOTA_DEFER_READY_SQL}`
   );
-  if (result.rows.length === 0) return;
+  if (result.rows.length === 0) return { recovered: 0 };
 
+  let recovered = 0;
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
@@ -323,6 +325,7 @@ const recoverContinuousCampaignRuns = async () => {
     }
 
     activeContinuousRunIds.add(runKey);
+    recovered += 1;
     console.log(`[Scheduler] Phục hồi campaign run continuous #${runId} (campaign #${campaignId})`);
     campaignController.executeCampaign(campaignId, runId, userId)
       .catch((error) => {
@@ -332,6 +335,7 @@ const recoverContinuousCampaignRuns = async () => {
         activeContinuousRunIds.delete(runKey);
       });
   }
+  return { recovered };
 };
 
 const triggerNonContinuousResume = ({ runId, campaignId, userId, resumedBy }) => {
@@ -370,8 +374,9 @@ const recoverNonContinuousCampaignRuns = async () => {
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
        ${QUOTA_DEFER_READY_SQL}`
   );
-  if (result.rows.length === 0) return;
+  if (result.rows.length === 0) return { recovered: 0 };
 
+  let recovered = 0;
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
@@ -380,9 +385,11 @@ const recoverNonContinuousCampaignRuns = async () => {
       continue;
     }
     if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'per_minute' })) {
+      recovered += 1;
       console.log(`[Scheduler] Phục hồi campaign run non-continuous #${runId} (campaign #${campaignId})`);
     }
   }
+  return { recovered };
 };
 
 /**
@@ -408,8 +415,9 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
        AND (crs.meta->>'nextDueAt')::timestamptz <= NOW()
        ${QUOTA_DEFER_READY_SQL}`
   );
-  if (result.rows.length === 0) return;
+  if (result.rows.length === 0) return { recovered: 0 };
 
+  let recovered = 0;
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
@@ -418,11 +426,13 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
       continue;
     }
     if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'overdue_scan' })) {
+      recovered += 1;
       console.log(
         `[Scheduler] Quét retry non-continuous quá hạn cho run #${runId} (campaign #${campaignId})`
       );
     }
   }
+  return { recovered };
 };
 
 export const requestCampaignScheduleRefresh = async () => {
@@ -443,31 +453,45 @@ export const initScheduler = () => {
   cron.schedule('30 0 * * *', async () => {
     console.log('[Scheduler] Bắt đầu đồng bộ khóa học hàng ngày lúc 00:30...');
     try {
-      // Sync với userId mặc định = 1
-      // Lưu ý: Query lấy TẤT CẢ courses để so sánh, không phân biệt user
-      const result = await coursesController.syncCoursesFromFounderAI();
-      if (result.success) {
-        console.log('[Scheduler] Đồng bộ khóa học thành công:', {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('courses_daily_sync', async () => {
+        // Sync với userId mặc định = 1
+        // Lưu ý: Query lấy TẤT CẢ courses để so sánh, không phân biệt user
+        const result = await coursesController.syncCoursesFromFounderAI();
+        if (result.success) {
+          console.log('[Scheduler] Đồng bộ khóa học thành công:', {
+            totalChecked: result.totalChecked,
+            totalInserted: result.totalInserted,
+            totalUpdated: result.totalUpdated,
+            duration: result.duration,
+          });
+        } else {
+          console.error('[Scheduler] Đồng bộ khóa học thất bại:', result.error);
+          throw new Error(result.error || 'Đồng bộ khóa học thất bại');
+        }
+
+        let archived = 0;
+        try {
+          const { archiveExpiredVouchers } = await import('../repositories/voucher.repository.js');
+          archived = await archiveExpiredVouchers();
+          if (archived > 0) {
+            console.log(`[Scheduler] Đã lưu trữ ${archived} voucher hết hạn`);
+          }
+        } catch (error) {
+          console.error('[Scheduler] Lỗi khi lưu trữ voucher hết hạn:', error.message);
+          throw error;
+        }
+
+        return {
           totalChecked: result.totalChecked,
           totalInserted: result.totalInserted,
           totalUpdated: result.totalUpdated,
-          duration: result.duration,
-        });
-      } else {
-        console.error('[Scheduler] Đồng bộ khóa học thất bại:', result.error);
-      }
+          archived,
+          synced: Number(result.totalInserted || 0) + Number(result.totalUpdated || 0) + Number(archived || 0),
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi đồng bộ khóa học:', error.message);
-    }
-
-    try {
-      const { archiveExpiredVouchers } = await import('../repositories/voucher.repository.js');
-      const archived = await archiveExpiredVouchers();
-      if (archived > 0) {
-        console.log(`[Scheduler] Đã lưu trữ ${archived} voucher hết hạn`);
-      }
-    } catch (error) {
-      console.error('[Scheduler] Lỗi khi lưu trữ voucher hết hạn:', error.message);
     }
   }, {
     timezone: 'Asia/Ho_Chi_Minh'
@@ -479,9 +503,20 @@ export const initScheduler = () => {
   // Dùng cron có giây: "20 * * * * *" = giây thứ 20 của mỗi phút.
   cron.schedule('20 * * * * *', async () => {
     try {
-      await refreshCampaignSchedules();
-      await recoverContinuousCampaignRuns();
-      await recoverNonContinuousCampaignRuns();
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('campaign_scheduler_tick', async () => {
+        const schedules = await refreshCampaignSchedules();
+        const continuous = await recoverContinuousCampaignRuns();
+        const nonContinuous = await recoverNonContinuousCampaignRuns();
+        return {
+          schedules: schedules?.schedules ?? 0,
+          continuous: continuous?.recovered ?? 0,
+          nonContinuous: nonContinuous?.recovered ?? 0,
+          synced:
+            Number(continuous?.recovered || 0)
+            + Number(nonContinuous?.recovered || 0),
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi refresh campaign schedules:', error.message);
     }
@@ -493,7 +528,14 @@ export const initScheduler = () => {
   // Lệch giây với refresh/recover chính ở :20 để giảm chồng trigger trong cùng tick.
   cron.schedule('40 * * * * *', async () => {
     try {
-      await recoverOverdueNonContinuousCampaignRuns();
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('campaign_overdue_retry', async () => {
+        const overdue = await recoverOverdueNonContinuousCampaignRuns();
+        return {
+          recovered: overdue?.recovered ?? 0,
+          synced: overdue?.recovered ?? 0,
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi quét retry non-continuous quá hạn:', error.message);
     }
@@ -517,8 +559,21 @@ export const initScheduler = () => {
   // ── Reset daily_sent_count — chạy lúc 00:00 mỗi ngày ─────────────────────
   cron.schedule('0 0 * * *', async () => {
     try {
-      const { rowCount } = await db.query('UPDATE email_settings SET daily_sent_count = 0');
-      console.log(`[Scheduler] Reset daily_sent_count: ${rowCount} email accounts`);
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('email_daily_count_reset', async () => {
+        const { rowCount } = await db.query('UPDATE email_settings SET daily_sent_count = 0');
+        console.log(`[Scheduler] Reset daily_sent_count: ${rowCount} email accounts`);
+        let pruned = 0;
+        try {
+          pruned = await cronJobRunRepository.deleteOlderThan({ olderThanDays: 14 });
+          if (pruned > 0) {
+            console.log(`[Scheduler] Đã xoá ${pruned} dòng cron_job_runs cũ hơn 14 ngày`);
+          }
+        } catch (pruneErr) {
+          console.error('[Scheduler] Lỗi dọn cron_job_runs:', pruneErr.message);
+        }
+        return { resetAccounts: rowCount || 0, pruned, synced: rowCount || 0 };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi reset daily_sent_count:', error.message);
     }
@@ -529,86 +584,107 @@ export const initScheduler = () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
     const renewalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/renewal`;
     try {
-      // 1. Hết hạn: revoke active_plan_id
-      const expired = await findExpiredUsers();
-      for (const user of expired) {
-        await expireUserPlan(user.id);
-        console.log(`[Subscription] Đã thu hồi gói của ${user.email} (${user.plan_name})`);
-      }
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('subscription_reminder', async () => {
+        // 1. Hết hạn: revoke active_plan_id
+        const expired = await findExpiredUsers();
+        for (const user of expired) {
+          await expireUserPlan(user.id);
+          console.log(`[Subscription] Đã thu hồi gói của ${user.email} (${user.plan_name})`);
+        }
 
-      // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
-      const week = await findExpiringUsers(6, 7, 1);
-      for (const user of week) {
-        const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-        const { subject, html } = buildRenewalReminderEmail({
-          fullName: user.full_name, planName: user.plan_name,
-          expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-        });
-        await sendSystemEmail({ to: user.email, subject, html });
-        await incrementReminderCount(user.id);
-        console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
-      }
+        // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
+        const week = await findExpiringUsers(6, 7, 1);
+        for (const user of week) {
+          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
+          const { subject, html } = buildRenewalReminderEmail({
+            fullName: user.full_name, planName: user.plan_name,
+            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+          });
+          await sendSystemEmail({ to: user.email, subject, html });
+          await incrementReminderCount(user.id);
+          console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
+        }
 
-      // 3. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
-      const threeDay = await findExpiringUsers(2, 3, 2);
-      for (const user of threeDay) {
-        const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-        const { subject, html } = buildRenewalReminderEmail({
-          fullName: user.full_name, planName: user.plan_name,
-          expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-        });
-        await sendSystemEmail({ to: user.email, subject, html });
-        await incrementReminderCount(user.id);
-        console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
-      }
+        // 3. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
+        const threeDay = await findExpiringUsers(2, 3, 2);
+        for (const user of threeDay) {
+          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
+          const { subject, html } = buildRenewalReminderEmail({
+            fullName: user.full_name, planName: user.plan_name,
+            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+          });
+          await sendSystemEmail({ to: user.email, subject, html });
+          await incrementReminderCount(user.id);
+          console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
+        }
 
-      // 4. Khoá / mở khoá tài nguyên mua thêm hết hạn (còn gói hoặc hết gói)
-      try {
-        const {
-          reconcileAllDueUsers,
-          sendStructuralGrantReminders,
-          structuralItemLabelVi,
-        } = await import('../services/payment/topupLock.service.js');
-        const lockResults = await reconcileAllDueUsers();
-        for (const r of lockResults) {
-          if (r.locked?.length) {
-            console.log(
-              `[TopupLock] user=${r.userId} locked=${r.locked.length} unlocked=${r.unlocked?.length || 0}`
-            );
-            // Email báo khoá (nếu có)
-            try {
-              const { rows } = await (await import('../config/database.js')).default.query(
-                `SELECT email, full_name FROM users WHERE id = $1`,
-                [r.userId]
+        let lockedUsers = 0;
+        let reminderWeek = 0;
+        let reminderThree = 0;
+        // 4. Khoá / mở khoá tài nguyên mua thêm hết hạn (còn gói hoặc hết gói)
+        try {
+          const {
+            reconcileAllDueUsers,
+            sendStructuralGrantReminders,
+            structuralItemLabelVi,
+          } = await import('../services/payment/topupLock.service.js');
+          const lockResults = await reconcileAllDueUsers();
+          for (const r of lockResults) {
+            if (r.locked?.length) {
+              lockedUsers += 1;
+              console.log(
+                `[TopupLock] user=${r.userId} locked=${r.locked.length} unlocked=${r.unlocked?.length || 0}`
               );
-              const u = rows[0];
-              if (u?.email) {
-                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-                const counts = r.locked.reduce((acc, x) => {
-                  acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
-                  return acc;
-                }, {});
-                const detail = Object.entries(counts)
-                  .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
-                  .join(', ');
-                await sendSystemEmail({
-                  to: u.email,
-                  subject: '[Founder AI] Một số tài nguyên mua thêm đã bị khoá',
-                  html: `<p>Xin chào ${u.full_name || 'bạn'},</p>
+              // Email báo khoá (nếu có)
+              try {
+                const { rows } = await (await import('../config/database.js')).default.query(
+                  `SELECT email, full_name FROM users WHERE id = $1`,
+                  [r.userId]
+                );
+                const u = rows[0];
+                if (u?.email) {
+                  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+                  const counts = r.locked.reduce((acc, x) => {
+                    acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
+                    return acc;
+                  }, {});
+                  const detail = Object.entries(counts)
+                    .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
+                    .join(', ');
+                  await sendSystemEmail({
+                    to: u.email,
+                    subject: '[Founder AI] Một số tài nguyên mua thêm đã bị khoá',
+                    html: `<p>Xin chào ${u.full_name || 'bạn'},</p>
                     <p>Các tài nguyên sau đã bị khoá vì slot mua thêm hết hạn: <strong>${detail}</strong>.</p>
                     <p><a href="${frontendUrl}/app/billing?tab=locks">Chọn tài nguyên giữ lại / gia hạn</a></p>`,
-                });
+                  });
+                }
+              } catch (mailErr) {
+                console.error('[TopupLock] lock notify email failed:', mailErr.message);
               }
-            } catch (mailErr) {
-              console.error('[TopupLock] lock notify email failed:', mailErr.message);
             }
           }
+          const rem = await sendStructuralGrantReminders();
+          reminderWeek = rem.week || 0;
+          reminderThree = rem.three || 0;
+          console.log(`[TopupLock] reminders week=${rem.week} three=${rem.three}`);
+        } catch (lockErr) {
+          console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
         }
-        const rem = await sendStructuralGrantReminders();
-        console.log(`[TopupLock] reminders week=${rem.week} three=${rem.three}`);
-      } catch (lockErr) {
-        console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
-      }
+
+        const processed = expired.length + week.length + threeDay.length + lockedUsers
+          + reminderWeek + reminderThree;
+        return {
+          expired: expired.length,
+          remindedWeek: week.length,
+          remindedThreeDay: threeDay.length,
+          lockedUsers,
+          reminderWeek,
+          reminderThree,
+          synced: processed,
+        };
+      });
     } catch (error) {
       console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);
     }
@@ -620,8 +696,13 @@ export const initScheduler = () => {
   // Cache accounts 5 phút nên chỉ cần check mỗi 5 phút
   // Dùng refreshListeners() thay vì start() để tận dụng cache
   const registerZaloPersonalListeners = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
     try {
-      await zaloPersonalInboxService.refreshListeners();
+      await cronJobRunRepository.recordRun('zalo_personal_listeners', async () => {
+        await zaloPersonalInboxService.refreshListeners();
+        const accounts = await zaloPersonalInboxService.getActiveZaloPersonalAccounts(false);
+        return { accounts: accounts?.length || 0, synced: accounts?.length || 0 };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi đăng ký Zalo Personal Inbox listeners:', error.message);
     }
@@ -693,12 +774,20 @@ export const initScheduler = () => {
   // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
   // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)
   const restoreZaloSessions = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
     try {
-      const campaignZaloSenderService = (await import('../services/campaign/campaignZaloSender.service.js')).default;
-      const result = await campaignZaloSenderService.restoreDisconnectedZaloAccounts();
-      if (result.restored > 0) {
-        console.log(`[Scheduler] Đã khôi phục ${result.restored}/${result.total} tài khoản Zalo`);
-      }
+      await cronJobRunRepository.recordRun('zalo_session_restore', async () => {
+        const campaignZaloSenderService = (await import('../services/campaign/campaignZaloSender.service.js')).default;
+        const result = await campaignZaloSenderService.restoreDisconnectedZaloAccounts();
+        if (result.restored > 0) {
+          console.log(`[Scheduler] Đã khôi phục ${result.restored}/${result.total} tài khoản Zalo`);
+        }
+        return {
+          restored: result.restored || 0,
+          total: result.total || 0,
+          synced: result.restored || 0,
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi khôi phục Zalo sessions:', error.message);
     }
@@ -723,12 +812,20 @@ export const initScheduler = () => {
   // ── Custom Domain Auto-Verify - Tự động verify pending domains ─────────────────
   // Chạy mỗi 5 phút để tự động kích hoạt domain khi DNS đã propagate
   const autoVerifyDomains = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
     try {
-      const landingPageDomainService = (await import('../services/landingPage/landingPageDomain.service.js')).default;
-      const result = await landingPageDomainService.autoVerifyPendingDomains();
-      if (result.verified > 0) {
-        console.log(`[Scheduler] Auto-verify domains: ${result.verified}/${result.total} activated`);
-      }
+      await cronJobRunRepository.recordRun('custom_domain_verify', async () => {
+        const landingPageDomainService = (await import('../services/landingPage/landingPageDomain.service.js')).default;
+        const result = await landingPageDomainService.autoVerifyPendingDomains();
+        if (result.verified > 0) {
+          console.log(`[Scheduler] Auto-verify domains: ${result.verified}/${result.total} activated`);
+        }
+        return {
+          verified: result.verified || 0,
+          total: result.total || 0,
+          synced: result.verified || 0,
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi auto-verify domains:', error.message);
     }
@@ -747,10 +844,17 @@ export const initScheduler = () => {
   // ── AI Model Catalog Sync - Đồng bộ danh sách model Gemini ─────────────────────
   const aiModelSyncCron = String(process.env.AI_MODEL_SYNC_CRON || '15 2 * * *').trim();
   const syncAiModels = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
     try {
-      const { syncModelsFromGoogle } = await import('../services/ai/aiModelCatalog.service.js');
-      const result = await syncModelsFromGoogle();
-      console.log('[Scheduler] AI model catalog synced:', result);
+      await cronJobRunRepository.recordRun('ai_model_catalog_sync', async () => {
+        const { syncModelsFromGoogle } = await import('../services/ai/aiModelCatalog.service.js');
+        const result = await syncModelsFromGoogle();
+        console.log('[Scheduler] AI model catalog synced:', result);
+        return {
+          ...result,
+          synced: Number(result?.fetched ?? result?.seen ?? 0),
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi đồng bộ AI models:', error.message);
     }
@@ -766,15 +870,23 @@ export const initScheduler = () => {
   // ── Scheduled Notifications - Xử lý notification đã hẹn giờ ─────────────────
   // Chạy mỗi phút để kiểm tra và gửi các notification đã đến giờ
   const processScheduledNotifications = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
     try {
-      const results = await notificationService.processScheduledNotifications();
-      for (const result of results) {
-        if (result.success) {
-          console.log(`[Scheduler] Đã gửi notification #${result.id}: ${result.result.sent}/${result.result.total} email`);
-        } else {
-          console.error(`[Scheduler] Lỗi gửi notification #${result.id}: ${result.error}`);
+      await cronJobRunRepository.recordRun('scheduled_notifications', async () => {
+        const results = await notificationService.processScheduledNotifications();
+        let sent = 0;
+        let failed = 0;
+        for (const result of results) {
+          if (result.success) {
+            sent += 1;
+            console.log(`[Scheduler] Đã gửi notification #${result.id}: ${result.result.sent}/${result.result.total} email`);
+          } else {
+            failed += 1;
+            console.error(`[Scheduler] Lỗi gửi notification #${result.id}: ${result.error}`);
+          }
         }
-      }
+        return { processed: results.length, sent, failed, synced: sent };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi xử lý scheduled notifications:', error.message);
     }
@@ -790,12 +902,16 @@ export const initScheduler = () => {
   // ── Cleanup orphan self-serve custom plans (unpaid / abandoned) ───────────
   cron.schedule('15 * * * *', async () => {
     try {
-      const { getPayosPendingWindowMinutes } = await import('../repositories/voucher.repository.js');
-      const { cleanupOrphanCustomPlans } = await import('../services/payment/customPlan.service.js');
-      const deleted = await cleanupOrphanCustomPlans(getPayosPendingWindowMinutes());
-      if (deleted.length) {
-        console.log(`[Scheduler] Đã xoá ${deleted.length} gói custom mồ côi: ${deleted.map((p) => p.id).join(', ')}`);
-      }
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('custom_plan_orphan_cleanup', async () => {
+        const { getPayosPendingWindowMinutes } = await import('../repositories/voucher.repository.js');
+        const { cleanupOrphanCustomPlans } = await import('../services/payment/customPlan.service.js');
+        const deleted = await cleanupOrphanCustomPlans(getPayosPendingWindowMinutes());
+        if (deleted.length) {
+          console.log(`[Scheduler] Đã xoá ${deleted.length} gói custom mồ côi: ${deleted.map((p) => p.id).join(', ')}`);
+        }
+        return { deleted: deleted.length, synced: deleted.length };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi dọn gói custom mồ côi:', error.message);
     }
@@ -855,8 +971,19 @@ export const initScheduler = () => {
   // ── Ops alerts evaluator (PLAN_DO_LUONG_KPI Phần A) ─────────────────────────
   cron.schedule('*/5 * * * *', async () => {
     try {
-      const { evaluateAllAlerts } = await import('../services/admin/alertEvaluator.service.js');
-      await evaluateAllAlerts();
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('alerts_evaluator', async () => {
+        const { evaluateAllAlerts } = await import('../services/admin/alertEvaluator.service.js');
+        const results = await evaluateAllAlerts();
+        const fired = results.filter((r) => r.fired).length;
+        const errors = results.filter((r) => r.error).length;
+        return {
+          processed: results.length,
+          fired,
+          errors,
+          synced: fired,
+        };
+      });
     } catch (error) {
       console.error('[Scheduler] Lỗi đánh giá cảnh báo:', error.message);
     }

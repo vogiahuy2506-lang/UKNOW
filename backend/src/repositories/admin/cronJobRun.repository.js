@@ -61,6 +61,16 @@ export async function listLatestByJob({ limit = 100 } = {}) {
   return rows;
 }
 
+/** Xoá lịch sử chạy cũ hơn `olderThanDays` (mặc định 14). */
+export async function deleteOlderThan({ olderThanDays = 14 } = {}) {
+  const days = Math.max(1, Number(olderThanDays) || 14);
+  const { rowCount } = await db.query(
+    `DELETE FROM cron_job_runs WHERE started_at < NOW() - make_interval(days => $1)`,
+    [days]
+  );
+  return rowCount || 0;
+}
+
 export async function listRecent({ jobCode = null, limit = 50 } = {}) {
   const params = [limit];
   let where = '';

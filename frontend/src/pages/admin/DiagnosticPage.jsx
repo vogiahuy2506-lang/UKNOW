@@ -52,22 +52,22 @@ const CHANNEL_LABELS = {
   email: 'Email',
 };
 const WAIT_REASON_LABELS = {
-  inter_message_delay: 'Chờ delay',
+  inter_message_delay: 'Chờ khoảng cách tin',
   rate_limited: 'Giới hạn/giờ',
   quiet_hours: 'Giờ im lặng',
-  phone_lookup_cooldown: 'Cooldown tra số',
+  phone_lookup_cooldown: 'Tạm khoá tra số',
 };
 const ERROR_CATEGORY_LABELS = {
-  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khóa tra cứu (~3h)',
+  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khoá tra cứu (~3 giờ)',
   RECIPIENT_NOT_FOUND: 'Số chưa dùng Zalo hoặc sai số',
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
   NOT_FRIEND_OR_BLOCKED: 'Người nhận chặn / chưa là bạn / hạn chế',
   ZALO_GROUP_UNREACHABLE: 'Không gửi được tới nhóm Zalo',
-  EMAIL_HARD_BOUNCE: 'Email hard bounce / địa chỉ không tồn tại',
-  EMAIL_SOFT_BOUNCE: 'Email soft bounce / lỗi tạm thời',
-  EMAIL_SMTP_AUTH_ERROR: 'Lỗi cấu hình SMTP / xác thực email gửi',
-  EMAIL_RATE_LIMIT_PAUSE: 'SMTP provider đang giới hạn gửi',
+  EMAIL_HARD_BOUNCE: 'Email nảy cứng — địa chỉ không tồn tại',
+  EMAIL_SOFT_BOUNCE: 'Email nảy mềm — lỗi tạm thời',
+  EMAIL_SMTP_AUTH_ERROR: 'Lỗi cấu hình / xác thực SMTP',
+  EMAIL_RATE_LIMIT_PAUSE: 'Nhà cung cấp SMTP đang giới hạn gửi',
   QUIET_HOURS: 'Đang trong khung giờ im lặng Zalo',
   RATE_LIMITED: 'Đã đạt giới hạn gửi theo giờ',
 };
@@ -81,10 +81,10 @@ const RECIPIENT_CONFIG = {
     note: 'mỗi số một dòng',
   },
   zalo_group: {
-    label: 'Group ID',
-    shortLabel: 'group ID',
+    label: 'ID nhóm',
+    shortLabel: 'ID nhóm',
     placeholder: '1234567890123456789\n9876543210987654321',
-    note: 'mỗi group ID một dòng',
+    note: 'mỗi ID nhóm một dòng',
   },
   email: {
     label: 'Địa chỉ email',
@@ -118,7 +118,7 @@ function formatPolicySummary(policy, quietHours) {
   const qh = quietHours
     ? ` · im lặng ${quietHours.start}h–${quietHours.end}h`
     : '';
-  return `delay ${minSec}–${maxSec}s random · ${limit} tin/giờ${qh}`;
+  return `khoảng cách ngẫu nhiên ${minSec}–${maxSec} giây · ${limit} tin/giờ${qh}`;
 }
 
 function buildAnalysis(messages) {
@@ -137,7 +137,7 @@ function buildAnalysis(messages) {
   const avgWait = avg(waitVals);
   const p95Lookup = percentile(lookupVals, 95);
 
-  let conclusion = 'Chưa đủ dữ liệu timing để kết luận.';
+  let conclusion = 'Chưa đủ dữ liệu thời gian để kết luận.';
   const parts = [];
   if (avgLookup != null) parts.push(`Tra số TB ${fmtDelay(avgLookup)}`);
   if (avgSend != null) parts.push(`Gửi TB ${fmtDelay(avgSend)}`);
@@ -228,7 +228,7 @@ function AnalysisPanel({ messages }) {
       <h3 className="text-sm font-semibold text-gray-800">Phân tích</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div>
-          <div className="text-xs text-gray-500">Tra số TB / p95</div>
+          <div className="text-xs text-gray-500">Tra số TB / P95</div>
           <div className="font-medium tabular-nums">{fmtDelay(analysis.avgLookup)} / {fmtDelay(analysis.p95Lookup)}</div>
         </div>
         <div>
@@ -267,8 +267,8 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
     ? `${quota.attemptCount ?? quota.successCount}/${quota.limitPerWindow}`
     : '—';
   const resetText = quota?.windowResetInMs == null
-    ? 'chưa có window'
-    : `reset sau ${fmtDuration(quota.windowResetInMs)}`;
+    ? 'chưa có khung giờ'
+    : `làm mới sau ${fmtDuration(quota.windowResetInMs)}`;
   const cooldownText = cooldown?.remainingMs > 0
     ? `còn ${fmtDuration(cooldown.remainingMs)}`
     : 'không';
@@ -280,8 +280,8 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
     <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-blue-900">Trạng thái account LIVE</p>
-          <p className="text-xs text-blue-700/80">{status?.accountName || 'Đọc từ campaign worker hiện tại'}</p>
+          <p className="text-sm font-semibold text-blue-900">Trạng thái tài khoản trực tiếp</p>
+          <p className="text-xs text-blue-700/80">{status?.accountName || 'Đọc từ worker chiến dịch hiện tại'}</p>
         </div>
         <button
           type="button"
@@ -297,19 +297,19 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
       ) : (
         <div className="grid grid-cols-1 gap-2 text-xs text-blue-900 md:grid-cols-4">
           <div>
-            <p className="text-blue-500">Quota giờ này</p>
+            <p className="text-blue-500">Hạn mức giờ này</p>
             <p className="font-semibold">{quotaText} · {resetText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Cooldown tra số</p>
+            <p className="text-blue-500">Tạm khoá tra số</p>
             <p className="font-semibold">{cooldownText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Quiet-hours</p>
+            <p className="text-blue-500">Giờ im lặng</p>
             <p className="font-semibold">{quietText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Delay policy</p>
+            <p className="text-blue-500">Chính sách khoảng cách</p>
             <p className="font-semibold">{fmtDelay(policy?.minDelayMs)}–{fmtDelay(policy?.maxDelayMs)}</p>
           </div>
         </div>
@@ -346,10 +346,10 @@ function RunLog({ run, messages }) {
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`badge ${isProduction ? 'badge-warning' : 'badge-gray'}`}>
-          {isProduction ? 'Production policy' : 'Fast mode'}
+          {isProduction ? 'Theo chính sách thật' : 'Chế độ nhanh'}
         </span>
         {!isProduction && run.inter_message_delay_ms != null && (
-          <span className="text-gray-500">Delay cấu hình: {fmtDelay(run.inter_message_delay_ms)}</span>
+          <span className="text-gray-500">Khoảng cách đã cấu hình: {fmtDelay(run.inter_message_delay_ms)}</span>
         )}
       </div>
 
@@ -571,7 +571,7 @@ export default function DiagnosticPage() {
       setAccountStatus(res.data?.data ?? null);
     } catch (err) {
       setAccountStatus(null);
-      setAccountStatusError(err.response?.data?.message || 'Không đọc được trạng thái live');
+      setAccountStatusError(err.response?.data?.message || 'Không đọc được trạng thái trực tiếp');
     } finally {
       setAccountStatusLoading(false);
     }
@@ -638,7 +638,7 @@ export default function DiagnosticPage() {
       setActiveRun(null);
       setActiveMessages([]);
     } catch (err) {
-      setFormError(err.response?.data?.message ?? 'Lỗi khi tạo diagnostic run');
+      setFormError(err.response?.data?.message ?? 'Lỗi khi tạo lần kiểm tra');
     } finally {
       setSubmitting(false);
     }
@@ -689,7 +689,7 @@ export default function DiagnosticPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Kiểm tra hiệu năng gửi tin</h1>
-          <p className="text-sm text-gray-400">Gửi thực tế với số lượng nhỏ — quan sát timing từng chặng và lỗi dễ hiểu</p>
+          <p className="text-sm text-gray-400">Gửi thực tế với số lượng nhỏ — quan sát thời gian từng chặng và lỗi dễ hiểu</p>
         </div>
       </div>
 
@@ -702,7 +702,7 @@ export default function DiagnosticPage() {
               onClick={() => setRunMode('fast')}
               className={`px-3 py-1.5 rounded-lg transition-colors ${runMode === 'fast' ? 'bg-white shadow-sm text-gray-900 font-medium' : 'text-gray-500'}`}
             >
-              Fast
+              Nhanh
             </button>
             <button
               type="button"
@@ -716,7 +716,7 @@ export default function DiagnosticPage() {
                     : 'text-gray-500'
               }`}
             >
-              Production
+              Theo thật
             </button>
           </div>
         </div>
@@ -728,7 +728,7 @@ export default function DiagnosticPage() {
                 {prefillLoading
                   ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
                   : <HiOutlineDownload className="w-3.5 h-3.5" />}
-                Load từ chiến dịch
+                Tải từ chiến dịch
               </span>
               <select
                 value={selectedCampaignId}
@@ -755,18 +755,18 @@ export default function DiagnosticPage() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex gap-2">
               <HiOutlineShieldCheck className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Chế độ Production — áp policy gửi thật</p>
+                <p className="font-medium">Chế độ theo thật — áp chính sách gửi thật</p>
                 {policySummary
                   ? <p className="text-xs mt-1 text-amber-800">{policySummary}</p>
-                  : <p className="text-xs mt-1 text-amber-700">Đang tải policy...</p>}
+                  : <p className="text-xs mt-1 text-amber-700">Đang tải chính sách…</p>}
                 {estimatedProductionMs != null && recipientCount > 0 && (
                   <p className="text-xs mt-1 text-amber-800">
                     Ước tính tối thiểu khoảng {fmtDuration(estimatedProductionMs)} cho {recipientCount} người nhận.
                   </p>
                 )}
                 <p className="text-xs mt-1 text-amber-700/80">
-                  Production mode sẽ chờ thời gian thật giữa mỗi tin — đừng đóng tab.
-                  Dùng tài khoản rảnh — không chạy song song với campaign thật trên cùng account.
+                  Chế độ theo thật sẽ chờ thời gian thật giữa mỗi tin — đừng đóng tab.
+                  Dùng tài khoản rảnh — không chạy song song với chiến dịch thật trên cùng tài khoản.
                 </p>
               </div>
             </div>
@@ -822,10 +822,10 @@ export default function DiagnosticPage() {
               {runMode === 'fast' ? (
                 <>
                   <div className="flex items-baseline justify-between mb-1.5">
-                    <label className="text-xs font-medium text-gray-600">Delay giữa tin</label>
+                    <label className="text-xs font-medium text-gray-600">Khoảng cách giữa tin</label>
                     <div className="flex items-baseline gap-1">
                       <span className="text-sm font-semibold text-primary-600">{delaySeconds}s</span>
-                      <span className="text-xs text-gray-400">(production: theo policy)</span>
+                      <span className="text-xs text-gray-400">(theo thật: theo chính sách)</span>
                     </div>
                   </div>
                   <input
@@ -844,7 +844,7 @@ export default function DiagnosticPage() {
                 </>
               ) : (
                 <div className="h-full flex flex-col justify-center rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                  Delay do policy production quyết định (không chỉnh tay).
+                  Khoảng cách do chính sách gửi thật quyết định (không chỉnh tay).
                 </div>
               )}
             </div>
@@ -917,7 +917,7 @@ export default function DiagnosticPage() {
           <div className="card overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="font-semibold text-gray-900 shrink-0">Run #{activeRun.id}</span>
+                <span className="font-semibold text-gray-900 shrink-0">Lần chạy #{activeRun.id}</span>
                 <span className="text-gray-200">|</span>
                 <span className="text-sm text-gray-500 truncate">{CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel}</span>
                 <RunStatusBadge status={activeRun.status} />
@@ -965,7 +965,7 @@ export default function DiagnosticPage() {
                           {CHANNEL_LABELS[r.channel] ?? r.channel}
                         </span>
                         {r.mode === 'production' && (
-                          <span className="badge badge-warning text-[10px]">Production</span>
+                          <span className="badge badge-warning text-[10px]">Theo thật</span>
                         )}
                         {r.account_display_name && (
                           <span className="text-gray-400 font-normal">· {r.account_display_name}</span>
@@ -980,7 +980,7 @@ export default function DiagnosticPage() {
                           <span className="text-amber-600">{r.skipped_count} bỏ qua</span>
                         )}
                         {r.mode !== 'production' && r.inter_message_delay_ms != null && (
-                          <span>delay {r.inter_message_delay_ms / 1000}s</span>
+                          <span>khoảng cách {r.inter_message_delay_ms / 1000}s</span>
                         )}
                         <span>{fmtTime(r.created_at)}</span>
                       </div>

@@ -1,0 +1,135 @@
+/**
+ * Danh mục cron cố định của hệ thống.
+ * `tracked: true` = đã gọi recordRun.
+ * `optional: true` = có thể không được đăng ký lúc khởi động (env).
+ * KHÔNG gồm cron động campaign_schedules (scheduler.js ~:270).
+ * KHÔNG gồm Zalo keep-alive (startKeepAliveScheduler / setInterval).
+ */
+export const CRON_JOBS = [
+  {
+    code: 'alerts_evaluator',
+    label: 'Đánh giá cảnh báo',
+    schedule: 'Mỗi 5 phút',
+    description: 'Quét 8 quy tắc cảnh báo của hệ thống và gửi email cho quản trị khi phát hiện bất thường.',
+    impact: 'Toàn bộ cảnh báo ngừng hoạt động. Sự cố vẫn xảy ra nhưng không ai được báo.',
+    tracked: true,
+  },
+  {
+    code: 'subscription_reminder',
+    label: 'Nhắc gia hạn & hết hạn gói',
+    schedule: '08:00 hàng ngày',
+    description: 'Nhắc khách sắp hết hạn trước 7 và 3 ngày, xử lý gói vừa hết hạn, và khoá tài nguyên mua thêm đã hết thời hạn thuê.',
+    impact: 'Khách không được nhắc gia hạn, và slot mua thêm hết hạn vẫn dùng được miễn phí.',
+    tracked: true,
+  },
+  {
+    code: 'payos_order_reconcile',
+    label: 'Đối soát thanh toán',
+    schedule: 'Mỗi 10 phút (phút 5/15/25…)',
+    description: 'Quét các đơn khách đã trả tiền nhưng hệ thống chưa kích hoạt gói. Lưới dự phòng cho trường hợp cổng thanh toán không báo về.',
+    impact: 'Khách trả tiền mà không được kích hoạt gói, phải chờ xử lý tay.',
+    tracked: true,
+  },
+  {
+    code: 'payos_order_expire',
+    label: 'Huỷ đơn quá hạn',
+    schedule: 'Mỗi giờ, phút 25',
+    description: 'Dọn các đơn chờ thanh toán quá lâu, nhả lại suất voucher cho người khác dùng.',
+    impact: 'Đơn bỏ dở chiếm suất voucher giới hạn, người khác không áp mã được.',
+    tracked: true,
+  },
+  {
+    code: 'zalo_personal_bg_group_sync',
+    label: 'Đồng bộ nhóm Zalo',
+    schedule: 'Mỗi 10 phút (phút 5/15/25…)',
+    description: 'Kéo danh sách nhóm và tin nhắn nhóm mới từ Zalo về hộp thư. Có thể tắt bằng cấu hình.',
+    impact: 'Tin nhắn nhóm mới không xuất hiện trong hộp thư.',
+    tracked: true,
+    optional: true,
+  },
+  {
+    code: 'campaign_scheduler_tick',
+    label: 'Nhịp chiến dịch',
+    schedule: 'Mỗi phút (giây 20)',
+    description: 'Ba việc trong một lượt: nạp lại danh sách lịch chạy đang bật, khôi phục chiến dịch chạy liên tục bị gián đoạn, và khôi phục chiến dịch chạy một lần bị gián đoạn.',
+    impact: 'Lịch mới tạo hoặc vừa sửa không có hiệu lực, và chiến dịch bị gián đoạn (khởi động lại máy chủ, mất kết nối) không tự chạy tiếp.',
+    tracked: true,
+  },
+  {
+    code: 'campaign_overdue_retry',
+    label: 'Gửi tiếp bước quá hạn',
+    schedule: 'Mỗi phút (giây 40)',
+    description: 'Quét các chiến dịch chạy một lần đang kẹt ở một bước quá thời hạn chờ và đẩy bước đó đi tiếp.',
+    impact: 'Chiến dịch dừng giữa chừng ở một bước, phần khách còn lại không bao giờ nhận được tin.',
+    tracked: true,
+  },
+  {
+    code: 'scheduled_notifications',
+    label: 'Gửi thông báo hẹn giờ',
+    schedule: 'Mỗi phút',
+    description: 'Gửi các thông báo quản trị đã đặt lịch trước tới người dùng.',
+    impact: 'Thông báo đã hẹn không bao giờ được gửi.',
+    tracked: true,
+  },
+  {
+    code: 'zalo_personal_listeners',
+    label: 'Kết nối nhận tin Zalo',
+    schedule: 'Mỗi 5 phút',
+    description: 'Gắn kết nối nhận tin nhắn đến cho các tài khoản Zalo cá nhân đang hoạt động.',
+    impact: 'Tin khách gửi tới không về hộp thư, dù gửi đi vẫn bình thường — rất dễ tưởng hệ thống vẫn tốt.',
+    tracked: true,
+  },
+  {
+    code: 'zalo_session_restore',
+    label: 'Khôi phục phiên Zalo',
+    schedule: 'Mỗi 15 phút',
+    description: 'Đăng nhập lại các tài khoản Zalo bị rớt phiên, dùng thông tin phiên đã lưu.',
+    impact: 'Tài khoản Zalo rớt phiên nằm im tới khi khách tự quét QR lại.',
+    tracked: true,
+  },
+  {
+    code: 'custom_domain_verify',
+    label: 'Xác minh tên miền riêng',
+    schedule: 'Mỗi 5 phút',
+    description: 'Kiểm tra cấu hình tên miền riêng khách vừa trỏ và tự xác minh khi đã đúng.',
+    impact: 'Khách trỏ tên miền xong phải chờ vô hạn, landing page không chạy trên tên miền riêng.',
+    tracked: true,
+  },
+  {
+    code: 'custom_plan_orphan_cleanup',
+    label: 'Dọn gói tự chọn bỏ dở',
+    schedule: 'Mỗi giờ, phút 15',
+    description: 'Xoá các gói tự chọn khách cấu hình nhưng không thanh toán.',
+    impact: 'Bảng gói phình dần bằng các gói rác không ai dùng.',
+    tracked: true,
+  },
+  {
+    code: 'ai_model_catalog_sync',
+    label: 'Đồng bộ danh mục model AI',
+    schedule: '02:15 hàng ngày (đổi được bằng cấu hình)',
+    description: 'Cập nhật danh sách model AI khả dụng từ nhà cung cấp. Có thể tắt bằng cấu hình.',
+    impact: 'Danh sách model trong trang quản trị lỗi thời; không ảnh hưởng người dùng cuối.',
+    tracked: true,
+    optional: true,
+  },
+  {
+    code: 'email_daily_count_reset',
+    label: 'Đặt lại bộ đếm email ngày',
+    schedule: '00:00',
+    description: 'Đưa số email đã gửi trong ngày của mọi tài khoản về 0 cho ngày mới.',
+    impact: 'Bộ đếm không reset, khách bị chặn gửi email vì tưởng đã chạm hạn mức ngày.',
+    tracked: true,
+  },
+  {
+    code: 'courses_daily_sync',
+    label: 'Đồng bộ khoá học & dọn voucher',
+    schedule: '00:30',
+    description: 'Đồng bộ khoá học từ website bán hàng và lưu trữ các voucher đã hết hạn.',
+    impact: 'Khoá học mới trên website không xuất hiện trong hệ thống; voucher hết hạn vẫn nằm trong danh sách đang chạy.',
+    tracked: true,
+  },
+];
+
+export function getCronJobByCode(code) {
+  return CRON_JOBS.find((j) => j.code === code) || null;
+}

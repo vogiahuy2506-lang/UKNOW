@@ -5,6 +5,7 @@ import {
   resolveAlertEvent,
 } from '../../services/admin/alertEvaluator.service.js';
 import * as cronJobRunRepository from '../../repositories/admin/cronJobRun.repository.js';
+import { CRON_JOBS } from '../../services/admin/cronJobRegistry.js';
 
 export async function overview(req, res) {
   try {
@@ -65,7 +66,7 @@ export async function cronStatus(req, res) {
         limit: Math.min(100, Number(req.query.limit) || 50),
       }),
     ]);
-    return res.json({ success: true, data: { latest, recent } });
+    return res.json({ success: true, data: { jobs: CRON_JOBS, latest, recent } });
   } catch (err) {
     console.error('[adminAlerts] cronStatus:', err);
     return res.status(500).json({ success: false, message: err.message || 'Lỗi tải trạng thái cron' });
