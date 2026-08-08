@@ -778,16 +778,20 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           .then(res => setHasProfile(!!res.data))
           .catch(() => setHasProfile(true));
       }
-      // Load sessions một lần khi panel mở lần đầu
+      // Load sessions một lần khi panel mở lần đầu — chỉ để hiện danh sách tabs.
+      // KHÔNG tự động load phiên gần nhất: mỗi lần mở panel đều bắt đầu ở
+      // phiên chat mới (welcome message). Người dùng có thể click tab session
+      // cũ trong sidebar để quay lại context trước.
       if (!hasInitializedRef.current) {
         hasInitializedRef.current = true;
         aiApi.getSessions()
           .then(res => {
-            const list = res.data || [];
-            setSessions(list);
-            if (list.length > 0) loadSession(list[0].id);
+            setSessions(res.data || []);
+            startNewChat();
           })
-          .catch(() => {});
+          .catch(() => {
+            startNewChat();
+          });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
