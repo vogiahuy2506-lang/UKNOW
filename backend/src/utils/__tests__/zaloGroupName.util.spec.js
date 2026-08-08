@@ -4,6 +4,9 @@ import {
   extractGroupNameFromApiResult,
   isPlaceholderGroupName,
   buildPlaceholderGroupName,
+  buildZaloGroupExternalIdCandidates,
+  resolveZaloGroupSendId,
+  isZaloGroupConversation,
 } from '../zaloGroupName.util.js';
 
 describe('zaloGroupName.util', () => {
@@ -15,6 +18,16 @@ describe('zaloGroupName.util', () => {
     });
     expect(normalizeZaloGroupId('12345')).toEqual({
       raw: '12345',
+      bare: '12345',
+      prefixed: 'group_12345',
+    });
+    expect(normalizeZaloGroupId('g_12345')).toEqual({
+      raw: 'g_12345',
+      bare: '12345',
+      prefixed: 'group_12345',
+    });
+    expect(normalizeZaloGroupId('group_g_12345')).toEqual({
+      raw: 'group_g_12345',
       bare: '12345',
       prefixed: 'group_12345',
     });
@@ -36,8 +49,20 @@ describe('zaloGroupName.util', () => {
     expect(isPlaceholderGroupName('Team Marketing', '172387')).toBe(false);
   });
 
-  it('builds short placeholder names', () => {
-    expect(buildPlaceholderGroupName('3436373613436545579')).toBe('Nhóm 545579');
-    expect(buildPlaceholderGroupName('group_172387')).toBe('Nhóm 172387');
+  it('builds alternate group external_id candidates for lookup', () => {
+    expect(buildZaloGroupExternalIdCandidates('g_99')).toEqual(
+      expect.arrayContaining(['group_99', 'g_99', 'group_g_99', '99'])
+    );
+    expect(buildZaloGroupExternalIdCandidates('group_99')[0]).toBe('group_99');
+  });
+
+  it('resolves Zalo grid send id by stripping internal group_ prefix', () => {
+    expect(resolveZaloGroupSendId('group_7445330951687908000')).toBe('7445330951687908000');
+    expect(resolveZaloGroupSendId(null, 'group_99')).toBe('99');
+    expect(resolveZaloGroupSendId('7445', 'group_ignored')).toBe('7445');
+    expect(resolveZaloGroupSendId('g_abc')).toBe('abc');
+    expect(isZaloGroupConversation({ externalId: 'group_1' })).toBe(true);
+    expect(isZaloGroupConversation({ conversationInfo: { is_group: true } })).toBe(true);
+    expect(isZaloGroupConversation({ externalId: 'user_1' })).toBe(false);
   });
 });

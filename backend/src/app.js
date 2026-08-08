@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { globalLimiter, authLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
+import { attachUserIdForRateLimit } from './middleware/auth.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -47,6 +48,8 @@ import adminOrdersRoutes from './routes/adminOrders.routes.js';
 import adminVouchersRoutes from './routes/adminVouchers.routes.js';
 import adminSystemRoutes from './routes/adminSystem.routes.js';
 import adminDeliveryMonitorRoutes from './routes/adminDeliveryMonitor.routes.js';
+import adminAlertsRoutes from './routes/adminAlerts.routes.js';
+import adminFunnelRoutes from './routes/adminFunnel.routes.js';
 import adminAiUsageRoutes from './routes/adminAiUsage.routes.js';
 import adminAiModelsRoutes from './routes/adminAiModels.routes.js';
 import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.js';
@@ -54,6 +57,8 @@ import adminNotificationRoutes from './routes/adminNotification.routes.js';
 import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
+import topupRoutes from './routes/topup.routes.js';
+import helpRoutes from './routes/help.routes.js';
 import voucherRoutes from './routes/voucher.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
@@ -66,6 +71,8 @@ import auditRoutes from './routes/audit.routes.js';
 import adminAuditLogsRoutes from './routes/adminAuditLogs.routes.js';
 import diagnosticRoutes from './routes/diagnostic.routes.js';
 import templateLabelRoutes from './routes/templateLabel.routes.js';
+import marketplaceRoutes from './routes/marketplace.routes.js';
+import marketplaceAdminRoutes from './routes/marketplaceAdmin.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
 import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
@@ -132,10 +139,11 @@ export function createApp() {
   // Resolve custom hostname (*.founderai.biz) → landing page slug
   app.use(domainResolver);
 
-  // TEMPORARILY DISABLED FOR QA: authLimiter blocks repeated Google login tests with 429.
-  // Re-enable before production hardening if brute-force protection is required.
-  // app.use('/api/auth', authLimiter, authRoutes);
-  app.use('/api/auth', authRoutes);
+  // Soft-resolve user id for rate-limit keys (never 401) then global limit
+  app.use('/api', attachUserIdForRateLimit, globalLimiter);
+
+  // Auth rate limit (chống brute-force login)
+  app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
   app.use('/api/email-templates', emailTemplateRoutes);
@@ -170,6 +178,8 @@ export function createApp() {
   app.use('/api/verification', verificationRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/plans', planRoutes);
+  app.use('/api/topup', topupRoutes);
+  app.use('/api/help', helpRoutes);
   app.use('/api/vouchers', voucherRoutes);
   app.use('/api/contact', contactRoutes);
   app.use('/api/employees', employeeRoutes);
@@ -180,6 +190,8 @@ export function createApp() {
   app.use('/api/admin/vouchers', adminVouchersRoutes);
   app.use('/api/admin/system', adminSystemRoutes);
   app.use('/api/admin/delivery-monitor', adminDeliveryMonitorRoutes);
+  app.use('/api/admin/alerts', adminAlertsRoutes);
+  app.use('/api/admin/funnel', adminFunnelRoutes);
   app.use('/api/admin/ai-usage', adminAiUsageRoutes);
   app.use('/api/admin/ai-models', adminAiModelsRoutes);
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
@@ -194,6 +206,8 @@ export function createApp() {
   app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
   app.use('/api/admin/diagnostic', diagnosticRoutes);
   app.use('/api/template-labels', templateLabelRoutes);
+  app.use('/api/marketplace', marketplaceRoutes);
+  app.use('/api/admin/marketplace', marketplaceAdminRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

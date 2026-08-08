@@ -6,6 +6,7 @@ import adminPlansApiService from '../../features/admin/services/adminPlansApi.se
 import { renderModal, MODAL_SM } from '../../features/admin/plans/planUtils.jsx';
 import { PlanCard, CustomPlanCard } from '../../features/admin/plans/PlanCards';
 import { PlanFormModal, AssignModal, CustomPlanModal, CustomPlanEditModal } from '../../features/admin/plans/PlanModals';
+import CustomPricingPanel from '../../features/admin/plans/CustomPricingPanel';
 
 const SkeletonGrid = () => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -76,12 +77,15 @@ const AdminPlansPage = () => {
 
   useEffect(() => {
     if (tab === 'public') fetchPlans();
-    else fetchCustomPlans(showHidden);
+    else if (tab === 'custom') fetchCustomPlans(showHidden);
+    // pricing tab loads itself
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPlans/fetchCustomPlans stable trong scope
   }, [tab, showHidden]);
 
-  const handleRefresh = () => tab === 'public' ? fetchPlans() : fetchCustomPlans();
-
+  const handleRefresh = () => {
+    if (tab === 'public') fetchPlans();
+    else if (tab === 'custom') fetchCustomPlans();
+  };
   const handleActivate = async (plan) => {
     if (!plan.assignedEmail) return;
     try {
@@ -152,13 +156,12 @@ const AdminPlansPage = () => {
               <HiOutlineSparkles className="w-4 h-4 mr-2" />
               {t('adminPlans.createCustomPlan')}
             </button>
-          ) : (
+          ) : tab === 'public' ? (
             <button type="button" onClick={() => setEditPlan('new')} className="btn btn-primary">
               <HiOutlinePlus className="w-4 h-4 mr-2" />
               {t('adminPlans.createPlan')}
             </button>
-          )}
-        </div>
+          ) : null}        </div>
       </div>
 
       {/* Toggle tabs */}
@@ -166,6 +169,7 @@ const AdminPlansPage = () => {
         {[
           { key: 'public', label: t('adminPlans.tabPublicPlans') },
           { key: 'custom', label: t('adminPlans.tabCustomPlans'), count: customPlans.length },
+          { key: 'pricing', label: t('adminPlans.tabCustomPricing') },
         ].map(({ key, label, count }) => (
           <button
             key={key}
@@ -237,6 +241,8 @@ const AdminPlansPage = () => {
           )}
         </>
       )}
+
+      {tab === 'pricing' && <CustomPricingPanel />}
 
       {/* Modals */}
       {showCustomModal && (

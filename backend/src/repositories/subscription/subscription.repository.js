@@ -27,7 +27,7 @@ export async function findExpiringUsers(minDays, maxDays, reminderThreshold) {
 }
 
 /**
- * Lấy danh sách user_admin đã hết hạn gói (subscription_expires_at < NOW()).
+ * Lấy danh sách user_admin đã hết hạn gói (sau cả ân hạn grace_period_days).
  */
 export async function findExpiredUsers() {
   const { rows } = await db.query(
@@ -36,29 +36,33 @@ export async function findExpiredUsers() {
      JOIN plans p ON u.active_plan_id = p.id
      WHERE u.role = 'user'
        AND u.subscription_expires_at IS NOT NULL
-       AND u.subscription_expires_at < NOW()`,
+       AND NOW() > (
+         u.subscription_expires_at
+         + (COALESCE(p.grace_period_days, 0) || ' days')::interval
+       )`,
   );
   return rows;
 }
 
 /**
- * Hết hạn gói: set active_plan_id = NULL, giữ lại subscription_expires_at để biết user là khách cũ.
+ * Hết hạn gói: set active_plan_id = NULL.
+ * max_* = 0 (cấm) — không NULL (NULL từng bị hiểu là vô hạn ở resource/send limit).
  */
 export async function expireUserPlan(userId) {
   await db.query(
     `UPDATE users
      SET active_plan_id          = NULL,
          subscription_reminder_count = 0,
-         max_landing_pages        = NULL,
-         max_campaigns            = NULL,
-         max_zalo_campaigns       = NULL,
-         max_zalo_group_campaigns = NULL,
-         max_email_campaigns      = NULL,
-         max_zalo_accounts        = NULL,
-         max_email_accounts       = NULL,
-         max_email_templates      = NULL,
-         max_zalo_templates       = NULL,
-         messages_per_period      = NULL,
+         max_landing_pages        = 0,
+         max_campaigns            = 0,
+         max_zalo_campaigns       = 0,
+         max_zalo_group_campaigns = 0,
+         max_email_campaigns      = 0,
+         max_zalo_accounts        = 0,
+         max_email_accounts       = 0,
+         max_email_templates      = 0,
+         max_zalo_templates       = 0,
+         messages_per_period      = 0,
          is_fup_enabled           = FALSE,
          updated_at               = CURRENT_TIMESTAMP
      WHERE id = $1`,

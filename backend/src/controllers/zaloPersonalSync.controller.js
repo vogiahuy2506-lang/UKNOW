@@ -8,28 +8,37 @@ import zaloAccountSessionService from '../services/zalo/zaloAccountSession.servi
 import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
 
 class ZaloPersonalSyncController {
+  _requestedAccountId(req) {
+    return req.query?.accountId || req.body?.accountId || null;
+  }
+
   /**
    * GET /api/chatbot/zalo-personal/sync
    * Full sync - đồng bộ bạn bè và nhóm
+   * Query: accountId (optional) — tài khoản đang chọn trên UI
    */
   async sync(req, res) {
     try {
       const userId = req.user.id;
-      console.log('[ZaloPersonalSync] sync called for userId:', userId);
+      const requestedAccountId = this._requestedAccountId(req);
+      console.log('[ZaloPersonalSync] sync called for userId:', userId, 'accountId:', requestedAccountId);
 
-      // Get active Zalo personal account
-      const account = await zaloSettingRepository.findActiveConnectedAccountByUser(userId).catch(e => {
-        console.error('[ZaloPersonalSync] DB query error:', e.message);
-        e.isDatabaseError = true;
-        throw e;
-      });
+      const account = await zaloSettingRepository
+        .findConnectedAccountForSync(userId, requestedAccountId)
+        .catch((e) => {
+          console.error('[ZaloPersonalSync] DB query error:', e.message);
+          e.isDatabaseError = true;
+          throw e;
+        });
 
       console.log('[ZaloPersonalSync] Found account:', account ? { id: account.id, status: account.status } : null);
 
       if (!account) {
         return res.status(400).json({
           success: false,
-          message: 'Không có tài khoản Zalo cá nhân nào đang kết nối. Vui lòng kết nối Zalo trong Cài đặt.',
+          message: requestedAccountId
+            ? 'Tài khoản Zalo đã chọn không hợp lệ hoặc chưa kết nối'
+            : 'Không có tài khoản Zalo cá nhân nào đang kết nối. Vui lòng kết nối Zalo trong Cài đặt.',
         });
       }
 
@@ -50,8 +59,16 @@ class ZaloPersonalSyncController {
       const result = await zaloPersonalSyncService.fullSync(accountId, userId);
       console.log('[ZaloPersonalSync] sync result:', JSON.stringify(result));
 
-      res.json({
-        success: true,
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+      const hasErrors = errors.length > 0;
+      const errorTypes = [...new Set(errors.map((e) => e.type || e.groupId || 'unknown'))];
+
+      return res.status(200).json({
+        // Không báo thành công giả khi nhóm/danh bạ lỗi (PLAN V-9)
+        success: !hasErrors,
+        message: hasErrors
+          ? `Đồng bộ chưa hoàn tất: lỗi ở ${errorTypes.join(', ')}`
+          : undefined,
         data: result,
       });
     } catch (error) {
@@ -77,7 +94,10 @@ class ZaloPersonalSyncController {
     try {
       const userId = req.user.id;
 
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({
@@ -109,7 +129,10 @@ class ZaloPersonalSyncController {
     try {
       const userId = req.user.id;
 
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({
@@ -215,7 +238,10 @@ class ZaloPersonalSyncController {
         });
       }
 
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({
@@ -254,7 +280,10 @@ class ZaloPersonalSyncController {
       const userId = req.user.id;
       const { limit = 50 } = req.query;
 
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({
@@ -385,7 +414,10 @@ class ZaloPersonalSyncController {
       }
 
       // Get active Zalo account
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({
@@ -427,7 +459,10 @@ class ZaloPersonalSyncController {
       }
 
       // Get active Zalo account
-      const account = await zaloSettingRepository.findActiveConnectedAccountSummaryByUser(userId);
+      const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
+        userId,
+        this._requestedAccountId(req)
+      );
 
       if (!account) {
         return res.status(400).json({

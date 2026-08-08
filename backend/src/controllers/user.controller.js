@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import {
-  createLegacyEmployee,
   findLegacyEmployees,
   findPasswordHashByUserId,
   findProfileBase,
@@ -13,15 +12,28 @@ import {
   findSuccessfulOrdersForUser,
   findUserByEmailExceptId,
   resetLegacyEmployeePassword,
+  revokeAllRefreshTokensForUser,
   updateLegacyEmployeeLimits,
   updateLegacyEmployeeStatus,
   updatePasswordHash,
   updateProfile as updateProfileInDb,
+  updateBotDailyReplyCap,
+  updateAiHandoffAutoResumeMinutes,
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
+import { generateTempPassword } from '../services/user/employee.service.js';
+import { sumActiveTopupGrants, getWalletBalance } from '../repositories/payment/topup.repository.js';
+import {
+  buildAddonsPayload,
+  isTopupOrderRow,
+  mapTopupItemsFromConfig,
+} from '../utils/topupDisplay.util.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
+import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 
-const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
+const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
+
 const EMPLOYEE_LIMIT_KEYS = {
   maxCampaigns: 'max_campaigns',
   maxZaloAccounts: 'max_zalo_accounts',
@@ -56,6 +68,46 @@ const normalizeLimitValue = (rawValue) => {
  * @returns {boolean} true nếu lỗi do thiếu cột
  */
 const isMissingLimitColumnError = (error) => error?.code === '42703';
+
+/**
+ * Phần mua thêm còn hiệu lực theo chu kỳ billing (không cộng vào hạn mức gói).
+ * @param {number|string} billingUserId
+ * @param {Date|string|null|undefined} expiresAt
+ */
+/**
+ * Load addons for profile: consumable = wallet {granted,used,remaining}; structural = cycle grants.
+ */
+async function loadProfileAddons(billingUserId) {
+  const [
+    zaloWallet,
+    emailWallet,
+    aiWallet,
+    zaloAccounts,
+    emailAccounts,
+    landingPages,
+    chatbots,
+    employees,
+  ] = await Promise.all([
+    getWalletBalance(billingUserId, 'zalo_messages'),
+    getWalletBalance(billingUserId, 'emails'),
+    getWalletBalance(billingUserId, 'ai_credits'),
+    sumActiveTopupGrants(billingUserId, 'zalo_accounts'),
+    sumActiveTopupGrants(billingUserId, 'email_accounts'),
+    sumActiveTopupGrants(billingUserId, 'landing_pages'),
+    sumActiveTopupGrants(billingUserId, 'chatbots'),
+    sumActiveTopupGrants(billingUserId, 'employees'),
+  ]);
+  return buildAddonsPayload({
+    zaloMessages: zaloWallet,
+    emails: emailWallet,
+    aiCredits: aiWallet,
+    zaloAccounts,
+    emailAccounts,
+    landingPages,
+    chatbots,
+    employees,
+  });
+}
 
 /**
  * Chuẩn hóa dữ liệu profile trả về cho frontend.
@@ -103,6 +155,8 @@ const mapProfileResponse = (userRow) => ({
   aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
   aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
+  botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
+  aiHandoffAutoResumeMinutes: userRow.ai_handoff_auto_resume_minutes ?? null,
   planGracePeriodDays: userRow.grace_period_days ?? 0,
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
@@ -201,15 +255,43 @@ class UserController {
       const profileRow = {
         ...userRow,
         ...(employeeCtx ? { subscription_expires_at: billingRow.subscription_expires_at } : {}),
+        bot_daily_reply_cap: billingRow.bot_daily_reply_cap ?? userRow.bot_daily_reply_cap ?? null,
+        ai_handoff_auto_resume_minutes:
+          billingRow.ai_handoff_auto_resume_minutes
+          ?? userRow.ai_handoff_auto_resume_minutes
+          ?? null,
         ...(planRow || {}),
         ...usageCounts,
         ai_tokens_used: aiTokenUsage.used,
         ai_credits_used: aiCreditUsage.used,
       };
 
+      let addons = null;
+      try {
+        // Grant neo theo subscription_expires_at của billing user — luôn lấy từ
+        // billingRow (kể cả khi employee tự resolve owner qua user_members, không có X-Owner-Context).
+        addons = await loadProfileAddons(billingUserId);
+      } catch (err) {
+        console.error('[Profile] loadProfileAddons failed', { userId, billingUserId, message: err.message });
+      }
+
+      const data = { ...mapProfileResponse(profileRow), addons };
+      data.chatbotRateLimits = chatbotRateLimitService.systemLimits;
+      try {
+        // billingUserId — bộ đếm Redis khoá theo chủ workspace, không phải employee
+        data.botRepliesUsedToday =
+          await chatbotRateLimitService.getOwnerUsedToday(billingUserId);
+      } catch (err) {
+        console.warn('[Profile] getOwnerUsedToday failed', {
+          billingUserId,
+          message: err.message,
+        });
+        data.botRepliesUsedToday = 0;
+      }
+
       res.json({
         success: true,
-        data: mapProfileResponse(profileRow),
+        data,
       });
     } catch (error) {
       console.error('Get profile error:', error);
@@ -262,10 +344,33 @@ class UserController {
         ...(roleAndLimits || {}),
       };
 
+      let addons = null;
+      try {
+        const employeeCtx = req.user?.activeContext?.type === 'employee'
+          ? req.user.activeContext
+          : null;
+        const billingOptions = employeeCtx?.ownerId != null
+          ? { ownerContextId: employeeCtx.ownerId }
+          : {};
+        const billingUserId = await resolveBillingUserId(userId, billingOptions);
+        let expiresAt = userProfileRow.subscription_expires_at ?? null;
+        if (String(billingUserId) !== String(userId)) {
+          try {
+            const billingBase = await findProfileBase(billingUserId);
+            expiresAt = billingBase?.subscription_expires_at ?? expiresAt;
+          } catch {
+            // keep expiresAt from self
+          }
+        }
+        addons = await loadProfileAddons(billingUserId);
+      } catch (err) {
+        console.error('[Profile] loadProfileAddons on update failed', { userId, message: err.message });
+      }
+
       res.json({
         success: true,
         message: 'Cập nhật thông tin thành công',
-        data: mapProfileResponse(userProfileRow)
+        data: { ...mapProfileResponse(userProfileRow), addons },
       });
     } catch (error) {
       console.error('Update profile error:', error);
@@ -273,6 +378,98 @@ class UserController {
         success: false,
         message: 'Lỗi server'
       });
+    }
+  }
+
+  /**
+   * PATCH /api/users/bot-daily-reply-cap
+   * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày (null = không giới hạn thêm).
+   * Guard requireSelfContext trên route.
+   */
+  async updateBotDailyReplyCap(req, res) {
+    try {
+      const userId = req.user.id;
+      const raw = req.body?.botDailyReplyCap;
+
+      let cap = null;
+      if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+        const n = Number.parseInt(String(raw), 10);
+        if (!Number.isFinite(n) || n <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn',
+          });
+        }
+        cap = n;
+      }
+
+      const row = await updateBotDailyReplyCap(userId, cap);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      chatbotRateLimitService.invalidateOwnerCapCache(userId);
+
+      return res.json({
+        success: true,
+        data: { botDailyReplyCap: row.bot_daily_reply_cap ?? null },
+      });
+    } catch (error) {
+      console.error('Update bot daily reply cap error:', error);
+      if (error?.code === '23514') {
+        return res.status(400).json({
+          success: false,
+          message: 'Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn',
+        });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * PATCH /api/users/ai-handoff-auto-resume
+   * Chủ tài khoản đặt phút tự bật lại AI sau handoff (null = tắt).
+   * Guard requireSelfContext trên route.
+   */
+  async updateAiHandoffAutoResume(req, res) {
+    try {
+      const userId = req.user.id;
+      const raw = req.body?.aiHandoffAutoResumeMinutes;
+
+      let minutes = null;
+      if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+        const n = Number.parseInt(String(raw), 10);
+        if (!AI_HANDOFF_AUTO_RESUME_ALLOWED.has(n)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Giá trị phải là 5, 15, 30, 60 phút, hoặc để trống để tắt',
+          });
+        }
+        minutes = n;
+      }
+
+      const row = await updateAiHandoffAutoResumeMinutes(userId, minutes);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      invalidateAiHandoffAutoResumeCache(userId);
+
+      return res.json({
+        success: true,
+        data: {
+          aiHandoffAutoResumeMinutes: row.ai_handoff_auto_resume_minutes ?? null,
+        },
+      });
+    } catch (error) {
+      console.error('Update AI handoff auto-resume error:', error);
+      if (error?.code === '23514') {
+        return res.status(400).json({
+          success: false,
+          message: 'Giá trị phải là 5, 15, 30, 60 phút, hoặc để trống để tắt',
+        });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 
@@ -310,6 +507,7 @@ class UserController {
 
       // Cập nhật mật khẩu
       await updatePasswordHash(userId, newPasswordHash);
+      await revokeAllRefreshTokensForUser(userId, 'password_changed');
 
       res.json({
         success: true,
@@ -370,75 +568,6 @@ class UserController {
       });
     } catch (error) {
       console.error('Get employees error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * Tạo tài khoản nhân viên (chỉ dành cho admin).
-   *
-   * Luồng hoạt động:
-   * 1. Kiểm tra trùng username/email.
-   * 2. Lấy role employee từ bảng roles.
-   * 3. Dùng mật khẩu mặc định của hệ thống để hash và tạo user mới.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async createEmployee(req, res) {
-    try {
-      const { username, email, fullName, phone } = req.body;
-
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
-      const createResult = await createLegacyEmployee({
-        username,
-        email,
-        passwordHash,
-        fullName,
-        phone,
-      });
-
-      if (createResult.status === 'duplicate') {
-        return res.status(400).json({
-          success: false,
-          message: 'Username hoặc email đã tồn tại',
-        });
-      }
-
-      if (createResult.status === 'missing_role') {
-        return res.status(400).json({
-          success: false,
-          message: 'Hệ thống chưa cấu hình role nhân viên. Vui lòng chạy migration role trước.',
-        });
-      }
-
-      const employee = createResult.employee;
-      return res.status(201).json({
-        success: true,
-        message: `Tạo tài khoản nhân viên thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
-        data: {
-          id: employee.id,
-          username: employee.username,
-          email: employee.email,
-          fullName: employee.full_name,
-          phone: employee.phone,
-          status: employee.status,
-          roleCode: 'employee',
-          roleName: 'Nhân viên',
-          maxCampaigns: null,
-          maxZaloAccounts: null,
-          maxEmailAccounts: null,
-          maxEmailTemplates: null,
-          maxZaloTemplates: null,
-          maxLandingPages: null,
-          createdAt: employee.created_at,
-        },
-      });
-    } catch (error) {
-      console.error('Create employee error:', error);
       return res.status(500).json({
         success: false,
         message: 'Lỗi server',
@@ -512,7 +641,9 @@ class UserController {
         });
       }
 
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+      // Mật khẩu tạm ngẫu nhiên theo từng lần, không dùng hằng số dùng chung.
+      const tempPassword = generateTempPassword();
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
       const employee = await resetLegacyEmployeePassword(employeeId, passwordHash);
 
       if (!employee) {
@@ -524,9 +655,10 @@ class UserController {
 
       return res.json({
         success: true,
-        message: `Reset mật khẩu thành công. Mật khẩu mặc định: ${DEFAULT_EMPLOYEE_PASSWORD}`,
+        message: 'Đã đặt lại mật khẩu. Gửi mật khẩu tạm này cho nhân viên — họ sẽ phải đổi ngay khi đăng nhập.',
         data: {
           id: employee.id,
+          tempPassword,
         },
       });
     } catch (error) {
@@ -630,23 +762,30 @@ class UserController {
 
       res.json({
         success: true,
-        data: orders.map((row) => ({
-          id: row.id,
-          orderCode: String(row.order_code),
-          amount: Number(row.amount),
-          status: row.status,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          plan: row.plan_id ? {
-            id: row.plan_id,
-            name: row.plan_name,
-            code: row.plan_code,
-            dailyEmailLimit: row.daily_email_limit,
-            monthlyEmailLimit: row.monthly_email_limit,
-            dailyZaloLimit: row.daily_zalo_limit,
-            monthlyZaloLimit: row.monthly_zalo_limit,
-          } : null,
-        })),
+        data: orders.map((row) => {
+          const kind = isTopupOrderRow(row) ? 'topup' : 'plan';
+          return {
+            id: row.id,
+            orderCode: String(row.order_code),
+            amount: Number(row.amount),
+            status: row.status,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            kind,
+            topup: kind === 'topup'
+              ? { items: mapTopupItemsFromConfig(row.topup_config) }
+              : null,
+            plan: row.plan_id ? {
+              id: row.plan_id,
+              name: row.plan_name,
+              code: row.plan_code,
+              dailyEmailLimit: row.daily_email_limit,
+              monthlyEmailLimit: row.monthly_email_limit,
+              dailyZaloLimit: row.daily_zalo_limit,
+              monthlyZaloLimit: row.monthly_zalo_limit,
+            } : null,
+          };
+        }),
       });
     } catch (error) {
       console.error('Get my orders error:', error);

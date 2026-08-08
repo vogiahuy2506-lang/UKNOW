@@ -13,12 +13,74 @@ export function normalizeZaloGroupId(groupId) {
   if (!raw) {
     return { raw: '', bare: '', prefixed: '' };
   }
-  const bare = raw.replace(/^group_/, '');
+  // Canonical bare: bỏ prefix nội bộ `group_` và marker Zalo `g_`
+  // (tránh tách hội thoại: group_123 vs group_g_123 vs g_123).
+  let bare = raw.replace(/^group_/, '');
+  if (bare.startsWith('g_')) {
+    bare = bare.slice(2);
+  }
+  bare = bare.replace(/^group_/, '');
+  if (bare.startsWith('g_')) {
+    bare = bare.slice(2);
+  }
   return {
     raw,
     bare,
     prefixed: bare ? `group_${bare}` : raw,
   };
+}
+
+/**
+ * Hội thoại nhóm trên hộp thư: external_id dạng group_<id>, hoặc visitor_info.is_group / group_id.
+ * @param {{ externalId?: string|null, conversationInfo?: object|null }} params
+ * @returns {boolean}
+ */
+export function isZaloGroupConversation({ externalId, conversationInfo } = {}) {
+  const info = conversationInfo || {};
+  const flag = info.is_group;
+  if (flag === true || flag === 1 || flag === 'true' || flag === 't' || flag === '1') {
+    return true;
+  }
+  if (info.group_id != null && String(info.group_id).trim() !== '') {
+    return true;
+  }
+  const ext = String(externalId || '').trim();
+  return ext.startsWith('group_') || ext.startsWith('g_');
+}
+
+/**
+ * Các dạng external_id có thể đã lưu cho cùng một nhóm (lệch g_/group_ trước đây).
+ * @param {string|number|null|undefined} groupIdOrExternalId
+ * @returns {string[]}
+ */
+export function buildZaloGroupExternalIdCandidates(groupIdOrExternalId) {
+  const { bare, prefixed } = normalizeZaloGroupId(groupIdOrExternalId);
+  if (!bare) {
+    const raw = String(groupIdOrExternalId || '').trim();
+    return raw ? [raw] : [];
+  }
+  return [...new Set([
+    prefixed,
+    `g_${bare}`,
+    `group_g_${bare}`,
+    bare,
+    String(groupIdOrExternalId || '').trim(),
+  ].filter(Boolean))];
+}
+
+/**
+ * ID gửi vào Zalo (tham số grid của zca-js).
+ * Dùng bare canonical (không `group_`, không `g_`) — khớp key getAllGroups/gridVerMap.
+ *
+ * @param {...(string|number|null|undefined)} candidates
+ * @returns {string}
+ */
+export function resolveZaloGroupSendId(...candidates) {
+  for (const candidate of candidates) {
+    const { bare } = normalizeZaloGroupId(candidate);
+    if (bare) return bare;
+  }
+  return '';
 }
 
 /**

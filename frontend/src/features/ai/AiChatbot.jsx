@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import useIsMobile from '../../hooks/useIsMobile';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
+import { getHelpArticle } from '../../services/help.service';
 import {
   HiOutlineSparkles, HiOutlinePaperClip, HiOutlineX,
   HiOutlineChevronRight, HiOutlineChevronDown, HiOutlineArrowRight,
@@ -27,6 +28,7 @@ import {
   ZaloQrLoginCard,
 } from './components/AiChatbotWizardCards';
 import ConfirmModal from '../inbox/ConfirmModal';
+import CreditWarningBanner from '../../components/layout/CreditWarningBanner';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service';
@@ -401,12 +403,18 @@ const normalizeContentPlanData = (rawData) => {
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd, variant = 'panel' }) => {
   const { t, locale } = useI18n();
-  const { user, fetchAiCredits, aiCredits, billingStatus } = useAuthStore();
+  const { user, fetchAiCredits, aiCredits, billingStatus, addons, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
+  const isEmployeeCtx = activeContext?.type === 'employee';
 
   const aiBillingBlock = useMemo(
-    () => getAiBillingBlockState({ isAdmin: isSuperAdmin, billingStatus, aiCredits }),
-    [aiCredits, billingStatus, isSuperAdmin],
+    () => getAiBillingBlockState({
+      isAdmin: isSuperAdmin,
+      billingStatus,
+      aiCredits,
+      walletRemaining: Number(addons?.aiCredits?.remaining) || 0,
+    }),
+    [addons, aiCredits, billingStatus, isSuperAdmin],
   );
 
   const welcomeMessage = isSuperAdmin
@@ -467,6 +475,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const pendingTabIdRef = useRef(new Set()); // non-rendering check
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const getAiRequestErrorMessage = (error) => getAiQuotaErrorMessage(error, t);
 
@@ -783,6 +792,33 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Nút "Hỏi trợ lý về mục này" ở trang hướng dẫn (/huong-dan/:slug) điều hướng tới
+  // /app?ask=<slug> — khi panel mở, tự điền câu hỏi gợi ý rồi xoá query param.
+  useEffect(() => {
+    const askSlug = searchParams.get('ask');
+    if (!isOpen || !askSlug) return;
+
+    let mounted = true;
+    getHelpArticle(askSlug)
+      .then((res) => {
+        if (!mounted) return;
+        const title = res.data?.result?.title;
+        setInputText(title ? t('aiChatbot.askAboutArticle', { title }) : t('aiChatbot.askAboutSlug', { slug: askSlug }));
+      })
+      .catch(() => {
+        if (mounted) setInputText(t('aiChatbot.askAboutSlug', { slug: askSlug }));
+      });
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('ask');
+      return next;
+    }, { replace: true });
+
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, searchParams]);
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2517,6 +2553,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const renderInputSection = ({ centered = false } = {}) => (
     <div className={centered ? 'w-full' : `flex-shrink-0 ${isFullscreen ? 'px-4 pb-6 bg-gray-50' : 'px-4 pt-3 pb-4 border-t border-slate-100 bg-white'}`}>
       <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
+        {isFullscreen && <CreditWarningBanner placement="composer" />}
         <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white border-slate-200' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40' : centered ? '' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -2700,8 +2737,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         </button>
       </div>
 
-      {/* Gói hết hạn / hết credit AI */}
-      {!isSuperAdmin && aiBillingBlock && (
+      {/* Gói hết hạn / hết credit AI — ở fullscreen đã có banner ngay trên khung nhập */}
+      {!isSuperAdmin && !isFullscreen && aiBillingBlock && (
         <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5">
           <HiOutlineExclamation className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
           <div className="min-w-0 flex-1">
@@ -2710,13 +2747,24 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 ? t('aiChatbot.planExpiredBanner')
                 : t('aiChatbot.creditsEmptyBanner')}
             </p>
-            <button
-              type="button"
-              onClick={() => navigate('/pricing')}
-              className="mt-1.5 text-xs font-semibold text-red-700 underline hover:text-red-900"
-            >
-              {t('aiChatbot.upgradePlan')}
-            </button>
+            <div className="mt-1.5 flex flex-wrap items-center gap-3">
+              {aiBillingBlock.type !== 'expired' && !isEmployeeCtx && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/app/topup')}
+                  className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+                >
+                  {t('creditBanner.buyTopup')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/pricing')}
+                className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+              >
+                {t('aiChatbot.upgradePlan')}
+              </button>
+            </div>
           </div>
         </div>
       )}

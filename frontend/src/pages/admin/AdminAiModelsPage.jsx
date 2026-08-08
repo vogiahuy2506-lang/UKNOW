@@ -1,28 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
+import { HiOutlineExclamation, HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
 import adminAiModelsApiService from '../../features/admin/services/adminAiModelsApi.service';
 import { useI18n } from '../../i18n';
 
 const toModelId = (model) => model.modelId || model.model_id;
 
-function formatTokenLimit(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  if (n >= 1_000_000) {
-    const millions = n / 1_000_000;
-    return Number.isInteger(millions) ? `${millions}M` : `${millions.toFixed(1)}M`;
-  }
-  if (n >= 1_000) {
-    const thousands = n / 1_000;
-    return Number.isInteger(thousands) ? `${thousands}K` : `${thousands.toFixed(1)}K`;
-  }
-  return String(n);
-}
+const fmtUsd = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return `$${v.toFixed(2)}`;
+};
 
 export default function AdminAiModelsPage() {
   const { t } = useI18n();
   const [models, setModels] = useState([]);
+  const [pricingMeta, setPricingMeta] = useState({
+    avgPromptTokens: 10000,
+    avgOutputTokens: 500,
+    basis: 'estimate',
+    usdVndRate: 24000,
+  });
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [savingId, setSavingId] = useState(null);
@@ -32,7 +30,19 @@ export default function AdminAiModelsPage() {
     setLoading(true);
     try {
       const res = await adminAiModelsApiService.list();
-      setModels(Array.isArray(res.data?.data) ? res.data.data : []);
+      const payload = res.data?.data;
+      const nextModels = Array.isArray(payload?.models)
+        ? payload.models
+        : (Array.isArray(payload) ? payload : []);
+      setModels(nextModels);
+      if (payload && !Array.isArray(payload)) {
+        setPricingMeta({
+          avgPromptTokens: Number(payload.avgPromptTokens) || 10000,
+          avgOutputTokens: Number(payload.avgOutputTokens) || 500,
+          basis: payload.basis === 'actual' ? 'actual' : 'estimate',
+          usdVndRate: Number(payload.usdVndRate) || 24000,
+        });
+      }
     } catch (err) {
       toast.error(err?.response?.data?.message || t('adminAiModels.loadFailed'));
     } finally {
@@ -45,9 +55,16 @@ export default function AdminAiModelsPage() {
   }, [load]);
 
   const visibleModels = useMemo(() => {
-    if (showAll) return models;
-    return models.filter((model) => model.isEnabled);
+    if (!showAll) return models.filter((model) => model.isEnabled);
+    return models.filter(
+      (model) => model.isEnabled || (model.thinking && model.supportsGenerateContent)
+    );
   }, [models, showAll]);
+
+  const systemModelUnpriced = useMemo(
+    () => models.find((m) => m.isEnabled && m.pricing && m.pricing.configured === false),
+    [models]
+  );
 
   const updateModel = async (model, patch) => {
     const modelId = toModelId(model);
@@ -57,7 +74,9 @@ export default function AdminAiModelsPage() {
       const res = await adminAiModelsApiService.update(modelId, patch);
       const updated = res.data?.data;
       if (updated) {
-        setModels((prev) => prev.map((item) => (toModelId(item) === modelId ? updated : item)));
+        setModels((prev) => prev.map((item) => (
+          toModelId(item) === modelId ? { ...item, ...updated, pricing: item.pricing } : item
+        )));
       }
       toast.success(t('adminAiModels.saved'));
     } catch (err) {
@@ -80,7 +99,6 @@ export default function AdminAiModelsPage() {
     }
   };
 
-  // Chọn model hệ thống: bật model này, backend tự tắt toàn bộ model còn lại
   const chooseSystemModel = async (model) => {
     const modelId = toModelId(model);
     if (!modelId || model.isEnabled) return;
@@ -115,6 +133,17 @@ export default function AdminAiModelsPage() {
         </button>
       </div>
 
+      {systemModelUnpriced && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0" />
+          <p>
+            {t('adminAiModels.systemModelUnpricedBanner', {
+              model: toModelId(systemModelUnpriced),
+            })}
+          </p>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -140,17 +169,14 @@ export default function AdminAiModelsPage() {
                 <tr>
                   <th className="px-5 py-3">{t('adminAiModels.model')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.displayName')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.inputTokens')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.outputTokens')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.description')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.pricePerAnswer')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.systemModelColumn') || 'Model hệ thống'}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.source')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleModels.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                    <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
                       {models.length === 0 ? t('adminAiModels.noModels') : t('adminAiModels.noEnabledModels')}
                     </td>
                   </tr>
@@ -158,6 +184,7 @@ export default function AdminAiModelsPage() {
                 {visibleModels.map((model) => {
                   const modelId = toModelId(model);
                   const busy = savingId === modelId;
+                  const pricing = model.pricing || {};
                   return (
                     <tr key={modelId} className="align-top">
                       <td className="px-5 py-4">
@@ -181,10 +208,27 @@ export default function AdminAiModelsPage() {
                           }}
                         />
                       </td>
-                      <td className="px-5 py-4 text-slate-700">{formatTokenLimit(model.inputTokenLimit)}</td>
-                      <td className="px-5 py-4 text-slate-700">{formatTokenLimit(model.outputTokenLimit)}</td>
-                      <td className="max-w-xs px-5 py-4 text-xs text-slate-500">
-                        {model.description || '—'}
+                      <td className="px-5 py-4">
+                        {pricing.configured ? (
+                          <div>
+                            <p className="font-semibold text-slate-800">
+                              ~{Number(pricing.costPerAnswerVnd).toLocaleString('vi-VN')}đ
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {fmtUsd(pricing.inputUsdPerM)} / {fmtUsd(pricing.outputUsdPerM)}{' '}
+                              {t('adminAiModels.perMillionTokens')}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="font-semibold text-amber-700">
+                              ⚠ {t('adminAiModels.priceMissing')}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {t('adminAiModels.priceMissingHint')}
+                            </p>
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <label className={`inline-flex items-center gap-2 ${model.supportsGenerateContent ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
@@ -203,12 +247,29 @@ export default function AdminAiModelsPage() {
                           </span>
                         </label>
                       </td>
-                      <td className="px-5 py-4 text-slate-500">{model.source || 'google'}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 space-y-1">
+              <p>
+                {t('adminAiModels.usdRateNote', {
+                  rate: Number(pricingMeta.usdVndRate).toLocaleString('vi-VN'),
+                })}
+              </p>
+              <p>
+                {pricingMeta.basis === 'actual'
+                  ? t('adminAiModels.avgBasisActual', {
+                    prompt: Number(pricingMeta.avgPromptTokens).toLocaleString('vi-VN'),
+                    output: Number(pricingMeta.avgOutputTokens).toLocaleString('vi-VN'),
+                  })
+                  : t('adminAiModels.avgBasisEstimate', {
+                    prompt: Number(pricingMeta.avgPromptTokens).toLocaleString('vi-VN'),
+                    output: Number(pricingMeta.avgOutputTokens).toLocaleString('vi-VN'),
+                  })}
+              </p>
+            </div>
           </div>
         )}
       </div>

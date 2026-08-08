@@ -7,9 +7,13 @@ import { useI18n } from '../../../i18n';
 /**
  * Modal đổi mật khẩu cho người dùng đang đăng nhập.
  *
- * @param {{ isOpen: boolean, onClose: () => void }} props
+ * `forced` = bắt buộc đổi (nhân viên vừa được chủ shop reset mật khẩu tạm).
+ * Ở chế độ này không có đường thoát: bỏ nút X, bỏ nút Huỷ, bấm ra ngoài không đóng.
+ * Đóng sớm sẽ khiến mọi request tiếp theo bị requirePasswordChange trả 403.
+ *
+ * @param {{ isOpen: boolean, onClose: () => void, forced?: boolean, onChanged?: () => void }} props
  */
-const ChangePasswordModal = ({ isOpen, onClose }) => {
+const ChangePasswordModal = ({ isOpen, onClose, forced = false, onChanged }) => {
   const { t } = useI18n();
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
@@ -29,6 +33,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
 
   const handleClose = () => {
+    if (forced) return;
     setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setError('');
     setSuccess('');
@@ -62,6 +67,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
       if (res.success) {
         setSuccess(t('changePassword.success'));
         setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        onChanged?.();
       } else {
         setError(res.message || t('changePassword.failed'));
       }
@@ -92,6 +98,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           </div>
           <button
             onClick={handleClose}
+            hidden={forced}
             className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <HiOutlineX className="w-5 h-5" />
@@ -140,9 +147,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={handleClose} className="btn btn-secondary">
-              {t('changePassword.cancel')}
-            </button>
+            {!forced && (
+              <button type="button" onClick={handleClose} className="btn btn-secondary">
+                {t('changePassword.cancel')}
+              </button>
+            )}
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? t('changePassword.saving') : t('changePassword.submit')}
             </button>

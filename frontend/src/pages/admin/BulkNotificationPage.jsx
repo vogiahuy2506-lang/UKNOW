@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { HiOutlineMail, HiOutlinePaperAirplane, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
+import { HiOutlineMail, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import adminBulkNotificationApiService from '../../features/admin/services/adminBulkNotificationApi.service';
 import { useI18n } from '../../i18n';
@@ -200,7 +200,7 @@ export default function BulkNotificationPage() {
                   </>
                 ) : (
                   <>
-                    <HiOutlinePaperAirplane className="h-4 w-4" />
+                    <HiOutlineMail className="h-4 w-4" />
                     {t('bulkNotification.send')}
                   </>
                 )}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   HiOutlineViewBoards,
-  HiOutlinePaperAirplane,
+  HiOutlineMail,
   HiOutlineTrash,
   HiOutlineRefresh,
   HiOutlineChevronLeft,
@@ -521,7 +521,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             {sending ? (
               <HiOutlineRefresh className="w-5 h-5 animate-spin" />
             ) : (
-              <HiOutlinePaperAirplane className="w-5 h-5" />
+              <HiOutlineMail className="w-5 h-5" />
             )}
           </button>
         </div>
@@ -550,10 +550,10 @@ function ChatbotStudioPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">AI Chatbot</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 mt-2">
           Quản lý và thiết lập chatbot AI cho doanh nghiệp của bạn.
         </p>
       </div>

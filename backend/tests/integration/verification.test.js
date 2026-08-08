@@ -19,8 +19,8 @@
  * Vì DNS check ẩn (server thật resolveMx) tốn time + flaky, test lấy
  * `gmail.com` (common domain → bypass) và `test.com` (whitelist trong code).
  *
- * `sendSystemEmail` no-op khi không có SENDGRID_API_KEY. Test này SET env
- * SENDGRID_API_KEY giả + mock nodemailer để xác minh email body có chứa mã.
+ * Hệ thống gửi mail qua SMTP (nodemailer). Test mock nodemailer để xác minh
+ * email body có chứa mã, không phụ thuộc nhà cung cấp.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 
@@ -119,10 +119,28 @@ describe('POST /api/verification/send-code', () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  it('gọi send-code 2 lần → mã cũ bị mark is_used=true, mã mới is_used=false', async () => {
+  it('gọi send-code 2 lần trong cooldown → lần 2 trả 429', async () => {
+    const email = 'reissue-cooldown@gmail.com';
+    const r1 = await request(app).post('/api/verification/send-code').send({ email });
+    expect(r1.status).toBe(200);
+    const r2 = await request(app).post('/api/verification/send-code').send({ email });
+    expect(r2.status).toBe(429);
+    expect(r2.body.code).toBe('VERIFICATION_COOLDOWN');
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+  });
+
+  it('gọi send-code lại sau cooldown → mã cũ bị mark is_used=true, mã mới is_used=false', async () => {
     const email = 'reissue@gmail.com';
     const r1 = await request(app).post('/api/verification/send-code').send({ email });
     expect(r1.status).toBe(200);
+
+    await db.query(
+      `UPDATE verification_codes
+       SET created_at = NOW() - INTERVAL '61 seconds'
+       WHERE LOWER(email) = LOWER($1)`,
+      [email]
+    );
+
     const r2 = await request(app).post('/api/verification/send-code').send({ email });
     expect(r2.status).toBe(200);
 
@@ -137,7 +155,11 @@ describe('POST /api/verification/send-code', () => {
     expect(mockSendMail).toHaveBeenCalledTimes(2);
   });
 
-  it('thiếu SENDGRID_API_KEY → mã vẫn lưu DB nhưng không gọi sendMail (no-op)', async () => {
+  // Trước đây `sendSystemEmail` no-op khi thiếu SENDGRID_API_KEY. Hệ thống đã chuyển
+  // sang SMTP (systemEmail.util.js không còn đọc biến này), nên việc thiếu key
+  // KHÔNG còn chặn gửi. Bài này khoá lại hành vi hiện tại để lần đổi nhà cung cấp
+  // sau không âm thầm trôi qua.
+  it('thiếu SENDGRID_API_KEY không còn chặn gửi — vẫn gửi qua SMTP và lưu mã', async () => {
     const saved = process.env.SENDGRID_API_KEY;
     delete process.env.SENDGRID_API_KEY;
 
@@ -146,7 +168,7 @@ describe('POST /api/verification/send-code', () => {
       .send({ email: 'noapi@gmail.com' });
 
     expect(res.status).toBe(200);
-    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
 
     const { rows } = await db.query(
       `SELECT email FROM verification_codes WHERE email = $1`,
@@ -154,7 +176,19 @@ describe('POST /api/verification/send-code', () => {
     );
     expect(rows).toHaveLength(1);
 
-    process.env.SENDGRID_API_KEY = saved;
+    if (saved === undefined) delete process.env.SENDGRID_API_KEY;
+    else process.env.SENDGRID_API_KEY = saved;
+  });
+
+  it('gửi mail lỗi → 500, KHÔNG âm thầm báo thành công', async () => {
+    mockSendMail.mockRejectedValueOnce(new Error('SMTP down'));
+
+    const res = await request(app)
+      .post('/api/verification/send-code')
+      .send({ email: 'smtpdown@gmail.com' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
   });
 });
 

@@ -3,17 +3,21 @@ import { body, param } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import productsController from '../controllers/products.controller.js';
+import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
-router.get('/', productsController.getAll.bind(productsController));
+router.get('/', requirePermission('courses'), productsController.getAll.bind(productsController));
 
-router.get('/categories', productsController.getCategories.bind(productsController));
+router.get('/categories', requirePermission('courses'), productsController.getCategories.bind(productsController));
 
 router.get(
   '/:id',
+  requirePermission('courses'),
   [param('id').isInt({ min: 1 })],
   handleValidationErrors,
   productsController.getById.bind(productsController)
@@ -21,6 +25,7 @@ router.get(
 
 router.post(
   '/',
+  requirePermission('courses'),
   [
     body('productName').trim().notEmpty().withMessage('Tên sản phẩm không được để trống'),
     body('productCode').optional({ nullable: true }).trim(),
@@ -40,6 +45,7 @@ router.post(
 
 router.put(
   '/:id',
+  requirePermission('courses'),
   [
     param('id').isInt({ min: 1 }),
     body('productName').optional({ nullable: true }).trim().notEmpty().withMessage('Tên sản phẩm không được để trống'),
@@ -60,6 +66,7 @@ router.put(
 
 router.delete(
   '/:id',
+  requirePermission('courses'),
   [param('id').isInt({ min: 1 })],
   handleValidationErrors,
   productsController.remove.bind(productsController)

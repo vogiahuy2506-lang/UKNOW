@@ -1,161 +1,229 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../../stores/authStore';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-  HiOutlineMenu,
-  HiOutlineLockClosed,
   HiOutlineLogout,
+  HiOutlineLockClosed,
+  HiOutlineUserCircle,
+  HiOutlineGlobeAlt,
+  HiOutlineCheck,
   HiOutlineUser,
   HiOutlineUserGroup,
-  HiCheck,
+  HiOutlineChevronDown,
+  HiOutlineShoppingCart,
 } from 'react-icons/hi';
-import logoIcon from '../../../assets/icons/founderai-logo.png';
-import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
-import LanguageSwitcher from '../../LanguageSwitcher';
+import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
+import { useComingSoon } from '../../../contexts/useComingSoon';
+import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
+import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
+import logoIcon from '../../../assets/icons/founderai-logo.png';
 
-const Header = ({ onToggleSidebar }) => {
-  const { t } = useI18n();
+const AVATAR_STYLES = {
+  admin: 'from-purple-500 to-violet-600',
+  super_admin: 'from-purple-500 to-violet-600',
+  user: 'from-orange-500 to-red-500',
+};
+
+const Header = () => {
+  const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
-  const [showMenu, setShowMenu] = useState(false);
+  const { showComingSoon } = useComingSoon();
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const menuRef = useRef(null);
+  const profileRef = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
+    const handleClick = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  const quickItems = [
+    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showComingSoon() },
+    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
+    { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
+    { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
+    { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
+  ];
+
+  const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
+  const avatarInitial = (user?.fullName?.[0] || user?.username?.[0] || 'U').toUpperCase();
+  const displayName = user?.fullName || user?.username || 'User';
 
   return (
-    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-30">
-      <div className="flex items-center gap-3">
+    <>
+      <header className="w-full h-[44px] bg-white flex items-center pl-3 pr-3 border-b border-gray-200">
+        {/* Left: Logo + Brand — icon's left edge aligned with sidebar icons */}
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+          <span className="w-7 h-7 flex items-center justify-center shrink-0">
+            <img src={logoIcon} alt="Founder AI" className="w-7 h-7 object-contain" />
+          </span>
+          <span className="text-[16px] font-bold text-gray-900 tracking-tight hidden sm:inline leading-none">
+            Founder AI
+          </span>
+        </Link>
+
+        {/* Spacer */}
+        <div className="flex-1 min-w-[16px]" />
+
+        {/* Center: quick nav */}
+        <nav className="hidden lg:flex items-center gap-1">
+          {quickItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={item.onClick}
+              className={`inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap transition-all ${
+                item.accent
+                  ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              {item.key === 'marketplace' && <HiOutlineShoppingCart className="w-3.5 h-3.5 mr-1.5" />}
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Mobile: compact marketplace icon */}
         <button
-          onClick={onToggleSidebar}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          aria-label={t('header.openMenu')}
+          type="button"
+          onClick={() => showComingSoon()}
+          className="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-600 text-white hover:bg-orange-700 shadow-sm transition-colors"
+          aria-label="Marketplace"
         >
-          <HiOutlineMenu className="w-5 h-5 text-gray-600" />
+          <HiOutlineShoppingCart className="w-4 h-4" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <img src={logoIcon} alt="Founder AI Logo" className="h-7 w-auto object-contain" />
-          {activeContext.type === 'employee' && (
-            <span className="text-sm text-primary-600 font-medium opacity-80">
-              / {activeContext.ownerName}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <LanguageSwitcher />
-
-        <div className="relative" ref={menuRef}>
+        {/* Right: profile dropdown */}
+        <div className="relative shrink-0" ref={profileRef}>
           <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            type="button"
+            onClick={() => setProfileOpen((o) => !o)}
+            className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-              <span className="text-white font-medium text-sm">
-                {user?.fullName?.[0] || user?.username?.[0] || 'U'}
+            <div
+              className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarGradient} flex items-center justify-center shrink-0 shadow-sm`}
+            >
+              <span className="text-white font-bold text-[11px] leading-none">{avatarInitial}</span>
+            </div>
+            <div className="hidden lg:flex flex-col items-start flex-1 min-w-0">
+              <span className="text-[13px] font-semibold text-gray-900 leading-tight truncate">{displayName}</span>
+              <span className="text-[10px] text-gray-400 leading-tight capitalize">
+                {activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}
               </span>
             </div>
+            <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${profileOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {showMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                <p className="text-sm font-semibold text-gray-900">{user?.fullName || user?.username}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+          {profileOpen && (
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+              <div className="px-4 py-3.5 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+                <p className="text-[13px] font-bold text-gray-900 truncate">{user?.fullName || user?.username}</p>
+                <p className="text-[12px] text-gray-500 truncate mt-0.5">{user?.email}</p>
               </div>
+
+              {/* Context switcher */}
               <div className="p-2 border-b border-gray-100">
-                <p className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <p className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   {t('header.activeContext')}
                 </p>
                 <button
-                  onClick={() => {
-                    switchContext(null);
-                    setShowMenu(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${
+                  onClick={() => { switchContext(null); setProfileOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors ${
                     activeContext.type === 'self'
-                      ? 'bg-primary-50 text-primary-600 font-medium'
+                      ? 'bg-orange-50 text-orange-600 font-semibold'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <HiOutlineUser className="w-4 h-4" />
                     {t('header.personal')}
                   </div>
-                  {activeContext.type === 'self' && <HiCheck className="w-4 h-4" />}
+                  {activeContext.type === 'self' && <HiOutlineCheck className="w-4 h-4" />}
                 </button>
-
                 {user?.memberships?.map((m) => (
                   <button
                     key={m.ownerId}
-                    onClick={() => {
-                      switchContext(m.ownerId);
-                      setShowMenu(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors mt-1 ${
+                    onClick={() => { switchContext(m.ownerId); setProfileOpen(false); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors mt-1 ${
                       activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
-                        ? 'bg-primary-50 text-primary-600 font-medium'
+                        ? 'bg-orange-50 text-orange-600 font-semibold'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       <HiOutlineUserGroup className="w-4 h-4" />
-                      <span className="truncate max-w-[140px]">
-                        {m.ownerName || m.ownerUsername}
-                      </span>
+                      <span className="truncate max-w-[140px]">{m.ownerName || m.ownerUsername}</span>
                     </div>
                     {activeContext.type === 'employee' && activeContext.ownerId === m.ownerId && (
-                      <HiCheck className="w-4 h-4" />
+                      <HiOutlineCheck className="w-4 h-4 shrink-0" />
                     )}
                   </button>
                 ))}
               </div>
 
-              <div className="p-2">
+              {/* Settings */}
+              <div className="p-1.5">
                 <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    setShowChangePassword(true);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                  onClick={() => { setShowAccountProfile(true); setProfileOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
                 >
-                  <HiOutlineLockClosed className="w-4 h-4" />
-                  {t('header.changePassword')}
+                  <HiOutlineUserCircle className="w-4 h-4 text-gray-400" />
+                  {t('sidebar.accountInfo')}
                 </button>
                 <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  onClick={() => { setShowChangePassword(true); setProfileOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
                 >
-                  <HiOutlineLogout className="w-5 h-5" />
-                  {t('header.logout')}
+                  <HiOutlineLockClosed className="w-4 h-4 text-gray-400" />
+                  {t('sidebar.changePassword')}
+                </button>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-2 text-[13px] text-gray-500">
+                    <HiOutlineGlobeAlt className="w-4 h-4" />
+                    {t('sidebar.language')}
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    {[{ code: 'vi', flag: '🇻🇳' }, { code: 'en', flag: '🇺🇸' }].map(({ code, flag }) => (
+                      <button
+                        key={code}
+                        onClick={() => changeLocale(code)}
+                        className={`text-[15px] px-1.5 py-1 rounded-lg transition-all ${
+                          locale === code ? 'bg-gray-100 opacity-100' : 'opacity-40 hover:opacity-80'
+                        }`}
+                      >
+                        {flag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-1.5 border-t border-gray-100">
+                <button
+                  onClick={async () => { await logout(); navigate('/login'); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                >
+                  <HiOutlineLogout className="w-4 h-4" />
+                  {t('sidebar.logout')}
                 </button>
               </div>
             </div>
           )}
         </div>
+      </header>
 
-        <ChangePasswordModal
-          isOpen={showChangePassword}
-          onClose={() => setShowChangePassword(false)}
-        />
-      </div>
-    </header>
+      <AccountProfileModal isOpen={showAccountProfile} onClose={() => setShowAccountProfile(false)} />
+      <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} />
+    </>
   );
 };
 

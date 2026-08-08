@@ -282,6 +282,11 @@ const chatbotApi = {
     return response.data;
   },
 
+  setConversationAiPaused: async (id, type, paused) => {
+    const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/ai-pause`, { type, paused });
+    return response.data;
+  },
+
   getUnreadCount: async () => {
     const response = await api.get('/ai/chatbot/inbox/unread-count');
     return response.data;
@@ -293,6 +298,11 @@ const chatbotApi = {
       content,
       attachments,
     });
+    return response.data;
+  },
+
+  retryMessage: async (messageId, { type }) => {
+    const response = await api.post(`/ai/chatbot/inbox/messages/${messageId}/retry`, { type });
     return response.data;
   },
 

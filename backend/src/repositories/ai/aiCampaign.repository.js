@@ -28,6 +28,10 @@ class AiCampaignRepository {
       `SELECT id, display_name, zalo_name, status
        FROM zalo_settings
        WHERE id_user = $1 AND status = 'connected'
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
+         )
        ORDER BY is_default DESC, created_at DESC
        LIMIT 5`,
       [userId]
@@ -40,6 +44,10 @@ class AiCampaignRepository {
       `SELECT id, display_name, zalo_name, status, is_active, is_default
        FROM zalo_settings
        WHERE id_user = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
+         )
        ORDER BY is_default DESC, created_at DESC`,
       [userId]
     );
@@ -51,6 +59,10 @@ class AiCampaignRepository {
       `SELECT id, name, email, reply_to, status
        FROM email_settings
        WHERE id_user = $1 AND status = 'active'
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'email_accounts' AND tlr.resource_id = email_settings.id
+         )
        ORDER BY name`,
       [userId]
     );
@@ -73,6 +85,10 @@ class AiCampaignRepository {
     const result = await db.query(
       `SELECT id FROM zalo_settings
        WHERE id_user = $1 AND status = 'connected'
+         AND NOT EXISTS (
+           SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
+         )
        ORDER BY is_default DESC LIMIT 1`,
       [userId]
     );

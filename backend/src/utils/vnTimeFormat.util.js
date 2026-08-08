@@ -21,6 +21,26 @@ function toDateOrNull(input) {
 }
 
 /**
+ * Khoá ngày lịch giờ VN dạng `yyyymmdd`.
+ * Dùng formatToParts như hanoiHour — KHÔNG dùng `new Date(d.toLocaleString(...))`
+ * (parse lại chuỗi đã định dạng sẽ lệch khi process chạy TZ=UTC).
+ *
+ * @param {Date|string|number|null|undefined} [input]
+ * @returns {string}
+ */
+export function vnDayKey(input = new Date()) {
+  const d = toDateOrNull(input) || new Date();
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: VIETNAM_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const get = (type) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('year')}${get('month')}${get('day')}`;
+}
+
+/**
  * Một dòng log: ISO UTC + cùng mốc theo lịch Việt Nam (24h).
  *
  * @param {Date|string|number|null|undefined} input

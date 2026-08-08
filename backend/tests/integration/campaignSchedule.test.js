@@ -506,3 +506,119 @@ describe('DELETE /api/campaign-schedules/:id', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('once schedule past / year-rollover guard', () => {
+  function hanoiParts(instant = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(instant);
+    return Object.fromEntries(parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]));
+  }
+
+  /** Cron for midnight on a Hanoi calendar day that already passed (forces ~1y rollover). */
+  function pastOnceCron() {
+    const n = hanoiParts();
+    let pastDay = Number(n.day);
+    let pastMonth = Number(n.month);
+    if (Number(n.hour) === 0 && Number(n.minute) < 1) {
+      const prev = new Date(Date.UTC(Number(n.year), pastMonth - 1, pastDay - 1));
+      pastDay = prev.getUTCDate();
+      pastMonth = prev.getUTCMonth() + 1;
+    }
+    return `0 0 ${pastDay} ${pastMonth} *`;
+  }
+
+  it('POST once cron for day/month already past this year → 400', async () => {
+    const o = await createUser({ role: 'user', username: 'u' });
+    const c = await insertCampaign({ ownerId: o.id });
+    const t = await loginAs(o);
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        campaignId: c.id,
+        scheduleName: 'Past once',
+        scheduleType: 'once',
+        cronExpression: pastOnceCron(),
+      });
+    expect(res.status).toBe(400);
+    expect(String(res.body.message || '')).toMatch(/tương lai|năm/i);
+  });
+
+  it('POST once cron for tomorrow → 201', async () => {
+    const o = await createUser({ role: 'user', username: 'u2' });
+    const c = await insertCampaign({ ownerId: o.id });
+    const t = await loginAs(o);
+
+    const v = hanoiParts(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const cron = `30 10 ${Number(v.day)} ${Number(v.month)} *`;
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        campaignId: c.id,
+        scheduleName: 'Tomorrow once',
+        scheduleType: 'once',
+        cronExpression: cron,
+      });
+    expect(res.status).toBe(201);
+  });
+
+  it('POST once cron ~1 minute ahead → 201 (after_delay path)', async () => {
+    const o = await createUser({ role: 'user', username: 'u3' });
+    const c = await insertCampaign({ ownerId: o.id });
+    const t = await loginAs(o);
+
+    // +5 phút, KHÔNG phải +60 giây.
+    //
+    // Backend so mốc ở độ chính xác PHÚT. Với +60 giây, nếu bài chạy vào quanh
+    // giây thứ 59 thì request vượt qua ranh giới phút, mốc đích thành quá khứ —
+    // và vì cron `once` mã hoá ngày+tháng, cron-parser nhảy thẳng sang năm sau,
+    // vượt cửa sổ 180 ngày → 400. Cửa sổ hỏng chỉ ~1 giây mỗi phút nhưng đủ để
+    // làm CI đỏ ngẫu nhiên.
+    //
+    // +5 phút vẫn chứng minh đúng điều cần chứng minh: cửa sổ tương lai ngắn
+    // (luồng "chạy sau N phút", gửi lên dưới dạng `once`) KHÔNG bị chặn.
+    const v = hanoiParts(new Date(Date.now() + 5 * 60 * 1000));
+    const cron = `${Number(v.minute)} ${Number(v.hour)} ${Number(v.day)} ${Number(v.month)} *`;
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        campaignId: c.id,
+        scheduleName: 'Soon once',
+        scheduleType: 'once',
+        cronExpression: cron,
+      });
+    expect(res.status).toBe(201);
+  });
+
+  it('PATCH once cron to past day/month → 400', async () => {
+    const o = await createUser({ role: 'user', username: 'u4' });
+    const c = await insertCampaign({ ownerId: o.id });
+    const v = hanoiParts(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const s = await insertSchedule({
+      campaignId: c.id,
+      scheduleType: 'once',
+      cronExpression: `0 10 ${Number(v.day)} ${Number(v.month)} *`,
+    });
+    const t = await loginAs(o);
+
+    const res = await request(app)
+      .patch(`/api/campaign-schedules/${s.id}`)
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        cronExpression: pastOnceCron(),
+      });
+    expect(res.status).toBe(400);
+  });
+});

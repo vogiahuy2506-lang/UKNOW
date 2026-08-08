@@ -3,11 +3,16 @@ import db from '../../config/database.js';
 // Public pricing — chỉ lấy gói đại trà còn active. Custom plan (is_custom=true) không bao
 // giờ hiện trên trang pricing công khai vì chúng được tạo riêng cho từng khách hàng.
 
-export const findPlanByCode = async (code) => {
-    const { rows } = await db.query(
+export const findPlanByCode = async (code, queryable = db) => {
+    const { rows } = await queryable.query(
         'SELECT * FROM plans WHERE code = $1 AND is_active = true AND is_custom = false',
         [code]
     );
+    return rows[0] || null;
+};
+
+export const findPlanById = async (id) => {
+    const { rows } = await db.query('SELECT * FROM plans WHERE id = $1', [id]);
     return rows[0] || null;
 };
 
@@ -35,8 +40,8 @@ export const getUserFeatures = async (userId) => {
     return [];
 };
 
-export const getPlanByUserId = async (userId) => {
-    const { rows } = await db.query(
+export const getPlanByUserId = async (userId, queryable = db) => {
+    const { rows } = await queryable.query(
         `SELECT p.*
          FROM users u
          JOIN plans p ON p.id = u.active_plan_id

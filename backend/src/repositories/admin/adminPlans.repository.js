@@ -82,8 +82,9 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays }) {
-  const { rows } = await db.query(
+  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays,
+  customOwnerUserId = null, customConfig = null }, queryable = db) {
+  const { rows } = await queryable.query(
     `INSERT INTO plans (code, name, price, price_yearly, description, features, max_employees, is_active, is_custom,
                         duration_days,
                         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
@@ -93,8 +94,9 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         max_zalo_accounts, max_email_accounts,
                         max_email_templates, max_zalo_templates,
                         max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days,
+                        custom_owner_user_id, custom_config,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
      RETURNING *`,
     [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
@@ -105,7 +107,9 @@ export async function createPlan({ code, name, price, priceYearly, description, 
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-     gracePeriodDays ?? 0]
+     gracePeriodDays ?? 0,
+     customOwnerUserId ?? null,
+     customConfig != null ? JSON.stringify(customConfig) : null]
   );
   return rows[0];
 }

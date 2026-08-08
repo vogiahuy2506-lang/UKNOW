@@ -149,6 +149,11 @@ class CampaignZaloSenderService {
         } else {
           failed++;
           console.warn(`[ZaloRestore] Failed to restore account ${accountId}`);
+          try {
+            await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+          } catch (recordErr) {
+            console.warn(`[ZaloRestore] recordRestoreFailure failed for ${accountId}: ${recordErr.message}`);
+          }
         }
       }
 

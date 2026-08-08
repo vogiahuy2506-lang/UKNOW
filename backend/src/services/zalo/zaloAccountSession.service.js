@@ -1,4 +1,5 @@
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
+import { unmarkAccountRegistered } from './zaloAccountRegistry.service.js';
 
 const LISTENER_ERROR_GUARD_FLAG = Symbol('Founder AI.zalo.listener.errorGuard');
 const LISTENER_CLOSE_HANDLED_FLAG = Symbol('Founder AI.zalo.listener.closeHandled');
@@ -172,6 +173,11 @@ class ZaloAccountSessionService {
     if (!key) return;
     if (expectedApi && this.apiByAccountId.get(key) !== expectedApi) return;
     this.apiByAccountId.delete(key);
+    // Session API đã mất → inbox handler gắn listener cũ cũng chết.
+    // Bỏ cờ registered để refreshListeners/keepAlive gắn lại trên API mới.
+    // (Gửi tin vẫn dùng API mới; không gắn lại handler = nhận được tin app/web gửi
+    // nhưng bạn bè nhắn vào không hiện hộp thư.)
+    unmarkAccountRegistered(key);
   }
 }
 

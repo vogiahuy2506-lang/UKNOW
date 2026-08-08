@@ -360,3 +360,165 @@ describe('PATCH /api/zalo/accounts/:id/default', () => {
     expect(map[Number(b1.id)]).toBe(true);
   });
 });
+
+describe('zalo restore fail / needs_reauth', () => {
+  it('GET accounts includes lastRestoreAttemptAt + restoreFailCount', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_reauth' });
+    await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Dead',
+      status: 'needs_reauth',
+    });
+    await db.query(
+      `UPDATE zalo_settings
+       SET restore_fail_count = 5,
+           last_restore_attempt_at = NOW() - INTERVAL '10 minutes'
+       WHERE id_user = $1`,
+      [owner.id]
+    );
+
+    const t = await loginAs(owner);
+    const res = await request(app)
+      .get('/api/zalo/accounts')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(200);
+    const acc = res.body.data.items[0];
+    expect(acc.status).toBe('needs_reauth');
+    expect(acc.restoreFailCount).toBe(5);
+    expect(acc.lastRestoreAttemptAt).toBeTruthy();
+  });
+
+  it('needs_reauth account is excluded from findConnectedAccountsNeedingRestore', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_excl' });
+    await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Alive',
+      status: 'connected',
+      cookieText: '[{"key":"a"}]',
+    });
+    await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Dead',
+      status: 'needs_reauth',
+      cookieText: '[{"key":"b"}]',
+    });
+
+    const campaignZaloSenderRepository = (await import('../../src/repositories/campaign/campaignZaloSender.repository.js')).default;
+    const result = await campaignZaloSenderRepository.findConnectedAccountsNeedingRestore();
+    const names = result.rows.map((r) => r.display_name);
+    expect(names).toContain('Alive');
+    expect(names).not.toContain('Dead');
+  });
+
+  it('recordRestoreFailure reaches needs_reauth after count+time window', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_fail' });
+    const acc = await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Failing',
+      status: 'connected',
+      cookieText: '[{"key":"x"}]',
+    });
+    await db.query(
+      `UPDATE zalo_settings
+       SET restore_fail_count = 4,
+           first_restore_fail_at = NOW() - INTERVAL '61 minutes'
+       WHERE id = $1`,
+      [acc.id]
+    );
+
+    const campaignZaloSenderRepository = (await import('../../src/repositories/campaign/campaignZaloSender.repository.js')).default;
+    const row = await campaignZaloSenderRepository.recordRestoreFailure(acc.id);
+    expect(row.status).toBe('needs_reauth');
+    expect(Number(row.restore_fail_count)).toBe(5);
+  });
+
+  it('recordRestoreFailure with count 5 but first fail 10m ago stays connected', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_short' });
+    const acc = await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Short',
+      status: 'connected',
+      cookieText: '[{"key":"x"}]',
+    });
+    await db.query(
+      `UPDATE zalo_settings
+       SET restore_fail_count = 4,
+           first_restore_fail_at = NOW() - INTERVAL '10 minutes'
+       WHERE id = $1`,
+      [acc.id]
+    );
+
+    const campaignZaloSenderRepository = (await import('../../src/repositories/campaign/campaignZaloSender.repository.js')).default;
+    const row = await campaignZaloSenderRepository.recordRestoreFailure(acc.id);
+    expect(row.status).toBe('connected');
+    expect(Number(row.restore_fail_count)).toBe(5);
+  });
+
+  it('POST retry-restore by other user → 404', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_r1' });
+    const other = await createUser({ role: 'user', username: 'other_r1' });
+    const acc = await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Owned',
+      status: 'needs_reauth',
+    });
+
+    const t = await loginAs(other);
+    const res = await request(app)
+      .post(`/api/zalo/accounts/${acc.id}/retry-restore`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('POST retry-restore by owner → connected + counters cleared', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_r2' });
+    const acc = await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Owned',
+      status: 'needs_reauth',
+    });
+    await db.query(
+      `UPDATE zalo_settings SET restore_fail_count = 5, first_restore_fail_at = NOW() - INTERVAL '2 hours' WHERE id = $1`,
+      [acc.id]
+    );
+
+    const t = await loginAs(owner);
+    const res = await request(app)
+      .post(`/api/zalo/accounts/${acc.id}/retry-restore`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.account.status).toBe('connected');
+    expect(res.body.data.account.restoreFailCount).toBe(0);
+
+    const { rows } = await db.query(
+      'SELECT status, restore_fail_count, first_restore_fail_at FROM zalo_settings WHERE id = $1',
+      [acc.id]
+    );
+    expect(rows[0].status).toBe('connected');
+    expect(Number(rows[0].restore_fail_count)).toBe(0);
+    expect(rows[0].first_restore_fail_at).toBeNull();
+  });
+
+  it('metricZaloDisconnected does not count needs_reauth', async () => {
+    const owner = await createUser({ role: 'user', username: 'owner_metric' });
+    await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Dead',
+      status: 'needs_reauth',
+    });
+    await createZaloAccount({
+      ownerId: owner.id,
+      displayName: 'Disc',
+      status: 'disconnected',
+    });
+    await db.query(
+      `UPDATE zalo_settings SET updated_at = NOW() - INTERVAL '2 hours' WHERE id_user = $1`,
+      [owner.id]
+    );
+
+    const { metricZaloDisconnected } = await import('../../src/repositories/admin/alert.repository.js');
+    const cnt = await metricZaloDisconnected(30, 7 * 24 * 60);
+    expect(cnt).toBe(1);
+  });
+});

@@ -3,6 +3,12 @@ import emailSettingsRepository from '../../repositories/email/emailSettings.repo
 import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
 import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
+import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
+import { maybeDebitWalletForSend } from '../payment/topupWallet.service.js';
+
+const EMAIL_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
+   SELECT um.employee_id FROM user_members um
+   WHERE um.owner_id = $1 AND um.status = 'active'))`;
 
 function createServiceError(message, statusCode, extra = {}) {
   const error = new Error(message);
@@ -140,6 +146,43 @@ class EmailSettingsSmtpService {
           sentAt: payload.sentAt,
         });
         await emailSettingsRepository.incrementCampaignSent(client, campaignIdNum);
+      }
+
+      // Trừ ví trong cùng TX khi gửi thành công / bounce (đếm vào hạn mức tháng).
+      // Không debit trên đường SMTP failed (status sẽ chuyển failed, không đếm quota).
+      if (payload.debitWallet && emailMessageId) {
+        const billingUserId = await resolveBillingUserId(payload.userId);
+        if (billingUserId) {
+          const { rows: limitRows } = await client.query(
+            `SELECT p.monthly_email_limit
+             FROM users u
+             JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+             WHERE u.id = $1
+             LIMIT 1`,
+            [billingUserId]
+          );
+          const planLimit = limitRows[0]?.monthly_email_limit;
+          const planLimitNum = planLimit == null || planLimit === ''
+            ? null
+            : Number.parseInt(planLimit, 10);
+          const { rows: countRows } = await client.query(
+            `SELECT COUNT(*)::int AS total
+             FROM email_messages em
+             INNER JOIN campaigns c ON c.id = em.id_campaign
+             WHERE ${EMAIL_OWNER_PREDICATE}
+               AND em.status IN ('sent', 'delivered', 'bounced')
+               AND em.sent_at >= DATE_TRUNC('month', NOW())`,
+            [billingUserId]
+          );
+          const usageCountAfterSend = Number(countRows[0]?.total) || 0;
+          await maybeDebitWalletForSend(client, {
+            billingUserId,
+            itemKey: 'emails',
+            sourceKey: `email_message:${emailMessageId}`,
+            planLimit: Number.isFinite(planLimitNum) ? planLimitNum : null,
+            usageCountAfterSend,
+          });
+        }
       }
 
       return emailMessageId;

@@ -1,5 +1,6 @@
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
+import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import ragEngineService from './ragEngine.service.js';
 import subAssistantService from './subAssistant.service.js';
 import webChatAdapter from './channelAdapters/webChat.adapter.js';
@@ -50,6 +51,15 @@ class ChatRouterService {
       return { type: 'disabled', content: null };
     }
 
+    // Handoff: skip AI when owner paused this conversation
+    const pauseType = channel === 'web' ? 'webchat'
+      : channel === 'zalo_personal' ? 'zalo_personal'
+        : 'channel';
+    if (conversationId && await unifiedInboxRepository.isAiPaused(conversationId, pauseType)) {
+      console.log(`[ChatRouter] AI paused for ${pauseType} conversation ${conversationId}`);
+      return { type: 'paused', content: null };
+    }
+
     const creditPrep = await this._prepareChatCredit(userId, creditFeature);
     if (creditPrep.visitorMessage) {
       return { type: 'text', content: creditPrep.visitorMessage };
@@ -96,7 +106,11 @@ class ChatRouterService {
       });
       shouldChargeCredit = true;
     } catch (error) {
-      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) throw error;
+      // Quota/credit limits and transient AI failures both return a static visitor message.
+      // Do not rethrow — public/channel callers must not see HTTP 500.
+      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
+        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}):`, error.message);
+      }
       aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
     }
 
@@ -132,7 +146,7 @@ class ChatRouterService {
     const adapter = ADAPTERS[channel];
     if (!adapter) throw new Error(`Unknown channel: ${channel}`);
 
-    console.log(`[ChatRouter] routeMessageWithSettings: channel=${channel}, userId=${userId}, conversationId=${conversationId}, message="${String(message).substring(0, 50)}"`);
+    console.log(`[ChatRouter] routeMessageWithSettings: channel=${channel}, userId=${userId}, conversationId=${conversationId}`);
 
     // Skip if chatbot is disabled
     if (!chatbotSettings?.is_enabled) {
@@ -188,7 +202,9 @@ class ChatRouterService {
       });
       shouldChargeCredit = true;
     } catch (error) {
-      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) throw error;
+      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
+        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}):`, error.message);
+      }
       aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
     }
 
@@ -441,6 +457,12 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       }
 
       const ownerId = chatbot.id_user;
+
+      if (conversationId && await unifiedInboxRepository.isAiPaused(conversationId, 'channel')) {
+        console.log(`[ChatRouter] AI paused for channel conversation ${conversationId}`);
+        return { content: null, paused: true };
+      }
+
       const creditPrep = await this._prepareChatCredit(ownerId, 'chatbot_widget');
       if (creditPrep.visitorMessage) {
         return { content: creditPrep.visitorMessage };

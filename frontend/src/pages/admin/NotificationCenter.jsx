@@ -79,22 +79,60 @@ export default function NotificationCenter() {
     }
   };
 
+  const buildNotificationPayload = useCallback(() => ({
+    type: notificationType,
+    priority,
+    title: editorData.title,
+    title_en: editorData.title_en,
+    message: editorData.message,
+    message_en: editorData.message_en,
+    target_roles: targetingCriteria.roles,
+    target_plans: targetingCriteria.plans,
+    target_statuses: targetingCriteria.statuses,
+    target_user_ids: targetingCriteria.user_ids,
+    target_emails: targetingCriteria.emails,
+    registered_before: targetingCriteria.registered_before,
+    registered_after: targetingCriteria.registered_after,
+    schedule_type: scheduleConfig.schedule_type,
+    scheduled_at: scheduleConfig.scheduled_at,
+    recurrence_pattern: scheduleConfig.recurrence_pattern,
+    recurrence_end_date: scheduleConfig.recurrence_end_date
+  }), [
+    notificationType, priority, editorData, targetingCriteria, scheduleConfig
+  ]);
+
+  const validatePayload = (payload) => {
+    if (!payload.title?.trim()) return 'Vui lòng nhập tiêu đề';
+    if (!payload.message?.trim()) return 'Vui lòng nhập nội dung';
+
+    if (payload.schedule_type === 'now') {
+      const hasRecipients =
+        (payload.target_user_ids && payload.target_user_ids.length > 0) ||
+        (payload.target_emails && payload.target_emails.length > 0);
+      if (!hasRecipients) {
+        return 'Vui lòng chọn ít nhất một người nhận (user IDs hoặc email)';
+      }
+    } else {
+      const hasTargeting =
+        (payload.target_roles && payload.target_roles.length > 0) ||
+        (payload.target_plans && payload.target_plans.length > 0) ||
+        (payload.target_statuses && payload.target_statuses.length > 0) ||
+        (payload.target_user_ids && payload.target_user_ids.length > 0) ||
+        (payload.target_emails && payload.target_emails.length > 0) ||
+        payload.registered_before ||
+        payload.registered_after;
+      if (!hasTargeting) {
+        return 'Vui lòng chọn ít nhất một tiêu chí người nhận';
+      }
+    }
+    return null;
+  };
+
   const handleCreateAndSend = async () => {
-    if (!editorData.title?.trim()) {
-      toast.error('Vui lòng nhập tiêu đề');
-      return;
-    }
-    if (!editorData.message?.trim()) {
-      toast.error('Vui lòng nhập nội dung');
-      return;
-    }
-    
-    // Kiểm tra đã chọn người nhận chưa
-    const hasSelectedUsers = targetingCriteria.user_ids && targetingCriteria.user_ids.length > 0;
-    const hasEmails = targetingCriteria.emails && targetingCriteria.emails.length > 0;
-    
-    if (!hasSelectedUsers && !hasEmails) {
-      toast.error('Vui lòng chọn ít nhất một người nhận');
+    const payload = buildNotificationPayload();
+    const validationError = validatePayload(payload);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -102,72 +140,51 @@ export default function NotificationCenter() {
     try {
       let response;
 
-      if (scheduleConfig.schedule_type === 'now') {
-        const sendData = {
-          type: notificationType,
-          priority,
-          title: editorData.title,
-          title_en: editorData.title_en,
-          message: editorData.message,
-          message_en: editorData.message_en
-        };
-        
-        // Chỉ thêm các trường targeting nếu có dữ liệu
-        if (targetingCriteria.user_ids && targetingCriteria.user_ids.length > 0) {
-          sendData.target_user_ids = targetingCriteria.user_ids;
-        }
-        if (targetingCriteria.emails && targetingCriteria.emails.length > 0) {
-          sendData.target_emails = targetingCriteria.emails;
-        }
-        
-        response = await adminNotificationApiService.sendDirect(sendData);
-      } else {
-        response = await adminNotificationApiService.createNotification({
-          type: notificationType,
-          priority,
-          title: editorData.title,
-          title_en: editorData.title_en,
-          message: editorData.message,
-          message_en: editorData.message_en,
-          target_roles: targetingCriteria.roles,
-          target_plans: targetingCriteria.plans,
-          target_statuses: targetingCriteria.statuses,
-          target_emails: targetingCriteria.emails,
-          registered_before: targetingCriteria.registered_before,
-          registered_after: targetingCriteria.registered_after,
-          schedule_type: scheduleConfig.schedule_type,
-          scheduled_at: scheduleConfig.scheduled_at,
-          recurrence_pattern: scheduleConfig.recurrence_pattern,
-          recurrence_end_date: scheduleConfig.recurrence_end_date
-        });
-
+      if (payload.schedule_type === 'now') {
+        // Gửi ngay — dùng endpoint send-direct (backend đã validate targeting)
+        response = await adminNotificationApiService.sendDirect(payload);
         if (response.data?.success) {
-          const notificationId = response.data.data.id;
-
-          if (scheduleConfig.schedule_type === 'scheduled') {
-            response = await adminNotificationApiService.scheduleNotification(
-              notificationId,
-              scheduleConfig.scheduled_at
-            );
-            toast.success('Đã hẹn giờ thông báo thành công');
-          } else {
-            toast.success('Đã tạo thông báo thành công');
-          }
+          toast.success(response.data.message || 'Gửi thông báo thành công');
+          resetForm();
+          await Promise.all([loadNotifications(), loadDashboardStats()]);
+          setActiveTab('history');
+        } else {
+          toast.error(response.data?.message || 'Có lỗi xảy ra');
         }
-      }
-
-      if (response.data?.success) {
-        toast.success(response.data.message || 'Thao tác thành công');
-        resetForm();
-        loadNotifications();
-        loadDashboardStats();
-        setActiveTab('history');
       } else {
-        toast.error(response.data?.message || 'Có lỗi xảy ra');
+        // Hẹn giờ hoặc định kỳ — tạo draft rồi gọi endpoint schedule
+        const createRes = await adminNotificationApiService.createNotification(payload);
+        if (!createRes.data?.success) {
+          toast.error(createRes.data?.message || 'Không thể tạo thông báo');
+          return;
+        }
+        const notificationId = createRes.data.data.id;
+
+        if (payload.schedule_type === 'scheduled') {
+          const scheduleRes = await adminNotificationApiService.scheduleNotification(
+            notificationId,
+            new Date(payload.scheduled_at).toISOString()
+          );
+          if (!scheduleRes.data?.success) {
+            toast.error(scheduleRes.data?.message || 'Không thể hẹn giờ thông báo');
+            return;
+          }
+          toast.success('Đã hẹn giờ thông báo thành công');
+        } else {
+          toast.success('Đã tạo thông báo định kỳ thành công');
+        }
+        resetForm();
+        await Promise.all([loadNotifications(), loadDashboardStats()]);
+        setActiveTab('history');
       }
     } catch (error) {
       console.error('Error sending notification:', error);
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      const status = error.response?.status;
+      if (status === 409) {
+        toast.error(error.response?.data?.message || 'Thông báo đang được xử lý, thử lại sau');
+      } else {
+        toast.error(error.response?.data?.message || error.message || 'Có lỗi xảy ra');
+      }
     } finally {
       setSending(false);
     }
@@ -206,13 +223,17 @@ export default function NotificationCenter() {
       const response = await adminNotificationApiService.sendNotification(notification.id);
       if (response.data?.success) {
         toast.success(response.data.message);
-        loadNotifications();
-        loadDashboardStats();
+        await Promise.all([loadNotifications(), loadDashboardStats()]);
       } else {
         toast.error(response.data?.message);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      const status = error.response?.status;
+      if (status === 409) {
+        toast.error(error.response?.data?.message || 'Thông báo đang được xử lý');
+      } else {
+        toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      }
     } finally {
       setSending(false);
     }
@@ -238,12 +259,24 @@ export default function NotificationCenter() {
   };
 
   const handleScheduleNotification = async (notification) => {
-    const scheduledAt = prompt('Nhập thời gian hẹn (định dạng: YYYY-MM-DD HH:mm)');
-    if (!scheduledAt) return;
+    // backend yêu cầu thời gian phải lớn hơn hiện tại ít nhất 1 phút
+    const minDate = new Date(Date.now() + 60 * 1000);
+    const minDateLocal = minDate.toLocaleString('sv-SE', { hour12: false }).replace(' ', ' ');
+    const input = window.prompt(
+      `Nhập thời gian hẹn (định dạng: YYYY-MM-DD HH:mm)\nPhải sau thời điểm: ${minDateLocal}`,
+      minDateLocal.slice(0, 16)
+    );
+    if (!input) return;
 
     const dateRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
-    if (!dateRegex.test(scheduledAt)) {
+    if (!dateRegex.test(input)) {
       toast.error('Định dạng không đúng. Ví dụ: 2024-12-31 10:00');
+      return;
+    }
+
+    const parsed = new Date(input).getTime();
+    if (Number.isNaN(parsed) || parsed <= Date.now()) {
+      toast.error('Thời gian hẹn giờ phải lớn hơn thời gian hiện tại ít nhất 1 phút');
       return;
     }
 
@@ -251,16 +284,21 @@ export default function NotificationCenter() {
     try {
       const response = await adminNotificationApiService.scheduleNotification(
         notification.id,
-        new Date(scheduledAt).toISOString()
+        new Date(input).toISOString()
       );
       if (response.data?.success) {
         toast.success('Đã hẹn giờ thông báo');
-        loadNotifications();
+        await loadNotifications();
       } else {
         toast.error(response.data?.message);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      const status = error.response?.status;
+      if (status === 409) {
+        toast.error(error.response?.data?.message || 'Không thể hẹn giờ thông báo này');
+      } else {
+        toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      }
     } finally {
       setSending(false);
     }
@@ -279,8 +317,12 @@ export default function NotificationCenter() {
       roles: notification.target_roles || null,
       plans: notification.target_plans || null,
       statuses: notification.target_statuses || null,
-      emails: notification.target_emails || []
+      emails: notification.target_emails || [],
+      user_ids: notification.target_user_ids || [],
+      registered_before: notification.registered_before || null,
+      registered_after: notification.registered_after || null
     });
+    setRecipientCount(notification.recipient_count || null);
     setScheduleConfig({
       schedule_type: 'now'
     });
@@ -303,6 +345,7 @@ export default function NotificationCenter() {
         target_roles: notification.target_roles,
         target_plans: notification.target_plans,
         target_statuses: notification.target_statuses,
+        target_user_ids: notification.target_user_ids,
         target_emails: notification.target_emails,
         registered_before: notification.registered_before,
         registered_after: notification.registered_after
@@ -818,7 +861,7 @@ function NotificationDetailModal({ notification, onClose, onPreview, onLogs, onC
               onClick={onDelete}
               className="px-4 py-2 text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
             >
-              Xoa
+              Xóa
             </button>
           )}
         </div>

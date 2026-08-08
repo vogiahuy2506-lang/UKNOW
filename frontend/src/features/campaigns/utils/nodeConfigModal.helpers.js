@@ -125,13 +125,15 @@ export const fetchInterestedCustomerCoursesLocal = async ({ config = {} } = {}) 
 export const fetchZaloAccountOptions = async () => {
   const response = await campaignBuilderApiService.getZaloAccounts();
   const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
-  return items.map((account) => ({
-    id: String(account.id || ''),
-    displayName: String(account.displayName || account.name || account.zaloName || 'Tài khoản Zalo'),
-    status: String(account.status || 'disconnected'),
-    isActive: account.isActive !== false,
-    isDefault: account.isDefault === true,
-  }));
+  return items
+    .filter((account) => !account.isLocked)
+    .map((account) => ({
+      id: String(account.id || ''),
+      displayName: String(account.displayName || account.name || account.zaloName || 'Tài khoản Zalo'),
+      status: String(account.status || 'disconnected'),
+      isActive: account.isActive !== false,
+      isDefault: account.isDefault === true,
+    }));
 };
 
 /**

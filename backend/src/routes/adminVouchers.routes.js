@@ -11,6 +11,8 @@ router.use(requireRole('admin'));
 router.get('/', ctrl.list);
 router.post('/', ctrl.create);
 router.patch('/:id', ctrl.update);
+router.post('/:id/restore', ctrl.restore);
+router.delete('/:id/permanent', ctrl.hardRemove);
 router.delete('/:id', ctrl.remove);
 
 export default router;

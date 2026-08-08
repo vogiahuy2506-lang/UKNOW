@@ -1,5 +1,9 @@
 import db from '../../config/database.js';
 import { decryptZaloCookieRow } from '../../utils/zaloCookieCrypto.util.js';
+import {
+  buildZaloGroupExternalIdCandidates,
+  normalizeZaloGroupId,
+} from '../../utils/zaloGroupName.util.js';
 
 class ZaloPersonalRepository {
   /**
@@ -38,16 +42,32 @@ class ZaloPersonalRepository {
 
   /**
    * Find an existing conversation by zalo setting and external uid.
+   * Với nhóm: tìm cả các biến thể g_/group_/group_g_ đã lưu lệch trước đây.
    *
    * @param {number} zaloSettingId
    * @param {string} externalId
    * @returns {Promise<object|null>}
    */
   async findConversation(zaloSettingId, externalId) {
+    const ext = String(externalId || '').trim();
+    if (!ext) return null;
+
+    const candidates = (ext.startsWith('group_') || ext.startsWith('g_'))
+      ? buildZaloGroupExternalIdCandidates(ext)
+      : [ext];
+    const preferred = (ext.startsWith('group_') || ext.startsWith('g_'))
+      ? (normalizeZaloGroupId(ext).prefixed || ext)
+      : ext;
+
     const { rows } = await db.query(
       `SELECT * FROM zalo_personal_conversations
-       WHERE id_zalo_setting = $1 AND external_id = $2`,
-      [zaloSettingId, externalId]
+       WHERE id_zalo_setting = $1
+         AND external_id = ANY($2::text[])
+       ORDER BY
+         CASE WHEN external_id = $3 THEN 0 ELSE 1 END,
+         id ASC
+       LIMIT 1`,
+      [zaloSettingId, candidates, preferred]
     );
     return rows[0] || null;
   }
@@ -145,9 +165,12 @@ class ZaloPersonalRepository {
       `INSERT INTO zalo_personal_messages
        (id_conversation, id_user, id_zalo_setting, role, content, external_id, external_ts, metadata, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id_zalo_setting, external_id) WHERE external_id IS NOT NULL
+       DO NOTHING
        RETURNING *`,
       [conversationId, userId, zaloSettingId, role, content, externalId, externalTs, metadata, createdAt]
     );
+    // ON CONFLICT DO NOTHING → empty RETURNING; callers must treat undefined as duplicate skip
     return rows[0];
   }
 
@@ -160,14 +183,17 @@ class ZaloPersonalRepository {
    * @param {number} params.zaloSettingId
    * @param {string} params.content
    * @param {string} params.now ISO timestamp
+   * @param {string|null} [params.externalId] Zalo msgId when known (echo dedupe)
    * @returns {Promise<void>}
    */
-  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now }) {
+  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now, externalId = null }) {
     await db.query(
       `INSERT INTO zalo_personal_messages
-       (id_conversation, id_user, id_zalo_setting, role, content, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [conversationId, userId, zaloSettingId, 'agent', content, now]
+       (id_conversation, id_user, id_zalo_setting, role, content, external_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id_zalo_setting, external_id) WHERE external_id IS NOT NULL
+       DO NOTHING`,
+      [conversationId, userId, zaloSettingId, 'agent', content, externalId, now]
     );
   }
 
@@ -209,6 +235,51 @@ class ZaloPersonalRepository {
       [externalId, zaloSettingId]
     );
     return rows[0] || null;
+  }
+
+  async setAiPaused(conversationId, paused) {
+    await db.query(
+      `UPDATE zalo_personal_conversations
+       SET ai_paused = $2,
+           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+       WHERE id = $1`,
+      [conversationId, !!paused]
+    );
+  }
+
+  async isAiPaused(conversationId) {
+    if (!conversationId) return false;
+    try {
+      const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(
+        '../../utils/aiHandoffResume.util.js'
+      );
+      const { rows } = await db.query(
+        `SELECT ai_paused, ai_paused_at, id_user FROM zalo_personal_conversations WHERE id = $1`,
+        [conversationId]
+      );
+      const row = rows[0];
+      if (!row || row.ai_paused !== true) return false;
+
+      const minutes = await getCachedAutoResumeMinutes(row.id_user);
+      if (shouldStayAiPaused({
+        aiPaused: true,
+        aiPausedAt: row.ai_paused_at,
+        autoResumeMinutes: minutes,
+      })) {
+        return true;
+      }
+
+      await db.query(
+        `UPDATE zalo_personal_conversations
+         SET ai_paused = false, ai_paused_at = NULL
+         WHERE id = $1 AND ai_paused = true`,
+        [conversationId]
+      );
+      return false;
+    } catch (err) {
+      console.warn('[ZaloPersonal] isAiPaused check failed:', err.message);
+      return false;
+    }
   }
 
   /**

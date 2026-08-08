@@ -2,11 +2,13 @@ import express from 'express';
 import { body } from 'express-validator';
 import verificationController from '../controllers/verification.controller.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { authLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
-// Gửi mã xác minh
+// Gửi mã xác minh — authLimiter chống email bombing
 router.post('/send-code',
+  authLimiter,
   [
     body('email')
       .trim()

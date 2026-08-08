@@ -124,11 +124,28 @@ const stopAllCampaignScheduleTasks = () => {
   campaignScheduleTasks.clear();
 };
 
+/** @internal test helper */
+export const _triggerCampaignScheduleForTests = (schedule) => triggerCampaignSchedule(schedule);
+
 const triggerCampaignSchedule = async (schedule) => {
   try {
-    if (!schedule?.id_campaign || !schedule?.id_user) return;
+    // Hai nhánh dưới đây trước kia return im lặng — khi lịch không chạy, log không để lại
+    // dấu vết nào và không thể phân biệt "cron không bắn" với "cron bắn rồi bị bỏ qua".
+    if (!schedule?.id_campaign || !schedule?.id_user) {
+      console.warn(
+        `[Scheduler] Bỏ qua schedule #${schedule?.id ?? '?'}: thiếu id_campaign hoặc id_user ` +
+          `(id_campaign=${schedule?.id_campaign ?? 'null'}, id_user=${schedule?.id_user ?? 'null'})`
+      );
+      return;
+    }
     const isCustomSchedule = String(schedule?.schedule_type || '').toLowerCase() === 'custom';
     if (isCustomSchedule && !shouldTriggerCustomScheduleToday(schedule)) {
+      console.log(
+        `[Scheduler] Bỏ qua schedule #${schedule.id} (custom chưa tới chu kỳ): ` +
+          `cron="${schedule.cron_expression}", ` +
+          `mốc neo=${schedule.last_run_at ? 'last_run_at' : 'created_at'} ` +
+          `${schedule.last_run_at || schedule.created_at}`
+      );
       return;
     }
     console.log(
@@ -143,9 +160,36 @@ const triggerCampaignSchedule = async (schedule) => {
       [schedule.id_campaign]
     );
     if (runningCheck.rows.length > 0) {
+      const isOnce = String(schedule?.schedule_type || '').toLowerCase() === 'once';
       console.log(
-        `[Scheduler] Bỏ qua schedule #${schedule.id} vì campaign #${schedule.id_campaign} đang chạy`
+        `[Scheduler] Bỏ qua schedule #${schedule.id} vì campaign #${schedule.id_campaign} đang chạy` +
+          (isOnce ? ' — vô hiệu hoá luôn vì đây là lịch chạy 1 lần' : '')
       );
+
+      // Lịch "chạy 1 lần" bị bỏ qua thì phải tắt luôn, đừng để nằm chờ.
+      //
+      // Trước đây nhánh này chỉ `return`: lịch giữ nguyên enabled=true, run_count=0,
+      // mà cron của `once` mã hoá ngày+tháng nên nó sẽ TỰ BẮN LẠI ĐÚNG NGÀY ĐÓ NĂM SAU.
+      // Thực tế 2026-08-05: #33 và #31 cùng campaign 37, cron giống hệt "30 19 9 4 *"
+      // (lịch bị tạo trùng) — #31 chạy, #33 bị bỏ qua và nằm chờ tới 9/4/2027.
+      //
+      // Không chạy bù: lượt chạy đang diễn ra đã làm đúng việc của lịch này rồi,
+      // chạy bù nghĩa là gửi hai lần cho cùng một danh sách.
+      if (isOnce) {
+        try {
+          await db.query(
+            `UPDATE campaign_schedules
+             SET enabled = false, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [schedule.id]
+          );
+        } catch (disableErr) {
+          console.error(
+            `[Scheduler] Không thể vô hiệu hoá schedule #${schedule.id}:`,
+            disableErr.message
+          );
+        }
+      }
       return;
     }
 
@@ -415,11 +459,21 @@ export const initScheduler = () => {
     } catch (error) {
       console.error('[Scheduler] Lỗi khi đồng bộ khóa học:', error.message);
     }
+
+    try {
+      const { archiveExpiredVouchers } = await import('../repositories/voucher.repository.js');
+      const archived = await archiveExpiredVouchers();
+      if (archived > 0) {
+        console.log(`[Scheduler] Đã lưu trữ ${archived} voucher hết hạn`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi lưu trữ voucher hết hạn:', error.message);
+    }
   }, {
     timezone: 'Asia/Ho_Chi_Minh'
   });
 
-  console.log('[Scheduler] Đã khởi tạo scheduled job: Đồng bộ khóa học hàng ngày lúc 00:30');
+  console.log('[Scheduler] Đã khởi tạo scheduled job: Đồng bộ khóa học + lưu trữ voucher hết hạn lúc 00:30');
 
   // Refresh danh sách lịch chạy chiến dịch lệch giây để tránh trùng đúng thời điểm cron trigger.
   // Dùng cron có giây: "20 * * * * *" = giây thứ 20 của mỗi phút.
@@ -507,6 +561,54 @@ export const initScheduler = () => {
         await incrementReminderCount(user.id);
         console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
       }
+
+      // 4. Khoá / mở khoá tài nguyên mua thêm hết hạn (còn gói hoặc hết gói)
+      try {
+        const {
+          reconcileAllDueUsers,
+          sendStructuralGrantReminders,
+          structuralItemLabelVi,
+        } = await import('../services/payment/topupLock.service.js');
+        const lockResults = await reconcileAllDueUsers();
+        for (const r of lockResults) {
+          if (r.locked?.length) {
+            console.log(
+              `[TopupLock] user=${r.userId} locked=${r.locked.length} unlocked=${r.unlocked?.length || 0}`
+            );
+            // Email báo khoá (nếu có)
+            try {
+              const { rows } = await (await import('../config/database.js')).default.query(
+                `SELECT email, full_name FROM users WHERE id = $1`,
+                [r.userId]
+              );
+              const u = rows[0];
+              if (u?.email) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+                const counts = r.locked.reduce((acc, x) => {
+                  acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
+                  return acc;
+                }, {});
+                const detail = Object.entries(counts)
+                  .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
+                  .join(', ');
+                await sendSystemEmail({
+                  to: u.email,
+                  subject: '[Founder AI] Một số tài nguyên mua thêm đã bị khoá',
+                  html: `<p>Xin chào ${u.full_name || 'bạn'},</p>
+                    <p>Các tài nguyên sau đã bị khoá vì slot mua thêm hết hạn: <strong>${detail}</strong>.</p>
+                    <p><a href="${frontendUrl}/app/billing?tab=locks">Chọn tài nguyên giữ lại / gia hạn</a></p>`,
+                });
+              }
+            } catch (mailErr) {
+              console.error('[TopupLock] lock notify email failed:', mailErr.message);
+            }
+          }
+        }
+        const rem = await sendStructuralGrantReminders();
+        console.log(`[TopupLock] reminders week=${rem.week} three=${rem.three}`);
+      } catch (lockErr) {
+        console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
+      }
     } catch (error) {
       console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);
     }
@@ -534,6 +636,59 @@ export const initScheduler = () => {
   registerZaloPersonalListeners();
 
   console.log('[Scheduler] Đã khởi tạo Zalo Personal Inbox: đăng ký listeners mỗi 5 phút');
+
+  // ── Zalo Personal — background group history sync (option a: known groups only) ──
+  const zaloBgSyncEnabled = String(process.env.ZALO_BG_SYNC_ENABLED ?? 'true').toLowerCase() !== 'false';
+  if (zaloBgSyncEnabled) {
+    const syncZaloPersonalGroupHistory = async () => {
+      const cronJobRunRepository = (await import('../repositories/admin/cronJobRun.repository.js'));
+      try {
+        await cronJobRunRepository.recordRun('zalo_personal_bg_group_sync', async () => {
+          const zaloPersonalSyncService = (await import('../services/chatbot/zaloPersonalSync.service.js')).default;
+          const zaloAccountSessionService = (await import('../services/zalo/zaloAccountSession.service.js')).default;
+          const accounts = await zaloPersonalInboxService.getActiveZaloPersonalAccounts(true);
+          let synced = 0;
+          let totalGroups = 0;
+          let errors = 0;
+          let skipped = 0;
+          for (const acc of accounts) {
+            const accountId = acc.account_id;
+            const userId = acc.id_user;
+            try {
+              if (!zaloAccountSessionService.getAccountApi(accountId)) {
+                skipped += 1;
+                continue;
+              }
+              const result = await zaloPersonalSyncService.syncKnownGroupHistory(accountId, userId, { limit: 50 });
+              synced += Number(result.synced || 0);
+              totalGroups += Number(result.totalGroups || 0);
+              errors += result.errors?.length || 0;
+              if (result.synced > 0 || result.errors?.length) {
+                console.log(
+                  `[Scheduler] Zalo bg sync account=${accountId}: synced=${result.synced} groups=${result.totalGroups} errors=${result.errors?.length || 0}`
+                );
+              }
+            } catch (err) {
+              errors += 1;
+              console.error(`[Scheduler] Zalo bg sync account ${accountId} failed:`, err.message);
+            }
+          }
+          return { synced, totalGroups, errors, skipped, accounts: accounts.length };
+        });
+      } catch (error) {
+        console.error('[Scheduler] Lỗi Zalo background group sync:', error.message);
+      }
+    };
+
+    // Offset from */5 listener cron (min 0,5,10,...) — run at 5,15,25,... so they never pile
+    cron.schedule('5-59/10 * * * *', async () => {
+      await syncZaloPersonalGroupHistory();
+    }, { timezone: HANOI_TIME_ZONE });
+
+    console.log('[Scheduler] Đã khởi tạo Zalo Personal background group sync: phút 5/15/25/... (ZALO_BG_SYNC_ENABLED)');
+  } else {
+    console.log('[Scheduler] Zalo Personal background group sync TẮT (ZALO_BG_SYNC_ENABLED=false)');
+  }
 
   // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
   // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)
@@ -631,4 +786,81 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Scheduled Notifications: xử lý mỗi phút');
+
+  // ── Cleanup orphan self-serve custom plans (unpaid / abandoned) ───────────
+  cron.schedule('15 * * * *', async () => {
+    try {
+      const { getPayosPendingWindowMinutes } = await import('../repositories/voucher.repository.js');
+      const { cleanupOrphanCustomPlans } = await import('../services/payment/customPlan.service.js');
+      const deleted = await cleanupOrphanCustomPlans(getPayosPendingWindowMinutes());
+      if (deleted.length) {
+        console.log(`[Scheduler] Đã xoá ${deleted.length} gói custom mồ côi: ${deleted.map((p) => p.id).join(', ')}`);
+      }
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn gói custom mồ côi:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Custom Plan orphan cleanup: mỗi giờ phút 15');
+
+  // ── PayOS order reconcile (webhook backup) — every 10 minutes at :05/:15/... ──
+  cron.schedule('5-59/10 * * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        reconcileRecentPendingOrders,
+        PAYOS_RECONCILE_JOB_CODE,
+      } = await import('../services/payment/payosReconcile.service.js');
+      await cronJobRunRepository.recordRun(PAYOS_RECONCILE_JOB_CODE, async () => {
+        const summary = await reconcileRecentPendingOrders();
+        if (summary.rescued > 0) {
+          console.warn(
+            `[Scheduler][OPS] PayOS reconcile rescued ${summary.rescued} order(s): `
+            + `${summary.rescuedOrderCodes.join(', ')}`
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đối soát PayOS:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo PayOS order reconcile: mỗi 10 phút (phút 5/15/25/…)');
+
+  // ── PayOS expire stale pending — hourly at minute 25 (after reconcile ticks) ──
+  cron.schedule('25 * * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        expireStalePendingOrders,
+        PAYOS_EXPIRE_JOB_CODE,
+      } = await import('../services/payment/payosReconcile.service.js');
+      await cronJobRunRepository.recordRun(PAYOS_EXPIRE_JOB_CODE, async () => {
+        const summary = await expireStalePendingOrders();
+        if (summary.rescued > 0 || summary.cancelled > 0) {
+          console.log(
+            `[Scheduler] PayOS expire: rescued=${summary.rescued} cancelled=${summary.cancelled}`
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi huỷ đơn PayOS quá hạn:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo PayOS stale pending expire: mỗi giờ phút 25');
+
+  // ── Ops alerts evaluator (PLAN_DO_LUONG_KPI Phần A) ─────────────────────────
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const { evaluateAllAlerts } = await import('../services/admin/alertEvaluator.service.js');
+      await evaluateAllAlerts();
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đánh giá cảnh báo:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Alert evaluator: mỗi 5 phút');
 };

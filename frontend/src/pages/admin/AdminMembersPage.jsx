@@ -371,6 +371,10 @@ const AdminMembersPage = () => {
                   <th>{t('adminMembers.table.role')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
                   <th>{t('adminMembers.table.employees')}</th>
+                  <th>Đăng nhập gần nhất</th>
+                  <th>% AI</th>
+                  <th>Fail 30d</th>
+                  <th>Rủi ro</th>
                   <th>{t('adminMembers.table.status')}</th>
                   <th>{t('adminMembers.table.expiry')}</th>
                   <th>{t('adminMembers.table.createdAt')}</th>
@@ -405,6 +409,22 @@ const AdminMembersPage = () => {
                         }
                       </td>
                       <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
+                      <td className="text-sm text-gray-500 whitespace-nowrap">
+                        {m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleDateString('vi-VN') : '—'}
+                      </td>
+                      <td className="text-sm text-gray-600">
+                        {m.aiCreditsLimit > 0
+                          ? `${Math.min(100, Math.round((Number(m.aiCreditsUsedThisMonth || 0) / m.aiCreditsLimit) * 100))}%`
+                          : '—'}
+                      </td>
+                      <td className={`text-sm ${Number(m.failedSends30d) > 0 ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                        {m.failedSends30d ?? 0}
+                      </td>
+                      <td>
+                        {m.churnRisk
+                          ? <span className="badge badge-warning">Nguy cơ</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       <td>
                         <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
                           {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}

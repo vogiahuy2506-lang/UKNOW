@@ -127,15 +127,15 @@ class EmailSettingsCrudService {
 
   // Default SMTP settings from environment
   DEFAULT_SMTP = {
-    host: process.env.SENDGRID_SMTP_HOST || 'smtp.sendgrid.net',
-    port: parseInt(process.env.SENDGRID_SMTP_PORT, 10) || 587,
-    username: process.env.SENDGRID_SMTP_USERNAME || 'apikey',
-    password: process.env.SENDGRID_API_KEY || '',
-    useTls: true,
+    host: process.env.MAIL_SERVER || 'mail.digiso.vn',
+    port: parseInt(process.env.MAIL_PORT, 10) || 465,
+    username: process.env.MAIL_USERNAME || 'founderai.noreply@digiso.vn',
+    password: process.env.MAIL_PASSWORD || '',
+    useTls: process.env.MAIL_TLS !== 'false',
   };
 
   isDefaultSmtpConfigured() {
-    return !!(process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.trim());
+    return !!(process.env.MAIL_USERNAME && process.env.MAIL_PASSWORD);
   }
 
   async create({ userId, roleCode, payload }) {
@@ -164,7 +164,7 @@ class EmailSettingsCrudService {
     }
 
     const emailMode = payload.emailMode || (payload.email ? 'smtp' : 'platform');
-    const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
+    const platformDomain = process.env.DEFAULT_FROM_DOMAIN;
     const useSmtp = emailMode === 'smtp';
 
     // Validate and sanitize platform prefix for platform mode
@@ -245,7 +245,7 @@ class EmailSettingsCrudService {
     }
 
     const emailMode = payload.emailMode || current.email_mode || 'platform';
-    const platformDomain = process.env.DEFAULT_FROM_DOMAIN || 'digiso.vn';
+    const platformDomain = process.env.DEFAULT_FROM_DOMAIN;
     const useSmtp = emailMode === 'smtp';
 
     // Validate and sanitize platform prefix for platform mode

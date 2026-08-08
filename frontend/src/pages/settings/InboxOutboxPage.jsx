@@ -50,6 +50,8 @@ const InboxPage = () => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [retryingMessageId, setRetryingMessageId] = useState(null);
+  const [isSyncingThread, setIsSyncingThread] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [typingSender, setTypingSender] = useState(null);
   const [page, setPage] = useState(0);
@@ -159,7 +161,7 @@ const InboxPage = () => {
         limit: 20,
       };
       
-      if (filters.channel === 'zalo_personal' && selectedAccountId) {
+      if (selectedAccountId) {
         requestParams.zaloAccountId = selectedAccountId;
       }
       
@@ -251,7 +253,7 @@ const InboxPage = () => {
     const displayMessage = getDisplayMessage(data.message, data.messageType);
 
     setConversations(prev => {
-      const existingIndex = prev.findIndex(c => c.id === data.conversationId);
+      const existingIndex = prev.findIndex(c => Number(c.id) === Number(data.conversationId));
       
       if (existingIndex !== -1) {
         const existing = prev[existingIndex];
@@ -260,7 +262,12 @@ const InboxPage = () => {
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : (existing.unreadCount || 0) + 1,
+          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
+            ? 0
+            : (existing.unreadCount || 0) + 1,
+          // Chủ nhắn từ app Zalo (isSelf) → backend pause AI; cập nhật toggle cho khớp.
+          // Không dùng role===agent: tin bot cũng là agent.
+          ...(data.isSelf === true ? { aiPaused: true } : {}),
         };
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
@@ -275,21 +282,30 @@ const InboxPage = () => {
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation?.id === data.conversationId) ? 0 : 1,
+          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId)) ? 0 : 1,
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
+          ...(data.isSelf === true ? { aiPaused: true } : {}),
         };
         return [newConv, ...prev];
       }
     });
 
+    if (data.isSelf === true) {
+      setSelectedConversation((prev) => {
+        if (!prev || Number(prev.id) !== Number(data.conversationId)) return prev;
+        return { ...prev, aiPaused: true };
+      });
+    }
     if (document.hidden && displayMessage) {
       showNotification(t('inbox.newMessage'), {
         body: `${data.senderName || t('inbox.customer')}: ${displayMessage.substring(0, 100)}`,
         tag: `conv-${data.conversationId}`,
       });
-    } else if (!document.hidden && displayMessage && (!selectedConversation || data.conversationId !== selectedConversation.id)) {
+    } else if (!document.hidden && displayMessage && (
+      !selectedConversation || Number(data.conversationId) !== Number(selectedConversation.id)
+    )) {
       const sender = data.senderName || t('inbox.customer');
       const msgPreview = displayMessage.length > 50 ? displayMessage.substring(0, 50) + '...' : displayMessage;
       toast.success(`${sender}: ${msgPreview}`, {
@@ -305,7 +321,8 @@ const InboxPage = () => {
       return;
     }
     
-    const isThisConversation = selectedConversation && data.conversationId === selectedConversation.id;
+    const isThisConversation = selectedConversation
+      && Number(data.conversationId) === Number(selectedConversation.id);
     
     if (isThisConversation) {
       const msgRole = data.role || 'visitor';
@@ -372,7 +389,7 @@ const InboxPage = () => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
 
-  useInboxSSE(handleNewMessage, handleUnreadChange);
+  const { status: sseStatus, retry: retrySse } = useInboxSSE(handleNewMessage, handleUnreadChange);
 
   const handleSendMessage = useCallback(async (content, replyTo) => {
     if (!selectedConversation || isSending) return;
@@ -389,17 +406,41 @@ const InboxPage = () => {
       });
 
       if (response.success) {
+        const sendStatus = response.sendStatus || 'sent';
         const newMessage = {
-          id: Date.now(),
+          id: response.messageId || Date.now(),
           role: 'agent',
           content,
           createdAt: new Date().toISOString(),
           isRead: true,
           replyTo,
+          metadata: {
+            source: 'manual_inbox',
+            send: sendStatus === 'failed'
+              ? {
+                  status: 'failed',
+                  error: response.error || t('inbox.sendFailed'),
+                  attempts: 1,
+                  failedAt: new Date().toISOString(),
+                }
+              : { status: 'sent', attempts: 1 },
+          },
         };
         setMessages(prev => [...prev, newMessage]);
         setReplyingTo(null);
-        toast.success(t('common.success'));
+        // Backend luôn pause AI khi chủ trả lời từ hộp thư — cập nhật UI cho khớp
+        // (trước đây toggle vẫn hiện "Bật" → user tưởng AI chạy nhưng bot im).
+        setSelectedConversation((prev) => (prev ? { ...prev, aiPaused: true } : prev));
+        setConversations((prev) => prev.map((c) => (
+          c.id === selectedConversation.id && c.type === selectedConversation.type
+            ? { ...c, aiPaused: true }
+            : c
+        )));
+        if (sendStatus === 'failed') {
+          toast.error(response.error || t('inbox.sendFailed'));
+        } else {
+          toast.success(t('inbox.sentAiPausedHint') || t('common.success'));
+        }
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -409,6 +450,45 @@ const InboxPage = () => {
       setIsSending(false);
     }
   }, [selectedConversation, isSending, t]);
+
+  const handleRetryMessage = useCallback(async (message) => {
+    if (!selectedConversation || !message?.id || retryingMessageId) return;
+    setRetryingMessageId(message.id);
+    try {
+      const response = await chatbotApi.retryMessage(message.id, {
+        type: selectedConversation.type,
+      });
+      if (response.success) {
+        setMessages((prev) => prev.map((m) => {
+          if (Number(m.id) !== Number(message.id)) return m;
+          const prevMeta = typeof m.metadata === 'string'
+            ? JSON.parse(m.metadata || '{}')
+            : (m.metadata || {});
+          return {
+            ...m,
+            metadata: response.metadata || {
+              ...prevMeta,
+              send: {
+                ...(prevMeta.send || {}),
+                status: response.sendStatus,
+                error: response.error || null,
+              },
+            },
+          };
+        }));
+        if (response.sendStatus === 'failed') {
+          toast.error(response.error || t('inbox.retryFailed'));
+        } else {
+          toast.success(t('inbox.retrySuccess'));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to retry message:', err);
+      toast.error(err.response?.data?.message || t('inbox.retryFailed'));
+    } finally {
+      setRetryingMessageId(null);
+    }
+  }, [selectedConversation, retryingMessageId, t]);
 
   const handleReply = useCallback((message) => {
     setReplyingTo(message);
@@ -555,6 +635,22 @@ const InboxPage = () => {
             </div>
           )}
 
+          {sseStatus === 'disconnected' && (
+            <div className="mx-3 mb-2 px-2 py-1.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2">
+              <HiOutlineExclamation className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <p className="text-[11px] text-rose-800 leading-tight flex-1">
+                {t('inbox.sseDisconnected')}
+              </p>
+              <button
+                type="button"
+                onClick={retrySse}
+                className="shrink-0 text-[11px] font-semibold text-rose-700 underline"
+              >
+                {t('inbox.sseRetry')}
+              </button>
+            </div>
+          )}
+
           <div className="px-3 pb-2">
             <div className="relative">
               <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -591,6 +687,9 @@ const InboxPage = () => {
                 onSyncComplete={() => {
                   fetchSessionStatus();
                   fetchConversations(true);
+                  if (selectedConversationRef.current) {
+                    fetchMessages(selectedConversationRef.current);
+                  }
                 }}
               />
             )}
@@ -649,18 +748,132 @@ const InboxPage = () => {
                 </h2>
                 <p className="text-sm text-gray-500">
                   {getChannelLabel(selectedConversation.channel, selectedConversation)}
+                  {selectedConversation.aiPaused ? ` · ${t('inbox.aiPausedHint')}` : ''}
                 </p>
               </div>
 
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm text-right leading-tight ${
+                    selectedConversation.chatbotEnabled === false
+                      ? 'text-gray-400'
+                      : 'text-gray-700'
+                  }`}>
+                    {t('inbox.aiToggleLabel')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused}
+                    disabled={selectedConversation.chatbotEnabled === false}
+                    onClick={async () => {
+                      if (selectedConversation.chatbotEnabled === false) return;
+                      try {
+                        const nextPaused = !selectedConversation.aiPaused;
+                        await chatbotApi.setConversationAiPaused(
+                          selectedConversation.id,
+                          selectedConversation.type || 'zalo_personal',
+                          nextPaused
+                        );
+                        setSelectedConversation((prev) => prev ? { ...prev, aiPaused: nextPaused } : prev);
+                        setConversations((prev) => prev.map((c) =>
+                          c.id === selectedConversation.id && c.type === selectedConversation.type
+                            ? { ...c, aiPaused: nextPaused }
+                            : c
+                        ));
+                      } catch (err) {
+                        toast.error(err?.response?.data?.message || err.message);
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                        ? 'bg-primary-600'
+                        : 'bg-slate-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                  {selectedConversation.chatbotEnabled === false ? (
+                    <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                      {t('inbox.aiToggleDisabledHint')}{' '}
+                      <button
+                        type="button"
+                        className="underline font-medium"
+                        onClick={() => window.open('/app/chatbot-studio', '_blank')}
+                      >
+                        {t('inbox.openDeployModal')}
+                      </button>
+                    </p>
+                  ) : selectedConversation.aiPaused ? (
+                    <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">
+                      {t('inbox.aiToggleManualHint')}
+                    </p>
+                  ) : null}
+              </div>
+
               <button
-                onClick={() => {
-                  fetchMessages(selectedConversation);
+                type="button"
+                disabled={isSyncingThread}
+                onClick={async () => {
+                  const conv = selectedConversation;
+                  if (!conv) return;
+                  const channel = conv.channel || conv.type;
+                  const visitorInfo = conv.visitorInfo || conv.visitor_info || {};
+                  const parsed = typeof visitorInfo === 'string'
+                    ? (() => { try { return JSON.parse(visitorInfo || '{}'); } catch { return {}; } })()
+                    : visitorInfo;
+                  const isZalo = channel === 'zalo_personal';
+                  const isGroup = conv.isGroup === true
+                    || parsed.is_group === true
+                    || String(conv.externalId || '').startsWith('group_')
+                    || String(conv.externalId || '').startsWith('g_');
+
+                  if (isZalo && conv.externalId) {
+                    setIsSyncingThread(true);
+                    try {
+                      const response = await chatbotApi.syncZaloChatHistory(conv.externalId, isGroup, {
+                        limit: 50,
+                        accountId: selectedAccountId || conv.idZaloSetting,
+                      });
+                      const payload = response?.data || response;
+                      if (payload?.success === false) {
+                        toast.error(payload?.message || t('inbox.syncFailed'));
+                      } else if (!isGroup) {
+                        toast(
+                          payload?.data?.message
+                            || t('inbox.syncPersonalNoHistory')
+                            || 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
+                          { icon: 'ℹ️', duration: 6000 }
+                        );
+                      } else {
+                        const synced = Number(payload?.data?.synced || 0);
+                        toast.success(
+                          synced > 0
+                            ? (t('inbox.syncThreadPulled', { count: synced }) || `Đã kéo ${synced} tin từ Zalo`)
+                            : (t('inbox.syncThreadEmpty') || 'Không có tin mới từ Zalo')
+                        );
+                      }
+                    } catch (err) {
+                      toast.error(err?.response?.data?.message || err.message || t('inbox.syncFailed'));
+                    } finally {
+                      setIsSyncingThread(false);
+                    }
+                  }
+
+                  await fetchMessages(conv);
                   fetchConversations(true);
                 }}
-                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-                title="Làm mới"
+                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50"
+                title={t('inbox.syncNow') || 'Đồng bộ'}
               >
-                <HiOutlineRefresh className="w-5 h-5" />
+                <HiOutlineRefresh className={`w-5 h-5 ${isSyncingThread ? 'animate-spin' : ''}`} />
               </button>
 
               <button
@@ -683,6 +896,8 @@ const InboxPage = () => {
                 isLoading={isLoadingMessages}
                 conversation={selectedConversation}
                 onReply={handleReply}
+                onRetry={handleRetryMessage}
+                retryingMessageId={retryingMessageId}
                 replyingTo={replyingTo}
               />
             </div>
@@ -712,7 +927,9 @@ const InboxPage = () => {
                 {t('inbox.selectConversation')}
               </h2>
               <p className="text-gray-500 leading-relaxed">
-                {t('inbox.noConversations')}
+                {conversations.length === 0
+                  ? (t('inbox.emptyInboxHint') || t('inbox.noConversations'))
+                  : t('inbox.noConversations')}
               </p>
               {filters.channel === 'zalo_personal' && !sessionStatus.connected && (
                 <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">

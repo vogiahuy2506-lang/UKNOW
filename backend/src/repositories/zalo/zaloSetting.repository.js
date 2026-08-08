@@ -7,6 +7,7 @@ class ZaloSettingRepository {
       `SELECT zs.*, zs.id as zalo_setting_id
        FROM zalo_settings zs
        WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected'
+       ORDER BY zs.id ASC
        LIMIT 1`,
       [userId]
     );
@@ -18,10 +19,45 @@ class ZaloSettingRepository {
       `SELECT zs.id, zs.id as zalo_setting_id
        FROM zalo_settings zs
        WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected'
+       ORDER BY zs.id ASC
        LIMIT 1`,
       [userId]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Resolve account for sync: prefer explicit accountId (must belong to user),
+   * else fall back to deterministic active connected account.
+   */
+  async findConnectedAccountForSync(userId, accountId = null) {
+    const parsed = Number.parseInt(accountId, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const result = await db.query(
+        `SELECT zs.*, zs.id as zalo_setting_id
+         FROM zalo_settings zs
+         WHERE zs.id = $1 AND zs.id_user = $2
+           AND zs.is_active = true AND zs.status = 'connected'`,
+        [parsed, userId]
+      );
+      return decryptZaloCookieRow(result.rows[0] || null);
+    }
+    return this.findActiveConnectedAccountByUser(userId);
+  }
+
+  async findConnectedAccountSummaryForSync(userId, accountId = null) {
+    const parsed = Number.parseInt(accountId, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const result = await db.query(
+        `SELECT zs.id, zs.id as zalo_setting_id
+         FROM zalo_settings zs
+         WHERE zs.id = $1 AND zs.id_user = $2
+           AND zs.is_active = true AND zs.status = 'connected'`,
+        [parsed, userId]
+      );
+      return result.rows[0] || null;
+    }
+    return this.findActiveConnectedAccountSummaryByUser(userId);
   }
 
   async findActiveConnectedAccountStatusByUser(userId) {
@@ -63,9 +99,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $6,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id_user = $7 AND id = $8
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [displayName, zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, userId, accountId]
     );
     return rows[0] || null;
@@ -89,6 +127,49 @@ class ZaloSettingRepository {
     return rows[0] || null;
   }
 
+  /**
+   * Kết nối còn sống của cùng zalo_user_id ở workspace khác (PLAN Z-2).
+   * @param {number} userId
+   * @param {string} zaloUserId
+   * @returns {Promise<{ id: number, id_user: number, owner_email: string }|null>}
+   */
+  async findLiveConnectionInOtherWorkspace(userId, zaloUserId) {
+    const id = String(zaloUserId || '').trim();
+    if (!id) return null;
+    const { rows } = await db.query(
+      `SELECT zs.id, zs.id_user, u.email AS owner_email
+       FROM zalo_settings zs
+       JOIN users u ON u.id = zs.id_user
+       WHERE zs.zalo_user_id = $1
+         AND zs.id_user <> $2
+         AND zs.is_active = TRUE
+         AND zs.status = 'connected'
+       LIMIT 1`,
+      [id, userId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Điền zalo_user_id khi đang trống (sau restore / keep-alive).
+   * Không đè giá trị đã có.
+   */
+  async backfillZaloUserIdIfEmpty(accountId, userId, zaloUserId) {
+    const id = String(zaloUserId || '').trim();
+    if (!id) return null;
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET zalo_user_id = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         AND id_user = $3
+         AND (zalo_user_id IS NULL OR zalo_user_id = '')
+       RETURNING id, zalo_user_id`,
+      [id, accountId, userId]
+    );
+    return rows[0] || null;
+  }
+
   async updateQrConnectedById(accountId, { displayName, zaloName, zaloPhone, cookieText }, now) {
     const { rows } = await db.query(
       `UPDATE zalo_settings
@@ -100,9 +181,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $5,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [displayName, zaloName, zaloPhone, encryptZaloCookie(cookieText), now, accountId]
     );
     return rows[0] || null;
@@ -128,9 +211,11 @@ class ZaloSettingRepository {
            status = 'connected',
            is_active = TRUE,
            last_connected_at = $6,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $7
-       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at`,
+       RETURNING id, display_name, zalo_user_id, zalo_name, zalo_phone, login_method, status, is_active, is_default, notes, updated_at, last_connected_at, last_restore_attempt_at, restore_fail_count`,
       [zaloUserId, zaloName, zaloPhone, encryptZaloCookie(cookieText), displayName, now, accountId]
     );
     return rows[0] || null;
@@ -163,7 +248,13 @@ class ZaloSettingRepository {
       `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
               zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes,
               zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
-              COALESCE(u.full_name, u.username) AS creator_name
+              zs.last_restore_attempt_at::timestamptz AS last_restore_attempt_at,
+              zs.restore_fail_count,
+              COALESCE(u.full_name, u.username) AS creator_name,
+              EXISTS (
+                SELECT 1 FROM topup_locked_resources tlr
+                WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zs.id
+              ) AS is_locked
        FROM zalo_settings zs
        LEFT JOIN users u ON zs.id_user = u.id
        WHERE 1 = 1
@@ -171,7 +262,7 @@ class ZaloSettingRepository {
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
       isAdmin ? [] : [userId]
     );
-    return rows;
+    return rows.map((r) => ({ ...r, is_locked: Boolean(r.is_locked) }));
   }
 
   async deleteAccount(accountId, isAdmin, userId) {
@@ -202,7 +293,7 @@ class ZaloSettingRepository {
 
   async findAccountForRestore(accountId, isAdmin, userId) {
     const { rows } = await db.query(
-      `SELECT id, id_user, display_name, cookie_text, is_active
+      `SELECT id, id_user, display_name, cookie_text, is_active, zalo_user_id
        FROM zalo_settings
        WHERE id = $1
          ${isAdmin ? '' : 'AND id_user = $2'}

@@ -1,6 +1,26 @@
 import { isSuperAdmin, isUserAdmin, isEmployeeContext } from '../utils/roleScope.util.js';
 
 /**
+ * Middleware yêu cầu user đổi mật khẩu trước khi truy cập.
+ * Chỉ áp dụng cho user thường, bypass cho superadmin.
+ */
+export function requirePasswordChange(req, res, next) {
+  if (isSuperAdmin(req.user?.role)) {
+    return next();
+  }
+
+  if (req.user?.must_change_password === true) {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn cần đổi mật khẩu trước khi sử dụng hệ thống',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+  }
+
+  return next();
+}
+
+/**
  * Middleware kiểm tra superadmin — quyền cao nhất, quản lý toàn hệ thống.
  * Giữ tên requireAdmin để tương thích với các route cũ đang dùng.
  */
@@ -38,6 +58,7 @@ export function requireRole(...roles) {
  * - superadmin      : bypass (không cần plan).
  * - employee context: kiểm tra plan của owner (contextPlanId từ auth middleware).
  * - self context    : kiểm tra plan của chính user.
+ * - Hết hạn: chặn khi đã qua subscription_expires_at + grace_period_days.
  */
 export function requireActivePlan(req, res, next) {
   const { role, activeContext } = req.user || {};
@@ -58,6 +79,40 @@ export function requireActivePlan(req, res, next) {
     });
   }
 
+  const expiryRaw = activeContext?.contextPlanExpiry ?? null;
+  if (expiryRaw) {
+    const expiresAt = new Date(expiryRaw);
+    if (!Number.isNaN(expiresAt.getTime())) {
+      const graceDays = Number(activeContext?.contextGraceDays) || 0;
+      const graceUntil = new Date(expiresAt);
+      graceUntil.setUTCDate(graceUntil.getUTCDate() + graceDays);
+      if (Date.now() > graceUntil.getTime()) {
+        return res.status(403).json({
+          success: false,
+          message: isEmployeeContext(activeContext)
+            ? 'Gói dịch vụ của chủ tài khoản đã hết hạn'
+            : 'Gói dịch vụ của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục sử dụng',
+          code: 'PLAN_EXPIRED',
+        });
+      }
+    }
+  }
+
+  return next();
+}
+
+/**
+ * Chỉ cho phép self context (chủ tài khoản) — chặn employee context.
+ * Dùng cho billing/topup: nhân viên không được mua ghi vào ví của chủ.
+ */
+export function requireSelfContext(req, res, next) {
+  if (isEmployeeContext(req.user?.activeContext)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Chỉ chủ tài khoản mới có thể thực hiện thao tác này',
+      code: 'OWNER_ONLY',
+    });
+  }
   return next();
 }
 

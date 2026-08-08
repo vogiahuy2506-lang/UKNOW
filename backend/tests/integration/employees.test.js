@@ -14,18 +14,31 @@
  * Email gửi qua `sendSystemEmail` sẽ no-op khi không có SENDGRID_API_KEY (test env)
  * nên không cần mock SMTP.
  */
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
-import bcrypt from 'bcryptjs';
-import request from 'supertest';
-import { createApp } from '../../src/app.js';
-import db from '../../src/config/database.js';
-import {
+import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
+
+// Mời nhân viên có gửi mail. Không mock thì nodemailer mở socket thật →
+// 'Unexpected socket close' → endpoint trả 500. Mock phải đăng ký TRƯỚC khi
+// import app, nên phần import dưới đây dùng dynamic import.
+const mockSendMail = jest.fn().mockResolvedValue({ messageId: '<emp@test>' });
+const mockTransport = () => ({ verify: jest.fn().mockResolvedValue(true), sendMail: mockSendMail });
+jest.unstable_mockModule('nodemailer', () => ({
+  default: { createTransport: jest.fn(mockTransport) },
+  createTransport: jest.fn(mockTransport),
+}));
+
+const bcrypt = (await import('bcryptjs')).default;
+const request = (await import('supertest')).default;
+const { createApp } = await import('../../src/app.js');
+const db = (await import('../../src/config/database.js')).default;
+const {
   truncateAll,
   createUser,
   createPlan,
   assignPlanToUser,
-} from './helpers/db.js';
-import { DEFAULT_EMPLOYEE_PASSWORD } from '../../src/services/user/employee.service.js';
+} = await import('./helpers/db.js');
+
+/** Chuỗi mật khẩu cố định cũ từng hardcode — không được xuất hiện trong reset. */
+const LEGACY_HARDCODED_EMPLOYEE_PASSWORD = 'digiso@2026';
 
 let app;
 
@@ -111,7 +124,7 @@ describe('Authorization layer', () => {
   });
 
   it('user_admin không có plan vẫn list được (chỉ create mới cần plan)', async () => {
-    const owner = await createUser({ username: 'noplan', role: 'user' });
+    const owner = await createUser({ username: 'noplan', role: 'user', withPlan: false });
     const token = await loginAs(owner);
     const res = await request(app)
       .get('/api/employees')
@@ -239,7 +252,7 @@ describe('GET /api/employees/:id', () => {
 // ---------------------------------------------------------------------------
 describe('POST /api/employees', () => {
   it('owner không có plan → 403 NO_ACTIVE_PLAN (chặn bởi requireActivePlan)', async () => {
-    const owner = await createUser({ username: 'noplan', role: 'user' });
+    const owner = await createUser({ username: 'noplan', role: 'user', withPlan: false });
     const token = await loginAs(owner);
 
     const res = await request(app)
@@ -610,19 +623,54 @@ describe('PATCH /api/employees/:id/limits', () => {
 // PATCH /api/employees/:id/reset-password
 // ---------------------------------------------------------------------------
 describe('PATCH /api/employees/:id/reset-password', () => {
-  it('reset xong password_hash khớp với DEFAULT_EMPLOYEE_PASSWORD', async () => {
+  // Reset là việc NỘI BỘ trong workspace: chủ shop bấm reset, đọc mật khẩu tạm cho
+  // nhân viên, nhân viên đăng nhập rồi bị buộc đổi ngay. Không gửi email.
+  // Mật khẩu tạm phải NGẪU NHIÊN từng lần — không dùng hằng số dùng chung
+  // (chuỗi digiso@2026 từng nằm trong repo public).
+  it('trả mật khẩu tạm ngẫu nhiên + buộc đổi, không dùng hằng số dùng chung', async () => {
     const { owner, token } = await setupOwnerWithPlan();
     const emp = await createUser({ username: 'reset', role: 'user' });
     await addMembership(owner.id, emp.id);
+
+    const before = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [emp.id]);
 
     const res = await request(app)
       .patch(`/api/employees/${emp.id}/reset-password`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const u = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [emp.id]);
-    const ok = await bcrypt.compare(DEFAULT_EMPLOYEE_PASSWORD, u.rows[0].password_hash);
-    expect(ok).toBe(true);
+    const tempPassword = res.body?.data?.tempPassword;
+    expect(typeof tempPassword).toBe('string');
+    expect(tempPassword.length).toBeGreaterThanOrEqual(8);
+    // Không được là hằng số dùng chung
+    expect(tempPassword).not.toBe(LEGACY_HARDCODED_EMPLOYEE_PASSWORD);
+
+    const after = await db.query(
+      `SELECT password_hash, must_change_password FROM users WHERE id = $1`,
+      [emp.id]
+    );
+    expect(after.rows[0].password_hash).not.toBe(before.rows[0].password_hash);
+    // Hash trong DB khớp đúng mật khẩu tạm vừa trả về
+    expect(await bcrypt.compare(tempPassword, after.rows[0].password_hash)).toBe(true);
+    // Không đoán được bằng hằng số công khai
+    expect(await bcrypt.compare(LEGACY_HARDCODED_EMPLOYEE_PASSWORD, after.rows[0].password_hash)).toBe(false);
+    // Buộc đổi ngay lần đăng nhập kế tiếp
+    expect(after.rows[0].must_change_password).toBe(true);
+  });
+
+  it('hai lần reset cho ra hai mật khẩu khác nhau', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'reset2', role: 'user' });
+    await addMembership(owner.id, emp.id);
+
+    const first = await request(app)
+      .patch(`/api/employees/${emp.id}/reset-password`)
+      .set('Authorization', `Bearer ${token}`);
+    const second = await request(app)
+      .patch(`/api/employees/${emp.id}/reset-password`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(first.body.data.tempPassword).not.toBe(second.body.data.tempPassword);
   });
 
   it('reset employee thuộc owner khác → 404 (không leak), password_hash không đổi', async () => {
@@ -750,5 +798,119 @@ describe('POST /api/employees/:id/resend-invite', () => {
       .post('/api/employees/9999999/resend-invite')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contribution / team-overview — ranh giới quyền (PLAN_DO_LUONG_KPI Phần D)
+// ---------------------------------------------------------------------------
+describe('Contribution tenant isolation (Phần D)', () => {
+  it('nhân viên workspace A gọi /contribution/me → chỉ đúng 1 dòng của chính họ', async () => {
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA = await createUser({ username: 'empa', role: 'employee' });
+    const empB = await createUser({ username: 'empb', role: 'employee' });
+    await addMembership(ownerA.id, empA.id);
+    await addMembership(ownerB.id, empB.id);
+
+    const tokenA = await loginAs(empA);
+    const res = await request(app)
+      .get('/api/employees/contribution/me')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Owner-Context', String(ownerA.id));
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toBeTruthy();
+    expect(res.body.data.id).toBe(empA.id);
+    expect(res.body.data.id).not.toBe(empB.id);
+    expect(res.body.data.username).toBe('empa');
+  });
+
+  it('chủ A gọi /contribution kèm ownerId của B trên query/body → không có dòng nào của B', async () => {
+    // Bài bắt buộc PLAN_DO_LUONG_KPI — Ranh giới quyền:
+    // chủ workspace A gọi API đóng góp → không có một dòng nào của workspace B,
+    // kể cả khi truyền ownerId của B lên.
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera2', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb2', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA1 = await createUser({ username: 'alice_a', role: 'user' });
+    const empA2 = await createUser({ username: 'carol_a', role: 'user' });
+    const empB1 = await createUser({ username: 'bob_b', role: 'user' });
+    const empB2 = await createUser({ username: 'dave_b', role: 'user' });
+    await addMembership(ownerA.id, empA1.id);
+    await addMembership(ownerA.id, empA2.id);
+    await addMembership(ownerB.id, empB1.id);
+    await addMembership(ownerB.id, empB2.id);
+
+    const tokenA = await loginAs(ownerA);
+    const res = await request(app)
+      .get('/api/employees/contribution')
+      .query({ ownerId: ownerB.id })
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ ownerId: ownerB.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const rows = res.body.data || [];
+    const ids = rows.map((r) => r.id);
+    const usernames = rows.map((r) => r.username).sort();
+
+    // Không một dòng nào của workspace B
+    expect(ids).not.toContain(empB1.id);
+    expect(ids).not.toContain(empB2.id);
+    expect(ids).not.toContain(ownerB.id);
+    expect(usernames).not.toContain('bob_b');
+    expect(usernames).not.toContain('dave_b');
+
+    // Chỉ đúng team của A (token), bất chấp ownerId=B trên request
+    expect(ids).toContain(empA1.id);
+    expect(ids).toContain(empA2.id);
+    expect(rows).toHaveLength(2);
+    expect(usernames).toEqual(['alice_a', 'carol_a']);
+  });
+
+  it('chủ A gọi /team-overview kèm ownerId của B → cũng không rò (cùng ranh giới)', async () => {
+    const plan = await createPlan({ maxEmployees: 10 });
+    const ownerA = await createUser({ username: 'ownera3', role: 'user' });
+    const ownerB = await createUser({ username: 'ownerb3', role: 'user' });
+    await assignPlanToUser(ownerA.id, plan.id);
+    await assignPlanToUser(ownerB.id, plan.id);
+
+    const empA = await createUser({ username: 'alice_ov', role: 'user' });
+    const empB = await createUser({ username: 'bob_ov', role: 'user' });
+    await addMembership(ownerA.id, empA.id);
+    await addMembership(ownerB.id, empB.id);
+
+    const tokenA = await loginAs(ownerA);
+    const res = await request(app)
+      .get('/api/employees/team-overview')
+      .query({ ownerId: ownerB.id })
+      .set('Authorization', `Bearer ${tokenA}`);
+
+    expect(res.status).toBe(200);
+    const rows = res.body.data || [];
+    expect(rows.some((r) => r.id === empB.id)).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(empA.id);
+  });
+
+  it('findOwnerIdForEmployee bỏ qua membership inactive', async () => {
+    const { findOwnerIdForEmployee } = await import(
+      '../../src/repositories/user/employee.repository.js'
+    );
+    const owner = await createUser({ username: 'own_inactive', role: 'user' });
+    const emp = await createUser({ username: 'emp_inactive', role: 'employee' });
+    await addMembership(owner.id, emp.id, { status: 'inactive' });
+
+    const ownerId = await findOwnerIdForEmployee(emp.id);
+    expect(ownerId).toBeNull();
   });
 });

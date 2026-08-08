@@ -1,6 +1,10 @@
 import express from 'express';
 import db from '../config/database.js';
 import landingPagePublicController from '../controllers/landingPagePublic.controller.js';
+import {
+  publicLandingAnalyticsLimiter,
+  publicLeadLimiter,
+} from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -10,7 +14,7 @@ router.get('/landing-pages/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
     const { rows } = await db.query(
-      `SELECT title, html_content as "htmlContent"
+      `SELECT id, title, html_content as "htmlContent"
        FROM landing_pages
        WHERE slug = $1 AND is_published = true`,
       [slug]
@@ -18,14 +22,21 @@ router.get('/landing-pages/:slug', async (req, res) => {
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
     }
-    return res.json({ success: true, data: rows[0] });
+    const { resourceIsLocked, pausedLandingHtml } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.json({
+        success: true,
+        data: { title: rows[0].title || 'Trang tạm ngừng', htmlContent: pausedLandingHtml(rows[0].title) },
+      });
+    }
+    return res.json({ success: true, data: { title: rows[0].title, htmlContent: rows[0].htmlContent } });
   } catch (error) {
     console.error('Get landing page error:', error);
     return res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
-router.post('/landing-analytics/view', async (req, res) => {
+router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req, res) => {
   try {
     const { slug, visitorId, utmSource, utmCampaign, utmMedium } = req.body;
 
@@ -48,6 +59,10 @@ router.post('/landing-analytics/view', async (req, res) => {
     );
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
     }
 
     await db.query(
@@ -105,6 +120,10 @@ router.get('/landing-track/go', async (req, res) => {
     if (!rows[0]) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
     }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
+    }
 
     if (!targetUrl.searchParams.has('utm_source')) {
       targetUrl.searchParams.set('utm_source', 'landing_page');
@@ -156,7 +175,7 @@ router.get('/landing-testimonials', async (req, res) => {
   }
 });
 
-router.post('/leads', async (req, res) => {
+router.post('/leads', publicLeadLimiter, async (req, res) => {
   try {
     const { lastName, firstName, email, phone, marketingConsent, landingPageSlug, utmSource, utmCampaign } = req.body;
 
@@ -177,27 +196,38 @@ router.post('/leads', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bạn cần đồng ý nhận email marketing' });
     }
 
-    let idUser = 1;
-    if (landingPageSlug) {
-      const { rows: landingRows } = await db.query(
-        `SELECT id_user FROM landing_pages WHERE slug = $1 AND is_published = true`,
-        [landingPageSlug]
-      );
-      if (landingRows[0]) {
-        idUser = landingRows[0].id_user;
-        await db.query(
-          `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)
-           VALUES ((SELECT id FROM landing_pages WHERE slug = $1), $1, 'submit', $2, $3)`,
-          [landingPageSlug, utmSource || null, utmCampaign || null]
-        );
-      }
+    const slug = typeof landingPageSlug === 'string' ? landingPageSlug.trim() : '';
+    if (!slug) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu trang đích hợp lệ để ghi nhận lead',
+      });
     }
+
+    const { rows: landingRows } = await db.query(
+      `SELECT id, id_user FROM landing_pages WHERE slug = $1 AND is_published = true`,
+      [slug]
+    );
+    if (!landingRows[0]?.id_user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', landingRows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
+    }
+
+    const idUser = landingRows[0].id_user;
+    await db.query(
+      `INSERT INTO landing_page_events (id_landing_page, landing_page_slug, event_type, utm_source, utm_campaign)
+       VALUES ($1, $2, 'submit', $3, $4)`,
+      [landingRows[0].id, slug, utmSource || null, utmCampaign || null]
+    );
 
     const { rows } = await db.query(
       `INSERT INTO leads (id_user, last_name, first_name, email, phone, marketing_consent, landing_page_slug, utm_source, utm_campaign)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [idUser, lastName, firstName, email, phone, marketingConsent, landingPageSlug || null, utmSource || null, utmCampaign || null]
+      [idUser, lastName, firstName, email, phone, marketingConsent, slug, utmSource || null, utmCampaign || null]
     );
 
     return res.status(201).json({ success: true, data: rows[0] });

@@ -222,15 +222,24 @@ class ZaloRateLimiter {
       if (Number.isFinite(accLim) && accLim > 0) {
         policy = { ...policy, limitPerWindow: accLim };
       }
+      // Ghi đè theo tài khoản chỉ được phép làm CHẬM hơn, không bao giờ nhanh hơn
+      // mức cấu hình chung. Trước đây `dMin >= 0` cho phép đặt thẳng 0 giây —
+      // tức bỏ qua mức an toàn đang cấu hình và tự đưa tài khoản Zalo của khách
+      // vào diện chống spam. Sàn = giá trị env đang chạy.
+      //
+      // Production đang đặt 80.000–150.000ms (~80–150 giây, ~30 tin/giờ), KHÔNG
+      // phải 20–50 giây như mặc định trong code. Xem bảng tham số ở CLAUDE.md.
+      const floorMin = policy.minDelayMs;
+      const floorMax = policy.maxDelayMs;
       const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
       const dMax = Number.parseInt(accountHint.zaloPersonalOutboundDelayMaxMs, 10);
-      let nextMin = policy.minDelayMs;
-      let nextMax = policy.maxDelayMs;
+      let nextMin = floorMin;
+      let nextMax = floorMax;
       if (Number.isFinite(dMin) && dMin >= 0) {
-        nextMin = dMin;
+        nextMin = Math.max(floorMin, dMin);
       }
       if (Number.isFinite(dMax) && dMax >= 0) {
-        nextMax = dMax;
+        nextMax = Math.max(floorMax, dMax);
       }
       nextMax = Math.max(nextMin, nextMax);
       policy = { ...policy, minDelayMs: nextMin, maxDelayMs: nextMax };
@@ -244,7 +253,7 @@ class ZaloRateLimiter {
    * @param {string|number} accountId
    * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} channel
    * @param {object|null} [accountHint]
-   * @returns {{successCount: number, limitPerWindow: number, windowStartMs: number|null, windowResetInMs: number|null, windowMs: number, lastAttemptAtMs: number|null}}
+   * @returns {{attemptCount: number, successCount: number, limitPerWindow: number, windowStartMs: number|null, windowResetInMs: number|null, windowMs: number, lastAttemptAtMs: number|null}}
    */
   getOutboundQuotaStatus(accountId, channel, accountHint = null) {
     const safeAccountId = String(accountId || '').trim();
@@ -258,6 +267,8 @@ class ZaloRateLimiter {
     const nowMs = Date.now();
     if (!current || !Number.isFinite(Number(current.windowStartMs))) {
       return {
+        attemptCount: 0,
+        /** @deprecated dùng attemptCount — giữ alias cho Diagnostic UI cũ */
         successCount: 0,
         limitPerWindow,
         windowStartMs: null,
@@ -268,8 +279,10 @@ class ZaloRateLimiter {
     }
     const windowStartMs = Number(current.windowStartMs);
     const expired = nowMs - windowStartMs >= windowMs;
+    const attemptCount = expired ? 0 : Math.max(0, Number.parseInt(current.attemptCount, 10) || 0);
     return {
-      successCount: expired ? 0 : Math.max(0, Number.parseInt(current.successCount, 10) || 0),
+      attemptCount,
+      successCount: attemptCount,
       limitPerWindow,
       windowStartMs,
       windowResetInMs: expired ? 0 : Math.max(0, windowStartMs + windowMs - nowMs),
@@ -283,34 +296,11 @@ class ZaloRateLimiter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Ghi nhận một lần gửi thành công để tính quota theo giờ.
-   *
-   * @param {object} input
-   * @param {string|number} input.accountId
-   * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
-   * @param {object|null} [input.zaloAccountPolicyHint]
+   * Legacy no-op — hạn mức giờ đã đếm theo lần thử trong
+   * `enforceOutboundPolicyBeforeSend` (P1-2). Giữ tên để call site cũ không gãy.
    */
-  markOutboundSuccess({ accountId, channel, zaloAccountPolicyHint = null }) {
-    const safeAccountId = String(accountId || '').trim();
-    const safeChannel = String(channel || '').trim();
-    if (!safeAccountId || !safeChannel) return;
-    const stateKey = `${safeAccountId}:${safeChannel}`;
-    const nowMs = Date.now();
-    const current = this.zaloOutboundRateLimitState.get(stateKey) || {
-      windowStartMs: nowMs,
-      successCount: 0,
-      lastAttemptAtMs: null,
-      policyFingerprint: null,
-    };
-    const policy = this.resolveOutboundPolicy(safeChannel, zaloAccountPolicyHint);
-    const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
-    if (nowMs - current.windowStartMs >= windowMs) {
-      this.zaloOutboundRateLimitState.delete(stateKey);
-      current.windowStartMs = nowMs;
-      current.successCount = 0;
-    }
-    current.successCount += 1;
-    this.zaloOutboundRateLimitState.set(stateKey, current);
+  markOutboundSuccess() {
+    // intentionally empty
   }
 
   /**
@@ -379,30 +369,30 @@ class ZaloRateLimiter {
 
       const current = this.zaloOutboundRateLimitState.get(stateKey) || {
         windowStartMs: nowMs,
-        successCount: 0,
+        attemptCount: 0,
         lastAttemptAtMs: null,
         policyFingerprint: null,
       };
       const policyFingerprint = `${limitPerWindow}:${windowMs}:${minDelayMs}:${maxDelayMs}`;
       if (current.policyFingerprint != null && current.policyFingerprint !== policyFingerprint) {
         current.windowStartMs = nowMs;
-        current.successCount = 0;
+        current.attemptCount = 0;
         current.lastAttemptAtMs = null;
       }
       current.policyFingerprint = policyFingerprint;
       if (nowMs - current.windowStartMs >= windowMs) {
         this.zaloOutboundRateLimitState.delete(stateKey);
         current.windowStartMs = nowMs;
-        current.successCount = 0;
+        current.attemptCount = 0;
       }
 
-      if (current.successCount >= limitPerWindow) {
+      if (current.attemptCount >= limitPerWindow) {
         const targetMs = current.windowStartMs + windowMs;
         const waitMs = Math.max(0, targetMs - nowMs);
         const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
         console.log(
           `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-          + `rate_limited=true success=${current.successCount}/${limitPerWindow} `
+          + `rate_limited=true attempts=${current.attemptCount}/${limitPerWindow} `
           + `window_start=${current.windowStartMs} now_local=${shifted.toISOString()} wait_ms=${waitMs}`
         );
         await yieldOrSleep(waitMs, 'rate_limited');
@@ -421,7 +411,9 @@ class ZaloRateLimiter {
         continue;
       }
 
+      // Đếm lần thử (không chỉ thành công) — Zalo tính mọi request vào anti-spam.
       current.lastAttemptAtMs = nowMs;
+      current.attemptCount += 1;
       this.zaloOutboundRateLimitState.set(stateKey, current);
       return;
     }

@@ -180,8 +180,8 @@ export function createDynamicCorsMiddleware() {
       return next();
     }
 
-    // For localhost in hostname (e.g., localhost:5173 in Referer)
-    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+    // Exact match only — substring "localhost" would allow localhost.attacker.com
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -222,11 +222,7 @@ export function createDynamicCorsMiddleware() {
       return next();
     } catch (err) {
       console.error('[DynamicCors] Error checking domain:', err);
-      // On error, allow but log - better than blocking legitimate requests
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      // Fail-closed: do not grant ACAO when verification lookup fails
       return next();
     }
   };

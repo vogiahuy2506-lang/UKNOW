@@ -43,6 +43,11 @@
   let isOpen = false;
   let messages = JSON.parse(localStorage.getItem('uknow_msgs_' + WIDGET_KEY) || '[]');
   let chatHistory = JSON.parse(localStorage.getItem('uknow_history_' + WIDGET_KEY) || '[]');
+  let sessionId = localStorage.getItem('uknow_session_' + WIDGET_KEY);
+  if (!sessionId) {
+    sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+    localStorage.setItem('uknow_session_' + WIDGET_KEY, sessionId);
+  }
   let configLoaded = false;
 
   // ── Load Config from API ─────────────────────────────────────────
@@ -319,6 +324,7 @@
         body: JSON.stringify({
           message: text,
           history: chatHistory.slice(-10),
+          sessionId: sessionId,
         }),
       });
 
@@ -326,9 +332,15 @@
       typing.remove();
 
       if (data.success && data.data) {
-        addMessage('assistant', data.data.content);
-        chatHistory.push({ role: 'assistant', content: data.data.content });
-        localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+        // Rate-limited silent (minute/hour): no bubble, no localStorage ghost
+        if (data.data.rateLimited && !data.data.content) {
+          return;
+        }
+        if (data.data.content) {
+          addMessage('assistant', data.data.content);
+          chatHistory.push({ role: 'assistant', content: data.data.content });
+          localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+        }
       } else {
         // Show error from server or default message
         const errorMsg = data.message || data.error?.message || 'Xin lỗi, tôi đang bận. Vui lòng thử lại sau.';

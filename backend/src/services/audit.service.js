@@ -62,6 +62,7 @@ export const AUDIT_ACTIONS = {
   PLAN_CREATED: 'PLAN_CREATED',
   PLAN_UPDATED: 'PLAN_UPDATED',
   PLAN_DELETED: 'PLAN_DELETED',
+  CUSTOM_PLAN_PRICING_UPDATED: 'CUSTOM_PLAN_PRICING_UPDATED',
 
   // System — vouchers
   VOUCHER_CREATED: 'VOUCHER_CREATED',
@@ -99,6 +100,10 @@ export const AUDIT_ACTIONS = {
   // System — AI wizard telemetry (dead-end detection)
   WIZARD_DEAD_END: 'WIZARD_DEAD_END',
   WIZARD_STATE_NOOP: 'WIZARD_STATE_NOOP',
+
+  // Workspace — channel connection (activation funnel)
+  EMAIL_ACCOUNT_CONNECTED: 'EMAIL_ACCOUNT_CONNECTED',
+  ZALO_ACCOUNT_CONNECTED: 'ZALO_ACCOUNT_CONNECTED',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -109,6 +114,8 @@ export const AUDIT_ENTITY_TYPES = {
   CAMPAIGN: 'campaign',
   EMAIL_TEMPLATE: 'email_template',
   ZALO_TEMPLATE: 'zalo_template',
+  EMAIL_SETTING: 'email_setting',
+  ZALO_SETTING: 'zalo_setting',
   AI_SESSION: 'ai_session',
 };
 

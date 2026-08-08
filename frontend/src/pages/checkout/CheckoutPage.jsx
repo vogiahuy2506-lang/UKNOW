@@ -6,9 +6,31 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
+import { trackEvent } from '../../utils/analytics';
 import QRCode from 'qrcode';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
+
+const camelItemKey = (key) => {
+    const map = {
+        base_fee: 'baseFee',
+        zalo_messages: 'zaloMessages',
+        emails: 'emails',
+        ai_credits: 'aiCredits',
+        zalo_accounts: 'zaloAccounts',
+        email_accounts: 'emailAccounts',
+        landing_pages: 'landingPages',
+        chatbots: 'chatbots',
+        employees: 'employees',
+        campaigns: 'campaigns',
+        zalo_campaigns: 'zaloCampaigns',
+        zalo_group_campaigns: 'zaloGroupCampaigns',
+        email_campaigns: 'emailCampaigns',
+        email_templates: 'emailTemplates',
+        zalo_templates: 'zaloTemplates',
+    };
+    return map[key] || key;
+};
 
 const GLASS_CARD = 'bg-white/60 border border-white/80 backdrop-blur-md rounded-2xl shadow-lg shadow-black/5';
 const GLASS_CARD_SOLID = 'bg-white/75 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
@@ -26,9 +48,21 @@ const CheckoutPage = () => {
     const pollingRef = useRef(null);
 
     const plan = location.state?.plan;
+    const isCustomPlan = Boolean(location.state?.isCustomPlan);
+    const customQuantities = location.state?.quantities || null;
+    const customQuote = location.state?.quote || null;
+    const reusePlanId = location.state?.reusePlanId || null;
     const billingPeriod = location.state?.billingPeriod || 'monthly';
-    const isYearly = billingPeriod === 'yearly' && plan?.price_yearly;
-    const displayPrice = isYearly ? Number(plan?.price_yearly) : Number(plan?.price || 0);
+    const isYearly = isCustomPlan
+        ? billingPeriod === 'yearly'
+        : billingPeriod === 'yearly' && plan?.price_yearly;
+    const displayPrice = isCustomPlan
+        ? Number(customQuote?.total || 0)
+        : (isYearly ? Number(plan?.price_yearly) : Number(plan?.price || 0));
+    const planName = isCustomPlan
+        ? (customQuote ? t('customPlan.checkoutPlanName') : t('customPlan.title'))
+        : plan?.name;
+    const voucherPlanCode = isCustomPlan ? 'custom' : plan?.code;
 
     const [orderCode, setOrderCode] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -59,7 +93,11 @@ const CheckoutPage = () => {
     };
 
     const createPayment = async () => {
-        if (!plan) {
+        if (!isCustomPlan && !plan) {
+            navigate('/pricing', { replace: true });
+            return;
+        }
+        if (isCustomPlan && !customQuantities) {
             navigate('/pricing', { replace: true });
             return;
         }
@@ -67,6 +105,11 @@ const CheckoutPage = () => {
         try {
             setPaymentStarted(true);
             setLoading(true);
+            trackEvent('begin_checkout', {
+                currency: 'VND',
+                value: finalAmount,
+                items: [{ item_id: voucherPlanCode, item_name: planName }],
+            });
             const userEmail = location.state?.userEmail || user?.email;
             if (!userEmail) {
                 if (isAuthLoading) {
@@ -76,6 +119,30 @@ const CheckoutPage = () => {
                 setError(t('checkout.userEmailNotFound'));
                 setPaymentStarted(false);
                 setLoading(false);
+                return;
+            }
+
+            if (isCustomPlan) {
+                const { data } = await checkoutApiService.createCustomPayment({
+                    quantities: customQuantities,
+                    billingPeriod,
+                    voucherCode: appliedVoucher?.code || null,
+                    reusePlanId,
+                });
+                if (!data.success) throw new Error(data.message);
+
+                if (data.result.noPayment) {
+                    navigate('/payment-success', {
+                        replace: true,
+                        state: { orderCode: data.result.orderCode, fromCheckout: true },
+                    });
+                    return;
+                }
+
+                setOrderCode(data.result.orderCode);
+                const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 220, margin: 1 });
+                setQrImageUrl(qrDataUrl);
+                setError(null);
                 return;
             }
 
@@ -94,7 +161,6 @@ const CheckoutPage = () => {
 
             const { data } = await checkoutApiService.createPayment({
                 planCode: plan.code,
-                userEmail,
                 billingPeriod,
                 voucherCode: appliedVoucher?.code || null,
             });
@@ -121,16 +187,25 @@ const CheckoutPage = () => {
     };
 
     useEffect(() => {
-        if (!plan) {
+        if (!isCustomPlan && !plan) {
+            navigate('/pricing', { replace: true });
+            return;
+        }
+        if (isCustomPlan && !customQuantities) {
             navigate('/pricing', { replace: true });
             return;
         }
         setLoading(false);
         const loadVouchers = async () => {
             try {
+                const voucherParams = {
+                    planCode: voucherPlanCode,
+                    billingPeriod,
+                    ...(isCustomPlan ? { amount: displayPrice } : {}),
+                };
                 const [autoRes, codeRes] = await Promise.all([
-                    getAvailableVouchers({ planCode: plan.code, billingPeriod }),
-                    getVoucherCodeSuggestions({ planCode: plan.code, billingPeriod }),
+                    getAvailableVouchers(voucherParams),
+                    getVoucherCodeSuggestions(voucherParams),
                 ]);
                 setAutoPromotion(autoRes.data?.data?.vouchers?.[0] || null);
                 setCodeVouchers(codeRes.data?.data?.vouchers || []);
@@ -141,14 +216,19 @@ const CheckoutPage = () => {
         };
         loadVouchers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [plan, user, isAuthLoading]);
+    }, [plan, isCustomPlan, user, isAuthLoading]);
 
     const applyVoucherCode = async (code = voucherCode) => {
         const normalized = String(code || '').trim().toUpperCase();
         if (!normalized) return;
         setVoucherLoading(true);
         try {
-            const { data } = await validateVoucher({ planCode: plan.code, billingPeriod, code: normalized });
+            const { data } = await validateVoucher({
+                planCode: voucherPlanCode,
+                billingPeriod,
+                code: normalized,
+                ...(isCustomPlan ? { amount: displayPrice } : {}),
+            });
             setManualVoucher(data.data.voucher);
             setVoucherCode(normalized);
             toast.success(t('checkout.voucherApplied'));
@@ -182,7 +262,8 @@ const CheckoutPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderCode]);
 
-    if (!plan) return null;
+    if (!isCustomPlan && !plan) return null;
+    if (isCustomPlan && !customQuantities) return null;
 
     return (
         <div className="relative min-h-screen">
@@ -219,22 +300,37 @@ const CheckoutPage = () => {
                                     <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-0.5">
                                         {t('checkout.membershipPlan')}
                                     </p>
-                                    <p className="text-lg font-black text-slate-900 leading-tight">{plan.name}</p>
+                                    <p className="text-lg font-black text-slate-900 leading-tight">{planName}</p>
                                     <p className="text-xs text-slate-500 mt-0.5">
                                         {isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')}
                                     </p>
                                 </div>
+                                {isCustomPlan && Array.isArray(customQuote?.items) && (
+                                    <div className="mb-3 space-y-1 max-h-36 overflow-y-auto text-xs text-slate-600">
+                                        {customQuote.items.filter((i) => i.subtotal > 0 || i.itemKey === 'base_fee').map((line) => (
+                                            <div key={line.itemKey} className="flex justify-between gap-2">
+                                                <span className="truncate">{t(`customPlan.items.${camelItemKey(line.itemKey)}`)}</span>
+                                                <span className="font-medium shrink-0">{fmtVnd(line.subtotal)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between text-slate-500">
                                         <span>{t('checkout.serviceFee')}</span>
                                         <span className="font-medium text-slate-700">{fmtVnd(displayPrice)}</span>
                                     </div>
-                                    {isYearly && (
+                                    {isYearly && !isCustomPlan && (
                                         <div className="flex justify-between text-emerald-600 text-xs">
                                             <span>{t('checkout.perMonthApprox', { amount: fmtVnd(Math.round(displayPrice / 12)) })}</span>
                                             <span className="bg-emerald-100/80 px-1.5 py-0.5 rounded font-semibold">
                                                 -{Math.round((Number(plan.price) * 12 - displayPrice) / (Number(plan.price) * 12) * 100)}%
                                             </span>
+                                        </div>
+                                    )}
+                                    {isYearly && isCustomPlan && (
+                                        <div className="flex justify-between text-emerald-600 text-xs">
+                                            <span>{t('checkout.perMonthApprox', { amount: fmtVnd(Math.round(displayPrice / 12)) })}</span>
                                         </div>
                                     )}
                                     {appliedVoucher && (

@@ -2,8 +2,19 @@ import { serverError } from '../helpers.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
 import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
+import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
 
 class CampaignScheduleController {
+  /**
+   * Reject once-schedules whose next fire is a year-rollover (past day/month).
+   * @returns {string|null} error message or null if ok
+   */
+  validateOnceScheduleTiming(scheduleType, cronExpression) {
+    if (String(scheduleType || '') !== 'once') return null;
+    const check = assertOnceCronNotYearRolled(cronExpression);
+    return check.ok ? null : check.message;
+  }
+
   // Lấy tất cả lịch chạy của user
   async getAll(req, res) {
     try {
@@ -102,6 +113,14 @@ class CampaignScheduleController {
         });
       }
 
+      const onceTimingError = this.validateOnceScheduleTiming(scheduleType, cronExpression);
+      if (onceTimingError) {
+        return res.status(400).json({
+          success: false,
+          message: onceTimingError,
+        });
+      }
+
       const row = await campaignScheduleRepository.create({
         campaignId,
         scheduleName,
@@ -171,6 +190,18 @@ class CampaignScheduleController {
           return res.status(409).json({
             success: false,
             message: 'Chiến dịch đang chạy, chưa thể bật lịch',
+          });
+        }
+      }
+
+      if (scheduleType !== undefined || cronExpression !== undefined) {
+        const effectiveType = scheduleType !== undefined ? scheduleType : scheduleData.schedule_type;
+        const effectiveCron = cronExpression !== undefined ? cronExpression : scheduleData.cron_expression;
+        const onceTimingError = this.validateOnceScheduleTiming(effectiveType, effectiveCron);
+        if (onceTimingError) {
+          return res.status(400).json({
+            success: false,
+            message: onceTimingError,
           });
         }
       }

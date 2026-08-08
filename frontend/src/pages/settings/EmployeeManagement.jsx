@@ -483,8 +483,11 @@ const EmployeeManagement = () => {
                     <th>{t('employee.fullName')}</th>
                     <th className="text-center">{t('employee.runningCampaigns')}</th>
                     <th className="text-center">{t('employee.campaignsThisMonth')}</th>
+                    <th className="text-center">Tỉ lệ thành công</th>
                     <th className="text-center">{t('employee.sendsThisMonth')}</th>
                     <th className="text-center">{t('employee.failedThisMonth')}</th>
+                    <th className="text-center">Mẫu đã soạn</th>
+                    <th className="text-center">Tín dụng AI</th>
                     <th>{t('employee.lastActive')}</th>
                   </tr>
                 </thead>
@@ -494,6 +497,7 @@ const EmployeeManagement = () => {
                       <td>
                         <div className="font-medium text-gray-800">{emp.fullName || emp.username}</div>
                         <div className="text-xs text-gray-400">@{emp.username}</div>
+                        <div className="text-[10px] text-amber-600 mt-0.5">{emp.attributionNote || 'Theo người tạo chiến dịch'}</div>
                       </td>
                       <td className="text-center">
                         {emp.runningCampaigns > 0 ? (
@@ -506,7 +510,10 @@ const EmployeeManagement = () => {
                         )}
                       </td>
                       <td className="text-center text-sm text-gray-700">{emp.campaignsThisMonth}</td>
-                      <td className="text-center text-sm font-medium text-gray-800">{emp.sendsThisMonth.toLocaleString('vi-VN')}</td>
+                      <td className="text-center text-sm font-semibold text-gray-800">
+                        {emp.successRate != null ? `${emp.successRate}%` : '—'}
+                      </td>
+                      <td className="text-center text-sm text-gray-500">{emp.sendsThisMonth.toLocaleString('vi-VN')}</td>
                       <td className="text-center text-sm">
                         {emp.failedThisMonth > 0 ? (
                           <span className="text-red-500 font-medium">{emp.failedThisMonth.toLocaleString('vi-VN')}</span>
@@ -514,6 +521,8 @@ const EmployeeManagement = () => {
                           <span className="text-gray-400">0</span>
                         )}
                       </td>
+                      <td className="text-center text-sm text-gray-700">{emp.templatesThisMonth ?? 0}</td>
+                      <td className="text-center text-sm text-gray-700">{emp.aiCreditsThisMonth ?? 0}</td>
                       <td className="text-sm text-gray-500">
                         {emp.lastActiveAt
                           ? new Date(emp.lastActiveAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })

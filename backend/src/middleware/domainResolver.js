@@ -1,6 +1,5 @@
 import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
 import landingPagePublicService from '../services/landingPage/landingPagePublic.service.js';
-import landingPageRepository from '../repositories/landingPage.repository.js';
 
 /**
  * Middleware: resolve custom hostname → landing page slug → attach to req.
@@ -30,7 +29,7 @@ export const domainResolver = async (req, res, next) => {
       if (resolved.slug) {
         payload = await landingPagePublicService.getPublishedPayload(resolved.slug);
       } else {
-        payload = await landingPageRepository.findPublishedById(resolved.id);
+        payload = await landingPagePublicService.getPublishedPayloadById(resolved.id);
       }
       if (payload) {
         req.isCustomDomain = true;

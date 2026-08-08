@@ -3,22 +3,26 @@ import { body } from 'express-validator';
 import emailSettingsController from '../controllers/emailSettings.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
-// Get all
+// Get all — chỉ cần auth, không cần permission
 router.get('/', emailSettingsController.getAll.bind(emailSettingsController));
 
 // Get active email settings for selection (must be before /:id)
 router.get('/active', emailSettingsController.getActiveSettings.bind(emailSettingsController));
 
-// Get by id
+// Get by id — chỉ cần auth
 router.get('/:id', emailSettingsController.getById.bind(emailSettingsController));
 
-// Create
+// Create — cần quyền email_settings
 router.post('/',
+  requirePermission('email_settings'),
   [
     body('name').trim().notEmpty().withMessage('Tên không được để trống'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
@@ -32,8 +36,9 @@ router.post('/',
   emailSettingsController.create.bind(emailSettingsController)
 );
 
-// Update
+// Update — cần quyền email_settings
 router.put('/:id',
+  requirePermission('email_settings'),
   [
     body('name').optional().trim().notEmpty().withMessage('Tên không được để trống'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
@@ -43,8 +48,8 @@ router.put('/:id',
   emailSettingsController.update.bind(emailSettingsController)
 );
 
-// Delete
-router.delete('/:id', emailSettingsController.delete.bind(emailSettingsController));
+// Delete — cần quyền email_settings
+router.delete('/:id', requirePermission('email_settings'), emailSettingsController.delete.bind(emailSettingsController));
 
 // Test connection
 router.post('/test-connection',
@@ -81,7 +86,7 @@ router.post('/:id/domain-verification/initiate',
   emailSettingsController.initiateDomainVerification.bind(emailSettingsController)
 );
 
-// Poll SendGrid to check if domain is verified
+// Poll SMTP provider to check if domain is verified
 router.get('/:id/domain-verification/status',
   emailSettingsController.getDomainVerificationStatus.bind(emailSettingsController)
 );

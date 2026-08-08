@@ -39,10 +39,74 @@ class CampaignZaloSenderRepository {
            display_name = COALESCE(NULLIF($1, ''), display_name),
            cookie_text = COALESCE(NULLIF($2, ''), cookie_text),
            last_connected_at = $3,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $4 AND id_user = $5`,
       [displayName, encryptZaloCookie(cookieText), now, accountId, userId]
     );
+  }
+
+  /**
+   * Record a failed auto-restore attempt. After ≥5 fails spanning ≥60 minutes,
+   * move the account to needs_reauth so keep-alive / cron stop hammering it.
+   *
+   * @param {number|string} accountId
+   * @returns {Promise<{ status: string, restore_fail_count: number }|null>}
+   */
+  async recordRestoreFailure(accountId) {
+    const id = Number.parseInt(accountId, 10);
+    if (!Number.isFinite(id)) return null;
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET restore_fail_count = restore_fail_count + 1,
+           first_restore_fail_at = COALESCE(first_restore_fail_at, CURRENT_TIMESTAMP),
+           last_restore_attempt_at = CURRENT_TIMESTAMP,
+           status = CASE
+             WHEN (restore_fail_count + 1) >= 5
+               AND COALESCE(first_restore_fail_at, CURRENT_TIMESTAMP)
+                   <= CURRENT_TIMESTAMP - INTERVAL '60 minutes'
+             THEN 'needs_reauth'
+             ELSE status
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING status, restore_fail_count, first_restore_fail_at, last_restore_attempt_at`,
+      [id]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Manual retry: clear fail window and re-queue for keep-alive / cron restore.
+   *
+   * @param {number|string} accountId
+   * @param {{ userId?: number|null, isAdmin?: boolean }} [scope]
+   * @returns {Promise<object|null>}
+   */
+  async resetRestoreForRetry(accountId, { userId = null, isAdmin = false } = {}) {
+    const id = Number.parseInt(accountId, 10);
+    if (!Number.isFinite(id)) return null;
+    const params = [id];
+    let ownerClause = '';
+    if (!isAdmin) {
+      const uid = Number.parseInt(userId, 10);
+      if (!Number.isFinite(uid)) return null;
+      params.push(uid);
+      ownerClause = ' AND id_user = $2';
+    }
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET status = 'connected',
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1${ownerClause}
+       RETURNING id, id_user, status, restore_fail_count, first_restore_fail_at,
+                 last_restore_attempt_at, display_name, is_active`,
+      params
+    );
+    return rows[0] || null;
   }
 
   /**
@@ -99,7 +163,11 @@ class CampaignZaloSenderRepository {
        LIMIT 1`,
       isAdmin ? [accountId] : [accountId, userId]
     );
-    return decryptZaloCookieRow(result.rows[0] || null);
+    const row = decryptZaloCookieRow(result.rows[0] || null);
+    if (!row) return null;
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('zalo_accounts', row.id)) return null;
+    return row;
   }
 
   /**

@@ -127,6 +127,12 @@ const getLimitReachedLabel = () => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Map server message vào Error.message để toast/UI không hiện chuỗi axios mặc định (vd. 429)
+    const serverMessage = error.response?.data?.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+      error.message = serverMessage;
+    }
+
     const originalRequest = error.config;
     const statusCode = error.response?.status;
     const requestUrl = originalRequest?.url;
@@ -150,7 +156,11 @@ api.interceptors.response.use(
           React.createElement(
             'button',
             {
-              onClick: () => { toast.dismiss(tst.id); window.location.href = '/pricing'; },
+              onClick: () => {
+                toast.dismiss(tst.id);
+                const isEmployee = useAuthStore.getState().activeContext?.type === 'employee';
+                window.location.href = isEmployee ? '/pricing' : '/app/billing';
+              },
               style: {
                 alignSelf: 'flex-start', fontSize: 12, fontWeight: 600,
                 color: '#f97316', background: 'none', border: 'none',

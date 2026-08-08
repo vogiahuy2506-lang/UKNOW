@@ -299,12 +299,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <div className="px-3 py-2.5 border-t border-slate-100 shrink-0 bg-slate-50/50">
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
+        <div className="text-[11px] text-slate-400">
           <span>{chatbots.length} chatbot(s)</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span>Gemini 2.5 Flash</span>
-          </div>
         </div>
       </div>
 
@@ -366,17 +362,17 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                       key={tpl.label}
                       type="button"
                       onClick={() => setNewName(tpl.label)}
-                      className={`text-left p-2.5 rounded-xl border-2 transition-all hover:border-primary-300 ${
+                      className={`text-left p-3 rounded-xl border-2 transition-all hover:border-primary-300 ${
                         newName === tpl.label
                           ? 'border-primary-400 bg-primary-50'
                           : 'border-slate-200 hover:border-primary-200'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-base">{tpl.emoji}</span>
+                      <div className="flex items-center gap-2.5 mb-1.5">
+                        <span className="text-base shrink-0">{tpl.emoji}</span>
                         <span className="text-xs font-semibold text-slate-700">{tpl.label}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400">{tpl.desc}</p>
+                      <p className="text-[10px] text-slate-400 pl-7">{tpl.desc}</p>
                     </button>
                   ))}
                 </div>

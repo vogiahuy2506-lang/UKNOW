@@ -92,9 +92,9 @@ const SECTIONS_BY_PAGE = {
       id: 'contact_info',
       label: 'Thông tin liên hệ',
       fields: [
-        { key: 'email', label: 'Email', placeholder: 'hello@founderai.vn' },
+        { key: 'email', label: 'Email', placeholder: 'info@digiso.vn' },
         { key: 'emailLabel', label: 'Nhãn Email', placeholder: 'Email' },
-        { key: 'emailValue', label: 'Giá trị Email', placeholder: 'hello@founderai.vn' },
+        { key: 'emailValue', label: 'Giá trị Email', placeholder: 'info@digiso.vn' },
         { key: 'hotline', label: 'Hotline Label', placeholder: 'Hotline' },
         { key: 'hotlineValue', label: 'Hotline Number', placeholder: '19006868' },
         { key: 'zalo', label: 'Zalo Label', placeholder: 'Zalo' },

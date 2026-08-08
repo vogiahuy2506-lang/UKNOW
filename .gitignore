@@ -5,8 +5,11 @@
 
 
 ####################
-# LOCAL DOCS (chứa thông tin test/credential)
+# TÀI LIỆU NỘI BỘ — KHÔNG đẩy lên (repo này PUBLIC)
 ####################
+# Kế hoạch, kết quả audit bảo mật, tài khoản test, ghi chú làm việc.
+# Tài liệu kỹ thuật dùng chung thì để ở docs/ hoặc cạnh code, không để đây.
+/_internal/
 docs/TEST_ACCOUNTS.md
 
 
@@ -87,7 +90,14 @@ uknow_campaign_schema.sql
 ####################
 CLAUDE.md
 AGENTS.md
-.claude/
+# Cấu hình cá nhân (settings.local.json, worktrees) không commit,
+# nhưng skills/ là quy ước làm việc chung — phải theo repo.
+.claude/*
+!.claude/skills/
+
+# Thư mục tooling local của Cursor AI / agents khác — không commit
+.agents/
+.impeccable-temp/
 
 ####################
 # LOCAL DOCS / PLANNING / DELIVERABLES

@@ -9,6 +9,10 @@ const checkoutApiService = {
     return api.post('/payments/create-payment', payload);
   },
 
+  createCustomPayment(payload) {
+    return api.post('/payments/create-custom-payment', payload);
+  },
+
   async getPaymentStatus(orderCode) {
     const response = await api.get(`/payments/status/${orderCode}`);
     return response.data;

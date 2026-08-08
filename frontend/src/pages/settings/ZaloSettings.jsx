@@ -48,6 +48,8 @@ function normalizeAccount(account = {}) {
     status: account.status || 'disconnected',
     isActive: account.isActive ?? true,
     isDefault: account.isDefault ?? false,
+    lastRestoreAttemptAt: account.lastRestoreAttemptAt || null,
+    restoreFailCount: Number(account.restoreFailCount || 0),
     loginMethod: account.loginMethod || 'qr',
     notes: account.notes || '',
     creatorName: String(account.creatorName || account.createdBy?.name || ''),
@@ -65,6 +67,7 @@ const ZaloSettings = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCreatingQr, setIsCreatingQr] = useState(false);
   const [restoringAccountIds, setRestoringAccountIds] = useState([]);
+  const [retryingAccountIds, setRetryingAccountIds] = useState([]);
   const [isBackendReady, setIsBackendReady] = useState(true);
   const [backendModeMessage, setBackendModeMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -232,6 +235,27 @@ const ZaloSettings = () => {
       });
     }
     await handleConnectByQr();
+  };
+
+  /**
+   * Re-enable automatic restore after needs_reauth (does not login).
+   *
+   * @param {{ id: string }} account
+   * @returns {Promise<void>}
+   */
+  const handleRetryRestore = async (account) => {
+    const accountId = account?.id;
+    if (!accountId) return;
+    setRetryingAccountIds((prev) => [...prev, accountId]);
+    try {
+      await zaloSettingsApiService.retryRestore(accountId);
+      toast.success(t('zaloSettings.retryRestoreSuccess'));
+      await fetchAccounts();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('zaloSettings.retryRestoreFailed'));
+    } finally {
+      setRetryingAccountIds((prev) => prev.filter((id) => id !== accountId));
+    }
   };
 
   /**
@@ -408,14 +432,26 @@ const ZaloSettings = () => {
                           className={`text-xs px-2 py-0.5 rounded-full ${
                             account.status === 'connected' && account.isActive
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
+                              : account.status === 'needs_reauth'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-red-100 text-red-700'
                           }`}
                         >
                           {account.status === 'connected' && account.isActive
                             ? t('zaloSettings.connected')
-                            : t('zaloSettings.disconnected')}
+                            : account.status === 'needs_reauth'
+                              ? t('zaloSettings.needsReauth')
+                              : t('zaloSettings.disconnected')}
                         </span>
                       </div>
+                      {account.status === 'needs_reauth' && (
+                        <p className="text-sm text-amber-800 mt-2">
+                          {t('zaloSettings.needsReauthHint')}
+                          {account.lastRestoreAttemptAt
+                            ? ` ${t('zaloSettings.lastRestoreAttempt')}: ${formatCampaignDateTime(account.lastRestoreAttemptAt)}`
+                            : ''}
+                        </p>
+                      )}
                       <p className="text-sm text-gray-600 mt-1">
                         {t('zaloSettings.zaloId')}: {account.zaloUserId || t('zaloSettings.notConfigured')}
                       </p>
@@ -436,6 +472,19 @@ const ZaloSettings = () => {
                     <div className="flex items-center gap-2">
                       {!(account.status === 'connected' && account.isActive) && (
                         <>
+                          {account.status === 'needs_reauth' && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-xs"
+                              onClick={() => handleRetryRestore(account)}
+                              disabled={retryingAccountIds.includes(account.id)}
+                            >
+                              <HiOutlineRefresh className="w-4 h-4 mr-1" />
+                              {retryingAccountIds.includes(account.id)
+                                ? t('zaloSettings.restoring')
+                                : t('zaloSettings.retryRestore')}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="btn btn-secondary text-xs"

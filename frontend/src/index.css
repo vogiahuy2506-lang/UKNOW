@@ -58,11 +58,11 @@ body {
 
 /* Button base styles */
 .btn {
-  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-base;
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200;
 }
 
 .btn-primary {
-  @apply bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700;
+  @apply bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700;
 }
 
 .btn-secondary {
@@ -79,17 +79,34 @@ body {
 
 /* Input base styles */
 .input {
-  @apply w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-base;
+  @apply w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-orange-400 focus:ring-1 focus:ring-orange-100 transition-all;
 }
 
 .input-error {
   @apply border-red-500 focus:border-red-500 focus:ring-red-500;
 }
 
+/* Label styles */
+.label {
+  @apply text-sm font-semibold text-slate-700;
+}
+
 /* Chặn nút reveal/clear của trình duyệt để tránh lộ mật khẩu SMTP trên UI */
 input[type='password']::-ms-reveal,
 input[type='password']::-ms-clear {
   display: none;
+}
+
+/* Ẩn mũi tên tăng/giảm của input số (Chrome/Safari/Edge + Firefox) */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 /* Card styles */
@@ -376,4 +393,21 @@ input[type='password']::-ms-clear {
     break-after: auto;
     page-break-after: auto;
   }
+}
+
+/* TipTap editor (help articles) */
+.ProseMirror {
+  outline: none;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
 }

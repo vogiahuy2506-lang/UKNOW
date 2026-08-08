@@ -1,6 +1,7 @@
 services:
   postgres-e2e:
-    image: postgres:15-alpine
+    # Cần pgvector cho help_article_chunks / kb_chunks (cosine search).
+    image: pgvector/pgvector:pg15
     container_name: uknow-postgres-e2e
     restart: unless-stopped
     environment:

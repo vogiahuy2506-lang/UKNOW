@@ -175,6 +175,11 @@ const ConversationItem = ({
                   Đóng
                 </span>
               )}
+              {conv.aiPaused && (
+                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  {t('inbox.manualBadge')}
+                </span>
+              )}
             </div>
             <div className="flex h-6 w-12 shrink-0 items-center justify-end">
               <span className={`text-[10px] text-gray-400 transition-opacity ${onDelete ? 'group-hover:opacity-0' : ''}`}>

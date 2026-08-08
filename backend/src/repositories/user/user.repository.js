@@ -57,6 +57,8 @@ export async function findProfileBase(userId) {
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
             u.role, u.active_plan_id, u.subscription_expires_at,
             ${PROFILE_LIMIT_COLUMNS},
+            u.bot_daily_reply_cap,
+            u.ai_handoff_auto_resume_minutes,
             u.created_at, u.last_login_at, r.role_code, r.role_name
      FROM users u
      LEFT JOIN roles r ON u.id_role = r.id
@@ -74,6 +76,8 @@ export async function findProfileBaseFallback(userId) {
             NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
             NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
             NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
+            NULL::int AS bot_daily_reply_cap,
+            NULL::int AS ai_handoff_auto_resume_minutes,
             u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
      FROM users u WHERE u.id = $1`,
     [userId]
@@ -168,6 +172,40 @@ export async function updateProfile(userId, { fullName, email, phone, avatarUrl 
   return rows[0] || null;
 }
 
+/**
+ * Owner-only daily bot reply cap. Pass null to clear (system limits only).
+ * @param {number} userId
+ * @param {number|null} cap
+ */
+export async function updateBotDailyReplyCap(userId, cap) {
+  const { rows } = await db.query(
+    `UPDATE users
+     SET bot_daily_reply_cap = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING id, bot_daily_reply_cap`,
+    [userId, cap]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Owner-only: minutes until AI auto-resumes after handoff. null = off.
+ * @param {number} userId
+ * @param {number|null} minutes
+ */
+export async function updateAiHandoffAutoResumeMinutes(userId, minutes) {
+  const { rows } = await db.query(
+    `UPDATE users
+     SET ai_handoff_auto_resume_minutes = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING id, ai_handoff_auto_resume_minutes`,
+    [userId, minutes]
+  );
+  return rows[0] || null;
+}
+
 export async function findRoleAndLimits(userId) {
   const { rows } = await db.query(
     `SELECT r.role_code, r.role_name, ${PROFILE_LIMIT_COLUMNS},
@@ -208,9 +246,27 @@ export async function findPasswordHashByUserId(userId) {
 }
 
 export async function updatePasswordHash(userId, passwordHash) {
+  // Đổi mật khẩu thành công thì gỡ luôn cờ bắt buộc đổi — nếu không, nhân viên
+  // vừa được reset sẽ đổi xong vẫn bị requirePasswordChange chặn, kẹt vòng lặp.
   await db.query(
-    'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    `UPDATE users
+     SET password_hash = $1, must_change_password = FALSE, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`,
     [passwordHash, userId]
+  );
+}
+
+/**
+ * Thu hồi mọi refresh token còn hiệu lực của user (đổi/reset mật khẩu).
+ * @param {number|string} userId
+ * @param {string} [reason='password_changed']
+ */
+export async function revokeAllRefreshTokensForUser(userId, reason = 'password_changed') {
+  await db.query(
+    `UPDATE refresh_tokens
+     SET is_revoked = TRUE, revoked_at = NOW(), revoked_reason = $2
+     WHERE id_user = $1 AND is_revoked = FALSE`,
+    [userId, reason]
   );
 }
 
@@ -230,60 +286,6 @@ export async function findLegacyEmployees({ includeLimits = true } = {}) {
   return rows;
 }
 
-export async function createLegacyEmployee({ username, email, passwordHash, fullName, phone }) {
-  const client = await db.getClient();
-  try {
-    await client.query('BEGIN');
-
-    const existingUserResult = await client.query(
-      `SELECT id
-       FROM users
-       WHERE username = $1 OR email = $2
-       LIMIT 1`,
-      [username, email]
-    );
-    if (existingUserResult.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return { status: 'duplicate' };
-    }
-
-    const employeeRoleResult = await client.query(
-      `SELECT id
-       FROM roles
-       WHERE role_code = 'employee'
-       LIMIT 1`
-    );
-    if (employeeRoleResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { status: 'missing_role' };
-    }
-
-    const createResult = await client.query(
-      `INSERT INTO users (
-        username, email, password_hash, full_name, phone, status, id_role, created_at, updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, 'active', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING id, username, email, full_name, phone, status, created_at`,
-      [
-        username,
-        email,
-        passwordHash,
-        fullName || null,
-        phone || null,
-        employeeRoleResult.rows[0].id,
-      ]
-    );
-
-    await client.query('COMMIT');
-    return { status: 'created', employee: createResult.rows[0] };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 export async function updateLegacyEmployeeStatus(employeeId, status) {
   const { rows } = await db.query(
     `UPDATE users u
@@ -300,8 +302,9 @@ export async function updateLegacyEmployeeStatus(employeeId, status) {
 
 export async function resetLegacyEmployeePassword(employeeId, passwordHash) {
   const { rows } = await db.query(
+    // must_change_password = TRUE: mật khẩu tạm chỉ dùng để đăng nhập một lần.
     `UPDATE users u
-     SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+     SET password_hash = $1, must_change_password = TRUE, updated_at = CURRENT_TIMESTAMP
      FROM roles r
      WHERE u.id = $2
        AND u.id_role = r.id
@@ -342,7 +345,8 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
     `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
             p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
             p.daily_email_limit, p.monthly_email_limit,
-            p.daily_zalo_limit, p.monthly_zalo_limit
+            p.daily_zalo_limit, p.monthly_zalo_limit,
+            o.note, o.topup_config
      FROM orders o
      LEFT JOIN plans p ON o.plan_id = p.id
      WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'

@@ -28,8 +28,8 @@ class CampaignEmailSenderService {
     // State rate-limit in-memory cho email theo SMTP account.
     this.rateLimitStateMap = new Map();
     this.RATE_LIMIT_STATE_TTL_MS = 90 * 60 * 1000;
-    // Khoảng cách tối thiểu giữa các lần retry khi provider rate-limit (mặc định 24h, override bằng SENDGRID_LIMIT_RETRY_DELAY_MS).
-    this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS = 24 * 60 * 60 * 1000;
+    // Khoảng cách tối thiểu giữa các lần retry khi provider rate-limit.
+    this.SMTP_LIMIT_RETRY_DELAY_MIN_MS = 24 * 60 * 60 * 1000;
   }
 
   /**
@@ -130,20 +130,20 @@ class CampaignEmailSenderService {
    * Lấy cấu hình retry khi gặp giới hạn gửi từ provider SMTP.
    *
    * Luồng:
-   * 1. Đọc `SENDGRID_LIMIT_RETRY_DELAY_MS` (mặc định = `SENDGRID_LIMIT_RETRY_DELAY_MIN_MS`, 24 giờ).
-   * 2. Đọc `SENDGRID_LIMIT_MAX_RETRIES` — mặc định 50 lần nếu không set env.
+   * 1. Đọc `SMTP_LIMIT_RETRY_DELAY_MS` (mặc định = `SMTP_LIMIT_RETRY_DELAY_MIN_MS`, 24 giờ).
+   * 2. Đọc `SMTP_LIMIT_MAX_RETRIES` — mặc định 60 lần nếu không set env.
    *
    * @returns {{delayMs: number, maxRetries: number}}
    */
   resolveProviderRateLimitRetryConfig() {
     const configuredDelayMs = this.parsePositiveIntEnv(
-      'SENDGRID_LIMIT_RETRY_DELAY_MS',
-      this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS
+      'SMTP_LIMIT_RETRY_DELAY_MS',
+      this.SMTP_LIMIT_RETRY_DELAY_MIN_MS
     );
     return {
-      delayMs: Math.max(this.SENDGRID_LIMIT_RETRY_DELAY_MIN_MS, configuredDelayMs),
-      // Trần số lần thử lại khi SMTP/SendGrid báo rate-limit (override bằng SENDGRID_LIMIT_MAX_RETRIES).
-      maxRetries: this.parsePositiveIntEnv('SENDGRID_LIMIT_MAX_RETRIES', 60),
+      delayMs: Math.max(this.SMTP_LIMIT_RETRY_DELAY_MIN_MS, configuredDelayMs),
+      // Trần số lần thử lại khi SMTP/SMTP provider báo rate-limit (override bằng SMTP_LIMIT_MAX_RETRIES).
+      maxRetries: this.parsePositiveIntEnv('SMTP_LIMIT_MAX_RETRIES', 60),
     };
   }
 
@@ -474,7 +474,7 @@ class CampaignEmailSenderService {
         errorType: 'smtp_rate_limited_retry_scheduled',
         error: `Email chưa tới giờ retry, hệ thống giữ lịch theo mốc ${retryDelayLabel} (chiến dịch sẽ thử lại khi tới hạn).`,
         retryScheduledAt: retryScheduleGuard.scheduledAtIso,
-        retryAttemptCount: Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0,
+        retryAttemptCount: Number.parseInt(retryMeta?.smtpLimitRetryCount, 10) || 0,
       };
     }
 
@@ -714,7 +714,7 @@ class CampaignEmailSenderService {
       if (providerRateLimitError) {
         const retryConfig = this.resolveProviderRateLimitRetryConfig();
         const retryDelayLabel = this.formatRetryDelayLabel(retryConfig.delayMs);
-        const currentRetryCount = Number.parseInt(retryMeta?.sendgridLimitRetryCount, 10) || 0;
+        const currentRetryCount = Number.parseInt(retryMeta?.smtpLimitRetryCount, 10) || 0;
         const nextRetryCount = currentRetryCount + 1;
         const canRetry = nextRetryCount <= retryConfig.maxRetries;
 
@@ -727,7 +727,7 @@ class CampaignEmailSenderService {
             to: customer.email,
             status: 'failed',
             errorType: 'smtp_rate_limited_retry_scheduled',
-            error: `SendGrid đang giới hạn gửi; chiến dịch sẽ thử lại sau ${retryDelayLabel} (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
+            error: `SMTP provider đang giới hạn gửi; chiến dịch sẽ thử lại sau ${retryDelayLabel} (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
             retryScheduledAt: retryScheduleAt.toISOString(),
             retryAttemptCount: nextRetryCount,
           };
@@ -737,7 +737,7 @@ class CampaignEmailSenderService {
           to: customer.email,
           status: 'failed',
           errorType: 'smtp_rate_limited',
-          error: `SendGrid đang giới hạn gửi và đã vượt số lần retry (${retryConfig.maxRetries}).`,
+            error: `SMTP provider đang giới hạn gửi và đã vượt số lần retry (${retryConfig.maxRetries}).`,
         };
       }
 
@@ -852,6 +852,7 @@ class CampaignEmailSenderService {
           emailStep: logEmailStepForDb,
           fromAddress,
           brandDomain,
+          debitWallet: true,
         });
         // Cập nhật email_message vừa insert sang status bounced
         await campaignEmailSenderRepository.markEmailMessageBounced(bounceTrackingToken, bouncedAt, bounceReason);
@@ -895,6 +896,7 @@ class CampaignEmailSenderService {
           emailStep: logEmailStepForDb,
           fromAddress,
           brandDomain,
+          debitWallet: true,
         });
       } catch (logError) {
         console.error('[sendEmailToCustomer] Lỗi lưu log:', logError.message);

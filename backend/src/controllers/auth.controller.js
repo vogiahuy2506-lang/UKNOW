@@ -4,12 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
+import { sendSystemEmail, buildWelcomeEmail } from '../utils/systemEmail.util.js';
 import {
   findActiveUserByEmail,
   updatePasswordByEmail,
   activateUserByEmail,
   findMembershipsByEmployeeId,
   insertRefreshToken,
+  revokeAllRefreshTokensForUser,
 } from '../repositories/user/user.repository.js';
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -17,10 +19,9 @@ import { getSystemAuditContext } from '../utils/auditContext.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-const DEFAULT_EMPLOYEE_PASSWORD = 'digiso@2026';
-
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 const REFRESH_TOKEN_PATH = '/api/auth';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
 class AuthController {
   setRefreshTokenCookie(res, token, rememberMe = true) {
@@ -91,7 +92,17 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
 
-      logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+      await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+
+      // Gửi Welcome Email (async, không block response)
+      const { full_name, email: userEmail } = user;
+      sendSystemEmail(
+        buildWelcomeEmail({
+          fullName: full_name,
+          email: userEmail,
+          loginUrl: `${FRONTEND_URL}/login`,
+        })
+      ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
 
       return res.status(201).json({
         success: true,
@@ -146,7 +157,8 @@ class AuthController {
 
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
-                active_plan_id, password_hash, failed_login_attempts, locked_until
+                active_plan_id, password_hash, failed_login_attempts, locked_until,
+                must_change_password
          FROM users
          WHERE username = $1`,
         [username]
@@ -162,13 +174,12 @@ class AuthController {
 
       const user = result.rows[0];
 
-      // TEMPORARILY DISABLED: login lockout check
-      // if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      //   return res.status(403).json({
-      //     success: false,
-      //     message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
-      //   });
-      // }
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+        });
+      }
 
       if (user.status !== 'active') {
         return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
@@ -177,13 +188,12 @@ class AuthController {
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
       if (!isValidPassword) {
-        // TEMPORARILY DISABLED: failed attempt counter and lockout update
-        // const failedAttempts = (user.failed_login_attempts || 0) + 1;
-        // const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
-        // await client.query(
-        //   'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
-        //   [failedAttempts, lockedUntil, user.id]
-        // );
+        const failedAttempts = (user.failed_login_attempts || 0) + 1;
+        const lockedUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
+        await client.query(
+          'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
+          [failedAttempts, lockedUntil, user.id]
+        );
         await this.logLoginAttempt(client, user.id, user.email, 'failed', 'Mật khẩu không đúng', ipAddress, userAgent);
 
         return res.status(401).json({
@@ -290,7 +300,7 @@ class AuthController {
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until
          FROM users
-         WHERE email = $1`,
+         WHERE LOWER(email) = LOWER($1)`,
         [email]
       );
 
@@ -323,6 +333,16 @@ class AuthController {
           [username, email, passwordHash, name || null, picture || null]
         );
         user = insertResult.rows[0];
+
+        // Gửi Welcome Email cho user mới đăng ký qua Google (async)
+        const { full_name, email: userEmail } = user;
+        sendSystemEmail(
+          buildWelcomeEmail({
+            fullName: full_name,
+            email: userEmail,
+            loginUrl: `${FRONTEND_URL}/login`,
+          })
+        ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
       } else {
         user = result.rows[0];
 
@@ -535,6 +555,7 @@ class AuthController {
         return res.status(400).json({ success: false, message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa' });
       }
 
+      await revokeAllRefreshTokensForUser(updated.id, 'password_changed');
       await verificationService.markCodeAsUsed(record.id);
 
       return res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
@@ -545,19 +566,19 @@ class AuthController {
   }
 
   /**
-   * Kích hoạt tài khoản nhân viên — đặt mật khẩu mặc định và chuyển status sang active.
-   * POST /auth/activate — body: { token }
+   * Kích hoạt tài khoản nhân viên — đặt mật khẩu do user tự chọn và chuyển status sang active.
+   * POST /auth/activate — body: { token, password }
    */
   async activateAccount(req, res) {
     try {
-      const { token } = req.body;
+      const { token, password } = req.body;
 
       const invitation = await verificationService.findInvitationByToken(token);
       if (!invitation) {
         return res.status(400).json({ success: false, message: 'Link kích hoạt không hợp lệ hoặc đã hết hạn' });
       }
 
-      const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+      const passwordHash = await bcrypt.hash(password, 10);
 
       const activated = await activateUserByEmail(passwordHash, invitation.email);
 
@@ -574,6 +595,45 @@ class AuthController {
       });
     } catch (error) {
       console.error('Activate account error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Đổi mật khẩu khi bị yêu cầu (must_change_password = TRUE).
+   * POST /auth/change-password — body: { currentPassword, newPassword }
+   */
+  async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user.id;
+
+      const isValid = await bcrypt.compare(currentPassword, req.user.password_hash);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: 'Mật khẩu hiện tại không đúng' });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      const client = await db.getClient();
+      try {
+        await client.query(
+          `UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2`,
+          [passwordHash, userId]
+        );
+        await client.query(
+          `UPDATE refresh_tokens
+           SET is_revoked = TRUE, revoked_at = NOW(), revoked_reason = 'password_changed'
+           WHERE id_user = $1 AND is_revoked = FALSE`,
+          [userId]
+        );
+      } finally {
+        client.release();
+      }
+
+      return res.json({ success: true, message: 'Đổi mật khẩu thành công' });
+    } catch (error) {
+      console.error('Change password error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
@@ -618,6 +678,10 @@ class AuthController {
       subscriptionExpiresAt: expiresAt,
       subscriptionExpired: isExpired,
       isReturningCustomer: expiresAt !== null,
+      // Frontend dựa vào cờ này để ép mở form đổi mật khẩu ngay sau đăng nhập.
+      // Thiếu nó thì mọi request sau đó bị requirePasswordChange trả 403 mà
+      // người dùng không hiểu vì sao.
+      mustChangePassword: user.must_change_password === true,
     };
   }
 

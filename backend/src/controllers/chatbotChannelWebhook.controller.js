@@ -1,8 +1,10 @@
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -86,6 +88,50 @@ class ChatbotChannelWebhookController {
         message_type: 'text',
         external_id: messageId,
       });
+
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`[ZaloOA] Chatbot ${chatbotId} locked — message saved, no reply`);
+        return;
+      }
+
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'zalo_oa',
+        ownerUserId: chatbot.id_user,
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!rate.allowed) {
+        if (rate.shouldNotify) {
+          const sent = await zaloOAAdapter.sendReply({
+            conversationId: conv.id,
+            message: rate.staticReply,
+            channelId: channel.id,
+            externalId: senderId,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: rate.staticReply,
+              message_type: 'text',
+            });
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'zalo_oa',
+              ownerUserId: chatbot.id_user,
+              chatbotId,
+              senderKey: senderId,
+              reason: rate.reason,
+            });
+          }
+        }
+        return;
+      }
+
+      // Handoff: owner paused AI for this conversation — save visitor msg only, no AI.
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`[ZaloOA] AI paused for conversation ${conv.id} — skipping reply`);
+        return;
+      }
 
       // Route to chatbot AI
       const result = await chatRouterService.routeChatbotMessage({
@@ -196,6 +242,48 @@ class ChatbotChannelWebhookController {
           message_type: 'text',
           external_id: msg.messageId,
         });
+
+        const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+        if (await resourceIsLocked('chatbots', chatbotId)) {
+          console.log(`[Facebook] Chatbot ${chatbotId} locked — message saved, no reply`);
+          continue;
+        }
+
+        const rate = await chatbotRateLimitService.checkBeforeAi({
+          channel: 'facebook',
+          ownerUserId: chatbot.id_user,
+          chatbotId,
+          senderKey: msg.senderId,
+        });
+        if (!rate.allowed) {
+          if (rate.shouldNotify) {
+            const sent = await facebookAdapter.sendReply({
+              externalId: msg.senderId,
+              message: rate.staticReply,
+              channelId: channel.id,
+            });
+            if (sent?.success !== false) {
+              await chatbotChannelRepository.addMessage(conv.id, {
+                role: 'bot',
+                content: rate.staticReply,
+                message_type: 'text',
+              });
+              await chatbotRateLimitService.markRateLimitNotified({
+                channel: 'facebook',
+                ownerUserId: chatbot.id_user,
+                chatbotId,
+                senderKey: msg.senderId,
+                reason: rate.reason,
+              });
+            }
+          }
+          continue;
+        }
+
+        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
+          continue;
+        }
 
         // Route to chatbot AI
         const result = await chatRouterService.routeChatbotMessage({

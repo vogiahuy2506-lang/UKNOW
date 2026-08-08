@@ -430,10 +430,6 @@ export default function LearningPage() {
                   >
                     Xem báo giá & Đăng ký <FaArrowRight />
                   </button>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
-                    <FaCheckCircle className="text-green-500 w-5 h-5" />
-                    <span>Cam kết hoàn tiền 100%</span>
-                  </div>
                 </div>
               </AnimatedSection>
 
@@ -629,7 +625,7 @@ export default function LearningPage() {
                 Đăng Ký Ngay
               </button>
             </div>
-            <p className="mt-6 text-orange-200 text-sm font-medium">Hỗ trợ thanh toán trả góp 0% qua thẻ tín dụng</p>
+            <p className="mt-6 text-orange-200 text-sm font-medium">Thanh toán nhanh bằng quét mã QR</p>
           </AnimatedSection>
         </div>
       </div>

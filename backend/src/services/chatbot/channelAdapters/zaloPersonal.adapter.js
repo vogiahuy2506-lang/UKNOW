@@ -12,14 +12,22 @@
  * Note: This is a "bridge" because Zalo does NOT have an official public API
  * for personal accounts. This approach simulates interaction via browser automation.
  */
+import { ThreadType } from 'zca-js';
 import zaloPersonalRepository from '../../../repositories/chatbot/zaloPersonal.repository.js';
 import zaloAccountSessionService from '../../zalo/zaloAccountSession.service.js';
 import chatbotRepository from '../../../repositories/ai/chatbot.repository.js';
 import {
   buildPlaceholderGroupName,
   extractGroupNameFromApiResult,
+  isZaloGroupConversation,
   normalizeZaloGroupId,
+  resolveZaloGroupSendId,
 } from '../../../utils/zaloGroupName.util.js';
+import {
+  extractSendMsgId,
+  resolveConversationExternalId,
+  runInboxHandlerAfterSave,
+} from '../../../utils/zaloPersonalMessage.util.js';
 
 /**
  * Extract attachments from raw message data
@@ -129,6 +137,66 @@ class ZaloPersonalAdapter {
   // Map accountId → message handler
   static messageHandlers = new Map();
 
+  /** Recent bot outbound — prefer msgId; fall back to content within 120s. */
+  static recentBotOutbound = new Map();
+
+  static _pruneBotOutbound(cutoff = Date.now() - 120000) {
+    for (const [k, ts] of ZaloPersonalAdapter.recentBotOutbound) {
+      if (ts < cutoff) ZaloPersonalAdapter.recentBotOutbound.delete(k);
+    }
+  }
+
+  /**
+   * @param {number|string} accountId
+   * @param {{ msgId?: string|number|null, content?: string|null }} payload
+   */
+  static markBotOutbound(accountId, payload) {
+    const msgId = payload?.msgId != null && payload.msgId !== ''
+      ? String(payload.msgId)
+      : null;
+    const content = payload?.content != null
+      ? String(payload.content).trim().slice(0, 200)
+      : '';
+    const now = Date.now();
+    // Prefer msgId-only when available — avoid text false positives on repeated greetings
+    if (msgId) {
+      ZaloPersonalAdapter.recentBotOutbound.set(`id:${accountId}:${msgId}`, now);
+    } else if (content) {
+      ZaloPersonalAdapter.recentBotOutbound.set(`text:${accountId}:${content}`, now);
+    }
+    ZaloPersonalAdapter._pruneBotOutbound();
+  }
+
+  /**
+   * @param {number|string} accountId
+   * @param {{ msgId?: string|number|null, content?: string|null }} payload
+   * @returns {boolean}
+   */
+  static consumeBotOutbound(accountId, payload) {
+    const msgId = payload?.msgId != null && payload.msgId !== ''
+      ? String(payload.msgId)
+      : null;
+    const content = payload?.content != null
+      ? String(payload.content).trim().slice(0, 200)
+      : '';
+    const now = Date.now();
+
+    const tryConsume = (key) => {
+      const ts = ZaloPersonalAdapter.recentBotOutbound.get(key);
+      if (!ts) return false;
+      if (now - ts > 120000) {
+        ZaloPersonalAdapter.recentBotOutbound.delete(key);
+        return false;
+      }
+      ZaloPersonalAdapter.recentBotOutbound.delete(key);
+      return true;
+    };
+
+    if (msgId && tryConsume(`id:${accountId}:${msgId}`)) return true;
+    if (content && tryConsume(`text:${accountId}:${content}`)) return true;
+    return false;
+  }
+
   /**
    * Get the active Zalo personal session for a user.
    * @param {number} userId
@@ -177,17 +245,14 @@ class ZaloPersonalAdapter {
       return false;
     }
 
-    // Remove existing handler if any
+    // Detach previous boundFn from its listener (nếu còn) — tránh chồng nhiều .on('message')
     this.removeMessageHandler(accountId);
 
-    // Store handler
-    ZaloPersonalAdapter.messageHandlers.set(String(accountId), { userId, handler });
+    const accountKey = String(accountId);
+    const boundFn = async (message) => {
+      const stored = ZaloPersonalAdapter.messageHandlers.get(accountKey);
+      if (!stored?.handler) return;
 
-    // Attach to listener - listener may already be started by startAccountListenerSafely
-    // so we just attach the handler without calling start() again
-    listener.on('message', async (message) => {
-      const stored = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
-      if (stored?.handler) {
         // zca-js has TWO separate message types:
         // - UserMessage (type=0, ThreadType.User) = personal chat
         // - GroupMessage (type=1, ThreadType.Group) = group chat
@@ -266,7 +331,8 @@ class ZaloPersonalAdapter {
           // Meta info from UserMessage wrapper
           isSelf: message?.isSelf || false,
           type: message?.type,  // ThreadType: 0=personal, 1=group, 2=page
-          threadId: rawData.threadId || rawData.idTo,
+          // threadId lives on the wrapper (UserMessage/GroupMessage), not in data
+          threadId: message?.threadId || rawData.idTo || rawData.threadId,
           // Source context: personal or group
           isGroup: isGroup,
           is_group: isGroup,
@@ -286,29 +352,41 @@ class ZaloPersonalAdapter {
         };
         
         const contentStr = typeof msgData.content === 'string' ? msgData.content : JSON.stringify(msgData.content || '');
-        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} message from ${msgData.fromUid}: ${contentStr.substring(0, 100)} [msgType=${msgType}]`);
+        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} from ${msgData.fromUid} [msgType=${msgType}] len=${contentStr.length}`);
         
         // Add accountId to msgData for saveMessageToDatabase
         msgData.zaloSettingId = accountId;
         
-        // Save to database for unified inbox
-        console.log(`[ZaloPersonalAdapter] >>> Saving message to DB...`);
+        // Single inbound persist path (visitor or owner/agent). Then hand off to zaloInbox.
+        // Echo / unique-index skip must not run handler — would setAiPaused (D3+D4).
         try {
           const saveResult = await this.saveMessageToDatabase(stored.userId, accountId, msgData);
-          console.log(`[ZaloPersonalAdapter] >>> Save result:`, saveResult ? `saved with id ${saveResult}` : 'skipped/null');
+          runInboxHandlerAfterSave(
+            saveResult,
+            stored.handler,
+            msgData,
+            (err) => {
+              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
+            }
+          );
         } catch (dbErr) {
-          console.error(`[ZaloPersonalAdapter] >>> DB save error:`, dbErr.message, dbErr.stack);
+          console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
+          if (stored.handler) {
+            stored.handler(msgData).catch((err) => {
+              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
+            });
+          }
         }
-        
-        // Call custom handler if registered
-        if (stored.handler) {
-          console.log(`[ZaloPersonalAdapter] Calling handler for account ${accountId}...`);
-          stored.handler(msgData).catch((err) => {
-            console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
-          });
-        }
-      }
+    };
+
+    ZaloPersonalAdapter.messageHandlers.set(accountKey, {
+      userId,
+      handler,
+      listener,
+      boundFn,
     });
+
+    listener.on('message', boundFn);
 
     // Start the listener to receive messages (only if not already started)
     if (typeof listener.start === 'function') {
@@ -337,11 +415,35 @@ class ZaloPersonalAdapter {
   }
 
   /**
+   * True when inbox handler is bound to this exact listener instance.
+   * @param {string|number} accountId
+   * @param {object|null} listener
+   * @returns {boolean}
+   */
+  isHandlerAttachedTo(accountId, listener) {
+    if (!listener) return false;
+    const meta = ZaloPersonalAdapter.messageHandlers.get(String(accountId));
+    return !!(meta?.handler && meta.listener === listener && meta.boundFn);
+  }
+
+  /**
    * Remove message handler for an account.
    * @param {string|number} accountId
    */
   removeMessageHandler(accountId) {
     const key = String(accountId);
+    const prev = ZaloPersonalAdapter.messageHandlers.get(key);
+    if (prev?.boundFn && prev.listener) {
+      try {
+        if (typeof prev.listener.off === 'function') {
+          prev.listener.off('message', prev.boundFn);
+        } else if (typeof prev.listener.removeListener === 'function') {
+          prev.listener.removeListener('message', prev.boundFn);
+        }
+      } catch (err) {
+        console.warn(`[ZaloPersonalAdapter] Failed to detach message handler for ${key}:`, err.message);
+      }
+    }
     ZaloPersonalAdapter.messageHandlers.delete(key);
   }
 
@@ -354,18 +456,23 @@ class ZaloPersonalAdapter {
    */
   async saveMessageToDatabase(userId, zaloSettingId, msgData, resolvedGroupName = null) {
     const now = new Date().toISOString();
+    const content = msgData.content || msgData.message || msgData.msg || '';
 
-    // Skip self-messages (sent by own account) - use isSelf flag from wrapper
+    // Owner messages from Zalo app: save as agent (not drop). Skip echo of our own bot replies.
     if (msgData.isSelf === true) {
-      console.log(`[ZaloPersonalAdapter] Skipping self-message`);
-      return null;
+      if (ZaloPersonalAdapter.consumeBotOutbound(zaloSettingId, {
+        msgId: msgData.messageId || msgData.msgId,
+        content,
+      })) {
+        return { skippedEcho: true };
+      }
     }
 
     // isGroup is determined by zaloThreadType (message.type from zca-js)
     // detectedGroupId is the actual group ID from raw data
     const groupId = msgData.groupId || null;
     const isGroup = msgData.isGroup === true;
-    const { bare, prefixed } = normalizeZaloGroupId(groupId);
+    const { bare } = normalizeZaloGroupId(groupId);
 
     // For group messages, resolve group name if not provided
     let groupName = msgData.groupName || null;
@@ -375,9 +482,6 @@ class ZaloPersonalAdapter {
         if (session?.api) {
           const info = await session.api.getGroupInfo(bare);
           groupName = extractGroupNameFromApiResult(info, bare) || null;
-          if (groupName) {
-            console.log(`[ZaloPersonalAdapter] Resolved group name: ${bare} -> ${groupName}`);
-          }
         }
       } catch (err) {
         console.warn(`[ZaloPersonalAdapter] Failed to resolve group name for ${bare}:`, err.message);
@@ -388,9 +492,12 @@ class ZaloPersonalAdapter {
     // Otherwise fall back to raw data group name
     const finalGroupName = resolvedGroupName || groupName;
 
-    const externalId = isGroup
-      ? prefixed
-      : String(msgData.fromUid);
+    const externalId = resolveConversationExternalId({
+      isGroup,
+      groupId,
+      threadId: msgData.threadId,
+      fromUid: msgData.fromUid,
+    });
 
     // Determine display name:
     // - Group: always show just the group name (so it doesn't get overwritten by sender)
@@ -417,7 +524,7 @@ class ZaloPersonalAdapter {
           sender_name: msgData.senderName,
           sender_avatar: msgData.senderAvatar,
           is_group: isGroup,
-          group_id: isGroup ? groupId : null,
+          group_id: isGroup ? (bare || groupId) : null,
           group_name: isGroup ? finalGroupName : null,
         }),
         now,
@@ -430,10 +537,12 @@ class ZaloPersonalAdapter {
         ? JSON.parse(conversation.visitor_info)
         : (conversation.visitor_info || {});
 
+      const canonicalGroupId = isGroup ? (bare || groupId) : null;
+
       // Update if is_group status changed or group info is new
       const needsUpdate = (
         existingInfo.is_group !== isGroup ||
-        (isGroup && existingInfo.group_id !== groupId) ||
+        (isGroup && existingInfo.group_id !== canonicalGroupId) ||
         (isGroup && !existingInfo.group_name && finalGroupName)
       );
 
@@ -446,7 +555,7 @@ class ZaloPersonalAdapter {
             sender_name: msgData.senderName,
             sender_avatar: msgData.senderAvatar,
             is_group: isGroup,
-            group_id: isGroup ? groupId : null,
+            group_id: canonicalGroupId,
             group_name: isGroup ? finalGroupName : null,
           }
         );
@@ -461,35 +570,43 @@ class ZaloPersonalAdapter {
     if (incomingExternalId) {
       const existing = await zaloPersonalRepository.findMessageByExternalId(incomingExternalId, zaloSettingId);
       if (existing) {
-        console.log(`[ZaloPersonalAdapter] Message ${incomingExternalId} already saved (id=${existing.id}), skipping duplicate`);
         return { conversationId, messageId: existing.id, isDuplicate: true };
       }
     }
 
-    // Save message with attachments
-    console.log(`[ZaloPersonalAdapter] DEBUG: Saving msg with content="${msgData.content}", msg="${msgData.message}", fromUid=${msgData.fromUid}`);
+    const role = msgData.isSelf === true ? 'agent' : 'visitor';
     const msgRow = await zaloPersonalRepository.insertMessage({
       conversationId,
       userId,
       zaloSettingId,
-      role: 'visitor',
-      content: msgData.content || msgData.message || msgData.msg || '',
+      role,
+      content,
       externalId: msgData.messageId || msgData.msgId,
       externalTs: msgData.timestamp ? new Date(msgData.timestamp) : now,
       metadata: JSON.stringify({
-        _raw: msgData._raw,
         sender_name: msgData.senderName,
         sender_id: msgData.senderId,
         sender_avatar: msgData.senderAvatar,
         is_group: isGroup,
-        group_id: isGroup ? groupId : null,
+        group_id: isGroup ? (bare || groupId) : null,
         group_name: isGroup ? finalGroupName : null,
         msg_type: msgData.msgType,
         msg_type_raw: msgData.msgTypeRaw,
         attachments: msgData.attachments || [],
+        is_self: msgData.isSelf === true,
+        source: msgData.isSelf === true ? 'owner_zalo_app' : 'visitor',
       }),
       createdAt: msgData.timestamp ? new Date(msgData.timestamp) : now,
     });
+
+    // ON CONFLICT DO NOTHING → undefined row (race with sync / echo after restart)
+    if (!msgRow) {
+      return { conversationId, isDuplicate: true };
+    }
+
+    if (role === 'agent') {
+      await zaloPersonalRepository.setAiPaused(conversationId, true);
+    }
 
     return {
       conversationId,
@@ -505,7 +622,13 @@ class ZaloPersonalAdapter {
    * @param {number} params.userId
    * @param {boolean} params.forceReply - if true, send even for group messages (for manual inbox replies)
    */
-  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false }) {
+  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false, persist = true }) {
+    if (accountId != null) {
+      const { resourceIsLocked } = await import('../../../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('zalo_accounts', accountId)) {
+        return { success: false, error: 'Tài khoản Zalo đang bị khoá do hết hạn slot mua thêm', code: 'RESOURCE_LOCKED' };
+      }
+    }
     const session = await this.getSessionByAccountId(accountId);
     if (!session?.api) {
       return { success: false, error: 'No active Zalo personal session' };
@@ -515,54 +638,70 @@ class ZaloPersonalAdapter {
       const api = session.api;
       const payload = String(message || '').slice(0, 4000);
 
-      // Check if this is a group conversation
-      const isGroup = conversationInfo?.is_group;
-      let sendTarget = externalId;
+      // Nhóm: nhận diện từ visitor_info HOẶC external_id dạng group_<id>
+      // (thiếu is_group/group_id vẫn phải gửi đúng — nếu không Zalo trả "Tham số không hợp lệ")
+      const isGroup = isZaloGroupConversation({ externalId, conversationInfo });
 
       // IMPORTANT: For group messages, we should NOT auto-reply!
       // Group messages should be handled by the group chatbot, not personal chatbot
       // UNLESS forceReply is true (manual inbox reply)
       if (isGroup && !forceReply) {
-        console.log(`[ZaloPersonalAdapter] ⚠️ Blocked auto-reply to group message - group chatbots should be handled separately`);
-        console.log(`[ZaloPersonalAdapter] group_id=${conversationInfo?.group_id}, externalId=${externalId}`);
+        console.log(`[ZaloPersonalAdapter] Blocked auto-reply to group message`);
         return { success: false, error: 'Group messages should not trigger personal chatbot replies' };
       }
-      
-      // For personal messages, send to the sender directly
-      // If externalId is in group format, extract the actual sender ID
-      if (externalId?.startsWith('group_')) {
-        const parts = externalId.split('_');
+
+      let sendTarget = externalId;
+      let sendToGroup = false;
+
+      if (isGroup && forceReply) {
+        // grid của zca-js cần id nhóm thật — bỏ prefix nội bộ `group_`
+        sendTarget = resolveZaloGroupSendId(
+          conversationInfo?.group_id,
+          externalId
+        );
+        if (!sendTarget) {
+          return { success: false, error: 'Thiếu group id để gửi vào nhóm Zalo' };
+        }
+        sendToGroup = true;
+      } else if (externalId?.startsWith('group_')) {
+        // Legacy: external_id dạng group_{groupId}_{senderId} → gửi 1-1 cho sender
+        const parts = String(externalId).split('_');
         if (parts.length >= 3) {
-          sendTarget = parts.slice(2).join('_'); // Get sender ID after "group_{groupId}_{senderId}"
-          console.log(`[ZaloPersonalAdapter] Extracted personal sender ID from group format: ${sendTarget}`);
+          sendTarget = parts.slice(2).join('_');
         }
       }
 
-      // For group messages with forceReply, send to the GROUP instead of individual
-      if (isGroup && conversationInfo?.group_id) {
-        sendTarget = conversationInfo.group_id;
-        console.log(`[ZaloPersonalAdapter] Sending group message to group: ${sendTarget}`);
+      // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
+      // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
+      // Cùng cách gọi với đường chiến dịch (campaignZaloSender.service.js:2165).
+      const sent = sendToGroup
+        ? await api.sendMessage(payload, sendTarget, ThreadType.Group)
+        : await api.sendMessage(payload, sendTarget);
+      const outboundMsgId = extractSendMsgId(sent);
+      ZaloPersonalAdapter.markBotOutbound(session.accountId, {
+        msgId: outboundMsgId,
+        content: payload,
+      });
+
+      // Persist only when caller did not already save (AI path). Manual inbox sets persist=false.
+      if (persist) {
+        const now = new Date().toISOString();
+        const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
+
+        if (conversation) {
+          await zaloPersonalRepository.insertAgentMessage({
+            conversationId: conversation.id,
+            userId,
+            zaloSettingId: session.accountId,
+            content: message,
+            now,
+            externalId: outboundMsgId,
+          });
+          await zaloPersonalRepository.touchConversation(conversation.id, now);
+        }
       }
 
-      await api.sendMessage(payload, sendTarget);
-
-      // Also save the sent message to database
-      const now = new Date().toISOString();
-      const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
-
-      if (conversation) {
-        await zaloPersonalRepository.insertAgentMessage({
-          conversationId: conversation.id,
-          userId,
-          zaloSettingId: session.accountId,
-          content: message,
-          now,
-        });
-        await zaloPersonalRepository.touchConversation(conversation.id, now);
-      }
-
-      console.log(`[ZaloPersonalAdapter] Sent reply to uid ${externalId}`);
-      return { success: true };
+      return { success: true, msgId: outboundMsgId };
     } catch (err) {
       console.error('[ZaloPersonalAdapter] Failed to send reply:', err.message);
       return { success: false, error: err.message };
@@ -617,4 +756,5 @@ class ZaloPersonalAdapter {
   }
 }
 
+export { ZaloPersonalAdapter };
 export default new ZaloPersonalAdapter();

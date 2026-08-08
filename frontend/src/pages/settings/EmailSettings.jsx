@@ -10,32 +10,21 @@ import {
   HiOutlineReply,
   HiOutlineRefresh,
   HiOutlineSparkles,
-  HiOutlineGlobe,
   HiOutlineLockClosed,
   HiOutlineQuestionMarkCircle,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
-  HiOutlinePaperAirplane,
   HiOutlineTerminal,
   HiOutlineUser,
   HiOutlineDesktopComputer,
   HiOutlineInformationCircle,
   HiOutlineShieldCheck,
+  HiOutlineGlobe,
 } from 'react-icons/hi';
 
-const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'digiso.vn';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const EMAIL_MODES = {
-  platform: {
-    labelKey: 'emailSettings.modePlatform',
-    descKey: 'emailSettings.modePlatformDesc',
-    Icon: HiOutlineGlobe,
-    badgeCls: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    cardCls: 'border-emerald-500 bg-emerald-50/60',
-    recommended: true,
-    tabColor: 'emerald',
-  },
   smtp: {
     labelKey: 'emailSettings.modeSmtp',
     descKey: 'emailSettings.modeSmtpDesc',
@@ -46,11 +35,6 @@ const EMAIL_MODES = {
     tabColor: 'amber',
   },
 };
-
-const TABS = [
-  { key: 'platform', labelKey: 'emailSettings.tabPlatformDefault', Icon: HiOutlineGlobe },
-  { key: 'smtp', labelKey: 'emailSettings.tabSmtpRieng', Icon: HiOutlineLockClosed },
-];
 
 // ── SectionCard ───────────────────────────────────────────────────────────────
 const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' }) => {
@@ -240,7 +224,7 @@ const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
           <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-            <HiOutlinePaperAirplane className="w-5 h-5 text-orange-600" />
+            <HiOutlineMail className="w-5 h-5 text-orange-600" />
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-800">{t('emailSettings.sendTestEmail')}</h3>
@@ -308,7 +292,7 @@ const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
               </>
             ) : (
               <>
-                <HiOutlinePaperAirplane className="h-4 w-4" />
+                <HiOutlineMail className="h-4 w-4" />
                 {t('emailSettings.sendTestEmail')}
               </>
             )}
@@ -326,7 +310,6 @@ function normalizeItem(raw) {
     name: item.name || '',
     email: item.email || '',
     replyTo: item.replyTo || item.reply_to || '',
-    platformPrefix: item.platformPrefix || item.platform_prefix || 'no-reply',
     dailySentCount: item.dailySentCount ?? item.daily_sent_count ?? 0,
     totalSentCount: item.totalSentCount ?? item.total_sent_count ?? 0,
     isVerified: item.isVerified ?? item.is_verified ?? false,
@@ -335,7 +318,7 @@ function normalizeItem(raw) {
     createdBy: item.creator_name ? { name: item.creator_name } : null,
     createdAt: item.createdAt || item.created_at || null,
     updatedAt: item.updatedAt || item.updated_at || null,
-    emailMode: item.emailMode || item.email_mode || 'platform',
+    emailMode: item.emailMode || item.email_mode || 'smtp',
     smtpHost: item.smtpHost || item.smtp_host || '',
     smtpPort: item.smtpPort || item.smtp_port || '',
     smtpUsername: item.smtpUsername || item.smtp_username || '',
@@ -351,7 +334,6 @@ const EmailSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEmailId, setSelectedEmailId] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
-  const [activeTab, setActiveTab] = useState('platform');
 
   // Modal state
   const [showTestEmailModal, setShowTestEmailModal] = useState(false);
@@ -361,7 +343,7 @@ const EmailSettings = () => {
   const emptyForm = {
     name: '',
     replyTo: '',
-    emailMode: 'platform',
+    emailMode: 'smtp',
     platformPrefix: '',
     smtpHost: '',
     smtpPort: '',
@@ -375,21 +357,16 @@ const EmailSettings = () => {
   const [isDeletingId, setIsDeletingId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const isSmtpMode = formData.emailMode === 'smtp';
-
+  const isSmtpMode = true;
   const isValidForm = useMemo(() => {
     const nameOk = String(formData.name || '').trim().length > 0;
     const replyOk = EMAIL_REGEX.test(String(formData.replyTo || '').trim());
-
-    if (isSmtpMode) {
-      const hostOk = String(formData.smtpHost || '').trim().length > 0;
-      const portOk = String(formData.smtpPort || '').trim().length > 0;
-      const usernameOk = String(formData.smtpUsername || '').trim().length > 0;
-      const passwordOk = String(formData.smtpPassword || '').trim().length > 0;
-      return nameOk && replyOk && hostOk && portOk && usernameOk && passwordOk;
-    }
-    return nameOk && replyOk;
-  }, [formData, isSmtpMode]);
+    const hostOk = String(formData.smtpHost || '').trim().length > 0;
+    const portOk = String(formData.smtpPort || '').trim().length > 0;
+    const usernameOk = String(formData.smtpUsername || '').trim().length > 0;
+    const passwordOk = String(formData.smtpPassword || '').trim().length > 0;
+    return nameOk && replyOk && hostOk && portOk && usernameOk && passwordOk;
+  }, [formData]);
 
   const fetchEmailSettings = useCallback(async () => {
     try {
@@ -444,28 +421,17 @@ const EmailSettings = () => {
       setFormData({
         name: normalized.name || '',
         replyTo: normalized.replyTo || normalized.reply_to || '',
-        emailMode: normalized.emailMode || 'platform',
-        platformPrefix: normalized.platformPrefix || '',
+        emailMode: normalized.emailMode || 'smtp',
+        platformPrefix: '',
         smtpHost: normalized.smtpHost || '',
         smtpPort: normalized.smtpPort || '',
         smtpUsername: normalized.smtpUsername || '',
         smtpPassword: normalized.smtpPassword || '',
       });
-      setActiveTab(normalized.emailMode || 'platform');
       setFormErrors({});
     } catch (error) {
       toast.error(t('emailSettings.loadDetailFailed'));
     }
-  };
-
-  const handleModeChange = (mode) => {
-    setFormData((prev) => ({
-      ...prev,
-      emailMode: mode,
-      ...(mode === 'smtp' ? { smtpHost: prev.smtpHost || '', smtpPort: prev.smtpPort || '', smtpUsername: prev.smtpUsername || '', smtpPassword: prev.smtpPassword || '' } : { smtpHost: '', smtpPort: '', smtpUsername: '', smtpPassword: '' }),
-    }));
-    setActiveTab(mode);
-    setFormErrors({});
   };
 
   const validateForm = () => {
@@ -476,17 +442,6 @@ const EmailSettings = () => {
     if (!name) errors.name = t('emailSettings.nameRequired');
     if (!replyTo) errors.replyTo = t('emailSettings.replyToRequired');
     else if (!EMAIL_REGEX.test(replyTo)) errors.replyTo = t('emailSettings.invalidReplyTo');
-
-    if (!isSmtpMode) {
-      const prefix = String(formData.platformPrefix || '').trim();
-      if (!prefix) {
-        errors.platformPrefix = t('emailSettings.platformPrefixRequired') || 'Email prefix là bắt buộc';
-      } else if (!/^[a-zA-Z0-9._-]+$/.test(prefix)) {
-        errors.platformPrefix = t('emailSettings.platformPrefixInvalid') || 'Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang';
-      } else if (prefix.length > 50) {
-        errors.platformPrefix = t('emailSettings.platformPrefixTooLong') || 'Tối đa 50 ký tự';
-      }
-    }
 
     if (isSmtpMode) {
       if (!String(formData.smtpHost || '').trim()) errors.smtpHost = t('emailSettings.smtpHostRequired');
@@ -609,7 +564,7 @@ const EmailSettings = () => {
         <div className="divide-y divide-slate-100">
           {emailSettings.map((item) => {
             const isActive = selectedEmailId === item.id && !isAddingNew;
-            const modeCfg = EMAIL_MODES[item.emailMode] || EMAIL_MODES.platform;
+            const modeCfg = EMAIL_MODES[item.emailMode] || EMAIL_MODES.smtp;
             return (
               <div
                 key={item.id}
@@ -668,12 +623,9 @@ const EmailSettings = () => {
   };
 
   const renderFromPreview = () => {
-    const modeCfg = EMAIL_MODES[formData.emailMode] || EMAIL_MODES.platform;
+    const modeCfg = EMAIL_MODES[formData.emailMode] || EMAIL_MODES.smtp;
     const Icon = modeCfg.Icon;
-    const previewEmail =
-      formData.emailMode === 'platform'
-        ? `${formData.platformPrefix || 'no-reply'}@${PLATFORM_DOMAIN}`
-        : String(formData.replyTo || '').trim();
+    const previewEmail = String(formData.replyTo || '').trim();
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
         <span className="inline-flex items-center gap-2 text-slate-700">
@@ -691,7 +643,7 @@ const EmailSettings = () => {
   const renderForm = () => {
     const title = isAddingNew ? t('emailSettings.addNewEmail') : t('emailSettings.editEmail');
     const hint = isAddingNew ? t('emailSettings.addNewEmailHint') : t('emailSettings.editEmailHint');
-    const modeCfg = EMAIL_MODES[formData.emailMode] || EMAIL_MODES.platform;
+    const modeCfg = EMAIL_MODES[formData.emailMode] || EMAIL_MODES.smtp;
     const ModeIcon = modeCfg.Icon;
 
     return (
@@ -725,27 +677,12 @@ const EmailSettings = () => {
           ) : null}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const tabColor = EMAIL_MODES[tab.key]?.tabColor || 'orange';
-            const activeClasses = {
-              orange: 'bg-orange-100 text-orange-700 shadow-sm',
-              emerald: 'bg-emerald-100 text-emerald-700 shadow-sm',
-            }[tabColor] || 'bg-white text-slate-700 shadow-sm';
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => handleModeChange(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${isActive ? activeClasses : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                <tab.Icon className="h-4 w-4" />
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
+        {/* SMTP Mode Badge */}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+            <HiOutlineLockClosed className="mr-1 h-3.5 w-3.5" />
+            {t('emailSettings.modeSmtp')}
+          </span>
         </div>
 
         {/* Section 1: Thong tin nguoi gui */}
@@ -782,31 +719,6 @@ const EmailSettings = () => {
               />
               {formErrors.replyTo && <p className="text-xs text-red-600">{formErrors.replyTo}</p>}
             </div>
-            {!isSmtpMode && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">
-                  {t('emailSettings.platformPrefix') || 'Email prefix'}
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={formData.platformPrefix}
-                    onChange={(event) => setFormData((prev) => ({ ...prev, platformPrefix: event.target.value.replace(/[^a-zA-Z0-9._-]/g, '') }))}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                      formErrors.platformPrefix ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
-                    }`}
-                    placeholder="no-reply"
-                    maxLength={50}
-                  />
-                  <span className="text-sm text-slate-500 shrink-0">@{PLATFORM_DOMAIN}</span>
-                </div>
-                {formErrors.platformPrefix ? (
-                  <p className="text-xs text-red-600">{formErrors.platformPrefix}</p>
-                ) : (
-                  <p className="text-xs text-slate-400">{t('emailSettings.platformPrefixHint') || 'Chỉ dùng chữ, số, dấu chấm, gạch dưới, gạch ngang'}</p>
-                )}
-              </div>
-            )}
           </div>
         </SectionCard>
 
@@ -912,7 +824,7 @@ const EmailSettings = () => {
                 onClick={() => setShowTestEmailModal(true)}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                <HiOutlinePaperAirplane className="h-4 w-4" />
+                <HiOutlineMail className="h-4 w-4" />
                 {t('emailSettings.sendTestEmail')}
               </button>
             )}

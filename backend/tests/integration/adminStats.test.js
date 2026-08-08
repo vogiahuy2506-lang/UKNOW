@@ -109,7 +109,7 @@ describe('KPI overview', () => {
     const plan = await createPlan({ code: 'p' });
     const paid = await createUser({ role: 'user', username: 'paid1' });
     await assignPlanToUser(paid.id, plan.id);
-    await createUser({ role: 'user', username: 'free1' });
+    await createUser({ role: 'user', username: 'free1', withPlan: false });
 
     const t = await loginAs(admin);
     const res = await request(app).get('/api/admin/stats/overview').set('Authorization', `Bearer ${t}`);

@@ -1,4 +1,5 @@
 import {
+  deleteModelsByIds,
   listAiModels,
   markGoogleModelsMissing,
   setOnlyEnabledModel,
@@ -205,6 +206,17 @@ export async function syncModelsFromGoogle() {
   } while (pageToken);
 
   const markedUnsupported = await markGoogleModelsMissing({ seenModelIds, seenAt });
+
+  // Dọn rác đã lỡ tồn trong DB từ trước: các model preview/experimental/
+  // deep-research/... mà bộ lọc sync giờ từ chối, nhưng markGoogleModelsMissing
+  // chỉ đánh dấu tắt chứ không xoá. Chỉ xoá theo tên (isRelevantChatModel=false)
+  // nên không đụng model gemini chat thật; deleteModelsByIds tự chừa model đang bật.
+  const existing = await listAiModels({});
+  const irrelevantIds = existing
+    .map((row) => row.modelId)
+    .filter((id) => id && !isRelevantChatModel(id));
+  const deletedIrrelevant = await deleteModelsByIds(irrelevantIds);
+
   invalidateCatalogCache();
 
   return {
@@ -214,5 +226,6 @@ export async function syncModelsFromGoogle() {
     skippedUnsupported,
     skippedIrrelevant,
     markedUnsupported,
+    deletedIrrelevant,
   };
 }

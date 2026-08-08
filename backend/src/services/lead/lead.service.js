@@ -158,6 +158,13 @@ class LeadService {
     if (landingPageSlug) {
       const lp = await landingPageRepository.findPublishedBySlug(landingPageSlug);
       if (lp && lp.idUser) {
+        const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+        if (await resourceIsLocked('landing_pages', lp.id)) {
+          const err = new Error('Landing page tạm ngừng');
+          err.statusCode = 503;
+          err.code = 'RESOURCE_LOCKED';
+          throw err;
+        }
         idUser = lp.idUser;
       }
     }

@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { HiOutlineExclamation, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
-import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
+import { getAiBillingBlockState, isUnlimitedPlanLimit } from '../../utils/subscriptionStatus.util.js';
 
-const DISMISS_KEY = 'founder_ai_credit_warning_dismissed';
+const DISMISS_KEY_PREFIX = 'founder_ai_credit_warning_dismissed:';
 
 const isAdminUser = (user) => {
   const role = String(user?.roleCode || user?.role || '').trim().toLowerCase();
@@ -17,89 +17,179 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(number) ? number : 0;
 };
 
-const CreditWarningBanner = () => {
+const walletRemaining = (addons, field) => {
+  if (!addons || typeof addons !== 'object') return 0;
+  return Math.max(0, toFiniteNumber(addons[field]?.remaining));
+};
+
+/**
+ * Build alert for a single quota metric.
+ * Yellow/red only when wallet remaining is 0 (null addons = 0).
+ */
+const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
+  if (isUnlimitedPlanLimit(limit)) return null;
+  const limitN = toFiniteNumber(limit);
+  if (limitN <= 0) return null;
+  if (remainingWallet > 0) return null;
+
+  const usedN = Math.max(0, toFiniteNumber(used));
+  const ratio = usedN / limitN;
+  if (ratio < 0.8) return null;
+
+  const leftover = Math.max(0, Math.ceil(limitN - usedN));
+  const remainingPercent = Math.max(0, Math.round((1 - ratio) * 100));
+  const resource = t(`creditBanner.resources.${resourceKey}`);
+  const isEmpty = ratio >= 1;
+
+  return {
+    metric: key,
+    kind: isEmpty ? `${key}-empty` : `${key}-low`,
+    isEmpty,
+    ratio,
+    message: isEmpty
+      ? t('creditBanner.empty', { resource })
+      : t('creditBanner.low', {
+          resource,
+          remaining: leftover.toLocaleString(),
+          percent: remainingPercent,
+        }),
+    used: usedN,
+    limit: limitN,
+  };
+};
+
+const CreditWarningBanner = ({ placement = 'page' }) => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const activeContext = useAuthStore((state) => state.activeContext);
   const aiCredits = useAuthStore((state) => state.aiCredits);
+  const sendUsage = useAuthStore((state) => state.sendUsage);
+  const addons = useAuthStore((state) => state.addons);
   const billingStatus = useAuthStore((state) => state.billingStatus);
-  const [isDismissed, setIsDismissed] = useState(() => {
-    try {
-      return sessionStorage.getItem(DISMISS_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [dismissedMetric, setDismissedMetric] = useState(null);
+  const isEmployeeCtx = activeContext?.type === 'employee';
 
   const alertState = useMemo(() => {
     if (isAdminUser(user)) return null;
 
     if (billingStatus?.isFullyExpired) {
       return {
+        metric: 'expired',
         kind: 'expired',
         isEmpty: true,
+        ratio: 2,
         message: t('creditBanner.expired'),
-        cta: t('creditBanner.viewPricing'),
       };
     }
 
-    const aiBlock = getAiBillingBlockState({ isAdmin: false, billingStatus, aiCredits });
+    const aiWallet = walletRemaining(addons, 'aiCredits');
+    const aiBlock = getAiBillingBlockState({
+      isAdmin: false,
+      billingStatus,
+      aiCredits,
+      walletRemaining: aiWallet,
+    });
+
+    const candidates = [];
+
     if (aiBlock?.type === 'credits') {
-      const limit = toFiniteNumber(aiCredits?.limit);
-      const used = Math.max(0, toFiniteNumber(aiCredits?.used));
-      return {
+      candidates.push({
+        metric: 'ai',
         kind: 'credits-empty',
         isEmpty: true,
-        message: t('creditBanner.empty'),
-        cta: t('creditBanner.upgrade'),
-        used,
-        limit,
-      };
+        ratio: 1,
+        message: t('creditBanner.empty', { resource: t('creditBanner.resources.ai') }),
+      });
+    } else {
+      const aiLow = metricAlert({
+        key: 'ai',
+        used: aiCredits?.used,
+        limit: aiCredits?.limit,
+        remainingWallet: aiWallet,
+        t,
+        resourceKey: 'ai',
+      });
+      if (aiLow) candidates.push(aiLow);
     }
 
-    const limit = toFiniteNumber(aiCredits?.limit);
-    if (limit <= 0) return null;
+    // Email/Zalo usage counts are scoped to the logged-in userId, not billing
+    // owner — only meaningful in self context.
+    if (!isEmployeeCtx) {
+      const emailAlert = metricAlert({
+        key: 'email',
+        used: sendUsage?.email?.used,
+        limit: sendUsage?.email?.limit,
+        remainingWallet: walletRemaining(addons, 'emails'),
+        t,
+        resourceKey: 'email',
+      });
+      if (emailAlert) candidates.push(emailAlert);
 
-    const used = Math.max(0, toFiniteNumber(aiCredits?.used));
-    const ratio = used / limit;
-    if (ratio < 0.8) return null;
+      const zaloAlert = metricAlert({
+        key: 'zalo',
+        used: sendUsage?.zalo?.used,
+        limit: sendUsage?.zalo?.limit,
+        remainingWallet: walletRemaining(addons, 'zaloMessages'),
+        t,
+        resourceKey: 'zalo',
+      });
+      if (zaloAlert) candidates.push(zaloAlert);
+    }
 
-    const remaining = Math.max(0, Math.ceil(limit - used));
-    const remainingPercent = Math.max(0, Math.round((1 - ratio) * 100));
-    return {
-      kind: 'credits-low',
-      isEmpty: false,
-      message: t('creditBanner.low', {
-        remaining: remaining.toLocaleString(),
-        percent: remainingPercent,
-      }),
-      cta: t('creditBanner.upgrade'),
-      used,
-      limit,
-      remaining,
-      remainingPercent,
-    };
-  }, [aiCredits, billingStatus, t, user]);
+    if (candidates.length === 0) return null;
+
+    candidates.sort((a, b) => {
+      if (a.isEmpty !== b.isEmpty) return a.isEmpty ? -1 : 1;
+      return (b.ratio || 0) - (a.ratio || 0);
+    });
+    return candidates[0];
+  }, [addons, aiCredits, billingStatus, isEmployeeCtx, sendUsage, t, user]);
 
   useEffect(() => {
-    if (alertState?.isEmpty) setIsDismissed(false);
-  }, [alertState?.isEmpty, alertState?.kind]);
+    if (!alertState?.metric || alertState.isEmpty) {
+      setDismissedMetric(null);
+      return;
+    }
+    try {
+      if (sessionStorage.getItem(`${DISMISS_KEY_PREFIX}${alertState.metric}`) === '1') {
+        setDismissedMetric(alertState.metric);
+      } else {
+        setDismissedMetric(null);
+      }
+    } catch {
+      setDismissedMetric(null);
+    }
+  }, [alertState?.isEmpty, alertState?.metric]);
 
-  if (!alertState || (!alertState.isEmpty && isDismissed)) return null;
+  if (!alertState || (!alertState.isEmpty && dismissedMetric === alertState.metric)) return null;
 
   const handleDismiss = () => {
-    if (alertState.isEmpty) return;
+    if (alertState.isEmpty || !alertState.metric) return;
     try {
-      sessionStorage.setItem(DISMISS_KEY, '1');
+      sessionStorage.setItem(`${DISMISS_KEY_PREFIX}${alertState.metric}`, '1');
     } catch {
       // ignore storage failures
     }
-    setIsDismissed(true);
+    setDismissedMetric(alertState.metric);
   };
+
+  const isComposer = placement === 'composer';
+  const showBuyTopup = alertState.kind !== 'expired' && !isEmployeeCtx;
+  const primaryHref = (alertState.kind === 'expired' || isEmployeeCtx)
+    ? '/pricing'
+    : '/app/billing';
+  const primaryCta = (alertState.kind === 'expired' || isEmployeeCtx)
+    ? t('creditBanner.viewPricing')
+    : t('creditBanner.goBilling');
 
   return (
     <div
-      className={`sticky top-0 z-20 mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-sm ${
+      className={`flex items-center justify-between gap-3 border shadow-sm ${
+        isComposer
+          ? 'mb-2 rounded-xl px-3 py-2 text-xs'
+          : 'sticky top-0 z-20 mb-4 rounded-md px-3 py-2 text-sm'
+      } ${
         alertState.isEmpty
           ? 'border-red-200 bg-red-50 text-red-800'
           : 'border-amber-200 bg-amber-50 text-amber-900'
@@ -108,21 +198,34 @@ const CreditWarningBanner = () => {
     >
       <div className="flex min-w-0 items-center gap-2">
         <HiOutlineExclamation
-          className={`h-5 w-5 shrink-0 ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
+          className={`shrink-0 ${isComposer ? 'h-4 w-4' : 'h-5 w-5'} ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
         />
         <span className="min-w-0">{alertState.message}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {showBuyTopup && (
+          <button
+            type="button"
+            onClick={() => navigate('/app/topup')}
+            className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
+              alertState.isEmpty
+                ? 'border border-red-600 bg-white text-red-700 hover:bg-red-50'
+                : 'border border-amber-500 bg-white text-amber-800 hover:bg-amber-50'
+            }`}
+          >
+            {t('creditBanner.buyTopup')}
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => navigate('/pricing')}
+          onClick={() => navigate(primaryHref)}
           className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
             alertState.isEmpty
               ? 'bg-red-600 text-white hover:bg-red-700'
               : 'bg-amber-500 text-white hover:bg-amber-600'
           }`}
         >
-          {alertState.cta}
+          {primaryCta}
         </button>
         {!alertState.isEmpty && (
           <button

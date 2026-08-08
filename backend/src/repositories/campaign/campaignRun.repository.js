@@ -511,13 +511,20 @@ class CampaignRunRepository {
     return result.rows[0] || null;
   }
 
-  async insertRunTx(client, { campaignId, scheduleId, runType, runMetadata }) {
+  async insertRunTx(client, { campaignId, scheduleId, runType, runMetadata, triggeredBy = null }) {
     const result = await client.query(
       `INSERT INTO campaign_runs
-         (id_campaign, id_schedule, run_type, status, started_at, run_metadata)
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+         (id_campaign, id_schedule, run_type, status, started_at, run_metadata, triggered_by)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6)
          RETURNING *`,
-      [campaignId, scheduleId, runType, 'running', JSON.stringify(runMetadata)]
+      [
+        campaignId,
+        scheduleId,
+        runType,
+        'running',
+        JSON.stringify(runMetadata),
+        triggeredBy != null ? Number(triggeredBy) : null,
+      ]
     );
     return result.rows[0];
   }

@@ -15,8 +15,8 @@ function handleError(res, err) {
 
 export async function list(_req, res) {
   try {
-    const models = await adminAiModelsService.listModels();
-    return res.json({ success: true, data: models });
+    const result = await adminAiModelsService.listModels();
+    return res.json({ success: true, data: result });
   } catch (err) {
     return handleError(res, err);
   }

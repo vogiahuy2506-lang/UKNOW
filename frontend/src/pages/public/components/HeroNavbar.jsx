@@ -93,15 +93,15 @@ export default function HeroNavbar() {
 
   return (
     <div className="flex justify-center pt-4 sm:pt-6 px-3 sm:px-4">
-      <div className="bg-white rounded-full shadow-sm border border-neutral-200 pl-3 pr-2 py-2 w-full max-w-[760px] relative">
+      <div className="bg-white rounded-full shadow-sm border border-neutral-200 pl-3 pr-3 py-2 w-full max-w-[760px] relative">
         <div className="flex items-center gap-3">
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center gap-2">
             <img src={founderaiLogo} alt="Founder AI" className="w-8 h-8 object-contain" />
           </Link>
 
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-6 flex-1">
+          {/* Desktop links — expands to fill center */}
+          <div className="hidden md:flex items-center gap-6 flex-1 justify-center">
             {navLinks.map(({ label, to }) => (
               <Link
                 key={label}

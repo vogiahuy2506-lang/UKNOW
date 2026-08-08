@@ -67,21 +67,40 @@ describe('POST /api/payments/create-payment', () => {
     expect(res.status).toBe(401);
   });
 
-  it('thiếu planCode hoặc userEmail → 400', async () => {
+  it('thiếu planCode → 400', async () => {
     const user = await createUser({ username: 'buyer1' });
     const token = await loginAs(user);
 
     const r1 = await request(app)
       .post('/api/payments/create-payment')
       .set('Authorization', `Bearer ${token}`)
-      .send({ planCode: 'basic' });
+      .send({});
     expect(r1.status).toBe(400);
+  });
 
-    const r2 = await request(app)
+  it('bỏ qua userEmail từ body — luôn dùng email của user đăng nhập', async () => {
+    const user = await createUser({ username: 'buyer-email' });
+    const token = await loginAs(user);
+    const plan = await createPlan({ code: 'email_lock', price: 99000 });
+
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'data:image/png;base64,FAKE',
+      checkoutUrl: 'https://pay.payos.vn/web/fake-id',
+    });
+
+    const res = await request(app)
       .post('/api/payments/create-payment')
       .set('Authorization', `Bearer ${token}`)
-      .send({ userEmail: 'x@test.local' });
-    expect(r2.status).toBe(400);
+      .send({ planCode: 'email_lock', userEmail: 'victim@attacker.local' });
+
+    expect(res.status).toBe(200);
+    const order = await db.query(
+      `SELECT user_email, user_id FROM orders WHERE order_code = $1`,
+      [res.body.result.orderCode]
+    );
+    expect(order.rows[0].user_email).toBe(user.email);
+    expect(Number(order.rows[0].user_id)).toBe(Number(user.id));
+    expect(Number(plan.id)).toBeTruthy();
   });
 
   it('planCode không tồn tại → 500 (Gói không tồn tại)', async () => {
@@ -142,6 +161,8 @@ describe('POST /api/payments/create-payment', () => {
     expect(payosArgs.description).toMatch(/^TT pro_test/);
     expect(payosArgs.returnUrl).toContain('/payment-success');
     expect(payosArgs.cancelUrl).toContain('/checkout');
+    expect(payosArgs.expiredAt).toEqual(expect.any(Number));
+    expect(payosArgs.expiredAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
 
     // Order được persist với status pending + plan_id + user_id
     const order = await db.query(
@@ -151,14 +172,26 @@ describe('POST /api/payments/create-payment', () => {
     );
     expect(order.rows[0]).toMatchObject({
       status: 'pending',
-      amount: '199000',
       user_email: user.email,
     });
+    // So bằng Number, KHÔNG so chuỗi.
+    //
+    // orders.amount trên production là numeric(12,2) nên pg trả "199000.00";
+    // bootstrap trước đây khai BIGINT nên trả "199000". Bài test cũ chỉ xanh vì
+    // hai schema lệch nhau — nó SAI với production suốt từ đầu. Sau khi bootstrap
+    // được sửa cho khớp (PLAN_SCHEMA_BUOC2 Loại C), lệch này lộ ra.
+    //
+    // Code thật cũng so bằng Number (payment.service.js, payosReconcile.service.js),
+    // nên so kiểu này khớp với hành vi thật và miễn nhiễm với định dạng chuỗi.
+    expect(Number(order.rows[0].amount)).toBe(199000);
     expect(Number(order.rows[0].plan_id)).toBe(Number(plan.id));
     expect(Number(order.rows[0].user_id)).toBe(Number(user.id));
   });
 
-  it('PayOS throw lỗi → 500, order vẫn còn pending (không rollback)', async () => {
+  it('PayOS throw lỗi → 502 và KHÔNG để lại đơn pending mồ côi', async () => {
+    // Trước đây đơn được commit trước khi gọi PayOS, lỗi là để lại đơn `pending`
+    // không bao giờ có link — nguồn của 6 đơn mồ côi trong dữ liệu tháng 5/2026.
+    // Nay xoá đơn khi create thất bại, giống đường top-up và gói tự chọn.
     const user = await createUser({ username: 'buyer5' });
     const token = await loginAs(user);
     await createPlan({ code: 'std', price: 50000 });
@@ -170,13 +203,103 @@ describe('POST /api/payments/create-payment', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ planCode: 'std', userEmail: user.email });
 
-    expect(res.status).toBe(500);
-    // createOrder chạy trước payos.create → order vẫn tồn tại với pending
+    // 502 = lỗi từ dịch vụ bên ngoài, không phải lỗi nội bộ của mình
+    expect(res.status).toBe(502);
+
     const pending = await db.query(
       `SELECT COUNT(*)::int AS n FROM orders WHERE user_email = $1 AND status = 'pending'`,
       [user.email]
     );
-    expect(pending.rows[0].n).toBe(1);
+    expect(pending.rows[0].n).toBe(0);
+  });
+
+  it('voucher usage_limit_per_user=1 → đơn thứ 2 huỷ đơn cũ rồi tạo mới, chỉ còn 1 pending', async () => {
+    const user = await createUser({ username: 'voucher-limit' });
+    const token = await loginAs(user);
+    await createPlan({ code: 'voucher_plan', price: 200000 });
+    await db.query(
+      `INSERT INTO vouchers (
+         code, name, discount_type, discount_value, min_order_amount,
+         usage_limit_per_user, auto_apply, is_active
+       ) VALUES ('LAUNCH50', 'Launch 50', 'percentage', 50, 0, 1, FALSE, TRUE)`
+    );
+
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'data:image/png;base64,FAKE',
+      checkoutUrl: 'https://pay.payos.vn/web/fake-id',
+    });
+
+    const first = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'voucher_plan', voucherCode: 'LAUNCH50' });
+    expect(first.status).toBe(200);
+    expect(first.body.result.discountAmount).toBe(100000);
+
+    // Trước đây guard voucher chặn đơn thứ 2 (400) khi còn đơn pending.
+    // Nay luật chống trùng huỷ đơn cũ trước, nên đơn thứ 2 đi qua — và đó là
+    // hành vi mong muốn: người dùng bấm lại được thay vì bị chặn cụt, mà vẫn
+    // chỉ còn đúng MỘT đơn sống. Voucher chỉ thực sự tiêu ở redeemVoucherForOrder
+    // khi thanh toán thành công, nên giới hạn 1 lần/người vẫn nguyên vẹn.
+    const second = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'voucher_plan', voucherCode: 'LAUNCH50' });
+    expect(second.status).toBe(200);
+    expect(second.body.result.discountAmount).toBe(100000);
+
+    // Điểm mấu chốt: đơn cũ đã bị huỷ, không tồn tại hai đơn pending song song
+    const { rows } = await db.query(
+      `SELECT status, COUNT(*)::int AS n FROM orders
+       WHERE user_email = $1 GROUP BY status ORDER BY status`,
+      [user.email]
+    );
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.n]));
+    expect(byStatus.pending).toBe(1);
+    expect(byStatus.cancelled).toBe(1);
+  });
+
+  it('voucher 100% → success ngay, redemption ghi trong cùng luồng', async () => {
+    const user = await createUser({ username: 'full-discount' });
+    const token = await loginAs(user);
+    const plan = await createPlan({ code: 'free_via_voucher', price: 100000 });
+    await db.query(
+      `INSERT INTO vouchers (
+         code, name, discount_type, discount_value, min_order_amount,
+         usage_limit_per_user, auto_apply, is_active
+       ) VALUES ('FREE100', 'Free 100', 'percentage', 100, 0, 1, FALSE, TRUE)`
+    );
+
+    const res = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'free_via_voucher', voucherCode: 'FREE100' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.noPayment).toBe(true);
+    expect(mockPaymentRequestsCreate).not.toHaveBeenCalled();
+
+    const order = await db.query(
+      `SELECT status, amount, voucher_code FROM orders WHERE order_code = $1`,
+      [res.body.result.orderCode]
+    );
+    expect(order.rows[0].status).toBe('success');
+    expect(Number(order.rows[0].amount)).toBe(0);
+
+    const redemption = await db.query(
+      `SELECT COUNT(*)::int AS n FROM voucher_redemptions WHERE user_id = $1`,
+      [user.id]
+    );
+    expect(redemption.rows[0].n).toBe(1);
+
+    const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
+    expect(Number(u.rows[0].active_plan_id)).toBe(Number(plan.id));
+
+    const second = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'free_via_voucher', voucherCode: 'FREE100' });
+    expect(second.status).toBe(400);
   });
 });
 
@@ -184,17 +307,17 @@ describe('POST /api/payments/create-payment', () => {
 // POST /api/payments/webhook
 // ===========================================================================
 describe('POST /api/payments/webhook', () => {
-  it('webhook verify fail → 200 success:false (controller nuốt lỗi, KHÔNG đổi DB)', async () => {
+  it('webhook verify fail → 500 (PayOS sẽ retry)', async () => {
     mockWebhooksVerify.mockRejectedValue(new Error('Invalid signature'));
 
     const res = await request(app).post('/api/payments/webhook').send({ bogus: true });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
   });
 
   it('code !== "00" → KHÔNG cập nhật order, KHÔNG activate plan', async () => {
-    const user = await createUser({ username: 'webhook-fail', status: 'active' });
+    const user = await createUser({ username: 'webhook-fail', status: 'active', withPlan: false });
     const plan = await createPlan({ code: 'p1' });
     const orderCode = Date.now();
     await db.query(
@@ -215,8 +338,32 @@ describe('POST /api/payments/webhook', () => {
     expect(u.rows[0].active_plan_id).toBeNull();
   });
 
+  it('webhook amount mismatch → 200 (dừng retry), đơn failed, không activate', async () => {
+    const user = await createUser({ username: 'amt-mismatch', withPlan: false });
+    const plan = await createPlan({ code: 'amt-plan', price: 199000 });
+    const orderCode = Date.now() + 77;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')`,
+      [orderCode, plan.id, 199000, user.email, user.id]
+    );
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode, amount: 1 });
+
+    const res = await request(app).post('/api/payments/webhook').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const order = await db.query(`SELECT status, note FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(order.rows[0].status).toBe('failed');
+    expect(String(order.rows[0].note || '')).toContain('AMOUNT_MISMATCH');
+
+    const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].active_plan_id).toBeNull();
+  });
+
   it('thanh toán thành công có user_id → order=success, active_plan_id set, expires ≈ now + 1 month', async () => {
-    const user = await createUser({ username: 'paid' });
+    const user = await createUser({ username: 'paid', withPlan: false });
     const plan = await createPlan({ code: 'monthly' });
     const orderCode = Date.now();
     await db.query(
@@ -284,7 +431,7 @@ describe('POST /api/payments/webhook', () => {
   });
 
   it('đơn đã cancelled bởi admin → webhook code=00 BỎ QUA (không re-activate)', async () => {
-    const user = await createUser({ username: 'cancelled-buyer' });
+    const user = await createUser({ username: 'cancelled-buyer', withPlan: false });
     const plan = await createPlan({ code: 'cancel-test' });
     const orderCode = Date.now() + 3;
     await db.query(
@@ -397,18 +544,38 @@ describe('POST /api/payments/webhook', () => {
 // GET /api/payments/status/:orderCode
 // ===========================================================================
 describe('GET /api/payments/status/:orderCode', () => {
-  it('trả về status của order (public, không cần auth)', async () => {
+  it('cho phép đọc status không auth (PayOS returnUrl) — chỉ trả status', async () => {
+    const user = await createUser({ username: 'status-owner' });
     const plan = await createPlan({ code: 'st' });
     const orderCode = Date.now() + 100;
     await db.query(
-      `INSERT INTO orders (order_code, plan_id, amount, user_email, status)
-       VALUES ($1, $2, $3, 'q@test.local', 'success')`,
-      [orderCode, plan.id, plan.price]
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'success')`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
     );
 
     const res = await request(app).get(`/api/payments/status/${orderCode}`);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('success');
+    expect(res.body).not.toHaveProperty('user_email');
+  });
+
+  it('user đăng nhập không phải chủ đơn → 404', async () => {
+    const user = await createUser({ username: 'status-owner2' });
+    const other = await createUser({ username: 'status-other' });
+    const otherToken = await loginAs(other);
+    const plan = await createPlan({ code: 'st2' });
+    const orderCode = Date.now() + 101;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'success')`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
+    );
+
+    const forbidden = await request(app)
+      .get(`/api/payments/status/${orderCode}`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(forbidden.status).toBe(404);
   });
 
   it('order không tồn tại → 404', async () => {

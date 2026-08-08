@@ -56,6 +56,14 @@ class VerificationController {
         message: 'Mã xác minh đã được gửi đến email của bạn'
       });
     } catch (error) {
+      if (error.status === 429 || error.code === 'VERIFICATION_COOLDOWN') {
+        return res.status(429).json({
+          success: false,
+          message: error.message,
+          code: 'VERIFICATION_COOLDOWN',
+          retryAfterSec: error.retryAfterSec,
+        });
+      }
       console.error('Send verification code error:', error);
       res.status(500).json({
         success: false,

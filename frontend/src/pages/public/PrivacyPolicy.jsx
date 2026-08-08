@@ -28,7 +28,7 @@ function getLangClass(activeLang, itemLang) {
  * @returns {JSX.Element} Trang privacy policy.
  */
 function PrivacyPolicy() {
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState('vi');
   const [policyType, setPolicyType] = useState('processor');
   const lc = getLangClass;
 
@@ -53,12 +53,12 @@ function PrivacyPolicy() {
       <div className="pp-body">
         {/* Thanh nhấn mạnh pháp lý + header tối giản, uy tín */}
         <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
-          <div className="h-1 bg-gradient-to-r from-teal-600 via-sky-600 to-indigo-700" aria-hidden />
+          <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
             style={{
               backgroundImage:
-                'radial-gradient(ellipse 80% 50% at 50% -20%, rgb(45 212 191 / 0.12), transparent), radial-gradient(ellipse 60% 40% at 100% 0%, rgb(56 189 248 / 0.08), transparent)',
+                'radial-gradient(ellipse 80% 50% at 50% -20%, rgb(249 115 22 / 0.12), transparent), radial-gradient(ellipse 60% 40% at 100% 0%, rgb(244 63 94 / 0.08), transparent)',
             }}
             aria-hidden
           />
@@ -76,21 +76,17 @@ function PrivacyPolicy() {
               <span className="rounded-md border border-slate-600/80 bg-slate-900/50 px-2.5 py-1 text-slate-300">
                 founderai.biz
               </span>
-              <span className="text-slate-600">·</span>
-              <span className="rounded-md border border-slate-600/80 bg-slate-900/50 px-2.5 py-1 text-slate-300">
-                campaign.digiso.vn
-              </span>
             </div>
 
             <h1
               className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}
             >
-              Chính Sách <span className="text-teal-400">Bảo Mật</span>
+              Chính Sách <span className="text-orange-400">Bảo Mật</span>
             </h1>
             <h1
               className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}
             >
-              Privacy <span className="text-teal-400">Policy</span>
+              Privacy <span className="text-orange-400">Policy</span>
             </h1>
 
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>
@@ -105,7 +101,7 @@ function PrivacyPolicy() {
               <button
                 type="button"
                 onClick={() => setLanguage('vi')}
-                className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
@@ -116,7 +112,7 @@ function PrivacyPolicy() {
               <button
                 type="button"
                 onClick={() => setLanguage('en')}
-                className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
@@ -168,19 +164,19 @@ function PrivacyPolicy() {
           {/* Thanh meta: giữ nguyên câu chữ — chỉ căn chỉnh hiển thị */}
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span
-              className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-teal-500 ring-4 ring-teal-500/15"
+              className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật: <strong>01 tháng 04 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Áp dụng cho: digiso.vn &nbsp;·&nbsp; founderai.biz &nbsp;·&nbsp; campaign.digiso.vn
+                Áp dụng cho: digiso.vn, founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated: <strong>April 01, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Applies to: digiso.vn &nbsp;·&nbsp; founderai.biz &nbsp;·&nbsp; campaign.digiso.vn
+                Applies to: digiso.vn, founderai.biz
               </span>
             </p>
           </div>
@@ -209,7 +205,7 @@ function PrivacyPolicy() {
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-400/95">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">
                   Công ty / Company
                 </div>
                 <div className="break-words text-[13.5px] leading-snug text-slate-100">
@@ -217,13 +213,13 @@ function PrivacyPolicy() {
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-400/95">Website</div>
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Website</div>
                 <div className="break-words text-[13.5px] leading-relaxed text-slate-100">
                   <a
                     href="https://digiso.vn"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-teal-400 no-underline hover:underline"
+                    className="text-orange-400 no-underline hover:underline"
                   >
                     digiso.vn
                   </a>
@@ -232,33 +228,33 @@ function PrivacyPolicy() {
                     href="https://founderai.biz"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-teal-400 no-underline hover:underline"
+                    className="text-orange-400 no-underline hover:underline"
                   >
                     founderai.biz
                   </a>
                   {'\u00a0'}·{'\u00a0'}
                   <a
-                    href="https://campaign.digiso.vn"
+                    href="https://founderai.biz"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-teal-400 no-underline hover:underline"
+                    className="text-orange-400 no-underline hover:underline"
                   >
-                    campaign.digiso.vn
+                    founderai.biz
                   </a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-400/95">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">
                   Email Bảo mật / Privacy Email
                 </div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:nhthong@digiso.vn" className="text-teal-400 no-underline hover:underline">
-                    nhthong@digiso.vn
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">
+                    info@digiso.vn
                   </a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-400/95">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">
                   Địa chỉ / Address
                 </div>
                 <div className="break-words text-[13.5px] text-slate-100">Việt Nam</div>
@@ -278,10 +274,6 @@ function PrivacyPolicy() {
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
               founderai.biz
             </a>
-            {'\u00a0'}·{'\u00a0'}
-            <a href="https://campaign.digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
-              campaign.digiso.vn
-            </a>
           </p>
           <p className={lc(language, 'en')}>
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
@@ -292,10 +284,6 @@ function PrivacyPolicy() {
             {'\u00a0'}·{'\u00a0'}
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
               founderai.biz
-            </a>
-            {'\u00a0'}·{'\u00a0'}
-            <a href="https://campaign.digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
-              campaign.digiso.vn
             </a>
           </p>
         </footer>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
@@ -90,6 +90,9 @@ export default function VisualCanvasEditor({
     ],
   };
 
+  // ELEMENT_MAP được tạo trong mỗi render nên không thể đưa vào deps (sẽ vô hiệu memo).
+  // Logic chỉ phụ thuộc vào `page`, đã đúng.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const elements = useMemo(() => ELEMENT_MAP[page] || [], [page]);
 
   // Handle save value
@@ -177,11 +180,12 @@ export default function VisualCanvasEditor({
     };
     
     previewRef.current.contentDocument.addEventListener('click', handlePreviewClick);
-    
+
+    // Copy vào biến cục bộ để cleanup dùng đúng giá trị tại thời điểm effect chạy.
+    const docForCleanup = previewRef.current?.contentDocument;
     return () => {
-      const doc = previewRef.current?.contentDocument;
-      if (doc) {
-        doc.removeEventListener('click', handlePreviewClick);
+      if (docForCleanup) {
+        docForCleanup.removeEventListener('click', handlePreviewClick);
       }
     };
   }, [previewRef, elements, overrides]);

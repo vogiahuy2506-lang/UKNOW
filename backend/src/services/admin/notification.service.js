@@ -1,41 +1,14 @@
 import notificationRepo from '../../repositories/admin/notification.repository.js';
 import emailLogRepo from '../../repositories/admin/notificationEmailLog.repository.js';
-import { sendSystemEmail } from '../../utils/systemEmail.util.js';
+import { sendSystemEmail, buildBaseTemplate } from '../../utils/systemEmail.util.js';
 
-const SENDER_NAME = process.env.SYSTEM_EMAIL_NAME || 'FounderAI';
-const PRODUCT_NAME = process.env.SYSTEM_EMAIL_NAME || 'FounderAI';
-const DASHBOARD_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
-const SYSTEM_LOGO_URL = process.env.SYSTEM_LOGO_URL || `${DASHBOARD_URL}/logo.png`;
+const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
+const PRODUCT_NAME = process.env.PRODUCT_NAME || process.env.MAIL_FROM_NAME || 'Founder AI';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'info@digiso.vn';
 
-// Cache for logo data URI
-let cachedLogoDataUri = null;
-let logoCacheTime = 0;
-const LOGO_CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+// ─── Notification Type Config ──────────────────────────────────────────────────
 
-async function getLogoDataUri() {
-  const now = Date.now();
-  if (cachedLogoDataUri && (now - logoCacheTime) < LOGO_CACHE_DURATION) {
-    return cachedLogoDataUri;
-  }
-  
-  try {
-    const response = await fetch(SYSTEM_LOGO_URL);
-    if (!response.ok) throw new Error('Logo fetch failed');
-    
-    const buffer = await response.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    const mimeType = response.headers.get('content-type') || 'image/png';
-    
-    cachedLogoDataUri = `data:${mimeType};base64,${base64}`;
-    logoCacheTime = now;
-    return cachedLogoDataUri;
-  } catch (err) {
-    console.error('[NotificationService] Failed to fetch logo:', err.message);
-    return null;
-  }
-}
-
-// Notification types configuration
 export const NOTIFICATION_TYPES = {
   MAINTENANCE: 'maintenance',
   ANNOUNCEMENT: 'announcement',
@@ -45,47 +18,73 @@ export const NOTIFICATION_TYPES = {
   SECURITY: 'security'
 };
 
-// Email template configurations by type
-const EMAIL_TEMPLATES = {
+/**
+ * Cấu hình giao diện cho mỗi loại thông báo (header badge + tone màu).
+ * Đồng bộ với TYPE_CONFIG trong NotificationTypeSelector.jsx (FE).
+ */
+const NOTIFICATION_TYPE_CONFIG = {
   maintenance: {
     headerColor: '#dc2626',
-    icon: 'warning',
+    badgeBg: '#fef2f2',
+    badgeBorder: '#fecaca',
+    badgeText: '#991b1b',
+    icon: '⚠️',
     label: 'Thông báo bảo trì',
-    defaultTitle: 'Bảo trì hệ thống định kỳ'
+    labelEn: 'Maintenance Notice',
+    footerNote: 'Nếu có thắc mắc, vui lòng liên hệ info@digiso.vn.'
   },
   announcement: {
     headerColor: '#2563eb',
-    icon: 'info',
+    badgeBg: '#eff6ff',
+    badgeBorder: '#bfdbfe',
+    badgeText: '#1e40af',
+    icon: '📢',
     label: 'Thông báo chung',
-    defaultTitle: 'Thông báo từ FounderAI'
+    labelEn: 'General Announcement',
+    footerNote: 'Cảm ơn bạn đã đồng hành cùng chúng tôi.'
   },
   promotion: {
     headerColor: '#f97316',
-    icon: 'gift',
-    label: 'Khuyến mãi',
-    defaultTitle: 'Ưu đãi đặc biệt dành cho bạn'
+    badgeBg: '#fff7ed',
+    badgeBorder: '#fed7aa',
+    badgeText: '#9a3412',
+    icon: '🎁',
+    label: 'Khuyến mãi đặc biệt',
+    labelEn: 'Special Promotion',
+    footerNote: 'Chương trình có thể kết thúc sớm hơn dự kiến khi hết lượt ưu đãi.'
   },
   warning: {
-    headerColor: '#eab308',
-    icon: 'alert',
+    headerColor: '#d97706',
+    badgeBg: '#fffbeb',
+    badgeBorder: '#fde68a',
+    badgeText: '#92400e',
+    icon: '🚨',
     label: 'Cảnh báo',
-    defaultTitle: 'Cảnh báo quan trọng'
+    labelEn: 'Warning',
+    footerNote: 'Vui lòng kiểm tra và xử lý sớm nhất có thể.'
   },
   reminder: {
-    headerColor: '#22c55e',
-    icon: 'clock',
+    headerColor: '#16a34a',
+    badgeBg: '#f0fdf4',
+    badgeBorder: '#bbf7d0',
+    badgeText: '#166534',
+    icon: '⏰',
     label: 'Nhắc nhở',
-    defaultTitle: 'Nhắc nhở từ FounderAI'
+    labelEn: 'Reminder',
+    footerNote: 'Đừng quên theo dõi lịch trình của bạn nhé!'
   },
   security: {
     headerColor: '#991b1b',
-    icon: 'shield',
-    label: 'Bảo mật',
-    defaultTitle: 'Thông báo bảo mật'
+    badgeBg: '#fef2f2',
+    badgeBorder: '#fecaca',
+    badgeText: '#7f1d1d',
+    icon: '🔒',
+    label: 'Cảnh báo bảo mật',
+    labelEn: 'Security Alert',
+    footerNote: 'Nếu bạn không nhận ra hoạt động này, hãy đổi mật khẩu và liên hệ hỗ trợ ngay.'
   }
 };
 
-// Available variables for replacement
 export const AVAILABLE_VARIABLES = [
   { key: '{{user_name}}', description: 'Tên người dùng' },
   { key: '{{user_email}}', description: 'Email người dùng' },
@@ -105,37 +104,22 @@ export default {
   // CRUD Operations
   // =====================
 
-  /**
-   * Create a new notification (draft)
-   */
   async createNotification(data) {
     return notificationRepo.create(data);
   },
 
-  /**
-   * Update notification by ID
-   */
   async updateNotification(id, data) {
     return notificationRepo.updateById(id, data);
   },
 
-  /**
-   * Delete notification by ID
-   */
   async deleteNotification(id) {
     return notificationRepo.deleteById(id);
   },
 
-  /**
-   * Get notifications with filters
-   */
   async getNotifications(query) {
     return notificationRepo.findAll(query);
   },
 
-  /**
-   * Get single notification by ID
-   */
   async getNotificationById(id) {
     return notificationRepo.findById(id);
   },
@@ -144,9 +128,6 @@ export default {
   // Targeting
   // =====================
 
-  /**
-   * Preview recipients based on criteria
-   */
   async previewRecipients(criteria) {
     const recipients = await notificationRepo.getEligibleRecipients({
       ...criteria,
@@ -160,9 +141,6 @@ export default {
     };
   },
 
-  /**
-   * Count eligible recipients
-   */
   async countRecipients(criteria) {
     return notificationRepo.countEligibleRecipients(criteria);
   },
@@ -171,9 +149,6 @@ export default {
   // Variable Replacement
   // =====================
 
-  /**
-   * Replace variables in content with user data
-   */
   replaceVariables(content, user) {
     if (!content) return content;
 
@@ -185,13 +160,10 @@ export default {
       .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric'
       }))
-      .replace(/\{\{dashboard_url\}\}/g, DASHBOARD_URL)
-      .replace(/\{\{support_email\}\}/g, 'support@digiso.vn');
+      .replace(/\{\{dashboard_url\}\}/g, FRONTEND_URL)
+      .replace(/\{\{support_email\}\}/g, SUPPORT_EMAIL);
   },
 
-  /**
-   * Format plan name for display
-   */
   formatPlanName(plan) {
     const planNames = {
       free: 'Miễn phí',
@@ -207,38 +179,49 @@ export default {
   // =====================
 
   /**
-   * Build email HTML based on notification type
+   * Escape HTML để an toàn khi chèn nội dung user-generated vào email.
+   * Áp dụng cho title/message/replaceVariables.
    */
-  async buildEmailHtml(notification, user) {
-    const template = EMAIL_TEMPLATES[notification.type] || EMAIL_TEMPLATES.announcement;
+  escapeHtml(input) {
+    if (input == null) return '';
+    return String(input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
 
-    // Replace variables
+  async buildEmailHtml(notification, user) {
+    const config = NOTIFICATION_TYPE_CONFIG[notification.type] || NOTIFICATION_TYPE_CONFIG.announcement;
+
     const title = this.replaceVariables(notification.title, user);
     const message = this.replaceVariables(notification.message, user);
     const titleEn = notification.title_en ? this.replaceVariables(notification.title_en, user) : null;
     const messageEn = notification.message_en ? this.replaceVariables(notification.message_en, user) : null;
 
+    const safeTitle = this.escapeHtml(title);
+    const safeMessage = this.escapeHtml(message);
+    const safeFullName = this.escapeHtml(user.full_name || user.username || 'bạn');
+    const safeEmail = this.escapeHtml(user.email || '');
+
     const priorityBadge = notification.priority === 'urgent'
-      ? `<span style="background:#dc2626;color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600">ƯU TIÊN CAO</span>`
+      ? `<span style="display:inline-block;background:#dc2626;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên cao</span>`
       : notification.priority === 'high'
-        ? `<span style="background:#f97316;color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600">ƯU TIÊN</span>`
+        ? `<span style="display:inline-block;background:#f97316;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên</span>`
         : '';
 
-    const subject = `[FounderAI] ${title}`;
+    const subject = `[${PRODUCT_NAME}] ${title}`;
 
-    // Get logo as data URI (embedded)
-    const logoDataUri = await getLogoDataUri();
-
-    const html = this.generateEmailTemplate({
+    const html = this.generateNotificationEmail({
       type: notification.type,
-      headerColor: template.headerColor,
-      icon: template.icon,
-      label: template.label,
-      title,
-      message,
+      config,
+      title: safeTitle,
+      message: safeMessage,
       priorityBadge,
-      user,
-      logoDataUri
+      fullName: safeFullName,
+      email: safeEmail,
+      planName: this.escapeHtml(this.formatPlanName(user.plan))
     });
 
     return {
@@ -250,128 +233,107 @@ export default {
   },
 
   /**
-   * Generate email HTML template
+   * Render nội dung email cho thông báo superadmin.
+   * Layout nhất quán với các template khác trong systemEmail.util.js:
+   * - Greeting cá nhân hoá
+   * - Box tiêu đề (badge tone màu theo loại)
+   * - Box nội dung (white card)
+   * - CTA cho promotion
+   * - Support block
+   * - User info chip
    */
-  generateEmailTemplate({ type, headerColor, icon, label, title, message, priorityBadge, user, logoDataUri }) {
-    const year = new Date().getFullYear();
-
-    const iconEmoji = {
-      warning: '⚠️',
-      info: '📢',
-      gift: '🎁',
-      alert: '🚨',
-      clock: '⏰',
-      shield: '🔒'
-    }[icon] || '📢';
-
-    const backgroundColor = {
-      maintenance: '#fef2f2',
-      announcement: '#fff7ed',
-      promotion: '#fff7ed',
-      warning: '#fefce8',
-      reminder: '#f0fdf4',
-      security: '#fef2f2'
-    }[type] || '#fff7ed';
-
-    const borderColor = {
-      maintenance: '#fecaca',
-      announcement: '#fed7aa',
-      promotion: '#fed7aa',
-      warning: '#fef08a',
-      reminder: '#bbf7d0',
-      security: '#fecaca'
-    }[type] || '#fed7aa';
-
-    // Header with logo (use embedded data URI)
-    const logoHtml = logoDataUri
-      ? `<img src="${logoDataUri}" alt="${SENDER_NAME}" style="max-height:48px;max-width:160px;object-fit:contain;display:block;">`
+  generateNotificationEmail({ type, config, title, message, priorityBadge, fullName, email, planName }) {
+    const planChip = planName && planName !== 'Miễn phí'
+      ? `<span style="display:inline-block;background:#f97316;color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">${planName}</span>`
       : '';
 
-    return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <div style="max-width:680px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+    const initial = (fullName || 'U').charAt(0).toUpperCase();
 
-    <!-- Header with gradient -->
-    <div style="background:linear-gradient(135deg, #f97316 0%, #ea580c 100%);padding:24px 40px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="display:flex;align-items:center;gap:16px">
-            ${logoHtml ? `<div style="background:rgba(255,255,255,0.2);padding:6px;border-radius:8px">${logoHtml}</div>` : ''}
-            <div>
-              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">${SENDER_NAME}</h1>
-              <p style="margin:2px 0 0;color:rgba(255,255,255,.85);font-size:13px">${label}</p>
-            </div>
-          </div>
-        </div>
-        ${priorityBadge ? `<span style="background:#dc2626;color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Ưu tiên cao</span>` : ''}
-      </div>
-    </div>
-
-    <!-- Body -->
-    <div style="padding:40px">
+    const content = `
       <!-- Greeting -->
-      <div style="margin-bottom:24px">
-        <p style="margin:0;font-size:16px;color:#374151;line-height:1.6">
-          Xin chào <strong style="color:#f97316">${user.full_name || user.username || 'bạn'}</strong>,
-        </p>
-        <p style="margin:8px 0 0;font-size:14px;color:#6b7280;line-height:1.6">
-          Chúng tôi có thông báo quan trọng dành cho bạn:
-        </p>
-      </div>
+      <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
+        Xin chào <strong style="color:#f97316">${fullName}</strong>,
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6">
+        Bạn có một thông báo mới từ <strong>${PRODUCT_NAME}</strong>:
+      </p>
 
-      <!-- Title Box -->
-      <div style="background:${backgroundColor};border:2px solid ${borderColor};border-radius:16px;padding:24px;margin-bottom:24px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="color:#f97316">🔔</span>
-          <p style="margin:0;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:1px">
-            Tiêu đề thông báo
-          </p>
-        </div>
-        <h2 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;line-height:1.4">${title}</h2>
-      </div>
+      <!-- Title Box (badge tone màu theo loại) -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:${config.badgeBg};border:2px solid ${config.badgeBorder};border-radius:14px;margin-bottom:20px">
+        <tr>
+          <td style="padding:18px 22px">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${config.badgeText};text-transform:uppercase;letter-spacing:1px">
+              ${config.icon} ${type === 'announcement' ? 'Tiêu đề' : config.label}
+            </p>
+            <h2 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;line-height:1.4">
+              ${title}
+              ${priorityBadge ? '&nbsp;' + priorityBadge : ''}
+            </h2>
+          </td>
+        </tr>
+      </table>
 
       <!-- Message Box -->
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:24px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="color:#6b7280">📝</span>
-          <p style="margin:0;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px">
-            Nội dung
-          </p>
-        </div>
-        <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap">${message}</p>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:24px">
+        <tr>
+          <td style="padding:18px 22px">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px">
+              📝 Nội dung
+            </p>
+            <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap">${message}</p>
+          </td>
+        </tr>
+      </table>
+
+      ${type === 'promotion' ? `
+      <!-- CTA cho khuyến mãi -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+        <tr>
+          <td align="center">
+            <a href="${FRONTEND_URL}"
+               style="display:inline-block;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);color:#fff;font-size:15px;font-weight:600;
+                      padding:13px 32px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+              Khám phá ưu đãi →
+            </a>
+          </td>
+        </tr>
+      </table>
+      ` : ''}
 
       <!-- Support -->
-      <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6">
-        Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ:
-        <a href="mailto:support@digiso.vn" style="color:#f97316;text-decoration:none;font-weight:500">support@digiso.vn</a>
+      <p style="margin:0 0 18px;font-size:13px;color:#6b7280;line-height:1.6">
+        Nếu có thắc mắc, vui lòng liên hệ
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#f97316;text-decoration:none;font-weight:500">${SUPPORT_EMAIL}</a>.
       </p>
-    </div>
 
-    <!-- Footer -->
-    <div style="padding:24px 40px;background:#1f2937">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:14px;font-weight:700;color:#fff">${PRODUCT_NAME}</span>
-            <span style="font-size:10px;color:#9ca3af;background:#374751;padding:2px 6px;border-radius:8px">${year}</span>
-          </div>
-          <p style="margin:0;font-size:12px;color:#9ca3af">
-            Email tự động, vui lòng không reply trực tiếp.
-          </p>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="#" style="color:#9ca3af;text-decoration:none;font-size:12px">Chính sách bảo mật</a>
-          <span style="color:#4b5563">·</span>
-          <a href="#" style="color:#9ca3af;text-decoration:none;font-size:12px">Hủy đăng ký</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+      <!-- User Info Chip -->
+      ${email ? `
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:10px;margin-top:8px">
+        <tr>
+          <td style="padding:12px 16px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="36" valign="middle" style="padding-right:10px">
+                  <div style="width:36px;height:36px;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);border-radius:8px;text-align:center;line-height:36px;color:#fff;font-weight:700;font-size:14px">${initial}</div>
+                </td>
+                <td valign="middle" style="font-size:13px;color:#374151">
+                  <p style="margin:0;font-weight:600;color:#92400e">${fullName}</p>
+                  <p style="margin:2px 0 0;color:#b45309;font-size:12px">${email}</p>
+                </td>
+                ${planChip ? `<td width="auto" align="right" valign="middle">${planChip}</td>` : ''}
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      ` : ''}
+    `;
+
+    return buildBaseTemplate({
+      subtitle: config.label,
+      content,
+      footerNote: config.footerNote
+    });
   },
 
   // =====================
@@ -387,19 +349,31 @@ export default {
       throw new Error('Notification not found');
     }
 
+    if (notification.status === 'sending') {
+      throw Object.assign(new Error('Thông báo đang được gửi'), { status: 409 });
+    }
+    if (notification.status === 'sent') {
+      throw Object.assign(new Error('Thông báo đã được gửi trước đó'), { status: 409 });
+    }
+
     // Update status to sending
     await notificationRepo.updateById(id, { status: 'sending' });
 
-    // Get eligible recipients
-    const recipients = await notificationRepo.getEligibleRecipients({
-      roles: notification.target_roles,
-      plans: notification.target_plans,
-      statuses: notification.target_statuses,
-      userIds: notification.target_user_ids,
-      emails: notification.target_emails,
-      registeredBefore: notification.registered_before,
-      registeredAfter: notification.registered_after
-    });
+    let recipients;
+    try {
+      recipients = await notificationRepo.getEligibleRecipients({
+        roles: notification.target_roles,
+        plans: notification.target_plans,
+        statuses: notification.target_statuses,
+        userIds: notification.target_user_ids,
+        emails: notification.target_emails,
+        registeredBefore: notification.registered_before,
+        registeredAfter: notification.registered_after
+      });
+    } catch (err) {
+      await notificationRepo.markAsFailed(id);
+      throw err;
+    }
 
     if (recipients.length === 0) {
       await notificationRepo.updateById(id, { status: 'sent', recipient_count: 0, sent_at: new Date() });
@@ -419,41 +393,47 @@ export default {
     let failed = 0;
     const failedEmails = [];
 
-    // Send to each recipient with delay
-    for (let i = 0; i < recipients.length; i++) {
-      const user = recipients[i];
-      const logId = createdLogs[i]?.id;
+    // Send to recipients in parallel with bounded concurrency
+    const CONCURRENCY = 5;
+    let cursor = 0;
+    const errors = [];
 
-      try {
-        const emailContent = await this.buildEmailHtml(notification, user);
-        await sendSystemEmail({
-          to: user.email,
-          subject: emailContent.subject,
-          html: emailContent.html
-        });
+    const worker = async () => {
+      while (cursor < recipients.length) {
+        const i = cursor++;
+        const user = recipients[i];
+        const logId = createdLogs[i]?.id;
+        try {
+          const emailContent = await this.buildEmailHtml(notification, user);
+          await sendSystemEmail({
+            to: user.email,
+            subject: emailContent.subject,
+            html: emailContent.html
+          });
 
-        if (logId) {
-          await emailLogRepo.updateStatus(logId, 'sent', { sent_at: new Date() });
+          if (logId) {
+            await emailLogRepo.updateStatus(logId, 'sent', { sent_at: new Date() });
+          }
+          sent++;
+        } catch (err) {
+          console.error(`[NotificationService] Failed to send to ${user.email}:`, err.message);
+          if (logId) {
+            await emailLogRepo.markAsFailed(logId, err.message);
+          }
+          failed++;
+          failedEmails.push(user.email);
+          errors.push(err);
         }
-        sent++;
-      } catch (err) {
-        console.error(`[NotificationService] Failed to send to ${user.email}:`, err.message);
-        if (logId) {
-          await emailLogRepo.markAsFailed(logId, err.message);
-        }
-        failed++;
-        failedEmails.push(user.email);
       }
+    };
 
-      // Delay to avoid rate limiting
-      if (i < recipients.length - 1) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-    }
+    const workers = Array.from({ length: Math.min(CONCURRENCY, recipients.length) }, () => worker());
+    await Promise.all(workers);
 
     // Update notification stats
     await notificationRepo.updateStats(id, { sent, failed });
     await notificationRepo.markAsSent(id);
+    await notificationRepo.updateById(id, { recipient_count: recipients.length });
 
     return { sent, failed, total: recipients.length, failedEmails };
   },
@@ -477,7 +457,15 @@ export default {
   async scheduleNotification(id, scheduledAt) {
     const notification = await notificationRepo.findById(id);
     if (!notification) {
-      throw new Error('Notification not found');
+      throw Object.assign(new Error('Không tìm thấy thông báo'), { status: 404 });
+    }
+
+    const schedulableStatuses = ['draft', 'scheduled', 'failed'];
+    if (!schedulableStatuses.includes(notification.status)) {
+      throw Object.assign(
+        new Error(`Không thể hẹn giờ thông báo ở trạng thái "${notification.status}"`),
+        { status: 409 }
+      );
     }
 
     return notificationRepo.updateById(id, {
@@ -611,11 +599,15 @@ export default {
    * Get notification types with labels
    */
   getNotificationTypes() {
-    return Object.entries(NOTIFICATION_TYPES).map(([key, value]) => ({
-      value,
-      label: EMAIL_TEMPLATES[value]?.label || value,
-      headerColor: EMAIL_TEMPLATES[value]?.headerColor || '#6b7280'
-    }));
+    return Object.entries(NOTIFICATION_TYPES).map(([key, value]) => {
+      const config = NOTIFICATION_TYPE_CONFIG[value] || {};
+      return {
+        value,
+        label: config.label || value,
+        headerColor: config.headerColor || '#6b7280',
+        icon: config.icon || '📨'
+      };
+    });
   },
 
   /**
@@ -629,12 +621,16 @@ export default {
    * Get template preview
    */
   getTemplatePreview(type) {
-    const template = EMAIL_TEMPLATES[type] || EMAIL_TEMPLATES.announcement;
+    const config = NOTIFICATION_TYPE_CONFIG[type] || NOTIFICATION_TYPE_CONFIG.announcement;
     return {
       type,
-      label: template.label,
-      headerColor: template.headerColor,
-      icon: template.icon
+      label: config.label,
+      labelEn: config.labelEn,
+      headerColor: config.headerColor,
+      icon: config.icon,
+      badgeBg: config.badgeBg,
+      badgeBorder: config.badgeBorder,
+      badgeText: config.badgeText
     };
   }
 };

@@ -51,7 +51,7 @@ const classifyFailure = (message = '') => {
   if (text.includes('not found') || text.includes('unreachable') || text.includes('invalid') || text.includes('bounce')) {
     return 'recipient_invalid';
   }
-  if (text.includes('smtp') || text.includes('sendgrid') || text.includes('mail')) {
+  if (text.includes('smtp') || text.includes('mail') || text.includes('email')) {
     return 'email_provider';
   }
   return 'other';

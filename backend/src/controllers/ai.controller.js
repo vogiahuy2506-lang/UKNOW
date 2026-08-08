@@ -4,8 +4,10 @@ import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
+import { tryHandleHelpChat } from '../services/help/helpAssistant.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
@@ -121,27 +123,45 @@ class AiController {
         });
       }
 
-      // Load wizard state đã persist (sống sót qua session reload) — không block chat khi lỗi
-      let persistedWizardState = null;
-      if (sessionId) {
-        try {
-          const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
-          persistedWizardState = row?.wizard_state || null;
-        } catch (stateErr) {
-          console.warn('[AI] Không đọc được wizard state:', stateErr.message);
-        }
-      }
-
-      const response = await aiCampaignService.processSmartChat({
+      // Định tuyến mỏng: hỏi_đáp / không_rõ / ngoài_phạm_vi → help center;
+      // làm_giúp → aiCampaign như cũ. Không nhét tài liệu vào prompt aiCampaign.
+      const helpResponse = await tryHandleHelpChat({
         history,
-        files: files || [],
         userId: req.user.id,
-        userRole: req.user.role,
-        locale: locale || 'vi',
-        model,
-        persistedWizardState,
       });
-      const { wizardShortCircuit, _wizard, ...publicResponse } = response || {};
+
+      let response;
+      let wizardShortCircuit;
+      let _wizard;
+      let publicResponse;
+
+      if (helpResponse) {
+        publicResponse = helpResponse;
+        wizardShortCircuit = false;
+        _wizard = null;
+      } else {
+        // Load wizard state đã persist (sống sót qua session reload) — không block chat khi lỗi
+        let persistedWizardState = null;
+        if (sessionId) {
+          try {
+            const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
+            persistedWizardState = row?.wizard_state || null;
+          } catch (stateErr) {
+            console.warn('[AI] Không đọc được wizard state:', stateErr.message);
+          }
+        }
+
+        response = await aiCampaignService.processSmartChat({
+          history,
+          files: files || [],
+          userId: req.user.id,
+          userRole: req.user.role,
+          locale: locale || 'vi',
+          model,
+          persistedWizardState,
+        });
+        ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
+      }
 
       // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
@@ -878,7 +898,19 @@ class AiController {
    */
   async getCustomChatbotDocuments(req, res) {
     try {
-      const documents = await customChatService.getDocuments(parseInt(req.params.chatbotId, 10));
+      const chatbotId = parseInt(req.params.chatbotId, 10);
+      if (Number.isNaN(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
+      // hợp lệ cũng bị 404 ("3" !== 3).
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const documents = await customChatService.getDocuments(chatbotId);
 
       return res.json({
         success: true,
@@ -892,8 +924,20 @@ class AiController {
 
   async deleteCustomChatbotDocument(req, res) {
     try {
+      const chatbotId = parseInt(req.params.chatbotId, 10);
+      if (Number.isNaN(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
+      // hợp lệ cũng bị 404 ("3" !== 3).
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
       const docId = decodeURIComponent(req.params.docId);
-      await customChatService.deleteDocument(parseInt(req.params.chatbotId, 10), docId);
+      await customChatService.deleteDocument(chatbotId, docId);
       return res.json({ success: true, message: 'Document deleted' });
     } catch (error) {
       console.error('[CustomChat] Delete document error:', error);

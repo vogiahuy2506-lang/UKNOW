@@ -84,6 +84,19 @@ export async function markGoogleModelsMissing({ seenModelIds = [], seenAt = new 
   return rowCount || 0;
 }
 
+// Xoá hẳn các model theo id (dùng để dọn rác preview/deprecated).
+// Guard: KHÔNG bao giờ xoá model đang bật (model hệ thống hiện dùng).
+export async function deleteModelsByIds(modelIds = []) {
+  if (!Array.isArray(modelIds) || modelIds.length === 0) return 0;
+  const { rowCount } = await db.query(
+    `DELETE FROM ai_models
+     WHERE model_id = ANY($1::text[])
+       AND is_enabled = FALSE`,
+    [modelIds]
+  );
+  return rowCount || 0;
+}
+
 // Chọn model hệ thống: bật đúng 1 model, tắt tất cả model còn lại (1 query, atomic)
 export async function setOnlyEnabledModel(modelId) {
   const { rows } = await db.query(

@@ -14,6 +14,7 @@ import { useI18n } from '../../i18n';
 import {
   buildDelayedRunDate,
   buildCronExpression,
+  assertOnceScheduleNotInPast,
   getScheduleStatusClassName,
   getScheduleStatusLabel,
   getScheduleTypeLabel,
@@ -669,6 +670,16 @@ const CampaignRun = () => {
 
     if (scheduleForm.scheduleType === 'once' && !scheduleForm.scheduleDate) {
       toast.error(t('campaigns.scheduleDateRequired'));
+      return;
+    }
+
+    const onceGuard = assertOnceScheduleNotInPast(scheduleForm);
+    if (!onceGuard.ok) {
+      toast.error(
+        onceGuard.reason === 'invalid'
+          ? t('campaigns.scheduleDateRequired')
+          : t('campaigns.scheduleOnceTooSoon')
+      );
       return;
     }
 

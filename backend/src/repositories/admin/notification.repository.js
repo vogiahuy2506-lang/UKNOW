@@ -353,20 +353,22 @@ export default {
 
   /**
    * Update notification stats
+   * - Cộng dồn sent/failed/delivered/opened
+   * - Tính lại open_rate sau khi cộng
    */
   async updateStats(id, { sent = 0, failed = 0, delivered = 0, opened = 0 }) {
     const { rows } = await db.query(
       `UPDATE notifications
-       SET sent_count = sent_count + $2,
-           failed_count = failed_count + $3,
-           delivered_count = delivered_count + $4,
-           opened_count = opened_count + $5,
-           open_rate = CASE
+       SET sent_count       = sent_count + $2,
+           failed_count     = failed_count + $3,
+           delivered_count  = delivered_count + $4,
+           opened_count     = opened_count + $5,
+           open_rate        = CASE
              WHEN sent_count + $2 > 0 THEN
                ROUND((opened_count + $5)::DECIMAL / (sent_count + $2) * 100, 2)
              ELSE 0
            END,
-           updated_at = NOW()
+           updated_at       = NOW()
        WHERE id = $1
        RETURNING *`,
       [id, sent, failed, delivered, opened]

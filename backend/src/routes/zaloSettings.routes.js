@@ -3,75 +3,73 @@ import { body, param, query } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import zaloSettingsController from '../controllers/zaloSettings.controller.js';
+import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
-/**
- * GET /api/zalo/accounts
- * Purpose: Lấy danh sách tài khoản Zalo đã lưu của user hiện tại.
- * Response: { success, data: { items: [...] } }
- */
+// Get accounts — chỉ cần auth
 router.get('/accounts', zaloSettingsController.getAccounts.bind(zaloSettingsController));
 
-/**
- * DELETE /api/zalo/accounts/:id
- * Purpose: Xóa một tài khoản Zalo theo ID.
- * Params: { id }
- * Response: { success, message }
- */
+// Create account — cần quyền zalo_settings
+router.post('/accounts/login-qr',
+  requirePermission('zalo_settings'),
+  zaloSettingsController.loginQr.bind(zaloSettingsController)
+);
+
+// Check QR status — cần quyền zalo_settings
+router.get('/accounts/login-qr/:sessionKey/status',
+  requirePermission('zalo_settings'),
+  [param('sessionKey').trim().notEmpty().withMessage('sessionKey không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.getQrLoginStatus.bind(zaloSettingsController)
+);
+
+// Delete — cần quyền zalo_settings
 router.delete(
   '/accounts/:id',
+  requirePermission('zalo_settings'),
   [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
   handleValidationErrors,
   zaloSettingsController.deleteAccount.bind(zaloSettingsController)
 );
 
-/**
- * PATCH /api/zalo/accounts/:id/default
- * Purpose: Đặt tài khoản gửi Zalo mặc định.
- * Params: { id }
- * Response: { success, message }
- */
+// Set default — cần quyền zalo_settings
 router.patch(
   '/accounts/:id/default',
+  requirePermission('zalo_settings'),
   [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
   handleValidationErrors,
   zaloSettingsController.setDefaultAccount.bind(zaloSettingsController)
 );
 
-/**
- * POST /api/zalo/accounts/:id/restore-session
- * Purpose: Khôi phục session Zalo từ cookie_text đã lưu cho một tài khoản.
- * Params: { id }
- * Response: { success, message, data: { account } }
- */
+// Restore session — cần quyền zalo_settings
 router.post(
   '/accounts/:id/restore-session',
+  requirePermission('zalo_settings'),
   [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
   handleValidationErrors,
   zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
 );
 
-/**
- * POST /api/zalo/accounts/login-qr
- * Purpose: Tạo phiên đăng nhập QR cho nhiều tài khoản Zalo.
- * Body: {}
- * Response: { success, message, data: { qrPath, qrImage, mode, sessionKey } }
- */
-router.post('/accounts/login-qr', zaloSettingsController.loginQr.bind(zaloSettingsController));
-
-/**
- * GET /api/zalo/accounts/login-qr/:sessionKey/status
- * Purpose: Kiểm tra trạng thái đăng nhập sau khi người dùng quét QR.
- * Params: { sessionKey }
- * Response: { success, data: { status, message, account } }
- */
-router.get(
-  '/accounts/login-qr/:sessionKey/status',
-  [param('sessionKey').trim().notEmpty().withMessage('sessionKey không hợp lệ')],
+// Clear needs_reauth fail window so keep-alive/cron will try again
+router.post(
+  '/accounts/:id/retry-restore',
+  requirePermission('zalo_settings'),
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
   handleValidationErrors,
-  zaloSettingsController.getQrLoginStatus.bind(zaloSettingsController)
+  zaloSettingsController.retryRestore.bind(zaloSettingsController)
+);
+
+// Restore account session by cookie — cần quyền zalo_settings
+router.post(
+  '/accounts/:id/restore-session-by-cookie',
+  requirePermission('zalo_settings'),
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
 );
 
 /**

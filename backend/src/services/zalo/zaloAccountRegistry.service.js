@@ -58,6 +58,22 @@ export function isAccountRegistered(accountId) {
 }
 
 /**
+ * @returns {string[]}
+ */
+export function listRegisteredAccounts() {
+  return Array.from(registeredAccounts);
+}
+
+/**
+ * Bỏ trạng thái "đã đăng ký inbox listener" — dùng khi websocket đóng /
+ * session restore lại API mới. Không đụng pending.
+ * @param {string|number} accountId
+ */
+export function unmarkAccountRegistered(accountId) {
+  registeredAccounts.delete(String(accountId));
+}
+
+/**
  * Remove account from registry
  * @param {string|number} accountId
  */

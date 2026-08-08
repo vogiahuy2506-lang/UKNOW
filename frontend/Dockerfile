@@ -23,6 +23,10 @@ ENV VITE_PRIMARY_APP_HOSTS=${VITE_PRIMARY_APP_HOSTS}
 ARG VITE_DEFAULT_FROM_DOMAIN=digiso.vn
 ENV VITE_DEFAULT_FROM_DOMAIN=${VITE_DEFAULT_FROM_DOMAIN}
 
+# Để trống = không nạp Google Analytics (build dev/preview).
+ARG VITE_GA_MEASUREMENT_ID
+ENV VITE_GA_MEASUREMENT_ID=${VITE_GA_MEASUREMENT_ID}
+
 RUN yarn build
 RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 

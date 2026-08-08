@@ -96,10 +96,17 @@ export default function PublicChatbotPage() {
       });
 
       if (res.data.success && res.data.data) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: res.data.data.content,
-        }]);
+        const payload = res.data.data;
+        // Rate-limited silent (minute/hour): clear typing only, no empty bubble
+        if (payload.rateLimited && !payload.content) {
+          return;
+        }
+        if (payload.content) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: payload.content,
+          }]);
+        }
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
 import cloudinary from '../config/cloudinary.js';
+import { validateHelpImageFile } from '../utils/helpImageUpload.util.js';
 
 // Resolve temp_uploads directory relative to project root (where the process starts)
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -157,6 +158,65 @@ class UploadController {
         success: false,
         message: 'Tải lên tạm thời thất bại'
       });
+    }
+  }
+
+  /**
+   * Admin-only help article image: validate MIME+ext once, then write temp and promote
+   * in the same request. One check is enough — there is no client-controlled gap between
+   * validate and disk write (unlike a split temp→promote flow).
+   * Returns public URL for TipTap <img src>.
+   */
+  async uploadHelpImage(req, res) {
+    try {
+      if (!req.user?.id) {
+        return res.status(401).json({ success: false, message: 'Người dùng chưa được xác thực' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có tệp để tải lên' });
+      }
+
+      const rawName = req.file.originalname || 'upload';
+      const originalName = Buffer.from(rawName, 'latin1').toString('utf8');
+      const check = validateHelpImageFile({
+        mimetype: req.file.mimetype,
+        originalName,
+        size: req.file.size,
+      });
+      if (!check.ok) {
+        return res.status(400).json({ success: false, message: check.message });
+      }
+
+      const fileId = uuidv4();
+      const ext = path.extname(originalName);
+      const tempFilePath = path.join(this.tempDir, `${fileId}${ext}`);
+      await fs.writeFile(tempFilePath, req.file.buffer);
+
+      const results = await this.moveToS3(
+        [{
+          tempId: fileId,
+          originalName,
+          size: req.file.size,
+          contentType: req.file.mimetype,
+        }],
+        req.user.id
+      );
+      if (!results.length) {
+        return res.status(500).json({ success: false, message: 'Không thể lưu ảnh' });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          url: results[0].url,
+          originalName,
+          size: req.file.size,
+          contentType: req.file.mimetype,
+        },
+      });
+    } catch (error) {
+      console.error('Upload help image error:', error);
+      return res.status(500).json({ success: false, message: 'Tải ảnh bài viết thất bại' });
     }
   }
 

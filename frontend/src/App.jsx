@@ -5,14 +5,16 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
-import { useI18n } from './i18n';
+import { useI18n, I18nProvider } from './i18n';
+import RouteAnalytics from './components/RouteAnalytics';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
-import LandingLayout from './layouts/LandingLayout';
-import PublicLayout from './layouts/PublicLayout';
+import { PublicLayoutLite } from './layouts/PublicLayout';
+import PolicyLayout from './layouts/PolicyLayout';
+import DocsLayout from './layouts/DocsLayout';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -23,6 +25,7 @@ import Campaigns from './pages/campaigns/Campaigns';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignRun from './pages/campaigns/CampaignRun';
+import QuickSend from './pages/campaigns/QuickSend';
 import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
 import ChannelSettings from './pages/settings/ChannelSettings';
@@ -37,11 +40,16 @@ import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
 import Products from './pages/products/Products';
 import Orders from './pages/orders/Orders';
+import TopupPage from './pages/billing/TopupPage';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
+import PublicDPA from './pages/public/PublicDPA';
+import TermsOfService from './pages/public/TermsOfService';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
+import HelpIndexPage from './pages/docs/HelpIndexPage';
+import HelpArticlePage from './pages/docs/HelpArticlePage';
 import LandingHtmlModeGate from './features/landing-customizer/components/LandingHtmlModeGate.jsx';
 import LpRendererPage from './pages/public/LpRendererPage';
 import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
@@ -59,6 +67,14 @@ import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
 import AdminAiUsagePage from './pages/admin/AdminAiUsagePage';
 import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
+import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
+import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
+import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
+import AdminAlertsPage from './pages/admin/AdminAlertsPage';
+import AdminFunnelPage from './pages/admin/AdminFunnelPage';
+import AdminSystemHealthPage from './pages/admin/AdminSystemHealthPage';
+import AdminCronStatusPanel from './pages/admin/AdminCronStatusPanel';
+import AdminAiOpsPage from './pages/admin/AdminAiOpsPage';
 import DiagnosticPage from './pages/admin/DiagnosticPage';
 import NotificationCenter from './pages/admin/NotificationCenter';
 import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
@@ -69,6 +85,13 @@ import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import Marketplace from './pages/marketplace/Marketplace';
+import { MarketplaceModalProvider } from './contexts/MarketplaceModalProvider';
+import { ComingSoonProvider } from './contexts/ComingSoonProvider';
+import MarketplaceListingRedirect from './pages/marketplace/MarketplaceListingRedirect';
+import CreateListing from './pages/marketplace/CreateListing';
+import AdminMarketplace from './pages/marketplace/AdminMarketplace';
+import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
 import { getPostAuthPath } from './utils/authRedirect';
 
 const LoadingScreen = () => {
@@ -122,6 +145,15 @@ const ProductionHiddenRoute = ({ children }) => {
   return children;
 };
 
+// Chỉ username "admin" hoặc nhân viên của account admin mới được vào
+const AdminUsernameRoute = ({ children }) => {
+  const { user, activeContext } = useAuthStore();
+  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
+  const ownerUsername = activeContext?.owner?.username?.toLowerCase();
+  if (!isAdminUsername && ownerUsername !== 'admin') return <UnauthorizedScreen />;
+  return children;
+};
+
 // Self context luôn vào được; employee context chỉ vào được nếu có ít nhất 1 trong các permission
 const PermissionRoute = ({ permission, children }) => {
   const { activeContext } = useAuthStore();
@@ -166,6 +198,7 @@ const PublicRoute = ({ children }) => {
 };
 
 function App() {
+  const { t } = useI18n();
   const toaster = (
     <Toaster
       position="top-center"
@@ -184,19 +217,25 @@ function App() {
 
   if (typeof window !== 'undefined' && !isPrimaryAppHostname(window.location.hostname)) {
     return (
-      <>
-        {toaster}
-        <LpRendererByHost />
-        {createPortal(<div id="modal-root"></div>, document.body)}
-      </>
+      <I18nProvider>
+        <>
+          {toaster}
+          <LpRendererByHost />
+          {createPortal(<div id="modal-root"></div>, document.body)}
+        </>
+      </I18nProvider>
     );
   }
 
   return (
     <>
-      <Router>
-        {toaster}
-        <Routes>
+      <I18nProvider>
+        <MarketplaceModalProvider>
+        <ComingSoonProvider>
+        <Router>
+          <RouteAnalytics />
+          {toaster}
+          <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
             <PublicRoute>
@@ -223,12 +262,12 @@ function App() {
             )}
           />
 
-          {/* Public pages — dùng video background + HeroNavbar */}
-          <Route element={<PublicLayout />}>
+          {/* Public pages — pricing dùng video bg, contact dùng lite */}
+          <Route element={<PublicLayoutLite />}>
             <Route
               path="/pricing"
               element={(
-                <LandingHtmlModeGate page="pricing" title="Bảng giá — Founder AI">
+                <LandingHtmlModeGate page="pricing" title={t('app.pageTitle.pricing')}>
                   <PricingPage />
                 </LandingHtmlModeGate>
               )}
@@ -236,21 +275,31 @@ function App() {
             <Route
               path="/contact"
               element={(
-                <LandingHtmlModeGate page="contact" title="Liên hệ — Founder AI">
+                <LandingHtmlModeGate page="contact" title={t('app.pageTitle.contact')}>
                   <ContactPage />
                 </LandingHtmlModeGate>
               )}
             />
           </Route>
 
+          {/* Trung tâm hướng dẫn — layout riêng, sidebar tài liệu */}
+          <Route path="/huong-dan" element={<DocsLayout />}>
+            <Route index element={<HelpIndexPage />} />
+            <Route path=":slug" element={<HelpArticlePage />} />
+          </Route>
+
           {/* Thanh toán — video background, không có navbar/footer */}
           <Route path="/checkout" element={<CheckoutLayout><CheckoutPage /></CheckoutLayout>} />
           <Route path="/payment-success" element={<CheckoutLayout><PaymentSuccessPage /></CheckoutLayout>} />
 
-          {/* Landing Routes — legacy pages */}
-          <Route element={<LandingLayout />}>
+          {/* Policy Routes — không có Navbar, có header tự thiết kế */}
+          <Route element={<PolicyLayout />}>
             <Route path="/privacy-policy" element={<PublicDataPolicyPage />} />
             <Route path="/privacy-policy/" element={<PublicDataPolicyPage />} />
+            <Route path="/public-dpa" element={<PublicDPA />} />
+            <Route path="/public-dpa/" element={<PublicDPA />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/terms/" element={<TermsOfService />} />
           </Route>
 
           {/* Kích hoạt tài khoản nhân viên qua link email */}
@@ -289,6 +338,7 @@ function App() {
             <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
             <Route path="campaigns/new" element={<CampaignBuilder />} />
             <Route path="campaign-run" element={<CampaignRun />} />
+            <Route path="quick-send" element={<QuickSend />} />
             <Route path="delivery-monitor" element={<UserDeliveryMonitorPage />} />
 
             {/* Customers */}
@@ -300,12 +350,15 @@ function App() {
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/audit-logs" element={<OwnerRoute><AuditLogsPage /></OwnerRoute>} />
-            <Route path="settings/landing-featured-courses" element={<OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute>} />
-            <Route path="settings/landing-testimonials" element={<OwnerRoute><LandingTestimonialsPage /></OwnerRoute>} />
+            {/* Admin-only cluster: chỉ username "admin" */}
+            <Route path="settings/landing-featured-courses" element={<AdminUsernameRoute><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></AdminUsernameRoute>} />
+            <Route path="settings/landing-testimonials" element={<AdminUsernameRoute><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></AdminUsernameRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
+            <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
+            <Route path="topup" element={<TopupPage />} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<ChannelTemplates />} />
@@ -320,11 +373,20 @@ function App() {
             <Route path="settings/chatbot-widget" element={<Navigate to="/app/chatbot-studio" replace />} />
             <Route path="settings/chatbot-channels" element={<Navigate to="/app/chatbot-studio" replace />} />
 
-            {/* Courses & Orders — orders chỉ owner, còn lại permission based */}
-            <Route path="courses" element={<Courses />} />
+            {/* Courses */}
+            <Route path="courses" element={<AdminUsernameRoute><Courses /></AdminUsernameRoute>} />
             <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
-            <Route path="orders" element={<OwnerRoute><Orders /></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
+
+            {/* Marketplace - unified page with tabs */}
+            <Route path="marketplace" element={<Marketplace />} />
+            <Route path="marketplace/my" element={<Marketplace />} />
+            <Route path="marketplace/my-purchases" element={<Marketplace />} />
+            <Route path="marketplace/my-favorites" element={<Marketplace />} />
+            <Route path="marketplace/create" element={<CreateListing />} />
+            <Route path="marketplace/:id" element={<MarketplaceListingRedirect />} />
+            <Route path="admin/marketplace" element={<AdminMarketplace />} />
+            <Route path="admin/marketplace/analytics" element={<MarketplaceAnalytics />} />
           </Route>
 
           {/* Admin Routes - chỉ super_admin */}
@@ -338,12 +400,27 @@ function App() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
-            <Route path="system" element={<AdminSystemPage />} />
-            <Route path="delivery-monitor" element={<AdminDeliveryMonitorPage />} />
-            <Route path="ai-usage" element={<AdminAiUsagePage />} />
+            <Route path="alerts" element={<AdminAlertsPage />} />
+            <Route path="funnel" element={<AdminFunnelPage />} />
+            <Route path="health" element={<AdminSystemHealthPage />}>
+              <Route path="system" element={<AdminSystemPage />} />
+              <Route path="delivery" element={<AdminDeliveryMonitorPage />} />
+              <Route path="diagnostic" element={<DiagnosticPage />} />
+              <Route path="cron" element={<AdminCronStatusPanel />} />
+            </Route>
+            <Route path="ai-ops" element={<AdminAiOpsPage />}>
+              <Route path="usage" element={<AdminAiUsagePage />} />
+              <Route path="unanswered" element={<AdminHelpUnansweredPage />} />
+            </Route>
+            <Route path="system" element={<Navigate to="/admin/health/system" replace />} />
+            <Route path="delivery-monitor" element={<Navigate to="/admin/health/delivery" replace />} />
+            <Route path="diagnostic" element={<Navigate to="/admin/health/diagnostic" replace />} />
+            <Route path="ai-usage" element={<Navigate to="/admin/ai-ops/usage" replace />} />
+            <Route path="help-unanswered" element={<Navigate to="/admin/ai-ops/unanswered" replace />} />
             <Route path="ai-models" element={<AdminAiModelsPage />} />
+            <Route path="help-articles" element={<AdminHelpArticlesPage />} />
+            <Route path="help-articles/:id" element={<AdminHelpArticleEditPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
-            <Route path="diagnostic" element={<DiagnosticPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />
           </Route>
@@ -352,6 +429,9 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
+        </ComingSoonProvider>
+        </MarketplaceModalProvider>
+      </I18nProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>
   );

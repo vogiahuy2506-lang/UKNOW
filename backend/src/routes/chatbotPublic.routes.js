@@ -13,14 +13,8 @@ router.use(allowAllCorsMiddleware);
 // Get widget configuration
 router.get('/widget/:widgetKey/config', chatbotController.getWidgetConfig.bind(chatbotController));
 
-// Start / resume web chat conversation
-router.post('/widget/conversations', chatbotController.startWebChat.bind(chatbotController));
-
-// Get messages in a conversation
-router.get('/widget/conversations/:conversationId/messages', chatbotController.getWebChatMessages.bind(chatbotController));
-
-// Send a message in a conversation
-router.post('/widget/conversations/:conversationId/messages', publicChatLimiter, chatbotController.sendWebChatMessage.bind(chatbotController));
+// NOTE: /widget/conversations* routes were removed (orphan + IDOR). Live widget uses
+// /custom-chatbot/:widgetKey/* with sessionId scoping. See PLAN_FIX_CHATBOT_INBOX Phase 1.
 
 // ── Custom AI Chat Widget (uses /api/ai/custom-chat) ─────────────────────
 
@@ -33,16 +27,13 @@ router.get('/custom-chatbot/:widgetKey', chatbotController.getCustomChatbotConfi
 // Alternative: /custom-chatbot/:widgetKey/config (for widget.js)
 router.get('/custom-chatbot/:widgetKey/config', chatbotController.getCustomChatbotConfig.bind(chatbotController));
 
-// Get documents for a chatbot
-router.get('/custom-chatbot/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
-
 // Send message to custom chatbot (directly uses Gemini + KB)
 router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotController.chatWithCustomChatbot.bind(chatbotController));
 
 // Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
 router.post('/custom-chatbot/id/:chatbotId/chat', publicChatLimiter, chatbotController.chatWithCustomChatbotById.bind(chatbotController));
 
-// Get messages for polling agent replies
+// Get messages for polling agent replies (requires sessionId)
 router.get('/custom-chatbot/id/:chatbotId/messages', chatbotController.getChatMessages.bind(chatbotController));
 
 export default router;

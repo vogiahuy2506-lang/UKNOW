@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
+import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -224,7 +225,9 @@ class UnifiedInboxRepository {
             SELECT created_at FROM channel_messages
             WHERE id_conversation = cc.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(cc.ai_paused, false) as ai_paused,
+          NULL::TEXT as first_visitor_message
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
         WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
@@ -280,7 +283,9 @@ class UnifiedInboxRepository {
             SELECT created_at FROM zalo_personal_messages
             WHERE id_conversation = zp.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(zp.ai_paused, false) as ai_paused,
+          NULL::TEXT as first_visitor_message
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
         LEFT JOIN LATERAL (
@@ -335,7 +340,13 @@ class UnifiedInboxRepository {
             SELECT created_at FROM webchat_messages
             WHERE id_conversation = wc.id
             ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override
+          ) as last_message_at_override,
+          COALESCE(wc.ai_paused, false) as ai_paused,
+          (
+            SELECT content FROM webchat_messages
+            WHERE id_conversation = wc.id AND role = 'visitor'
+            ORDER BY created_at ASC LIMIT 1
+          ) as first_visitor_message
         FROM webchat_conversations wc
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
         WHERE wc.id_user = $1 ${wcSearch}
@@ -363,9 +374,14 @@ class UnifiedInboxRepository {
         ? row.group_name_override
         : null;
 
-      // For webchat: show "Chatbot Name - ID" instead of visitor_name
+      // For webchat: prefer visitor name / first message over "{widget} - {id}"
       if (row.conversation_type === 'webchat') {
-        displayName = `${row.channel_display_name} - ${row.id}`;
+        displayName = formatWebchatDisplayName({
+          visitorName: row.visitor_name,
+          channelDisplayName: row.channel_display_name,
+          conversationId: row.id,
+          firstMessageSnippet: row.first_visitor_message || null,
+        });
       } else if (isGroup && groupNameOverride) {
         displayName = groupNameOverride;
         visitorInfo.group_name = visitorInfo.group_name || groupNameOverride;
@@ -392,6 +408,7 @@ class UnifiedInboxRepository {
         lastMessageAt: row.last_message_at_override || row.last_message_at,
         lastMessage: row.last_message,
         unreadCount: parseInt(row.unread_count || 0),
+        aiPaused: row.ai_paused === true,
       };
     });
   }
@@ -479,12 +496,14 @@ class UnifiedInboxRepository {
         [conversationId, userId]
       );
       if (rows[0]) {
-        // Parse visitor_info to extract is_group
+        // Parse visitor_info to extract is_group (not table columns — migration 045)
         const visitorInfo = typeof rows[0].visitor_info === 'string'
-          ? JSON.parse(rows[0].visitor_info)
+          ? (() => { try { return JSON.parse(rows[0].visitor_info); } catch { return {}; } })()
           : (rows[0].visitor_info || {});
         rows[0]._parsedVisitorInfo = visitorInfo;
         rows[0]._isGroup = visitorInfo.is_group === true;
+        rows[0].is_group = visitorInfo.is_group === true;
+        rows[0].group_id = visitorInfo.group_id || null;
       }
       return rows[0] || null;
     } else {
@@ -641,48 +660,148 @@ class UnifiedInboxRepository {
 
   /**
    * Send a message from agent/admin
+   * @returns {Promise<number|null>} zalo_personal message id when applicable; otherwise null
    */
   async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [], metadata = {} } = {}) {
     const now = new Date().toISOString();
     const metadataJson = JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
 
     if (conversationType === 'channel') {
-      await db.query(
+      const { rows } = await db.query(
         `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+         RETURNING id`,
         [conversationId, userId, channelId, role, content, JSON.stringify(attachments), metadataJson, now]
       );
       await db.query(
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
         [conversationId, now]
       );
-    } else if (conversationType === 'zalo_personal') {
-      // Get zalo_setting_id from conversation
+      return rows[0]?.id ?? null;
+    }
+
+    if (conversationType === 'zalo_personal') {
+      return this.insertZaloPersonalAgentMessage(db, conversationId, userId, {
+        role, content, attachments, metadataJson, now,
+      });
+    }
+
+    await db.query(
+      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, metadata, is_read, read_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)`,
+      [conversationId, userId, role, content, JSON.stringify(attachments), metadataJson, now]
+    );
+    await db.query(
+      `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,
+      [conversationId, now]
+    );
+    return null;
+  }
+
+  /**
+   * @param {import('pg').Pool|import('pg').PoolClient} queryable
+   * @returns {Promise<number|null>}
+   */
+  async insertZaloPersonalAgentMessage(queryable, conversationId, userId, {
+    role = 'agent',
+    content,
+    attachments = [],
+    metadata = {},
+    metadataJson = null,
+    now = null,
+  } = {}) {
+    const ts = now || new Date().toISOString();
+    const meta = metadataJson ?? JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
+    const { rows: settingRows } = await queryable.query(
+      `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
+      [conversationId]
+    );
+    const zaloSettingId = settingRows[0]?.id_zalo_setting;
+    const { rows: inserted } = await queryable.query(
+      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+       RETURNING id`,
+      [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), meta, ts]
+    );
+    await queryable.query(
+      `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
+      [conversationId, ts]
+    );
+    return inserted[0]?.id ?? null;
+  }
+
+  async withTransaction(callback) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async setAiPaused(conversationId, conversationType, paused) {
+    const table =
+      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
+        : conversationType === 'webchat' ? 'webchat_conversations'
+          : 'channel_conversations';
+    await db.query(
+      `UPDATE ${table}
+       SET ai_paused = $2,
+           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+       WHERE id = $1`,
+      [conversationId, !!paused]
+    );
+  }
+
+  /**
+   * Whether AI auto-reply is paused for this conversation (owner handoff).
+   * Lazy auto-resume when owner setting ai_handoff_auto_resume_minutes has elapsed
+   * since ai_paused_at (see aiHandoffResume.util.js).
+   */
+  async isAiPaused(conversationId, conversationType) {
+    if (!conversationId) return false;
+    const table =
+      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
+        : conversationType === 'webchat' ? 'webchat_conversations'
+          : 'channel_conversations';
+
+    try {
+      const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(
+        '../../utils/aiHandoffResume.util.js'
+      );
       const { rows } = await db.query(
-        `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
+        `SELECT ai_paused, ai_paused_at, id_user FROM ${table} WHERE id = $1`,
         [conversationId]
       );
-      const zaloSettingId = rows[0]?.id_zalo_setting;
-      
+      const row = rows[0];
+      if (!row || row.ai_paused !== true) return false;
+
+      const minutes = await getCachedAutoResumeMinutes(row.id_user);
+      if (shouldStayAiPaused({
+        aiPaused: true,
+        aiPausedAt: row.ai_paused_at,
+        autoResumeMinutes: minutes,
+      })) {
+        return true;
+      }
+
       await db.query(
-        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
-        [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), metadataJson, now]
+        `UPDATE ${table}
+         SET ai_paused = false, ai_paused_at = NULL
+         WHERE id = $1 AND ai_paused = true`,
+        [conversationId]
       );
-      await db.query(
-        `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
-        [conversationId, now]
-      );
-    } else {
-      await db.query(
-        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)`,
-        [conversationId, userId, role, content, JSON.stringify(attachments), metadataJson, now]
-      );
-      await db.query(
-        `UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`,
-        [conversationId, now]
-      );
+      return false;
+    } catch (err) {
+      // Column missing (migration not applied yet) — do not block AI.
+      console.warn('[UnifiedInbox] isAiPaused check failed:', err.message);
+      return false;
     }
   }
 
@@ -973,6 +1092,174 @@ class UnifiedInboxRepository {
     ));
 
     return rows[0] || null;
+  }
+
+  /**
+   * Patch metadata.send via jsonb_set (never overwrite whole metadata — preserves source).
+   * @param {'zalo_personal'|'channel'} conversationType
+   * @param {number|string} messageId
+   * @param {{ status: string, error?: string|null, attempts?: number|null, setLockedAt?: boolean }} patch
+   */
+  async updateMessageSendStatus(conversationType, messageId, patch = {}) {
+    const table = conversationType === 'zalo_personal'
+      ? 'zalo_personal_messages'
+      : 'channel_messages';
+    const status = String(patch.status || 'failed');
+    const error = patch.error == null ? null : String(patch.error);
+    const attempts = patch.attempts == null ? null : Number(patch.attempts);
+    const setLockedAt = Boolean(patch.setLockedAt);
+
+    const { rows } = await db.query(
+      `UPDATE ${table} m
+       SET metadata = (
+         WITH base AS (
+           SELECT jsonb_set(
+                    COALESCE(m.metadata, '{}'::jsonb),
+                    '{send}',
+                    COALESCE(m.metadata->'send', '{}'::jsonb),
+                    true
+                  ) AS meta
+         ),
+         with_status AS (
+           SELECT jsonb_set(base.meta, '{send,status}', to_jsonb($2::text), true) AS meta FROM base
+         ),
+         with_error AS (
+           SELECT jsonb_set(
+                    with_status.meta,
+                    '{send,error}',
+                    CASE WHEN $3::text IS NULL THEN 'null'::jsonb ELSE to_jsonb($3::text) END,
+                    true
+                  ) AS meta
+           FROM with_status
+         ),
+         with_attempts AS (
+           SELECT jsonb_set(
+                    with_error.meta,
+                    '{send,attempts}',
+                    CASE
+                      WHEN $4::int IS NOT NULL THEN to_jsonb($4::int)
+                      WHEN $2::text = 'failed' THEN to_jsonb(
+                        COALESCE((with_error.meta->'send'->>'attempts')::int, 0) + 1
+                      )
+                      ELSE COALESCE(with_error.meta->'send'->'attempts', to_jsonb(1))
+                    END,
+                    true
+                  ) AS meta
+           FROM with_error
+         ),
+         with_failed_at AS (
+           SELECT CASE
+                    WHEN $2::text = 'failed'
+                      THEN jsonb_set(with_attempts.meta, '{send,failedAt}', to_jsonb(NOW()), true)
+                    ELSE with_attempts.meta
+                  END AS meta
+           FROM with_attempts
+         ),
+         with_locked_at AS (
+           SELECT CASE
+                    WHEN $5::boolean
+                      THEN jsonb_set(with_failed_at.meta, '{send,lockedAt}', to_jsonb(NOW()), true)
+                    ELSE with_failed_at.meta
+                  END AS meta
+           FROM with_failed_at
+         )
+         SELECT meta FROM with_locked_at
+       )
+       WHERE m.id = $1
+       RETURNING m.id, m.metadata`,
+      [messageId, status, error, Number.isFinite(attempts) ? attempts : null, setLockedAt]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Atomically claim a failed/stale-retrying agent message for retry.
+   * @returns {Promise<object|null>} claimed row or null
+   */
+  async claimMessageForRetry(conversationType, messageId) {
+    const table = conversationType === 'zalo_personal'
+      ? 'zalo_personal_messages'
+      : 'channel_messages';
+    const { rows } = await db.query(
+      `UPDATE ${table}
+       SET metadata = jsonb_set(
+             jsonb_set(
+               jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb),
+                 '{send}',
+                 COALESCE(metadata->'send', '{}'::jsonb),
+                 true
+               ),
+               '{send,status}',
+               '"retrying"',
+               true
+             ),
+             '{send,lockedAt}',
+             to_jsonb(NOW()),
+             true
+           )
+       WHERE id = $1
+         AND role = 'agent'
+         AND (
+           metadata->'send'->>'status' = 'failed'
+           OR (
+             metadata->'send'->>'status' = 'retrying'
+             AND COALESCE(
+                   (metadata->'send'->>'lockedAt')::timestamptz,
+                   (metadata->'send'->>'failedAt')::timestamptz
+                 ) < NOW() - INTERVAL '2 minutes'
+           )
+         )
+       RETURNING id, id_conversation, id_user, role, content, attachments, metadata,
+                 ${conversationType === 'zalo_personal' ? 'id_zalo_setting' : 'id_channel'}`,
+      [messageId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Load agent message + conversation for retry, scoped to workspace owner userId.
+   */
+  async findAgentMessageForRetry(userId, messageId, conversationType) {
+    if (conversationType === 'zalo_personal') {
+      // is_group / group_id live in visitor_info JSONB (not table columns — see migration 045)
+      const { rows } = await db.query(
+        `SELECT zpm.id, zpm.id_conversation, zpm.id_user, zpm.id_zalo_setting, zpm.role,
+                zpm.content, zpm.attachments, zpm.metadata,
+                zp.external_id, zp.visitor_info, zp.id_user AS conversation_user_id,
+                'zalo_personal' AS channel
+         FROM zalo_personal_messages zpm
+         JOIN zalo_personal_conversations zp ON zp.id = zpm.id_conversation
+         WHERE zpm.id = $1 AND zp.id_user = $2 AND zpm.role = 'agent'`,
+        [messageId, userId]
+      );
+      const row = rows[0];
+      if (!row) return null;
+      const visitorInfo = typeof row.visitor_info === 'string'
+        ? (() => { try { return JSON.parse(row.visitor_info); } catch { return {}; } })()
+        : (row.visitor_info || {});
+      row.is_group = visitorInfo.is_group === true;
+      row.group_id = visitorInfo.group_id || null;
+      row._parsedVisitorInfo = visitorInfo;
+      return row;
+    }
+
+    if (conversationType === 'channel') {
+      const { rows } = await db.query(
+        `SELECT cm.id, cm.id_conversation, cm.id_user, cm.id_channel, cm.role,
+                cm.content, cm.attachments, cm.metadata,
+                cc.external_id, cc.id_user AS conversation_user_id,
+                ch.channel AS channel
+         FROM channel_messages cm
+         JOIN channel_conversations cc ON cc.id = cm.id_conversation
+         JOIN channel_connections ch ON ch.id = cm.id_channel
+         WHERE cm.id = $1 AND cc.id_user = $2 AND cm.role = 'agent'`,
+        [messageId, userId]
+      );
+      return rows[0] || null;
+    }
+
+    return null;
   }
 }
 

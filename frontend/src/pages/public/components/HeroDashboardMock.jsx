@@ -40,20 +40,20 @@ function MiniBarChart({ data, color = '#f97316' }) {
 
 function StatCard({ label, value, sub, trend, trendUp, gradient, chart }) {
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-neutral-100">
-      <div className={`bg-gradient-to-r ${gradient} px-3 pt-2.5 pb-2`}>
-        <div className="flex items-center justify-between">
+    <div className="bg-white rounded-xl overflow-hidden border border-neutral-100 flex flex-col">
+      <div className={`bg-gradient-to-r ${gradient} px-3 pt-1.5 pb-1.5 flex-1`}>
+        <div className="flex items-start justify-between mb-0.5">
           <span className="text-[9px] font-semibold text-white/80 uppercase tracking-wider">{label}</span>
           {trend && (
-            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${trendUp ? 'bg-white/20 text-white' : 'bg-white/20 text-white'}`}>
+            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-white/20 text-white">
               {trendUp ? '↑' : '↓'} {trend}
             </span>
           )}
         </div>
-        <div className="text-[20px] font-bold text-white leading-none mt-1">{value}</div>
+        <div className="text-[18px] font-bold text-white leading-none text-left">{value}</div>
       </div>
-      <div className="px-3 py-2">
-        <div className="text-[8px] text-neutral-400">{sub}</div>
+      <div className="px-3 py-2 bg-white">
+        <div className="text-[8px] text-neutral-500 leading-relaxed text-left">{sub}</div>
         {chart && <div className="mt-1">{chart}</div>}
       </div>
     </div>
@@ -74,7 +74,7 @@ function MockSidebar() {
   return (
     <div className="w-36 shrink-0 bg-white border-r border-neutral-100 flex flex-col h-full">
       {/* Logo */}
-      <div className="px-3 py-3 border-b border-neutral-100 flex items-center gap-2">
+      <div className="px-3 py-3 border-b border-neutral-100 flex items-start gap-2">
         <img src={founderaiLogo} alt="logo" className="w-6 h-6 object-contain" />
         <div>
           <div className="text-[10px] font-bold text-neutral-800 leading-tight">Founder AI</div>
@@ -82,7 +82,7 @@ function MockSidebar() {
         </div>
       </div>
       {/* User */}
-      <div className="px-3 py-2 border-b border-neutral-100 flex items-center gap-1.5">
+      <div className="px-3 py-2 border-b border-neutral-100 flex items-start gap-1.5">
         <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
           <span className="text-white text-[8px] font-bold">N</span>
         </div>
@@ -95,8 +95,8 @@ function MockSidebar() {
       <nav className="flex-1 px-2 py-2 flex flex-col gap-0.5 overflow-hidden">
         {NAV.map((item) => (
           <div key={item.label}>
-            <div className={`px-2 py-1.5 rounded-lg text-[9px] font-semibold flex items-center gap-1.5 ${item.active ? 'bg-orange-50 text-orange-600' : 'text-neutral-600'}`}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.active ? '#f97316' : '#d1d5db' }} />
+            <div className={`px-2 py-1.5 rounded-lg text-[9px] font-semibold flex items-start gap-1.5 ${item.active ? 'bg-orange-50 text-orange-600' : 'text-neutral-600'}`}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: item.active ? '#f97316' : '#d1d5db' }} />
               {item.label}
             </div>
             {item.sub && (

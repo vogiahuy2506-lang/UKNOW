@@ -1,5 +1,6 @@
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import crypto from 'crypto';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 const FB_OAUTH_BASE = 'https://www.facebook.com/v18.0/dialog/oauth';
@@ -353,6 +354,19 @@ class OAuthController {
         },
         webhook_url: webhookUrl,
         settings: { auto_setup: true },
+      });
+
+      auditService.log({
+        userId: user_id,
+        ownerId: user_id,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.ZALO_ACCOUNT_CONNECTED,
+        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
+        entityId: channel?.id ?? null,
+        details: {
+          channel: 'zalo_oa',
+          displayName: oaInfo.name || 'Zalo OA',
+        },
       });
 
       return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?success=zalo_connected&name=${encodeURIComponent(oaInfo.name || 'Zalo OA')}`);

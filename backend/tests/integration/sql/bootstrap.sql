@@ -32,7 +32,7 @@ CREATE TABLE users (
   locked_until            TIMESTAMPTZ,
   last_login_at           TIMESTAMPTZ,
   last_login_ip           VARCHAR(45),
-  active_plan_id          BIGINT,
+  active_plan_id          INTEGER,
   preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
@@ -46,7 +46,14 @@ CREATE TABLE users (
   max_email_templates     INTEGER,
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
-  subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
+  bot_daily_reply_cap     INTEGER CHECK (bot_daily_reply_cap IS NULL OR bot_daily_reply_cap > 0),
+  ai_handoff_auto_resume_minutes INTEGER CHECK (
+    ai_handoff_auto_resume_minutes IS NULL
+    OR ai_handoff_auto_resume_minutes IN (5, 15, 30, 60)
+  ),
+  subscription_reminder_count SMALLINT NOT NULL DEFAULT 0,
+  -- migration 094: buộc đổi mật khẩu sau khi chủ shop reset cho nhân viên
+  must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,
   messages_per_period     INTEGER,
   is_fup_enabled          BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -117,7 +124,7 @@ CREATE INDEX idx_verification_codes_lookup ON verification_codes(email, code, ty
 
 -- ─── Plans + Orders (payment) ──────────────────────────────────────────
 CREATE TABLE plans (
-  id                    BIGSERIAL PRIMARY KEY,
+  id                    SERIAL PRIMARY KEY,
   code                  VARCHAR(50)  UNIQUE,
   name                  VARCHAR(100) NOT NULL,
   price                 BIGINT       NOT NULL DEFAULT 0,
@@ -148,6 +155,8 @@ CREATE TABLE plans (
   price_yearly          BIGINT,
   messages_per_period   INTEGER,
   is_fup_enabled        BOOLEAN      NOT NULL DEFAULT FALSE,
+  custom_owner_user_id  BIGINT,
+  custom_config         JSONB,
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -182,20 +191,65 @@ VALUES
   ('gemini-2.5-pro', 'Gemini 2.5 Pro', 1048576, 131072, FALSE, TRUE, 'google');
 
 -- FK sau khi plans tồn tại: users.active_plan_id → plans(id)
+-- Tên khớp Neon/production (migration 107): users_active_plan_id_fkey
 ALTER TABLE users
-  ADD CONSTRAINT users_active_plan_fk
+  ADD CONSTRAINT users_active_plan_id_fkey
     FOREIGN KEY (active_plan_id) REFERENCES plans(id) ON DELETE SET NULL;
 
+ALTER TABLE plans
+  ADD CONSTRAINT plans_custom_owner_user_fk
+    FOREIGN KEY (custom_owner_user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE TABLE custom_plan_pricing (
+  id           BIGSERIAL PRIMARY KEY,
+  item_key     VARCHAR(50) UNIQUE NOT NULL,
+  plan_column  VARCHAR(50),
+  unit_price   BIGINT  NOT NULL DEFAULT 0,
+  unit_size    INTEGER NOT NULL DEFAULT 1,
+  included_qty INTEGER NOT NULL DEFAULT 0,
+  min_qty      INTEGER NOT NULL DEFAULT 0,
+  max_qty      INTEGER,
+  step_qty     INTEGER NOT NULL DEFAULT 1,
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT custom_plan_pricing_unit_size_positive CHECK (unit_size > 0),
+  CONSTRAINT custom_plan_pricing_step_qty_positive CHECK (step_qty > 0),
+  CONSTRAINT custom_plan_pricing_min_qty_nonneg CHECK (min_qty >= 0)
+);
+
+INSERT INTO custom_plan_pricing (item_key, plan_column, unit_price, unit_size, included_qty, min_qty, max_qty, step_qty, is_active, sort_order)
+VALUES
+  ('yearly_discount_percent', NULL, 20, 1, 0, 0, NULL, 1, TRUE, 0),
+  ('zalo_monthly_capacity_per_account', NULL, 16000, 1, 0, 0, NULL, 1, TRUE, 0),
+  ('base_fee', NULL, 199000, 1, 0, 1, 1, 1, TRUE, 10),
+  ('zalo_messages', 'monthly_zalo_limit', 30000, 500, 500, 500, 200000, 500, TRUE, 20),
+  ('emails', 'monthly_email_limit', 25000, 2500, 2500, 2500, 500000, 2500, TRUE, 30),
+  ('ai_credits', 'ai_credits_per_period', 35000, 250, 250, 250, 50000, 250, TRUE, 40),
+  ('zalo_accounts', 'max_zalo_accounts', 40000, 1, 1, 1, 50, 1, TRUE, 50),
+  ('email_accounts', 'max_email_accounts', 40000, 1, 1, 1, 50, 1, TRUE, 60),
+  ('landing_pages', 'max_landing_pages', 20000, 1, 1, 1, 200, 1, TRUE, 70),
+  ('chatbots', 'max_chatbots', 70000, 1, 1, 1, 100, 1, TRUE, 80),
+  ('employees', 'max_employees', 35000, 1, 1, 1, 100, 1, TRUE, 90),
+  ('campaigns', 'max_campaigns', 10000, 1, 1, 1, 500, 1, TRUE, 100),
+  ('zalo_campaigns', 'max_zalo_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 110),
+  ('zalo_group_campaigns', 'max_zalo_group_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 120),
+  ('email_campaigns', 'max_email_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 130),
+  ('email_templates', 'max_email_templates', 8000, 1, 0, 0, 500, 1, TRUE, 140),
+  ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150);
+
+-- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
+-- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).
 CREATE TABLE orders (
-  id          BIGSERIAL PRIMARY KEY,
-  order_code  BIGINT       NOT NULL UNIQUE,
-  plan_id     BIGINT       REFERENCES plans(id) ON DELETE SET NULL,
-  amount      BIGINT       NOT NULL DEFAULT 0,
+  id          SERIAL PRIMARY KEY,
+  order_code  BIGINT       NOT NULL,
+  plan_id     INTEGER      REFERENCES plans(id),
+  amount      NUMERIC(12, 2) NOT NULL DEFAULT 0,
   user_email  VARCHAR(255),
-  user_id     BIGINT       REFERENCES users(id) ON DELETE SET NULL,
-  status      VARCHAR(20)  NOT NULL DEFAULT 'pending'
+  user_id     BIGINT       REFERENCES users(id),
+  status      VARCHAR(50)  NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
-  payment_method VARCHAR(20) NOT NULL DEFAULT 'payos'
+  payment_method VARCHAR(50) NOT NULL DEFAULT 'payos'
     CHECK (payment_method IN ('payos', 'manual', 'free', 'voucher')),
   note        TEXT,
   billing_period VARCHAR(10) NOT NULL DEFAULT 'monthly'
@@ -204,18 +258,56 @@ CREATE TABLE orders (
   discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   voucher_id  BIGINT,
   voucher_code VARCHAR(64),
+  topup_config JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT orders_order_code_key UNIQUE (order_code)
 );
 
 CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
 
+-- ─── Top-up pricing & grants (migration 099) ───────────────────────────
+CREATE TABLE topup_pricing (
+  id           BIGSERIAL PRIMARY KEY,
+  item_key     VARCHAR(50) UNIQUE NOT NULL,
+  unit_price   BIGINT  NOT NULL DEFAULT 0,
+  min_qty      INTEGER NOT NULL DEFAULT 0,
+  step_qty     INTEGER NOT NULL DEFAULT 1,
+  max_qty      INTEGER,
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_pricing_unit_price_nonneg CHECK (unit_price >= 0),
+  CONSTRAINT topup_pricing_min_qty_nonneg CHECK (min_qty >= 0),
+  CONSTRAINT topup_pricing_step_qty_positive CHECK (step_qty > 0)
+);
+
+INSERT INTO topup_pricing (item_key, unit_price, min_qty, step_qty, max_qty, is_active, sort_order)
+VALUES
+  ('zalo_messages', 100, 50, 50, NULL, TRUE, 10),
+  ('emails', 20, 250, 250, 50000, TRUE, 20),
+  ('ai_credits', 200, 25, 25, 5000, TRUE, 30);
+
+CREATE TABLE topup_grants (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key   VARCHAR(50) NOT NULL,
+  qty        INTEGER NOT NULL CHECK (qty > 0),
+  order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  cycle_end  TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT topup_grants_order_item_unique UNIQUE (order_id, item_key)
+);
+
+CREATE INDEX idx_topup_grants_user_item_cycle
+  ON topup_grants (user_id, item_key, cycle_end);
+
 -- ─── Vouchers (migration 036) ──────────────────────────────────────────
 CREATE TABLE vouchers (
   id                         BIGSERIAL PRIMARY KEY,
-  code                       VARCHAR(64)  NOT NULL UNIQUE,
+  code                       VARCHAR(64)  NOT NULL,
   name                       VARCHAR(160) NOT NULL,
   description                TEXT,
   discount_type              VARCHAR(20)  NOT NULL CHECK (discount_type IN ('percentage', 'fixed_amount')),
@@ -235,6 +327,12 @@ CREATE TABLE vouchers (
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX vouchers_code_active_uniq ON vouchers (code) WHERE is_active = TRUE;
+
+CREATE INDEX idx_orders_voucher_pending
+  ON orders (voucher_id, status, created_at)
+  WHERE voucher_id IS NOT NULL;
 
 ALTER TABLE orders
   ADD CONSTRAINT orders_voucher_fk FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE SET NULL;
@@ -387,10 +485,12 @@ CREATE TABLE campaign_runs (
   skipped_sends     INTEGER      NOT NULL DEFAULT 0,
   error_message     TEXT,
   run_metadata      JSONB        NOT NULL DEFAULT '{}',
+  triggered_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
 CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
+CREATE INDEX idx_campaign_runs_triggered_by ON campaign_runs (triggered_by) WHERE triggered_by IS NOT NULL;
 
 -- Campaign executions — log từng node được engine xử lý cho mỗi customer/run.
 -- Bảng tối thiểu để GET /api/campaign-runs/:id không 500 khi chưa có run nào.
@@ -453,6 +553,9 @@ CREATE TABLE zalo_settings (
   is_default        BOOLEAN      NOT NULL DEFAULT FALSE,
   notes             TEXT,
   last_connected_at TIMESTAMPTZ,
+  restore_fail_count INT NOT NULL DEFAULT 0,
+  first_restore_fail_at TIMESTAMPTZ,
+  last_restore_attempt_at TIMESTAMPTZ,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -836,6 +939,7 @@ CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
 CREATE TABLE usage_logs (
   id            BIGSERIAL PRIMARY KEY,
   id_user       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   resource_type VARCHAR(50) NOT NULL,
   delta         INTEGER NOT NULL DEFAULT 1,
   period_start  TIMESTAMPTZ NOT NULL,
@@ -846,6 +950,7 @@ CREATE TABLE usage_logs (
 CREATE INDEX idx_usage_logs_user ON usage_logs(id_user);
 CREATE INDEX idx_usage_logs_resource ON usage_logs(resource_type);
 CREATE INDEX idx_usage_logs_period ON usage_logs(period_start, period_end);
+CREATE INDEX idx_usage_logs_actor ON usage_logs (actor_user_id) WHERE actor_user_id IS NOT NULL;
 
 -- ─── Dashboard insights (Gemini AI persistence) ───────────────────────
 CREATE TABLE dashboard_insights (
@@ -998,6 +1103,7 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
 
 -- ─── Zalo personal unified inbox (migration 045) ───────────────────────
+-- Khớp migration 045: is_group/group_id nằm trong visitor_info JSONB, không phải cột.
 CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1005,8 +1111,6 @@ CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   external_id      VARCHAR(255) NOT NULL,
   visitor_name     VARCHAR(255),
   visitor_info     JSONB DEFAULT '{}',
-  is_group         BOOLEAN DEFAULT FALSE,
-  group_id         VARCHAR(255),
   status           VARCHAR(20) DEFAULT 'active',
   started_at       TIMESTAMPTZ DEFAULT NOW(),
   last_message_at  TIMESTAMPTZ DEFAULT NOW(),
@@ -1033,6 +1137,291 @@ CREATE TABLE IF NOT EXISTS zalo_personal_messages (
 CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
   ON zalo_personal_messages (id_user, created_at)
   WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
+-- Migration 101: prevent duplicate inbound / sync rows (and bot echo after restart)
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
+  ON zalo_personal_messages (id_zalo_setting, external_id)
+  WHERE external_id IS NOT NULL;
+
+-- ─── Web chat / custom chatbot ─────────────────────────────────────────
+-- Cần cho test widget + hội thoại web chat. Phải khớp migration 031/041/095/098:
+-- nếu lệch thì test xanh giả (đúng bài học lệch schema đã dính hai lần).
+
+-- Chỉ dựng cột tối thiểu mà repository JOIN tới.
+CREATE TABLE IF NOT EXISTS sub_assistants (
+  id           BIGSERIAL PRIMARY KEY,
+  id_user      BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  name         VARCHAR(255),
+  greeting_msg TEXT,
+  avatar_url   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_chatbots (
+  id                  BIGSERIAL PRIMARY KEY,
+  id_user             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name                VARCHAR(255) NOT NULL DEFAULT 'New Chatbot',
+  description         TEXT DEFAULT '',
+  system_instruction  TEXT DEFAULT '',
+  greeting_msg        TEXT DEFAULT 'Xin chào! Tôi có thể giúp gì cho bạn?',
+  avatar_url          TEXT DEFAULT NULL,
+  is_active           BOOLEAN DEFAULT true,
+  theme_color         VARCHAR(7) DEFAULT '#6366F1',
+  position            VARCHAR(20) DEFAULT 'bottom-right',
+  welcome_message     TEXT DEFAULT 'Xin chào! Tôi có thể giúp gì cho bạn?',
+  primary_color       VARCHAR(7) DEFAULT '#6366F1',
+  background_color    VARCHAR(7) DEFAULT '#FFFFFF',
+  text_color          VARCHAR(7) DEFAULT '#1F2937',
+  accent_color        VARCHAR(7) DEFAULT '#60A5FA',
+  logo_url            TEXT DEFAULT NULL,
+  show_avatar         BOOLEAN DEFAULT true,
+  border_radius       INTEGER DEFAULT 16,
+  chat_height         VARCHAR(10) DEFAULT '600px',
+  suggested_questions TEXT[] DEFAULT '{}',
+  widget_key          VARCHAR(100) UNIQUE DEFAULT NULL,
+  temperature         DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens          INTEGER DEFAULT 2048,
+  ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS web_widget_configs (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_sub_assistant BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  widget_key       VARCHAR(100) UNIQUE NOT NULL,
+  display_name     VARCHAR(255),
+  theme_color      VARCHAR(7) DEFAULT '#3B82F6',
+  position         VARCHAR(20) DEFAULT 'bottom-right',
+  welcome_message  TEXT,
+  is_active        BOOLEAN DEFAULT true,
+  allowed_domains  TEXT[],
+  settings         JSONB DEFAULT '{}',
+  logo_url         TEXT,
+  primary_color    VARCHAR(7) DEFAULT '#3B82F6',
+  background_color VARCHAR(7) DEFAULT '#FFFFFF',
+  text_color       VARCHAR(7) DEFAULT '#1F2937',
+  accent_color     VARCHAR(7) DEFAULT '#60A5FA',
+  suggested_questions TEXT[] DEFAULT '{}',
+  border_radius    INTEGER DEFAULT 16,
+  show_avatar      BOOLEAN DEFAULT true,
+  chat_height      VARCHAR(10) DEFAULT '500px',
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS webchat_conversations (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_widget_config BIGINT NOT NULL REFERENCES web_widget_configs(id) ON DELETE CASCADE,
+  session_id       VARCHAR(100),
+  visitor_name     VARCHAR(255),
+  visitor_email    VARCHAR(255),
+  visitor_info     JSONB DEFAULT '{}',
+  started_at       TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
+  status           VARCHAR(20) DEFAULT 'active',
+  ai_paused        BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migration 098 B5: chặn phân mảnh phiên đang hoạt động.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_webchat_active_session
+  ON webchat_conversations (id_widget_config, session_id)
+  WHERE session_id IS NOT NULL AND status = 'active';
+
+CREATE TABLE IF NOT EXISTS webchat_messages (
+  id              BIGSERIAL PRIMARY KEY,
+  id_conversation BIGINT NOT NULL REFERENCES webchat_conversations(id) ON DELETE CASCADE,
+  id_user         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role            VARCHAR(20) NOT NULL,
+  content         TEXT NOT NULL,
+  attachments     JSONB DEFAULT '[]',
+  metadata        JSONB DEFAULT '{}',
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_webchat_messages_conv ON webchat_messages(id_conversation);
+
+-- ─── Help center (migration 100) ───────────────────────────────────────
+-- Production dùng pgvector (migration 100). Bootstrap test dùng JSONB để
+-- chạy được trên postgres thuần (e2e image có thể chưa gắn pgvector).
+-- Repository tự phát hiện kiểu cột và chọn đường insert/search phù hợp.
+
+CREATE TABLE help_articles (
+  id            BIGSERIAL PRIMARY KEY,
+  slug          VARCHAR(120) NOT NULL UNIQUE,
+  title         VARCHAR(255) NOT NULL,
+  summary       TEXT NOT NULL DEFAULT '',
+  body_md       TEXT NOT NULL DEFAULT '',
+  body_html     TEXT,
+  feature_key   VARCHAR(80) NOT NULL,
+  primary_route VARCHAR(255),
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  is_published  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_help_articles_feature ON help_articles (feature_key, sort_order);
+CREATE INDEX idx_help_articles_published ON help_articles (is_published) WHERE is_published = TRUE;
+
+CREATE TABLE help_article_media (
+  id          BIGSERIAL PRIMARY KEY,
+  article_id  BIGINT NOT NULL REFERENCES help_articles(id) ON DELETE CASCADE,
+  type        VARCHAR(20) NOT NULL CHECK (type IN ('image', 'video')),
+  url         TEXT NOT NULL,
+  caption     TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_help_article_media_article ON help_article_media (article_id, sort_order);
+
+CREATE TABLE help_article_chunks (
+  id            BIGSERIAL PRIMARY KEY,
+  article_id    BIGINT NOT NULL REFERENCES help_articles(id) ON DELETE CASCADE,
+  chunk_index   INTEGER NOT NULL,
+  content_text  TEXT NOT NULL,
+  embedding     JSONB,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT help_article_chunks_unique UNIQUE (article_id, chunk_index)
+);
+
+CREATE INDEX idx_help_article_chunks_article ON help_article_chunks (article_id);
+
+CREATE TABLE help_unanswered (
+  id              BIGSERIAL PRIMARY KEY,
+  question        TEXT NOT NULL,
+  user_id         BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  asked_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  top_similarity  REAL
+);
+
+CREATE INDEX idx_help_unanswered_asked ON help_unanswered (asked_at DESC);
+
+-- ─── Alerts + cron status (migration 104) ──────────────────────────────
+CREATE TABLE alert_rules (
+  id                SERIAL PRIMARY KEY,
+  code              VARCHAR(64) NOT NULL UNIQUE,
+  name              TEXT NOT NULL,
+  description       TEXT,
+  threshold_value   NUMERIC,
+  window_minutes    INT,
+  channel           VARCHAR(32) NOT NULL DEFAULT 'email',
+  severity          VARCHAR(16) NOT NULL DEFAULT 'warning',
+  enabled           BOOLEAN NOT NULL DEFAULT TRUE,
+  cooldown_minutes  INT NOT NULL DEFAULT 60,
+  config            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'payos_reconcile_rescued',
+  'Đối soát PayOS cứu được đơn đã trả',
+  'Cron đối soát tìm thấy đơn PAID mà webhook chưa kích hoạt',
+  1, NULL, 'email', 'critical', 30,
+  '{"jobCode": "payos_order_reconcile"}'::jsonb
+);
+
+CREATE TABLE alert_events (
+  id              BIGSERIAL PRIMARY KEY,
+  rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+  fired_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  measured_value  NUMERIC,
+  message         TEXT,
+  payload         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  resolved        BOOLEAN NOT NULL DEFAULT FALSE,
+  resolved_at     TIMESTAMPTZ,
+  resolved_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  notified        BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX idx_alert_events_rule_fired ON alert_events (rule_id, fired_at DESC);
+CREATE INDEX idx_alert_events_unresolved ON alert_events (resolved, fired_at DESC) WHERE resolved = FALSE;
+
+CREATE TABLE cron_job_runs (
+  id             BIGSERIAL PRIMARY KEY,
+  job_code       VARCHAR(64) NOT NULL,
+  started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at    TIMESTAMPTZ,
+  duration_ms    INT,
+  status         VARCHAR(32) NOT NULL,
+  result         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error_message  TEXT
+);
+CREATE INDEX idx_cron_job_runs_job_started ON cron_job_runs (job_code, started_at DESC);
+
+-- ─── Marketplace (migration 108) ──────────────────────────────────────
+CREATE TABLE marketplace_listings (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    resource_type VARCHAR(20) NOT NULL CHECK (resource_type IN ('campaign', 'chatbot')),
+    resource_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50),
+    tags TEXT[],
+    price_credits INTEGER DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'paused')),
+    visibility VARCHAR(20) DEFAULT 'public' CHECK (visibility IN ('public', 'team')),
+    view_count INTEGER DEFAULT 0,
+    purchase_count INTEGER DEFAULT 0,
+    rating_avg DECIMAL(3,2) DEFAULT 0,
+    rating_count INTEGER DEFAULT 0,
+    snapshot_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    published_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_listings_status ON marketplace_listings(status);
+CREATE INDEX idx_listings_type ON marketplace_listings(resource_type);
+CREATE INDEX idx_listings_category ON marketplace_listings(category);
+CREATE INDEX idx_listings_rating ON marketplace_listings(rating_avg DESC);
+CREATE INDEX idx_listings_user ON marketplace_listings(id_user);
+
+CREATE TABLE marketplace_purchases (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    seller_id BIGINT NOT NULL REFERENCES users(id),
+    credits_spent INTEGER NOT NULL,
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('purchase', 'refund')),
+    cloned_resource_id BIGINT,
+    cloned_resource_type VARCHAR(20),
+    purchased_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(id_user, listing_id)
+);
+
+CREATE INDEX idx_purchases_user ON marketplace_purchases(id_user);
+CREATE INDEX idx_purchases_listing ON marketplace_purchases(listing_id);
+CREATE INDEX idx_purchases_seller ON marketplace_purchases(seller_id);
+
+CREATE TABLE marketplace_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(id_user, listing_id)
+);
+
+CREATE INDEX idx_reviews_listing ON marketplace_reviews(listing_id);
+CREATE INDEX idx_reviews_user ON marketplace_reviews(id_user);
+
+CREATE TABLE marketplace_favorites (
+    id_user BIGINT NOT NULL REFERENCES users(id),
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (id_user, listing_id)
+);
+
+CREATE INDEX idx_favorites_user ON marketplace_favorites(id_user);
+CREATE INDEX idx_favorites_listing ON marketplace_favorites(listing_id);
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.

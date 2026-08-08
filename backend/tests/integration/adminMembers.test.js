@@ -125,7 +125,7 @@ describe('GET /api/admin/members — listing', () => {
     const plan = await createPlan({ code: 'basic' });
     const u1 = await createUser({ role: 'user', username: 'has_plan' });
     await assignPlanToUser(u1.id, plan.id);
-    await createUser({ role: 'user', username: 'no_plan' });
+    await createUser({ role: 'user', username: 'no_plan', withPlan: false });
 
     const token = await loginAs(admin);
     const res = await request(app)
@@ -208,7 +208,7 @@ describe('GET /api/admin/members — listing', () => {
   it('expiry=expired → chỉ user đã hết hạn VÀ không còn plan', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const plan = await createPlan({ code: 'basic' });
-    const expiredNoPlan = await createUser({ role: 'user', username: 'expired_no_plan' });
+    const expiredNoPlan = await createUser({ role: 'user', username: 'expired_no_plan', withPlan: false });
     const expiredWithPlan = await createUser({ role: 'user', username: 'expired_with_plan' });
     const stillValid = await createUser({ role: 'user', username: 'still_ok' });
 

@@ -50,6 +50,10 @@ export const userManagementApiService = {
   getTeamOverview() {
     return api.get('/employees/team-overview');
   },
+
+  getMyContribution() {
+    return api.get('/employees/contribution/me');
+  },
 };
 
 export default userManagementApiService;

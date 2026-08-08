@@ -3,72 +3,109 @@ import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
-import authMiddleware from '../middleware/auth.middleware.js';
+import authMiddleware, {
+  attachSseUserIdForRateLimit,
+  resolveUserContext,
+} from '../middleware/auth.middleware.js';
+import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// ── SSE Stream (parse JWT from query param for SSE compatibility) ───
-router.get('/inbox/stream', (req, res) => {
-  // Set headers for SSE
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering if present
-  
-  // Parse JWT token from query param (EventSource doesn't support headers)
+function runGate(middleware, req, res) {
+  return new Promise((resolve) => {
+    middleware(req, res, (err) => {
+      if (err) {
+        resolve({ ok: false, error: err });
+        return;
+      }
+      if (res.headersSent) {
+        resolve({ ok: false, sent: true });
+        return;
+      }
+      resolve({ ok: true });
+    });
+  });
+}
+
+// ── SSE Stream — MUST stay above router.use(authMiddleware).
+// EventSource can only send JWT via ?token=; Bearer auth would always 401.
+router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req, res) => {
   const token = req.query.token;
   if (!token) {
-    res.setHeader('Content-Type', 'application/json');
-    res.status(401).json({ success: false, message: 'Unauthorized' });
-    return;
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(String(token), process.env.JWT_SECRET);
   } catch (err) {
-    console.error('[SSE] JWT verify failed:', err.message, 'token prefix:', token.substring(0, 50));
-    res.setHeader('Content-Type', 'application/json');
-    res.status(401).json({ success: false, message: 'Invalid token' });
-    return;
+    console.error('[SSE] JWT verify failed:', err.message, 'token prefix:', String(token).substring(0, 50));
+    return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
-  // Token uses userIdentifier, nameidentifier (Microsoft), or userId depending on how it was created
-  // Microsoft-style tokens use URL-formatted keys
   const userIdentifierClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
   const userId = decoded.userId || decoded.userIdentifier || decoded.nameidentifier || decoded[userIdentifierClaim];
   if (!userId) {
-    res.setHeader('Content-Type', 'application/json');
-    res.status(401).json({ success: false, message: 'Invalid token - no userId' });
-    return;
+    return res.status(401).json({ success: false, message: 'Invalid token - no userId' });
   }
 
-  // Send initial connection message
-  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', userId })}\n\n`);
-  
-  // Register client
+  try {
+    // EventSource cannot send X-Owner-Context — always self context (see plan out-of-scope).
+    req.user = await resolveUserContext(userId);
+  } catch (err) {
+    if (err.status && err.body) {
+      return res.status(err.status).json(err.body);
+    }
+    console.error('[SSE] resolveUserContext failed:', err.message);
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const passwordGate = await runGate(requirePasswordChange, req, res);
+  if (!passwordGate.ok) return;
+  const planGate = await runGate(requireActivePlan, req, res);
+  if (!planGate.ok) return;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', userId: String(userId) })}\n\n`);
+
   sseService.addClient(userId, res);
-  
-  // Keep connection alive with heartbeat
+
   const heartbeat = setInterval(() => {
     try {
       res.write(`: heartbeat\n\n`);
-    } catch (e) {
+    } catch {
       clearInterval(heartbeat);
+      res.__sseHeartbeat = null;
     }
   }, 30000);
-  
-  // Cleanup on close
+  // Track on res so tests / removeClient can clear if req.close races
+  res.__sseHeartbeat = heartbeat;
+
+  const clearHeartbeat = () => {
+    if (res.__sseHeartbeat) {
+      clearInterval(res.__sseHeartbeat);
+      res.__sseHeartbeat = null;
+    }
+  };
+
   req.on('close', () => {
-    clearInterval(heartbeat);
+    clearHeartbeat();
     sseService.removeClient(userId, res);
   });
+  res.on('close', clearHeartbeat);
 });
 
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
 // ── Knowledge Base ───────────────────────────────────────────────
 
@@ -107,6 +144,7 @@ router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatb
 router.get('/custom-chatbots/:chatbotId', chatbotController.getCustomChatbot.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Chatbot Channel Connections
 router.get('/custom-chatbots/:chatbotId/channels', chatbotController.getChatbotChannels.bind(chatbotController));
@@ -130,10 +168,8 @@ router.post('/widgets', chatbotController.createWidget.bind(chatbotController));
 router.put('/widgets/:id', chatbotController.updateWidget.bind(chatbotController));
 router.delete('/widgets/:id', chatbotController.deleteWidget.bind(chatbotController));
 
-// Web Chat (visitor-facing, no auth)
-router.get('/widgets/:widgetKey/start', chatbotController.startWebChat.bind(chatbotController));
-router.get('/widgets/conversations/:conversationId/messages', chatbotController.getWebChatMessages.bind(chatbotController));
-router.post('/widgets/conversations/:conversationId/messages', chatbotController.sendWebChatMessage.bind(chatbotController));
+// NOTE: visitor webchat start/messages routes removed (orphan + cross-tenant IDOR).
+// Inbox uses /inbox/*; public widget uses /api/chatbot-public/custom-chatbot/*.
 
 // ── Unified Inbox ────────────────────────────────────────────────
 
@@ -141,19 +177,17 @@ router.get('/inbox/conversations', unifiedInboxController.getConversations.bind(
 router.get('/inbox/conversations/:id', unifiedInboxController.getConversation.bind(unifiedInboxController));
 router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessages.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMessage.bind(unifiedInboxController));
+router.post('/inbox/messages/:messageId/retry', unifiedInboxController.retryMessage.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));
 router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
+router.post('/inbox/conversations/:id/ai-pause', unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 
-// Get chatbot settings for a Zalo account
 router.get('/zalo-account/:zaloSettingId/chatbot', chatbotController.getZaloAccountChatbotSettings.bind(chatbotController));
-// Update chatbot settings for a Zalo account
 router.put('/zalo-account/:zaloSettingId/chatbot', chatbotController.updateZaloAccountChatbotSettings.bind(chatbotController));
-// Enable/disable chatbot for a Zalo account
 router.post('/zalo-account/:zaloSettingId/chatbot/toggle', chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
-// Get all Zalo accounts with chatbot settings for current user
 router.get('/zalo-accounts/chatbot', chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
 
 // ── Outbox ───────────────────────────────────────────────────────
@@ -163,23 +197,14 @@ router.get('/inbox/outbox/:id', unifiedInboxController.getOutboxMessage.bind(uni
 
 // ── Zalo Personal Sync ───────────────────────────────────────────
 
-// Sync all (contacts + groups)
 router.get('/zalo-personal/sync', zaloPersonalSyncController.sync.bind(zaloPersonalSyncController));
-// Sync contacts only
 router.get('/zalo-personal/sync/contacts', zaloPersonalSyncController.syncContacts.bind(zaloPersonalSyncController));
-// Sync groups only
 router.get('/zalo-personal/sync/groups', zaloPersonalSyncController.syncGroups.bind(zaloPersonalSyncController));
-// Get sync status
 router.get('/zalo-personal/sync/status', zaloPersonalSyncController.getSyncStatus.bind(zaloPersonalSyncController));
-// Sync chat history for a specific conversation
 router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
-// Sync chat history for all groups
 router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
-// Get chat history from DB for AI context
 router.get('/zalo-personal/history', zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
-// Get group members from Zalo API
 router.get('/zalo-personal/group-members', zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
-// Get senders who have messaged in a group from DB
 router.get('/zalo-personal/group-senders', zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
 
 export default router;

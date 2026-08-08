@@ -3,12 +3,15 @@ import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
+import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.use(authMiddleware);
+router.use(requirePasswordChange);
+router.use(requireActivePlan);
 
 // Smart interactive chat
 router.post('/chat', aiLimiter, assertAiCreditAvailable('ai_assistant_chat'), aiController.chat.bind(aiController));
