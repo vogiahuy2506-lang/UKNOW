@@ -137,4 +137,97 @@ describe('chatbotRateLimit.service', () => {
     expect(blockB.reason).toBe('owner_cap');
     expect(blockB.shouldNotify).toBe(true);
   });
+
+  it('counts owner usage even without a daily cap', async () => {
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_MIN = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_HOUR = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_DAY = '100';
+
+    const params = {
+      channel: 'web',
+      ownerUserId: 55,
+      chatbotId: 3,
+      senderKey: 'u1',
+    };
+
+    await chatbotRateLimitService.checkBeforeAi(params);
+    await chatbotRateLimitService.checkBeforeAi(params);
+    await chatbotRateLimitService.checkBeforeAi(params);
+
+    expect(await chatbotRateLimitService.getOwnerUsedToday(55)).toBe(3);
+  });
+
+  it('increments owner count when blocking on owner_cap', async () => {
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_MIN = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_HOUR = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_DAY = '100';
+    chatbotRateLimitService._setOwnerCapForTests(66, 2);
+
+    const params = {
+      channel: 'web',
+      ownerUserId: 66,
+      chatbotId: 3,
+      senderKey: 'u2',
+    };
+
+    expect((await chatbotRateLimitService.checkBeforeAi(params)).allowed).toBe(true);
+    expect((await chatbotRateLimitService.checkBeforeAi(params)).allowed).toBe(true);
+    const blocked = await chatbotRateLimitService.checkBeforeAi(params);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.reason).toBe('owner_cap');
+    expect(await chatbotRateLimitService.getOwnerUsedToday(66)).toBe(3);
+  });
+
+  it('does not increment owner count when blocked by sender_minute', async () => {
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_MIN = '1';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_HOUR = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_DAY = '100';
+
+    const params = {
+      channel: 'web',
+      ownerUserId: 77,
+      chatbotId: 3,
+      senderKey: 'spammer',
+    };
+
+    expect((await chatbotRateLimitService.checkBeforeAi(params)).allowed).toBe(true);
+    expect(await chatbotRateLimitService.getOwnerUsedToday(77)).toBe(1);
+
+    const blocked = await chatbotRateLimitService.checkBeforeAi(params);
+    expect(blocked.reason).toBe('sender_minute');
+    expect(await chatbotRateLimitService.getOwnerUsedToday(77)).toBe(1);
+  });
+
+  it('counts owner usage on the no-senderKey branch', async () => {
+    process.env.CHATBOT_RATE_LIMIT_PER_CHATBOT_PER_HOUR = '100';
+
+    const params = {
+      channel: 'web',
+      ownerUserId: 88,
+      chatbotId: 3,
+      senderKey: '',
+    };
+
+    await chatbotRateLimitService.checkBeforeAi(params);
+    await chatbotRateLimitService.checkBeforeAi(params);
+    expect(await chatbotRateLimitService.getOwnerUsedToday(88)).toBe(2);
+  });
+
+  it('getOwnerUsedToday is read-only across repeated calls', async () => {
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_MIN = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_HOUR = '100';
+    process.env.CHATBOT_RATE_LIMIT_PER_SENDER_PER_DAY = '100';
+
+    const params = {
+      channel: 'web',
+      ownerUserId: 99,
+      chatbotId: 3,
+      senderKey: 'u9',
+    };
+    await chatbotRateLimitService.checkBeforeAi(params);
+    await chatbotRateLimitService.checkBeforeAi(params);
+
+    expect(await chatbotRateLimitService.getOwnerUsedToday(99)).toBe(2);
+    expect(await chatbotRateLimitService.getOwnerUsedToday(99)).toBe(2);
+  });
 });

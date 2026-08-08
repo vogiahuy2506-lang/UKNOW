@@ -54,6 +54,22 @@ jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () =>
   findGrantsByOrderId: jest.fn(),
 }));
 
+const getOwnerUsedToday = jest.fn(async () => 0);
+const invalidateOwnerCapCache = jest.fn();
+
+jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', () => ({
+  default: {
+    systemLimits: {
+      perSenderPerMin: 8,
+      perSenderPerHour: 20,
+      perSenderPerDay: 50,
+      perChatbotPerHour: 500,
+    },
+    getOwnerUsedToday,
+    invalidateOwnerCapCache,
+  },
+}));
+
 const userController = (await import('../user.controller.js')).default;
 
 describe('UserController.getProfile', () => {
@@ -70,6 +86,9 @@ describe('UserController.getProfile', () => {
     sumActiveTopupGrants.mockReset();
     getWalletBalance.mockReset();
     findSuccessfulOrdersForUser.mockReset();
+    getOwnerUsedToday.mockReset();
+    invalidateOwnerCapCache.mockReset();
+    getOwnerUsedToday.mockResolvedValue(0);
 
     resolveBillingUserId.mockImplementation(async (userId, options = {}) => {
       if (options.ownerContextId != null && options.ownerContextId !== '') {

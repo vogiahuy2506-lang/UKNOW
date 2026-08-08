@@ -275,9 +275,23 @@ class UserController {
         console.error('[Profile] loadProfileAddons failed', { userId, billingUserId, message: err.message });
       }
 
+      const data = { ...mapProfileResponse(profileRow), addons };
+      data.chatbotRateLimits = chatbotRateLimitService.systemLimits;
+      try {
+        // billingUserId — bộ đếm Redis khoá theo chủ workspace, không phải employee
+        data.botRepliesUsedToday =
+          await chatbotRateLimitService.getOwnerUsedToday(billingUserId);
+      } catch (err) {
+        console.warn('[Profile] getOwnerUsedToday failed', {
+          billingUserId,
+          message: err.message,
+        });
+        data.botRepliesUsedToday = 0;
+      }
+
       res.json({
         success: true,
-        data: { ...mapProfileResponse(profileRow), addons },
+        data,
       });
     } catch (error) {
       console.error('Get profile error:', error);

@@ -299,12 +299,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <div className="px-3 py-2.5 border-t border-slate-100 shrink-0 bg-slate-50/50">
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
+        <div className="text-[11px] text-slate-400">
           <span>{chatbots.length} chatbot(s)</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span>Gemini 2.5 Flash</span>
-          </div>
         </div>
       </div>
 
