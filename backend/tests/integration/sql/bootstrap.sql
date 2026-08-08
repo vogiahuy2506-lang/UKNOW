@@ -288,7 +288,14 @@ INSERT INTO topup_pricing (item_key, unit_price, min_qty, step_qty, max_qty, is_
 VALUES
   ('zalo_messages', 100, 50, 50, NULL, TRUE, 10),
   ('emails', 20, 250, 250, 50000, TRUE, 20),
-  ('ai_credits', 200, 25, 25, 5000, TRUE, 30);
+  ('ai_credits', 200, 25, 25, 5000, TRUE, 30),
+  -- Món cấu trúc (migration 109). employees tắt từ migration 112 — giữ dòng
+  -- nhưng is_active = FALSE để test "không bán nhân viên" vẫn có gì để kiểm.
+  ('zalo_accounts',  50000, 1, 1, 50,  TRUE,  40),
+  ('email_accounts', 50000, 1, 1, 50,  TRUE,  50),
+  ('landing_pages',  30000, 1, 1, 200, TRUE,  60),
+  ('chatbots',      100000, 1, 1, 100, TRUE,  70),
+  ('employees',      50000, 1, 1, 100, FALSE, 80);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,
@@ -1434,6 +1441,13 @@ CREATE TABLE schema_migrations (
 -- ─── Top-up wallet (migrations 110/111) ──────────────────────────────────
 -- cycle_end NULL = ví vĩnh viễn (consumable). Có giá trị = structural.
 ALTER TABLE topup_grants ALTER COLUMN cycle_end DROP NOT NULL;
+
+-- Món tiêu hao KHÔNG được có hạn — ghi sai thì lỗi ngay tại chỗ ghi (migration 110).
+ALTER TABLE topup_grants
+  ADD CONSTRAINT topup_grants_consumable_no_expiry CHECK (
+    item_key NOT IN ('zalo_messages', 'emails', 'ai_credits')
+    OR cycle_end IS NULL
+  );
 
 CREATE TABLE IF NOT EXISTS topup_debits (
   id          BIGSERIAL PRIMARY KEY,
