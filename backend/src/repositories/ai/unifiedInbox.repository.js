@@ -761,7 +761,8 @@ class UnifiedInboxRepository {
 
   /**
    * Whether AI auto-reply is paused for this conversation (owner handoff).
-   * Pause stays until the owner explicitly resumes — no timed auto-resume.
+   * Lazy auto-resume when owner setting ai_handoff_auto_resume_minutes has elapsed
+   * since ai_paused_at (see aiHandoffResume.util.js).
    */
   async isAiPaused(conversationId, conversationType) {
     if (!conversationId) return false;
@@ -771,11 +772,32 @@ class UnifiedInboxRepository {
           : 'channel_conversations';
 
     try {
+      const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(
+        '../../utils/aiHandoffResume.util.js'
+      );
       const { rows } = await db.query(
-        `SELECT ai_paused FROM ${table} WHERE id = $1`,
+        `SELECT ai_paused, ai_paused_at, id_user FROM ${table} WHERE id = $1`,
         [conversationId]
       );
-      return rows[0]?.ai_paused === true;
+      const row = rows[0];
+      if (!row || row.ai_paused !== true) return false;
+
+      const minutes = await getCachedAutoResumeMinutes(row.id_user);
+      if (shouldStayAiPaused({
+        aiPaused: true,
+        aiPausedAt: row.ai_paused_at,
+        autoResumeMinutes: minutes,
+      })) {
+        return true;
+      }
+
+      await db.query(
+        `UPDATE ${table}
+         SET ai_paused = false, ai_paused_at = NULL
+         WHERE id = $1 AND ai_paused = true`,
+        [conversationId]
+      );
+      return false;
     } catch (err) {
       // Column missing (migration not applied yet) — do not block AI.
       console.warn('[UnifiedInbox] isAiPaused check failed:', err.message);

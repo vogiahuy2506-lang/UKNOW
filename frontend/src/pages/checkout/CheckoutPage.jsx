@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
+import { trackEvent } from '../../utils/analytics';
 import QRCode from 'qrcode';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
@@ -104,6 +105,11 @@ const CheckoutPage = () => {
         try {
             setPaymentStarted(true);
             setLoading(true);
+            trackEvent('begin_checkout', {
+                currency: 'VND',
+                value: finalAmount,
+                items: [{ item_id: voucherPlanCode, item_name: planName }],
+            });
             const userEmail = location.state?.userEmail || user?.email;
             if (!userEmail) {
                 if (isAuthLoading) {

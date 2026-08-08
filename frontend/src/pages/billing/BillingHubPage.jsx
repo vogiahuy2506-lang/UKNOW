@@ -5,7 +5,6 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import PlanSection from '../../features/billing/PlanSection';
-import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
 import OrderHistoryTab from '../../features/billing/OrderHistoryTab';
 import ResourceLocksTab from '../../features/billing/ResourceLocksTab';
 
@@ -52,7 +51,7 @@ const BillingHubPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="w-full space-y-8 p-4 sm:p-6 lg:p-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{t('billingHub.title')}</h1>
         <p className="mt-1 text-sm text-slate-500">{t('billingHub.subtitle')}</p>
@@ -88,29 +87,20 @@ const BillingHubPage = () => {
       ) : activeTab === 'locks' ? (
         <ResourceLocksTab t={t} />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <PlanSection data={profileData} t={t} />
-          {isUserAdmin && (
-            <BotDailyReplyCapCard
-              data={profileData}
-              t={t}
-              onSaved={(next) => {
-                setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
-              }}
-            />
-          )}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link
               to="/app/topup"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-primary-700"
             >
               <HiOutlineCurrencyDollar className="h-5 w-5" />
               {t('billingHub.ctaTopup')}
             </Link>
             <Link
               to="/pricing"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
               <HiOutlineTag className="h-5 w-5" />
               {t('billingHub.ctaUpgrade')}

@@ -58,6 +58,7 @@ export async function findProfileBase(userId) {
             u.role, u.active_plan_id, u.subscription_expires_at,
             ${PROFILE_LIMIT_COLUMNS},
             u.bot_daily_reply_cap,
+            u.ai_handoff_auto_resume_minutes,
             u.created_at, u.last_login_at, r.role_code, r.role_name
      FROM users u
      LEFT JOIN roles r ON u.id_role = r.id
@@ -76,6 +77,7 @@ export async function findProfileBaseFallback(userId) {
             NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
             NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
             NULL::int AS bot_daily_reply_cap,
+            NULL::int AS ai_handoff_auto_resume_minutes,
             u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
      FROM users u WHERE u.id = $1`,
     [userId]
@@ -183,6 +185,23 @@ export async function updateBotDailyReplyCap(userId, cap) {
      WHERE id = $1
      RETURNING id, bot_daily_reply_cap`,
     [userId, cap]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Owner-only: minutes until AI auto-resumes after handoff. null = off.
+ * @param {number} userId
+ * @param {number|null} minutes
+ */
+export async function updateAiHandoffAutoResumeMinutes(userId, minutes) {
+  const { rows } = await db.query(
+    `UPDATE users
+     SET ai_handoff_auto_resume_minutes = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING id, ai_handoff_auto_resume_minutes`,
+    [userId, minutes]
   );
   return rows[0] || null;
 }

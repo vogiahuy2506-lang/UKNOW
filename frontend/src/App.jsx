@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
 import { useI18n, I18nProvider } from './i18n';
+import RouteAnalytics from './components/RouteAnalytics';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -231,9 +232,9 @@ function App() {
     <>
       <I18nProvider>
         <Router>
-          <>
-            {toaster}
-            <Routes>
+          <RouteAnalytics />
+          {toaster}
+          <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
             <PublicRoute>

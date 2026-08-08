@@ -4,6 +4,7 @@ import { HiOutlineCheckCircle, HiArrowRight, HiOutlineDocumentText } from 'react
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
+import { trackEvent } from '../../utils/analytics';
 
 const GLASS_CARD = 'bg-white/70 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
 
@@ -33,6 +34,12 @@ const PaymentSuccessPage = () => {
                 if (data.status === 'success') {
                     setVerified(true);
                     setNeedsLogin(false);
+                    // transaction_id = mã đơn → GA4 tự loại trùng khi khách F5 trang này.
+                    trackEvent('purchase', {
+                        transaction_id: String(code),
+                        currency: 'VND',
+                        value: Number(data.amount || 0),
+                    });
                 } else if (data.status === 'failed') {
                     navigate('/checkout', { replace: true });
                 } else {

@@ -25,6 +25,9 @@ import {
 const normalizeFileName = (name) => name.trim().normalize('NFC');
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { getMyProfile } from '../../features/auth/services/authApi.service';
+import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
+import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import { useI18n } from '../../i18n';
 import {
   ChannelGuideModal,
@@ -72,6 +75,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [showZaloChannelModal, setShowZaloChannelModal] = useState(false);
   const [showFacebookChannelModal, setShowFacebookChannelModal] = useState(false);
   const [showZaloPersonalChannelModal, setShowZaloPersonalChannelModal] = useState(false);
+  const [profileData, setProfileData] = useState(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -97,6 +101,20 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [newQuestion, setNewQuestion] = useState('');
 
   // ── localStorage persistence ──────────────────────────────────────────────────
+
+  // Owner limits (daily bot reply cap) — không nằm Billing
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await getMyProfile();
+        if (!cancelled) setProfileData(response?.data || null);
+      } catch {
+        // non-fatal — card ẩn nếu không load được
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -714,6 +732,27 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           {/* ── GENERAL ── */}
           {activeTab === 'general' && (
             <div className="space-y-5">
+
+              {profileData && (
+                <>
+                  <BotDailyReplyCapCard
+                    data={profileData}
+                    t={t}
+                    onSaved={(next) => {
+                      setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
+                    }}
+                  />
+                  <AiHandoffAutoResumeCard
+                    data={profileData}
+                    t={t}
+                    onSaved={(next) => {
+                      setProfileData((prev) => (
+                        prev ? { ...prev, aiHandoffAutoResumeMinutes: next } : prev
+                      ));
+                    }}
+                  />
+                </>
+              )}
 
               {/* Gộp: Thông tin + AI + Câu hỏi gợi ý */}
               <SectionCard

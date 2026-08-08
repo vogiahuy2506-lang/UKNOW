@@ -52,9 +52,9 @@ export default function PlanSection({ data, t }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {/* Plan name + price */}
-      <div className="flex items-start justify-between gap-3 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 rounded-xl border border-primary-100 bg-primary-50 px-5 py-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 text-xs font-bold bg-primary-500 text-white rounded-full">

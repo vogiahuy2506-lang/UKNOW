@@ -47,6 +47,10 @@ CREATE TABLE users (
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
   bot_daily_reply_cap     INTEGER CHECK (bot_daily_reply_cap IS NULL OR bot_daily_reply_cap > 0),
+  ai_handoff_auto_resume_minutes INTEGER CHECK (
+    ai_handoff_auto_resume_minutes IS NULL
+    OR ai_handoff_auto_resume_minutes IN (5, 15, 30, 60)
+  ),
   subscription_reminder_count SMALLINT NOT NULL DEFAULT 0,
   -- migration 094: buộc đổi mật khẩu sau khi chủ shop reset cho nhân viên
   must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,

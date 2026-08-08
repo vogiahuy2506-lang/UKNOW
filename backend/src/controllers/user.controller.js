@@ -18,6 +18,7 @@ import {
   updatePasswordHash,
   updateProfile as updateProfileInDb,
   updateBotDailyReplyCap,
+  updateAiHandoffAutoResumeMinutes,
 } from '../repositories/user/user.repository.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
@@ -29,6 +30,9 @@ import {
   mapTopupItemsFromConfig,
 } from '../utils/topupDisplay.util.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
+import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
+
+const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
 const EMPLOYEE_LIMIT_KEYS = {
   maxCampaigns: 'max_campaigns',
@@ -152,6 +156,7 @@ const mapProfileResponse = (userRow) => ({
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
   aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
   botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
+  aiHandoffAutoResumeMinutes: userRow.ai_handoff_auto_resume_minutes ?? null,
   planGracePeriodDays: userRow.grace_period_days ?? 0,
   // Send usage counts (today and this month)
   emailSentToday: Number(userRow.email_sent_today ?? 0),
@@ -251,6 +256,10 @@ class UserController {
         ...userRow,
         ...(employeeCtx ? { subscription_expires_at: billingRow.subscription_expires_at } : {}),
         bot_daily_reply_cap: billingRow.bot_daily_reply_cap ?? userRow.bot_daily_reply_cap ?? null,
+        ai_handoff_auto_resume_minutes:
+          billingRow.ai_handoff_auto_resume_minutes
+          ?? userRow.ai_handoff_auto_resume_minutes
+          ?? null,
         ...(planRow || {}),
         ...usageCounts,
         ai_tokens_used: aiTokenUsage.used,
@@ -397,6 +406,53 @@ class UserController {
         return res.status(400).json({
           success: false,
           message: 'Giới hạn phải là số nguyên dương, hoặc để trống để bỏ giới hạn',
+        });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * PATCH /api/users/ai-handoff-auto-resume
+   * Chủ tài khoản đặt phút tự bật lại AI sau handoff (null = tắt).
+   * Guard requireSelfContext trên route.
+   */
+  async updateAiHandoffAutoResume(req, res) {
+    try {
+      const userId = req.user.id;
+      const raw = req.body?.aiHandoffAutoResumeMinutes;
+
+      let minutes = null;
+      if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+        const n = Number.parseInt(String(raw), 10);
+        if (!AI_HANDOFF_AUTO_RESUME_ALLOWED.has(n)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Giá trị phải là 5, 15, 30, 60 phút, hoặc để trống để tắt',
+          });
+        }
+        minutes = n;
+      }
+
+      const row = await updateAiHandoffAutoResumeMinutes(userId, minutes);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      invalidateAiHandoffAutoResumeCache(userId);
+
+      return res.json({
+        success: true,
+        data: {
+          aiHandoffAutoResumeMinutes: row.ai_handoff_auto_resume_minutes ?? null,
+        },
+      });
+    } catch (error) {
+      console.error('Update AI handoff auto-resume error:', error);
+      if (error?.code === '23514') {
+        return res.status(400).json({
+          success: false,
+          message: 'Giá trị phải là 5, 15, 30, 60 phút, hoặc để trống để tắt',
         });
       }
       return res.status(500).json({ success: false, message: 'Lỗi server' });
