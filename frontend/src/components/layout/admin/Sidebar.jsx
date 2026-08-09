@@ -18,6 +18,7 @@ import {
   HiOutlineCube,
   HiOutlineX,
   HiOutlineClipboardList,
+  HiOutlinePlusCircle,
   HiOutlineUserGroup,
   HiOutlineStar,
   HiOutlineGlobeAlt,
@@ -105,6 +106,13 @@ const userMenuItems = (t) => [
       { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar },
       { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap },
       { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList },
+    ],
+  },
+  {
+    name: t('nav.billing'), icon: HiOutlineCurrencyDollar,
+    children: [
+      { name: t('nav.billingOverview'), path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
+      { name: t('nav.buyTopup'), path: '/app/topup', icon: HiOutlinePlusCircle, ownerOnly: true },
     ],
   },
   {
