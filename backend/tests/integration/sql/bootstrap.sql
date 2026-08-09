@@ -1188,6 +1188,7 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   temperature         DECIMAL(3,2) DEFAULT 0.7,
   max_tokens          INTEGER DEFAULT 2048,
   ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  allow_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

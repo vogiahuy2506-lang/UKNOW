@@ -136,6 +136,21 @@ export const publicChatLimiter = rateLimit({
   keyGenerator: (req) => `pubchat:${clientIpKey(req)}`,
 });
 
+// Public chat attachment upload — 5 files / 10 minutes / IP
+export const publicUploadLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Quá nhiều file tải lên. Vui lòng thử lại sau.',
+    code: 'PUBLIC_UPLOAD_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pubupload:${clientIpKey(req)}`,
+});
+
 // Campaign run limiter — số lần /run mỗi giờ (không phải concurrent; concurrent = MAX_CONCURRENT_CAMPAIGNS)
 const CAMPAIGN_RUN_LIMIT_PER_HOUR = Math.max(
   1,

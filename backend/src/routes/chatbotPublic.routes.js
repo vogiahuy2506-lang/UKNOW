@@ -1,9 +1,11 @@
 import express from 'express';
+import multer from 'multer';
 import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
-import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
+import { publicChatLimiter, publicUploadLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Apply allow-all CORS to all routes (for widget/iframe embedding)
 router.use(allowAllCorsMiddleware);
@@ -32,6 +34,20 @@ router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotControl
 
 // Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
 router.post('/custom-chatbot/id/:chatbotId/chat', publicChatLimiter, chatbotController.chatWithCustomChatbotById.bind(chatbotController));
+
+// Chat attachment upload (visitor) — rate limit before multer; gates inside controller
+router.post(
+  '/custom-chatbot/:widgetKey/attachment',
+  publicUploadLimiter,
+  upload.single('file'),
+  chatbotController.uploadPublicChatAttachment.bind(chatbotController)
+);
+router.post(
+  '/custom-chatbot/id/:chatbotId/attachment',
+  publicUploadLimiter,
+  upload.single('file'),
+  chatbotController.uploadPublicChatAttachmentById.bind(chatbotController)
+);
 
 // Get messages for polling agent replies (requires sessionId)
 router.get('/custom-chatbot/id/:chatbotId/messages', chatbotController.getChatMessages.bind(chatbotController));

@@ -5,6 +5,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
+
+const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
+const MAX_ATTACH = 3;
 
 export default function PublicChatbotPage() {
   const { chatbotId } = useParams();
@@ -14,18 +18,18 @@ export default function PublicChatbotPage() {
   const [chatbot, setChatbot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Generate session ID for this browser
   const sessionId = useRef(localStorage.getItem(`uknow_session_${chatbotId}`) || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-  
-  // Save session ID
+
   useEffect(() => {
     localStorage.setItem(`uknow_session_${chatbotId}`, sessionId.current);
   }, [chatbotId]);
 
-  // Widget settings
   const primaryColor = chatbot?.primary_color || chatbot?.theme_color || '#6366f1';
   const backgroundColor = chatbot?.background_color || '#ffffff';
   const textColor = chatbot?.text_color || '#1f2937';
@@ -33,12 +37,12 @@ export default function PublicChatbotPage() {
   const logoUrl = chatbot?.logo_url || '';
   const showAvatar = chatbot?.show_avatar !== false;
   const suggestedQuestions = chatbot?.suggested_questions || [];
+  const allowAttachments = chatbot?.allow_attachments === true;
 
   useEffect(() => {
     loadChatbot();
   }, [chatbotId]);
 
-  // Load messages from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`uknow_msgs_${chatbotId}_${sessionId.current}`);
     if (saved) {
@@ -47,11 +51,10 @@ export default function PublicChatbotPage() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMessages(parsed);
         }
-      } catch (e) {}
+      } catch (e) { /* ignore */ }
     }
   }, [chatbotId, sessionId.current]);
 
-  // Save messages to localStorage
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem(`uknow_msgs_${chatbotId}_${sessionId.current}`, JSON.stringify(messages));
@@ -80,35 +83,73 @@ export default function PublicChatbotPage() {
     }
   };
 
-  const sendMessage = async (text) => {
-    if (!text?.trim() || isTyping) return;
+  const handlePickFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length || !allowAttachments) return;
+    const remaining = MAX_ATTACH - pendingAttachments.length;
+    if (remaining <= 0) return;
 
-    const userMsg = { role: 'user', content: text };
-    setMessages(prev => [...prev, userMsg]);
+    setUploading(true);
+    try {
+      for (const file of files.slice(0, remaining)) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('sessionId', sessionId.current);
+        const res = await chatbotApi.uploadPublicChatAttachment(chatbotId, formData);
+        const data = res.data?.data;
+        if (data) setPendingAttachments((prev) => [...prev, data]);
+        else throw new Error(res.data?.message || 'Tải file thất bại');
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(err.response?.data?.message || err.message || 'Tải file thất bại');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const sendMessage = async (text) => {
+    if ((!text?.trim() && pendingAttachments.length === 0) || isTyping || uploading) return;
+
+    const attachmentsToSend = [...pendingAttachments];
+    const userMsg = {
+      role: 'user',
+      content: text?.trim() || '',
+      attachments: attachmentsToSend,
+    };
+    setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+    setPendingAttachments([]);
     setIsTyping(true);
 
     try {
+      const history = messages.slice(-10).map((m) => ({
+        role: m.role,
+        content: m.content,
+        attachments: m.attachments || [],
+      }));
+
       const res = await chatbotApi.sendPublicChatbotMessage(chatbotId, {
-        message: text,
-        history: messages.slice(-10),
+        message: text?.trim() || '',
+        history,
         sessionId: sessionId.current,
+        attachments: attachmentsToSend,
       });
 
       if (res.data.success && res.data.data) {
         const payload = res.data.data;
-        // Rate-limited silent (minute/hour): clear typing only, no empty bubble
         if (payload.rateLimited && !payload.content) {
           return;
         }
         if (payload.content) {
-          setMessages(prev => [...prev, {
+          setMessages((prev) => [...prev, {
             role: 'assistant',
             content: payload.content,
           }]);
         }
       } else {
-        setMessages(prev => [...prev, {
+        setMessages((prev) => [...prev, {
           role: 'assistant',
           content: res.data?.message || 'Xin lỗi, đã có lỗi xảy ra.',
         }]);
@@ -119,10 +160,11 @@ export default function PublicChatbotPage() {
       const fallback = isTimeout
         ? 'AI đang xử lý quá lâu, vui lòng thử lại sau vài giây.'
         : (serverMsg || 'Không thể kết nối với server. Vui lòng thử lại sau.');
-      setMessages(prev => [...prev, {
+      setMessages((prev) => [...prev, {
         role: 'assistant',
         content: fallback,
       }]);
+      setPendingAttachments(attachmentsToSend);
     } finally {
       setIsTyping(false);
       inputRef.current?.focus();
@@ -168,12 +210,11 @@ export default function PublicChatbotPage() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
-      {/* Header */}
       <div
         className="shadow-lg"
         style={{
           background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
-          color: 'white'
+          color: 'white',
         }}
       >
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
@@ -189,14 +230,13 @@ export default function PublicChatbotPage() {
           <div>
             <h1 className="font-semibold text-base">{chatbot.name || 'AI Assistant'}</h1>
             <p className="text-xs opacity-80 flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+              <span className="w-2 h-2 bg-green-400 rounded-full" />
               Đang trò chuyện
             </p>
           </div>
         </div>
       </div>
 
-      {/* Suggested Questions */}
       {suggestedQuestions.length > 0 && messages.length === 1 && (
         <div className="max-w-lg mx-auto w-full px-4 pt-4">
           <p className="text-xs font-medium mb-2" style={{ color: textColor, opacity: 0.6 }}>Câu hỏi gợi ý:</p>
@@ -204,12 +244,13 @@ export default function PublicChatbotPage() {
             {suggestedQuestions.map((q, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => handleSuggestionClick(q)}
                 className="px-4 py-2 rounded-full text-sm font-medium transition-all hover:scale-105"
                 style={{
                   backgroundColor: `${primaryColor}15`,
                   border: `1px solid ${primaryColor}30`,
-                  color: primaryColor
+                  color: primaryColor,
                 }}
               >
                 {q}
@@ -219,7 +260,6 @@ export default function PublicChatbotPage() {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 chat-messages-scroll">
         <div className="max-w-lg mx-auto flex flex-col gap-3">
           {messages.map((msg, idx) => (
@@ -238,12 +278,18 @@ export default function PublicChatbotPage() {
                     ? { background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, color: 'white' }
                     : { backgroundColor: '#fff', color: textColor, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
                 }
-                dangerouslySetInnerHTML={{ 
-                  __html: msg.content
-                    .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">$1</a>')
-                    .replace(/\n/g, '<br/>') 
-                }}
-              />
+              >
+                {msg.content ? (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: String(msg.content)
+                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">$1</a>')
+                        .replace(/\n/g, '<br/>'),
+                    }}
+                  />
+                ) : null}
+                <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
+              </div>
             </div>
           ))}
 
@@ -251,9 +297,9 @@ export default function PublicChatbotPage() {
             <div className="flex justify-start">
               <div className="px-4 py-3 rounded-2xl rounded-bl-md shadow-sm" style={{ backgroundColor: '#fff' }}>
                 <div className="flex gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '0ms' }}></span>
-                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '150ms' }}></span>
-                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '300ms' }}></span>
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '0ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '150ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: primaryColor, animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
@@ -263,10 +309,35 @@ export default function PublicChatbotPage() {
         </div>
       </div>
 
-      {/* Input */}
       <div className="border-t" style={{ borderColor: `${primaryColor}20`, backgroundColor: '#fff' }}>
         <div className="max-w-lg mx-auto px-4 py-3">
-          <div className="flex gap-2">
+          {pendingAttachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {pendingAttachments.map((att, idx) => (
+                <div key={att.ref || idx} className="text-xs px-2 py-1 rounded-lg bg-slate-100 flex items-center gap-1">
+                  <span className="truncate max-w-[140px]">{att.displayName || att.name}</span>
+                  <span className="text-slate-400">{formatFileSize(att.size)}</span>
+                  <button type="button" className="text-slate-500" onClick={() => setPendingAttachments((p) => p.filter((_, i) => i !== idx))}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 items-center">
+            {allowAttachments && (
+              <>
+                <input ref={fileInputRef} type="file" accept={ACCEPTED} multiple className="hidden" onChange={handlePickFiles} />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isTyping || uploading || pendingAttachments.length >= MAX_ATTACH}
+                  className="w-11 h-11 rounded-full flex items-center justify-center border disabled:opacity-50"
+                  style={{ borderColor: `${primaryColor}30`, color: primaryColor }}
+                  title="Đính kèm tệp"
+                >
+                  📎
+                </button>
+              </>
+            )}
             <input
               ref={inputRef}
               type="text"
@@ -275,20 +346,21 @@ export default function PublicChatbotPage() {
               onKeyPress={handleKeyPress}
               placeholder="Nhập tin nhắn..."
               className="flex-1 px-4 py-3 border-2 rounded-full focus:outline-none text-sm transition-all"
-              style={{ 
+              style={{
                 borderColor: `${primaryColor}30`,
-                color: textColor
+                color: textColor,
               }}
               disabled={isTyping}
             />
             <button
+              type="button"
               onClick={() => sendMessage(inputText)}
-              disabled={!inputText.trim() || isTyping}
+              disabled={(!inputText.trim() && pendingAttachments.length === 0) || isTyping || uploading}
               className="w-11 h-11 rounded-full flex items-center justify-center text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, boxShadow: `0 4px 12px ${primaryColor}40` }}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
               </svg>
             </button>
           </div>

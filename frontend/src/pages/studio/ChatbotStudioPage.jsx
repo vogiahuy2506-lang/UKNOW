@@ -8,11 +8,36 @@ import {
   HiOutlineChevronRight,
   HiOutlineChatAlt2,
   HiOutlinePlus,
+  HiOutlinePaperClip,
+  HiOutlineX,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
 import ChatbotSettings from './ChatbotSettings';
 import ChatListSidebar from './ChatListSidebar';
+
+const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
+const MAX_ATTACHMENTS = 3;
+const MAX_FILE_MB = 10;
+const MAX_IMAGE_MB = 5;
+
+function clientValidateFile(file) {
+  const name = file.name || '';
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.doc') && !lower.endsWith('.docx')) {
+    return 'Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại';
+  }
+  if (lower.endsWith('.svg')) {
+    return 'Không nhận file SVG';
+  }
+  const isImage = /\.(png|jpe?g|webp)$/i.test(name) || String(file.type || '').startsWith('image/');
+  const maxBytes = (isImage ? MAX_IMAGE_MB : MAX_FILE_MB) * 1024 * 1024;
+  if (file.size > maxBytes) {
+    return `File vượt dung lượng tối đa ${isImage ? MAX_IMAGE_MB : MAX_FILE_MB} MB`;
+  }
+  return null;
+}
 
 // Get custom colors from chatbot
 function getChatbotTheme(chatbot) {
@@ -143,8 +168,11 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const { primaryColor, bgColor, textColor, gradientStyle } = getChatbotTheme(chatbot);
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
@@ -177,6 +205,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           role: m.role,
           content: m.content,
           created_at: m.created_at,
+          attachments: m.attachments || [],
         })));
       }
     } catch (err) {
@@ -188,6 +217,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
   const handleSelectConversation = async (conv) => {
     setActiveConversation(conv);
+    setPendingAttachments([]);
     await loadMessages(conv.id);
   };
 
@@ -199,6 +229,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
         setConversations(prev => [newConv, ...prev]);
         setActiveConversation(newConv);
         setMessages([]);
+        setPendingAttachments([]);
       }
     } catch (err) {
       toast.error('Không thể tạo cuộc trò chuyện mới');
@@ -213,6 +244,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       if (activeConversation?.id === convId) {
         setActiveConversation(null);
         setMessages([]);
+        setPendingAttachments([]);
       }
       toast.success('Đã xóa cuộc trò chuyện');
     } catch (err) {
@@ -220,8 +252,57 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     }
   };
 
+  const handlePickFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const remaining = MAX_ATTACHMENTS - pendingAttachments.length;
+    if (remaining <= 0) {
+      toast.error(`Tối đa ${MAX_ATTACHMENTS} tệp mỗi tin nhắn`);
+      return;
+    }
+
+    const toUpload = files.slice(0, remaining);
+    if (files.length > remaining) {
+      toast.error(`Chỉ thêm được ${remaining} tệp nữa (tối đa ${MAX_ATTACHMENTS})`);
+    }
+
+    setUploadingAttachment(true);
+    try {
+      for (const file of toUpload) {
+        const clientErr = clientValidateFile(file);
+        if (clientErr) {
+          toast.error(clientErr);
+          continue;
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('chatbot_id', String(chatbot.id));
+        const res = await chatbotApi.uploadChatAttachment(formData);
+        const data = res.data?.data;
+        if (!data) {
+          toast.error(res.data?.message || 'Tải file thất bại');
+          continue;
+        }
+        if (data.textExtracted === false && data.type === 'file') {
+          toast('Đã gửi tệp, nhưng chatbot không đọc được nội dung', { icon: '⚠️' });
+        }
+        setPendingAttachments(prev => [...prev, data]);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Tải file thất bại');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const removePendingAttachment = (index) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || sending) return;
+    if ((!input.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment) return;
 
     // Create new conversation if none selected
     let conv = activeConversation;
@@ -240,32 +321,48 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     }
 
     const userText = input.trim();
-    const userMessage = { role: 'user', content: userText, created_at: new Date().toISOString() };
+    const attachmentsToSend = [...pendingAttachments];
+    const userMessage = {
+      role: 'user',
+      content: userText,
+      created_at: new Date().toISOString(),
+      attachments: attachmentsToSend,
+    };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setPendingAttachments([]);
     setSending(true);
 
     try {
-      // Save user message
+      // Save user message (server resolves ref → key)
       await chatbotApi.addChatbotStudioMessage(conv.id, {
         role: 'user',
-        content: userText,
+        content: userText || (attachmentsToSend.length ? '[Đính kèm]' : ''),
+        attachments: attachmentsToSend,
+        message_type: attachmentsToSend.length ? 'file' : 'text',
       });
 
-      // Get chat history for context
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-      
-      // Call AI
+      // History must carry attachments so later turns still see files
+      const history = messages.slice(-20).map(m => ({
+        role: m.role,
+        content: m.content,
+        attachments: m.attachments || [],
+      }));
+
       const res = await chatbotApi.sendCustomChat({
-        history: [...history, { role: 'user', content: userText }],
+        history: [...history, {
+          role: 'user',
+          content: userText || (attachmentsToSend.length ? '[Đính kèm]' : ''),
+          attachments: attachmentsToSend,
+        }],
         chatbot_id: chatbot?.id,
         system_instruction: chatbot?.system_instruction,
         temperature: chatbot?.temperature || 0.7,
         max_tokens: chatbot?.max_tokens || 2048,
+        attachments: attachmentsToSend,
       });
 
       if (res.data?.content) {
-        // Save AI response
         await chatbotApi.addChatbotStudioMessage(conv.id, {
           role: 'assistant',
           content: res.data.content,
@@ -277,9 +374,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           created_at: new Date().toISOString(),
         }]);
 
-        // Update conversation in list
-        setConversations(prev => prev.map(c => 
-          c.id === conv.id 
+        setConversations(prev => prev.map(c =>
+          c.id === conv.id
             ? { ...c, last_message: res.data.content.substring(0, 100), last_message_at: new Date().toISOString() }
             : c
         ));
@@ -288,8 +384,9 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       }
     } catch (err) {
       const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''));
-      toast.error(isTimeout ? 'AI đang xử lý quá lâu, vui lòng thử lại' : (err.message || 'Gửi thất bại'));
+      toast.error(isTimeout ? 'AI đang xử lý quá lâu, vui lòng thử lại' : (err.response?.data?.message || err.message || 'Gửi thất bại'));
       setMessages(prev => prev.slice(0, -1));
+      setPendingAttachments(attachmentsToSend);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -458,7 +555,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
                   : { backgroundColor: bgColor, color: textColor, border: `1px solid ${primaryColor}15` }
                 }
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
               </div>
               <span className="text-[10px] mt-1 px-1" style={{ color: `${textColor}60` }}>
                 {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
@@ -495,7 +593,52 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
       {/* Input */}
       <div className="p-4 border-t border-gray-100 bg-white">
-        <div className="flex gap-3 items-end">
+        {pendingAttachments.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {pendingAttachments.map((att, idx) => (
+              <div
+                key={`${att.ref || att.name}-${idx}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs max-w-[220px]"
+              >
+                <span className="truncate font-medium text-slate-700">{att.displayName || att.name}</span>
+                <span className="text-slate-400 shrink-0">{formatFileSize(att.size)}</span>
+                {att.textExtracted === false && att.type === 'file' && (
+                  <span className="text-amber-600 shrink-0">!</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePendingAttachment(idx)}
+                  className="p-0.5 text-slate-400 hover:text-slate-700"
+                  aria-label="Xóa tệp"
+                >
+                  <HiOutlineX className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_EXTENSIONS}
+            multiple
+            className="hidden"
+            onChange={handlePickFiles}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || uploadingAttachment || pendingAttachments.length >= MAX_ATTACHMENTS}
+            className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+            title="Đính kèm tệp"
+          >
+            {uploadingAttachment ? (
+              <HiOutlineRefresh className="w-5 h-5 animate-spin" />
+            ) : (
+              <HiOutlinePaperClip className="w-5 h-5" />
+            )}
+          </button>
           <textarea
             ref={inputRef}
             value={input}
@@ -514,7 +657,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
             className="w-12 h-12 text-white rounded-xl flex items-center justify-center shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             style={{ background: gradientStyle }}
           >

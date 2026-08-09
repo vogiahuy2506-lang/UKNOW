@@ -1,5 +1,20 @@
 import chatbotStudioConversationRepository from '../../repositories/chatbot/chatbotStudioConversation.repository.js';
+import chatAttachmentService from './chatAttachment.service.js';
 import { v4 as uuidv4 } from 'uuid';
+
+function parseAttachments(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 class ChatbotStudioConversationService {
   async createOrGetConversation({ userId, chatbotId }) {
@@ -32,9 +47,18 @@ class ChatbotStudioConversationService {
     if (!conversation) {
       throw new Error('Không tìm thấy cuộc hội thoại');
     }
-    return await chatbotStudioConversationRepository.getMessagesByConversation(conversationId, {
+    const messages = await chatbotStudioConversationRepository.getMessagesByConversation(conversationId, {
       limit,
       offset,
+    });
+
+    const bind = { chatbotId: conversation.id_chatbot, uid: userId };
+    return messages.map((msg) => {
+      const stored = parseAttachments(msg.attachments);
+      return {
+        ...msg,
+        attachments: chatAttachmentService.presentAttachmentsForClient(stored, bind),
+      };
     });
   }
 
@@ -45,7 +69,13 @@ class ChatbotStudioConversationService {
       throw new Error('Không tìm thấy cuộc hội thoại');
     }
 
-    // Create message
+    const bind = { chatbotId: conversation.id_chatbot, uid: userId };
+    let storedAttachments = [];
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      storedAttachments = chatAttachmentService.enrichAttachmentsForStorage(attachments, bind);
+    }
+
+    // Create message (DB keeps key, not ref)
     const message = await chatbotStudioConversationRepository.createMessage({
       conversationId,
       role,
@@ -54,7 +84,7 @@ class ChatbotStudioConversationService {
       aiModel,
       aiTokensUsed,
       aiLatencyMs,
-      attachments,
+      attachments: storedAttachments,
       metadata,
     });
 
@@ -69,7 +99,14 @@ class ChatbotStudioConversationService {
       incrementMessageCount: true,
     });
 
-    return message;
+    // Return client shape (fresh ref, no key)
+    return {
+      ...message,
+      attachments: chatAttachmentService.presentAttachmentsForClient(
+        parseAttachments(message.attachments?.length ? message.attachments : storedAttachments),
+        bind
+      ),
+    };
   }
 
   async deleteConversation({ userId, conversationId }) {

@@ -5,6 +5,7 @@ import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { tryHandleHelpChat } from '../services/help/helpAssistant.service.js';
@@ -818,14 +819,18 @@ class AiController {
    */
   async customChat(req, res) {
     try {
-      const { history, chatbot_id, system_instruction, temperature, max_tokens } = req.body;
+      const { history, chatbot_id, system_instruction, temperature, max_tokens, attachments } = req.body;
+      const chatbotId = parseInt(chatbot_id, 10) || 0;
+      const userId = req.user?.id || 1;
       const data = await customChatService.chat({
         history,
-        chatbotId: parseInt(chatbot_id, 10) || 0,
-        userId: req.user?.id || 1,
+        chatbotId,
+        userId,
         systemInstruction: system_instruction,
         temperature,
         maxTokens: max_tokens,
+        attachments: Array.isArray(attachments) ? attachments : [],
+        attachmentBind: { chatbotId, uid: userId },
       });
 
       await chargeAiCredit(req);
@@ -1015,6 +1020,45 @@ class AiController {
   }
 
   /**
+   * Upload a chat attachment for Studio (not Knowledge Base).
+   * POST /api/ai/chat-attachment
+   */
+  async uploadChatAttachment(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có file được tải lên' });
+      }
+      const chatbotId = parseInt(req.body?.chatbot_id || req.body?.chatbotId, 10);
+      if (!chatbotId) {
+        return res.status(400).json({ success: false, message: 'chatbot_id is required' });
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== Number(req.user.id)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const stored = await chatAttachmentService.storeChatFile({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimetype: req.file.mimetype,
+        ownerUserId: req.user.id,
+        chatbotId,
+        bind: { uid: req.user.id },
+      });
+
+      const { _key, ...clientPayload } = stored;
+      return res.status(201).json({ success: true, data: clientPayload });
+    } catch (error) {
+      console.error('[ChatAttachment] upload error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Không thể tải file lên',
+      });
+    }
+  }
+
+  /**
    * Get messages for a conversation
    */
   async getChatbotStudioMessages(req, res) {
@@ -1029,7 +1073,7 @@ class AiController {
       return res.json({ success: true, data: messages });
     } catch (error) {
       console.error('[ChatbotStudio] Get messages error:', error);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 
@@ -1074,7 +1118,7 @@ class AiController {
       return res.status(201).json({ success: true, data: message });
     } catch (error) {
       console.error('[ChatbotStudio] Add message error:', error);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 

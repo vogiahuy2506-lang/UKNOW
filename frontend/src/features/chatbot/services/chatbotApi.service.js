@@ -32,6 +32,27 @@ const chatbotApiService = {
     return api.post('/ai/custom-chat', payload, { timeout: AI_CHAT_TIMEOUT_MS });
   },
 
+  uploadChatAttachment(formData) {
+    return api.post('/ai/chat-attachment', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
+  },
+
+  uploadPublicChatAttachment(chatbotId, formData) {
+    return api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/attachment`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
+  },
+
+  uploadPublicChatAttachmentByWidgetKey(widgetKey, formData) {
+    return api.post(`/chatbot-public/custom-chatbot/${widgetKey}/attachment`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
+  },
+
   // Chatbot Studio Conversations
   getChatbotStudioConversations(params = {}) {
     return api.get('/ai/chatbot-studio/conversations', { params: { ...params } });

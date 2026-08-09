@@ -579,6 +579,23 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
+  // ── Dọn tệp đính kèm chat rác — 00:20 mỗi ngày ───────────────────────────
+  cron.schedule('20 0 * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('chat_attachment_cleanup', async () => {
+        const { cleanupOrphanChatAttachments } = await import('../services/chatbot/chatAttachmentCleanup.service.js');
+        const result = await cleanupOrphanChatAttachments();
+        console.log(
+          `[Scheduler] chat_attachment_cleanup: scanned=${result.scanned} deleted=${result.deleted} skipped=${result.skipped}`
+        );
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn chat attachments:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');

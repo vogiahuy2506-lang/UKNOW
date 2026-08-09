@@ -39,10 +39,12 @@
   let WELCOME_MSG = config.welcomeMessage || 'Xin chào! Tôi có thể giúp gì cho bạn?';
   let CHATBOT_NAME = 'AI Assistant';
   let CHATBOT_AVATAR = '';
+  let ALLOW_ATTACHMENTS = false;
 
   let isOpen = false;
   let messages = JSON.parse(localStorage.getItem('uknow_msgs_' + WIDGET_KEY) || '[]');
   let chatHistory = JSON.parse(localStorage.getItem('uknow_history_' + WIDGET_KEY) || '[]');
+  let pendingAttachments = [];
   let sessionId = localStorage.getItem('uknow_session_' + WIDGET_KEY);
   if (!sessionId) {
     sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
@@ -76,6 +78,7 @@
         WELCOME_MSG = c.welcomeMessage || WELCOME_MSG;
         CHATBOT_NAME = c.name || CHATBOT_NAME;
         CHATBOT_AVATAR = c.avatarUrl || c.logoUrl || '';
+        ALLOW_ATTACHMENTS = c.allowAttachments === true;
         configLoaded = true;
       }
     } catch (err) {
@@ -215,7 +218,10 @@
       background: ${BACKGROUND_COLOR};
     `;
     inputArea.innerHTML = `
+      <div id="uknow-attach-chips" style="display:none; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
       <div style="display: flex; gap: 10px; align-items: flex-end;">
+        ${ALLOW_ATTACHMENTS ? `<button id="uknow-attach" type="button" title="Đính kèm" style="width:44px;height:44px;border:2px solid #f0f0f0;border-radius:50%;background:#fff;cursor:pointer;font-size:18px;">📎</button>
+        <input id="uknow-file" type="file" accept=".pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp" multiple style="display:none;" />` : ''}
         <input id="uknow-input" type="text" placeholder="Nhập tin nhắn..." style="flex: 1; padding: 12px 16px; border: 2px solid #f0f0f0; border-radius: 24px; outline: none; font-size: 14px; color: ${TEXT_COLOR}; transition: border-color 0.2s;" />
         <button id="uknow-send" style="width: 44px; height: 44px; background: linear-gradient(135deg, ${PRIMARY_COLOR}, ${ACCENT_COLOR}); border: none; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px ${PRIMARY_COLOR}40;">
           <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -224,6 +230,8 @@
     `;
     const input = inputArea.querySelector('#uknow-input');
     const sendBtn = inputArea.querySelector('#uknow-send');
+    const fileInput = inputArea.querySelector('#uknow-file');
+    const attachBtn = inputArea.querySelector('#uknow-attach');
 
     // Style input focus
     input.addEventListener('focus', () => { input.style.borderColor = PRIMARY_COLOR; });
@@ -231,6 +239,59 @@
 
     sendBtn.onclick = () => sendMessage(input.value);
     input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(input.value); };
+
+    if (attachBtn && fileInput) {
+      attachBtn.onclick = () => fileInput.click();
+      fileInput.onchange = async () => {
+        const files = Array.from(fileInput.files || []);
+        fileInput.value = '';
+        if (!files.length) return;
+        const room = 3 - pendingAttachments.length;
+        for (const file of files.slice(0, Math.max(0, room))) {
+          try {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('sessionId', sessionId);
+            const res = await fetch(`${API_BASE}/api/chatbot-public/custom-chatbot/${WIDGET_KEY}/attachment`, {
+              method: 'POST',
+              body: fd,
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.message || 'Upload failed');
+            pendingAttachments.push(data.data);
+            renderAttachChips();
+          } catch (err) {
+            alert(err.message || 'Tải file thất bại');
+          }
+        }
+      };
+    }
+
+    function renderAttachChips() {
+      const box = document.getElementById('uknow-attach-chips');
+      if (!box) return;
+      box.replaceChildren();
+      if (!pendingAttachments.length) {
+        box.style.display = 'none';
+        return;
+      }
+      box.style.display = 'flex';
+      pendingAttachments.forEach((a, i) => {
+        const span = document.createElement('span');
+        span.style.cssText = 'font-size:11px;padding:4px 8px;background:#f3f4f6;border-radius:8px;';
+        span.appendChild(document.createTextNode(`${a.displayName || a.name || 'file'} `));
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = '×';
+        btn.style.cssText = 'border:none;background:transparent;cursor:pointer;';
+        btn.onclick = () => {
+          pendingAttachments.splice(i, 1);
+          renderAttachChips();
+        };
+        span.appendChild(btn);
+        box.appendChild(span);
+      });
+    }
 
     chatWindow.appendChild(header);
     chatWindow.appendChild(msgArea);
@@ -291,14 +352,18 @@
   }
 
   async function sendMessage(text) {
-    if (!text?.trim()) return;
+    if (!text?.trim() && pendingAttachments.length === 0) return;
 
     const input = document.getElementById('uknow-input');
     input.value = '';
+    const attachmentsToSend = pendingAttachments.slice();
+    pendingAttachments = [];
+    const chips = document.getElementById('uknow-attach-chips');
+    if (chips) { chips.style.display = 'none'; chips.innerHTML = ''; }
 
-    // Add user message
-    addMessage('user', text);
-    chatHistory.push({ role: 'user', content: text });
+    const userText = text?.trim() || '';
+    addMessage('user', userText || '[Đính kèm]');
+    chatHistory.push({ role: 'user', content: userText || '[Đính kèm]', attachments: attachmentsToSend });
 
     // Show typing indicator
     const msgArea = document.getElementById('uknow-messages');
@@ -322,9 +387,10 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text,
+          message: userText,
           history: chatHistory.slice(-10),
           sessionId: sessionId,
+          attachments: attachmentsToSend,
         }),
       });
 
@@ -354,6 +420,7 @@
         ? 'Mất kết nối mạng. Vui lòng kiểm tra internet và thử lại.'
         : 'Không thể kết nối với server. Vui lòng thử lại sau.';
       addMessage('bot', errorMsg);
+      pendingAttachments = attachmentsToSend;
     }
   }
 

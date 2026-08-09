@@ -4,6 +4,7 @@ import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 
 /** Timeout for Gemini API calls (30 seconds) */
 const GEMINI_TIMEOUT_MS = 30000;
@@ -15,11 +16,37 @@ const RETRY_CONFIG = {
   retryableErrors: ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
 };
 
+function isImageUnsupportedError(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  const status = err?.geminiStatus ?? err?.status;
+  // Only vision-related 400s: must mention inline_data/image AND unsupported/invalid wording.
+  // Do NOT treat every HTTP 400 as image failure (content-policy 400s must surface).
+  if (status !== 400) return false;
+  const mentionsVision = msg.includes('inline_data') || msg.includes('inline data');
+  const mentionsImagePart = /\bimage\b/.test(msg) && (
+    msg.includes('unsupported') ||
+    msg.includes('not supported') ||
+    msg.includes('invalid') ||
+    msg.includes('mime')
+  );
+  return mentionsVision || mentionsImagePart;
+}
+
+function stripInlineDataParts(parts) {
+  const textOnly = (parts || []).filter((p) => !p?.inline_data);
+  const hasImagePlaceholder = textOnly.some((p) => String(p?.text || '').includes('[Không đọc được ảnh đính kèm]'));
+  if (!hasImagePlaceholder) {
+    textOnly.push({ text: '[Không đọc được ảnh đính kèm]' });
+  }
+  return textOnly.length ? textOnly : [{ text: '[Không đọc được ảnh đính kèm]' }];
+}
+
 class CustomChatService {
   /**
-   * Call Gemini API with timeout and retry logic
+   * Call Gemini API with timeout and retry logic.
+   * Accepts either legacy `prompt` (string) or multimodal `parts` (array).
    */
-  async callGeminiWithRetry(prompt, options = {}) {
+  async callGeminiWithRetry(promptOrParts, options = {}) {
     const { temperature = 0.7, maxTokens = 2048, userId = null } = options;
     const apiKey = process.env.GEMINI_API_KEY;
     const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
@@ -30,23 +57,27 @@ class CustomChatService {
       throw error;
     }
 
+    let parts;
+    if (Array.isArray(promptOrParts)) {
+      parts = promptOrParts;
+    } else {
+      parts = [{ text: String(promptOrParts ?? '') }];
+    }
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const body = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature,
-        maxOutputTokens: Math.min(maxTokens, 65536),
-      },
-    });
 
-    // Retry loop
-    let lastError;
-    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    const doFetch = async (requestParts) => {
+      const body = JSON.stringify({
+        contents: [{ parts: requestParts }],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: Math.min(maxTokens, 65536),
+        },
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
       try {
-        // Create abort controller for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -54,17 +85,12 @@ class CustomChatService {
           signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
-
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          // Retry on 5xx errors
-          if (response.status >= 500 && attempt < RETRY_CONFIG.maxRetries) {
-            console.warn(`[Gemini] Attempt ${attempt + 1} failed with ${response.status}, retrying...`);
-            await sleep(RETRY_CONFIG.retryDelayMs * (attempt + 1));
-            continue;
-          }
           const error = new Error(errorData?.error?.message || `Gemini API error: ${response.status}`);
+          // Keep client-facing status as before this feature: 5xx→502, else→500.
+          // Preserve raw Gemini status only for internal fallback decisions.
+          error.geminiStatus = response.status;
           error.status = response.status >= 500 ? 502 : 500;
           throw error;
         }
@@ -80,13 +106,35 @@ class CustomChatService {
           text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
           usage: extractGeminiUsage(data),
         };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    let lastError;
+    let imageFallbackDone = false;
+    let currentParts = parts;
+
+    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+      try {
+        return await doFetch(currentParts);
       } catch (err) {
         lastError = err;
 
-        // Check if error is retryable
+        // Vision fallback: drop images once on 400 related to inline_data/image
+        const hasInline = currentParts.some((p) => p?.inline_data);
+        if (!imageFallbackDone && hasInline && isImageUnsupportedError(err)) {
+          console.warn('[Gemini] Image not supported by model, retrying text-only:', err.message);
+          currentParts = stripInlineDataParts(currentParts);
+          imageFallbackDone = true;
+          attempt -= 1; // don't consume a network retry slot
+          continue;
+        }
+
         const isRetryable =
-          err.name === 'AbortError' || // Timeout
-          RETRY_CONFIG.retryableErrors.some(e => err.message?.includes(e) || err.code === e);
+          err.name === 'AbortError' ||
+          (err.geminiStatus >= 500) ||
+          RETRY_CONFIG.retryableErrors.some((e) => err.message?.includes(e) || err.code === e);
 
         if (isRetryable && attempt < RETRY_CONFIG.maxRetries) {
           console.warn(`[Gemini] Attempt ${attempt + 1} failed (${err.message}), retrying...`);
@@ -94,16 +142,28 @@ class CustomChatService {
           continue;
         }
 
-        // Non-retryable error or max retries reached
+        if (err.geminiStatus >= 500) {
+          err.status = 502;
+        } else if (err.status == null) {
+          err.status = 500;
+        }
         throw err;
       }
     }
 
-    // Should not reach here, but just in case
     throw lastError;
   }
 
-  async chat({ history, chatbotId, userId, systemInstruction, temperature, maxTokens }) {
+  async chat({
+    history,
+    chatbotId,
+    userId,
+    systemInstruction,
+    temperature,
+    maxTokens,
+    attachments = [],
+    attachmentBind = null,
+  }) {
     if (!history || !Array.isArray(history) || history.length === 0) {
       const error = new Error('history is required');
       error.status = 400;
@@ -139,15 +199,47 @@ QUY TẮC TRẢ LỜI:
     const systemPrompt = systemInstruction || defaultSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
+    const resolveBind = attachmentBind || (userId != null && chatbotId
+      ? { chatbotId, uid: userId }
+      : null);
+
+    let attachmentParts = [];
+    try {
+      // History may already include current turn; avoid double-counting currentAttachments
+      const historyWithoutTrailingCurrent = [...history];
+      const last = historyWithoutTrailingCurrent[historyWithoutTrailingCurrent.length - 1];
+      const currentFromHistory = last?.role === 'user' ? (last.attachments || []) : [];
+      const current = (attachments?.length ? attachments : currentFromHistory);
+
+      // Strip current-turn attachments from history so they are treated as latest
+      if (last?.role === 'user' && (attachments?.length || currentFromHistory.length)) {
+        historyWithoutTrailingCurrent[historyWithoutTrailingCurrent.length - 1] = {
+          ...last,
+          attachments: [],
+        };
+      }
+
+      attachmentParts = await chatAttachmentService.buildAiPartsFromHistory({
+        history: historyWithoutTrailingCurrent,
+        currentAttachments: current,
+        resolveBind,
+      });
+    } catch (e) {
+      console.warn('[CustomChat] buildAiParts failed:', e.message);
+      if (e.status) throw e;
+    }
+
+    const parts = [{ text: prompt }, ...attachmentParts];
+
     try {
       const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
-      const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+      const contents = [{ role: 'user', parts }];
       const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
         contents,
         model,
         requestedMaxOutputTokens: maxTokens,
       });
-      const rawContent = await this.callGeminiWithRetry(prompt, { temperature, maxTokens: maxOutputTokens, userId });
+      const rawContent = await this.callGeminiWithRetry(parts, { temperature, maxTokens: maxOutputTokens, userId });
       const content = stripMarkdown(rawContent?.text || 'Xin lỗi, tôi không có câu trả lời.');
       await aiUsageMeter.record(userId, rawContent?.usage, {
         feature: 'kb_chat',

@@ -13,6 +13,7 @@ import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
 import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
+import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
@@ -974,6 +975,7 @@ class ChatbotController {
           chat_height: chatbot.chat_height || '600px',
           // Suggested questions - applies to all deployment types
           suggested_questions: chatbot.suggested_questions || [],
+          allow_attachments: chatbot.allow_attachments === true,
         },
       });
     } catch (err) {
@@ -1021,11 +1023,104 @@ class ChatbotController {
           showAvatar: chatbot.show_avatar !== false,
           suggestedQuestions: chatbot.suggested_questions || [],
           position: chatbot.position || 'bottom-right',
+          allowAttachments: chatbot.allow_attachments === true,
         },
       });
     } catch (err) {
       console.error('[CustomChatbot] Config error:', err);
       return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Shared gates + store for public chat attachments.
+   * Order: allow_attachments → RESOURCE_LOCKED → credit → write disk.
+   * (publicUploadLimiter runs as middleware before this.)
+   */
+  async _uploadPublicAttachmentCore(req, res, chatbot) {
+    if (!chatbot) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
+    }
+    if (chatbot.allow_attachments !== true) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chatbot này không nhận tệp đính kèm',
+        code: 'ATTACHMENTS_DISABLED',
+      });
+    }
+
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('chatbots', chatbot.id)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Chatbot tạm ngừng do hết hạn slot mua thêm',
+        code: 'RESOURCE_LOCKED',
+      });
+    }
+
+    const creditPrep = await preparePublicChatCredit(chatbot.id_user);
+    if (creditPrep.blocked) {
+      return res.status(402).json({
+        success: false,
+        message: VISITOR_CHAT_UNAVAILABLE_MESSAGE,
+        code: 'AI_CREDIT_EXHAUSTED',
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Không có file được tải lên' });
+    }
+
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || '').trim();
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: 'sessionId is required' });
+    }
+
+    const stored = await chatAttachmentService.storeChatFile({
+      buffer: req.file.buffer,
+      originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
+      ownerUserId: chatbot.id_user,
+      chatbotId: chatbot.id,
+      bind: { sid: sessionId },
+    });
+
+    const { _key, ...clientPayload } = stored;
+    return res.status(201).json({ success: true, data: clientPayload });
+  }
+
+  async uploadPublicChatAttachment(req, res) {
+    try {
+      const { widgetKey } = req.params;
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
+      return await this._uploadPublicAttachmentCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[ChatAttachment] public upload error:', err);
+      return res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Không thể tải file lên',
+      });
+    }
+  }
+
+  async uploadPublicChatAttachmentById(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId, 10);
+      let chatbot = null;
+      if (!Number.isNaN(id)) {
+        chatbot = await chatbotRepository.findChatbotById(id);
+      }
+      if (!chatbot) {
+        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
+      }
+      return await this._uploadPublicAttachmentCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[ChatAttachment] public upload by id error:', err);
+      return res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Không thể tải file lên',
+      });
     }
   }
 
@@ -1207,9 +1302,9 @@ class ChatbotController {
   async chatWithCustomChatbot(req, res) {
     try {
       const { widgetKey } = req.params;
-      const { message, history, sessionId } = req.body;
+      const { message, history, sessionId, attachments } = req.body;
 
-      if (!message?.trim()) {
+      if (!message?.trim() && !(Array.isArray(attachments) && attachments.length)) {
         return res.status(400).json({ success: false, message: 'message is required' });
       }
 
@@ -1295,9 +1390,22 @@ class ChatbotController {
         return res.json(publicChatbotCreditBlockedResponse());
       }
 
+      const currentAttachments = Array.isArray(attachments) ? attachments : [];
+      if (currentAttachments.length && !sessionForPause) {
+        return res.status(400).json({
+          success: false,
+          message: 'sessionId is required when sending attachments',
+        });
+      }
+      const userContent = String(message || '').trim()
+        || (currentAttachments.length ? '[Đính kèm]' : '');
+      const attachmentBind = sessionForPause
+        ? { chatbotId: chatbot.id, sid: sessionForPause }
+        : null;
+
       const fullHistory = [
         ...(history || []),
-        { role: 'user', content: message }
+        { role: 'user', content: userContent, attachments: currentAttachments },
       ];
 
       const result = await customChatService.chat({
@@ -1307,6 +1415,8 @@ class ChatbotController {
         systemInstruction: chatbot.system_instruction,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
+        attachments: currentAttachments,
+        attachmentBind,
       });
 
       const content = result.content;
@@ -1327,7 +1437,7 @@ class ChatbotController {
         return res.json(publicChatbotFallback());
       }
       console.error('[CustomChatbot] Chat error:', err);
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -1368,14 +1478,33 @@ class ChatbotController {
         }
       }
 
-      const { message, history, sessionId } = req.body;
+      const { message, history, sessionId, attachments } = req.body;
 
-      if (!message?.trim()) {
+      if (!message?.trim() && !(Array.isArray(attachments) && attachments.length)) {
         return res.status(400).json({ success: false, message: 'message is required' });
       }
 
+      const currentAttachments = Array.isArray(attachments) ? attachments : [];
+      const clientSessionId = String(sessionId || '').trim();
+      if (currentAttachments.length && !clientSessionId) {
+        return res.status(400).json({
+          success: false,
+          message: 'sessionId is required when sending attachments',
+        });
+      }
       // Prefer client-stable sessionId (PublicChatbotPage localStorage). Fallback is last resort.
-      visitorSessionId = sessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      visitorSessionId = clientSessionId || `pub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const userContent = String(message || '').trim()
+        || (currentAttachments.length ? '[Đính kèm]' : '');
+      const attachmentBind = { chatbotId: chatbot.id, sid: visitorSessionId };
+
+      let storedAttachments = [];
+      if (currentAttachments.length) {
+        storedAttachments = chatAttachmentService.enrichAttachmentsForStorage(
+          currentAttachments,
+          attachmentBind
+        );
+      }
 
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'web',
@@ -1427,13 +1556,14 @@ class ChatbotController {
       if (conversation) {
         await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
           role: 'visitor',
-          content: message,
+          content: userContent,
+          attachments: storedAttachments,
         });
 
         // Prefer first visitor snippet as display name when still generic
         await chatbotRepository.maybeSetWebChatVisitorNameFromMessage(
           conversation.id,
-          message
+          userContent
         ).catch(() => {});
 
     // Broadcast SSE for real-time update
@@ -1441,7 +1571,7 @@ class ChatbotController {
       conversationId: conversation.id,
       conversationType: 'webchat',
       channel: 'web',
-      message: message,
+      message: userContent,
       senderName: 'Khách',
       timestamp: new Date().toISOString(),
     });
@@ -1470,7 +1600,7 @@ class ChatbotController {
 
       const fullHistory = [
         ...(history || []),
-        { role: 'user', content: message }
+        { role: 'user', content: userContent, attachments: currentAttachments },
       ];
 
       const result = await customChatService.chat({
@@ -1480,6 +1610,8 @@ class ChatbotController {
         systemInstruction: chatbot.system_instruction,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
+        attachments: currentAttachments,
+        attachmentBind,
       });
 
       const content = result.content;

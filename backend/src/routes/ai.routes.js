@@ -1,7 +1,7 @@
 import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
+import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
@@ -55,6 +55,14 @@ router.patch('/sessions/:id/wizard-state', aiController.patchWizardState.bind(ai
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
 router.post('/custom-chat', aiLimiter, assertAiCreditAvailable('ai_custom_chat'), aiController.customChat.bind(aiController));
+
+// Chat attachment for Studio (per-turn; NOT knowledge base)
+router.post(
+  '/chat-attachment',
+  uploadLimiter,
+  upload.single('file'),
+  aiController.uploadChatAttachment.bind(aiController)
+);
 
 // Chatbot Studio Conversations
 router.get('/chatbot-studio/conversations', aiController.getChatbotStudioConversations.bind(aiController));

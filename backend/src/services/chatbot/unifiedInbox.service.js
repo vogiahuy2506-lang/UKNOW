@@ -12,6 +12,11 @@ import {
   isZaloGroupConversation,
   resolveZaloGroupSendId,
 } from '../../utils/zaloGroupName.util.js';
+import chatAttachmentService from './chatAttachment.service.js';
+
+function presentInboxAttachments(raw) {
+  return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
+}
 
 class UnifiedInboxService {
   /**
@@ -215,7 +220,7 @@ class UnifiedInboxService {
         content: msg.content,
         senderName,
         senderId,
-        attachments: msg.attachments || [],
+        attachments: presentInboxAttachments(msg.attachments),
         metadata: {
           ...metadata,
           isGroup: isGroupMsg,
@@ -581,7 +586,7 @@ class UnifiedInboxService {
       externalId: msg.external_id,
       conversationStatus: msg.conversation_status,
       content: msg.content,
-      attachments: msg.attachments || [],
+      attachments: presentInboxAttachments(msg.attachments),
       sentAt: msg.created_at,
       isRead: msg.is_read || false,
       readAt: msg.read_at,

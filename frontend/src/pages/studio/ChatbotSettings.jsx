@@ -88,6 +88,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     response_style: 'friendly',
     welcome_message: '',
     is_active: true,
+    allow_attachments: false,
     primary_color: '#6366F1',
     background_color: '#FFFFFF',
     text_color: '#1F2937',
@@ -191,6 +192,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         response_style: chatbot.response_style || 'friendly',
         welcome_message: chatbot.welcome_message || chatbot.greeting_msg || '',
         is_active: chatbot.is_active !== false,
+        allow_attachments: chatbot.allow_attachments === true,
         primary_color: ws.primary_color || '#8B5CF6',
         background_color: ws.background_color || '#FFFFFF',
         text_color: ws.text_color || '#1F2937',
@@ -372,6 +374,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         response_style: form.response_style,
         welcome_message: form.welcome_message,
         is_active: form.is_active,
+        allow_attachments: form.allow_attachments === true,
         primary_color: form.primary_color,
         background_color: form.background_color,
         text_color: form.text_color,
@@ -780,6 +783,18 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
                       <Toggle
                         checked={form.is_active}
                         onChange={val => setForm(p => ({ ...p, is_active: val }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">Cho khách gửi tệp đính kèm</p>
+                        <p className="text-xs text-slate-400">
+                          Khách có thể gửi PDF, Word, Excel, ảnh. Nội dung tệp chỉ dùng cho cuộc trò chuyện đó, không lưu vào Kiến thức.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={form.allow_attachments === true}
+                        onChange={val => setForm(p => ({ ...p, allow_attachments: val }))}
                       />
                     </div>
                   </div>

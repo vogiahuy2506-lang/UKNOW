@@ -9,20 +9,22 @@ const Papa = require('papaparse');
 
 /**
  * Extract text from different file types based on originalName and contentType.
- * 
- * @param {Buffer} buffer 
- * @param {string} originalName 
- * @param {string} contentType 
+ *
+ * @param {Buffer} buffer
+ * @param {string} originalName
+ * @param {string} contentType
+ * @param {{ max?: number }} [options] - PDF: `max` pages (0 = all pages, default). Chat attachments pass max: 30.
  * @returns {Promise<string>} Extracted text content
  */
-export async function extractTextFromBuffer(buffer, originalName, contentType = '') {
+export async function extractTextFromBuffer(buffer, originalName, contentType = '', options = {}) {
   const ext = path.extname(originalName || '').toLowerCase();
   const mime = String(contentType || '').toLowerCase();
+  const pdfMax = typeof options.max === 'number' ? options.max : 0;
 
   // 1. PDF Documents
   if (ext === '.pdf' || mime === 'application/pdf') {
     try {
-      const data = await pdfParse(buffer);
+      const data = await pdfParse(buffer, { max: pdfMax });
       return data.text || '';
     } catch (err) {
       console.error('[FileParser] PDF parse error:', err);

@@ -121,6 +121,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'chat_attachment_cleanup',
+    label: 'Dọn tệp đính kèm chat rác',
+    schedule: '00:20',
+    description: 'Xoá file trong uploads/*/chat/ cũ hơn 90 ngày không còn được tham chiếu trong tin nhắn.',
+    impact: 'Ổ đĩa đầy dần bởi file khách tải lên rồi bỏ cuộc trò chuyện.',
+    tracked: true,
+  },
+  {
     code: 'courses_daily_sync',
     label: 'Đồng bộ khoá học & dọn voucher',
     schedule: '00:30',
