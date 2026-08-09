@@ -1257,7 +1257,7 @@ CREATE TABLE IF NOT EXISTS chat_attachments (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   source           VARCHAR(24) NOT NULL
-                   CHECK (source IN ('chatbot_web', 'chatbot_studio', 'ai_assistant')),
+                   CHECK (source IN ('chatbot_web', 'chatbot_studio', 'ai_assistant', 'inbox_outbound')),
   storage_key      TEXT NOT NULL UNIQUE,
   display_name     VARCHAR(255),
   mime_type        VARCHAR(120),

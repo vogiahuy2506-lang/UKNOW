@@ -19,6 +19,7 @@ export const CHAT_ATTACHMENT_SOURCES = Object.freeze({
   WEB: 'chatbot_web',
   STUDIO: 'chatbot_studio',
   ASSISTANT: 'ai_assistant',
+  INBOX_OUTBOUND: 'inbox_outbound',
 });
 
 const DOC_ALLOW = [

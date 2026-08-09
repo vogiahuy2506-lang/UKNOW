@@ -28,6 +28,7 @@ import {
   resolveConversationExternalId,
   runInboxHandlerAfterSave,
 } from '../../../utils/zaloPersonalMessage.util.js';
+import campaignZaloSender from '../../campaign/campaignZaloSender.service.js';
 
 /**
  * Extract attachments from raw message data
@@ -622,7 +623,16 @@ class ZaloPersonalAdapter {
    * @param {number} params.userId
    * @param {boolean} params.forceReply - if true, send even for group messages (for manual inbox replies)
    */
-  async sendReply({ externalId, message, userId, accountId, conversationInfo, forceReply = false, persist = true }) {
+  async sendReply({
+    externalId,
+    message,
+    userId,
+    accountId,
+    conversationInfo,
+    forceReply = false,
+    persist = true,
+    attachments = [],
+  }) {
     if (accountId != null) {
       const { resourceIsLocked } = await import('../../../utils/topupLockGate.util.js');
       if (await resourceIsLocked('zalo_accounts', accountId)) {
@@ -671,17 +681,37 @@ class ZaloPersonalAdapter {
         }
       }
 
-      // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
-      // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
-      // Cùng cách gọi với đường chiến dịch (campaignZaloSender.service.js:2165).
-      const sent = sendToGroup
-        ? await api.sendMessage(payload, sendTarget, ThreadType.Group)
-        : await api.sendMessage(payload, sendTarget);
-      const outboundMsgId = extractSendMsgId(sent);
-      ZaloPersonalAdapter.markBotOutbound(session.accountId, {
-        msgId: outboundMsgId,
-        content: payload,
+      // Reuse campaign dispatch: album ảnh 1 lượt, mỗi file tài liệu 1 lượt (không dồn chung).
+      const attachmentSources = await campaignZaloSender.prepareZaloAttachmentSources(
+        Array.isArray(attachments) ? attachments : []
+      );
+
+      let lastOutboundMsgId = null;
+      const { response: sent } = await campaignZaloSender.sendMessageWithAttachmentDispatch({
+        operationName: 'inbox_zalo_personal',
+        message: payload,
+        attachments: attachmentSources,
+        logIdentity: String(sendTarget || ''),
+        sendOperation: async (dispatchPayload) => {
+          // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
+          // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
+          const response = sendToGroup
+            ? await api.sendMessage(dispatchPayload, sendTarget, ThreadType.Group)
+            : await api.sendMessage(dispatchPayload, sendTarget);
+          const dispatchMsgId = extractSendMsgId(response);
+          const dispatchContent = typeof dispatchPayload === 'string'
+            ? dispatchPayload
+            : String(dispatchPayload?.msg || '');
+          // Mỗi lượt có msgId riêng — phải mark hết để echo-suppression không bỏ sót ảnh/file đầu.
+          ZaloPersonalAdapter.markBotOutbound(session.accountId, {
+            msgId: dispatchMsgId,
+            content: dispatchContent || payload,
+          });
+          lastOutboundMsgId = dispatchMsgId;
+          return response;
+        },
       });
+      const outboundMsgId = lastOutboundMsgId || extractSendMsgId(sent);
 
       // Persist only when caller did not already save (AI path). Manual inbox sets persist=false.
       if (persist) {

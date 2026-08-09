@@ -13,6 +13,7 @@ import {
   resolveZaloGroupSendId,
 } from '../../utils/zaloGroupName.util.js';
 import chatAttachmentService from './chatAttachment.service.js';
+import { sanitizeOwnedInboxAttachments } from '../../utils/inboxOwnedAttachments.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
@@ -286,8 +287,9 @@ class UnifiedInboxService {
    * @param {number|string|null} [options.ownerContextId]
    */
   async sendMessage(userId, conversationId, conversationType, content, attachments = [], options = {}) {
-    if (!content?.trim()) {
-      throw new Error('Message content is required');
+    const ownedAttachments = sanitizeOwnedInboxAttachments(attachments, userId);
+    if (!content?.trim() && !ownedAttachments.length) {
+      throw new Error('Cần nội dung hoặc tệp đính kèm');
     }
 
     // Verify conversation belongs to user
@@ -315,8 +317,8 @@ class UnifiedInboxService {
 
     const messagePayload = {
       role: 'agent',
-      content: content.trim(),
-      attachments,
+      content: String(content || '').trim(),
+      attachments: ownedAttachments,
       metadata: { source: 'manual_inbox' },
     };
 
@@ -377,8 +379,8 @@ class UnifiedInboxService {
             : (conversation.visitor_info || {}));
         const params = {
           externalId: conversation.external_id,
-          message: content.trim(),
-          attachments,
+          message: String(content || '').trim(),
+          attachments: ownedAttachments,
           userId,
           accountId: zaloAccountId,
           conversationInfo: conversation.channel === 'zalo_personal'
@@ -493,7 +495,7 @@ class UnifiedInboxService {
         const params = {
           externalId: conversation.external_id || owned.external_id,
           message: owned.content,
-          attachments: owned.attachments || [],
+          attachments: sanitizeOwnedInboxAttachments(owned.attachments || [], userId),
           userId,
           accountId: type === 'zalo_personal'
             ? (owned.id_zalo_setting || conversation.id_zalo_setting)

@@ -176,6 +176,11 @@ router.delete('/widgets/:id', chatbotController.deleteWidget.bind(chatbotControl
 router.get('/inbox/conversations', unifiedInboxController.getConversations.bind(unifiedInboxController));
 router.get('/inbox/conversations/:id', unifiedInboxController.getConversation.bind(unifiedInboxController));
 router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessages.bind(unifiedInboxController));
+router.post(
+  '/inbox/attachments',
+  upload.single('file'),
+  unifiedInboxController.uploadInboxAttachment.bind(unifiedInboxController)
+);
 router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMessage.bind(unifiedInboxController));
 router.post('/inbox/messages/:messageId/retry', unifiedInboxController.retryMessage.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));

@@ -391,13 +391,27 @@ const InboxPage = () => {
 
   const { status: sseStatus, retry: retrySse } = useInboxSSE(handleNewMessage, handleUnreadChange);
 
-  const handleSendMessage = useCallback(async (content, replyTo) => {
+  const handleSendMessage = useCallback(async (content, replyTo, files = []) => {
     if (!selectedConversation || isSending) return;
     setIsSending(true);
     try {
+      let attachments = [];
+      if (Array.isArray(files) && files.length > 0) {
+        const uploaded = await Promise.all(
+          files.map((item) => chatbotApi.uploadInboxAttachment(
+            selectedConversation.id,
+            item?.file || item
+          ))
+        );
+        attachments = uploaded
+          .map((u) => u?.data)
+          .filter(Boolean);
+      }
+
       const response = await chatbotApi.sendMessage(selectedConversation.id, {
         type: selectedConversation.type,
         content,
+        attachments,
         replyTo: replyTo ? {
           id: replyTo.id,
           content: replyTo.content,
@@ -411,6 +425,7 @@ const InboxPage = () => {
           id: response.messageId || Date.now(),
           role: 'agent',
           content,
+          attachments,
           createdAt: new Date().toISOString(),
           isRead: true,
           replyTo,

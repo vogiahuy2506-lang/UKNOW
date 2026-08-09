@@ -1,4 +1,8 @@
 import unifiedInboxService from '../services/chatbot/unifiedInbox.service.js';
+import {
+  CHAT_ATTACHMENT_SOURCES,
+  persistChatBlob,
+} from '../services/chatbot/chatAttachment.service.js';
 import { checkSendQuota } from '../utils/userSendLimit.util.js';
 
 function normalizeInboxQueryFilters(query = {}) {
@@ -148,6 +152,35 @@ class UnifiedInboxController {
   }
 
   /**
+   * Upload an attachment for inbox outbound (no chatbotId / no signed ref).
+   * POST /api/ai/chatbot/inbox/attachments
+   */
+  async uploadInboxAttachment(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có file được tải lên' });
+      }
+
+      const stored = await persistChatBlob({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimetype: req.file.mimetype,
+        ownerUserId: req.user.id,
+        source: CHAT_ATTACHMENT_SOURCES.INBOX_OUTBOUND,
+      });
+
+      const { _key, ...clientPayload } = stored;
+      return res.status(201).json({ success: true, data: clientPayload });
+    } catch (err) {
+      console.error('[UnifiedInbox] Upload attachment error:', err);
+      return res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Không thể tải file lên',
+      });
+    }
+  }
+
+  /**
    * Send a message as agent
    * POST /api/ai/chatbot/inbox/conversations/:id/messages
    */
@@ -160,8 +193,12 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      if (!content?.trim()) {
-        return res.status(400).json({ success: false, message: 'Message content is required' });
+      const hasFiles = Array.isArray(attachments) && attachments.length > 0;
+      if (!content?.trim() && !hasFiles) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cần nội dung hoặc tệp đính kèm',
+        });
       }
 
       if (String(type) === 'zalo_personal') {
