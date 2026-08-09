@@ -1,5 +1,5 @@
-import db from '../../config/database.js';
-import uploadController from '../../controllers/upload.controller.js';
+import db from '../config/database.js';
+import uploadController from '../controllers/upload.controller.js';
 
 const ALLOWED_SOURCES = new Set(['chatbot_web', 'chatbot_studio', 'ai_assistant']);
 

@@ -5,12 +5,12 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/glo
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
-const { createApp } = await import('../../../src/app.js');
+const { createApp } = await import('../../src/app.js');
 const {
   truncateAll,
   createUser,
-} = await import('../helpers/db.js');
-const db = (await import('../../../src/config/database.js')).default;
+} = await import('./helpers/db.js');
+const db = (await import('../../src/config/database.js')).default;
 
 let app;
 
