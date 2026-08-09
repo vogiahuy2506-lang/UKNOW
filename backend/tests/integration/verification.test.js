@@ -46,11 +46,15 @@ beforeAll(() => {
   app = createApp();
   originalSendGridKey = process.env.SENDGRID_API_KEY;
   process.env.SENDGRID_API_KEY = 'SG.test-key-for-verification-only';
+  // Test này mock nodemailer + assert sendMail được gọi → opt-in gửi mail
+  // (systemEmail no-op mặc định trong test để tránh flaky SMTP thật).
+  process.env.TEST_SEND_EMAIL = '1';
 });
 
 afterAll(() => {
   if (originalSendGridKey === undefined) delete process.env.SENDGRID_API_KEY;
   else process.env.SENDGRID_API_KEY = originalSendGridKey;
+  delete process.env.TEST_SEND_EMAIL;
 });
 
 beforeEach(async () => {

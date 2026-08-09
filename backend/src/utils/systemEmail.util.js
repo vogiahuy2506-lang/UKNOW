@@ -28,6 +28,15 @@ function createTransporter() {
 // ─── Core Sender ─────────────────────────────────────────────────────────────
 
 export async function sendSystemEmail({ to, subject, html }) {
+  // Test env: no-op để KHÔNG gọi SMTP thật. SMTP fail trong test rồi retry
+  // (setTimeout backoff) sẽ log SAU khi test kết thúc → flaky
+  // "Cannot log after tests are done". Test nào CẦN xác minh gửi mail thì mock
+  // nodemailer + set TEST_SEND_EMAIL='1' (verification.test.js, email.test.js).
+  // Guard CHỈ khi NODE_ENV==='test' → prod/dev luôn gửi SMTP bình thường.
+  if (process.env.NODE_ENV === 'test' && process.env.TEST_SEND_EMAIL !== '1') {
+    return { messageId: 'test-noop', accepted: [to], skipped: true };
+  }
+
   const transporter = createTransporter();
   const maxRetries = 3;
   let lastError;

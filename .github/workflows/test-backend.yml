@@ -110,6 +110,33 @@ jobs:
       - name: Run Jest (unit)
         run: npm run test:unit -- --ci
 
+  lint:
+    name: ESLint (backend)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Cổng gác lỗi cấu trúc: no-dupe-class-members (2 _parseJson trùng đã gây bug 500),
+      # no-unreachable, no-redeclare... Config: backend/.eslintrc.cjs.
+      - name: Run ESLint
+        run: npm run lint
+
   integration:
     name: Jest integration (backend)
     runs-on: ubuntu-latest

@@ -436,6 +436,11 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
 };
 
 export const requestCampaignScheduleRefresh = async () => {
+  // Test env: KHÔNG đăng ký cron thật. Controller gọi hàm này fire-and-forget khi
+  // tạo/sửa lịch → trong test nó chạy async sau khi test xong (log "Đã nạp N lịch"
+  // → flaky "Cannot log after tests are done") VÀ cron node-cron chạy nền có thể
+  // trigger campaign, làm nhiễu state các suite khác. Prod/dev refresh bình thường.
+  if (process.env.NODE_ENV === 'test') return;
   try {
     await refreshCampaignSchedules();
   } catch (error) {

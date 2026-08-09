@@ -1,15 +1,22 @@
-import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
-import businessProfileService, { serializeProductList } from './businessProfile.service.js';
-import productRepository from '../../repositories/products/product.repository.js';
+import businessProfileService from './businessProfile.service.js';
 import { buildAdminContext } from './adminContext.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
-import axios from 'axios';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
-import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
-import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
-import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import aiPromptResources from './aiPromptResources.service.js';
+import { runChat } from './aiChatTransport.service.js';
+import { parseAiJson } from '../../utils/aiJsonParse.util.js';
+import {
+  langInstruction,
+  lastUserMessageContent,
+  hasExplicitCustomerSource,
+  looksLikeCampaignRequest,
+  asksOnlyForGoogleSheet,
+  buildCampaignDataSourceQuestion,
+  isMultiDaySeriesRequest,
+  looksLikeInlineSeriesDraft,
+} from '../../utils/campaignIntent.util.js';
 import {
   evaluateNextGate,
   extractWizardState,
@@ -27,233 +34,6 @@ import {
 } from './aiCampaignWizard.service.js';
 
 class AiCampaignService {
-  /**
-   * Lấy danh sách email templates của user để AI điền sẵn config.
-   * @param {number} userId
-   * @returns {Promise<Array>}
-   */
-  async getCourses(userId) {
-    try {
-      const rows = await aiCampaignRepository.getCourses(userId);
-      return rows.map(r => {
-        let name = String(r.name || '');
-        // Decode numeric entities first
-        name = name.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
-        // Decode named entities
-        name = name
-          .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, ' ')
-          .replace(/&ndash;/g, '–').replace(/&mdash;/g, '—').replace(/&lsquo;/g, '‘')
-          .replace(/&rsquo;/g, '’').replace(/&ldquo;/g, '“').replace(/&rdquo;/g, '”');
-        // Strip HTML tags
-        name = name.replace(/<[^>]+>/g, '').trim();
-        return { ...r, name };
-      });
-    } catch (e) {
-      console.warn('[AI] Không lấy được danh sách khóa học:', e.message);
-      return [];
-    }
-  }
-
-  async getEmailTemplates(userId) {
-    try {
-      const rows = await aiCampaignRepository.getEmailTemplates(userId);
-      return rows.map(r => ({
-        id: r.id,
-        name: r.template_name,
-        subject: r.subject,
-        category: r.category,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được email templates:', e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Lấy danh sách tài khoản Zalo đã kết nối của user.
-   * @param {number} userId
-   * @returns {Promise<Array>}
-   */
-  async getZaloAccounts(userId) {
-    try {
-      const rows = await aiCampaignRepository.getZaloAccounts(userId);
-      return rows.map(r => ({
-        id: r.id,
-        displayName: r.display_name,
-        zaloName: r.zalo_name,
-        status: r.status,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được Zalo accounts:', e.message);
-      return [];
-    }
-  }
-
-  async getZaloAccountsFull(userId) {
-    try {
-      const rows = await aiCampaignRepository.getZaloAccountsFull(userId);
-      return rows.map(r => ({
-        id: r.id,
-        displayName: r.display_name,
-        zaloName: r.zalo_name,
-        status: r.status,
-        isActive: r.is_active,
-        isDefault: r.is_default,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được full Zalo accounts:', e.message);
-      return [];
-    }
-  }
-
-  async getActiveEmailSenders(userId) {
-    try {
-      const rows = await aiCampaignRepository.getActiveEmailSenders(userId);
-      return rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        email: r.email,
-        replyTo: r.reply_to,
-        status: r.status,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được email senders:', e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Lấy danh sách Zalo message templates của user.
-   * @param {number} userId
-   * @returns {Promise<Array>}
-   */
-  async getZaloTemplates(userId) {
-    try {
-      const rows = await aiCampaignRepository.getZaloTemplates(userId);
-      return rows.map(r => ({
-        id: r.id,
-        name: r.template_name,
-        code: r.template_code,
-        bodyText: r.body_text ? String(r.body_text).slice(0, 200) : '',
-        category: r.category,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được Zalo templates:', e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Lấy danh sách nhóm Zalo từ tài khoản đầu tiên của user.
-   * @param {number} userId
-   * @returns {Promise<Array>}
-   */
-  async getZaloGroups(userId) {
-    try {
-      const accountId = await aiCampaignRepository.getDefaultZaloAccountId(userId);
-      if (!accountId) return [];
-
-      const rows = await aiCampaignRepository.getZaloGroupsByAccountId(accountId);
-      return rows.map(r => ({
-        id: r.id,
-        groupId: r.group_id,
-        groupName: r.group_name,
-        memberCount: r.member_count,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được Zalo groups:', e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Lấy danh sách landing pages của user (slug + title) để AI gợi ý filter leads.
-   * @param {number} userId
-   * @returns {Promise<Array>}
-   */
-  async getLandingPages(userId) {
-    try {
-      const rows = await aiCampaignRepository.getLandingPages(userId);
-      return rows.map(r => ({
-        slug: r.slug,
-        title: r.title,
-        isPublished: r.is_published,
-      }));
-    } catch (e) {
-      console.warn('[AI] Không lấy được landing pages:', e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Lấy thông tin khuyến nghị campaign type dựa trên profile doanh nghiệp.
-   * @param {number} userId
-   * @returns {Promise<string>}
-   */
-  async getRecommendedCampaignType(userId) {
-    try {
-      const profile = await businessProfileService.getProfile(userId);
-      if (!profile) return 'mixed';
-
-      const industry = String(profile.industry || '').toLowerCase();
-      const productRows = await productRepository.findAllByUser(userId);
-      const products = serializeProductList(productRows).toLowerCase();
-      const targetAudience = String(profile.target_audience || '').toLowerCase();
-
-      // Heuristics để gợi ý campaign type phù hợp
-      // B2B: Nên dùng email nhiều hơn
-      if (industry.includes('b2b') || industry.includes('doanh nghiệp') ||
-          industry.includes('công nghệ') || industry.includes('phần mềm')) {
-        return 'email';
-      }
-
-      // B2C / Consumer: Zalo hiệu quả hơn
-      if (industry.includes('b2c') || industry.includes('retail') ||
-          industry.includes('fmcg') || industry.includes('thực phẩm') ||
-          industry.includes('giáo dục') || industry.includes('sức khỏe')) {
-        // Check nếu có Zalo accounts thì gợi Zalo
-        const zaloAccounts = await this.getZaloAccounts(userId);
-        if (zaloAccounts.length > 0) {
-          return 'zalo';
-        }
-      }
-
-      // Mặc định là mixed để kết hợp đa kênh
-      return 'mixed';
-    } catch (e) {
-      console.warn('[AI] Không xác định được campaign type:', e.message);
-      return 'mixed';
-    }
-  }
-
-  /**
-   * Lấy thống kê khách hàng của user để gợi ý audience.
-   * Lưu ý: Tất cả khách hàng được cung cấp từ file/Google Sheet, không phải từ lịch sử mua hàng.
-   * @param {number} userId
-   * @returns {Promise<object>}
-   */
-  async getCustomerStats(userId) {
-    try {
-      const [totalRow, emailRow, zaloRow, phoneRow] = await Promise.all([
-        aiCampaignRepository.getCustomerStatTotal(userId),
-        aiCampaignRepository.getCustomerStatEmail(userId),
-        aiCampaignRepository.getCustomerStatZalo(userId),
-        aiCampaignRepository.getCustomerStatPhone(userId),
-      ]);
-
-      return {
-        total: parseInt(totalRow?.total || 0, 10),
-        hasEmail: parseInt(emailRow?.count || 0, 10),
-        hasZalo: parseInt(zaloRow?.count || 0, 10),
-        hasPhone: parseInt(phoneRow?.count || 0, 10),
-      };
-    } catch (e) {
-      console.warn('[AI] Không lấy được customer stats:', e.message);
-      return { total: 0, hasEmail: 0, hasZalo: 0, hasPhone: 0 };
-    }
-  }
-
   /**
    * Generate campaign JSON structure from prompt and files.
    */
@@ -278,11 +58,11 @@ class AiCampaignService {
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType] =
           await Promise.all([
-            this.getEmailTemplates(userId),
-            this.getZaloAccounts(userId),
-            this.getZaloGroups(userId),
-            this.getZaloTemplates(userId),
-            this.getRecommendedCampaignType(userId),
+            aiPromptResources.getEmailTemplates(userId),
+            aiPromptResources.getZaloAccounts(userId),
+            aiPromptResources.getZaloGroups(userId),
+            aiPromptResources.getZaloTemplates(userId),
+            aiPromptResources.getRecommendedCampaignType(userId),
           ]);
 
         const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
@@ -548,120 +328,28 @@ D. ZALO NHÓM:
     });
     console.log(`[AI] Gemini response received (${text?.length || 0} chars)`);
 
-    return this._parseJson(text);
-  }
-
-  /**
-   * Process interactive smart chat with intent detection.
-   * Returns: { type, content, data, missing_fields }
-   */
-  _langInstruction(locale) {
-    return locale === 'en'
-      ? 'Always respond in English. All "content" fields in JSON must be written in English.'
-      : 'Luôn trả lời bằng tiếng Việt. Tất cả trường "content" trong JSON phải viết bằng tiếng Việt.';
-  }
-
-  _lastUserMessageContent(history = []) {
-    const lastUserMessage = [...history].reverse().find((message) => message?.role === 'user');
-    return String(lastUserMessage?.content || '');
-  }
-
-  _hasExplicitCustomerSource(text = '') {
-    const normalized = String(text || '').toLowerCase();
-    return /google\s*sheet|spreadsheet|docs\.google\.com\/spreadsheets|excel|xlsx|xls|csv|file|t[eệ]p|tập tin|landing page|khách hàng trong hệ thống|database|db|crm/.test(normalized);
-  }
-
-  _looksLikeCampaignRequest(text = '') {
-    const normalized = String(text || '').toLowerCase();
-    return /chiến dịch|chien dich|campaign|email|zalo|khách|khach|customer|tour|chuyến đi|chuyen di|du lịch|du lich/.test(normalized);
-  }
-
-  _asksOnlyForGoogleSheet(response) {
-    const text = [
-      response?.content,
-      ...(Array.isArray(response?.missing_fields) ? response.missing_fields : []),
-    ].join(' ').toLowerCase();
-
-    return response?.type === 'ask_more'
-      && /google\s*sheet|spreadsheet|sheet\s*url|đường dẫn google sheet|docs\.google\.com\/spreadsheets/.test(text);
-  }
-
-  _buildCampaignDataSourceQuestion(locale = 'vi') {
-    const isEnglish = locale === 'en';
-    return {
-      type: 'ask_campaign_details',
-      content: isEnglish
-        ? 'I can create this customer care campaign. Before setting it up, please choose where the customer list should come from.'
-        : 'Tôi có thể tạo chiến dịch chăm sóc khách hàng này. Trước khi thiết lập, bạn chọn giúp tôi nguồn danh sách khách hàng nhé.',
-      missing_fields: [],
-      data: {
-        campaignName: isEnglish ? 'Travel customer care campaign' : 'Chiến dịch chăm sóc khách du lịch',
-        description: isEnglish
-          ? 'Send thank-you messages after a trip and a follow-up promotion later.'
-          : 'Gửi lời cảm ơn sau chuyến đi và gửi ưu đãi tour mới sau một khoảng thời gian.',
-        questions: [
-          {
-            id: 'dataSource',
-            label: isEnglish ? 'Where should the customer list come from?' : 'Lấy danh sách khách từ đâu?',
-            options: [
-              {
-                value: 'db',
-                label: isEnglish ? 'Saved customer list' : 'Danh sách khách hàng',
-                description: isEnglish
-                  ? 'People already in your account (from past campaigns, courses, or CRM)'
-                  : 'Khách đã có trong tài khoản (từ chiến dịch cũ, khóa học, CRM)',
-              },
-              {
-                value: 'sheet',
-                label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet',
-                description: isEnglish
-                  ? 'A spreadsheet file or Google Sheet link you provide'
-                  : 'File hoặc link bảng tính bạn tự cung cấp',
-              },
-              {
-                value: 'landing',
-                label: isEnglish ? 'Landing page sign-ups' : 'Đăng ký từ Landing Page',
-                description: isEnglish
-                  ? 'People who submitted the form on your landing page (name, phone, email)'
-                  : 'Người điền form trên trang landing (tên, SĐT, email)',
-              },
-            ],
-          },
-        ],
-      },
-    };
+    return parseAiJson(text);
   }
 
   _guardCampaignDataSourceResponse(response, history = [], locale = 'vi') {
-    const lastUserText = this._lastUserMessageContent(history);
+    const lastUserText = lastUserMessageContent(history);
     if (
-      this._looksLikeCampaignRequest(lastUserText)
-      && this._asksOnlyForGoogleSheet(response)
-      && !this._hasExplicitCustomerSource(lastUserText)
+      looksLikeCampaignRequest(lastUserText)
+      && asksOnlyForGoogleSheet(response)
+      && !hasExplicitCustomerSource(lastUserText)
     ) {
-      return this._buildCampaignDataSourceQuestion(locale);
+      return buildCampaignDataSourceQuestion(locale);
     }
     return response;
-  }
-
-  _isMultiDaySeriesRequest(text = '') {
-    const normalized = String(text || '').toLowerCase();
-    return /\d+\s*(tin nhắn|tin|email|ngày|ngay|message|messages|day|days)/i.test(normalized)
-      && /(zalo|email|chiến dịch|chien dich|campaign|chăm sóc|cham soc|drip|đăng ký|dang ky|kêu gọi|keu goi|nhóm zalo|zalo nhóm|zalo group)/i.test(normalized);
-  }
-
-  _looksLikeInlineSeriesDraft(content = '') {
-    const matches = String(content || '').match(/tin nhắn\s*\d+|ngày\s*\d+|email\s*\d+|message\s*\d+|day\s*\d+/gi) || [];
-    return matches.length >= 2;
   }
 
   _guardContentPlanResponse(response, history = []) {
     if (response?.type === 'content_plan') return response;
 
-    const lastUserText = this._lastUserMessageContent(history);
-    if (!this._isMultiDaySeriesRequest(lastUserText)) return response;
+    const lastUserText = lastUserMessageContent(history);
+    if (!isMultiDaySeriesRequest(lastUserText)) return response;
 
-    if (response?.type === 'text' && this._looksLikeInlineSeriesDraft(response.content)) {
+    if (response?.type === 'text' && looksLikeInlineSeriesDraft(response.content)) {
       return {
         type: 'suggest_content_plan',
         content: response.content,
@@ -675,8 +363,8 @@ D. ZALO NHÓM:
   async _getWizardResources(userId) {
     if (!userId) return { zaloAccounts: [], emailSenders: [] };
     const [zaloAccounts, emailSenders] = await Promise.all([
-      this.getZaloAccountsFull(userId),
-      this.getActiveEmailSenders(userId),
+      aiPromptResources.getZaloAccountsFull(userId),
+      aiPromptResources.getActiveEmailSenders(userId),
     ]);
     return { zaloAccounts, emailSenders };
   }
@@ -685,7 +373,7 @@ D. ZALO NHÓM:
   // truyền thì tự derive từ history — tương đương behavior cũ.
   // Return { response, gateAsked } để caller persist meta dead-end.
   _guardWizardGates(response, history = [], resources = {}, locale = 'vi', mergedGates = null) {
-    const lastUserText = this._lastUserMessageContent(history);
+    const lastUserText = lastUserMessageContent(history);
     if (isPlanTemplateDraftRequest(lastUserText)) return { response, gateAsked: null };
     if (!shouldGuardCampaignResponse(response)) return { response, gateAsked: null };
 
@@ -740,7 +428,7 @@ D. ZALO NHÓM:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
-      const langInstr = this._langInstruction(locale);
+      const langInstr = langInstruction(locale);
       const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI, và chuyên phân tích tài liệu/dữ liệu doanh nghiệp.
 Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược, trả lời câu hỏi về tình trạng hoạt động của nền tảng, và giải đáp/tổng hợp bất kỳ tài liệu nào được gửi kèm.
 
@@ -762,11 +450,11 @@ QUY TẮC:
   "data": null
 }`;
 
-      return this._runChat(adminSystemPrompt, history, files, userId, model);
+      return runChat({ systemPrompt: adminSystemPrompt, history, files, userId, requestedModel: model });
     }
 
     const wizardResources = await this._getWizardResources(userId);
-    const lastUserText = this._lastUserMessageContent(history);
+    const lastUserText = lastUserMessageContent(history);
 
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
     // từ history của request này (marker tường minh luôn thắng).
@@ -817,14 +505,14 @@ QUY TẮC:
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages] =
           await Promise.all([
-            this.getEmailTemplates(userId),
-            this.getZaloAccounts(userId),
-            this.getZaloGroups(userId),
-            this.getZaloTemplates(userId),
-            this.getRecommendedCampaignType(userId),
-            this.getCustomerStats(userId),
-            this.getCourses(userId),
-            this.getLandingPages(userId),
+            aiPromptResources.getEmailTemplates(userId),
+            aiPromptResources.getZaloAccounts(userId),
+            aiPromptResources.getZaloGroups(userId),
+            aiPromptResources.getZaloTemplates(userId),
+            aiPromptResources.getRecommendedCampaignType(userId),
+            aiPromptResources.getCustomerStats(userId),
+            aiPromptResources.getCourses(userId),
+            aiPromptResources.getLandingPages(userId),
           ]);
 
         landingPages = _landingPages;
@@ -901,7 +589,7 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
-    const langInstr = this._langInstruction(locale);
+    const langInstr = langInstruction(locale);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing, landing page, và phân tích tài liệu/dữ liệu doanh nghiệp.
 
 ## NGÔN NGỮ:
@@ -1379,7 +1067,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
 
-    const response = await this._runChat(systemPrompt, history, files, userId, model);
+    const response = await runChat({ systemPrompt, history, files, userId, requestedModel: model });
     const guarded = this._guardWizardGates(
       this._guardContentPlanResponse(
         this._guardCampaignDataSourceResponse(response, history, locale),
@@ -1411,123 +1099,6 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     };
   }
 
-  /**
-   * Generate landing page using AI with optional template.
-   * @param {object} params
-   * @param {string} params.prompt - User's request
-   * @param {number} [params.templateId] - Optional template ID
-   * @param {number} [params.userId] - User ID for RAG context
-   * @param {Array} [params.files] - Attached files
-   * @returns {Promise<object>}
-   */
-  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
-    return landingTemplateService.generateLandingPage({ prompt, templateId, userId, files });
-  }
-
-  /**
-   * Get available landing page templates.
-   * @param {string} [category] - Optional category filter
-   * @returns {Promise<object[]>}
-   */
-  async getLandingTemplates(category = null) {
-    if (category) {
-      return landingTemplateService.getTemplatesByCategory(category);
-    }
-    return landingTemplateService.getTemplates();
-  }
-
-  /**
-   * Get landing page template categories.
-   * @returns {Promise<object[]>}
-   */
-  async getLandingTemplateCategories() {
-    return landingTemplateService.getCategories();
-  }
-
-  /**
-   * Robustly parse JSON from AI output.
-   */
-  _parseJson(text) {
-    let jsonStr = text.trim();
-    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    } else {
-      const firstBrace = jsonStr.indexOf('{');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-      }
-    }
-    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
-
-    try {
-      const parsed = JSON.parse(jsonStr);
-      return this._validateWorkflowNodes(this._normalizeParsed(parsed));
-    } catch {
-      try {
-        const sanitized = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (_match, p1) => {
-          return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-        });
-        return this._validateWorkflowNodes(this._normalizeParsed(JSON.parse(sanitized)));
-      } catch {
-        // JSON hoàn toàn không parse được → trả text thân thiện thay vì crash.
-        // KHÔNG đổ raw JSON vỡ ra chat: nếu text trông như JSON/code fence thì
-        // thay bằng thông báo lỗi; text thuần (AI trả lời tự do) thì giữ nguyên.
-        console.warn('[AI] JSON parse failed, falling back to text response');
-        const looksLikeBrokenJson = /^\s*(\{|```)/.test(text);
-        return {
-          type: 'text',
-          content: looksLikeBrokenJson
-            ? 'Xin lỗi, tôi gặp lỗi định dạng khi tạo câu trả lời. Bạn gửi lại yêu cầu giúp tôi nhé.'
-            : text,
-          data: null,
-          missing_fields: [],
-        };
-      }
-    }
-  }
-
-  _normalizeParsed(parsed) {
-    if (parsed.type === 'campaign_script' && parsed.data) {
-      parsed.type = 'confirm_create';
-      if (!parsed.data.summary) {
-        const nodes = parsed.data.nodes || [];
-        const visibleNodes = nodes.filter(n => n.nodeType === 'action' || n.nodeType === 'data');
-        parsed.data.summary = {
-          totalSteps: nodes.length,
-          duration: 'N/A',
-          steps: visibleNodes.map((n, i) => ({
-            step: i + 1,
-            action: n.nodeName || n.nodeSubtype,
-            timing: n.config?.delayValue
-              ? `Sau ${n.config.delayValue} ${n.config.delayUnit || 'ngày'}`
-              : 'Ngay lập tức',
-          })),
-        };
-      }
-    }
-    return parsed;
-  }
-
-  /**
-   * Validate workflow has DATA nodes. If not, add warning but still return.
-   */
-  _validateWorkflowNodes(parsed) {
-    if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
-      return parsed;
-    }
-
-    const hasDataNode = parsed.nodes.some(n => n.nodeType === 'data');
-    if (!hasDataNode) {
-      console.warn('[AI] Warning: Workflow has no DATA nodes. Consider adding condition, filter, or tag_contact nodes.');
-    } else {
-      console.log(`[AI] Workflow validated: ${parsed.nodes.length} nodes with DATA nodes`);
-    }
-
-    return parsed;
-  }
-
   async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
     let contextBlock = '';
 
@@ -1541,12 +1112,12 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats] =
           await Promise.all([
-            this.getEmailTemplates(userId),
-            this.getZaloAccounts(userId),
-            this.getZaloGroups(userId),
-            this.getZaloTemplates(userId),
-            this.getRecommendedCampaignType(userId),
-            this.getCustomerStats(userId),
+            aiPromptResources.getEmailTemplates(userId),
+            aiPromptResources.getZaloAccounts(userId),
+            aiPromptResources.getZaloGroups(userId),
+            aiPromptResources.getZaloTemplates(userId),
+            aiPromptResources.getRecommendedCampaignType(userId),
+            aiPromptResources.getCustomerStats(userId),
           ]);
 
         // Get node context từ registry
@@ -1607,7 +1178,7 @@ ${templateSelectionPrompt}
       }
     }
 
-    const langInstrV2 = this._langInstruction(locale);
+    const langInstrV2 = langInstruction(locale);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo chiến dịch marketing với multi-step support.
 
 ## NGÔN NGỮ:
@@ -1663,109 +1234,7 @@ Khi muốn tạo Landing Page.
 - Nếu thiếu thông tin cơ bản → vẫn tạo nhưng dùng placeholder có ý nghĩa
 `;
 
-    return this._runChat(systemPrompt, history, files, userId, model);
-  }
-
-  /**
-   * Shared Gemini chat runner — builds history, attaches files, calls API.
-   * @param {string} systemPrompt
-   * @param {Array}  history  — [{role, content}]
-   * @param {Array}  files    — [{tempId, originalName, contentType}]
-   */
-  async _runChat(systemPrompt, history, files, userId = null, requestedModel = null) {
-    const googleUrlCache = new Map();
-
-    // Hàm đọc và đính kèm một file vào parts array
-    const attachFileToParts = async (parts, file) => {
-      try {
-        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-        const mimeType = String(file.contentType || '').toLowerCase();
-        if (mimeType.startsWith('image/')) {
-          parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
-        } else {
-          const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
-          if (extractedText.trim()) {
-            parts.push({
-              text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`
-            });
-          }
-        }
-      } catch (err) {
-        console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
-      }
-    };
-
-    // Build Gemini history — re-attach files + Google URLs từ TẤT CẢ tin nhắn trong lịch sử
-    const geminiHistory = await Promise.all(history.map(async (msg) => {
-      const parts = [{ text: msg.content || '(no text)' }];
-      if (msg.role === 'user') {
-        if (Array.isArray(msg.files) && msg.files.length > 0) {
-          for (const file of msg.files) {
-            await attachFileToParts(parts, file);
-          }
-        }
-        await attachGoogleUrlParts(parts, msg.content, googleUrlCache);
-      }
-      return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
-    }));
-
-    // Đính kèm thêm files của tin nhắn hiện tại (nếu có, không trùng với history)
-    if (files.length > 0) {
-      const lastMessage = geminiHistory[geminiHistory.length - 1];
-      const historyFileIds = new Set(
-        (history[history.length - 1]?.files || []).map(f => f.tempId)
-      );
-      for (const file of files) {
-        if (!historyFileIds.has(file.tempId)) {
-          await attachFileToParts(lastMessage.parts, file);
-        }
-      }
-    }
-
-    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const modelName = await resolveAllowedModel(userId, requestedModel);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-    try {
-      const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
-        contents: geminiHistory,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        model: modelName,
-        requestedMaxOutputTokens: 8192,
-      });
-
-      const { data: result } = await axios.post(url, {
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: geminiHistory,
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens },
-      }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
-
-      if (!result.candidates || result.candidates.length === 0) {
-        if (result.promptFeedback?.blockReason) {
-          throw new Error(`Yêu cầu bị chặn: ${result.promptFeedback.blockReason}`);
-        }
-        throw new Error('AI không phản hồi, vui lòng thử lại.');
-      }
-
-      const text = (result.candidates[0].content?.parts || [])
-        .filter(p => p.text && !p.thought)
-        .map(p => p.text)
-        .join('');
-      if (!text) throw new Error('AI trả về kết quả rỗng.');
-
-      console.log('[AI Chat] Gemini response (first 500 chars):', text.substring(0, 500));
-      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
-        feature: 'smart_chat',
-        model: modelName,
-      });
-      return this._parseJson(text);
-    } catch (err) {
-      if (err.response) {
-        console.error('Gemini API Error Detail:', JSON.stringify(err.response.data, null, 2));
-        throw new Error(`Gemini API Error (${err.response.status}): ${JSON.stringify(err.response.data)}`);
-      }
-      throw err;
-    }
+    return runChat({ systemPrompt, history, files, userId, requestedModel: model });
   }
 
   /**
@@ -1779,26 +1248,6 @@ Khi muốn tạo Landing Page.
    */
   async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
     return landingTemplateService.generateLandingPage({ prompt, templateId, userId, files });
-  }
-
-  /**
-   * Get available landing page templates.
-   * @param {string} [category] - Optional category filter
-   * @returns {Promise<object[]>}
-   */
-  async getLandingTemplates(category = null) {
-    if (category) {
-      return landingTemplateService.getTemplatesByCategory(category);
-    }
-    return landingTemplateService.getTemplates();
-  }
-
-  /**
-   * Get landing page template categories.
-   * @returns {Promise<object[]>}
-   */
-  async getLandingTemplateCategories() {
-    return landingTemplateService.getCategories();
   }
 
   /**
@@ -1824,11 +1273,11 @@ Khi muốn tạo Landing Page.
       try {
         const [emailTemplates, zaloAccounts, zaloTemplates, recommendedType, customerStats] =
           await Promise.all([
-            this.getEmailTemplates(userId),
-            this.getZaloAccounts(userId),
-            this.getZaloTemplates(userId),
-            this.getRecommendedCampaignType(userId),
-            this.getCustomerStats(userId),
+            aiPromptResources.getEmailTemplates(userId),
+            aiPromptResources.getZaloAccounts(userId),
+            aiPromptResources.getZaloTemplates(userId),
+            aiPromptResources.getRecommendedCampaignType(userId),
+            aiPromptResources.getCustomerStats(userId),
           ]);
 
         // Build template selection prompt
@@ -1902,7 +1351,7 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
     });
     console.log(`[AI Registry] Response received (${text?.length || 0} chars)`);
 
-    return this._parseJson(text);
+    return parseAiJson(text);
   }
 
   /**
@@ -1932,169 +1381,6 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
     return { valid: errors.length === 0, errors, warnings };
   }
 
-  /**
-   * Robustly parse JSON from AI output.
-   */
-  _parseJson(text) {
-    let jsonStr = text.trim();
-    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    } else {
-      const firstBrace = jsonStr.indexOf('{');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-      }
-    }
-    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
-
-    try {
-      const parsed = JSON.parse(jsonStr);
-      // Normalize: đổi "text" hoặc "response" thành "content" để frontend đọc được
-      if (parsed.text && !parsed.content) {
-        parsed.content = parsed.text;
-        delete parsed.text;
-      }
-      if (parsed.response && !parsed.content) {
-        parsed.content = parsed.response;
-        delete parsed.response;
-      }
-      // Handle {"intent":{"type":"..."}, ...} format - extract type from intent
-      if (parsed.intent?.type && !parsed.type) {
-        parsed.type = parsed.intent.type;
-        delete parsed.intent;
-      }
-      
-      // Nếu AI trả về campaign script trực tiếp (không có type), wrap lại đúng format
-      const hasCampaignScript = parsed.nodes && parsed.connections && parsed.campaignName;
-      const hasOnlyScriptData = !parsed.type && (parsed.campaignName || parsed.nodes);
-      
-      if (hasOnlyScriptData) {
-        // AI trả về campaign script trực tiếp - wrap lại
-        return {
-          type: parsed.type || 'campaign_script',
-          content: parsed.content || `Chiến dịch "${parsed.campaignName}" đã được tạo.`,
-          data: parsed,
-        };
-      }
-      
-      // Validate: nếu không có type, mặc định là "text" cho text content
-      if (!parsed.type) {
-        parsed.type = 'text';
-      }
-      // Validate: must have DATA nodes
-      return this._validateWorkflowNodes(parsed);
-    } catch {
-      const escapeCtrl = (s) => s.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, p1) => {
-        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-      });
-      let parsed = null;
-      try {
-        parsed = JSON.parse(escapeCtrl(jsonStr));
-      } catch {
-        // Model chèn nội dung thừa SAU object JSON ("non-whitespace after JSON")
-        // → chỉ lấy object JSON đầu tiên rồi thử lại (cứu được câu trả lời tốt).
-        const firstObj = this._extractFirstJsonObject(jsonStr);
-        if (firstObj) {
-          try { parsed = JSON.parse(escapeCtrl(firstObj)); } catch { parsed = null; }
-        }
-      }
-      if (!parsed || typeof parsed !== 'object') {
-        // Cứu không được → trả text thân thiện. TUYỆT ĐỐI không ném ra ngoài:
-        // trước đây JSON.parse(sanitized) không bọc → 500 + nuốt luôn tin người dùng.
-        console.warn('[AI] _parseJson: parse thất bại sau mọi cách, fallback text');
-        const looksLikeJson = /^\s*(\{|```)/.test(text);
-        return {
-          type: 'text',
-          content: looksLikeJson
-            ? 'Xin lỗi, tôi gặp lỗi định dạng khi tạo câu trả lời. Bạn gửi lại yêu cầu giúp tôi nhé.'
-            : text,
-          data: null,
-          missing_fields: [],
-        };
-      }
-      if (parsed.text && !parsed.content) {
-        parsed.content = parsed.text;
-        delete parsed.text;
-      }
-      if (parsed.response && !parsed.content) {
-        parsed.content = parsed.response;
-        delete parsed.response;
-      }
-      // Handle {"intent":{"type":"..."}, ...} format
-      if (parsed.intent?.type && !parsed.type) {
-        parsed.type = parsed.intent.type;
-        delete parsed.intent;
-      }
-      
-      // Nếu AI trả về campaign script trực tiếp, wrap lại
-      const hasCampaignScript = parsed.nodes && parsed.connections && parsed.campaignName;
-      const hasOnlyScriptData = !parsed.type && (parsed.campaignName || parsed.nodes);
-      
-      if (hasOnlyScriptData) {
-        return {
-          type: parsed.type || 'campaign_script',
-          content: parsed.content || `Chiến dịch "${parsed.campaignName}" đã được tạo.`,
-          data: parsed,
-        };
-      }
-      
-      if (!parsed.type) {
-        parsed.type = 'text';
-      }
-      return this._validateWorkflowNodes(parsed);
-    }
-  }
-
-  /**
-   * Trích object JSON cân bằng ĐẦU TIÊN trong chuỗi (bỏ nội dung model chèn sau nó).
-   * Bám dấu ngoặc, tôn trọng chuỗi + ký tự escape để không nhầm '{' '}' trong text.
-   * @param {string} text
-   * @returns {string|null}
-   */
-  _extractFirstJsonObject(text) {
-    const s = String(text || '');
-    const start = s.indexOf('{');
-    if (start === -1) return null;
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (let i = start; i < s.length; i += 1) {
-      const ch = s[i];
-      if (inStr) {
-        if (esc) esc = false;
-        else if (ch === '\\') esc = true;
-        else if (ch === '"') inStr = false;
-      } else if (ch === '"') {
-        inStr = true;
-      } else if (ch === '{') {
-        depth += 1;
-      } else if (ch === '}') {
-        depth -= 1;
-        if (depth === 0) return s.slice(start, i + 1);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Validate workflow has DATA nodes. If not, add warning but still return.
-   */
-  _validateWorkflowNodes(parsed) {
-    if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
-      return parsed;
-    }
-
-    const hasDataNode = parsed.nodes.some(n => n.nodeType === 'data');
-    if (!hasDataNode) {
-      console.warn('[AI] Warning: Workflow has no DATA nodes. Consider adding condition, filter, or tag_contact nodes.');
-    } else {
-      console.log(`[AI] Workflow validated: ${parsed.nodes.length} nodes with DATA nodes`);
-    }
-      
-    return parsed;
-  }
 }
 
 export default new AiCampaignService();

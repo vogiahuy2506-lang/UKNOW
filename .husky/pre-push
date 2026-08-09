@@ -25,11 +25,19 @@ if ! git diff --name-only @{push}..HEAD 2>/dev/null | grep -q '^backend/'; then
   fi
 fi
 
-echo "[pre-push] Chạy backend unit test trước khi push..."
+echo "[pre-push] Chạy backend lint + unit test trước khi push..."
 echo "[pre-push] Bỏ qua nhanh:  git push --no-verify"
 echo ""
 
 cd backend || exit 1
+
+# Lint nhanh trước (bắt lỗi cấu trúc: method trùng no-dupe-class-members, unreachable...).
+# Cần eslint local → chạy `npm ci` sau khi pull. Chưa cài thì dùng --no-verify.
+if ! npm run lint --silent; then
+  echo ""
+  echo "[pre-push] ❌ ESLint FAIL — fix trước hoặc dùng --no-verify để bypass."
+  exit 1
+fi
 
 if ! npm run test:unit --silent -- --ci; then
   echo ""

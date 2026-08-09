@@ -883,6 +883,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     return { label: 'File', icon: null, bg: 'bg-slate-100 border-slate-200', text: 'text-slate-500' };
   };
 
+  // URL tải file về (ép attachment, như Zalo/Messenger). Chỉ có khi tin đã lưu:
+  // f.url dạng /file/<token> (viewer tài liệu) → +/download; ảnh /file/<token>/download?preview=true → bỏ query.
+  // File vừa upload (temp) chưa có url → trả null (không cho tải, người dùng đang giữ bản gốc).
+  const fileDownloadHref = (f) => {
+    const raw = f?.url;
+    if (!raw) return null;
+    const base = String(raw).split('?')[0];
+    return base.endsWith('/download') ? base : `${base}/download`;
+  };
+
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
   const handleDragEnter = (e) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDragging(false); };
@@ -2922,14 +2932,29 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {msg.files.map((f, i) => {
                     const { bg, text } = fileChipMeta(f);
-                    return (
-                      <div key={i} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-2 py-1`}>
+                    const dl = fileDownloadHref(f);
+                    const cls = `flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-2 py-1`;
+                    const inner = (
+                      <>
                         {(f.previewUrl || (f.url && String(f.contentType || f.type || '').includes('image')))
                           ? <img src={f.previewUrl || f.url} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
                           : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
                         }
                         <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.displayName || f.originalName}</span>
-                      </div>
+                      </>
+                    );
+                    return dl ? (
+                      <a
+                        key={i}
+                        href={dl}
+                        download={f.displayName || f.originalName}
+                        title="Tải xuống"
+                        className={`${cls} cursor-pointer hover:brightness-95 transition`}
+                      >
+                        {inner}
+                      </a>
+                    ) : (
+                      <div key={i} className={cls}>{inner}</div>
                     );
                   })}
                 </div>

@@ -67,9 +67,13 @@ let app;
 
 beforeAll(() => {
   app = createApp();
+  // Test này mock nodemailer + assert sendMail được gọi → opt-in gửi mail
+  // (systemEmail no-op mặc định trong test để tránh flaky SMTP thật).
+  process.env.TEST_SEND_EMAIL = '1';
 });
 
 afterAll(() => {
+  delete process.env.TEST_SEND_EMAIL;
   if (originalSendGridKey === undefined) delete process.env.SENDGRID_API_KEY;
   else process.env.SENDGRID_API_KEY = originalSendGridKey;
   if (originalMailUsername === undefined) delete process.env.MAIL_USERNAME;

@@ -52,10 +52,18 @@ jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({
   attachGoogleUrlParts,
 }));
 
-jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', () => ({
+jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   default: {
     getZaloAccountsFull,
     getActiveEmailSenders,
+    getEmailTemplates: jest.fn(async () => []),
+    getZaloAccounts: jest.fn(async () => []),
+    getZaloGroups: jest.fn(async () => []),
+    getZaloTemplates: jest.fn(async () => []),
+    getRecommendedCampaignType: jest.fn(async () => 'mixed'),
+    getCustomerStats: jest.fn(async () => ({ total: 0 })),
+    getCourses: jest.fn(async () => []),
+    getLandingPages: jest.fn(async () => []),
   },
 }));
 
@@ -71,6 +79,7 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
 }));
 
 const { default: aiCampaignService } = await import('../aiCampaign.service.js');
+const { runChat } = await import('../aiChatTransport.service.js');
 
 describe('aiCampaign.service', () => {
   beforeEach(() => {
@@ -100,12 +109,12 @@ describe('aiCampaign.service', () => {
       },
     });
 
-    const response = await aiCampaignService._runChat(
-      'system prompt',
-      [{ role: 'user', content: 'hello' }],
-      [],
-      42
-    );
+    const response = await runChat({
+      systemPrompt: 'system prompt',
+      history: [{ role: 'user', content: 'hello' }],
+      files: [],
+      userId: 42,
+    });
 
     expect(response).toMatchObject({ type: 'text', content: 'ok' });
     expect(reserve).toHaveBeenCalledWith(42, expect.objectContaining({

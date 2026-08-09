@@ -17,6 +17,8 @@
     "pm2:status": "pm2 list",
     "seed": "node scripts/seed.js",
     "check:schema": "node scripts/checkCoreSchema.js",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
@@ -110,6 +112,7 @@
     "zca-js": "2.1.2"
   },
   "devDependencies": {
+    "eslint": "^8.57.1",
     "jest": "^29.7.0",
     "nodemon": "^3.0.2",
     "supertest": "^7.2.2"
