@@ -101,11 +101,14 @@ export async function writeWizardState(sessionId, userId, state) {
 // Lưu cặp user + assistant message và cập nhật updated_at của session.
 // INSERT được gate bằng ownership (WHERE EXISTS) — không ghi được vào session của
 // người khác kể cả khi sessionId bị giả mạo. Trả true nếu đã ghi.
-export async function saveMessages(sessionId, userId, userContent, assistantMsg) {
+export async function saveMessages(sessionId, userId, userContent, assistantMsg, userFiles = []) {
+  const userData = Array.isArray(userFiles) && userFiles.length
+    ? JSON.stringify({ files: userFiles })
+    : null;
   const { rowCount } = await db.query(
     `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
      SELECT * FROM (VALUES
-       ($1::bigint, 'user',      $3::text, NULL::varchar, NULL::jsonb, NULL::jsonb),
+       ($1::bigint, 'user',      $3::text, NULL::varchar, $8::jsonb, NULL::jsonb),
        ($1::bigint, 'assistant', $4::text, $5::varchar,   $6::jsonb,   $7::jsonb)
      ) AS v(session_id, role, content, type, data, missing_fields)
      WHERE EXISTS (SELECT 1 FROM ai_chat_sessions WHERE id = $1 AND id_user = $2)`,
@@ -117,6 +120,7 @@ export async function saveMessages(sessionId, userId, userContent, assistantMsg)
       assistantMsg.type ?? null,
       assistantMsg.data != null ? JSON.stringify(assistantMsg.data) : null,
       assistantMsg.missing_fields?.length ? JSON.stringify(assistantMsg.missing_fields) : null,
+      userData,
     ]
   );
   if (!rowCount) return false;

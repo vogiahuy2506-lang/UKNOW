@@ -124,8 +124,8 @@ class AiController {
         });
       }
 
-      // Định tuyến mỏng: hỏi_đáp / không_rõ / ngoài_phạm_vi → help center;
-      // làm_giúp → aiCampaign như cũ. Không nhét tài liệu vào prompt aiCampaign.
+      // Định tuyến mỏng: hỏi_đáp / ngoài_phạm_vi → help center;
+      // làm_giúp / không_rõ → aiCampaign. Không nhét tài liệu vào prompt aiCampaign.
       // Có tệp đính kèm → BỎ QUA help-router: đính tệp là dấu hiệu muốn AI xử lý
       // tệp, không phải hỏi trợ giúp. Trước đây câu hỏi kèm tệp bị help-router nuốt
       // nên tệp không bao giờ tới processSmartChat (chỗ duy nhất đọc tệp).
@@ -181,7 +181,23 @@ class AiController {
           sessionTitle = session.title;
         }
 
-        await aiSessionRepo.saveMessages(finalSessionId, req.user.id, userContent, publicResponse);
+        const safeFiles = Array.isArray(files)
+          ? files
+            .map((f) => ({
+              tempId: f?.tempId,
+              originalName: f?.originalName,
+              contentType: f?.contentType,
+              size: f?.size,
+            }))
+            .filter((f) => f.tempId)
+          : [];
+        await aiSessionRepo.saveMessages(
+          finalSessionId,
+          req.user.id,
+          userContent,
+          publicResponse,
+          safeFiles
+        );
 
         if (_wizard) {
           // Dead-end: cùng 1 gate bị hỏi lần thứ 3 liên tiếp → log 1 lần cho mỗi streak

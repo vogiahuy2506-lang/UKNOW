@@ -660,7 +660,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (m.role === 'user' && parseWizardMarker(m.content)) {
           return { role: m.role, content: m.content, silent: true };
         }
-        return { role: m.role, content: m.content };
+        return {
+          role: m.role,
+          content: m.content,
+          ...(m.role === 'user' && Array.isArray(m.data?.files) ? { files: m.data.files } : {}),
+        };
       });
 
       setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);

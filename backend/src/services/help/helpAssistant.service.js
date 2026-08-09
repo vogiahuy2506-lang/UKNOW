@@ -69,10 +69,11 @@ không_rõ
 ngoài_phạm_vi
 
 Quy tắc:
-- hỏi_đáp: hỏi cách dùng hệ thống, lỗi khi dùng, hệ thống làm được gì, vì sao chiến dịch dừng...
-- làm_giúp: yêu cầu soạn/tạo/viết hộ chiến dịch, email, landing, nội dung marketing
+- hỏi_đáp: hỏi CÁCH DÙNG hoặc VÌ SAO (how-to, khắc phục lỗi thao tác) — KHÔNG phải yêu cầu hệ thống làm hộ
+- làm_giúp: yêu cầu soạn/tạo/viết hộ chiến dịch, email, landing, nội dung marketing, tạo landing page, đọc/phân tích tệp đính kèm, chạy/sửa việc trong hệ thống
 - không_rõ: quá ngắn / thiếu ngữ cảnh (vd: "Zalo")
-- ngoài_phạm_vi: không liên quan sản phẩm (thời tiết, tin tức, kiến thức chung...)`;
+- ngoài_phạm_vi: không liên quan sản phẩm (thời tiết, tin tức, kiến thức chung...)
+- Nếu phân vân giữa hỏi_đáp và làm_giúp → chọn làm_giúp`;
 
   const baseArgs = {
     userId,
@@ -192,7 +193,7 @@ ${chunkBlock}`;
 
 /**
  * Entry for assistant chat: route then handle help branches.
- * Returns null when branch is làm_giúp (caller continues to aiCampaign).
+ * Returns null when branch is làm_giúp or không_rõ (caller continues to aiCampaign).
  */
 export async function tryHandleHelpChat({ history, userId }) {
   const question = extractLastUserText(history);
@@ -218,12 +219,9 @@ export async function tryHandleHelpChat({ history, userId }) {
     };
   }
 
+  // không_rõ → fall through to AI assistant (clarifies better than a canned reply)
   if (route === HELP_ROUTE_LABELS.không_rõ) {
-    return {
-      type: 'text',
-      content: CLARIFY_REPLY,
-      data: { helpRoute: route },
-    };
+    return null;
   }
 
   return answerWithDocs(question, userId);

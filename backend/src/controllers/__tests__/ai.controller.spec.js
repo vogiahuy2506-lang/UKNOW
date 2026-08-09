@@ -81,9 +81,10 @@ describe('ai.controller', () => {
     await aiController.chat(req, res);
 
     expect(chargeAiCredit).not.toHaveBeenCalled();
+    // saveMessages nay nhận tham số thứ 5 (safeFiles) — request này không có tệp → [].
     expect(saveMessages).toHaveBeenCalledWith(123, 42, expect.any(String), expect.not.objectContaining({
       wizardShortCircuit: true,
-    }));
+    }), []);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.not.objectContaining({ wizardShortCircuit: true }),
