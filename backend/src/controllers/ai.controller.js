@@ -12,7 +12,7 @@ import { tryHandleHelpChat } from '../services/help/helpAssistant.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
-import { applyWizardStateAction, normalizeWizardState } from '../services/ai/aiCampaignWizard.service.js';
+import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
@@ -126,11 +126,11 @@ class AiController {
 
       // Định tuyến mỏng: hỏi_đáp / ngoài_phạm_vi → help center;
       // làm_giúp / không_rõ → aiCampaign. Không nhét tài liệu vào prompt aiCampaign.
-      // Có tệp đính kèm → BỎ QUA help-router: đính tệp là dấu hiệu muốn AI xử lý
-      // tệp, không phải hỏi trợ giúp. Trước đây câu hỏi kèm tệp bị help-router nuốt
-      // nên tệp không bao giờ tới processSmartChat (chỗ duy nhất đọc tệp).
+      // Có tệp đính kèm hoặc đang trả lời gate wizard → BỎ QUA help-router:
+      // đính tệp / giữa flow là dấu hiệu muốn AI xử lý, không phải hỏi trợ giúp.
       const hasFiles = Array.isArray(files) && files.length > 0;
-      const helpResponse = hasFiles
+      const inWizard = isWizardAnswerTurn(history);
+      const helpResponse = (hasFiles || inWizard)
         ? null
         : await tryHandleHelpChat({ history, userId: req.user.id });
 

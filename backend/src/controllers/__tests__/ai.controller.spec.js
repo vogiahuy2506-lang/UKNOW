@@ -137,4 +137,30 @@ describe('ai.controller', () => {
       data: expect.objectContaining({ content: 'Đã đọc tệp' }),
     });
   });
+
+  it('đang trả lời gate wizard: BỎ QUA help-router (kể cả câu lạc đề)', async () => {
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'KHÔNG ĐƯỢC HIỆN' });
+    processSmartChat.mockResolvedValue({ type: 'ask_sender_account', content: 'Chọn tài khoản gửi' });
+
+    const req = {
+      body: {
+        history: [
+          { role: 'assistant', type: 'ask_campaign_details', content: 'Bạn muốn gửi qua kênh nào?' },
+          { role: 'user', content: 'thời tiết hôm nay' },
+        ],
+        locale: 'vi',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).not.toHaveBeenCalled();
+    expect(processSmartChat).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ content: 'Chọn tài khoản gửi' }),
+    });
+  });
 });

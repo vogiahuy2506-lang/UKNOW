@@ -771,6 +771,36 @@ export function isWizardMarkerMessage(content = '') {
   return Boolean(parseWizardMarker(content));
 }
 
+/**
+ * Types where the assistant is waiting for a gate answer (not result/display cards).
+ * Keep in sync with AiChatbot interactiveTypes — ask-* / setup / confirm / plan actions only.
+ */
+export const GATE_PROMPT_TYPES = new Set([
+  'ask_campaign_details',
+  'ask_campaign_type',
+  'ask_audience',
+  'ask_sender_account',
+  'ask_landing_details',
+  'email_setup_guide',
+  'zalo_qr_login',
+  'zalo_group_picker',
+  'confirm_create',
+  'content_plan_actions',
+]);
+
+/**
+ * Current turn is answering a wizard gate?
+ *  (a) button click: last user message is a [wizard] marker (gate card stripped from history)
+ *  (b) typed reply: previous assistant message is a gate prompt card (still in history)
+ */
+export function isWizardAnswerTurn(history = []) {
+  if (!Array.isArray(history) || history.length === 0) return false;
+  const last = history[history.length - 1];
+  if (last?.role === 'user' && isWizardMarkerMessage(last.content)) return true;
+  const prev = history[history.length - 2];
+  return prev?.role === 'assistant' && GATE_PROMPT_TYPES.has(prev.type);
+}
+
 export function isPlanTemplateDraftRequest(content = '') {
   return isPlanTemplatePrompt(content);
 }
