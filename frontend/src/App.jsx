@@ -35,6 +35,7 @@ import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
 import InboxOutboxPage from './pages/settings/InboxOutboxPage';
+import MediaLibraryPage from './pages/settings/MediaLibraryPage';
 import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
 import ChannelTemplates from './pages/templates/ChannelTemplates';
 import Courses from './pages/courses/Courses';
@@ -357,6 +358,7 @@ function App() {
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
+            <Route path="settings/media-library" element={<OwnerRoute><MediaLibraryPage /></OwnerRoute>} />
             <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
             <Route path="topup" element={<TopupPage />} />
 

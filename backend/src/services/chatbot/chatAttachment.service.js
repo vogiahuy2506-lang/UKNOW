@@ -3,6 +3,7 @@ import path from 'path';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { signChatAttachmentRef, resolveChatAttachmentRef } from '../../utils/chatAttachmentRef.js';
+import db from '../../config/database.js';
 
 export const MAX_FILES_PER_MESSAGE = 3;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -12,6 +13,13 @@ export const TEXT_BUDGET_CHARS = 12000;
 export const PDF_MAX_PAGES = 30;
 export const PARSE_TIMEOUT_MS = 20_000;
 export const MAX_IMAGES_LATEST_TURN = 2;
+export const CHAT_ATTACHMENT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+export const CHAT_ATTACHMENT_SOURCES = Object.freeze({
+  WEB: 'chatbot_web',
+  STUDIO: 'chatbot_studio',
+  ASSISTANT: 'ai_assistant',
+});
 
 const DOC_ALLOW = [
   { mime: 'application/pdf', exts: ['.pdf'], magic: [0x25, 0x50, 0x44, 0x46], kind: 'doc' },
@@ -108,18 +116,60 @@ async function extractWithTimeout(buffer, originalName, mime, options = {}) {
   }
 }
 
+function resolveSource({ source, bind = {} } = {}) {
+  if (source && Object.values(CHAT_ATTACHMENT_SOURCES).includes(source)) return source;
+  if (bind.sid) return CHAT_ATTACHMENT_SOURCES.WEB;
+  if (bind.uid != null) return CHAT_ATTACHMENT_SOURCES.STUDIO;
+  return CHAT_ATTACHMENT_SOURCES.STUDIO;
+}
+
 /**
- * Store chat attachment under uploads/<ownerUserId>/chat/ and extract text for docs.
- *
- * @param {{ buffer: Buffer, originalName: string, mimetype?: string, ownerUserId: number|string, chatbotId: number|string, bind?: { uid?: *, sid?: * } }}
+ * Insert catalog row — fail-soft (file on disk remains usable for chat).
  */
-export async function storeChatFile({
+export async function insertChatAttachmentRow({
+  ownerUserId,
+  source,
+  storageKey,
+  displayName,
+  mimeType,
+  sizeBytes,
+  conversationRef = null,
+  expiresAt = null,
+}) {
+  const expires = expiresAt || new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
+  try {
+    await db.query(
+      `INSERT INTO chat_attachments
+         (id_user, source, storage_key, display_name, mime_type, size_bytes, conversation_ref, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (storage_key) DO NOTHING`,
+      [
+        ownerUserId,
+        source,
+        storageKey,
+        displayName || null,
+        mimeType || null,
+        sizeBytes ?? null,
+        conversationRef,
+        expires,
+      ]
+    );
+  } catch (err) {
+    console.warn('[ChatAttachment] catalog insert failed:', err.message);
+  }
+}
+
+/**
+ * Persist blob under uploads/<owner>/chat/ + sidecar + catalog row.
+ * Does NOT sign chat refs (Assistant has no chatbotId).
+ */
+export async function persistChatBlob({
   buffer,
   originalName,
   mimetype,
   ownerUserId,
-  chatbotId,
-  bind = {},
+  source,
+  conversationRef = null,
 }) {
   const { kind, mime, ext } = validateFile({ buffer, originalName, mimetype });
 
@@ -155,14 +205,23 @@ export async function storeChatFile({
     await fs.writeFile(sidecarPath, text, 'utf8');
   }
 
+  const displayName = sanitizeDisplayName(originalName);
+  const expiresAt = new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
+  const resolvedSource = resolveSource({ source });
+
+  await insertChatAttachmentRow({
+    ownerUserId,
+    source: resolvedSource,
+    storageKey: key,
+    displayName,
+    mimeType: mime,
+    sizeBytes: buffer.length,
+    conversationRef,
+    expiresAt,
+  });
+
   const type = kind === 'image' ? 'image' : 'file';
   const url = uploadController.buildDownloadUrlByKey(key, { preview: kind === 'image' });
-  const ref = signChatAttachmentRef(key, {
-    chatbotId,
-    uid: bind.uid ?? null,
-    sid: bind.sid ?? null,
-  });
-  const displayName = sanitizeDisplayName(originalName);
 
   return {
     type,
@@ -171,10 +230,85 @@ export async function storeChatFile({
     displayName,
     size: buffer.length,
     mime,
-    ref,
     textExtracted,
-    // key is server-only; callers that persist to DB use enrichAttachmentsForStorage
     _key: key,
+    expiresAt,
+    source: resolvedSource,
+  };
+}
+
+/**
+ * Store chat attachment under uploads/<ownerUserId>/chat/ and extract text for docs.
+ *
+ * @param {{ buffer: Buffer, originalName: string, mimetype?: string, ownerUserId: number|string, chatbotId: number|string, bind?: { uid?: *, sid?: * }, source?: string }}
+ */
+export async function storeChatFile({
+  buffer,
+  originalName,
+  mimetype,
+  ownerUserId,
+  chatbotId,
+  bind = {},
+  source,
+}) {
+  const persisted = await persistChatBlob({
+    buffer,
+    originalName,
+    mimetype,
+    ownerUserId,
+    source: resolveSource({ source, bind }),
+  });
+
+  const ref = signChatAttachmentRef(persisted._key, {
+    chatbotId,
+    uid: bind.uid ?? null,
+    sid: bind.sid ?? null,
+  });
+
+  return {
+    type: persisted.type,
+    url: persisted.url,
+    name: persisted.name,
+    displayName: persisted.displayName,
+    size: persisted.size,
+    mime: persisted.mime,
+    ref,
+    textExtracted: persisted.textExtracted,
+    _key: persisted._key,
+  };
+}
+
+/**
+ * Promote Assistant temp upload → durable chat storage + catalog row.
+ */
+export async function promoteAssistantTempFile({
+  tempId,
+  originalName,
+  contentType,
+  size,
+  ownerUserId,
+}) {
+  const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
+  const persisted = await persistChatBlob({
+    buffer,
+    originalName,
+    mimetype: contentType,
+    ownerUserId,
+    source: CHAT_ATTACHMENT_SOURCES.ASSISTANT,
+  });
+  try {
+    await uploadController.deleteTempFileById(tempId, originalName);
+  } catch (err) {
+    console.warn('[ChatAttachment] temp cleanup after promote failed:', err.message);
+  }
+  return {
+    storage_key: persisted._key,
+    originalName: persisted.displayName || originalName,
+    contentType: persisted.mime || contentType,
+    size: persisted.size ?? size,
+    url: persisted.url,
+    type: persisted.type,
+    displayName: persisted.displayName,
   };
 }
 
@@ -486,7 +620,10 @@ export async function buildAiPartsFromHistory({
 
 const chatAttachmentService = {
   validateFile,
+  persistChatBlob,
   storeChatFile,
+  promoteAssistantTempFile,
+  insertChatAttachmentRow,
   resolveRef,
   signRef,
   enrichAttachmentsForStorage,
@@ -498,6 +635,7 @@ const chatAttachmentService = {
   MAX_IMAGE_BYTES,
   TEXT_PER_FILE_CHARS,
   TEXT_BUDGET_CHARS,
+  CHAT_ATTACHMENT_SOURCES,
 };
 
 export default chatAttachmentService;

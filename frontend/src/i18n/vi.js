@@ -255,6 +255,7 @@ export default {
     businessProfile: 'Hồ sơ doanh nghiệp',
     chatbotStudio: 'Tạo AI Chatbot',
     inbox: 'Lịch sử trò chuyện',
+    mediaLibrary: 'Thư viện media',
     chatHistory: 'Lịch sử trò chuyện',
     activityLog: 'Nhật ký hoạt động',
     auditLogs: 'Nhật ký hoạt động',
@@ -1610,6 +1611,22 @@ export default {
     toggleFailed: 'Không thể bật/tắt chatbot',
     chatbotDisabled: 'chatbot đang tắt',
     connectFirst: 'Vui lòng kết nối tài khoản Zalo cá nhân trước',
+  },
+
+  mediaLibrary: {
+    title: 'Thư viện media',
+    subtitle: 'Ảnh và tệp đã gửi qua chatbot và Trợ lý AI',
+    tabOwned: 'File của tôi',
+    tabChannels: 'Zalo / Facebook',
+    allSources: 'Tất cả nguồn',
+    sourceWeb: 'Web chat',
+    sourceStudio: 'Studio',
+    sourceAssistant: 'Trợ lý AI',
+    daysLeft: 'Còn {days} ngày',
+    empty: 'Chưa có tệp nào',
+    loadError: 'Không tải được thư viện',
+    channelsNote: 'Mục này chỉ là link tới nền tảng — Zalo/Facebook xoá thì mất. Không phải bản sao lưu trên hệ thống.',
+    platformFallback: 'Ảnh trên Zalo/Facebook — mở ứng dụng để xem',
   },
 
   inbox: {

@@ -587,7 +587,7 @@ export const initScheduler = () => {
         const { cleanupOrphanChatAttachments } = await import('../services/chatbot/chatAttachmentCleanup.service.js');
         const result = await cleanupOrphanChatAttachments();
         console.log(
-          `[Scheduler] chat_attachment_cleanup: scanned=${result.scanned} deleted=${result.deleted} skipped=${result.skipped}`
+          `[Scheduler] chat_attachment_cleanup: scanned=${result.scanned} deleted=${result.deleted} rowsDeleted=${result.rowsDeleted ?? 0} skipped=${result.skipped}`
         );
         return result;
       });

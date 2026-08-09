@@ -2924,11 +2924,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     const { bg, text } = fileChipMeta(f);
                     return (
                       <div key={i} className={`flex items-center gap-1.5 ${bg} border rounded-xl overflow-hidden pr-2 py-1`}>
-                        {f.previewUrl
-                          ? <img src={f.previewUrl} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
+                        {(f.previewUrl || (f.url && String(f.contentType || f.type || '').includes('image')))
+                          ? <img src={f.previewUrl || f.url} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
                           : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
                         }
-                        <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.originalName}</span>
+                        <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.displayName || f.originalName}</span>
                       </div>
                     );
                   })}

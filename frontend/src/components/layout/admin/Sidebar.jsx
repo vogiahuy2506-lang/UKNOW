@@ -26,6 +26,7 @@ import {
   HiOutlineShieldCheck,
   HiOutlineOfficeBuilding,
   HiOutlineInbox,
+  HiOutlinePhotograph,
   HiOutlineSparkles,
   HiOutlineServer,
   HiOutlineClipboard,
@@ -74,6 +75,7 @@ const userMenuItems = (t) => [
     children: [
       { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus },
       { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox },
+      { name: t('nav.mediaLibrary'), path: '/app/settings/media-library', icon: HiOutlinePhotograph },
     ],
   },
   {

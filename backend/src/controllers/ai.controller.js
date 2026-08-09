@@ -181,7 +181,7 @@ class AiController {
           sessionTitle = session.title;
         }
 
-        const safeFiles = Array.isArray(files)
+        const rawFiles = Array.isArray(files)
           ? files
             .map((f) => ({
               tempId: f?.tempId,
@@ -191,6 +191,34 @@ class AiController {
             }))
             .filter((f) => f.tempId)
           : [];
+
+        // Phase 2: promote temp → uploads/<user>/chat/ + catalog row (source=ai_assistant)
+        const safeFiles = [];
+        for (const f of rawFiles) {
+          try {
+            const promoted = await chatAttachmentService.promoteAssistantTempFile({
+              tempId: f.tempId,
+              originalName: f.originalName,
+              contentType: f.contentType,
+              size: f.size,
+              ownerUserId: req.user.id,
+            });
+            safeFiles.push({
+              storage_key: promoted.storage_key,
+              originalName: promoted.originalName || f.originalName,
+              contentType: promoted.contentType || f.contentType,
+              size: promoted.size ?? f.size,
+              url: promoted.url,
+              type: promoted.type,
+              displayName: promoted.displayName || f.originalName,
+            });
+          } catch (promoteErr) {
+            console.warn('[AI] promote attachment failed:', promoteErr.message);
+            // Keep temp metadata so chip still shows name after F5 (file may expire ~24h)
+            safeFiles.push(f);
+          }
+        }
+
         await aiSessionRepo.saveMessages(
           finalSessionId,
           req.user.id,
@@ -1064,6 +1092,7 @@ class AiController {
         ownerUserId: req.user.id,
         chatbotId,
         bind: { uid: req.user.id },
+        source: chatAttachmentService.CHAT_ATTACHMENT_SOURCES.STUDIO,
       });
 
       const { _key, ...clientPayload } = stored;

@@ -68,6 +68,7 @@ import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
 import auditRoutes from './routes/audit.routes.js';
+import mediaLibraryRoutes from './routes/mediaLibrary.routes.js';
 import adminAuditLogsRoutes from './routes/adminAuditLogs.routes.js';
 import diagnosticRoutes from './routes/diagnostic.routes.js';
 import templateLabelRoutes from './routes/templateLabel.routes.js';
@@ -203,6 +204,7 @@ export function createApp() {
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/custom-domains', customDomainRoutes);
   app.use('/api/audit-logs', auditRoutes);
+  app.use('/api/media-library', mediaLibraryRoutes);
   app.use('/api/admin/audit-logs', adminAuditLogsRoutes);
   app.use('/api/admin/diagnostic', diagnosticRoutes);
   app.use('/api/template-labels', templateLabelRoutes);

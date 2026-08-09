@@ -1,12 +1,29 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { promises as fs } from 'fs';
 
 const mockQuery = jest.fn();
+const mockResolveAbs = jest.fn((key) => (key ? `/abs/${key}` : null));
 
 jest.unstable_mockModule('../../../config/database.js', () => ({
   default: { query: mockQuery },
 }));
 
-const { isKeyReferenced } = await import('../chatAttachmentCleanup.service.js');
+jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
+  default: {
+    resolveAbsolutePathFromKey: mockResolveAbs,
+  },
+}));
+
+const unlinkSpy = jest.spyOn(fs, 'unlink').mockResolvedValue(undefined);
+const readdirSpy = jest.spyOn(fs, 'readdir').mockResolvedValue([]);
+const statSpy = jest.spyOn(fs, 'stat');
+
+const {
+  isKeyReferenced,
+  isKeyInCatalog,
+  cleanupExpiredCatalogRows,
+  cleanupOrphanChatAttachments,
+} = await import('../chatAttachmentCleanup.service.js');
 
 describe('isKeyReferenced fail-closed', () => {
   beforeEach(() => {
@@ -59,5 +76,88 @@ describe('isKeyReferenced fail-closed', () => {
     await expect(isKeyReferenced('uploads/1/chat/a.pdf')).rejects.toThrow(
       /Connection terminated unexpectedly/
     );
+  });
+});
+
+describe('expires_at catalog cleanup', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockResolveAbs.mockClear();
+    unlinkSpy.mockReset().mockResolvedValue(undefined);
+    readdirSpy.mockReset().mockResolvedValue([]);
+  });
+
+  it('expired row → unlink file + sidecar + DELETE row', async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ id: 11, storage_key: 'uploads/1/chat/old.pdf' }],
+      })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }); // DELETE
+
+    const result = await cleanupExpiredCatalogRows();
+
+    expect(mockResolveAbs).toHaveBeenCalledWith('uploads/1/chat/old.pdf');
+    expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf');
+    expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf.txt');
+    expect(mockQuery.mock.calls[1][0]).toMatch(/DELETE FROM chat_attachments WHERE id = \$1/);
+    expect(mockQuery.mock.calls[1][1]).toEqual([11]);
+    expect(result).toMatchObject({ expiredScanned: 1, rowsDeleted: 1, filesDeleted: 1 });
+  });
+
+  it('no expired rows → nothing unlinked', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const result = await cleanupExpiredCatalogRows();
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result.rowsDeleted).toBe(0);
+  });
+
+  it('ENOENT on unlink is swallowed; row still deleted', async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ id: 3, storage_key: 'uploads/1/chat/gone.pdf' }],
+      })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+
+    unlinkSpy.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    const result = await cleanupExpiredCatalogRows();
+    expect(result.rowsDeleted).toBe(1);
+    expect(mockQuery.mock.calls[1][0]).toMatch(/DELETE FROM chat_attachments/);
+  });
+
+  it('catalog SELECT failure throws (fail-closed, no orphan pass)', async () => {
+    mockQuery.mockRejectedValueOnce(new Error('Connection terminated unexpectedly'));
+    await expect(cleanupOrphanChatAttachments()).rejects.toThrow(/Connection terminated/);
+    expect(unlinkSpy).not.toHaveBeenCalled();
+  });
+
+  it('isKeyInCatalog true → orphan sweep skips unlink', async () => {
+    // Pass 1: no expired
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    // list one old file under uploads/9/chat/
+    const dirent = (name, isDirectory) => ({
+      name,
+      isDirectory: () => isDirectory,
+      isFile: () => !isDirectory,
+    });
+    readdirSpy
+      .mockResolvedValueOnce([dirent('9', true)]) // uploads/
+      .mockResolvedValueOnce([dirent('kept.pdf', false)]); // uploads/9/chat/
+    statSpy.mockResolvedValue({ mtimeMs: Date.now() - 100 * 24 * 60 * 60 * 1000 });
+
+    // isKeyInCatalog → true (has row)
+    mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+
+    const result = await cleanupOrphanChatAttachments();
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result.skipped).toBeGreaterThanOrEqual(1);
+    expect(result.rowsDeleted).toBe(0);
+  });
+
+  it('isKeyInCatalog queries storage_key', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await expect(isKeyInCatalog('uploads/1/chat/x.pdf')).resolves.toBe(false);
+    expect(mockQuery.mock.calls[0][0]).toMatch(/FROM chat_attachments WHERE storage_key/);
   });
 });

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import db from '../../config/database.js';
+import uploadController from '../../controllers/upload.controller.js';
 
 const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
 const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -14,6 +15,10 @@ const REF_TABLES = [
 
 function isUndefinedTableError(err) {
   return String(err?.code || '') === '42P01';
+}
+
+function isEnoent(err) {
+  return err?.code === 'ENOENT';
 }
 
 /**
@@ -61,6 +66,66 @@ export async function isKeyReferenced(storageKey) {
   return false;
 }
 
+/**
+ * True if storage_key already has a catalog row (managed by expires_at pass).
+ * Fail-closed on unexpected DB errors.
+ */
+export async function isKeyInCatalog(storageKey) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM chat_attachments WHERE storage_key = $1 LIMIT 1`,
+    [storageKey]
+  );
+  return rows.length > 0;
+}
+
+async function unlinkQuiet(absPath) {
+  try {
+    await fs.unlink(absPath);
+  } catch (err) {
+    if (!isEnoent(err)) throw err;
+  }
+}
+
+/**
+ * Pass 1: delete expired catalog rows + their files/sidecars.
+ * Query failure must throw (do not continue to orphan sweep).
+ */
+export async function cleanupExpiredCatalogRows() {
+  const { rows } = await db.query(
+    `SELECT id, storage_key
+     FROM chat_attachments
+     WHERE expires_at IS NOT NULL AND expires_at < NOW()`
+  );
+
+  let rowsDeleted = 0;
+  let filesDeleted = 0;
+
+  for (const row of rows) {
+    const abs = uploadController.resolveAbsolutePathFromKey(row.storage_key);
+    if (abs) {
+      try {
+        await unlinkQuiet(abs);
+        await unlinkQuiet(`${abs}.txt`);
+        filesDeleted += 1;
+      } catch (err) {
+        console.warn(
+          `[ChatAttachmentCleanup] failed to unlink expired ${row.storage_key}:`,
+          err.message
+        );
+      }
+    } else {
+      console.warn(
+        `[ChatAttachmentCleanup] skip unsafe/invalid key for expired row ${row.id}: ${row.storage_key}`
+      );
+    }
+
+    await db.query(`DELETE FROM chat_attachments WHERE id = $1`, [row.id]);
+    rowsDeleted += 1;
+  }
+
+  return { expiredScanned: rows.length, rowsDeleted, filesDeleted };
+}
+
 async function listOldChatFiles(dir, olderThanMs, out = []) {
   let entries;
   try {
@@ -98,15 +163,25 @@ function absoluteToStorageKey(absPath) {
 }
 
 /**
- * Delete orphan chat attachments older than 90 days (file → DB direction).
+ * Two-pass cleanup:
+ *  1) Catalog rows past expires_at → unlink file+sidecar + DELETE row
+ *  2) Legacy orphans on disk (>90d, not in REF_TABLES, not in catalog)
  */
 export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } = {}) {
+  // Pass 1 first — if DB is down, throw before any unlink in either pass.
+  const expired = await cleanupExpiredCatalogRows();
+
   const chatGlobRoot = UPLOADS_ROOT;
   let userDirs = [];
   try {
     userDirs = await fs.readdir(chatGlobRoot, { withFileTypes: true });
   } catch {
-    return { scanned: 0, deleted: 0, skipped: 0 };
+    return {
+      scanned: expired.expiredScanned,
+      deleted: expired.filesDeleted,
+      rowsDeleted: expired.rowsDeleted,
+      skipped: 0,
+    };
   }
 
   const candidates = [];
@@ -116,7 +191,7 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
     await listOldChatFiles(chatDir, olderThanMs, candidates);
   }
 
-  let deleted = 0;
+  let deleted = expired.filesDeleted;
   let skipped = 0;
 
   for (const abs of candidates) {
@@ -125,18 +200,21 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
       skipped += 1;
       continue;
     }
+
+    // Guard: catalog-managed files are owned by expires_at pass — never orphan-delete them.
+    if (await isKeyInCatalog(key)) {
+      skipped += 1;
+      continue;
+    }
+
     const referenced = await isKeyReferenced(key);
     if (referenced) {
       skipped += 1;
       continue;
     }
     try {
-      await fs.unlink(abs);
-      try {
-        await fs.unlink(`${abs}.txt`);
-      } catch {
-        // no sidecar
-      }
+      await unlinkQuiet(abs);
+      await unlinkQuiet(`${abs}.txt`);
       deleted += 1;
     } catch (err) {
       console.warn(`[ChatAttachmentCleanup] failed to delete ${abs}:`, err.message);
@@ -144,7 +222,17 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
     }
   }
 
-  return { scanned: candidates.length, deleted, skipped };
+  return {
+    scanned: expired.expiredScanned + candidates.length,
+    deleted,
+    rowsDeleted: expired.rowsDeleted,
+    skipped,
+  };
 }
 
-export default { cleanupOrphanChatAttachments, isKeyReferenced };
+export default {
+  cleanupOrphanChatAttachments,
+  cleanupExpiredCatalogRows,
+  isKeyReferenced,
+  isKeyInCatalog,
+};

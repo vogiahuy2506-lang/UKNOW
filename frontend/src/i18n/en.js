@@ -254,6 +254,7 @@ export default {
     siteGuide: 'User Guide',
     businessProfile: 'Business Profile',
     inbox: 'Conversation History',
+    mediaLibrary: 'Media library',
     chatHistory: 'Conversation History',
     activityLog: 'Activity Log',
     auditLogs: 'Activity Logs',
@@ -1607,6 +1608,22 @@ export default {
     toggleFailed: 'Cannot toggle chatbot',
     chatbotDisabled: 'chatbot disabled',
     connectFirst: 'Please connect a Zalo personal account first',
+  },
+
+  mediaLibrary: {
+    title: 'Media library',
+    subtitle: 'Images and files sent via chatbot and AI Assistant',
+    tabOwned: 'My files',
+    tabChannels: 'Zalo / Facebook',
+    allSources: 'All sources',
+    sourceWeb: 'Web chat',
+    sourceStudio: 'Studio',
+    sourceAssistant: 'AI Assistant',
+    daysLeft: '{days} days left',
+    empty: 'No files yet',
+    loadError: 'Could not load media library',
+    channelsNote: 'These are platform links only — if Zalo/Facebook removes them, they are gone. Not a local copy.',
+    platformFallback: 'Media on Zalo/Facebook — open the app to view',
   },
 
   inbox: {

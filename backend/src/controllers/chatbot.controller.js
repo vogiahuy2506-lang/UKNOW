@@ -1083,6 +1083,7 @@ class ChatbotController {
       ownerUserId: chatbot.id_user,
       chatbotId: chatbot.id,
       bind: { sid: sessionId },
+      source: chatAttachmentService.CHAT_ATTACHMENT_SOURCES.WEB,
     });
 
     const { _key, ...clientPayload } = stored;
