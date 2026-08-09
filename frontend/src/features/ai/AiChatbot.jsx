@@ -857,7 +857,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         const fd = new FormData();
         fd.append('file', file);
         const res = await api.post('/uploads/temp', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-        return { ...res.data.data, previewUrl };
+        // Giữ File gốc để tải-về-ngay tin vừa gửi (chưa có url server) — không cần F5.
+        return { ...res.data.data, previewUrl, localFile: file };
       }));
       setUploadedFiles(prev => [...prev, ...results]);
       toast.success(`Đã tải lên ${results.length} tệp`);
@@ -891,6 +892,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (!raw) return null;
     const base = String(raw).split('?')[0];
     return base.endsWith('/download') ? base : `${base}/download`;
+  };
+
+  // Tải file VỪA GỬI (chưa có url server) ngay từ bộ nhớ trình duyệt — không cần F5.
+  const downloadLocalFile = (file, name) => {
+    if (!(file instanceof Blob)) return;
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name || file.name || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
@@ -2943,19 +2957,34 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                         <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.displayName || f.originalName}</span>
                       </>
                     );
-                    return dl ? (
-                      <a
-                        key={i}
-                        href={dl}
-                        download={f.displayName || f.originalName}
-                        title="Tải xuống"
-                        className={`${cls} cursor-pointer hover:brightness-95 transition`}
-                      >
-                        {inner}
-                      </a>
-                    ) : (
-                      <div key={i} className={cls}>{inner}</div>
-                    );
+                    if (dl) {
+                      return (
+                        <a
+                          key={i}
+                          href={dl}
+                          download={f.displayName || f.originalName}
+                          title="Tải xuống"
+                          className={`${cls} cursor-pointer hover:brightness-95 transition`}
+                        >
+                          {inner}
+                        </a>
+                      );
+                    }
+                    if (f.localFile instanceof File) {
+                      // Tin vừa gửi: tải ngay từ File trong bộ nhớ, không cần F5.
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => downloadLocalFile(f.localFile, f.displayName || f.originalName)}
+                          title="Tải xuống"
+                          className={`${cls} cursor-pointer hover:brightness-95 transition text-left`}
+                        >
+                          {inner}
+                        </button>
+                      );
+                    }
+                    return <div key={i} className={cls}>{inner}</div>;
                   })}
                 </div>
               )}
