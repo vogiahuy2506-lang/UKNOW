@@ -1612,13 +1612,14 @@ export default {
 
   mediaLibrary: {
     title: 'Media library',
-    subtitle: 'Images and files sent via chatbot and AI Assistant',
+    subtitle: 'Images and files sent via chatbot, AI Assistant and inbox',
     tabOwned: 'My files',
     tabChannels: 'Zalo / Facebook',
     allSources: 'All sources',
     sourceWeb: 'Web chat',
     sourceStudio: 'Studio',
     sourceAssistant: 'AI Assistant',
+    sourceInbox: 'Inbox',
     daysLeft: '{days} days left',
     empty: 'No files yet',
     loadError: 'Could not load media library',

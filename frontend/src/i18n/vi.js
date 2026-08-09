@@ -1615,13 +1615,14 @@ export default {
 
   mediaLibrary: {
     title: 'Thư viện media',
-    subtitle: 'Ảnh và tệp đã gửi qua chatbot và Trợ lý AI',
+    subtitle: 'Ảnh và tệp đã gửi qua chatbot, Trợ lý AI và hộp thư',
     tabOwned: 'File của tôi',
     tabChannels: 'Zalo / Facebook',
     allSources: 'Tất cả nguồn',
     sourceWeb: 'Web chat',
     sourceStudio: 'Studio',
     sourceAssistant: 'Trợ lý AI',
+    sourceInbox: 'Hộp thư',
     daysLeft: 'Còn {days} ngày',
     empty: 'Chưa có tệp nào',
     loadError: 'Không tải được thư viện',

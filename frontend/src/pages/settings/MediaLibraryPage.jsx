@@ -16,6 +16,7 @@ function SourceBadge({ source, t }) {
     chatbot_web: t('mediaLibrary.sourceWeb'),
     chatbot_studio: t('mediaLibrary.sourceStudio'),
     ai_assistant: t('mediaLibrary.sourceAssistant'),
+    inbox_outbound: t('mediaLibrary.sourceInbox'),
   }[source] || source;
   return (
     <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
@@ -125,6 +126,7 @@ export default function MediaLibraryPage() {
     { value: 'chatbot_web', label: t('mediaLibrary.sourceWeb') },
     { value: 'chatbot_studio', label: t('mediaLibrary.sourceStudio') },
     { value: 'ai_assistant', label: t('mediaLibrary.sourceAssistant') },
+    { value: 'inbox_outbound', label: t('mediaLibrary.sourceInbox') },
   ]), [t]);
 
   return (
