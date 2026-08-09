@@ -4,6 +4,7 @@ const processSmartChat = jest.fn();
 const chargeAiCredit = jest.fn();
 const createSession = jest.fn();
 const saveMessages = jest.fn();
+const tryHandleHelpChat = jest.fn(async () => null);
 
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
@@ -27,7 +28,7 @@ jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async () => 'gemini-2.5-flash'),
 }));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
-  tryHandleHelpChat: jest.fn(async () => null),
+  tryHandleHelpChat,
 }));
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
   chargeAiCredit,
@@ -55,6 +56,8 @@ describe('ai.controller', () => {
     chargeAiCredit.mockReset();
     createSession.mockReset();
     saveMessages.mockReset();
+    tryHandleHelpChat.mockReset();
+    tryHandleHelpChat.mockResolvedValue(null);
     createSession.mockResolvedValue({ id: 123, title: 'Wizard chat' });
   });
 
@@ -84,6 +87,53 @@ describe('ai.controller', () => {
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.not.objectContaining({ wizardShortCircuit: true }),
+    });
+  });
+
+  it('không có tệp: câu hỏi được help-router trả lời, không gọi processSmartChat', async () => {
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'Xem hướng dẫn' });
+
+    const req = {
+      body: { history: [{ role: 'user', content: 'gói cước bao nhiêu tiền' }], locale: 'vi' },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+    expect(processSmartChat).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ content: 'Xem hướng dẫn' }),
+    });
+  });
+
+  it('có tệp đính kèm: BỎ QUA help-router, vào thẳng processSmartChat (đọc tệp)', async () => {
+    // Help-router sẽ trả lời nếu bị gọi — nhưng có tệp thì không được gọi.
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'KHÔNG ĐƯỢC HIỆN' });
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'Đã đọc tệp' });
+
+    const req = {
+      body: {
+        history: [{ role: 'user', content: 'bạn đọc được file này ko' }],
+        files: [{ tempId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', originalName: 'bao_cao.pdf', contentType: 'application/pdf' }],
+        locale: 'vi',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).not.toHaveBeenCalled();
+    expect(processSmartChat).toHaveBeenCalledTimes(1);
+    expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({
+      files: [expect.objectContaining({ tempId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' })],
+    }));
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ content: 'Đã đọc tệp' }),
     });
   });
 });

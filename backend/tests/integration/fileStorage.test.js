@@ -392,6 +392,18 @@ describe('POST /api/uploads/temp', () => {
     const expectedPath = path.join(TEST_TEMP_DIR, `${res.body.data.tempId}`);
     await expect(fs.stat(expectedPath)).resolves.toBeDefined();
   });
+
+  it('file vượt 10MB → 413 FILE_TOO_LARGE, không phải 500', async () => {
+    const user = await createUser({ username: 'up-big' });
+    const token = await loginAs(user);
+    const big = Buffer.alloc(11 * 1024 * 1024, 0x61); // 11MB > giới hạn 10MB của multer
+    const res = await request(app)
+      .post('/api/uploads/temp')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', big, { filename: 'big.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(413);
+    expect(res.body.code).toBe('FILE_TOO_LARGE');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

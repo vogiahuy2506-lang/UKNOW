@@ -126,10 +126,13 @@ class AiController {
 
       // Định tuyến mỏng: hỏi_đáp / không_rõ / ngoài_phạm_vi → help center;
       // làm_giúp → aiCampaign như cũ. Không nhét tài liệu vào prompt aiCampaign.
-      const helpResponse = await tryHandleHelpChat({
-        history,
-        userId: req.user.id,
-      });
+      // Có tệp đính kèm → BỎ QUA help-router: đính tệp là dấu hiệu muốn AI xử lý
+      // tệp, không phải hỏi trợ giúp. Trước đây câu hỏi kèm tệp bị help-router nuốt
+      // nên tệp không bao giờ tới processSmartChat (chỗ duy nhất đọc tệp).
+      const hasFiles = Array.isArray(files) && files.length > 0;
+      const helpResponse = hasFiles
+        ? null
+        : await tryHandleHelpChat({ history, userId: req.user.id });
 
       let response;
       let wizardShortCircuit;

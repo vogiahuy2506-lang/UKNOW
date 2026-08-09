@@ -271,6 +271,22 @@ export function createApp() {
   });
 
   app.use((err, req, res, _next) => {
+    // Lỗi multer (tệp quá lớn / quá nhiều) là lỗi phía client → 4xx có thông báo,
+    // không phải 500 trơ trụi. multer đặt err.name = 'MulterError'.
+    if (err && err.name === 'MulterError') {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+          success: false,
+          message: 'Tệp vượt dung lượng tối đa cho phép',
+          code: 'FILE_TOO_LARGE',
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Tải tệp lên không hợp lệ',
+        code: err.code || 'UPLOAD_ERROR',
+      });
+    }
     console.error(err.stack);
     res.status(err.status || 500).json({
       success: false,
