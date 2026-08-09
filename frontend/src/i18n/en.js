@@ -1720,6 +1720,7 @@ export default {
     messageCall: 'Call',
     messageZaloEvent: 'Zalo event',
     messageImage: 'Image',
+    messageFile: 'Attachment',
     confirmDeleteTitle: 'Delete conversation',
     confirmDelete: 'Are you sure you want to delete this conversation?',
     // Account selector

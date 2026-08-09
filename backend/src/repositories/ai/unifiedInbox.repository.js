@@ -213,7 +213,17 @@ class UnifiedInboxRepository {
           ch.is_active as channel_is_active,
           NULL::TEXT as group_name_override,
           (
-            SELECT content FROM channel_messages
+            SELECT CASE
+              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
+              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
+                CASE
+                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
+                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
+                  ELSE 'Tệp đính kèm'
+                END
+              ELSE content
+            END
+            FROM channel_messages
             WHERE id_conversation = cc.id
             ORDER BY created_at DESC LIMIT 1
           ) as last_message,
@@ -271,7 +281,17 @@ class UnifiedInboxRepository {
             )
           ) as group_name_override,
           (
-            SELECT content FROM zalo_personal_messages
+            SELECT CASE
+              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
+              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
+                CASE
+                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
+                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
+                  ELSE 'Tệp đính kèm'
+                END
+              ELSE content
+            END
+            FROM zalo_personal_messages
             WHERE id_conversation = zp.id
             ORDER BY created_at DESC LIMIT 1
           ) as last_message,
@@ -328,7 +348,17 @@ class UnifiedInboxRepository {
           ww.is_active as channel_is_active,
           NULL::TEXT as group_name_override,
           (
-            SELECT content FROM webchat_messages
+            SELECT CASE
+              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
+              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
+                CASE
+                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
+                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
+                  ELSE 'Tệp đính kèm'
+                END
+              ELSE content
+            END
+            FROM webchat_messages
             WHERE id_conversation = wc.id
             ORDER BY created_at DESC LIMIT 1
           ) as last_message,

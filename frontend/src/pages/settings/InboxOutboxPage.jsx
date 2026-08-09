@@ -97,8 +97,9 @@ const InboxPage = () => {
 
   const getDisplayMessage = useCallback((message, messageType) => {
     if (message) return getMessagePreviewText(message, messagePreviewLabels);
-    if (messageType === 'image') return t('inbox.messageImage');
+    if (messageType === 'image' || messageType === 'photo') return t('inbox.messageImage');
     if (messageType === 'sticker') return t('inbox.messageSticker');
+    if (messageType === 'file' || messageType === 'doc') return t('inbox.messageFile');
     return '';
   }, [messagePreviewLabels, t]);
 

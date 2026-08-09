@@ -1725,6 +1725,7 @@ export default {
     messageCall: 'Cuộc gọi',
     messageZaloEvent: 'Sự kiện Zalo',
     messageImage: 'Hình ảnh',
+    messageFile: 'Tệp đính kèm',
     confirmDeleteTitle: 'Xóa cuộc trò chuyện',
     confirmDelete: 'Bạn có chắc muốn xóa cuộc trò chuyện này?',
     sent: 'Đã gửi',
