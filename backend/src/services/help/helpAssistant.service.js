@@ -154,13 +154,35 @@ ${capabilityMap}
 === ĐOẠN TÀI LIỆU ===
 ${chunkBlock}`;
 
-  const { text, modelName, raw } = await generateGeminiText({
+  const answerArgs = {
     userId,
     systemPrompt,
     userPrompt: question,
     temperature: 0.3,
-    maxOutputTokens: 1200,
-  });
+  };
+
+  let text;
+  let modelName;
+  let raw;
+  try {
+    // thinkingBudget: 0 → toàn bộ maxOutputTokens dành cho câu trả lời, tránh bị
+    // cắt cụt vì gemini-2.5-flash tiêu token vào "thinking" mặc định.
+    ({ text, modelName, raw } = await generateGeminiText({
+      ...answerArgs,
+      maxOutputTokens: 1536,
+      thinkingBudget: 0,
+    }));
+  } catch (err) {
+    if (!THINKING_BUDGET_RETRY_RE.test(String(err?.message || ''))) {
+      throw err;
+    }
+    // Model chỉ-thinking (vd gemini-2.5-pro) từ chối budget 0 — bỏ thinkingConfig,
+    // nới maxOutputTokens để chừa chỗ cho cả thinking lẫn câu trả lời.
+    ({ text, modelName, raw } = await generateGeminiText({
+      ...answerArgs,
+      maxOutputTokens: 3072,
+    }));
+  }
 
   try {
     await aiUsageMeter.record(userId, {
