@@ -9,6 +9,18 @@ import { validateHelpImageFile } from '../utils/helpImageUpload.util.js';
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
 const UPLOADS_ROOT_DIR = path.resolve(process.cwd(), 'uploads');
 
+// tempId do client khai chỉ được là MỘT segment nằm trong temp_uploads.
+// Bất biến cần giữ là "không thoát tempDir", KHÔNG phải "đúng một format": thực tế
+// có cả UUID (uploadTemp) lẫn 'kb_<id>' (knowledgeBase). Chỉ chặn '/', '\', '..'.
+function isSafeTempSegment(id) {
+  const s = String(id || '');
+  return s.length > 0
+    && !s.includes('/')
+    && !s.includes('\\')
+    && !s.includes('..')
+    && path.basename(s) === s;
+}
+
 class UploadController {
   constructor() {
     this.tempDir = TEMP_DIR;
@@ -87,6 +99,29 @@ class UploadController {
     const resolvedPath = path.resolve(this.uploadsRootDir, relativePath);
     if (!resolvedPath.startsWith(this.uploadsRootDir)) return '';
     return resolvedPath;
+  }
+
+  /**
+   * Trả về đường dẫn tuyệt đối AN TOÀN của một temp file trong `tempDir`, hoặc ném lỗi.
+   *
+   * `tempId` và `originalName` đều do client khai (req.body.files[]) — nếu ghép thẳng
+   * `path.join(tempDir, tempId + ext)` thì `tempId='../.env'` hay `'../uploads/<id>/...'`
+   * đọc được file tuỳ ý ngoài temp_uploads. Đây là hàng rào duy nhất chống việc đó:
+   * bắt tempId đúng dạng UUID, đuôi chỉ nhận chữ-số, và chốt kết quả phải nằm trong tempDir.
+   */
+  resolveTempFilePath(tempId, originalName) {
+    if (!isSafeTempSegment(tempId)) {
+      throw new Error('tempId không hợp lệ');
+    }
+    let ext = path.extname(String(originalName || ''));
+    // Đuôi lấy từ originalName do client khai — chỉ giữ đuôi chữ-số thuần.
+    if (!/^\.[A-Za-z0-9]+$/.test(ext)) ext = '';
+    const resolved = path.join(this.tempDir, `${String(tempId)}${ext}`);
+    // Chốt cuối: kết quả phải nằm trong tempDir (thừa vì đã chặn ký tự đường dẫn).
+    if (resolved !== this.tempDir && !resolved.startsWith(this.tempDir + path.sep)) {
+      throw new Error('Đường dẫn tệp tạm không hợp lệ');
+    }
+    return resolved;
   }
 
   /**
@@ -220,15 +255,6 @@ class UploadController {
     }
   }
 
-  /**
-   * Đọc file tạm thời dưới dạng Buffer.
-   */
-  async readTempFileBuffer(tempId, originalName) {
-    const ext = path.extname(originalName || '');
-    const tempFilePath = path.join(this.tempDir, `${tempId}${ext}`);
-    return fs.readFile(tempFilePath);
-  }
-
   /** Promote 1 temp file lên permanent storage, trả về URL công khai. */
   async promoteTemp(req, res) {
     try {
@@ -257,7 +283,7 @@ class UploadController {
     
     for (const tempFile of tempFiles) {
       try {
-        const tempPath = path.join(this.tempDir, `${tempFile.tempId}${path.extname(tempFile.originalName)}`);
+        const tempPath = this.resolveTempFilePath(tempFile.tempId, tempFile.originalName);
         const fileBuffer = await fs.readFile(tempPath);
         
         const ext = path.extname(tempFile.originalName);
@@ -383,9 +409,7 @@ class UploadController {
   }
 
   async readTempFileBuffer(tempId, originalName) {
-    const ext = path.extname(originalName || '');
-    const tempFileName = `${tempId}${ext}`;
-    const tempFilePath = path.join(this.tempDir, tempFileName);
+    const tempFilePath = this.resolveTempFilePath(tempId, originalName);
     return fs.readFile(tempFilePath);
   }
 
