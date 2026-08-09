@@ -18,6 +18,13 @@ jest.spyOn(moduleLib, 'createRequire').mockImplementation((metaUrl) => {
   };
 });
 
+// storeChatFile → persistChatBlob ghi row chat_attachments qua db.query. Unit test
+// KHÔNG có Postgres (nhất là CI) → INSERT thật treo tới timeout 5s. Mock db để insert
+// trả ngay; test này chỉ kiểm đường dẫn key + file trên đĩa, không kiểm row DB.
+jest.unstable_mockModule('../config/database.js', () => ({
+  default: { query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }) },
+}));
+
 const {
   signChatAttachmentRef,
   resolveChatAttachmentRef,
