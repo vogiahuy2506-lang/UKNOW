@@ -149,7 +149,7 @@ Trả lời tiếng Việt, ngắn gọn, có bước nếu là hướng dẫn.
 QUY TẮC LIÊN KẾT (bắt buộc):
 - KHÔNG dán đường dẫn thô làm chữ hiển thị. SAI: [/app/campaigns/new](/app/campaigns/new).
   ĐÚNG: gọi tên trang bằng tiếng Việt trong câu — vd "vào **Tạo chiến dịch**", "mở **Hồ sơ doanh nghiệp** (Cài đặt)", "dùng **Gửi nhanh**".
-- Nếu cần dẫn link, chỉ kèm TỐI ĐA MỘT link "Xem chi tiết" ở CUỐI, trỏ tới bài hướng dẫn /huong-dan/<slug>, và đặt nhãn tiếng Việt cho link đó.
+- Nếu cần dẫn link, chỉ kèm TỐI ĐA MỘT link "Xem chi tiết" ở CUỐI, đặt nhãn tiếng Việt. URL PHẢI là đường dẫn tương đối /huong-dan/<slug> — TUYỆT ĐỐI không kèm tên miền, không "https://", không "founder.ai".
 - KHÔNG rải nhiều link phụ giữa các bước. KHÔNG thêm dòng "Nguồn bài viết gốc".
 - Mũi tên viết bằng ký tự "→", KHÔNG dùng ký hiệu LaTeX/toán cho mũi tên.
 

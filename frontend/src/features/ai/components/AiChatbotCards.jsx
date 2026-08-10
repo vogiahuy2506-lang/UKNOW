@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
@@ -17,13 +16,27 @@ function deLatexArrows(s) {
     .replace(/\\to\b/g, '→');
 }
 
-// Link tô xanh, bấm 1 phát qua trang: nội bộ (/...) dùng Link SPA, ngoài mở tab mới.
+// Model đôi khi bịa tên miền (vd founder.ai) cho link hướng dẫn — ép về path tương đối chuẩn.
+function normalizeHref(href) {
+  const guide = href.match(/huong-dan\/[A-Za-z0-9-]+/);
+  if (guide) return `/${guide[0]}`;
+  const app = href.match(/\/app\/[A-Za-z0-9/-]+/);
+  if (app) return app[0];
+  return href;
+}
+
+// Link tô xanh, LUÔN mở tab mới để không mất đoạn chat trợ lý.
 function InlineLink({ href, children }) {
-  const cls = 'text-blue-600 underline hover:text-blue-700 break-words';
-  if (href.startsWith('/')) {
-    return <Link to={href} className={cls}>{children}</Link>;
-  }
-  return <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{children}</a>;
+  return (
+    <a
+      href={normalizeHref(href)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 underline hover:text-blue-700 break-words"
+    >
+      {children}
+    </a>
+  );
 }
 
 // Tách một đoạn thành **đậm**, [nhãn](url) và text thường.
