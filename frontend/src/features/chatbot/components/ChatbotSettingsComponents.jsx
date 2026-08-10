@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef } from 'react';
 import api from '../../../services/api';
+import { MAX_UPLOAD_FILE_MB } from '../../../constants/uploadLimits';
 import {
   HiOutlineBookOpen,
   HiOutlineCheck,
@@ -754,7 +755,7 @@ export function UploadDocumentModal({
               <>
                 <HiOutlineUpload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-sm text-slate-600">Click hoặc kéo thả file vào đây</p>
-                <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT, CSV (tối đa 10MB)</p>
+                <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT, CSV (tối đa {MAX_UPLOAD_FILE_MB}MB)</p>
               </>
             )}
           </div>

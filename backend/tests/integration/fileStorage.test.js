@@ -393,10 +393,10 @@ describe('POST /api/uploads/temp', () => {
     await expect(fs.stat(expectedPath)).resolves.toBeDefined();
   });
 
-  it('file vượt 10MB → 413 FILE_TOO_LARGE, không phải 500', async () => {
+  it('file vượt 50MB → 413 FILE_TOO_LARGE, không phải 500', async () => {
     const user = await createUser({ username: 'up-big' });
     const token = await loginAs(user);
-    const big = Buffer.alloc(11 * 1024 * 1024, 0x61); // 11MB > giới hạn 10MB của multer
+    const big = Buffer.alloc(51 * 1024 * 1024, 0x61); // 51MB > giới hạn 50MB của multer
     const res = await request(app)
       .post('/api/uploads/temp')
       .set('Authorization', `Bearer ${token}`)

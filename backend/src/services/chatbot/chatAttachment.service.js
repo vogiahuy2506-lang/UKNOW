@@ -3,10 +3,11 @@ import path from 'path';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { signChatAttachmentRef, resolveChatAttachmentRef } from '../../utils/chatAttachmentRef.js';
+import { MAX_UPLOAD_FILE_BYTES } from '../../utils/uploadLimits.util.js';
 import db from '../../config/database.js';
 
 export const MAX_FILES_PER_MESSAGE = 3;
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_FILE_BYTES = MAX_UPLOAD_FILE_BYTES;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const TEXT_PER_FILE_CHARS = 8000;
 export const TEXT_BUDGET_CHARS = 12000;

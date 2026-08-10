@@ -112,8 +112,8 @@ describe('chatAttachment', () => {
       })).toThrow(/SVG/i);
     });
 
-    it('rejects file over 10MB', () => {
-      const big = Buffer.alloc(11 * 1024 * 1024, 0x25);
+    it('rejects file over 50MB', () => {
+      const big = Buffer.alloc(51 * 1024 * 1024, 0x25);
       big[0] = 0x25; big[1] = 0x50; big[2] = 0x44; big[3] = 0x46;
       expect(() => validateFile({
         buffer: big,

@@ -16,10 +16,11 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
 import ChatbotSettings from './ChatbotSettings';
 import ChatListSidebar from './ChatListSidebar';
+import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
-const MAX_FILE_MB = 10;
+const MAX_FILE_MB = MAX_UPLOAD_FILE_MB;
 const MAX_IMAGE_MB = 5;
 
 function clientValidateFile(file) {

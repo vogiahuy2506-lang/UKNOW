@@ -5,11 +5,12 @@ import authMiddleware from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/authorization.middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { HELP_IMAGE_MAX_BYTES } from '../utils/helpImageUpload.util.js';
+import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 
 const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES },
 });
 const helpImageUpload = multer({
   storage: multer.memoryStorage(),

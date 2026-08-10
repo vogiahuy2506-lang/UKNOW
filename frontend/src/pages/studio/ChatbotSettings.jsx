@@ -29,6 +29,7 @@ import { getMyProfile } from '../../features/auth/services/authApi.service';
 import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import { useI18n } from '../../i18n';
+import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
 import {
   ChannelGuideModal,
   ChannelOverview,
@@ -532,7 +533,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
         toast.error(t('chatbot.knowledgeBase.fileTooLarge'));
         return;
       }
@@ -547,9 +548,9 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       toast.error(t('errors.validationError'));
       return;
     }
-    // Validate file size (10MB)
-    if (uploadForm.file.size > 10 * 1024 * 1024) {
-      toast.error('File quá lớn. Vui lòng chọn file nhỏ hơn 10MB.');
+    // Validate file size
+    if (uploadForm.file.size > MAX_UPLOAD_FILE_BYTES) {
+      toast.error(`File quá lớn. Vui lòng chọn file nhỏ hơn ${MAX_UPLOAD_FILE_MB}MB.`);
       return;
     }
     // Validate file type

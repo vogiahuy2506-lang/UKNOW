@@ -11,9 +11,10 @@ import { requireActivePlan, requirePasswordChange } from '../middleware/authoriz
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
+import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
 
 function runGate(middleware, req, res) {
   return new Promise((resolve) => {

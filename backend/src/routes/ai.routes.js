@@ -5,9 +5,10 @@ import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.j
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
+import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);

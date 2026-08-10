@@ -3,9 +3,10 @@ import multer from 'multer';
 import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
 import { publicChatLimiter, publicUploadLimiter } from '../middleware/rateLimiter.middleware.js';
+import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
 
 // Apply allow-all CORS to all routes (for widget/iframe embedding)
 router.use(allowAllCorsMiddleware);
