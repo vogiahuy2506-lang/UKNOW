@@ -6521,6 +6521,8 @@ export default {
     reindex: 'Reindex',
     reindexSuccess: 'Reindexed {count} chunks',
     reindexFailed: 'Reindex failed',
+    pendingEmbedBadge: '⚠ embedding pending — click Reindex',
+    pendingEmbedHint: 'Content saved — vector temporarily missing; keyword search still works. Click Reindex to rebuild vectors.',
     requiredFields: 'Please enter title, slug and feature key',
     createSuccess: 'Article created',
     updateSuccess: 'Article updated',

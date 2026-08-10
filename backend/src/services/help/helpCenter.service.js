@@ -2,6 +2,7 @@ import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
 import { chunkHelpMarkdown, buildCapabilityMap } from '../../utils/helpCenter.util.js';
 import { sanitizeHelpHtml, htmlToPlainText } from '../../utils/helpHtmlSanitize.util.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
+import db from '../../config/database.js';
 
 let capabilityMapCache = { text: '', builtAt: 0, fingerprint: '', locale: '' };
 
@@ -37,7 +38,8 @@ export async function getCapabilityMapText(locale = 'vi') {
 }
 
 /**
- * Re-embed a single article (delete old chunks → chunk → embed → insert).
+ * Re-embed a single article: embed best-effort first, then swap chunks in one txn.
+ * Embed API failure → insert chunks with NULL embedding (keyword searchable); do not throw.
  */
 export async function reindexArticle(articleId, { actorUserId = null } = {}) {
   const article = await helpRepo.findArticleById(articleId);
@@ -50,26 +52,91 @@ export async function reindexArticle(articleId, { actorUserId = null } = {}) {
       ? htmlToPlainText(article.body_html)
       : article.body_md
   );
-  await helpRepo.deleteChunksByArticleId(articleId);
 
-  if (!pieces.length) {
-    _clearCapabilityMapCache();
-    return { articleId, chunkCount: 0 };
+  let embeddings = null;
+  let embedError = null;
+  if (pieces.length) {
+    try {
+      embeddings = await embedTexts(pieces, {
+        userId: actorUserId || null,
+        feature: 'embedding_help',
+      });
+    } catch (err) {
+      embedError = err;
+      console.warn(
+        `[help] embed failed article=${articleId}:`,
+        err?.message || err
+      );
+    }
   }
-
-  const embeddings = await embedTexts(pieces, {
-    userId: actorUserId || null,
-    feature: 'embedding_help',
-  });
 
   const rows = pieces.map((contentText, index) => ({
     chunkIndex: index,
     contentText,
-    embedding: embeddings[index],
+    embedding: embeddings ? embeddings[index] : null,
   }));
-  await helpRepo.insertChunks(articleId, rows);
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await helpRepo.deleteChunksByArticleId(articleId, client);
+    if (rows.length) {
+      await helpRepo.insertChunks(articleId, rows, client);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+
   _clearCapabilityMapCache();
-  return { articleId, chunkCount: rows.length };
+  return {
+    articleId,
+    chunkCount: pieces.length,
+    embedded: Boolean(embeddings),
+    pendingEmbed: !embeddings && pieces.length > 0,
+    embedError: embedError?.message || null,
+  };
+}
+
+/**
+ * Backfill embeddings for published articles with NULL/missing chunks.
+ *
+ * @param {{ limit?: number, actorUserId?: number|null }} [opts]
+ * @returns {Promise<{ scanned: number, reembedded: number, stillPending: number }>}
+ */
+export async function reindexPendingArticles({ limit = 20, actorUserId = null } = {}) {
+  const pending = await helpRepo.listArticlesWithPendingEmbedding({ limit });
+  let reembedded = 0;
+  let stillPending = 0;
+  for (const row of pending) {
+    try {
+      const result = await reindexArticle(row.id, { actorUserId });
+      if (result.embedded) {
+        reembedded += 1;
+      } else if (result.pendingEmbed) {
+        // chunkCount === 0 (body rỗng sau plain-text) → bỏ qua, không đếm stillPending.
+        stillPending += 1;
+      }
+    } catch (err) {
+      stillPending += 1;
+      console.warn(
+        `[help] reindexPendingArticles failed article=${row.id}:`,
+        err?.message || err
+      );
+    }
+  }
+  return {
+    scanned: pending.length,
+    reembedded,
+    stillPending,
+  };
 }
 
 export async function listPublicArticles(locale = 'vi') {
@@ -127,6 +194,7 @@ export async function adminGetArticle(id) {
   if (!article) throw Object.assign(new Error('Không tìm thấy bài viết'), { status: 404 });
   const media = await helpRepo.listMedia(id);
   const chunkCount = await helpRepo.countChunksByArticleId(id);
+  const pendingEmbedCount = await helpRepo.countPendingEmbedChunks(id);
   let siblingEnId = null;
   let siblingViId = null;
   if (article.slug) {
@@ -147,6 +215,7 @@ export async function adminGetArticle(id) {
     ...article,
     media,
     chunkCount,
+    pendingEmbedCount,
     siblingEnId,
     siblingViId,
   };
@@ -245,15 +314,24 @@ export async function searchHelpChunks(question, {
   minSimilarity = 0.35,
   locale = 'vi',
 } = {}) {
-  const embedding = await embedText(question, {
-    userId,
-    feature: 'embedding_help',
-  });
-  let chunks = await helpRepo.searchPublishedChunks(embedding, {
-    limit,
-    minSimilarity,
-    locale: normalizeLocale(locale),
-  });
+  let embedding = null;
+  try {
+    embedding = await embedText(question, {
+      userId,
+      feature: 'embedding_help',
+    });
+  } catch (err) {
+    console.warn('[help] query embed failed — falling back to keyword:', err?.message || err);
+  }
+
+  let chunks = [];
+  if (embedding) {
+    chunks = await helpRepo.searchPublishedChunks(embedding, {
+      limit,
+      minSimilarity,
+      locale: normalizeLocale(locale),
+    });
+  }
   if (!chunks.length) {
     const keywordHits = await helpRepo.searchPublishedChunksByKeyword(question, {
       limit,

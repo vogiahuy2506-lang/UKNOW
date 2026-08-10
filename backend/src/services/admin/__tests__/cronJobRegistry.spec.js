@@ -54,9 +54,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 16 cron cố định, không trùng mã', () => {
-    expect(CRON_JOBS).toHaveLength(16);
+  it('đúng 17 cron cố định, không trùng mã', () => {
+    expect(CRON_JOBS).toHaveLength(17);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(16);
+    expect(new Set(codes).size).toBe(17);
   });
 });

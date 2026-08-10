@@ -306,20 +306,26 @@ export async function insertChunks(articleId, chunks, queryable = db) {
   const mode = await detectEmbeddingStorage(queryable);
   const inserted = [];
   for (const chunk of chunks) {
-    const embeddingLiteral = JSON.stringify(chunk.embedding);
-    const sql = mode === 'vector'
-      ? `INSERT INTO help_article_chunks (article_id, chunk_index, content_text, embedding)
-         VALUES ($1, $2, $3, $4::vector)
-         RETURNING id, article_id, chunk_index, content_text`
-      : `INSERT INTO help_article_chunks (article_id, chunk_index, content_text, embedding)
-         VALUES ($1, $2, $3, $4::jsonb)
-         RETURNING id, article_id, chunk_index, content_text`;
-    const { rows } = await queryable.query(sql, [
-      articleId,
-      chunk.chunkIndex,
-      chunk.contentText,
-      embeddingLiteral,
-    ]);
+    const hasEmbedding = chunk.embedding != null;
+    const embeddingParam = hasEmbedding ? JSON.stringify(chunk.embedding) : null;
+    let sql;
+    if (!hasEmbedding) {
+      sql = `INSERT INTO help_article_chunks (article_id, chunk_index, content_text, embedding)
+             VALUES ($1, $2, $3, NULL)
+             RETURNING id, article_id, chunk_index, content_text`;
+    } else if (mode === 'vector') {
+      sql = `INSERT INTO help_article_chunks (article_id, chunk_index, content_text, embedding)
+             VALUES ($1, $2, $3, $4::vector)
+             RETURNING id, article_id, chunk_index, content_text`;
+    } else {
+      sql = `INSERT INTO help_article_chunks (article_id, chunk_index, content_text, embedding)
+             VALUES ($1, $2, $3, $4::jsonb)
+             RETURNING id, article_id, chunk_index, content_text`;
+    }
+    const params = hasEmbedding
+      ? [articleId, chunk.chunkIndex, chunk.contentText, embeddingParam]
+      : [articleId, chunk.chunkIndex, chunk.contentText];
+    const { rows } = await queryable.query(sql, params);
     inserted.push(rows[0]);
   }
   return inserted;
@@ -331,6 +337,48 @@ export async function countChunksByArticleId(articleId, queryable = db) {
     [articleId]
   );
   return Number(rows[0]?.total) || 0;
+}
+
+export async function countPendingEmbedChunks(articleId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total
+     FROM help_article_chunks
+     WHERE article_id = $1 AND embedding IS NULL`,
+    [articleId]
+  );
+  return Number(rows[0]?.total) || 0;
+}
+
+/**
+ * Published articles that still need embedding backfill:
+ * - has at least one chunk with NULL embedding, or
+ * - published with zero chunks AND non-empty body (empty body never produces chunks).
+ *
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<Array<{ id: number }>>}
+ */
+export async function listArticlesWithPendingEmbedding({ limit = 20 } = {}, queryable = db) {
+  const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
+  const { rows } = await queryable.query(
+    `SELECT a.id
+     FROM help_articles a
+     LEFT JOIN help_article_chunks c ON c.article_id = a.id
+     WHERE a.is_published = TRUE
+     GROUP BY a.id, a.body_md, a.body_html
+     HAVING
+       COUNT(c.id) FILTER (WHERE c.embedding IS NULL) > 0
+       OR (
+         COUNT(c.id) = 0
+         AND (
+           LENGTH(TRIM(COALESCE(a.body_md, ''))) > 0
+           OR LENGTH(TRIM(COALESCE(a.body_html, ''))) > 0
+         )
+       )
+     ORDER BY a.id ASC
+     LIMIT $1`,
+    [safeLimit]
+  );
+  return rows;
 }
 
 async function searchPublishedChunksForLocale(queryEmbedding, {

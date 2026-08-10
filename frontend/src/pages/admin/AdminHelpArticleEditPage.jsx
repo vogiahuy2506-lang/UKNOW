@@ -40,6 +40,7 @@ export default function AdminHelpArticleEditPage() {
   const [media, setMedia] = useState([]);
   const [siblingEnId, setSiblingEnId] = useState(null);
   const [siblingViId, setSiblingViId] = useState(null);
+  const [pendingEmbedCount, setPendingEmbedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(!isCreate);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -77,6 +78,7 @@ export default function AdminHelpArticleEditPage() {
         });
         setSiblingEnId(a.siblingEnId || null);
         setSiblingViId(a.siblingViId || null);
+        setPendingEmbedCount(Number(a.pendingEmbedCount) || 0);
         setUseRichEditor(hasHtmlBody(html));
         setMedia(a.media || []);
       })
@@ -132,6 +134,13 @@ export default function AdminHelpArticleEditPage() {
       } else {
         await help.adminUpdateHelpArticle(id, payload);
         toast.success(t('adminHelp.updateSuccess'));
+        // Reload để cập nhật badge pendingEmbed (nếu embed tạm lỗi).
+        const refreshed = await help.adminGetHelpArticle(id);
+        const a = refreshed.data?.result || {};
+        setPendingEmbedCount(Number(a.pendingEmbedCount) || 0);
+        if (Number(a.pendingEmbedCount) > 0) {
+          toast(t('adminHelp.pendingEmbedHint'), { icon: '⚠️' });
+        }
       }
     } catch (err) {
       toast.error(err?.response?.data?.message || t('adminHelp.saveFailed'));
@@ -159,7 +168,12 @@ export default function AdminHelpArticleEditPage() {
     setIsReindexing(true);
     try {
       const res = await help.adminReindexHelpArticle(id);
-      toast.success(t('adminHelp.reindexSuccess', { count: res.data?.result?.chunkCount ?? 0 }));
+      const result = res.data?.result || {};
+      toast.success(t('adminHelp.reindexSuccess', { count: result.chunkCount ?? 0 }));
+      setPendingEmbedCount(result.pendingEmbed ? (result.chunkCount || 1) : 0);
+      if (result.pendingEmbed) {
+        toast.error(result.embedError || t('adminHelp.pendingEmbedHint'));
+      }
     } catch (err) {
       toast.error(err?.response?.data?.message || t('adminHelp.reindexFailed'));
     } finally {
@@ -220,6 +234,11 @@ export default function AdminHelpArticleEditPage() {
             </h1>
             {!isCreate && form.slug && (
               <p className="mt-1 text-sm text-gray-500">/huong-dan/{form.slug}</p>
+            )}
+            {!isCreate && pendingEmbedCount > 0 && (
+              <p className="mt-2 inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
+                {t('adminHelp.pendingEmbedBadge')}
+              </p>
             )}
           </div>
         </div>

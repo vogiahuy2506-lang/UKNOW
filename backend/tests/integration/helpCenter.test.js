@@ -31,7 +31,13 @@ const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
-const { reindexArticle, _clearCapabilityMapCache } = await import('../../src/services/help/helpCenter.service.js');
+const {
+  reindexArticle,
+  reindexPendingArticles,
+  _clearCapabilityMapCache,
+  adminGetArticle,
+  searchHelpChunks,
+} = await import('../../src/services/help/helpCenter.service.js');
 const helpRepo = await import('../../src/repositories/help/helpArticle.repository.js');
 const { tryHandleHelpChat } = await import('../../src/services/help/helpAssistant.service.js');
 const { default: HELP_SEED_ARTICLES } = await import('../../src/services/help/helpSeed.data.js');
@@ -278,5 +284,136 @@ describe('Help center', () => {
         contentType: 'image/svg+xml',
       });
     expect(res.status).toBe(400);
+  });
+
+  describe('crash-safe index (PLAN_HELP_INDEX_CRASHSAFE)', () => {
+    it('create + embed fail → vẫn có chunk NULL; keyword ASCII ra; vector không', async () => {
+      mockEmbedTexts.mockRejectedValueOnce(new Error('Embedding API lỗi (503)'));
+      const article = await helpRepo.createArticle({
+        slug: 'zalo-crash',
+        title: 'Zalo crashsafe',
+        summary: 'Zalo',
+        body_md: '# Zalo\nHướng dẫn kết nối tài khoản Zalo.',
+        feature_key: 'zalo-account',
+        is_published: true,
+      });
+      const idx = await reindexArticle(article.id);
+      expect(idx.chunkCount).toBeGreaterThan(0);
+      expect(idx.embedded).toBe(false);
+      expect(idx.pendingEmbed).toBe(true);
+      expect(await helpRepo.countChunksByArticleId(article.id)).toBe(idx.chunkCount);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBe(idx.chunkCount);
+
+      const vectorHits = await helpRepo.searchPublishedChunks(await mockEmbedText('Zalo'), {
+        minSimilarity: 0,
+        limit: 5,
+      });
+      expect(vectorHits.some((c) => c.slug === 'zalo-crash')).toBe(false);
+
+      const kw = await helpRepo.searchPublishedChunksByKeyword('Zalo', { limit: 5 });
+      expect(kw.some((c) => c.slug === 'zalo-crash')).toBe(true);
+    });
+
+    it('update + embed fail → không throw; giữ chunk (NULL)', async () => {
+      const article = await helpRepo.createArticle({
+        slug: 'zalo-update',
+        title: 'Zalo update',
+        summary: 'Zalo',
+        body_md: '# Zalo\nBản gốc có Zalo.',
+        feature_key: 'zalo-account',
+        is_published: true,
+      });
+      await reindexArticle(article.id);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBe(0);
+
+      await helpRepo.updateArticle(article.id, { body_md: '# Zalo\nBản sửa vẫn có Zalo.' });
+      mockEmbedTexts.mockRejectedValueOnce(new Error('Embedding API lỗi (503)'));
+      const idx = await reindexArticle(article.id);
+      expect(idx.pendingEmbed).toBe(true);
+      expect(await helpRepo.countChunksByArticleId(article.id)).toBe(1);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBe(1);
+
+      mockEmbedTexts.mockClear();
+      const recovered = await reindexArticle(article.id);
+      expect(recovered.embedded).toBe(true);
+      expect(recovered.pendingEmbed).toBe(false);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBe(0);
+      const detail = await adminGetArticle(article.id);
+      expect(detail.pendingEmbedCount).toBe(0);
+    });
+
+    it('query embed fail → keyword ASCII vẫn ra (không throw)', async () => {
+      const article = await helpRepo.createArticle({
+        slug: 'zalo-query',
+        title: 'Zalo query',
+        summary: 'Zalo',
+        body_md: '# Zalo\nHướng dẫn Zalo personal.',
+        feature_key: 'zalo-account',
+        is_published: true,
+      });
+      mockEmbedTexts.mockRejectedValueOnce(new Error('embed index fail'));
+      await reindexArticle(article.id);
+
+      mockEmbedText.mockRejectedValueOnce(new Error('embed query fail'));
+      mockGenerate
+        .mockResolvedValueOnce({ text: 'hỏi_đáp', modelName: 'm', raw: {} })
+        .mockResolvedValueOnce({ text: 'Dùng Zalo theo hướng dẫn.', modelName: 'm', raw: {} });
+
+      const user = await createUser({ username: 'help-query-embed' });
+      const result = await tryHandleHelpChat({
+        history: [{ role: 'user', content: 'Làm sao dùng Zalo?' }],
+        userId: user.id,
+      });
+      expect(result).not.toBeNull();
+      expect(result.data?.sources?.some((s) => s.slug === 'zalo-query')).toBe(true);
+
+      // Direct search path also soft-fails
+      mockEmbedText.mockRejectedValueOnce(new Error('embed query fail again'));
+      const searched = await searchHelpChunks('Zalo', { userId: user.id });
+      expect(searched.chunks.some((c) => c.slug === 'zalo-query')).toBe(true);
+    });
+
+    it('reindexPendingArticles backfill + endpoint admin-only', async () => {
+      mockEmbedTexts.mockRejectedValueOnce(new Error('embed fail'));
+      const article = await helpRepo.createArticle({
+        slug: 'zalo-pending',
+        title: 'Zalo pending',
+        summary: 'Zalo',
+        body_md: '# Zalo\nPending embed Zalo.',
+        feature_key: 'zalo-account',
+        is_published: true,
+      });
+      await reindexArticle(article.id);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBeGreaterThan(0);
+
+      mockEmbedTexts.mockClear();
+      const summary = await reindexPendingArticles({ limit: 20 });
+      expect(summary.scanned).toBeGreaterThanOrEqual(1);
+      expect(summary.reembedded).toBeGreaterThanOrEqual(1);
+      expect(await helpRepo.countPendingEmbedChunks(article.id)).toBe(0);
+
+      const user = await createUser({ username: 'help-pending-user', role: 'user' });
+      const userToken = await loginAs(user);
+      const forbidden = await request(app)
+        .post('/api/help/admin/articles/reindex-pending')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ limit: 5 });
+      expect(forbidden.status).toBe(403);
+
+      const admin = await createUser({ username: 'help-pending-admin', role: 'admin' });
+      const adminToken = await loginAs(admin);
+      const ok = await request(app)
+        .post('/api/help/admin/articles/reindex-pending')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ limit: 5 });
+      expect(ok.status).toBe(200);
+      expect(ok.body.result).toEqual(
+        expect.objectContaining({
+          scanned: expect.any(Number),
+          reembedded: expect.any(Number),
+          stillPending: expect.any(Number),
+        })
+      );
+    });
   });
 });

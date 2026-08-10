@@ -7,6 +7,7 @@ import {
   adminUpdateArticle,
   adminDeleteArticle,
   reindexArticle,
+  reindexPendingArticles,
 } from '../services/help/helpCenter.service.js';
 import { translateHelpArticle } from '../services/help/helpTranslate.service.js';
 import * as helpRepo from '../repositories/help/helpArticle.repository.js';
@@ -92,6 +93,20 @@ export async function adminRemove(req, res) {
 export async function adminReindex(req, res) {
   try {
     const result = await reindexArticle(Number(req.params.id), { actorUserId: req.user.id });
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
+  }
+}
+
+export async function adminReindexPending(req, res) {
+  try {
+    const limit = Number.parseInt(req.body?.limit ?? req.query?.limit, 10);
+    const result = await reindexPendingArticles({
+      limit: Number.isFinite(limit) ? limit : 20,
+      actorUserId: req.user.id,
+    });
     res.json({ success: true, result });
   } catch (err) {
     console.error(err);

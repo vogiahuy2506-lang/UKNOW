@@ -12,6 +12,12 @@ router.get('/feature/:featureKey', helpController.resolveFeature);
 
 // Admin
 router.get('/admin/articles', authMiddleware, requireAdmin, helpController.adminList);
+router.post(
+  '/admin/articles/reindex-pending',
+  authMiddleware,
+  requireAdmin,
+  helpController.adminReindexPending
+);
 router.get('/admin/articles/:id', authMiddleware, requireAdmin, helpController.adminGet);
 router.post('/admin/articles', authMiddleware, requireAdmin, helpController.adminCreate);
 router.patch('/admin/articles/:id', authMiddleware, requireAdmin, helpController.adminUpdate);

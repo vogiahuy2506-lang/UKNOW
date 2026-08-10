@@ -136,6 +136,14 @@ export const CRON_JOBS = [
     impact: 'Khoá học mới trên website không xuất hiện trong hệ thống; voucher hết hạn vẫn nằm trong danh sách đang chạy.',
     tracked: true,
   },
+  {
+    code: 'help_reembed_pending',
+    label: 'Backfill embedding bài hướng dẫn',
+    schedule: 'Mỗi 30 phút',
+    description: 'Tạo lại vector cho các bài hướng dẫn publish còn chunk thiếu embedding (sau lỗi Gemini lúc index).',
+    impact: 'Bài mới/sửa khi embedding lỗi chỉ tìm được bằng keyword ASCII; câu tiếng Việt có dấu dễ trượt cho đến khi backfill chạy.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {

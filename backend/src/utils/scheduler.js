@@ -1012,4 +1012,25 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Alert evaluator: mỗi 5 phút');
+
+  // ── Help: backfill embedding NULL / 0-chunk (PLAN_HELP_INDEX_CRASHSAFE) ─────
+  cron.schedule('*/30 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('help_reembed_pending', async () => {
+        const { reindexPendingArticles } = await import('../services/help/helpCenter.service.js');
+        const summary = await reindexPendingArticles({ limit: 20 });
+        console.log(
+          `[Scheduler] Help reembed pending: scanned=${summary.scanned} `
+          + `reembedded=${summary.reembedded} stillPending=${summary.stillPending}`
+        );
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi backfill help embedding:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Help reembed pending: mỗi 30 phút');
 };

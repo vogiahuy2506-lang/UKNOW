@@ -6484,6 +6484,8 @@ export default {
     reindex: 'Reindex',
     reindexSuccess: 'Đã reindex {count} đoạn',
     reindexFailed: 'Reindex thất bại',
+    pendingEmbedBadge: '⚠ chưa tạo vector — bấm Reindex',
+    pendingEmbedHint: 'Đã cập nhật nội dung — mất vector tạm, còn tìm bằng keyword; bấm Reindex để tạo lại vector',
     requiredFields: 'Vui lòng nhập tiêu đề, slug và feature key',
     createSuccess: 'Đã tạo bài viết',
     updateSuccess: 'Đã cập nhật bài viết',
