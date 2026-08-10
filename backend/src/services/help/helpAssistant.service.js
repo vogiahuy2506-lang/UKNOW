@@ -196,11 +196,17 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
   const isOverview = OVERVIEW_RE.test(question);
 
   if (!chunks.length && !isOverview) {
-    await helpRepo.insertUnanswered({
-      question,
-      userId,
-      topSimilarity: topSimilarity || null,
-    });
+    // Chỉ backlog khi đây là nhánh hỏi_đáp thật (câu how-to trượt tài liệu →
+    // admin cần viết bài). Nhánh dò out-of-scope gọi với allowSoftFallback:false
+    // chỉ để kiểm "có bài khớp không" — không được làm nhiễu help_unanswered
+    // bằng câu ngoài phạm vi (thời tiết, tin tức…).
+    if (allowSoftFallback) {
+      await helpRepo.insertUnanswered({
+        question,
+        userId,
+        topSimilarity: topSimilarity || null,
+      });
+    }
 
     if (isSensitiveHelpTopic(question)) {
       return {
