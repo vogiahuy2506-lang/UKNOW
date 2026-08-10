@@ -151,6 +151,7 @@ QUY TẮC LIÊN KẾT (bắt buộc):
   ĐÚNG: gọi tên trang bằng tiếng Việt trong câu — vd "vào **Tạo chiến dịch**", "mở **Hồ sơ doanh nghiệp** (Cài đặt)", "dùng **Gửi nhanh**".
 - Nếu cần dẫn link, chỉ kèm TỐI ĐA MỘT link "Xem chi tiết" ở CUỐI, trỏ tới bài hướng dẫn /huong-dan/<slug>, và đặt nhãn tiếng Việt cho link đó.
 - KHÔNG rải nhiều link phụ giữa các bước. KHÔNG thêm dòng "Nguồn bài viết gốc".
+- Mũi tên viết bằng ký tự "→", KHÔNG dùng ký hiệu LaTeX/toán cho mũi tên.
 
 ${capabilityMap}
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
@@ -8,16 +9,42 @@ import {
 import api from '../../../services/api';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
 
+// Đổi ký hiệu LaTeX model hay chèn (vd "$\rightarrow$") thành mũi tên thường.
+function deLatexArrows(s) {
+  return String(s)
+    .replace(/\$\s*\\(?:rightarrow|longrightarrow|to|Rightarrow|mapsto)\s*\$/g, '→')
+    .replace(/\\(?:rightarrow|longrightarrow)\b/g, '→')
+    .replace(/\\to\b/g, '→');
+}
+
+// Link tô xanh, bấm 1 phát qua trang: nội bộ (/...) dùng Link SPA, ngoài mở tab mới.
+function InlineLink({ href, children }) {
+  const cls = 'text-blue-600 underline hover:text-blue-700 break-words';
+  if (href.startsWith('/')) {
+    return <Link to={href} className={cls}>{children}</Link>;
+  }
+  return <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{children}</a>;
+}
+
+// Tách một đoạn thành **đậm**, [nhãn](url) và text thường.
+const INLINE_RE = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+
 // Render AI message content — convert basic markdown to JSX
 export function AiContent({ text }) {
   if (!text) return null;
-  const lines = text.split('\n');
+  const lines = deLatexArrows(text).split('\n');
   const renderInline = (str, baseKey) =>
-    str.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
-      part.startsWith('**') && part.endsWith('**')
-        ? <strong key={`${baseKey}-${j}`}>{part.slice(2, -2)}</strong>
-        : part
-    );
+    str.split(INLINE_RE).map((part, j) => {
+      const key = `${baseKey}-${j}`;
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={key}>{part.slice(2, -2)}</strong>;
+      }
+      const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (link) {
+        return <InlineLink key={key} href={link[2]}>{link[1]}</InlineLink>;
+      }
+      return part;
+    });
   return (
     <div className="text-sm leading-relaxed text-slate-800 space-y-1 break-words">
       {lines.map((line, i) => {
