@@ -37,15 +37,21 @@ export function buildMTChieu(orderCode) {
  * @returns {string} `YYYY-MM-DDT00:00:00`
  */
 export function formatMatbaoNLap(now = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
+  // Ngày + GIỜ VN thật (không ép 00:00): Mắt Bão bắt NLap >= NLap hóa đơn liền kề
+  // trước cùng ký hiệu (lỗi 333) → dùng giờ hiện tại để NLap luôn tăng dần.
+  // hourCycle 'h23' để nửa đêm ra "00" (không phải "24"). Ngày pháp lý vẫn là ngày VN.
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: HANOI_TZ,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  });
-  // en-CA → YYYY-MM-DD
-  const ymd = formatter.format(now);
-  return `${ymd}T00:00:00`;
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const get = (t) => parts.find((p) => p.type === t)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
 function parseInvoiceInfo(order) {
