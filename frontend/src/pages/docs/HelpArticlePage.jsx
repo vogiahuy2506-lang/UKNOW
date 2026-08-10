@@ -9,7 +9,7 @@ import { useI18n } from '../../i18n';
  * Trang chi tiết 1 bài hướng dẫn (/huong-dan/:slug).
  */
 export default function HelpArticlePage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { slug } = useParams();
   const navigate = useNavigate();
   const [article, setArticle] = useState(null);
@@ -22,7 +22,7 @@ export default function HelpArticlePage() {
     setNotFound(false);
     setArticle(null);
 
-    getHelpArticle(slug)
+    getHelpArticle(slug, locale)
       .then((res) => {
         if (!mounted) return;
         setArticle(res.data?.result || null);
@@ -37,7 +37,7 @@ export default function HelpArticlePage() {
     return () => {
       mounted = false;
     };
-  }, [slug]);
+  }, [slug, locale]);
 
   const askAssistant = () => {
     navigate(`/app?ask=${encodeURIComponent(slug)}`);

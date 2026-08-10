@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -39,6 +39,29 @@ export default function AdminHelpArticlesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Prefer showing VI rows; attach EN sibling meta for badges.
+  const rows = useMemo(() => {
+    const bySlug = new Map();
+    for (const a of articles) {
+      const key = a.slug;
+      if (!bySlug.has(key)) bySlug.set(key, { vi: null, en: null });
+      const bucket = bySlug.get(key);
+      if ((a.locale || 'vi') === 'en') bucket.en = a;
+      else bucket.vi = a;
+    }
+    return [...bySlug.values()]
+      .map(({ vi, en }) => {
+        const primary = vi || en;
+        return {
+          ...primary,
+          _en: en,
+          _hasEn: Boolean(en),
+          _enStale: Boolean(en?.is_stale),
+        };
+      })
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id);
+  }, [articles]);
 
   const togglePublish = async (article) => {
     setSavingId(article.id);
@@ -108,7 +131,7 @@ export default function AdminHelpArticlesPage() {
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
           <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
-        ) : articles.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 p-14 text-slate-400">
             <HiOutlineDocumentText className="h-10 w-10" />
             <p>{t('adminHelp.noArticles')}</p>
@@ -119,6 +142,7 @@ export default function AdminHelpArticlesPage() {
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3">{t('adminHelp.article')}</th>
+                  <th className="px-5 py-3">{t('adminHelp.locale')}</th>
                   <th className="px-5 py-3">{t('adminHelp.featureKey')}</th>
                   <th className="px-5 py-3">{t('adminHelp.published')}</th>
                   <th className="px-5 py-3">{t('adminHelp.updatedAt')}</th>
@@ -126,13 +150,34 @@ export default function AdminHelpArticlesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {articles.map((article) => {
+                {rows.map((article) => {
                   const busy = savingId === article.id;
                   return (
-                    <tr key={article.id} className="align-top">
+                    <tr key={article.slug} className="align-top">
                       <td className="px-5 py-4">
                         <p className="font-medium text-slate-900">{article.title}</p>
                         <p className="mt-0.5 text-xs text-slate-500">/huong-dan/{article.slug}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                            {t('adminHelp.localeVi')}
+                          </span>
+                          {article._hasEn ? (
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                              article._enStale
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                            >
+                              {article._enStale ? t('adminHelp.enStale') : t('adminHelp.hasEn')}
+                            </span>
+                          ) : (
+                            <span className="rounded bg-slate-50 px-1.5 py-0.5 text-xs text-slate-400">
+                              {t('adminHelp.noEn')}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-4 text-slate-600">{article.feature_key}</td>
                       <td className="px-5 py-4">

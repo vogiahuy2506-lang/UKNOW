@@ -18,7 +18,7 @@ const ROUTE_FEATURE_MAP = [
  * Icon ? trên header — trỏ tới bài hướng dẫn theo màn hình hiện tại.
  */
 const HelpHintLink = () => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const location = useLocation();
   const [href, setHref] = useState(null);
 
@@ -36,7 +36,7 @@ const HelpHintLink = () => {
     }
     (async () => {
       try {
-        const { data } = await resolveHelpFeature(featureKey);
+        const { data } = await resolveHelpFeature(featureKey, locale);
         const url = data?.result?.url;
         if (!cancelled) setHref(url || null);
       } catch {
@@ -44,7 +44,7 @@ const HelpHintLink = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [featureKey]);
+  }, [featureKey, locale]);
 
   if (!href) return null;
 

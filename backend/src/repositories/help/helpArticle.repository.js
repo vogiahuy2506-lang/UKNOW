@@ -3,6 +3,14 @@ import db from '../../config/database.js';
 /** @type {'vector'|'jsonb'|null} */
 let embeddingStorage = null;
 
+const ARTICLE_COLS = `id, slug, title, summary, body_md, body_html, feature_key, primary_route,
+            sort_order, is_published, locale, is_stale, source_locale, translated_at,
+            created_at, updated_at`;
+
+function normalizeLocale(locale) {
+  return String(locale || 'vi').trim().toLowerCase() === 'en' ? 'en' : 'vi';
+}
+
 async function detectEmbeddingStorage(queryable = db) {
   if (embeddingStorage) return embeddingStorage;
   const { rows } = await queryable.query(
@@ -52,58 +60,130 @@ function parseEmbedding(value) {
   return [];
 }
 
-export async function listArticles({ publishedOnly = false, queryable = db } = {}) {
+export async function listArticles({ publishedOnly = false, locale = null, queryable = db } = {}) {
+  const params = [];
+  const where = [];
+  if (publishedOnly) where.push('is_published = TRUE');
+  if (locale) {
+    params.push(normalizeLocale(locale));
+    where.push(`locale = $${params.length}`);
+  }
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
-            sort_order, is_published, created_at, updated_at
+    `SELECT ${ARTICLE_COLS}
      FROM help_articles
-     ${publishedOnly ? 'WHERE is_published = TRUE' : ''}
-     ORDER BY sort_order ASC, id ASC`
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+     ORDER BY sort_order ASC, id ASC`,
+    params
   );
   return rows;
 }
 
-export async function findArticleBySlug(slug, { publishedOnly = false, queryable = db } = {}) {
+/**
+ * One row per slug: prefer target locale, else vi (then any).
+ */
+export async function listArticlesPreferLocale({
+  locale = 'vi',
+  publishedOnly = true,
+  queryable = db,
+} = {}) {
+  const target = normalizeLocale(locale);
+  // DISTINCT ON requires ORDER BY slug first (locale pick), then re-sort by sort_order.
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
-            sort_order, is_published, created_at, updated_at
+    `SELECT * FROM (
+       SELECT DISTINCT ON (slug) ${ARTICLE_COLS}
+       FROM help_articles
+       ${publishedOnly ? 'WHERE is_published = TRUE' : ''}
+       ORDER BY slug,
+                (locale = $1) DESC,
+                (locale = 'vi') DESC,
+                sort_order ASC,
+                id ASC
+     ) t
+     ORDER BY sort_order ASC, id ASC`,
+    [target]
+  );
+  return rows;
+}
+
+export async function findArticleBySlug(slug, {
+  locale = 'vi',
+  publishedOnly = false,
+  queryable = db,
+  fallbackVi = true,
+} = {}) {
+  const target = normalizeLocale(locale);
+  const publishedClause = publishedOnly ? 'AND is_published = TRUE' : '';
+
+  const { rows } = await queryable.query(
+    `SELECT ${ARTICLE_COLS}
      FROM help_articles
-     WHERE slug = $1
-       ${publishedOnly ? 'AND is_published = TRUE' : ''}
+     WHERE slug = $1 AND locale = $2
+       ${publishedClause}
+     LIMIT 1`,
+    [slug, target]
+  );
+  if (rows[0]) return rows[0];
+  if (!fallbackVi || target === 'vi') return null;
+
+  const fallback = await queryable.query(
+    `SELECT ${ARTICLE_COLS}
+     FROM help_articles
+     WHERE slug = $1 AND locale = 'vi'
+       ${publishedClause}
      LIMIT 1`,
     [slug]
   );
-  return rows[0] || null;
+  return fallback.rows[0] || null;
 }
 
 export async function findArticleById(id, queryable = db) {
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route,
-            sort_order, is_published, created_at, updated_at
+    `SELECT ${ARTICLE_COLS}
      FROM help_articles WHERE id = $1 LIMIT 1`,
     [id]
   );
   return rows[0] || null;
 }
 
-export async function findArticleByFeatureKey(featureKey, { publishedOnly = true, queryable = db } = {}) {
+export async function findArticleByFeatureKey(featureKey, {
+  locale = 'vi',
+  publishedOnly = true,
+  queryable = db,
+  fallbackVi = true,
+} = {}) {
+  const target = normalizeLocale(locale);
+  const publishedClause = publishedOnly ? 'AND is_published = TRUE' : '';
+
   const { rows } = await queryable.query(
-    `SELECT id, slug, title, summary, body_md, body_html, feature_key, primary_route, is_published
+    `SELECT ${ARTICLE_COLS}
      FROM help_articles
-     WHERE feature_key = $1
-       ${publishedOnly ? 'AND is_published = TRUE' : ''}
+     WHERE feature_key = $1 AND locale = $2
+       ${publishedClause}
+     ORDER BY sort_order ASC, id ASC
+     LIMIT 1`,
+    [featureKey, target]
+  );
+  if (rows[0]) return rows[0];
+  if (!fallbackVi || target === 'vi') return null;
+
+  const fallback = await queryable.query(
+    `SELECT ${ARTICLE_COLS}
+     FROM help_articles
+     WHERE feature_key = $1 AND locale = 'vi'
+       ${publishedClause}
      ORDER BY sort_order ASC, id ASC
      LIMIT 1`,
     [featureKey]
   );
-  return rows[0] || null;
+  return fallback.rows[0] || null;
 }
 
 export async function createArticle(payload, queryable = db) {
   const { rows } = await queryable.query(
     `INSERT INTO help_articles
-       (slug, title, summary, body_md, body_html, feature_key, primary_route, sort_order, is_published)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       (slug, title, summary, body_md, body_html, feature_key, primary_route, sort_order,
+        is_published, locale, is_stale, source_locale, translated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [
       payload.slug,
@@ -115,6 +195,10 @@ export async function createArticle(payload, queryable = db) {
       payload.primary_route || payload.primaryRoute || null,
       payload.sort_order ?? payload.sortOrder ?? 0,
       payload.is_published ?? payload.isPublished ?? false,
+      normalizeLocale(payload.locale || 'vi'),
+      Boolean(payload.is_stale ?? payload.isStale ?? false),
+      payload.source_locale || payload.sourceLocale || null,
+      payload.translated_at || payload.translatedAt || null,
     ]
   );
   return rows[0];
@@ -140,11 +224,21 @@ export async function updateArticle(id, patch, queryable = db) {
     sortOrder: 'sort_order',
     is_published: 'is_published',
     isPublished: 'is_published',
+    locale: 'locale',
+    is_stale: 'is_stale',
+    isStale: 'is_stale',
+    source_locale: 'source_locale',
+    sourceLocale: 'source_locale',
+    translated_at: 'translated_at',
+    translatedAt: 'translated_at',
   };
   for (const [key, col] of Object.entries(map)) {
     if (patch[key] !== undefined) {
+      let value = patch[key];
+      if (col === 'locale') value = normalizeLocale(value);
+      if (col === 'is_stale') value = Boolean(value);
       fields.push(`${col} = $${i++}`);
-      values.push(patch[key]);
+      values.push(value);
     }
   }
   if (!fields.length) return findArticleById(id, queryable);
@@ -155,6 +249,23 @@ export async function updateArticle(id, patch, queryable = db) {
     values
   );
   return rows[0] || null;
+}
+
+export async function markTranslationsStale(slug, queryable = db) {
+  await queryable.query(
+    `UPDATE help_articles
+     SET is_stale = TRUE, updated_at = NOW()
+     WHERE slug = $1 AND locale <> 'vi'`,
+    [slug]
+  );
+}
+
+export async function cascadeSlugChange(oldSlug, newSlug, queryable = db) {
+  if (!oldSlug || !newSlug || oldSlug === newSlug) return;
+  await queryable.query(
+    `UPDATE help_articles SET slug = $2, updated_at = NOW() WHERE slug = $1`,
+    [oldSlug, newSlug]
+  );
 }
 
 export async function deleteArticle(id, queryable = db) {
@@ -181,6 +292,10 @@ export async function addMedia(articleId, { type, url, caption, sortOrder = 0 },
 
 export async function deleteMedia(id, queryable = db) {
   await queryable.query(`DELETE FROM help_article_media WHERE id = $1`, [id]);
+}
+
+export async function deleteMediaByArticleId(articleId, queryable = db) {
+  await queryable.query(`DELETE FROM help_article_media WHERE article_id = $1`, [articleId]);
 }
 
 export async function deleteChunksByArticleId(articleId, queryable = db) {
@@ -218,41 +333,42 @@ export async function countChunksByArticleId(articleId, queryable = db) {
   return Number(rows[0]?.total) || 0;
 }
 
-/**
- * Semantic search — only published articles.
- * Production (vector): pgvector cosine. Test bootstrap (jsonb): JS cosine.
- */
-export async function searchPublishedChunks(queryEmbedding, {
+async function searchPublishedChunksForLocale(queryEmbedding, {
+  locale,
   limit = 5,
   minSimilarity = 0.45,
   queryable = db,
-} = {}) {
+}) {
   const mode = await detectEmbeddingStorage(queryable);
+  const target = normalizeLocale(locale);
 
   if (mode === 'vector') {
     const { rows } = await queryable.query(
       `SELECT c.content_text, c.chunk_index, c.article_id,
-              a.slug, a.title, a.feature_key,
+              a.slug, a.title, a.feature_key, a.locale,
               1 - (c.embedding <=> $1::vector) AS similarity
        FROM help_article_chunks c
        JOIN help_articles a ON a.id = c.article_id
        WHERE a.is_published = TRUE
+         AND a.locale = $4
          AND c.embedding IS NOT NULL
          AND 1 - (c.embedding <=> $1::vector) >= $2
        ORDER BY c.embedding <=> $1::vector
        LIMIT $3`,
-      [JSON.stringify(queryEmbedding), minSimilarity, limit]
+      [JSON.stringify(queryEmbedding), minSimilarity, limit, target]
     );
     return rows;
   }
 
   const { rows } = await queryable.query(
     `SELECT c.content_text, c.chunk_index, c.article_id, c.embedding,
-            a.slug, a.title, a.feature_key
+            a.slug, a.title, a.feature_key, a.locale
      FROM help_article_chunks c
      JOIN help_articles a ON a.id = c.article_id
      WHERE a.is_published = TRUE
-       AND c.embedding IS NOT NULL`
+       AND a.locale = $1
+       AND c.embedding IS NOT NULL`,
+    [target]
   );
 
   return rows
@@ -263,11 +379,37 @@ export async function searchPublishedChunks(queryEmbedding, {
       slug: row.slug,
       title: row.title,
       feature_key: row.feature_key,
+      locale: row.locale,
       similarity: cosineSimilarity(queryEmbedding, parseEmbedding(row.embedding)),
     }))
     .filter((row) => row.similarity >= minSimilarity)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, limit);
+}
+
+/**
+ * Semantic search — prefer locale chunks; if zero hits and locale≠vi, retry vi.
+ */
+export async function searchPublishedChunks(queryEmbedding, {
+  limit = 5,
+  minSimilarity = 0.45,
+  locale = 'vi',
+  queryable = db,
+} = {}) {
+  const target = normalizeLocale(locale);
+  const primary = await searchPublishedChunksForLocale(queryEmbedding, {
+    locale: target,
+    limit,
+    minSimilarity,
+    queryable,
+  });
+  if (primary.length || target === 'vi') return primary;
+  return searchPublishedChunksForLocale(queryEmbedding, {
+    locale: 'vi',
+    limit,
+    minSimilarity,
+    queryable,
+  });
 }
 
 export async function insertUnanswered({ question, userId = null, topSimilarity = null }, queryable = db) {
@@ -293,3 +435,5 @@ export async function listUnansweredGrouped({ limit = 50, queryable = db } = {})
   );
   return rows;
 }
+
+export { normalizeLocale };

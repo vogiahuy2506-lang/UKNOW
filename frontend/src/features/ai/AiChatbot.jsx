@@ -808,7 +808,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (!isOpen || !askSlug) return;
 
     let mounted = true;
-    getHelpArticle(askSlug)
+    getHelpArticle(askSlug, locale)
       .then((res) => {
         if (!mounted) return;
         const title = res.data?.result?.title;
@@ -826,7 +826,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
     return () => { mounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, searchParams]);
+  }, [isOpen, searchParams, locale]);
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

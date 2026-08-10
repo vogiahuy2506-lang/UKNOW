@@ -8,16 +8,22 @@ import { reindexArticle } from './helpCenter.service.js';
 export async function seedHelpArticles({ reindex = false, actorUserId = null } = {}) {
   const results = [];
   for (const article of HELP_SEED_ARTICLES) {
-    const existing = await helpRepo.findArticleBySlug(article.slug);
+    const existing = await helpRepo.findArticleBySlug(article.slug, {
+      locale: 'vi',
+      publishedOnly: false,
+      fallbackVi: false,
+    });
     let row;
     if (existing) {
       row = await helpRepo.updateArticle(existing.id, {
         ...article,
+        locale: 'vi',
         is_published: true,
       });
     } else {
       row = await helpRepo.createArticle({
         ...article,
+        locale: 'vi',
         is_published: true,
       });
     }

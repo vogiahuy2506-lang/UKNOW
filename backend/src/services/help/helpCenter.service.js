@@ -3,26 +3,36 @@ import { chunkHelpMarkdown, buildCapabilityMap } from '../../utils/helpCenter.ut
 import { sanitizeHelpHtml, htmlToPlainText } from '../../utils/helpHtmlSanitize.util.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
 
-let capabilityMapCache = { text: '', builtAt: 0, fingerprint: '' };
+let capabilityMapCache = { text: '', builtAt: 0, fingerprint: '', locale: '' };
 
 function articlesFingerprint(articles) {
   return articles
-    .map((a) => `${a.id}:${a.updated_at || a.updatedAt || ''}:${a.is_published}`)
+    .map((a) => `${a.id}:${a.updated_at || a.updatedAt || ''}:${a.is_published}:${a.locale || 'vi'}`)
     .join('|');
 }
 
-export function _clearCapabilityMapCache() {
-  capabilityMapCache = { text: '', builtAt: 0, fingerprint: '' };
+function normalizeLocale(locale) {
+  return String(locale || 'vi').trim().toLowerCase() === 'en' ? 'en' : 'vi';
 }
 
-export async function getCapabilityMapText() {
-  const articles = await helpRepo.listArticles({ publishedOnly: true });
-  const fingerprint = articlesFingerprint(articles);
-  if (capabilityMapCache.text && capabilityMapCache.fingerprint === fingerprint) {
+export function _clearCapabilityMapCache() {
+  capabilityMapCache = { text: '', builtAt: 0, fingerprint: '', locale: '' };
+}
+
+export async function getCapabilityMapText(locale = 'vi') {
+  const lang = normalizeLocale(locale);
+  // Prefer target locale per slug, fallback vi — avoids empty EN map and VN+EN duplicates.
+  const articles = await helpRepo.listArticlesPreferLocale({ locale: lang, publishedOnly: true });
+  const fingerprint = `${lang}|${articlesFingerprint(articles)}`;
+  if (
+    capabilityMapCache.text
+    && capabilityMapCache.fingerprint === fingerprint
+    && capabilityMapCache.locale === lang
+  ) {
     return capabilityMapCache.text;
   }
   const text = buildCapabilityMap(articles);
-  capabilityMapCache = { text, builtAt: Date.now(), fingerprint };
+  capabilityMapCache = { text, builtAt: Date.now(), fingerprint, locale: lang };
   return text;
 }
 
@@ -62,8 +72,11 @@ export async function reindexArticle(articleId, { actorUserId = null } = {}) {
   return { articleId, chunkCount: rows.length };
 }
 
-export async function listPublicArticles() {
-  const articles = await helpRepo.listArticles({ publishedOnly: true });
+export async function listPublicArticles(locale = 'vi') {
+  const articles = await helpRepo.listArticlesPreferLocale({
+    locale: normalizeLocale(locale),
+    publishedOnly: true,
+  });
   return articles.map((a) => ({
     id: a.id,
     slug: a.slug,
@@ -72,11 +85,15 @@ export async function listPublicArticles() {
     featureKey: a.feature_key,
     primaryRoute: a.primary_route,
     sortOrder: a.sort_order,
+    locale: a.locale || 'vi',
   }));
 }
 
-export async function getPublicArticleBySlug(slug) {
-  const article = await helpRepo.findArticleBySlug(slug, { publishedOnly: true });
+export async function getPublicArticleBySlug(slug, locale = 'vi') {
+  const article = await helpRepo.findArticleBySlug(slug, {
+    locale: normalizeLocale(locale),
+    publishedOnly: true,
+  });
   if (!article) {
     throw Object.assign(new Error('Không tìm thấy bài hướng dẫn'), { status: 404 });
   }
@@ -90,6 +107,7 @@ export async function getPublicArticleBySlug(slug) {
     bodyHtml: article.body_html || null,
     featureKey: article.feature_key,
     primaryRoute: article.primary_route,
+    locale: article.locale || 'vi',
     media: media.map((m) => ({
       id: m.id,
       type: m.type,
@@ -109,7 +127,29 @@ export async function adminGetArticle(id) {
   if (!article) throw Object.assign(new Error('Không tìm thấy bài viết'), { status: 404 });
   const media = await helpRepo.listMedia(id);
   const chunkCount = await helpRepo.countChunksByArticleId(id);
-  return { ...article, media, chunkCount };
+  let siblingEnId = null;
+  let siblingViId = null;
+  if (article.slug) {
+    const en = await helpRepo.findArticleBySlug(article.slug, {
+      locale: 'en',
+      publishedOnly: false,
+      fallbackVi: false,
+    });
+    const vi = await helpRepo.findArticleBySlug(article.slug, {
+      locale: 'vi',
+      publishedOnly: false,
+      fallbackVi: false,
+    });
+    siblingEnId = en?.id || null;
+    siblingViId = vi?.id || null;
+  }
+  return {
+    ...article,
+    media,
+    chunkCount,
+    siblingEnId,
+    siblingViId,
+  };
 }
 
 export async function adminCreateArticle(payload, { actorUserId } = {}) {
@@ -119,6 +159,7 @@ export async function adminCreateArticle(payload, { actorUserId } = {}) {
     cleaned.body_html = raw == null || raw === '' ? null : sanitizeHelpHtml(raw);
     delete cleaned.bodyHtml;
   }
+  if (!cleaned.locale) cleaned.locale = 'vi';
   const created = await helpRepo.createArticle(cleaned);
   if (created.is_published) {
     await reindexArticle(created.id, { actorUserId });
@@ -138,7 +179,33 @@ export async function adminUpdateArticle(id, patch, { actorUserId } = {}) {
     delete cleaned.bodyHtml;
   }
 
+  // Keep translation pairing when VN slug changes.
+  if (
+    cleaned.slug
+    && cleaned.slug !== before.slug
+    && (before.locale || 'vi') === 'vi'
+  ) {
+    await helpRepo.cascadeSlugChange(before.slug, cleaned.slug);
+  }
+
   const updated = await helpRepo.updateArticle(id, cleaned);
+
+  const contentTouched =
+    cleaned.title !== undefined
+    || cleaned.summary !== undefined
+    || cleaned.body_md !== undefined
+    || cleaned.bodyMd !== undefined
+    || cleaned.body_html !== undefined
+    || cleaned.bodyHtml !== undefined
+    || cleaned.feature_key !== undefined
+    || cleaned.featureKey !== undefined
+    || cleaned.primary_route !== undefined
+    || cleaned.primaryRoute !== undefined;
+
+  if ((before.locale || 'vi') === 'vi' && contentTouched) {
+    await helpRepo.markTranslationsStale(updated.slug || before.slug);
+  }
+
   const bodyChanged =
     cleaned.body_md !== undefined ||
     cleaned.bodyMd !== undefined ||
@@ -150,7 +217,6 @@ export async function adminUpdateArticle(id, patch, { actorUserId } = {}) {
   if (nowPublished && (bodyChanged || publishChanged || !(await helpRepo.countChunksByArticleId(id)))) {
     await reindexArticle(id, { actorUserId });
   } else if (!nowPublished) {
-    // Unpublish: keep chunks but RAG filters is_published — clear map cache
     _clearCapabilityMapCache();
   } else if (bodyChanged) {
     await reindexArticle(id, { actorUserId });
@@ -165,12 +231,21 @@ export async function adminDeleteArticle(id) {
   _clearCapabilityMapCache();
 }
 
-export async function searchHelpChunks(question, { userId = null, limit = 5, minSimilarity = 0.45 } = {}) {
+export async function searchHelpChunks(question, {
+  userId = null,
+  limit = 5,
+  minSimilarity = 0.45,
+  locale = 'vi',
+} = {}) {
   const embedding = await embedText(question, {
     userId,
     feature: 'embedding_help',
   });
-  const chunks = await helpRepo.searchPublishedChunks(embedding, { limit, minSimilarity });
+  const chunks = await helpRepo.searchPublishedChunks(embedding, {
+    limit,
+    minSimilarity,
+    locale: normalizeLocale(locale),
+  });
   const topSimilarity = chunks.length ? Number(chunks[0].similarity) : 0;
   return { chunks, topSimilarity };
 }

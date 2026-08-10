@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { HiOutlineArrowLeft, HiOutlineTrash, HiOutlineRefresh } from 'react-icons/hi';
+import {
+  HiOutlineArrowLeft,
+  HiOutlineTrash,
+  HiOutlineRefresh,
+  HiOutlineTranslate,
+} from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 import RichTextEditor from '../../components/editor/RichTextEditor';
@@ -17,6 +22,8 @@ const EMPTY_FORM = {
   primary_route: '',
   sort_order: 0,
   is_published: false,
+  locale: 'vi',
+  is_stale: false,
 };
 
 function hasHtmlBody(html) {
@@ -31,16 +38,21 @@ export default function AdminHelpArticleEditPage() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [media, setMedia] = useState([]);
+  const [siblingEnId, setSiblingEnId] = useState(null);
+  const [siblingViId, setSiblingViId] = useState(null);
   const [isLoading, setIsLoading] = useState(!isCreate);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   /** New articles default to rich editor; existing MD-only stay on textarea until converted */
   const [useRichEditor, setUseRichEditor] = useState(isCreate);
 
   useEffect(() => {
     if (isCreate) {
       setUseRichEditor(true);
+      setSiblingEnId(null);
+      setSiblingViId(null);
       return;
     }
     let mounted = true;
@@ -60,7 +72,11 @@ export default function AdminHelpArticleEditPage() {
           primary_route: a.primary_route || '',
           sort_order: a.sort_order ?? 0,
           is_published: Boolean(a.is_published),
+          locale: a.locale || 'vi',
+          is_stale: Boolean(a.is_stale),
         });
+        setSiblingEnId(a.siblingEnId || null);
+        setSiblingViId(a.siblingViId || null);
         setUseRichEditor(hasHtmlBody(html));
         setMedia(a.media || []);
       })
@@ -99,10 +115,10 @@ export default function AdminHelpArticleEditPage() {
         primary_route: form.primary_route || null,
         sort_order: Number(form.sort_order) || 0,
         is_published: form.is_published,
+        locale: form.locale || 'vi',
       };
       if (useRichEditor) {
         payload.body_html = form.body_html || '';
-        // Keep body_md as-is (seed history) — do not wipe unless empty create
         if (isCreate) payload.body_md = '';
       } else {
         payload.body_md = form.body_md;
@@ -151,25 +167,112 @@ export default function AdminHelpArticleEditPage() {
     }
   };
 
+  const handleTranslate = async () => {
+    if (isCreate) return;
+    const sourceId = (form.locale || 'vi') === 'vi' ? id : siblingViId;
+    if (!sourceId) {
+      toast.error(t('adminHelp.translateFailed'));
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const res = await help.adminTranslateHelpArticle(sourceId, 'en');
+      const enId = res.data?.result?.id;
+      toast.success(t('adminHelp.translateSuccess'));
+      if (enId) navigate(`/admin/help-articles/${enId}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminHelp.translateFailed'));
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const switchLocale = (target) => {
+    if (isCreate) return;
+    if (target === 'vi') {
+      if (siblingViId && String(siblingViId) !== String(id)) {
+        navigate(`/admin/help-articles/${siblingViId}`);
+      }
+      return;
+    }
+    if (siblingEnId) {
+      navigate(`/admin/help-articles/${siblingEnId}`);
+    }
+  };
+
   if (isLoading) {
     return <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>;
   }
 
+  const currentLocale = form.locale || 'vi';
+  const showStale = currentLocale === 'en' && form.is_stale;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link to="/admin/help-articles" className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100">
-          <HiOutlineArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isCreate ? t('adminHelp.newArticle') : t('adminHelp.editArticle')}
-          </h1>
-          {!isCreate && form.slug && (
-            <p className="mt-1 text-sm text-gray-500">/huong-dan/{form.slug}</p>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link to="/admin/help-articles" className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100">
+            <HiOutlineArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isCreate ? t('adminHelp.newArticle') : t('adminHelp.editArticle')}
+            </h1>
+            {!isCreate && form.slug && (
+              <p className="mt-1 text-sm text-gray-500">/huong-dan/{form.slug}</p>
+            )}
+          </div>
         </div>
+
+        {!isCreate && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-slate-200 p-0.5">
+              <button
+                type="button"
+                onClick={() => switchLocale('vi')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  currentLocale === 'vi' ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {t('adminHelp.localeVi')}
+              </button>
+              <button
+                type="button"
+                onClick={() => switchLocale('en')}
+                disabled={!siblingEnId}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
+                  currentLocale === 'en' ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+                title={!siblingEnId ? t('adminHelp.enMissingHint') : t('adminHelp.switchToEn')}
+              >
+                {t('adminHelp.localeEn')}
+              </button>
+            </div>
+            {(currentLocale === 'vi' || siblingViId) && (
+              <button
+                type="button"
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                className="btn btn-secondary inline-flex items-center gap-2"
+              >
+                <HiOutlineTranslate className={`h-4 w-4 ${isTranslating ? 'animate-pulse' : ''}`} />
+                {isTranslating ? t('adminHelp.translating') : t('adminHelp.translateEn')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {showStale && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {t('adminHelp.staleBadge')}
+        </div>
+      )}
+      {!isCreate && currentLocale === 'vi' && !siblingEnId && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
+          {t('adminHelp.enMissingHint')}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -192,6 +295,7 @@ export default function AdminHelpArticleEditPage() {
               onChange={(e) => setField('slug', e.target.value)}
               placeholder="vi-du-slug-bai-viet"
               required
+              disabled={currentLocale === 'en'}
             />
           </div>
         </div>

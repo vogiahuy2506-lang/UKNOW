@@ -1275,22 +1275,28 @@ CREATE INDEX IF NOT EXISTS idx_chat_attachments_user
 -- Repository tự phát hiện kiểu cột và chọn đường insert/search phù hợp.
 
 CREATE TABLE help_articles (
-  id            BIGSERIAL PRIMARY KEY,
-  slug          VARCHAR(120) NOT NULL UNIQUE,
-  title         VARCHAR(255) NOT NULL,
-  summary       TEXT NOT NULL DEFAULT '',
-  body_md       TEXT NOT NULL DEFAULT '',
-  body_html     TEXT,
-  feature_key   VARCHAR(80) NOT NULL,
-  primary_route VARCHAR(255),
-  sort_order    INTEGER NOT NULL DEFAULT 0,
-  is_published  BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id             BIGSERIAL PRIMARY KEY,
+  slug           VARCHAR(120) NOT NULL,
+  title          VARCHAR(255) NOT NULL,
+  summary        TEXT NOT NULL DEFAULT '',
+  body_md        TEXT NOT NULL DEFAULT '',
+  body_html      TEXT,
+  feature_key    VARCHAR(80) NOT NULL,
+  primary_route  VARCHAR(255),
+  sort_order     INTEGER NOT NULL DEFAULT 0,
+  is_published   BOOLEAN NOT NULL DEFAULT FALSE,
+  locale         VARCHAR(5) NOT NULL DEFAULT 'vi',
+  is_stale       BOOLEAN NOT NULL DEFAULT FALSE,
+  source_locale  VARCHAR(5),
+  translated_at  TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT help_articles_slug_locale_key UNIQUE (slug, locale)
 );
 
 CREATE INDEX idx_help_articles_feature ON help_articles (feature_key, sort_order);
 CREATE INDEX idx_help_articles_published ON help_articles (is_published) WHERE is_published = TRUE;
+CREATE INDEX idx_help_articles_locale ON help_articles (locale, is_published);
 
 CREATE TABLE help_article_media (
   id          BIGSERIAL PRIMARY KEY,

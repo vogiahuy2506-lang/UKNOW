@@ -16,7 +16,7 @@ import { useI18n } from '../i18n';
  * Trên mobile, sidebar thu vào dạng drawer.
  */
 export default function DocsLayout() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const location = useLocation();
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,7 +29,8 @@ export default function DocsLayout() {
 
   useEffect(() => {
     let mounted = true;
-    listHelpArticles()
+    setIsLoading(true);
+    listHelpArticles(locale)
       .then((res) => {
         if (!mounted) return;
         setArticles(res.data?.result || []);
@@ -43,7 +44,7 @@ export default function DocsLayout() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);

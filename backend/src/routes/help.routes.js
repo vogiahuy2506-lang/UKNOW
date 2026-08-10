@@ -17,6 +17,7 @@ router.post('/admin/articles', authMiddleware, requireAdmin, helpController.admi
 router.patch('/admin/articles/:id', authMiddleware, requireAdmin, helpController.adminUpdate);
 router.delete('/admin/articles/:id', authMiddleware, requireAdmin, helpController.adminRemove);
 router.post('/admin/articles/:id/reindex', authMiddleware, requireAdmin, helpController.adminReindex);
+router.post('/admin/articles/:id/translate', authMiddleware, requireAdmin, helpController.adminTranslate);
 router.get('/admin/unanswered', authMiddleware, requireAdmin, helpController.adminUnanswered);
 router.post('/admin/seed', authMiddleware, requireAdmin, helpController.adminSeed);
 

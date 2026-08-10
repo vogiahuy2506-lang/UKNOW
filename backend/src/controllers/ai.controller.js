@@ -132,7 +132,11 @@ class AiController {
       const inWizard = isWizardAnswerTurn(history);
       const helpResponse = (hasFiles || inWizard)
         ? null
-        : await tryHandleHelpChat({ history, userId: req.user.id });
+        : await tryHandleHelpChat({
+          history,
+          userId: req.user.id,
+          locale: locale || 'vi',
+        });
 
       let response;
       let wizardShortCircuit;
