@@ -516,7 +516,7 @@ describe('once schedule past / year-rollover guard', () => {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false,
+      hourCycle: 'h23', // KHÔNG dùng hour12:false — nó render nửa đêm thành "24" (h24), cron hỏng
     }).formatToParts(instant);
     return Object.fromEntries(parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]));
   }

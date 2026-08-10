@@ -68,7 +68,7 @@ export const formatCampaignDateTime = (value, fallback = '-') => {
   const date = toCampaignDate(value);
   if (!date) return fallback;
   return date.toLocaleString('vi-VN', {
-    hour12: false,
+    hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     timeZone: HANOI_TIME_ZONE,
   });
 };
@@ -84,7 +84,7 @@ export const formatCampaignTime = (value, fallback = '-') => {
   const date = toCampaignDate(value);
   if (!date) return fallback;
   return date.toLocaleTimeString('vi-VN', {
-    hour12: false,
+    hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     timeZone: HANOI_TIME_ZONE,
   });
 };

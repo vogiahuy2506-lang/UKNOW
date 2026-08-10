@@ -1,7 +1,7 @@
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
+import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
@@ -66,13 +66,19 @@ class CustomChatService {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const doFetch = async (requestParts) => {
+    const doFetch = async (requestParts, { disableThinking = false } = {}) => {
+      const maxOut = Math.min(maxTokens, 65536);
+      const generationConfig = {
+        temperature,
+        maxOutputTokens: disableThinking ? Math.max(maxOut, 3072) : maxOut,
+      };
+      if (!disableThinking) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
       const body = JSON.stringify({
         contents: [{ parts: requestParts }],
-        generationConfig: {
-          temperature,
-          maxOutputTokens: Math.min(maxTokens, 65536),
-        },
+        generationConfig,
       });
 
       const controller = new AbortController();
@@ -103,9 +109,15 @@ class CustomChatService {
         }
 
         return {
-          text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+          text: joinGeminiTextParts(data.candidates?.[0]?.content?.parts),
           usage: extractGeminiUsage(data),
         };
+      } catch (err) {
+        // Thinking-fallback: one shot inside doFetch — does not consume RETRY_CONFIG slots.
+        if (!disableThinking && isThinkingBudgetRejection(err)) {
+          return doFetch(requestParts, { disableThinking: true });
+        }
+        throw err;
       } finally {
         clearTimeout(timeoutId);
       }

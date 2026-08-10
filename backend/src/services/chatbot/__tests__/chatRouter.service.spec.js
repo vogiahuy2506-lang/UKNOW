@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+const originalFetch = global.fetch;
+const isThinkingBudgetRejection = jest.fn(() => false);
 
 const getSettings = jest.fn();
 const getWebChatMessages = jest.fn();
@@ -65,6 +68,11 @@ jest.unstable_mockModule('../../../utils/aiResponseFormatter.util.js', () => ({
 
 jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage: () => ({}),
+  isThinkingBudgetRejection: (...args) => isThinkingBudgetRejection(...args),
+  joinGeminiTextParts: (parts) => (Array.isArray(parts)
+    ? parts.filter((p) => p?.text && !p.thought).map((p) => p.text).join('')
+    : ''),
+  THINKING_BUDGET_RETRY_RE: /budget 0 is invalid|thinking mode|thinking_?budget/i,
 }));
 
 jest.unstable_mockModule('../../ai/aiUsageMeter.service.js', () => ({
@@ -168,5 +176,79 @@ describe('chatRouter.service AI fallback', () => {
     expect(charge).not.toHaveBeenCalled();
 
     callAI.mockRestore();
+  });
+});
+
+describe('chatRouter._callAI thinking config', () => {
+  // _callAI dùng Promise.race với setTimeout(30s) KHÔNG được clear → fake timers
+  // để timer đó không treo teardown.
+  beforeEach(() => {
+    jest.useFakeTimers();
+    resolveAllowedModel.mockReset();
+    reserve.mockReset();
+    record.mockReset();
+    isThinkingBudgetRejection.mockReset();
+    isThinkingBudgetRejection.mockReturnValue(false);
+
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    reserve.mockResolvedValue({ maxOutputTokens: 512 });
+    record.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    global.fetch = originalFetch;
+  });
+
+  const callArgs = {
+    userId: 7,
+    systemPrompt: 'sp',
+    history: [],
+    message: 'xin chào',
+    model: 'gemini-2.5-flash',
+    temperature: 0.7,
+    maxTokens: 512,
+  };
+
+  it('gửi thinkingConfig budget 0 và lọc thought parts', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }, { text: 'Xin chào bạn' }] } }],
+      }),
+    });
+    global.fetch = fetchMock;
+
+    const res = await chatRouterService._callAI(callArgs);
+
+    expect(res).toEqual({ text: 'Xin chào bạn' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+  });
+
+  it('model chỉ-thinking từ chối budget 0 → retry bỏ thinkingConfig, nới cap ≥3072', async () => {
+    isThinkingBudgetRejection.mockReturnValueOnce(true);
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Budget 0 is invalid. This model only works in thinking mode.' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: 'rescued' }] } }] }),
+      });
+    global.fetch = fetchMock;
+
+    const res = await chatRouterService._callAI(callArgs);
+
+    expect(res).toEqual({ text: 'rescued' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const first = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const second = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(first.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(second.generationConfig.thinkingConfig).toBeUndefined();
+    expect(second.generationConfig.maxOutputTokens).toBe(3072);
   });
 });

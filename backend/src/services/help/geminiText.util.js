@@ -46,7 +46,8 @@ export async function generateGeminiText({
   }
 
   const text = data?.candidates?.[0]?.content?.parts
-    ?.map((p) => p.text || '')
+    ?.filter((p) => p?.text && !p.thought)
+    ?.map((p) => p.text)
     .join('')
     .trim() || '';
 

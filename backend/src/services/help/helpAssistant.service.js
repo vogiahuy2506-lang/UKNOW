@@ -1,5 +1,6 @@
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import { parseRouteLabel, HELP_ROUTE_LABELS } from '../../utils/helpCenter.util.js';
+import { isThinkingBudgetRejection } from '../../utils/geminiClient.util.js';
 import { generateGeminiText } from './geminiText.util.js';
 import {
   getCapabilityMapText,
@@ -45,8 +46,6 @@ function formatSources(chunks = []) {
   }
   return sources;
 }
-
-const THINKING_BUDGET_RETRY_RE = /budget 0 is invalid|thinking mode|thinking_?budget/i;
 
 async function recordRouteUsage(userId, modelName, raw) {
   try {
@@ -94,8 +93,7 @@ Quy tắc:
     }));
     await recordRouteUsage(userId, modelName, raw);
   } catch (err) {
-    const msg = String(err?.message || '');
-    if (!THINKING_BUDGET_RETRY_RE.test(msg)) {
+    if (!isThinkingBudgetRejection(err)) {
       throw err;
     }
     // Thinking-only models (e.g. gemini-2.5-pro) reject budget 0 — retry without thinkingConfig.
@@ -146,8 +144,13 @@ async function answerWithDocs(question, userId) {
   const systemPrompt = `Bạn là trợ lý hướng dẫn dùng Founder AI (UKNOW).
 Chỉ trả lời dựa trên BẢN ĐỒ NĂNG LỰC và CÁC ĐOẠN TÀI LIỆU bên dưới.
 Nếu thiếu thông tin: nói chưa có hướng dẫn, KHÔNG bịa.
-Luôn kèm link bài gốc dạng /huong-dan/<slug> khi trả lời từ tài liệu.
 Trả lời tiếng Việt, ngắn gọn, có bước nếu là hướng dẫn.
+
+QUY TẮC LIÊN KẾT (bắt buộc):
+- KHÔNG dán đường dẫn thô làm chữ hiển thị. SAI: [/app/campaigns/new](/app/campaigns/new).
+  ĐÚNG: gọi tên trang bằng tiếng Việt trong câu — vd "vào **Tạo chiến dịch**", "mở **Hồ sơ doanh nghiệp** (Cài đặt)", "dùng **Gửi nhanh**".
+- Nếu cần dẫn link, chỉ kèm TỐI ĐA MỘT link "Xem chi tiết" ở CUỐI, trỏ tới bài hướng dẫn /huong-dan/<slug>, và đặt nhãn tiếng Việt cho link đó.
+- KHÔNG rải nhiều link phụ giữa các bước. KHÔNG thêm dòng "Nguồn bài viết gốc".
 
 ${capabilityMap}
 
@@ -173,7 +176,7 @@ ${chunkBlock}`;
       thinkingBudget: 0,
     }));
   } catch (err) {
-    if (!THINKING_BUDGET_RETRY_RE.test(String(err?.message || ''))) {
+    if (!isThinkingBudgetRejection(err)) {
       throw err;
     }
     // Model chỉ-thinking (vd gemini-2.5-pro) từ chối budget 0 — bỏ thinkingConfig,

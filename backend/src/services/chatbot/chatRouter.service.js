@@ -9,7 +9,7 @@ import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
+import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import aiCreditMeter, {
   VISITOR_CHAT_UNAVAILABLE_MESSAGE,
@@ -324,27 +324,45 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       requestedMaxOutputTokens: maxTokens,
     });
 
-    const response = await Promise.race([
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction,
-          contents: chatHistory,
-          generationConfig: {
-            temperature,
-            maxOutputTokens,
-          },
+    const fetchOnce = async (generationConfig) => {
+      const response = await Promise.race([
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction,
+            contents: chatHistory,
+            generationConfig,
+          }),
         }),
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('AI call timeout (30s)')), 30000)),
-    ]);
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AI call timeout (30s)')), 30000)),
+      ]);
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
+      }
+      return data;
+    };
+
+    const baseConfig = {
+      temperature,
+      maxOutputTokens,
+      thinkingConfig: { thinkingBudget: 0 },
+    };
+
+    let data;
+    try {
+      data = await fetchOnce(baseConfig);
+    } catch (err) {
+      if (!isThinkingBudgetRejection(err)) throw err;
+      data = await fetchOnce({
+        temperature,
+        maxOutputTokens: Math.max(maxOutputTokens, 3072),
+      });
     }
-    const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    const textResponse = joinGeminiTextParts(data?.candidates?.[0]?.content?.parts);
     if (!textResponse) throw new Error('AI returned empty response');
 
     await aiUsageMeter.record(userId, extractGeminiUsage(data), {

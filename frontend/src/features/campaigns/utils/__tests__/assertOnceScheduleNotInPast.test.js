@@ -9,7 +9,7 @@ function hanoiYmdHm(instant) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
   }).formatToParts(instant);
   const v = Object.fromEntries(parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]));
   return {

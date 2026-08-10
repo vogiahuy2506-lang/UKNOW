@@ -196,7 +196,7 @@ const triggerCampaignSchedule = async (schedule) => {
     // Luôn gắn nhãn thời điểm theo Asia/Ho_Chi_Minh (không phụ thuộc TZ của process/ máy chủ).
     const runName = `${schedule.schedule_name || 'Lich chay'} - ${new Date().toLocaleString('vi-VN', {
       timeZone: HANOI_TIME_ZONE,
-      hour12: false,
+      hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     })}`;
     const runRecord = await campaignController.createCampaignRunRecord({
       campaignId: schedule.id_campaign,

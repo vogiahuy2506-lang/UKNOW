@@ -58,7 +58,7 @@ export function formatUtcAndVietnamForLog(input) {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
   }).format(d);
   return `${utcIso} (giờ VN: ${vnWall})`;
 }

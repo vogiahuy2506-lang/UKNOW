@@ -23,7 +23,7 @@ function getHanoiParts(instant) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hourCycle: 'h23', // h23 = 0–23; hour12:false rơi vào h24 (nửa đêm = "24") ở một số ICU
   });
   const values = {};
   for (const part of formatter.formatToParts(instant)) {

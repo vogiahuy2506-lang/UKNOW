@@ -57,7 +57,7 @@ export const formatDateTime = (value) => {
   return Number.isNaN(date.getTime())
     ? '--'
     : date.toLocaleString('vi-VN', {
-      hour12: false,
+      hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
       timeZone: DISPLAY_TZ,
     });
 };
