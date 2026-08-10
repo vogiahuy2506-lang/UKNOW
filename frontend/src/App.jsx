@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
 import { useEffect } from 'react';
@@ -60,6 +60,7 @@ import PublicChatbotPage from './pages/public/PublicChatbotPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
 import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
+import InvoicePage from './pages/invoices/InvoicePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
@@ -111,6 +112,7 @@ const LoadingScreen = () => {
 // Bảo vệ /app/* — yêu cầu đăng nhập + có gói
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading, user, activeContext } = useAuthStore();
+  const location = useLocation();
 
   useEffect(() => {
     if (isLoading) {
@@ -122,7 +124,10 @@ const ProtectedRoute = ({ children }) => {
   }, [isLoading]);
 
   if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    const redirect = encodeURIComponent(`${location.pathname}${location.search || ''}`);
+    return <Navigate to={`/login?redirect=${redirect}`} replace />;
+  }
   if (user?.role === 'admin') return <Navigate to="/admin" replace />;
 
   // Employee context: plan check dựa vào owner's plan (middleware đã xử lý server-side)
@@ -293,6 +298,14 @@ function App() {
           {/* Thanh toán — video background, không có navbar/footer */}
           <Route path="/checkout" element={<CheckoutLayout><CheckoutPage /></CheckoutLayout>} />
           <Route path="/payment-success" element={<CheckoutLayout><PaymentSuccessPage /></CheckoutLayout>} />
+          <Route
+            path="/invoices/:orderCode"
+            element={(
+              <ProtectedRoute>
+                <CheckoutLayout><InvoicePage /></CheckoutLayout>
+              </ProtectedRoute>
+            )}
+          />
 
           {/* Policy Routes — không có Navbar, có header tự thiết kế */}
           <Route element={<PolicyLayout />}>

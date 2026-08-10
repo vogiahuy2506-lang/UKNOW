@@ -1,4 +1,9 @@
 import * as paymentService from '../services/payment/payment.service.js';
+import {
+  verifyMatbaoWebhookSecret,
+  handleMatbaoCqtWebhook,
+  getInvoiceForOwner,
+} from '../services/payment/einvoiceView.service.js';
 
 export const createPayment = async (req, res) => {
     try {
@@ -124,5 +129,38 @@ export const getPaymentStatus = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+};
+
+/** Mat Bao CQT webhook — public, secret in path. Always 200 after auth (except bad secret → 404). */
+export const einvoiceWebhook = async (req, res) => {
+    try {
+        if (!verifyMatbaoWebhookSecret(req.params.secret)) {
+            return res.status(404).json({ success: false, message: 'Not found' });
+        }
+        const result = await handleMatbaoCqtWebhook(req.body || {});
+        return res.status(200).json({ success: true, matched: result.matched });
+    } catch (err) {
+        console.error('[MatBaoWebhook] error:', err?.message || err);
+        // Still 200 to avoid retry storms; secret was valid.
+        return res.status(200).json({ success: true, matched: false, error: true });
+    }
+};
+
+/** Owner-only invoice view for /invoices/:orderCode */
+export const getInvoiceForOrder = async (req, res) => {
+    try {
+        const { orderCode } = req.params;
+        if (!orderCode || !req.user?.id) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hoá đơn' });
+        }
+        const result = await getInvoiceForOwner(orderCode, req.user.id);
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hoá đơn' });
+        }
+        return res.json({ success: true, result });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
 };

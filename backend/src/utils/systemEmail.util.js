@@ -524,17 +524,17 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
     </table>
 
     <!-- Invoice CTA -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+    ${invoiceUrl ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
       <tr>
         <td style="text-align:center">
           <a href="${invoiceUrl}"
              style="display:inline-block;background:#374151;color:#fff;font-size:14px;font-weight:600;
                     padding:12px 28px;border-radius:8px;text-decoration:none">
-            📄 Tải hóa đơn
+            📄 Xem hóa đơn
           </a>
         </td>
       </tr>
-    </table>
+    </table>` : ''}
 
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">

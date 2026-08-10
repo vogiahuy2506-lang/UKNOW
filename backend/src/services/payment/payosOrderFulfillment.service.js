@@ -47,6 +47,14 @@ export async function fulfillPaidOrder(order, client) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + (plan?.duration_days || 30));
 
+    let invoiceInfo = order.invoice_info;
+    if (typeof invoiceInfo === 'string') {
+      try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
+    }
+    const invoiceUrl = invoiceInfo?.wantInvoice
+      ? `${FRONTEND_URL}/invoices/${order.order_code}`
+      : undefined;
+
     sendSystemEmail(
       buildPaymentSuccessEmail({
         fullName: user?.full_name,
@@ -57,7 +65,7 @@ export async function fulfillPaidOrder(order, client) {
         orderCode: order.order_code,
         paymentMethod: order.payment_method,
         expiresAt,
-        invoiceUrl: `${FRONTEND_URL}/invoices/${order.order_code}`,
+        invoiceUrl,
       })
     ).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
   } else {

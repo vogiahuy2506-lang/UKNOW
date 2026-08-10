@@ -37,7 +37,12 @@ const Login = () => {
     try {
       const result = await googleLogin({ access_token: tokenResponse.access_token });
       toast.success(t('auth.googleLoginSuccess'));
-      navigate(getPostAuthPath(result?.data?.user));
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+        navigate(redirect);
+      } else {
+        navigate(getPostAuthPath(result?.data?.user));
+      }
     } catch (error) {
       const message = error.response?.data?.message || t('auth.googleLoginFailed');
       toast.error(message);
@@ -68,7 +73,12 @@ const Login = () => {
     try {
       const result = await login(data.username, data.password, data.rememberMe ?? true);
       toast.success(t('common.success'));
-      navigate(getPostAuthPath(result?.data?.user));
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+        navigate(redirect);
+      } else {
+        navigate(getPostAuthPath(result?.data?.user));
+      }
     } catch (error) {
       const message = error.response?.data?.message || t('auth.invalidCredentials');
       toast.error(message);
