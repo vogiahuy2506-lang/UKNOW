@@ -22,6 +22,68 @@ import { getMessagePreviewText } from '../../features/inbox/utils/normalizeMessa
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
 
+const extractPauseState = (res) => {
+  const payload = res?.data ?? res ?? {};
+  return {
+    aiPaused: payload.aiPaused === true,
+    aiPausedAt: payload.aiPausedAt ?? null,
+    // Server always sends ISO or null; undefined only from optimistic socket.
+    aiResumeAt: Object.prototype.hasOwnProperty.call(payload, 'aiResumeAt')
+      ? payload.aiResumeAt
+      : null,
+  };
+};
+
+const applySelfHandoffPause = (prev) => {
+  if (!prev) return prev;
+  // Manual pause (aiPaused && !aiPausedAt) must not become countdown.
+  if (prev.aiPaused && !prev.aiPausedAt) return prev;
+  return {
+    ...prev,
+    aiPaused: true,
+    aiPausedAt: new Date().toISOString(),
+    aiResumeAt: undefined,
+  };
+};
+
+const formatCountdown = (ms) => {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+};
+
+/** Header subtitle for AI pause: manual / countdown / auto-off / pending */
+const AiPauseStatusText = ({ conversation, t }) => {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!conversation?.aiPaused || typeof conversation.aiResumeAt !== 'string') {
+      return undefined;
+    }
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [conversation?.aiPaused, conversation?.aiResumeAt, conversation?.id, conversation?.type]);
+
+  if (!conversation?.aiPaused) return null;
+
+  if (!conversation.aiPausedAt) {
+    return <> · {t('inbox.aiManualOff')}</>;
+  }
+  if (conversation.aiResumeAt === undefined) {
+    return <> · {t('inbox.aiPausedPending')}</>;
+  }
+  if (conversation.aiResumeAt === null) {
+    return <> · {t('inbox.aiAutoResumeOff')}</>;
+  }
+
+  const remaining = new Date(conversation.aiResumeAt).getTime() - now;
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    return <> · {t('inbox.aiResumeOnNextMessage')}</>;
+  }
+  return <> · {t('inbox.aiCountdown', { time: formatCountdown(remaining) })}</>;
+};
+
 const mergeUniqueMessages = (baseMessages, nextMessages, markAsRead = false) => {
   const merged = [...baseMessages];
 
@@ -266,9 +328,18 @@ const InboxPage = () => {
           unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
             ? 0
             : (existing.unreadCount || 0) + 1,
-          // Chủ nhắn từ app Zalo (isSelf) → backend pause AI; cập nhật toggle cho khớp.
-          // Không dùng role===agent: tin bot cũng là agent.
-          ...(data.isSelf === true ? { aiPaused: true } : {}),
+          // Chủ nhắn từ app Zalo (isSelf) → backend pause AI (handoff).
+          // Không đè manual; để aiResumeAt=undefined tới lần fetch list.
+          ...(data.isSelf === true
+            ? (() => {
+                if (existing.aiPaused && !existing.aiPausedAt) return {};
+                return {
+                  aiPaused: true,
+                  aiPausedAt: new Date().toISOString(),
+                  aiResumeAt: undefined,
+                };
+              })()
+            : {}),
         };
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
@@ -287,7 +358,13 @@ const InboxPage = () => {
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
-          ...(data.isSelf === true ? { aiPaused: true } : {}),
+          ...(data.isSelf === true
+            ? {
+                aiPaused: true,
+                aiPausedAt: new Date().toISOString(),
+                aiResumeAt: undefined,
+              }
+            : {}),
         };
         return [newConv, ...prev];
       }
@@ -296,7 +373,7 @@ const InboxPage = () => {
     if (data.isSelf === true) {
       setSelectedConversation((prev) => {
         if (!prev || Number(prev.id) !== Number(data.conversationId)) return prev;
-        return { ...prev, aiPaused: true };
+        return applySelfHandoffPause(prev);
       });
     }
     if (document.hidden && displayMessage) {
@@ -444,12 +521,12 @@ const InboxPage = () => {
         };
         setMessages(prev => [...prev, newMessage]);
         setReplyingTo(null);
-        // Backend luôn pause AI khi chủ trả lời từ hộp thư — cập nhật UI cho khớp
-        // (trước đây toggle vẫn hiện "Bật" → user tưởng AI chạy nhưng bot im).
-        setSelectedConversation((prev) => (prev ? { ...prev, aiPaused: true } : prev));
+        // Apply pause state from sendMessage response (PR1 returns aiPausedAt/aiResumeAt).
+        const pauseState = extractPauseState(response);
+        setSelectedConversation((prev) => (prev ? { ...prev, ...pauseState } : prev));
         setConversations((prev) => prev.map((c) => (
           c.id === selectedConversation.id && c.type === selectedConversation.type
-            ? { ...c, aiPaused: true }
+            ? { ...c, ...pauseState }
             : c
         )));
         if (sendStatus === 'failed') {
@@ -764,7 +841,7 @@ const InboxPage = () => {
                 </h2>
                 <p className="text-sm text-gray-500">
                   {getChannelLabel(selectedConversation.channel, selectedConversation)}
-                  {selectedConversation.aiPaused ? ` · ${t('inbox.aiPausedHint')}` : ''}
+                  <AiPauseStatusText conversation={selectedConversation} t={t} />
                 </p>
               </div>
 
@@ -786,15 +863,16 @@ const InboxPage = () => {
                       if (selectedConversation.chatbotEnabled === false) return;
                       try {
                         const nextPaused = !selectedConversation.aiPaused;
-                        await chatbotApi.setConversationAiPaused(
+                        const apiRes = await chatbotApi.setConversationAiPaused(
                           selectedConversation.id,
                           selectedConversation.type || 'zalo_personal',
                           nextPaused
                         );
-                        setSelectedConversation((prev) => prev ? { ...prev, aiPaused: nextPaused } : prev);
+                        const pauseState = extractPauseState(apiRes);
+                        setSelectedConversation((prev) => (prev ? { ...prev, ...pauseState } : prev));
                         setConversations((prev) => prev.map((c) =>
                           c.id === selectedConversation.id && c.type === selectedConversation.type
-                            ? { ...c, aiPaused: nextPaused }
+                            ? { ...c, ...pauseState }
                             : c
                         ));
                       } catch (err) {
@@ -829,7 +907,11 @@ const InboxPage = () => {
                     </p>
                   ) : selectedConversation.aiPaused ? (
                     <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">
-                      {t('inbox.aiToggleManualHint')}
+                      {!selectedConversation.aiPausedAt
+                        ? t('inbox.aiManualOff')
+                        : selectedConversation.aiResumeAt === null
+                          ? t('inbox.aiAutoResumeOff')
+                          : t('inbox.aiToggleManualHint')}
                     </p>
                   ) : null}
               </div>

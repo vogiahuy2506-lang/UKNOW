@@ -237,6 +237,7 @@ class UnifiedInboxRepository {
             ORDER BY created_at DESC LIMIT 1
           ) as last_message_at_override,
           COALESCE(cc.ai_paused, false) as ai_paused,
+          cc.ai_paused_at as ai_paused_at,
           NULL::TEXT as first_visitor_message
         FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
@@ -305,6 +306,7 @@ class UnifiedInboxRepository {
             ORDER BY created_at DESC LIMIT 1
           ) as last_message_at_override,
           COALESCE(zp.ai_paused, false) as ai_paused,
+          zp.ai_paused_at as ai_paused_at,
           NULL::TEXT as first_visitor_message
         FROM zalo_personal_conversations zp
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
@@ -372,6 +374,7 @@ class UnifiedInboxRepository {
             ORDER BY created_at DESC LIMIT 1
           ) as last_message_at_override,
           COALESCE(wc.ai_paused, false) as ai_paused,
+          wc.ai_paused_at as ai_paused_at,
           (
             SELECT content FROM webchat_messages
             WHERE id_conversation = wc.id AND role = 'visitor'
@@ -439,6 +442,9 @@ class UnifiedInboxRepository {
         lastMessage: row.last_message,
         unreadCount: parseInt(row.unread_count || 0),
         aiPaused: row.ai_paused === true,
+        aiPausedAt: row.ai_paused_at
+          ? new Date(row.ai_paused_at).toISOString()
+          : null,
       };
     });
   }
@@ -775,18 +781,39 @@ class UnifiedInboxRepository {
     }
   }
 
-  async setAiPaused(conversationId, conversationType, paused) {
+  /**
+   * Pause / resume AI for one conversation.
+   * reason='manual' → ai_paused_at NULL (stay paused until toggle on).
+   * reason='handoff' → set ai_paused_at=NOW(), but do NOT overwrite an existing manual pause.
+   * @returns {{ aiPaused: boolean, aiPausedAt: string|null }}
+   */
+  async setAiPaused(conversationId, conversationType, paused, reason = 'handoff') {
     const table =
       conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
         : conversationType === 'webchat' ? 'webchat_conversations'
           : 'channel_conversations';
-    await db.query(
+    const isPaused = !!paused;
+    const pauseReason = isPaused && reason === 'manual' ? 'manual' : 'handoff';
+    const { rows } = await db.query(
       `UPDATE ${table}
        SET ai_paused = $2,
-           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
-       WHERE id = $1`,
-      [conversationId, !!paused]
+           ai_paused_at = CASE
+             WHEN $2 = false THEN NULL
+             WHEN $3 = 'manual' THEN NULL
+             WHEN ai_paused = true AND ai_paused_at IS NULL THEN NULL
+             ELSE NOW()
+           END
+       WHERE id = $1
+       RETURNING ai_paused, ai_paused_at`,
+      [conversationId, isPaused, pauseReason]
     );
+    const row = rows[0];
+    return {
+      aiPaused: row?.ai_paused === true,
+      aiPausedAt: row?.ai_paused_at
+        ? new Date(row.ai_paused_at).toISOString()
+        : null,
+    };
   }
 
   /**

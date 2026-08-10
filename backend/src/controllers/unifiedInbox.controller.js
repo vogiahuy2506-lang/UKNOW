@@ -242,6 +242,9 @@ class UnifiedInboxController {
         messageId: result.messageId,
         sendStatus: result.sendStatus,
         error: result.error,
+        aiPaused: result.aiPaused === true,
+        aiPausedAt: result.aiPausedAt ?? null,
+        aiResumeAt: result.aiResumeAt ?? null,
       });
     } catch (err) {
       console.error('[UnifiedInbox] Send message error:', err);

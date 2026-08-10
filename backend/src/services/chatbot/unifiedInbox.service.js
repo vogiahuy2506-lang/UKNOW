@@ -14,9 +14,36 @@ import {
 } from '../../utils/zaloGroupName.util.js';
 import chatAttachmentService from './chatAttachment.service.js';
 import { sanitizeOwnedInboxAttachments } from '../../utils/inboxOwnedAttachments.util.js';
+import {
+  computeAiResumeAt,
+  getCachedAutoResumeMinutes,
+} from '../../utils/aiHandoffResume.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
+}
+
+function normalizeAiPausedAt(value) {
+  if (value == null || value === '') return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+async function buildAiPausePayload({ aiPaused, aiPausedAt, ownerUserId }) {
+  const paused = aiPaused === true;
+  const pausedAt = paused ? normalizeAiPausedAt(aiPausedAt) : null;
+  const minutes = paused && pausedAt
+    ? await getCachedAutoResumeMinutes(ownerUserId)
+    : null;
+  return {
+    aiPaused: paused,
+    aiPausedAt: pausedAt,
+    aiResumeAt: computeAiResumeAt({
+      aiPaused: paused,
+      aiPausedAt: pausedAt,
+      autoResumeMinutes: minutes,
+    }),
+  };
 }
 
 class UnifiedInboxService {
@@ -74,33 +101,44 @@ class UnifiedInboxService {
   async getConversations(userId, filters = {}) {
     console.log('[UnifiedInboxService] getConversations called:', { userId, filters });
 
-    const [conversations, total, unreadByChannel, zaloEnabledMap] = await Promise.all([
+    const [conversations, total, unreadByChannel, zaloEnabledMap, autoResumeMinutes] = await Promise.all([
       unifiedInboxRepository.getConversations(userId, filters),
       unifiedInboxRepository.getConversationsCount(userId, filters),
       unifiedInboxRepository.getUnreadCountByChannel(userId),
       this._loadZaloAccountChatbotEnabledMap(userId),
+      getCachedAutoResumeMinutes(userId),
     ]);
 
-    const formattedConversations = conversations.map(conv => ({
-      id: conv.id,
-      type: conv.type,
-      channel: conv.channel,
-      channelDisplayName: conv.channelDisplayName,
-      externalId: conv.externalId,
-      visitorName: conv.visitorName,
-      visitorInfo: conv.visitorInfo,
-      isGroup: conv.isGroup || false,
-      groupId: conv.groupId || null,
-      groupName: conv.groupName || null,
-      lastMessage: conv.lastMessage,
-      unreadCount: parseInt(conv.unreadCount || 0),
-      startedAt: conv.startedAt,
-      lastMessageAt: conv.lastMessageAt,
-      status: conv.status,
-      aiPaused: conv.aiPaused === true,
-      chatbotEnabled: this._resolveChatbotEnabled(conv, zaloEnabledMap),
-      idZaloSetting: conv.idZaloSetting || null,
-    }));
+    const formattedConversations = conversations.map(conv => {
+      const aiPaused = conv.aiPaused === true;
+      const aiPausedAt = aiPaused ? normalizeAiPausedAt(conv.aiPausedAt) : null;
+      return {
+        id: conv.id,
+        type: conv.type,
+        channel: conv.channel,
+        channelDisplayName: conv.channelDisplayName,
+        externalId: conv.externalId,
+        visitorName: conv.visitorName,
+        visitorInfo: conv.visitorInfo,
+        isGroup: conv.isGroup || false,
+        groupId: conv.groupId || null,
+        groupName: conv.groupName || null,
+        lastMessage: conv.lastMessage,
+        unreadCount: parseInt(conv.unreadCount || 0),
+        startedAt: conv.startedAt,
+        lastMessageAt: conv.lastMessageAt,
+        status: conv.status,
+        aiPaused,
+        aiPausedAt,
+        aiResumeAt: computeAiResumeAt({
+          aiPaused,
+          aiPausedAt,
+          autoResumeMinutes,
+        }),
+        chatbotEnabled: this._resolveChatbotEnabled(conv, zaloEnabledMap),
+        idZaloSetting: conv.idZaloSetting || null,
+      };
+    });
 
     // Build unread summary
     const unreadSummary = {};
@@ -165,6 +203,12 @@ class UnifiedInboxService {
       }
     }
 
+    const pauseState = await buildAiPausePayload({
+      aiPaused: conversation.ai_paused === true,
+      aiPausedAt: conversation.ai_paused_at,
+      ownerUserId: userId,
+    });
+
     return {
       id: conversation.id,
       type: conversationType,
@@ -179,7 +223,7 @@ class UnifiedInboxService {
       startedAt: conversation.started_at,
       lastMessageAt: conversation.last_message_at,
       status: conversation.status,
-      aiPaused: conversation.ai_paused === true,
+      ...pauseState,
       chatbotEnabled,
       idZaloSetting: conversation.id_zalo_setting || null,
     };
@@ -354,12 +398,28 @@ class UnifiedInboxService {
       );
     }
 
-    // Handoff: pause AI for this conversation when owner replies from inbox
-    await unifiedInboxRepository.setAiPaused(
-      parseInt(conversationId),
-      conversationType,
-      true
-    ).catch((e) => console.warn('[UnifiedInbox] setAiPaused failed:', e.message));
+    // Handoff: pause AI for this conversation when owner replies from inbox.
+    // Uses reason=handoff (default); does not overwrite an existing manual pause.
+    let pauseState = {
+      aiPaused: true,
+      aiPausedAt: null,
+      aiResumeAt: null,
+    };
+    try {
+      const pausedRow = await unifiedInboxRepository.setAiPaused(
+        parseInt(conversationId),
+        conversationType,
+        true,
+        'handoff'
+      );
+      pauseState = await buildAiPausePayload({
+        aiPaused: pausedRow.aiPaused,
+        aiPausedAt: pausedRow.aiPausedAt,
+        ownerUserId: userId,
+      });
+    } catch (e) {
+      console.warn('[UnifiedInbox] setAiPaused failed:', e.message);
+    }
 
     // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.
     // Broadcasting causes frontend to create duplicate "Agent" conversations.
@@ -435,6 +495,7 @@ class UnifiedInboxService {
       messageId,
       sendStatus: canTrackSend ? sendStatus : 'sent',
       error: sendStatus === 'failed' ? sendError : undefined,
+      ...pauseState,
     };
   }
 
@@ -540,7 +601,8 @@ class UnifiedInboxService {
   }
 
   /**
-   * Pause / resume AI auto-reply for one conversation (handoff).
+   * Pause / resume AI auto-reply for one conversation.
+   * Toggle always uses reason=manual when pausing (stay until toggled on).
    */
   async setConversationAiPaused(userId, conversationId, conversationType, paused) {
     const conversation = await unifiedInboxRepository.getConversationById(
@@ -549,8 +611,19 @@ class UnifiedInboxService {
       conversationType
     );
     if (!conversation) throw new Error('Conversation not found');
-    await unifiedInboxRepository.setAiPaused(parseInt(conversationId), conversationType, !!paused);
-    return { success: true, aiPaused: !!paused };
+    const reason = paused ? 'manual' : 'handoff';
+    const pausedRow = await unifiedInboxRepository.setAiPaused(
+      parseInt(conversationId),
+      conversationType,
+      !!paused,
+      reason
+    );
+    const pauseState = await buildAiPausePayload({
+      aiPaused: pausedRow.aiPaused,
+      aiPausedAt: pausedRow.aiPausedAt,
+      ownerUserId: userId,
+    });
+    return { success: true, ...pauseState };
   }
 
   /**

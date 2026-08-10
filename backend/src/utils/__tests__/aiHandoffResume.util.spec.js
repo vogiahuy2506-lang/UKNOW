@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import {
   shouldStayAiPaused,
+  computeAiResumeAt,
   _resetAiHandoffAutoResumeCacheForTests,
 } from '../aiHandoffResume.util.js';
 
@@ -58,5 +59,33 @@ describe('shouldStayAiPaused', () => {
       autoResumeMinutes: 15,
       now,
     })).toBe(false);
+  });
+});
+
+describe('computeAiResumeAt', () => {
+  const pausedAt = '2026-08-07T12:00:00.000Z';
+
+  it('returns null when not paused or manual (no timestamp)', () => {
+    expect(computeAiResumeAt({
+      aiPaused: false, aiPausedAt: pausedAt, autoResumeMinutes: 15,
+    })).toBeNull();
+    expect(computeAiResumeAt({
+      aiPaused: true, aiPausedAt: null, autoResumeMinutes: 15,
+    })).toBeNull();
+  });
+
+  it('returns null when auto-resume minutes off', () => {
+    expect(computeAiResumeAt({
+      aiPaused: true, aiPausedAt: pausedAt, autoResumeMinutes: null,
+    })).toBeNull();
+    expect(computeAiResumeAt({
+      aiPaused: true, aiPausedAt: pausedAt, autoResumeMinutes: 0,
+    })).toBeNull();
+  });
+
+  it('adds minutes via getTime (ISO string safe)', () => {
+    expect(computeAiResumeAt({
+      aiPaused: true, aiPausedAt: pausedAt, autoResumeMinutes: 15,
+    })).toBe('2026-08-07T12:15:00.000Z');
   });
 });

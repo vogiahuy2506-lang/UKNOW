@@ -22,6 +22,20 @@ export function shouldStayAiPaused({ aiPaused, aiPausedAt, autoResumeMinutes, no
 }
 
 /**
+ * ISO deadline for lazy auto-resume countdown, or null when no clock
+ * (AI on, manual pause with null aiPausedAt, or auto-resume setting off).
+ * Manual pause encoding: aiPaused && !aiPausedAt.
+ */
+export function computeAiResumeAt({ aiPaused, aiPausedAt, autoResumeMinutes }) {
+  if (!aiPaused || aiPausedAt == null || aiPausedAt === '') return null;
+  const mins = Number(autoResumeMinutes);
+  if (!Number.isFinite(mins) || mins <= 0) return null;
+  const pausedAtMs = new Date(aiPausedAt).getTime();
+  if (!Number.isFinite(pausedAtMs)) return null;
+  return new Date(pausedAtMs + mins * 60_000).toISOString();
+}
+
+/**
  * Owner handoff auto-resume minutes (cached ~60s). Fail-safe: null on error.
  * @param {number} ownerUserId
  * @returns {Promise<number|null>}

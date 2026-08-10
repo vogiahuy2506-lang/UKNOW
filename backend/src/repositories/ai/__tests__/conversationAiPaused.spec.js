@@ -84,3 +84,54 @@ describe('unifiedInbox.repository isAiPaused (lazy auto-resume)', () => {
     expect(query.mock.calls.some((c) => /UPDATE/i.test(String(c[0])))).toBe(false);
   });
 });
+
+describe('unifiedInbox.repository setAiPaused (manual vs handoff)', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('manual pause sets ai_paused_at NULL', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ ai_paused: true, ai_paused_at: null }],
+    });
+
+    const result = await unifiedInboxRepository.setAiPaused(7, 'webchat', true, 'manual');
+    expect(result).toEqual({ aiPaused: true, aiPausedAt: null });
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toMatch(/WHEN \$3 = 'manual' THEN NULL/i);
+    expect(query.mock.calls[0][1]).toEqual([7, true, 'manual']);
+  });
+
+  it('handoff pause writes NOW and returns timestamp', async () => {
+    const at = '2026-08-10T08:00:00.000Z';
+    query.mockResolvedValueOnce({
+      rows: [{ ai_paused: true, ai_paused_at: at }],
+    });
+
+    const result = await unifiedInboxRepository.setAiPaused(8, 'channel', true, 'handoff');
+    expect(result.aiPaused).toBe(true);
+    expect(result.aiPausedAt).toBe(new Date(at).toISOString());
+    expect(query.mock.calls[0][1]).toEqual([8, true, 'handoff']);
+  });
+
+  it('handoff SQL keeps null when already manual (CASE branch)', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ ai_paused: true, ai_paused_at: null }],
+    });
+
+    const result = await unifiedInboxRepository.setAiPaused(9, 'zalo_personal', true, 'handoff');
+    expect(result).toEqual({ aiPaused: true, aiPausedAt: null });
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toMatch(/WHEN ai_paused = true AND ai_paused_at IS NULL THEN NULL/i);
+  });
+
+  it('resume clears both fields', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ ai_paused: false, ai_paused_at: null }],
+    });
+
+    const result = await unifiedInboxRepository.setAiPaused(10, 'webchat', false);
+    expect(result).toEqual({ aiPaused: false, aiPausedAt: null });
+    expect(query.mock.calls[0][1][1]).toBe(false);
+  });
+});

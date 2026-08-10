@@ -175,9 +175,14 @@ const ConversationItem = ({
                   Đóng
                 </span>
               )}
-              {conv.aiPaused && (
+              {conv.aiPaused && !conv.aiPausedAt && (
                 <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-200">
                   {t('inbox.manualBadge')}
+                </span>
+              )}
+              {conv.aiPaused && !!conv.aiPausedAt && (
+                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-slate-50 text-slate-600 border border-slate-200">
+                  {t('inbox.handoffBadge')}
                 </span>
               )}
             </div>

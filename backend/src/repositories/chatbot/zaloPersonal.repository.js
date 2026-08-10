@@ -237,14 +237,35 @@ class ZaloPersonalRepository {
     return rows[0] || null;
   }
 
-  async setAiPaused(conversationId, paused) {
-    await db.query(
+  /**
+   * Pause / resume AI for one Zalo Personal conversation.
+   * reason='manual' → ai_paused_at NULL (stay paused until toggle on).
+   * reason='handoff' → set ai_paused_at=NOW(), but do NOT overwrite an existing manual pause.
+   * @returns {{ aiPaused: boolean, aiPausedAt: string|null }}
+   */
+  async setAiPaused(conversationId, paused, reason = 'handoff') {
+    const isPaused = !!paused;
+    const pauseReason = isPaused && reason === 'manual' ? 'manual' : 'handoff';
+    const { rows } = await db.query(
       `UPDATE zalo_personal_conversations
        SET ai_paused = $2,
-           ai_paused_at = CASE WHEN $2 THEN NOW() ELSE NULL END
-       WHERE id = $1`,
-      [conversationId, !!paused]
+           ai_paused_at = CASE
+             WHEN $2 = false THEN NULL
+             WHEN $3 = 'manual' THEN NULL
+             WHEN ai_paused = true AND ai_paused_at IS NULL THEN NULL
+             ELSE NOW()
+           END
+       WHERE id = $1
+       RETURNING ai_paused, ai_paused_at`,
+      [conversationId, isPaused, pauseReason]
     );
+    const row = rows[0];
+    return {
+      aiPaused: row?.ai_paused === true,
+      aiPausedAt: row?.ai_paused_at
+        ? new Date(row.ai_paused_at).toISOString()
+        : null,
+    };
   }
 
   async isAiPaused(conversationId) {

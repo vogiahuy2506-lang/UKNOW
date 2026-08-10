@@ -63,7 +63,10 @@ const unifiedInboxService = (await import('../unifiedInbox.service.js')).default
 describe('UnifiedInbox send status + retry', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSetAiPaused.mockResolvedValue(undefined);
+    mockSetAiPaused.mockResolvedValue({
+      aiPaused: true,
+      aiPausedAt: new Date().toISOString(),
+    });
     mockUpdateSendStatus.mockResolvedValue({ id: 10, metadata: { source: 'manual_inbox', send: { status: 'failed' } } });
     mockResolveBilling.mockResolvedValue(1);
     mockDebit.mockResolvedValue({ debited: false });

@@ -136,7 +136,8 @@ const chatbotApiService = {
   },
 
   setConversationAiPaused(conversationId, type, paused) {
-    return api.post(`/ai/chatbot/inbox/conversations/${conversationId}/ai-pause`, { type, paused });
+    return api.post(`/ai/chatbot/inbox/conversations/${conversationId}/ai-pause`, { type, paused })
+      .then((res) => res.data);
   },
 
   // ── Zalo Personal Sync ──────────────────────────────────────────────────────
