@@ -3847,6 +3847,8 @@ export default {
     schedule: 'Lên lịch',
     running: 'Đang chạy',
     continuousRunning: 'Chạy liên tục{interval, select, undefined {} other { ({interval} phút/lần)}}',
+    quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
+    buyTopup: 'Mua thêm',
     unknown: 'Không xác định',
     runNotFound: 'Không tìm thấy lượt chạy để dừng',
     stopping: 'Đang dừng...',

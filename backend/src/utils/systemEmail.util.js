@@ -206,6 +206,152 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
   };
 }
 
+// ─── Campaign paused / stopped vì plan send-quota ─────────────────────────────
+
+function formatResetAtVi(resetAt) {
+  const d = resetAt instanceof Date ? resetAt : new Date(resetAt);
+  if (!Number.isFinite(d.getTime())) return String(resetAt || '');
+  return d.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Email khi campaign tạm hoãn vì hết lượt gửi gói (có mốc tự chạy lại).
+ *
+ * @param {{ fullName?: string|null, campaignName: string, channelLabel: string, resetAt: Date|string, topupUrl: string }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildCampaignPausedEmail({ fullName, campaignName, channelLabel, resetAt, topupUrl }) {
+  const resetStr = formatResetAtVi(resetAt);
+  const channel = channelLabel || 'gửi';
+  const name = campaignName || 'Chiến dịch';
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Chiến dịch <strong>«${name}»</strong> đang tạm dừng vì hết lượt <strong>${channel}</strong> của gói hiện tại.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px;text-align:center">
+          <p style="margin:0;font-size:13px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
+            Tự chạy lại lúc
+          </p>
+          <p style="margin:6px 0 0;font-size:22px;font-weight:800;color:#ea580c;line-height:1.3">
+            ${resetStr}
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border-left:4px solid #ea580c;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#991b1b;line-height:1.6">
+            Muốn chạy tiếp ngay thay vì chờ reset hạn mức? Mua thêm lượt gửi để chiến dịch tiếp tục.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${topupUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Mua thêm hạn mức →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã mua thêm hoặc không muốn nhận thông báo này, vui lòng liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Chiến dịch «${name}» tạm dừng vì hết lượt ${channel}`,
+    html: buildBaseTemplate({
+      subtitle: 'Chiến dịch tạm dừng — hết hạn mức gửi',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
+/**
+ * Email khi campaign dừng hẳn vì gói hết hạn / không còn resetAt.
+ *
+ * @param {{ fullName?: string|null, campaignName: string, reason?: string, billingUrl: string }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildCampaignStoppedQuotaEmail({ fullName, campaignName, reason, billingUrl }) {
+  const name = campaignName || 'Chiến dịch';
+  const detail = reason || 'Gói hết hạn hoặc hết hạn mức kỳ.';
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Chiến dịch <strong>«${name}»</strong> đã dừng vì không còn hạn mức gửi hợp lệ.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
+            Lý do
+          </p>
+          <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${detail}</p>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.6">
+      Gia hạn hoặc nâng gói để tiếp tục chạy chiến dịch.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${billingUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Gia hạn / nâng gói →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Cần hỗ trợ? Liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Chiến dịch «${name}» dừng vì hết hạn mức gói`,
+    html: buildBaseTemplate({
+      subtitle: 'Chiến dịch dừng — hết hạn mức gửi',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
 export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }) {

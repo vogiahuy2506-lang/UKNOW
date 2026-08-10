@@ -3831,6 +3831,8 @@ export default {
     schedule: 'Schedule',
     running: 'Running',
     continuousRunning: 'Running continuously{interval, select, undefined {} other { ({interval} min/interval)}}',
+    quotaPausedUntil: 'Out of send quota — resumes {until}',
+    buyTopup: 'Buy more',
     unknown: 'Unknown',
     runNotFound: 'Run not found to stop',
     stopping: 'Stopping...',

@@ -1,5 +1,8 @@
 import CampaignExecutionLogWorkspace from '../../../components/campaigns/CampaignExecutionLogWorkspace';
+import { Link } from 'react-router-dom';
+import { useI18n } from '../../../i18n';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
+import { getActivePlanQuotaPause } from '../utils/campaignQuotaPause.helpers';
 
 const CampaignRunLogsPanel = ({
   selectedCampaignForLogs,
@@ -11,12 +14,14 @@ const CampaignRunLogsPanel = ({
   campaignRunHistory,
   onViewRunDetail,
 }) => {
+  const { t } = useI18n();
   if (!selectedCampaignForLogs) return null;
   const isContinuousMode = Boolean(selectedRunDetail?.runMetadata?.continuousMode);
   const pollIntervalMs = Number.parseInt(selectedRunDetail?.runMetadata?.pollIntervalMs, 10);
   const pollIntervalMinutes = Number.isFinite(pollIntervalMs)
     ? Math.max(1, Math.round(pollIntervalMs / 60000))
     : null;
+  const quotaPause = getActivePlanQuotaPause(selectedRunDetail?.runMetadata);
 
   return (
     <div className="card">
@@ -39,6 +44,21 @@ const CampaignRunLogsPanel = ({
           </div>
         ) : (
           <>
+            {quotaPause && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <span className="text-sm font-medium text-amber-900">
+                  {t('campaignRun.quotaPausedUntil', {
+                    until: formatCampaignDateTime(quotaPause.untilIso),
+                  })}
+                </span>
+                <Link
+                  to="/app/topup"
+                  className="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                >
+                  {t('campaignRun.buyTopup')}
+                </Link>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="p-3 rounded-lg bg-gray-50">
                 <p className="text-xs text-gray-500">Chiến dịch / lần chạy</p>

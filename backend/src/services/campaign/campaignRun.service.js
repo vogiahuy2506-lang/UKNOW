@@ -27,6 +27,11 @@ import customerMutationRepository from '../../repositories/customer/customerMuta
 import customerZaloTrackingRepository from '../../repositories/customer/customerZaloTracking.repository.js';
 import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.repository.js';
 import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
+import {
+  QUOTA_DEFER_CLEAR_KEYS,
+  notifyCampaignQuotaPaused,
+  notifyCampaignQuotaStopped,
+} from '../../utils/campaignQuotaPauseNotify.util.js';
 
 class CampaignRunService {
   constructor() {
@@ -97,6 +102,9 @@ class CampaignRunService {
 
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
     this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
+
+    // RunId đã gửi email quota-pause trong process hiện tại (để clear cờ sau resume/gửi lại).
+    this._quotaPauseNotifiedRunIds = new Set();
   }
   
   async runWithZaloAccountMutex(accountId, task) {
@@ -175,12 +183,21 @@ class CampaignRunService {
         reasonKey: 'zaloDeferredReason',
         atKey: 'zaloDeferredAt',
         label: 'zalo',
+        clearKeys: null,
       },
       {
         untilKey: 'nonContinuousDeferredUntil',
         reasonKey: 'nonContinuousDeferredReason',
         atKey: 'nonContinuousDeferredAt',
         label: 'non_continuous',
+        clearKeys: null,
+      },
+      {
+        untilKey: 'quotaDeferredUntil',
+        reasonKey: 'quotaDeferredReason',
+        atKey: 'quotaDeferredAt',
+        label: 'plan_quota',
+        clearKeys: QUOTA_DEFER_CLEAR_KEYS,
       },
     ];
     for (const deferConfig of deferredConfigs) {
@@ -189,8 +206,13 @@ class CampaignRunService {
         continue;
       }
       const untilMs = Date.parse(String(raw));
+      const keysToClear = deferConfig.clearKeys
+        || [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey];
       if (!Number.isFinite(untilMs)) {
-        await campaignRunRepository.clearDeferMetadataKeys(runId, [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]);
+        await campaignRunRepository.clearDeferMetadataKeys(runId, keysToClear);
+        if (deferConfig.label === 'plan_quota') {
+          this._quotaPauseNotifiedRunIds.delete(Number(runId));
+        }
         continue;
       }
       if (untilMs > Date.now()) {
@@ -212,9 +234,70 @@ class CampaignRunService {
         resumedBy: resumeContext?.resumedBy || 'campaign_run',
         step: null,
       });
-      await campaignRunRepository.clearDeferMetadataKeys(runId, [deferConfig.untilKey, deferConfig.reasonKey, deferConfig.atKey]);
+      await campaignRunRepository.clearDeferMetadataKeys(runId, keysToClear);
+      if (deferConfig.label === 'plan_quota') {
+        this._quotaPauseNotifiedRunIds.delete(Number(runId));
+      }
     }
     return false;
+  }
+
+  /**
+   * Fire-and-forget email khi hoãn vì plan quota (không chặn worker).
+   *
+   * @param {{ runId: number, campaignId: number, reason: string, resetAt: Date|string }} input
+   * @returns {void}
+   */
+  _notifyQuotaPausedFireAndForget(input) {
+    notifyCampaignQuotaPaused(input)
+      .then((result) => {
+        // Theo dõi mọi đợt plan_quota (kể cả đã claim cờ / thiếu email) để clear khi resume.
+        if (result?.skipped && result?.reason === 'not_plan_quota') return;
+        this._quotaPauseNotifiedRunIds.add(Number(input.runId));
+      })
+      .catch((err) => {
+        console.warn(
+          `[CampaignQuotaNotify] paused email failed run=${input?.runId}:`,
+          err?.message || err
+        );
+      });
+  }
+
+  /**
+   * Fire-and-forget email khi hard-fail vì hết hạn mức / gói hết hạn.
+   *
+   * @param {{ campaignId: number, reason?: string }} input
+   * @returns {void}
+   */
+  _notifyQuotaStoppedFireAndForget(input) {
+    notifyCampaignQuotaStopped(input).catch((err) => {
+      console.warn(
+        `[CampaignQuotaNotify] stopped email failed campaign=${input?.campaignId}:`,
+        err?.message || err
+      );
+    });
+  }
+
+  /**
+   * Xoá cờ/key quota-defer sau khi run tiến triển lại (gửi thành công hậu-resume).
+   * Chỉ đụng DB khi process này đã từng notify pause cho runId.
+   *
+   * @param {number} runId
+   * @returns {Promise<void>}
+   */
+  async _clearQuotaPauseStateAfterProgress(runId) {
+    const id = Number(runId);
+    if (!Number.isFinite(id) || !this._quotaPauseNotifiedRunIds.has(id)) return;
+    try {
+      await campaignRunRepository.clearDeferMetadataKeys(runId, QUOTA_DEFER_CLEAR_KEYS);
+    } catch (err) {
+      console.warn(
+        `[CampaignQuotaNotify] clear quota pause meta failed run=${runId}:`,
+        err?.message || err
+      );
+      return;
+    }
+    this._quotaPauseNotifiedRunIds.delete(id);
   }
 
   /**
@@ -355,16 +438,32 @@ class CampaignRunService {
    * @returns {Promise<never>}
    */
   async persistQuotaDeferYieldSlot({ runId, campaignId, waitMs, reason }) {
-    await this.persistRunDeferYieldSlot({
-      runId,
-      campaignId,
-      waitMs,
-      reason: String(reason || 'plan_quota'),
-      untilKey: 'quotaDeferredUntil',
-      reasonKey: 'quotaDeferredReason',
-      atKey: 'quotaDeferredAt',
-      label: 'Plan quota',
-    });
+    const reasonStr = String(reason || 'plan_quota');
+    const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
+    const resetAt = new Date(Date.now() + w);
+    try {
+      await this.persistRunDeferYieldSlot({
+        runId,
+        campaignId,
+        waitMs,
+        reason: reasonStr,
+        untilKey: 'quotaDeferredUntil',
+        reasonKey: 'quotaDeferredReason',
+        atKey: 'quotaDeferredAt',
+        label: 'Plan quota',
+      });
+    } catch (err) {
+      // Patch metadata đã xong trước khi throw RUN_YIELD_SLOT → notify sau patch, không await.
+      if (err?.code === 'RUN_YIELD_SLOT') {
+        this._notifyQuotaPausedFireAndForget({
+          runId,
+          campaignId,
+          reason: reasonStr,
+          resetAt,
+        });
+      }
+      throw err;
+    }
   }
 
   /**
@@ -1072,6 +1171,10 @@ class CampaignRunService {
         const quota = await checkSendQuota({ userId, channel });
         if (quota.allowed) return;
         if (!quota.resetAt) {
+          this._notifyQuotaStoppedFireAndForget({
+            campaignId,
+            reason: quota.message || 'Vượt giới hạn gửi của gói dịch vụ.',
+          });
           throw new Error(quota.message || 'Vượt giới hạn gửi của gói dịch vụ.');
         }
         const waitMs = Math.max(0, new Date(quota.resetAt).getTime() - Date.now());
@@ -3344,6 +3447,7 @@ class CampaignRunService {
               }
 
               successfulSends += 1;
+              void this._clearQuotaPauseStateAfterProgress(runId);
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const resultPayload = {
                 ...sendResult,
@@ -4568,6 +4672,7 @@ class CampaignRunService {
             }
           );
           successfulSends += 1;
+          void this._clearQuotaPauseStateAfterProgress(runId);
           const { sendResult, trackedMessage } = sendOutcome;
               const progressMessage = buildZaloPersonalProgressMessage();
               // UID resolved by Zalo API (always available after successful send)
@@ -5780,6 +5885,7 @@ class CampaignRunService {
                 message,
               });
               successfulSends += 1;
+              void this._clearQuotaPauseStateAfterProgress(runId);
               markZaloOutboundSuccess({ accountId: workingAccount.id, channel: 'zalo_friend_request' });
               const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const resultPayload = {
@@ -5896,6 +6002,7 @@ class CampaignRunService {
                     entryRow: entry?.row || null,
                   });
                   successfulSends += 1;
+                  void this._clearQuotaPauseStateAfterProgress(runId);
                   const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const alreadyFriendPayload = {
                     channel: 'zalo_friend_request',
@@ -6332,6 +6439,7 @@ class CampaignRunService {
                 attachments,
               });
               successfulSends += 1;
+              void this._clearQuotaPauseStateAfterProgress(runId);
               markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_group' });
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();

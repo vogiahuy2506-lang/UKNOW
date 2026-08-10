@@ -1,4 +1,5 @@
 import { useI18n } from '../../../i18n';
+import { Link } from 'react-router-dom';
 import {
   HiOutlineClock,
   HiOutlineEye,
@@ -11,6 +12,7 @@ import {
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import { filterSchedulesByCampaignId } from '../utils/campaignRunSchedule.helpers';
+import { getActivePlanQuotaPause } from '../utils/campaignQuotaPause.helpers';
 
 const CampaignRunMainTabs = ({
   activeMainTab,
@@ -159,6 +161,7 @@ const CampaignRunMainTabs = ({
                     : null;
                   const runId = Number.parseInt(runningRun?.id, 10);
                   const isStopping = Number.isFinite(runId) && stoppingRunIds.has(runId);
+                  const quotaPause = getActivePlanQuotaPause(runningRun?.runMetadata);
 
                   return (
                     <tr key={campaign.id} className="hover:bg-gray-50">
@@ -192,7 +195,7 @@ const CampaignRunMainTabs = ({
                               )}
                             </div>
                             {isRunning && (
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
                                 <span className="badge badge-warning flex items-center gap-1">
                                   <HiOutlineRefresh className="w-3 h-3 animate-spin" />
                                   {t('campaignRun.running')}
@@ -201,6 +204,21 @@ const CampaignRunMainTabs = ({
                                   <span className="text-xs text-emerald-600 font-medium">
                                     {t('campaignRun.continuousRunning', { interval: pollIntervalMinutes })}
                                   </span>
+                                )}
+                                {quotaPause && (
+                                  <>
+                                    <span className="badge badge-danger text-xs font-normal">
+                                      {t('campaignRun.quotaPausedUntil', {
+                                        until: formatCampaignDateTime(quotaPause.untilIso),
+                                      })}
+                                    </span>
+                                    <Link
+                                      to="/app/topup"
+                                      className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                                    >
+                                      {t('campaignRun.buyTopup')}
+                                    </Link>
+                                  </>
                                 )}
                               </div>
                             )}
