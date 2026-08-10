@@ -139,11 +139,12 @@ không_rõ
 ngoài_phạm_vi
 
 Quy tắc:
-- hỏi_đáp: hỏi CÁCH DÙNG hoặc VÌ SAO (how-to, khắc phục lỗi thao tác) — KHÔNG phải yêu cầu hệ thống làm hộ
+- hỏi_đáp: hỏi CÁCH DÙNG hoặc VÌ SAO (how-to, khắc phục lỗi thao tác), HOẶC hỏi thông tin đã/có thể có trong tài liệu hướng dẫn sản phẩm (FAQ, chính sách công khai, thông tin giới thiệu trên /huong-dan) — KHÔNG phải yêu cầu hệ thống làm hộ
 - làm_giúp: yêu cầu soạn/tạo/viết hộ chiến dịch, email, landing, nội dung marketing, tạo landing page, đọc/phân tích tệp đính kèm, chạy/sửa việc trong hệ thống
 - không_rõ: quá ngắn / thiếu ngữ cảnh (vd: "Zalo")
-- ngoài_phạm_vi: không liên quan sản phẩm (thời tiết, tin tức, kiến thức chung...)
-- Nếu phân vân giữa hỏi_đáp và làm_giúp → chọn làm_giúp`;
+- ngoài_phạm_vi: không liên quan sản phẩm Founder AI (thời tiết, tin tức thế giới, kiến thức chung không gắn nền tảng...)
+- Nếu phân vân giữa hỏi_đáp và làm_giúp → chọn làm_giúp
+- Nếu phân vân giữa hỏi_đáp và ngoài_phạm_vi mà câu hỏi có thể là FAQ sản phẩm → chọn hỏi_đáp`;
 
   const baseArgs = {
     userId,
@@ -185,7 +186,7 @@ Quy tắc:
   return parseRouteLabel(text);
 }
 
-async function answerWithDocs(question, userId, locale = 'vi') {
+async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallback = true } = {}) {
   const lang = normalizeLocale(locale);
   const copy = fixedReplies(lang);
   const capabilityMap = await getCapabilityMapText(lang);
@@ -206,6 +207,20 @@ async function answerWithDocs(question, userId, locale = 'vi') {
         type: 'text',
         content: sensitiveNoDocReply(lang),
         data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true, softFallback: false },
+      };
+    }
+
+    if (!allowSoftFallback) {
+      return {
+        type: 'text',
+        content: copy.noDocReply,
+        data: {
+          helpRoute: HELP_ROUTE_LABELS.hỏi_đáp,
+          sources: [],
+          unanswered: true,
+          softFallback: false,
+          topSimilarity,
+        },
       };
     }
 
@@ -359,6 +374,20 @@ export async function tryHandleHelpChat({ history, userId, locale = 'vi' } = {})
   }
 
   if (route === HELP_ROUTE_LABELS.ngoài_phạm_vi) {
+    // Vẫn thử RAG trước: bài hướng dẫn mới (FAQ, giới thiệu…) có thể khớp dù
+    // router nghĩ "kiến thức chung". Chỉ reject khi không có đoạn tài liệu.
+    // Tắt soft-fallback ở nhánh này — tránh trả lời thời tiết bằng capability map.
+    const docsAnswer = await answerWithDocs(question, userId, lang, { allowSoftFallback: false });
+    if (Array.isArray(docsAnswer?.data?.sources) && docsAnswer.data.sources.length > 0) {
+      return {
+        ...docsAnswer,
+        data: {
+          ...docsAnswer.data,
+          helpRoute: HELP_ROUTE_LABELS.hỏi_đáp,
+          recoveredFromOutOfScope: true,
+        },
+      };
+    }
     return {
       type: 'text',
       content: copy.outOfScope,

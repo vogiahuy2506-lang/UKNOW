@@ -78,7 +78,7 @@ describe('tryHandleHelpChat route branches', () => {
     expect(String(result.content || '')).toBeTruthy();
   });
 
-  it('ngoài_phạm_vi → OUT_OF_SCOPE (không null)', async () => {
+  it('ngoài_phạm_vi không có chunk → OUT_OF_SCOPE', async () => {
     mockGenerate.mockResolvedValue({ text: 'ngoài_phạm_vi', modelName: 'm', raw: {} });
     const result = await tryHandleHelpChat({
       history: historyWith('thời tiết hôm nay'),
@@ -87,6 +87,34 @@ describe('tryHandleHelpChat route branches', () => {
     expect(result).not.toBeNull();
     expect(result.data?.helpRoute).toBe(HELP_ROUTE_LABELS.ngoài_phạm_vi);
     expect(String(result.content || '')).toMatch(/ngoài phạm vi/i);
+  });
+
+  it('ngoài_phạm_vi nhưng có chunk khớp → trả lời từ tài liệu', async () => {
+    mockGenerate
+      .mockResolvedValueOnce({ text: 'ngoài_phạm_vi', modelName: 'm', raw: {} })
+      .mockResolvedValueOnce({
+        text: 'Chủ sở hữu Founder AI là Ngô Hữu Thống.',
+        modelName: 'm',
+        raw: {},
+      });
+    mockSearchHelpChunks.mockResolvedValue({
+      chunks: [{
+        slug: 'chu-so-huu',
+        title: 'Chủ sở hữu',
+        content_text: 'Tôi là Ngô Hữu Thống - Chủ sở hữu founderai',
+      }],
+      topSimilarity: 0.8,
+    });
+
+    const result = await tryHandleHelpChat({
+      history: historyWith('chủ sở hữu founder ai là ai'),
+      userId: 1,
+    });
+    expect(result).not.toBeNull();
+    expect(result.data?.helpRoute).toBe(HELP_ROUTE_LABELS.hỏi_đáp);
+    expect(result.data?.recoveredFromOutOfScope).toBe(true);
+    expect(result.data?.sources?.length).toBeGreaterThan(0);
+    expect(String(result.content || '')).toMatch(/Ngô Hữu Thống/i);
   });
 
   it('extractLastUserText rỗng → CLARIFY (không gọi route)', async () => {

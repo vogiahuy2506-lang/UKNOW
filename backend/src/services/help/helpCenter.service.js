@@ -162,7 +162,15 @@ export async function adminCreateArticle(payload, { actorUserId } = {}) {
   if (!cleaned.locale) cleaned.locale = 'vi';
   const created = await helpRepo.createArticle(cleaned);
   if (created.is_published) {
-    await reindexArticle(created.id, { actorUserId });
+    try {
+      await reindexArticle(created.id, { actorUserId });
+    } catch (err) {
+      // Bài đã lưu — không fail cả request nếu embed lỗi; admin bấm Reindex lại.
+      console.warn(
+        `[help] reindex after create failed article=${created.id}:`,
+        err?.message || err
+      );
+    }
   }
   _clearCapabilityMapCache();
   return created;
