@@ -118,7 +118,9 @@ jobs:
               -v /root/uknow/certbot:/var/www/certbot:ro \
               -v /root/uknow/nginx-domains:/etc/nginx/domains:ro \
               "$FRONTEND_IMAGE"
-            docker image prune -f
+            # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
+            # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
+            docker image prune -af --filter "until=24h"
             echo "Chờ nginx khởi động..."
             sleep 5
             if curl --noproxy '*' --retry 5 --retry-delay 2 --retry-connrefused -kfsS \

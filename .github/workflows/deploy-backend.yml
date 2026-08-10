@@ -130,7 +130,9 @@ jobs:
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
               -v /root/uknow/scripts/ssl-auto-provision.sh:/opt/uknow/ssl-auto-provision.sh:ro \
               "$BACKEND_IMAGE"
-            docker image prune -f
+            # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
+            # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
+            docker image prune -af --filter "until=24h"
             echo "Chờ server khởi động (DB recovery có thể mất ~30s)..."
             sleep 15
             if curl --retry 8 --retry-delay 5 --retry-connrefused -sf http://localhost:5001/api/health > /dev/null; then
