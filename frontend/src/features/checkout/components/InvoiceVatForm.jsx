@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HiOutlineX } from 'react-icons/hi';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../i18n';
 
 /** Keep in sync with backend DEFAULT_INVOICE_VAT_RATE / INVOICE_VAT_RATE. */
 export const DEFAULT_FE_INVOICE_VAT_RATE = 10;
