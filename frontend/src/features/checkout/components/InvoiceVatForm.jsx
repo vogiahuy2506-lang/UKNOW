@@ -1,0 +1,227 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { HiOutlineX } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
+
+/** Keep in sync with backend DEFAULT_INVOICE_VAT_RATE / INVOICE_VAT_RATE. */
+export const DEFAULT_FE_INVOICE_VAT_RATE = 10;
+
+export function computeDisplayVat(net, wantInvoice, vatRate = DEFAULT_FE_INVOICE_VAT_RATE) {
+  const n = Math.round(Number(net) || 0);
+  if (!wantInvoice || n <= 0) {
+    return { net: n, vatAmount: 0, gross: n, vatRate };
+  }
+  const vatAmount = Math.round((n * vatRate) / 100);
+  return { net: n, vatAmount, gross: n + vatAmount, vatRate };
+}
+
+/**
+ * Shared VAT invoice form for Checkout + Topup.
+ * Parent owns display of totals; this emits payload via onChange.
+ */
+export default function InvoiceVatForm({
+  netAmount = 0,
+  disabled = false,
+  defaultEmail = '',
+  onChange,
+  className = '',
+}) {
+  const { t } = useI18n();
+  const vatRate = DEFAULT_FE_INVOICE_VAT_RATE;
+  const net = Math.round(Number(netAmount) || 0);
+  const canRequest = net > 0 && !disabled;
+
+  const [wantInvoice, setWantInvoice] = useState(true);
+  const [buyerType, setBuyerType] = useState('company');
+  const [taxCode, setTaxCode] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [email, setEmail] = useState(defaultEmail || '');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+
+  const effectiveWant = canRequest && wantInvoice;
+
+  const payload = useMemo(() => {
+    if (!effectiveWant) {
+      return { wantInvoice: false };
+    }
+    const base = {
+      wantInvoice: true,
+      buyerType,
+      email: String(email || '').trim(),
+      phone: String(phone || '').trim() || undefined,
+      address: String(address || '').trim() || undefined,
+    };
+    if (buyerType === 'company') {
+      return {
+        ...base,
+        taxCode: String(taxCode || '').trim(),
+        companyName: String(companyName || '').trim(),
+        companyAddress: String(companyAddress || '').trim() || undefined,
+      };
+    }
+    return {
+      ...base,
+      fullName: String(fullName || '').trim(),
+      idNumber: String(idNumber || '').trim(),
+    };
+  }, [
+    effectiveWant,
+    buyerType,
+    email,
+    phone,
+    address,
+    taxCode,
+    companyName,
+    companyAddress,
+    fullName,
+    idNumber,
+  ]);
+
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.(payload);
+  }, [payload]);
+
+  useEffect(() => {
+    if (defaultEmail && !email) setEmail(defaultEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultEmail]);
+
+  if (!canRequest) return null;
+
+  if (!wantInvoice) {
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={() => setWantInvoice(true)}
+          className="w-full rounded-xl border border-dashed border-slate-300 bg-white/50 px-3 py-2.5 text-left text-sm text-slate-600 hover:border-orange-300 hover:bg-orange-50/40 transition-colors"
+        >
+          {t('invoiceVat.reopenBanner')}
+        </button>
+      </div>
+    );
+  }
+
+  const inputClass =
+    'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
+
+  return (
+    <div className={`rounded-xl border border-orange-200/80 bg-orange-50/50 ${className}`}>
+      <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{t('invoiceVat.bannerTitle')}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {t('invoiceVat.vatAdditiveNote', { rate: vatRate })}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label={t('invoiceVat.dismiss')}
+          onClick={() => setWantInvoice(false)}
+          className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-white/80 hover:text-slate-700 transition-colors"
+        >
+          <HiOutlineX className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="flex gap-1 px-3 mb-3">
+        <button
+          type="button"
+          onClick={() => setBuyerType('company')}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+            buyerType === 'company'
+              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
+              : 'text-slate-500 hover:bg-white/60'
+          }`}
+        >
+          {t('invoiceVat.tabCompany')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setBuyerType('personal')}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+            buyerType === 'personal'
+              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
+              : 'text-slate-500 hover:bg-white/60'
+          }`}
+        >
+          {t('invoiceVat.tabPersonal')}
+        </button>
+      </div>
+
+      <div className="space-y-2 px-3 pb-3">
+        {buyerType === 'company' ? (
+          <>
+            <input
+              className={inputClass}
+              value={taxCode}
+              onChange={(e) => setTaxCode(e.target.value)}
+              placeholder={t('invoiceVat.taxCode')}
+              maxLength={14}
+              autoComplete="off"
+            />
+            <input
+              className={inputClass}
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder={t('invoiceVat.companyName')}
+              autoComplete="organization"
+            />
+            <input
+              className={inputClass}
+              value={companyAddress}
+              onChange={(e) => setCompanyAddress(e.target.value)}
+              placeholder={t('invoiceVat.companyAddress')}
+              autoComplete="street-address"
+            />
+          </>
+        ) : (
+          <>
+            <input
+              className={inputClass}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder={t('invoiceVat.fullName')}
+              autoComplete="name"
+            />
+            <input
+              className={inputClass}
+              value={idNumber}
+              onChange={(e) => setIdNumber(e.target.value)}
+              placeholder={t('invoiceVat.idNumber')}
+              maxLength={12}
+              autoComplete="off"
+            />
+            <input
+              className={inputClass}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={t('invoiceVat.address')}
+              autoComplete="street-address"
+            />
+          </>
+        )}
+        <input
+          className={inputClass}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t('invoiceVat.email')}
+          autoComplete="email"
+        />
+        <input
+          className={inputClass}
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder={t('invoiceVat.phone')}
+          autoComplete="tel"
+        />
+      </div>
+    </div>
+  );
+}

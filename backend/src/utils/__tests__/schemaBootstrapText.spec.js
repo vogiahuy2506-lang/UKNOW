@@ -61,6 +61,17 @@ describe('bootstrap.sql text parity (S-2)', () => {
     expect(ordersBody).toMatch(/topup_config\s+JSONB/i);
   });
 
+  it('orders declares invoice_info JSONB (migration 120)', () => {
+    expect(ordersBody).toMatch(/invoice_info\s+JSONB/i);
+  });
+
+  it('bootstrap declares einvoices (migration 121)', () => {
+    expect(bootstrapSql).toMatch(/CREATE TABLE einvoices\s*\(/i);
+    const body = tableBody(bootstrapSql, 'einvoices');
+    expect(body).toMatch(/ma_tra_cuu\s+VARCHAR/i);
+    expect(body).toMatch(/pdf_url\s+TEXT/i);
+  });
+
   it('bootstrap declares help center tables (migration 100)', () => {
     expect(bootstrapSql).toMatch(/CREATE TABLE help_articles\s*\(/i);
     expect(bootstrapSql).toMatch(/CREATE TABLE help_article_chunks\s*\(/i);

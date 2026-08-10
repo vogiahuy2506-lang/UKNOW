@@ -36,6 +36,11 @@ jest.unstable_mockModule('../payosOrderFulfillment.service.js', () => ({
   fulfillPaidOrder: mockFulfill,
 }));
 
+jest.unstable_mockModule('../matbaoInvoice.service.js', () => ({
+  scheduleIssueInvoiceAfterCommit: jest.fn(),
+  EINVOICE_RECONCILE_JOB_CODE: 'einvoice_matbao_retry',
+}));
+
 const {
   applyPayosLinkToPendingOrder,
   reconcileRecentPendingOrders,

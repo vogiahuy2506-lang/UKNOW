@@ -6,6 +6,8 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
+import InvoiceVatForm, { computeDisplayVat } from '../../features/checkout/components/InvoiceVatForm';
+import { isInvoiceVatUiEnabled } from '../../constants/invoiceVat';
 import { trackEvent } from '../../utils/analytics';
 import QRCode from 'qrcode';
 
@@ -77,10 +79,17 @@ const CheckoutPage = () => {
     const [voucherCode, setVoucherCode] = useState('');
     const [voucherLoading, setVoucherLoading] = useState(false);
     const [paymentStarted, setPaymentStarted] = useState(false);
+    const [invoiceInfo, setInvoiceInfo] = useState({ wantInvoice: false });
+    const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
 
     const appliedVoucher = manualVoucher || autoPromotion;
     const discountAmount = Number(appliedVoucher?.discountAmount || 0);
     const finalAmount = Math.max(0, displayPrice - discountAmount);
+    const vatBreakdown = computeDisplayVat(
+        finalAmount,
+        invoiceVatUiEnabled && Boolean(invoiceInfo?.wantInvoice),
+    );
+    const payableAmount = vatBreakdown.gross;
     const hasManualVoucherInList = manualVoucher
         ? codeVouchers.some((voucher) => voucher.code === manualVoucher.code)
         : false;
@@ -107,7 +116,7 @@ const CheckoutPage = () => {
             setLoading(true);
             trackEvent('begin_checkout', {
                 currency: 'VND',
-                value: finalAmount,
+                value: payableAmount,
                 items: [{ item_id: voucherPlanCode, item_name: planName }],
             });
             const userEmail = location.state?.userEmail || user?.email;
@@ -128,6 +137,7 @@ const CheckoutPage = () => {
                     billingPeriod,
                     voucherCode: appliedVoucher?.code || null,
                     reusePlanId,
+                    invoiceInfo: invoiceVatUiEnabled ? invoiceInfo : { wantInvoice: false },
                 });
                 if (!data.success) throw new Error(data.message);
 
@@ -163,6 +173,7 @@ const CheckoutPage = () => {
                 planCode: plan.code,
                 billingPeriod,
                 voucherCode: appliedVoucher?.code || null,
+                invoiceInfo: invoiceVatUiEnabled ? invoiceInfo : { wantInvoice: false },
             });
             if (!data.success) throw new Error(data.message);
 
@@ -339,15 +350,32 @@ const CheckoutPage = () => {
                                             <span className="font-semibold">-{fmtVnd(discountAmount)}</span>
                                         </div>
                                     )}
+                                    {invoiceVatUiEnabled && Boolean(invoiceInfo?.wantInvoice) && vatBreakdown.vatAmount > 0 && (
+                                        <div className="flex justify-between text-slate-500 text-xs">
+                                            <span>{t('checkout.vatLine', { rate: vatBreakdown.vatRate })}</span>
+                                            <span className="font-medium text-slate-700">+{fmtVnd(vatBreakdown.vatAmount)}</span>
+                                        </div>
+                                    )}
                                     <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center">
                                         <div>
                                             <span className="block text-sm font-bold text-slate-800">{t('checkout.total')}</span>
-                                            <span className="text-[10px] text-slate-400">{t('checkout.vatIncluded')}</span>
+                                            <span className="text-[10px] text-slate-400">
+                                                {invoiceVatUiEnabled ? t('checkout.vatIncluded') : null}
+                                            </span>
                                         </div>
-                                        <span className="text-2xl font-black text-slate-900">{fmtVnd(finalAmount)}</span>
+                                        <span className="text-2xl font-black text-slate-900">{fmtVnd(payableAmount)}</span>
                                     </div>
                                 </div>
                             </div>
+
+                            {invoiceVatUiEnabled && (
+                                <InvoiceVatForm
+                                    netAmount={finalAmount}
+                                    disabled={paymentStarted}
+                                    defaultEmail={user?.email || ''}
+                                    onChange={setInvoiceInfo}
+                                />
+                            )}
 
                             {/* Divider */}
                             <div className="border-t border-slate-200/60" />
@@ -482,7 +510,7 @@ const CheckoutPage = () => {
                                     ) : (
                                         <div className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl shrink-0">
                                             <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-0.5">{t('checkout.amountDue')}</p>
-                                            <span className="font-bold text-white text-xl">{fmtVnd(finalAmount)}</span>
+                                            <span className="font-bold text-white text-xl">{fmtVnd(payableAmount)}</span>
                                         </div>
                                     )}
 
@@ -501,7 +529,7 @@ const CheckoutPage = () => {
                                                 )}
                                             </div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
-                                                {paymentStarted ? t('checkout.scanToPay') : t('checkout.payAmount', { amount: fmtVnd(finalAmount) })}
+                                                {paymentStarted ? t('checkout.scanToPay') : t('checkout.payAmount', { amount: fmtVnd(payableAmount) })}
                                             </p>
                                         </div>
 

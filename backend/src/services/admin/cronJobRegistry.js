@@ -144,6 +144,14 @@ export const CRON_JOBS = [
     impact: 'Bài mới/sửa khi embedding lỗi chỉ tìm được bằng keyword ASCII; câu tiếng Việt có dấu dễ trượt cho đến khi backfill chạy.',
     tracked: true,
   },
+  {
+    code: 'einvoice_matbao_retry',
+    label: 'Retry xuất hoá đơn Mắt Bão',
+    schedule: 'Mỗi 15 phút',
+    description: 'Thử lại các einvoices failed với mã lỗi ký lại được (315/321/…/timeout). Không retry hết số (327) hay lỗi credentials.',
+    impact: 'Khách đã trả tiền (gồm VAT) nhưng chưa nhận được hoá đơn điện tử nếu API Mắt Bão lỗi tạm thời.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {

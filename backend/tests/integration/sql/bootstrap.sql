@@ -259,6 +259,7 @@ CREATE TABLE orders (
   voucher_id  BIGINT,
   voucher_code VARCHAR(64),
   topup_config JSONB,
+  invoice_info JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)
@@ -267,6 +268,34 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
+
+-- Electronic invoices (migration 121)
+CREATE TABLE einvoices (
+  id               BIGSERIAL PRIMARY KEY,
+  order_id         INTEGER      NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  ma_tra_cuu       VARCHAR(100) NOT NULL,
+  mtchieu          VARCHAR(20)  NOT NULL,
+  khmshdon         VARCHAR(20),
+  khhdon           VARCHAR(20),
+  ma_so_hdon       TEXT,
+  so_hdon          VARCHAR(64),
+  status           VARCHAR(32)  NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'issued', 'failed', 'cqt_ok', 'cqt_rejected')),
+  cqt_code         VARCHAR(64),
+  error_code       VARCHAR(64),
+  error_message    TEXT,
+  pdf_url          TEXT,
+  request_payload  JSONB,
+  response_payload JSONB,
+  issued_at        TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT einvoices_order_id_key UNIQUE (order_id),
+  CONSTRAINT einvoices_ma_tra_cuu_key UNIQUE (ma_tra_cuu)
+);
+
+CREATE INDEX idx_einvoices_status_retry
+  ON einvoices (status, error_code, updated_at);
 
 -- ─── Top-up pricing & grants (migration 099) ───────────────────────────
 CREATE TABLE topup_pricing (

@@ -61,7 +61,7 @@ export const quote = async (req, res) => {
 
 export const createPayment = async (req, res) => {
   try {
-    const { quantities, months } = req.body || {};
+    const { quantities, months, invoiceInfo = null } = req.body || {};
     if (!quantities || typeof quantities !== 'object') {
       return res.status(400).json({ success: false, message: 'Thiếu quantities' });
     }
@@ -71,6 +71,7 @@ export const createPayment = async (req, res) => {
       ownerContextId: ownerContextId(req),
       quantities,
       months,
+      invoiceInfo,
     });
     res.json({ success: true, message: 'Tạo liên kết thanh toán mua thêm thành công', result });
   } catch (err) {

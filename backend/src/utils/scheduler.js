@@ -1033,4 +1033,29 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Help reembed pending: mỗi 30 phút');
+
+  // ── Mat Bao e-invoice retry (failed with retryable codes) ─────────────────
+  cron.schedule('7-59/15 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        retryFailedEinvoices,
+        EINVOICE_RECONCILE_JOB_CODE,
+      } = await import('../services/payment/matbaoInvoice.service.js');
+      await cronJobRunRepository.recordRun(EINVOICE_RECONCILE_JOB_CODE, async () => {
+        const summary = await retryFailedEinvoices({ limit: 20 });
+        if (summary.issued > 0) {
+          console.log(
+            `[Scheduler] Mat Bao invoice retry: issued=${summary.issued} retried=${summary.retried}`,
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi retry hoá đơn Mắt Bão:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Mat Bao invoice retry: mỗi 15 phút');
 };

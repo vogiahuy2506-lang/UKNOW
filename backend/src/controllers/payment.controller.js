@@ -2,7 +2,7 @@ import * as paymentService from '../services/payment/payment.service.js';
 
 export const createPayment = async (req, res) => {
     try {
-        const { planCode, billingPeriod = 'monthly', voucherCode = null } = req.body;
+        const { planCode, billingPeriod = 'monthly', voucherCode = null, invoiceInfo = null } = req.body;
         const userEmail = req.user?.email;
         if (!planCode || !userEmail) {
             return res.status(400).json({ error: 'Thiếu planCode hoặc thông tin người dùng' });
@@ -17,6 +17,7 @@ export const createPayment = async (req, res) => {
             userId: req.user.id,
             billingPeriod,
             voucherCode,
+            invoiceInfo,
         });
         res.json({ success: true, message: 'Tạo liên kết thanh toán thành công', result });
     } catch (err) {
@@ -32,6 +33,7 @@ export const createCustomPayment = async (req, res) => {
             billingPeriod = 'monthly',
             voucherCode = null,
             reusePlanId = null,
+            invoiceInfo = null,
         } = req.body || {};
 
         if (!quantities || typeof quantities !== 'object') {
@@ -48,6 +50,7 @@ export const createCustomPayment = async (req, res) => {
             billingPeriod,
             voucherCode,
             reusePlanId: reusePlanId ? Number(reusePlanId) : null,
+            invoiceInfo,
         });
         res.json({ success: true, message: 'Tạo liên kết thanh toán gói tự chọn thành công', result });
     } catch (err) {

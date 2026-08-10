@@ -19,13 +19,14 @@ export const createOrder = async ({
     voucherId = null,
     voucherCode = null,
     topupConfig = null,
+    invoiceInfo = null,
 }, queryable = db) => {
     const { rows } = await queryable.query(
         `INSERT INTO orders (
             order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
-            original_amount, discount_amount, voucher_id, voucher_code, topup_config, created_at
+            original_amount, discount_amount, voucher_id, voucher_code, topup_config, invoice_info, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW()) RETURNING *`,
         [
             orderCode,
             planId,
@@ -41,6 +42,7 @@ export const createOrder = async ({
             voucherId,
             voucherCode,
             topupConfig ? JSON.stringify(topupConfig) : null,
+            invoiceInfo ? JSON.stringify(invoiceInfo) : null,
         ]
     );
     return rows[0];
@@ -67,7 +69,7 @@ export const claimOrderSuccess = async (orderCode, queryable = db) => {
            AND status NOT IN ('success', 'cancelled', 'failed')
          RETURNING id, user_id, plan_id, user_email, billing_period,
                    amount, voucher_id, voucher_code, discount_amount,
-                   note, topup_config, order_code, payment_method`,
+                   note, topup_config, invoice_info, order_code, payment_method`,
         [orderCode]
     );
     return rows[0] || null;

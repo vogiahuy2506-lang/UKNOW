@@ -30,6 +30,8 @@ import {
     tryFulfillPendingOrderOnStatusCheck,
 } from './payosReconcile.service.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
+import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
+import { scheduleIssueInvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -69,7 +71,14 @@ const assertNoImmediateDowngrade = async ({ targetPlan, userId }) => {
  */
 const generateOrderCode = () => Date.now() * 100 + crypto.randomInt(0, 100);
 
-export const createPaymentLink = async ({ planCode, userEmail, userId = null, billingPeriod = 'monthly', voucherCode = null }) => {
+export const createPaymentLink = async ({
+    planCode,
+    userEmail,
+    userId = null,
+    billingPeriod = 'monthly',
+    voucherCode = null,
+    invoiceInfo: invoiceInfoRaw = null,
+}) => {
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
     await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
@@ -148,6 +157,10 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
             amount = Number(voucher.finalAmount || 0);
         }
 
+        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
+        amount = priced.amount;
+        const invoiceInfo = priced.invoiceInfo;
+
         order = await createOrder({
             orderCode,
             planId: plan.id,
@@ -161,6 +174,7 @@ export const createPaymentLink = async ({ planCode, userEmail, userId = null, bi
             voucherCode: voucher?.code || null,
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
+            invoiceInfo,
         }, client);
 
         if (amount <= 0) {
@@ -272,6 +286,7 @@ export const handleWebhook = async (body) => {
 
             await fulfillPaidOrder(order, client);
             await client.query('COMMIT');
+            scheduleIssueInvoiceAfterCommit(order);
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -357,6 +372,7 @@ export const createCustomPaymentLink = async ({
     billingPeriod = 'monthly',
     voucherCode = null,
     reusePlanId = null,
+    invoiceInfo: invoiceInfoRaw = null,
 }) => {
     if (!userId || !userEmail) {
         throw { status: 401, message: 'Yêu cầu đăng nhập' };
@@ -526,6 +542,10 @@ export const createCustomPaymentLink = async ({
             amount = Number(voucher.finalAmount || 0);
         }
 
+        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
+        amount = priced.amount;
+        const invoiceInfo = priced.invoiceInfo;
+
         order = await createOrder({
             orderCode,
             planId: plan.id,
@@ -540,6 +560,7 @@ export const createCustomPaymentLink = async ({
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
             note: 'custom_self_serve',
+            invoiceInfo,
         }, client);
 
         if (amount <= 0) {

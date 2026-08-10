@@ -27,6 +27,7 @@ import {
 } from '../../repositories/payment/payment.repository.js';
 import { getPayosPendingWindowMinutes } from '../../repositories/voucher.repository.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
+import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
 import { _clearQuotaCache } from '../../utils/userSendLimit.util.js';
 import crypto from 'crypto';
 
@@ -247,6 +248,7 @@ export async function createTopupPaymentLink({
   ownerContextId,
   quantities = {},
   months: rawMonths,
+  invoiceInfo: invoiceInfoRaw = null,
 } = {}) {
   if (!userId || !userEmail) throw { status: 401, message: 'Yêu cầu đăng nhập' };
 
@@ -263,7 +265,10 @@ export async function createTopupPaymentLink({
     };
   }
 
-  const amount = Math.round(quote.total);
+  const net = Math.round(quote.total);
+  const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, net);
+  const amount = priced.amount;
+  const invoiceInfo = priced.invoiceInfo;
   const orderCode = generateOrderCode();
   const pendingWindowMinutes = await getPayosPendingWindowMinutes();
   const reuseWindowMinutes = Math.max(1, Number(pendingWindowMinutes) - 2);
@@ -271,7 +276,7 @@ export async function createTopupPaymentLink({
     quantities: quote.quantities,
     billingUserId: quote.billingUserId,
     items: quote.items,
-    total: amount,
+    total: net,
     months: quote.months,
   };
 
@@ -294,12 +299,13 @@ export async function createTopupPaymentLink({
       userEmail,
       userId,
       billingPeriod: 'monthly',
-      originalAmount: amount,
+      originalAmount: net,
       discountAmount: 0,
       status: 'pending',
       paymentMethod: 'payos',
       note: 'topup',
       topupConfig,
+      invoiceInfo,
     }, client);
     await client.query('COMMIT');
   } catch (err) {
