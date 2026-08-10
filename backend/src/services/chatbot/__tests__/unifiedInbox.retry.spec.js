@@ -58,6 +58,13 @@ jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({
   default: { sendReply: mockSendReply },
 }));
 
+// sendMessage nay goi buildAiPausePayload -> getCachedAutoResumeMinutes (db.query that).
+// Mock de unit test khong cham DB (tranh reject tre gay "Cannot log after tests are done" tren CI).
+jest.unstable_mockModule('../../../utils/aiHandoffResume.util.js', () => ({
+  getCachedAutoResumeMinutes: jest.fn(async () => null),
+  computeAiResumeAt: jest.fn(() => null),
+}));
+
 const unifiedInboxService = (await import('../unifiedInbox.service.js')).default;
 
 describe('UnifiedInbox send status + retry', () => {
