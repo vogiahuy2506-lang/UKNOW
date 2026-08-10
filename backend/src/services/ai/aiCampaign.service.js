@@ -31,6 +31,7 @@ import {
   isWizardMarkerMessage,
   normalizeChannel,
   shouldGuardCampaignResponse,
+  withDeadEndNudge,
 } from './aiCampaignWizard.service.js';
 
 class AiCampaignService {
@@ -476,10 +477,11 @@ QUY TẮC:
       const marker = parseWizardMarker(lastUserText);
       const nextGate = evaluateNextGate(mergedGates, wizardResources, locale);
       if (nextGate?.response) {
+        const _wizard = buildWizard(nextGate.gate || null);
         return {
-          ...nextGate.response,
+          ...withDeadEndNudge(nextGate.response, _wizard.meta, nextGate.gate || null, locale),
           wizardShortCircuit: true,
-          _wizard: buildWizard(nextGate.gate || null),
+          _wizard,
         };
       }
 
@@ -1093,9 +1095,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       };
     }
 
+    const _wizard = buildWizard(guarded.gateAsked, planChange);
     return {
-      ...finalResponse,
-      _wizard: buildWizard(guarded.gateAsked, planChange),
+      ...withDeadEndNudge(finalResponse, _wizard.meta, guarded.gateAsked, locale),
+      _wizard,
     };
   }
 

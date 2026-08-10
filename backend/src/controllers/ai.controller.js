@@ -233,7 +233,7 @@ class AiController {
 
         if (_wizard) {
           // Dead-end: cùng 1 gate bị hỏi lần thứ 3 liên tiếp → log 1 lần cho mỗi streak
-          if (_wizard.gateAsked && _wizard.meta.lastGateCount >= 3 && !_wizard.meta.deadEndLoggedAt) {
+          if (_wizard.gateAsked && _wizard.meta.lastGateCount >= 2 && !_wizard.meta.deadEndLoggedAt) {
             _wizard.meta.deadEndLoggedAt = new Date().toISOString();
             auditService.log({
               userId: req.user.id,

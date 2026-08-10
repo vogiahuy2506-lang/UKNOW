@@ -35,6 +35,10 @@ import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
+const PLAN_APPROVE_REGEX =
+  /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
+const PLAN_CANCEL_REGEX =
+  /^\s*(huỷ|hủy|huy|cancel|dừng|dung|thôi|thoi|stop)\s*$/i;
 
 const normalizeChannel = (channel) => {
   const lower = String(channel || '').trim().toLowerCase();
@@ -1338,8 +1342,29 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const shouldHandlePlanConfirmationByText = (text) => {
     if (!text || !contentPlanWorkflow) return false;
+    // Khi đang chờ duyệt plan — không dùng nhánh day-confirm (thiếu approve_plan).
+    const waitingPlanApproval = contentPlanWorkflow.requiresApproval !== false
+      && !contentPlanWorkflow.planApproved
+      && contentPlanWorkflow.status === 'waiting_day_confirm';
+    if (waitingPlanApproval) return false;
     if (!DAY_CONFIRM_REGEX.test(text.trim())) return false;
     return contentPlanWorkflow.awaitingDayConfirm || contentPlanWorkflow.awaitingCampaignConfirm;
+  };
+
+  const handleCancelPlanByText = async () => {
+    enqueueWizardPatch('reset_plan');
+    setContentPlanWorkflow(null);
+    setPendingCampaignData(null);
+    setPendingCampaignPrompt(null);
+    setMessages((prev) => [...prev, {
+      role: 'user',
+      content: locale === 'en' ? 'cancel' : 'huỷ',
+    }, {
+      role: 'assistant',
+      content: locale === 'en'
+        ? 'Stopped. The content plan was cleared. Tell me if you want to start a new campaign.'
+        : 'Đã dừng. Kế hoạch nội dung đã được xoá. Bạn muốn tạo chiến dịch mới thì nói mình nhé.',
+    }]);
   };
 
   const handlePlanConfirmationByText = async () => {
@@ -1683,6 +1708,46 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (isSendingRef.current) return;
     const trimmedInput = inputText.trim();
     if (!trimmedInput && !uploadedFiles.length) return;
+
+    // Huỷ plan/wizard bằng free-text — trước mọi nhánh chat.
+    if (
+      trimmedInput
+      && uploadedFiles.length === 0
+      && PLAN_CANCEL_REGEX.test(trimmedInput)
+      && contentPlanWorkflow
+    ) {
+      isSendingRef.current = true;
+      setInputText('');
+      try {
+        await handleCancelPlanByText();
+      } finally {
+        isSendingRef.current = false;
+      }
+      return;
+    }
+
+    // Duyệt kế hoạch: mirror nút Đồng ý (approve_plan + generate day 1).
+    const waitingPlanApproval = Boolean(
+      contentPlanWorkflow
+      && contentPlanWorkflow.requiresApproval !== false
+      && !contentPlanWorkflow.planApproved
+      && contentPlanWorkflow.status === 'waiting_day_confirm'
+    );
+    if (
+      trimmedInput
+      && uploadedFiles.length === 0
+      && waitingPlanApproval
+      && PLAN_APPROVE_REGEX.test(trimmedInput)
+    ) {
+      isSendingRef.current = true;
+      setInputText('');
+      try {
+        await handleApproveContentPlan();
+      } finally {
+        isSendingRef.current = false;
+      }
+      return;
+    }
 
     if (trimmedInput && uploadedFiles.length === 0 && shouldHandlePlanConfirmationByText(trimmedInput)) {
       isSendingRef.current = true;

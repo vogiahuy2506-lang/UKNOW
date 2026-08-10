@@ -113,6 +113,49 @@ export const isContentPlanRevisionText = (text = '') => {
   return /góp ý chỉnh kế hoạch|chỉnh lại content_plan|plan revision:/i.test(value);
 };
 
+/** Whole-message approve — dùng khi đang chờ cổng planApproved (không gồm "được"). */
+export const PLAN_APPROVE_TEXT_RE =
+  /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
+
+export const PLAN_CANCEL_TEXT_RE =
+  /^\s*(huỷ|hủy|huy|cancel|dừng|dung|thôi|thoi|stop)\s*$/i;
+
+export function isPlanApproveText(text = '') {
+  return PLAN_APPROVE_TEXT_RE.test(String(text || '').trim());
+}
+
+export function isPlanCancelText(text = '') {
+  return PLAN_CANCEL_TEXT_RE.test(String(text || '').trim());
+}
+
+/**
+ * Khi cùng 1 gate bị hỏi lại (lastGateCount >= 2), đổi content để có lối thoát.
+ * Không hardcode "Đồng ý" cho mọi gate.
+ */
+export function withDeadEndNudge(response, meta = {}, gateAsked = null, locale = 'vi') {
+  if (!response || !gateAsked) return response;
+  const count = Number(meta?.lastGateCount) || 0;
+  if (count < 2) return response;
+
+  const isEn = String(locale || 'vi').toLowerCase() === 'en';
+  const nudge = gateAsked === 'planApproved'
+    ? (isEn
+      ? 'Please click **Approve** above, or type **agree** / **ok**. To stop, type **cancel**.'
+      : 'Bạn bấm **Đồng ý** ở trên, hoặc gõ **đồng ý** / **ok**. Muốn dừng thì gõ **huỷ**.')
+    : (isEn
+      ? 'Please pick an option above. To stop this flow, type **cancel**.'
+      : 'Bạn chọn một lựa chọn phía trên nhé. Muốn dừng thì gõ **huỷ**.');
+
+  const base = String(response.content || '').trim();
+  if (base.includes('huỷ') || base.toLowerCase().includes('cancel')) {
+    return response;
+  }
+  return {
+    ...response,
+    content: base ? `${base}\n\n${nudge}` : nudge,
+  };
+}
+
 const getAssistantData = (message) => message?.data || null;
 
 export function extractWizardState(history = []) {
@@ -179,6 +222,15 @@ export function extractWizardState(history = []) {
     }
 
     if (!marker) {
+      // Free-text duyệt kế hoạch — PHẢI trước return (reload / không có marker nút).
+      if (
+        message?.role === 'user'
+        && state.hasContentPlan
+        && !state.planApproved
+        && isPlanApproveText(content)
+      ) {
+        state.planApproved = true;
+      }
       // User dán link Google Sheet dưới dạng tin nhắn thường — lấy link mới nhất
       if (message?.role === 'user') {
         const sheetMatch = content.match(GOOGLE_SHEET_URL_RE);

@@ -72,6 +72,27 @@ QUY TẮC LIÊN KẾT (bắt buộc):
 const OVERVIEW_RE =
   /làm được gì|làm những gì|làm gì|giúp (được )?gì|hỗ trợ (được )?gì|dùng để làm gì|tính năng|chức năng|hệ thống .+ (gì|nào)|overview|capabilit|what can (you|it|i) do|what can i do|features?|how does .+ work/i;
 
+/** Chủ đề nhạy — không best-effort khi thiếu chunk (tránh bịa tiền/pháp lý). */
+export const SENSITIVE_HELP_TOPIC_RE =
+  /giá gói|bảng giá|pricing|hoá đơn|hóa đơn|thanh toán|hoàn tiền|hoan tien|refund|invoice|billing|mật khẩu|mat khau|đăng nhập|dang nhap|mã số thuế|ma so thue/i;
+
+export function isSensitiveHelpTopic(question = '') {
+  return SENSITIVE_HELP_TOPIC_RE.test(String(question || ''));
+}
+
+function softFallbackIntro(locale) {
+  return normalizeLocale(locale) === 'en'
+    ? 'I do not have an official help article for this yet, but typically…'
+    : 'Mình chưa có tài liệu chính thức phần này, nhưng thường thì…';
+}
+
+function sensitiveNoDocReply(locale) {
+  const copy = fixedReplies(locale);
+  return normalizeLocale(locale) === 'en'
+    ? `I should not guess on billing, login, or legal details without an official guide. ${copy.contactHint}`
+    : `Mình không nên đoán thông tin về thanh toán, đăng nhập hoặc pháp lý khi chưa có hướng dẫn chính thức. ${copy.contactHint}`;
+}
+
 function extractLastUserText(history = []) {
   for (let i = history.length - 1; i >= 0; i -= 1) {
     const msg = history[i];
@@ -179,10 +200,65 @@ async function answerWithDocs(question, userId, locale = 'vi') {
       userId,
       topSimilarity: topSimilarity || null,
     });
+
+    if (isSensitiveHelpTopic(question)) {
+      return {
+        type: 'text',
+        content: sensitiveNoDocReply(lang),
+        data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true, softFallback: false },
+      };
+    }
+
+    // Best-effort how-to với rào — vẫn backlog unanswered ở trên.
+    const softSystemPrompt = `Bạn là trợ lý hướng dẫn dùng Founder AI (UKNOW).
+Không có đoạn tài liệu khớp câu hỏi. Hãy trả lời best-effort dựa trên BẢN ĐỒ NĂNG LỰC bên dưới.
+Bắt đầu bằng đúng câu: "${softFallbackIntro(lang)}"
+QUY TẮC CỨNG:
+- KHÔNG bịa số liệu, giá gói, hạn mức, điều khoản, hoá đơn, hoàn tiền, hay chính sách pháp lý.
+- Chỉ hướng dẫn thao tác chung trên sản phẩm; nếu không chắc → bảo người dùng liên hệ hỗ trợ.
+${linkRulesForLocale(lang)}
+
+${capabilityMap}
+
+=== ĐOẠN TÀI LIỆU ===
+(không có đoạn khớp)`;
+
+    const softArgs = {
+      userId,
+      systemPrompt: softSystemPrompt,
+      userPrompt: question,
+      temperature: 0.3,
+    };
+    let softText;
+    let softModel;
+    let softRaw;
+    try {
+      ({ text: softText, modelName: softModel, raw: softRaw } = await generateGeminiText({
+        ...softArgs,
+        maxOutputTokens: 1024,
+        thinkingBudget: 0,
+      }));
+    } catch (err) {
+      if (!isThinkingBudgetRejection(err)) throw err;
+      ({ text: softText, modelName: softModel, raw: softRaw } = await generateGeminiText({
+        ...softArgs,
+        maxOutputTokens: 2048,
+      }));
+    }
+    try {
+      await aiUsageMeter.record(userId, {
+        promptTokens: Number(softRaw?.usageMetadata?.promptTokenCount) || 0,
+        outputTokens: Number(softRaw?.usageMetadata?.candidatesTokenCount) || 0,
+        totalTokens: Number(softRaw?.usageMetadata?.totalTokenCount) || 0,
+      }, { feature: 'help_answer_soft', model: softModel, kind: 'generate' });
+    } catch {
+      // ignore
+    }
+
     return {
       type: 'text',
-      content: copy.noDocReply,
-      data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true },
+      content: softText || copy.noDocReply,
+      data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true, softFallback: true },
     };
   }
 

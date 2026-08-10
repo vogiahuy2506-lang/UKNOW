@@ -412,6 +412,59 @@ export async function searchPublishedChunks(queryEmbedding, {
   });
 }
 
+function keywordTokens(question = '') {
+  return String(question || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/i)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3)
+    .slice(0, 8);
+}
+
+/**
+ * Keyword fallback when vector search returns empty.
+ * ILIKE on content_text + title; locale filter with vi fallback.
+ */
+export async function searchPublishedChunksByKeyword(question, {
+  limit = 5,
+  locale = 'vi',
+  queryable = db,
+} = {}) {
+  const tokens = keywordTokens(question);
+  if (!tokens.length) return [];
+
+  const target = normalizeLocale(locale);
+  const run = async (loc) => {
+    const params = [loc];
+    const likes = tokens.map((token) => {
+      params.push(`%${token}%`);
+      const i = params.length;
+      return `(c.content_text ILIKE $${i} OR a.title ILIKE $${i})`;
+    });
+    params.push(limit);
+    const { rows } = await queryable.query(
+      `SELECT c.content_text, c.chunk_index, c.article_id,
+              a.slug, a.title, a.feature_key, a.locale,
+              0.4::float AS similarity
+       FROM help_article_chunks c
+       JOIN help_articles a ON a.id = c.article_id
+       WHERE a.is_published = TRUE
+         AND a.locale = $1
+         AND (${likes.join(' OR ')})
+       ORDER BY c.article_id, c.chunk_index
+       LIMIT $${params.length}`,
+      params
+    );
+    return rows;
+  };
+
+  const primary = await run(target);
+  if (primary.length || target === 'vi') return primary;
+  return run('vi');
+}
+
 export async function insertUnanswered({ question, userId = null, topSimilarity = null }, queryable = db) {
   const { rows } = await queryable.query(
     `INSERT INTO help_unanswered (question, user_id, top_similarity)

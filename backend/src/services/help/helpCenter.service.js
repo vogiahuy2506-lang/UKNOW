@@ -234,18 +234,34 @@ export async function adminDeleteArticle(id) {
 export async function searchHelpChunks(question, {
   userId = null,
   limit = 5,
-  minSimilarity = 0.45,
+  minSimilarity = 0.35,
   locale = 'vi',
 } = {}) {
   const embedding = await embedText(question, {
     userId,
     feature: 'embedding_help',
   });
-  const chunks = await helpRepo.searchPublishedChunks(embedding, {
+  let chunks = await helpRepo.searchPublishedChunks(embedding, {
     limit,
     minSimilarity,
     locale: normalizeLocale(locale),
   });
+  if (!chunks.length) {
+    const keywordHits = await helpRepo.searchPublishedChunksByKeyword(question, {
+      limit,
+      locale: normalizeLocale(locale),
+    });
+    // Dedupe by article_id, keep first keyword hits.
+    const seen = new Set();
+    chunks = [];
+    for (const row of keywordHits) {
+      const key = row.article_id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      chunks.push(row);
+      if (chunks.length >= limit) break;
+    }
+  }
   const topSimilarity = chunks.length ? Number(chunks[0].similarity) : 0;
   return { chunks, topSimilarity };
 }
