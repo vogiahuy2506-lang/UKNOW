@@ -56,6 +56,58 @@ describe('tryHandleHelpChat route branches', () => {
       .resolves.toBeNull();
   });
 
+  it.each([
+    ['core', 'bạn có thể tạo landing page cho tôi không', /mình làm được/i, 'core'],
+    ['guide', 'trợ lý hẹn giờ gửi được không', /mình tạo chiến dịch được ngay/i, 'guide'],
+    ['unsupported', 'hệ thống có gửi SMS không', /chưa hỗ trợ/i, 'unsupported'],
+  ])('short-circuits %s capability probes without the LLM router', async (_name, question, content, kind) => {
+    const result = await tryHandleHelpChat({ history: historyWith(question), userId: 1 });
+
+    expect(result.content).toMatch(content);
+    expect(result.data).toMatchObject({ capabilityProbe: true, capabilityKind: kind });
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('sensitive question without a matching document stays behind the fixed guard', async () => {
+    const result = await tryHandleHelpChat({
+      history: historyWith('thanh toán gói được không'),
+      userId: 1,
+    });
+
+    expect(result.content).toMatch(/không nên đoán thông tin về thanh toán/i);
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(mockInsertUnanswered).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'thanh toán gói được không',
+    }));
+  });
+
+  it('sensitive overview without a matching document stays behind the fixed guard', async () => {
+    const result = await tryHandleHelpChat({
+      history: historyWith('bảng giá có những tính năng gì'),
+      userId: 1,
+    });
+
+    expect(result.content).toMatch(/không nên đoán thông tin về thanh toán/i);
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('answers a sensitive question from official matching documents without calling the router', async () => {
+    mockGenerate.mockResolvedValueOnce({ text: 'Gói hiện có trong tài liệu.', modelName: 'm', raw: {} });
+    mockSearchHelpChunks.mockResolvedValue({
+      chunks: [{ slug: 'bang-gia', title: 'Bảng giá', content_text: 'Gói Professional có giá...' }],
+      topSimilarity: 0.9,
+    });
+
+    const result = await tryHandleHelpChat({
+      history: historyWith('giá gói professional'),
+      userId: 1,
+    });
+
+    expect(result.content).toContain('Gói hiện có trong tài liệu.');
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockGenerate.mock.calls[0][0].systemPrompt).not.toContain('bộ định tuyến ý định');
+  });
+
   it('hỏi_đáp → answerWithDocs (không null)', async () => {
     mockGenerate
       .mockResolvedValueOnce({ text: 'hỏi_đáp', modelName: 'm', raw: {} })
@@ -76,6 +128,47 @@ describe('tryHandleHelpChat route branches', () => {
     expect(result).not.toBeNull();
     expect(result.data?.helpRoute).toBe(HELP_ROUTE_LABELS.hỏi_đáp);
     expect(String(result.content || '')).toBeTruthy();
+  });
+
+  it('includes capability rules in normal document and soft-fallback prompts', async () => {
+    mockGenerate
+      .mockResolvedValueOnce({ text: 'hỏi_đáp', modelName: 'm', raw: {} })
+      .mockResolvedValueOnce({ text: 'Hướng dẫn', modelName: 'm', raw: {} });
+    mockSearchHelpChunks.mockResolvedValue({
+      chunks: [{ slug: 'chien-dich-zalo', title: 'Zalo', content_text: 'bước 1' }],
+      topSimilarity: 0.9,
+    });
+
+    await tryHandleHelpChat({ history: historyWith('làm sao tạo chiến dịch Zalo?'), userId: 1 });
+
+    const normalPrompt = mockGenerate.mock.calls[1][0].systemPrompt;
+    expect(normalPrompt).toContain('NĂNG LỰC HÀNH ĐỘNG CỦA TRỢ LÝ');
+    expect(normalPrompt).toContain('CHỈ HƯỚNG DẪN');
+    expect(normalPrompt).toContain('KHÔNG HỖ TRỢ');
+    expect(normalPrompt).toContain('QUY TẮC NĂNG LỰC');
+
+    mockGenerate.mockReset();
+    mockGenerate
+      .mockResolvedValueOnce({ text: 'hỏi_đáp', modelName: 'm', raw: {} })
+      .mockResolvedValueOnce({ text: 'Best effort', modelName: 'm', raw: {} });
+    mockSearchHelpChunks.mockResolvedValue({ chunks: [], topSimilarity: 0 });
+
+    await tryHandleHelpChat({ history: historyWith('cách dùng tính năng mới'), userId: 1 });
+
+    const softPrompt = mockGenerate.mock.calls[1][0].systemPrompt;
+    expect(softPrompt).toContain('NĂNG LỰC HÀNH ĐỘNG CỦA TRỢ LÝ');
+    expect(softPrompt).toContain('QUY TẮC NĂNG LỰC');
+  });
+
+  it('leaves actual commands to the existing LLM router', async () => {
+    mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
+
+    await expect(tryHandleHelpChat({
+      history: historyWith('hãy tạo landing page cho khóa học'),
+      userId: 1,
+    })).resolves.toBeNull();
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
   });
 
   it('ngoài_phạm_vi không có chunk → OUT_OF_SCOPE', async () => {

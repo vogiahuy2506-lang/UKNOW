@@ -7,6 +7,10 @@ import {
   searchHelpChunks,
 } from './helpCenter.service.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
+import {
+  classifyCapabilityProbe,
+  formatAssistantCapabilities,
+} from '../ai/assistantCapabilities.js';
 
 const FIXED_REPLIES = {
   vi: {
@@ -91,6 +95,55 @@ function sensitiveNoDocReply(locale) {
   return normalizeLocale(locale) === 'en'
     ? `I should not guess on billing, login, or legal details without an official guide. ${copy.contactHint}`
     : `Mình không nên đoán thông tin về thanh toán, đăng nhập hoặc pháp lý khi chưa có hướng dẫn chính thức. ${copy.contactHint}`;
+}
+
+function capabilityRulesForLocale(locale) {
+  if (normalizeLocale(locale) === 'en') {
+    return `CAPABILITY RULES:
+- If the question matches CAN DO above, confirm the assistant can do it and invite the user to begin.
+- If it matches GUIDANCE ONLY, explain that the assistant cannot perform that part directly and direct the user to the relevant screen.
+- If it matches NOT SUPPORTED, say honestly that it is not supported.
+- For anything else, say there is not enough documentation to confirm it. Do not conclude that a feature exists or does not exist.`;
+  }
+  return `QUY TẮC NĂNG LỰC:
+- Nếu câu hỏi khớp LÀM ĐƯỢC ở trên, khẳng định trợ lý làm được và mời người dùng bắt đầu.
+- Nếu khớp CHỈ HƯỚNG DẪN, nói trợ lý không thao tác trực tiếp phần đó và hướng tới màn hình phù hợp.
+- Nếu khớp KHÔNG HỖ TRỢ, nói trung thực là chưa hỗ trợ.
+- Với phần còn lại, nói chưa đủ tài liệu để xác nhận; không tự kết luận có hoặc không có tính năng.`;
+}
+
+function fixedCapabilityReply(probe, locale) {
+  const lang = normalizeLocale(locale);
+  const replies = {
+    vi: {
+      core: `Có, mình làm được ${probe.label}. Bạn muốn bắt đầu không? Cho mình biết mục tiêu, sản phẩm/dịch vụ và đối tượng bạn muốn hướng tới nhé.`,
+      schedule: 'Mình tạo chiến dịch được ngay; để hẹn giờ, bạn thiết lập ở màn hình Lên lịch trong trang chi tiết chiến dịch nhé.',
+      edit_existing: 'Mình chưa sửa trực tiếp chiến dịch đã lưu. Bạn mở chiến dịch đó để chỉnh sửa, xóa hoặc dừng theo nhu cầu nhé.',
+      unsupported: `Hiện chưa hỗ trợ ${probe.label}. Mình có thể giúp bạn tạo chiến dịch qua Email hoặc Zalo nhé.`,
+    },
+    en: {
+      core: `Yes, I can ${probe.label}. Would you like to start? Tell me your goal, product or service, and intended audience.`,
+      schedule: 'I can create the campaign now; to schedule it, set that up from the campaign detail page.',
+      edit_existing: 'I cannot directly edit an existing saved campaign. Open that campaign to edit, delete, or stop it.',
+      unsupported: `This does not currently support ${probe.label}. I can help you create an Email or Zalo campaign instead.`,
+    },
+  };
+  const copy = replies[lang];
+  const content = probe.kind === 'core'
+    ? copy.core
+    : probe.kind === 'guide'
+      ? copy[probe.id]
+      : copy.unsupported;
+
+  return {
+    type: 'text',
+    content,
+    data: {
+      helpRoute: HELP_ROUTE_LABELS.hỏi_đáp,
+      capabilityProbe: true,
+      capabilityKind: probe.kind,
+    },
+  };
 }
 
 function extractLastUserText(history = []) {
@@ -191,9 +244,25 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
   const copy = fixedReplies(lang);
   const capabilityMap = await getCapabilityMapText(lang);
   const { chunks, topSimilarity } = await searchHelpChunks(question, { userId, locale: lang });
+  const assistantCapabilities = formatAssistantCapabilities(lang);
 
   // Overview questions → capability map even without strong chunk hits.
   const isOverview = OVERVIEW_RE.test(question);
+
+  if (!chunks.length && isSensitiveHelpTopic(question)) {
+    if (allowSoftFallback) {
+      await helpRepo.insertUnanswered({
+        question,
+        userId,
+        topSimilarity: topSimilarity || null,
+      });
+    }
+    return {
+      type: 'text',
+      content: sensitiveNoDocReply(lang),
+      data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true, softFallback: false },
+    };
+  }
 
   if (!chunks.length && !isOverview) {
     // Chỉ backlog khi đây là nhánh hỏi_đáp thật (câu how-to trượt tài liệu →
@@ -206,14 +275,6 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
         userId,
         topSimilarity: topSimilarity || null,
       });
-    }
-
-    if (isSensitiveHelpTopic(question)) {
-      return {
-        type: 'text',
-        content: sensitiveNoDocReply(lang),
-        data: { helpRoute: HELP_ROUTE_LABELS.hỏi_đáp, sources: [], unanswered: true, softFallback: false },
-      };
     }
 
     if (!allowSoftFallback) {
@@ -240,6 +301,10 @@ QUY TẮC CỨNG:
 ${linkRulesForLocale(lang)}
 
 ${capabilityMap}
+
+${assistantCapabilities}
+
+${capabilityRulesForLocale(lang)}
 
 === ĐOẠN TÀI LIỆU ===
 (không có đoạn khớp)`;
@@ -294,6 +359,10 @@ Nếu thiếu thông tin: nói chưa có hướng dẫn, KHÔNG bịa.
 ${linkRulesForLocale(lang)}
 
 ${capabilityMap}
+
+${assistantCapabilities}
+
+${capabilityRulesForLocale(lang)}
 
 === ĐOẠN TÀI LIỆU ===
 ${chunkBlock}`;
@@ -371,6 +440,16 @@ export async function tryHandleHelpChat({ history, userId, locale = 'vi' } = {})
       content: copy.clarify,
       data: { helpRoute: HELP_ROUTE_LABELS.không_rõ },
     };
+  }
+
+  // Billing, login, and tax queries must never fall through the LLM router.
+  if (isSensitiveHelpTopic(question)) {
+    return answerWithDocs(question, userId, lang);
+  }
+
+  const probe = classifyCapabilityProbe(question, lang);
+  if (probe) {
+    return fixedCapabilityReply(probe, lang);
   }
 
   const route = await routeQuestion(question, userId);
