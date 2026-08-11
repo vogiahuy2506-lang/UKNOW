@@ -49,6 +49,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     timelineRows,
     topRunRows,
     recentErrorRows,
+    runLevelErrorRows,
     hardBounceRows,
     zaloDisconnectedRows,
     pendingRetryRows,
@@ -166,6 +167,28 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
          AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
          AND c.id_user = $2
        ORDER BY ce.updated_at DESC
+       LIMIT 15`,
+      params
+    ),
+    // Pre-flight / run-level failures (no execution rows) — show in recentErrors only.
+    safeQuery(
+      `SELECT
+         cr.id AS run_id,
+         cr.error_message,
+         COALESCE(cr.completed_at, cr.started_at)::timestamptz AS updated_at,
+         c.campaign_name, c.campaign_type
+       FROM campaign_runs cr
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
+         AND c.id_user = $2
+         AND LOWER(cr.status) = 'failed'
+         AND NULLIF(BTRIM(COALESCE(cr.error_message, '')), '') IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM campaign_executions ce
+           WHERE ce.id_run = cr.id
+             AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
+         )
+       ORDER BY COALESCE(cr.completed_at, cr.started_at) DESC
        LIMIT 15`,
       params
     ),
@@ -319,12 +342,28 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
 
   const topRuns = topRunRows.map(mapTopRunRow);
 
-  const recentErrors = recentErrorRows.map((row) => ({
+  const recentErrorsFromExecutions = recentErrorRows.map((row) => ({
     id: row.id, runId: row.id_run, campaignName: row.campaign_name,
     channel: inferChannel(row), nodeName: row.node_name, nodeSubtype: row.node_subtype,
     category: classifyFailure(row.error_message),
     errorMessage: String(row.error_message || '').slice(0, 500), updatedAt: row.updated_at,
   }));
+
+  const runLevelErrors = runLevelErrorRows.map((row) => ({
+    id: `run-${row.run_id}`,
+    runId: row.run_id,
+    campaignName: row.campaign_name,
+    channel: inferChannel({ campaign_type: row.campaign_type }),
+    nodeName: null,
+    nodeSubtype: null,
+    category: classifyFailure(row.error_message),
+    errorMessage: String(row.error_message || '').slice(0, 500),
+    updatedAt: row.updated_at,
+  }));
+
+  const recentErrors = [...recentErrorsFromExecutions, ...runLevelErrors]
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, 15);
 
   const quietStart = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START ?? '23', 10);
   const quietEnd = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END ?? '6', 10);

@@ -42,11 +42,21 @@ async function createCampaign({ userId, name = 'C', type = 'email' }) {
   return rows[0];
 }
 
-async function createRun({ campaignId, status = 'completed' }) {
+async function createRun({
+  campaignId,
+  status = 'completed',
+  errorMessage = null,
+  totalRecipients = 10,
+  successfulSends = 9,
+  failedSends = 1,
+}) {
   const { rows } = await db.query(
-    `INSERT INTO campaign_runs (id_campaign, status, started_at, total_recipients, successful_sends, failed_sends)
-     VALUES ($1, $2, NOW(), 10, 9, 1) RETURNING id`,
-    [campaignId, status]
+    `INSERT INTO campaign_runs (
+       id_campaign, status, started_at, completed_at,
+       total_recipients, successful_sends, failed_sends, error_message
+     )
+     VALUES ($1, $2, NOW(), NOW(), $3, $4, $5, $6) RETURNING id`,
+    [campaignId, status, totalRecipients, successfulSends, failedSends, errorMessage]
   );
   return rows[0];
 }
@@ -180,6 +190,64 @@ describe('Tenant isolation — /api/delivery-monitor/overview', () => {
       .get('/api/delivery-monitor/overview')
       .set('Authorization', `Bearer ${tokenB}`);
     expect(resB.body.data.summary.totalRuns).toBe(1);
+  });
+});
+
+// ─── Run-level (pre-flight) errors ───────────────────────────────────────────
+describe('GET /api/delivery-monitor/overview — run-level recentErrors', () => {
+  it('run failed pre-flight (có error_message, 0 execution lỗi) hiện trong recentErrors; KPI tin lỗi vẫn 0', async () => {
+    const user = await createUser({ username: 'uRunErr' });
+    const camp = await createCampaign({ userId: user.id, name: 'Zalo preflight fail', type: 'zalo' });
+    const run = await createRun({
+      campaignId: camp.id,
+      status: 'failed',
+      errorMessage: 'Tài khoản Zalo chưa sẵn sàng',
+      totalRecipients: 0,
+      successfulSends: 0,
+      failedSends: 0,
+    });
+    // Pre-flight: không tạo campaign_executions failed
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const { summary, recentErrors } = res.body.data;
+    expect(summary.failed).toBe(0);
+    expect(summary.failedRuns).toBe(1);
+
+    const match = recentErrors.find((e) => e.id === `run-${run.id}`);
+    expect(match).toBeTruthy();
+    expect(match.campaignName).toBe('Zalo preflight fail');
+    expect(match.errorMessage).toMatch(/Tài khoản Zalo/);
+    expect(match.nodeName).toBeNull();
+  });
+
+  it('run vừa có error_message vừa có execution failed → chỉ hiện lỗi execution (không nhân đôi)', async () => {
+    const user = await createUser({ username: 'uDedup' });
+    const camp = await createCampaign({ userId: user.id, name: 'Node fail', type: 'email' });
+    const run = await createRun({
+      campaignId: camp.id,
+      status: 'failed',
+      errorMessage: 'Run also has message',
+    });
+    await db.query(
+      `INSERT INTO campaign_executions (
+         id_campaign, id_run, node_id, node_name, status, error_message, updated_at, created_at
+       ) VALUES ($1, $2, 'n1', 'Send email', 'failed', 'SMTP bounce', NOW(), NOW())`,
+      [camp.id, run.id]
+    );
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    const { recentErrors } = res.body.data;
+    expect(recentErrors.some((e) => e.id === `run-${run.id}`)).toBe(false);
+    expect(recentErrors.some((e) => String(e.errorMessage || '').includes('SMTP bounce'))).toBe(true);
   });
 });
 

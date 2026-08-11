@@ -373,7 +373,7 @@ export default function UserDeliveryMonitorPage() {
         <KpiCard icon={HiOutlineCheckCircle} label={t('userDeliveryMonitor.kpi.sent')} value={fmt(summary.sent)} sub={t('userDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })} tone="green" />
         <KpiCard icon={HiOutlineExclamationCircle} label={t('userDeliveryMonitor.kpi.failed')} value={fmt(summary.failed)} sub={t('userDeliveryMonitor.kpi.successRate', { rate: fmtPct(summary.successRate) })} tone={summary.failed > 0 ? 'red' : 'green'} />
         <KpiCard icon={HiOutlineTrendingUp} label={t('userDeliveryMonitor.kpi.clicked')} value={fmt(summary.clicked)} sub={t('userDeliveryMonitor.kpi.opened', { opened: fmt(summary.opened) })} tone="blue" />
-        <KpiCard icon={HiOutlineClock} label={t('userDeliveryMonitor.kpi.runningRuns')} value={fmt(summary.runningRuns)} sub={t('userDeliveryMonitor.kpi.totalRuns', { total: fmt(summary.totalRuns) })} tone="orange" />
+        <KpiCard icon={HiOutlineClock} label={t('userDeliveryMonitor.kpi.runningRuns')} value={fmt(summary.runningRuns)} sub={t('userDeliveryMonitor.kpi.runBreakdown', { total: fmt(summary.totalRuns), failed: fmt(summary.failedRuns), completed: fmt(summary.completedRuns) })} tone="orange" />
       </div>
 
       <HealthPanel health={data?.health} t={t} />

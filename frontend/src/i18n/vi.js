@@ -6064,13 +6064,13 @@ export default {
     kpi: {
       sent: 'Tin đã gửi',
       failed: 'Tin lỗi',
-      clicked: 'Click',
-      runningRuns: 'Run đang chạy',
+      clicked: 'Lượt nhấp liên kết',
+      runningRuns: 'Chiến dịch đang chạy',
       attempts: 'Tổng lượt thử: {attempts}',
       reachRate: 'Tiếp cận: {rate} / {total} người',
       successRate: 'Tỷ lệ thành công / lượt thử: {rate}',
       opened: 'Đã mở: {opened}',
-      totalRuns: 'Tổng run: {total}',
+      totalRuns: 'Tổng lượt chạy: {total}',
       runBreakdown: 'Tổng: {total} · {failed} lỗi · {completed} hoàn thành',
     },
     chart: {
@@ -6237,13 +6237,13 @@ export default {
     kpi: {
       sent: 'Tin đã gửi',
       failed: 'Tin lỗi',
-      clicked: 'Click',
-      runningRuns: 'Run đang chạy',
+      clicked: 'Lượt nhấp liên kết',
+      runningRuns: 'Chiến dịch đang chạy',
       attempts: 'Tổng lượt thử: {attempts}',
       reachRate: 'Tiếp cận: {rate} / {total} người',
       successRate: 'Tỷ lệ thành công / lượt thử: {rate}',
       opened: 'Đã mở: {opened}',
-      totalRuns: 'Tổng run: {total}',
+      totalRuns: 'Tổng lượt chạy: {total}',
       runBreakdown: 'Tổng: {total} · {failed} lỗi · {completed} hoàn thành',
     },
     chart: {

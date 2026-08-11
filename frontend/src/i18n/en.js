@@ -6103,8 +6103,8 @@ export default {
     kpi: {
       sent: 'Messages sent',
       failed: 'Failed messages',
-      clicked: 'Clicks',
-      runningRuns: 'Running runs',
+      clicked: 'Link clicks',
+      runningRuns: 'Running campaigns',
       attempts: 'Attempts: {attempts}',
       successRate: 'Success rate: {rate}',
       opened: 'Opened: {opened}',
@@ -6276,12 +6276,13 @@ export default {
     kpi: {
       sent: 'Messages sent',
       failed: 'Failed',
-      clicked: 'Clicks',
-      runningRuns: 'Active runs',
+      clicked: 'Link clicks',
+      runningRuns: 'Running campaigns',
       attempts: 'Total attempts: {attempts}',
       successRate: 'Success rate: {rate}',
       opened: 'Opened: {opened}',
       totalRuns: 'Total runs: {total}',
+      runBreakdown: '{total} total · {failed} failed · {completed} completed',
     },
     chart: {
       email: 'Email',
