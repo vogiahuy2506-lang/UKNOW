@@ -316,6 +316,39 @@ class ZaloPersonalRepository {
   }
 
   /**
+   * Recent agent rows used to detect inbox-send echo before isSelf handoff pause.
+   * @param {number} conversationId
+   * @param {{ lookbackMs?: number }} [opts]
+   * @returns {Promise<Array<{ source: string|null, externalId: string|null, zaloMsgIds: unknown, content: string|null, createdAt: Date }>>}
+   */
+  async listRecentAgentEchoCandidates(conversationId, { lookbackMs = 5 * 60 * 1000 } = {}) {
+    const ms = Number(lookbackMs);
+    const windowMs = Number.isFinite(ms) && ms > 0 ? Math.floor(ms) : 5 * 60 * 1000;
+    const { rows } = await db.query(
+      `SELECT role, content, external_id, metadata, created_at
+       FROM zalo_personal_messages
+       WHERE id_conversation = $1
+         AND role = 'agent'
+         AND created_at >= NOW() - ($2::text || ' milliseconds')::interval
+       ORDER BY created_at DESC
+       LIMIT 40`,
+      [conversationId, String(windowMs)]
+    );
+    return rows.map((row) => {
+      const metadata = typeof row.metadata === 'string'
+        ? (() => { try { return JSON.parse(row.metadata || '{}'); } catch { return {}; } })()
+        : (row.metadata || {});
+      return {
+        source: metadata?.source != null ? String(metadata.source) : null,
+        externalId: row.external_id != null ? String(row.external_id) : null,
+        zaloMsgIds: Array.isArray(metadata?.zalo_msg_ids) ? metadata.zalo_msg_ids : [],
+        content: row.content != null ? String(row.content) : null,
+        createdAt: row.created_at,
+      };
+    });
+  }
+
+  /**
    * Get messages for AI context - returns formatted messages
    */
   async getMessagesForContext(conversationId, limit = 50) {

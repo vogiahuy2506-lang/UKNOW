@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import {
   extractSendMsgId,
+  isInboxSendEcho,
   resolveConversationExternalId,
   runInboxHandlerAfterSave,
   shouldSkipInboxHandler,
@@ -48,6 +49,98 @@ describe('zaloPersonalMessage.util', () => {
     expect(extractSendMsgId({ message: null, attachment: [{ msgId: 9 }] })).toBe('9');
     expect(extractSendMsgId({ message: null, attachment: [] })).toBeNull();
     expect(extractSendMsgId(null)).toBeNull();
+  });
+});
+
+describe('isInboxSendEcho (handoff re-pause guard)', () => {
+  const now = Date.parse('2026-08-11T02:00:00.000Z');
+
+  it('skips when incoming msgId is in metadata.zalo_msg_ids', () => {
+    expect(isInboxSendEcho({
+      incomingMsgId: 'img-2',
+      incomingContent: '',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: 'txt-1',
+        zaloMsgIds: ['txt-1', 'img-2'],
+        content: 'hello',
+        createdAt: new Date(now - 5_000).toISOString(),
+      }],
+    })).toBe(true);
+  });
+
+  it('skips when manual_inbox external_id equals incoming msgId within window', () => {
+    expect(isInboxSendEcho({
+      incomingMsgId: 'm1',
+      incomingContent: 'hello',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: 'm1',
+        zaloMsgIds: [],
+        content: 'hello',
+        createdAt: new Date(now - 10_000).toISOString(),
+      }],
+    })).toBe(true);
+  });
+
+  it('skips null external_id only with matching content inside 30s', () => {
+    expect(isInboxSendEcho({
+      incomingMsgId: 'echo-later',
+      incomingContent: 'hello',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: null,
+        zaloMsgIds: [],
+        content: 'hello',
+        createdAt: new Date(now - 10_000).toISOString(),
+      }],
+    })).toBe(true);
+
+    expect(isInboxSendEcho({
+      incomingMsgId: 'echo-later',
+      incomingContent: 'hello',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: null,
+        zaloMsgIds: [],
+        content: 'hello',
+        createdAt: new Date(now - 45_000).toISOString(),
+      }],
+    })).toBe(false);
+  });
+
+  it('does NOT skip real app reply with same text after inbox send (different msgId, A already bound)', () => {
+    expect(isInboxSendEcho({
+      incomingMsgId: 'owner-app-9',
+      incomingContent: 'hello',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: 'inbox-1',
+        zaloMsgIds: ['inbox-1'],
+        content: 'hello',
+        createdAt: new Date(now - 5_000).toISOString(),
+      }],
+    })).toBe(false);
+  });
+
+  it('does NOT skip when content differs and external_id is null', () => {
+    expect(isInboxSendEcho({
+      incomingMsgId: 'app-2',
+      incomingContent: 'other text',
+      now,
+      candidates: [{
+        source: 'manual_inbox',
+        externalId: null,
+        zaloMsgIds: [],
+        content: 'hello',
+        createdAt: new Date(now - 5_000).toISOString(),
+      }],
+    })).toBe(false);
   });
 });
 

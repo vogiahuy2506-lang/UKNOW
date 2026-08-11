@@ -35,7 +35,8 @@ import {
   isPlaceholderGroupName,
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
-import { resolveConversationExternalId } from '../../utils/zaloPersonalMessage.util.js';
+import { resolveConversationExternalId, isInboxSendEcho } from '../../utils/zaloPersonalMessage.util.js';
+import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 
 class ZaloPersonalInboxService {
   constructor() {
@@ -318,7 +319,7 @@ class ZaloPersonalInboxService {
       }
 
       // Owner typed from Zalo app: already saved as agent by adapter; pause AI + SSE.
-      // Echo of our own bot replies never reaches here (adapter returns skippedEcho first).
+      // Echo of bot replies / inbox-send: skip pause+broadcast (see isInboxSendEcho).
       if (rawMessage.isSelf === true) {
         const externalIdSelf = resolveConversationExternalId({
           isGroup,
@@ -329,7 +330,29 @@ class ZaloPersonalInboxService {
         try {
           const conv = await zaloPersonalRepository.findConversation(zaloSettingId, externalIdSelf);
           if (conv?.id) {
-            await zaloPersonalRepository.setAiPaused(conv.id, true);
+            let isEcho = false;
+            try {
+              const candidates = await zaloPersonalRepository.listRecentAgentEchoCandidates(conv.id);
+              isEcho = isInboxSendEcho({
+                incomingMsgId: messageId,
+                incomingContent: content,
+                candidates,
+              });
+            } catch (echoErr) {
+              console.warn('[ZaloInbox] Echo check failed (will pause):', echoErr.message);
+            }
+
+            if (isEcho) {
+              console.log(`[ZaloInbox] Skip handoff pause for inbox-send echo msgId=${messageId} conv=${conv.id}`);
+              return;
+            }
+
+            const pausedRow = await zaloPersonalRepository.setAiPaused(conv.id, true);
+            const pauseState = await buildAiPausePayload({
+              aiPaused: pausedRow.aiPaused,
+              aiPausedAt: pausedRow.aiPausedAt,
+              ownerUserId: userId,
+            });
             sseService.broadcast(String(userId), 'inbox:new_message', {
               conversationId: conv.id,
               channel: 'zalo_personal',
@@ -348,6 +371,7 @@ class ZaloPersonalInboxService {
               role: 'agent',
               isSelf: true,
               timestamp,
+              ...pauseState,
             });
           }
         } catch (e) {

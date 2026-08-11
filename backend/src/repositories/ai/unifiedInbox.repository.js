@@ -766,6 +766,35 @@ class UnifiedInboxRepository {
     return inserted[0]?.id ?? null;
   }
 
+  /**
+   * After inbox-send via Zalo: bind durable echo keys on the pre-inserted agent row.
+   * external_id = primary msgId (ON CONFLICT dedupe); metadata.zalo_msg_ids = all dispatches.
+   * @param {number|string} messageId
+   * @param {{ externalId?: string|null, msgIds?: Array<string|number|null|undefined> }} opts
+   */
+  async bindZaloPersonalOutboundMsgIds(messageId, { externalId = null, msgIds = [] } = {}) {
+    const id = Number(messageId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const ids = [...new Set(
+      (Array.isArray(msgIds) ? msgIds : [])
+        .map((v) => (v == null || v === '' ? null : String(v)))
+        .filter(Boolean)
+    )];
+    const primary = externalId != null && externalId !== ''
+      ? String(externalId)
+      : (ids[0] || null);
+    if (!primary && ids.length === 0) return;
+
+    await db.query(
+      `UPDATE zalo_personal_messages
+       SET external_id = COALESCE($2, external_id),
+           metadata = COALESCE(metadata, '{}'::jsonb)
+             || jsonb_build_object('zalo_msg_ids', $3::jsonb)
+       WHERE id = $1`,
+      [id, primary, JSON.stringify(ids.length > 0 ? ids : (primary ? [primary] : []))]
+    );
+  }
+
   async withTransaction(callback) {
     const client = await db.getClient();
     try {

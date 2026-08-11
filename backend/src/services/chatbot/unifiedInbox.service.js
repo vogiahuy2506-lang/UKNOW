@@ -14,36 +14,10 @@ import {
 } from '../../utils/zaloGroupName.util.js';
 import chatAttachmentService from './chatAttachment.service.js';
 import { sanitizeOwnedInboxAttachments } from '../../utils/inboxOwnedAttachments.util.js';
-import {
-  computeAiResumeAt,
-  getCachedAutoResumeMinutes,
-} from '../../utils/aiHandoffResume.util.js';
+import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
-}
-
-function normalizeAiPausedAt(value) {
-  if (value == null || value === '') return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
-}
-
-async function buildAiPausePayload({ aiPaused, aiPausedAt, ownerUserId }) {
-  const paused = aiPaused === true;
-  const pausedAt = paused ? normalizeAiPausedAt(aiPausedAt) : null;
-  const minutes = paused && pausedAt
-    ? await getCachedAutoResumeMinutes(ownerUserId)
-    : null;
-  return {
-    aiPaused: paused,
-    aiPausedAt: pausedAt,
-    aiResumeAt: computeAiResumeAt({
-      aiPaused: paused,
-      aiPausedAt: pausedAt,
-      autoResumeMinutes: minutes,
-    }),
-  };
 }
 
 class UnifiedInboxService {
@@ -462,6 +436,22 @@ class UnifiedInboxService {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
         } else if (conversation.channel === 'zalo_personal' && zaloAccountId) {
+          // Durable echo keys: bind Zalo msgId(s) onto the pre-inserted inbox row so
+          // later sync ON CONFLICT / isSelf skip does not re-pause after owner resumes AI.
+          if (conversationType === 'zalo_personal' && messageId) {
+            const msgIds = Array.isArray(sendResult?.msgIds) ? sendResult.msgIds : [];
+            const primaryMsgId = sendResult?.msgId ?? msgIds[0] ?? null;
+            if (primaryMsgId || msgIds.length > 0) {
+              try {
+                await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(messageId, {
+                  externalId: primaryMsgId,
+                  msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
+                });
+              } catch (bindErr) {
+                console.warn('[UnifiedInbox] bind outbound msgIds failed:', bindErr.message);
+              }
+            }
+          }
           // Gửi OK chứng tỏ session API còn; inbox handler có thể đã lệch listener sau restore.
           // Gắn lại ngay (không đợi cron 5 phút) để tin bạn bè / app về hộp thư.
           try {
@@ -573,6 +563,18 @@ class UnifiedInboxService {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
         } else if (type === 'zalo_personal' && params.accountId) {
+          const msgIds = Array.isArray(sendResult?.msgIds) ? sendResult.msgIds : [];
+          const primaryMsgId = sendResult?.msgId ?? msgIds[0] ?? null;
+          if (primaryMsgId || msgIds.length > 0) {
+            try {
+              await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(owned.id, {
+                externalId: primaryMsgId,
+                msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
+              });
+            } catch (bindErr) {
+              console.warn('[UnifiedInbox] bind outbound msgIds on retry failed:', bindErr.message);
+            }
+          }
           try {
             const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
             await zaloPersonalInboxService.registerAccountListener(params.accountId);

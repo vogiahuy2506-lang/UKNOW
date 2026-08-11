@@ -605,9 +605,9 @@ class ZaloPersonalAdapter {
       return { conversationId, isDuplicate: true };
     }
 
-    if (role === 'agent') {
-      await zaloPersonalRepository.setAiPaused(conversationId, true);
-    }
+    // Handoff pause for owner isSelf is owned by zaloInbox.processIncomingMessage
+    // (single path + SSE). Do not setAiPaused here — avoids double-pause and lets
+    // inbox-send echo skip run before pausing.
 
     return {
       conversationId,
@@ -687,6 +687,7 @@ class ZaloPersonalAdapter {
       );
 
       let lastOutboundMsgId = null;
+      const outboundMsgIds = [];
       const { response: sent } = await campaignZaloSender.sendMessageWithAttachmentDispatch({
         operationName: 'inbox_zalo_personal',
         message: payload,
@@ -707,11 +708,15 @@ class ZaloPersonalAdapter {
             msgId: dispatchMsgId,
             content: dispatchContent || payload,
           });
+          if (dispatchMsgId) outboundMsgIds.push(String(dispatchMsgId));
           lastOutboundMsgId = dispatchMsgId;
           return response;
         },
       });
       const outboundMsgId = lastOutboundMsgId || extractSendMsgId(sent);
+      const msgIds = outboundMsgIds.length > 0
+        ? [...new Set(outboundMsgIds)]
+        : (outboundMsgId ? [String(outboundMsgId)] : []);
 
       // Persist only when caller did not already save (AI path). Manual inbox sets persist=false.
       if (persist) {
@@ -731,7 +736,7 @@ class ZaloPersonalAdapter {
         }
       }
 
-      return { success: true, msgId: outboundMsgId };
+      return { success: true, msgId: outboundMsgId, msgIds };
     } catch (err) {
       console.error('[ZaloPersonalAdapter] Failed to send reply:', err.message);
       return { success: false, error: err.message };

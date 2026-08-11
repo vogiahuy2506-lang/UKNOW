@@ -34,15 +34,21 @@ const extractPauseState = (res) => {
   };
 };
 
-const applySelfHandoffPause = (prev) => {
-  if (!prev) return prev;
+/** Apply BE pause fields from SSE when present; never guess aiPaused:true. */
+const pausePatchFromSse = (data, existing) => {
+  if (!data || typeof data !== 'object') return {};
+  const hasPauseFields = Object.prototype.hasOwnProperty.call(data, 'aiPaused')
+    || Object.prototype.hasOwnProperty.call(data, 'aiPausedAt')
+    || Object.prototype.hasOwnProperty.call(data, 'aiResumeAt');
+  if (!hasPauseFields) return {};
   // Manual pause (aiPaused && !aiPausedAt) must not become countdown.
-  if (prev.aiPaused && !prev.aiPausedAt) return prev;
+  if (existing?.aiPaused && !existing?.aiPausedAt) return {};
   return {
-    ...prev,
-    aiPaused: true,
-    aiPausedAt: new Date().toISOString(),
-    aiResumeAt: undefined,
+    aiPaused: data.aiPaused === true,
+    aiPausedAt: data.aiPausedAt ?? null,
+    aiResumeAt: Object.prototype.hasOwnProperty.call(data, 'aiResumeAt')
+      ? data.aiResumeAt
+      : null,
   };
 };
 
@@ -328,18 +334,8 @@ const InboxPage = () => {
           unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
             ? 0
             : (existing.unreadCount || 0) + 1,
-          // Chủ nhắn từ app Zalo (isSelf) → backend pause AI (handoff).
-          // Không đè manual; để aiResumeAt=undefined tới lần fetch list.
-          ...(data.isSelf === true
-            ? (() => {
-                if (existing.aiPaused && !existing.aiPausedAt) return {};
-                return {
-                  aiPaused: true,
-                  aiPausedAt: new Date().toISOString(),
-                  aiResumeAt: undefined,
-                };
-              })()
-            : {}),
+          // isSelf: chỉ áp pause thật từ BE (aiPaused/aiPausedAt/aiResumeAt), không đoán.
+          ...(data.isSelf === true ? pausePatchFromSse(data, existing) : {}),
         };
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
@@ -358,13 +354,7 @@ const InboxPage = () => {
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
-          ...(data.isSelf === true
-            ? {
-                aiPaused: true,
-                aiPausedAt: new Date().toISOString(),
-                aiResumeAt: undefined,
-              }
-            : {}),
+          ...(data.isSelf === true ? pausePatchFromSse(data, null) : {}),
         };
         return [newConv, ...prev];
       }
@@ -373,7 +363,9 @@ const InboxPage = () => {
     if (data.isSelf === true) {
       setSelectedConversation((prev) => {
         if (!prev || Number(prev.id) !== Number(data.conversationId)) return prev;
-        return applySelfHandoffPause(prev);
+        const patch = pausePatchFromSse(data, prev);
+        if (!Object.keys(patch).length) return prev;
+        return { ...prev, ...patch };
       });
     }
     if (document.hidden && displayMessage) {

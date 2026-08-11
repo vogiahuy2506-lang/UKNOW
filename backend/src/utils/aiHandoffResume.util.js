@@ -35,6 +35,34 @@ export function computeAiResumeAt({ aiPaused, aiPausedAt, autoResumeMinutes }) {
   return new Date(pausedAtMs + mins * 60_000).toISOString();
 }
 
+function normalizeAiPausedAt(value) {
+  if (value == null || value === '') return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+/**
+ * Pause fields for API / SSE — shared by unified inbox send + isSelf handoff broadcast.
+ * @param {{ aiPaused: boolean, aiPausedAt?: string|null, ownerUserId: number }} args
+ * @returns {Promise<{ aiPaused: boolean, aiPausedAt: string|null, aiResumeAt: string|null }>}
+ */
+export async function buildAiPausePayload({ aiPaused, aiPausedAt, ownerUserId }) {
+  const paused = aiPaused === true;
+  const pausedAt = paused ? normalizeAiPausedAt(aiPausedAt) : null;
+  const minutes = paused && pausedAt
+    ? await getCachedAutoResumeMinutes(ownerUserId)
+    : null;
+  return {
+    aiPaused: paused,
+    aiPausedAt: pausedAt,
+    aiResumeAt: computeAiResumeAt({
+      aiPaused: paused,
+      aiPausedAt: pausedAt,
+      autoResumeMinutes: minutes,
+    }),
+  };
+}
+
 /**
  * Owner handoff auto-resume minutes (cached ~60s). Fail-safe: null on error.
  * @param {number} ownerUserId

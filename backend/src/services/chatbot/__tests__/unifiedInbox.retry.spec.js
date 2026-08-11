@@ -22,6 +22,7 @@ jest.unstable_mockModule('../../../repositories/ai/unifiedInbox.repository.js', 
     updateMessageSendStatus: mockUpdateSendStatus,
     claimMessageForRetry: mockClaimRetry,
     findAgentMessageForRetry: mockFindForRetry,
+    bindZaloPersonalOutboundMsgIds: jest.fn().mockResolvedValue(undefined),
     getAllSettingsForUser: jest.fn(),
   },
 }));
@@ -63,6 +64,11 @@ jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({
 jest.unstable_mockModule('../../../utils/aiHandoffResume.util.js', () => ({
   getCachedAutoResumeMinutes: jest.fn(async () => null),
   computeAiResumeAt: jest.fn(() => null),
+  buildAiPausePayload: jest.fn(async ({ aiPaused, aiPausedAt }) => ({
+    aiPaused: aiPaused === true,
+    aiPausedAt: aiPaused === true ? (aiPausedAt ?? null) : null,
+    aiResumeAt: null,
+  })),
 }));
 
 const unifiedInboxService = (await import('../unifiedInbox.service.js')).default;
