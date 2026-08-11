@@ -9,6 +9,7 @@ import {
 } from 'react-icons/hi';
 import { listHelpArticles } from '../services/help.service';
 import { useI18n } from '../i18n';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 /**
  * Layout công khai cho trung tâm hướng dẫn (/huong-dan).
@@ -144,6 +145,7 @@ export default function DocsLayout() {
           <Link to="/huong-dan" className="text-sm font-semibold text-slate-900">
             {t('helpDocs.title')}
           </Link>
+          <LanguageSwitcher className="ml-auto" showLabel />
         </div>
       </header>
 
