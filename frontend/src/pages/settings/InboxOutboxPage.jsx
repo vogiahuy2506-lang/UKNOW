@@ -524,11 +524,26 @@ const InboxPage = () => {
         // Apply pause state from sendMessage response (PR1 returns aiPausedAt/aiResumeAt).
         const pauseState = extractPauseState(response);
         setSelectedConversation((prev) => (prev ? { ...prev, ...pauseState } : prev));
-        setConversations((prev) => prev.map((c) => (
-          c.id === selectedConversation.id && c.type === selectedConversation.type
-            ? { ...c, ...pauseState }
-            : c
-        )));
+        // Cập nhật danh sách: đổi preview tin cuối + đẩy hội thoại lên đầu (khớp
+        // cách xử lý tin ĐẾN qua SSE :325-344). Trước đây chỉ .map pauseState nên
+        // tin BẠN gửi không hiện ở preview và hội thoại không nhảy lên đầu.
+        const sentPreview = content?.trim()
+          ? content.trim()
+          : (attachments?.length ? t('inbox.messageFile') : '');
+        const sentAt = newMessage.createdAt;
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => (
+            c.id === selectedConversation.id && c.type === selectedConversation.type
+          ));
+          if (idx === -1) return prev;
+          const updated = {
+            ...prev[idx],
+            ...pauseState,
+            lastMessage: sentPreview,
+            lastMessageAt: sentAt,
+          };
+          return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        });
         if (sendStatus === 'failed') {
           toast.error(response.error || t('inbox.sendFailed'));
         } else {
