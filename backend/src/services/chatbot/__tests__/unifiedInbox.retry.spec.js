@@ -64,6 +64,7 @@ jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({
 jest.unstable_mockModule('../../../utils/aiHandoffResume.util.js', () => ({
   getCachedAutoResumeMinutes: jest.fn(async () => null),
   computeAiResumeAt: jest.fn(() => null),
+  normalizeAiPausedAt: jest.fn((value) => (value == null || value === '' ? null : value)),
   buildAiPausePayload: jest.fn(async ({ aiPaused, aiPausedAt }) => ({
     aiPaused: aiPaused === true,
     aiPausedAt: aiPaused === true ? (aiPausedAt ?? null) : null,

@@ -35,7 +35,7 @@ export function computeAiResumeAt({ aiPaused, aiPausedAt, autoResumeMinutes }) {
   return new Date(pausedAtMs + mins * 60_000).toISOString();
 }
 
-function normalizeAiPausedAt(value) {
+export function normalizeAiPausedAt(value) {
   if (value == null || value === '') return null;
   const ms = new Date(value).getTime();
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;

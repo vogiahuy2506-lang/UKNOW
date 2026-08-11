@@ -14,7 +14,12 @@ import {
 } from '../../utils/zaloGroupName.util.js';
 import chatAttachmentService from './chatAttachment.service.js';
 import { sanitizeOwnedInboxAttachments } from '../../utils/inboxOwnedAttachments.util.js';
-import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
+import {
+  buildAiPausePayload,
+  computeAiResumeAt,
+  getCachedAutoResumeMinutes,
+  normalizeAiPausedAt,
+} from '../../utils/aiHandoffResume.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
