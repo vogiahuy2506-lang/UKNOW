@@ -3036,6 +3036,11 @@ export default {
     customFieldsHint: 'Mỗi trường cách nhau bằng dấu phẩy',
     createLandingWithOptions: 'Tạo Landing Page theo lựa chọn này',
     enterFieldNameToContinue: 'Nhập tên trường để tiếp tục',
+    otherProductNamePlaceholder: 'Tên sản phẩm / khóa học (bắt buộc)',
+    otherProductDescPlaceholder: 'Mô tả ngắn (tuỳ chọn)',
+    otherProductNameRequired: 'Nhập tên sản phẩm/khóa học để tiếp tục',
+    otherProductNameLength: 'Tên sản phẩm cần từ 2 đến 160 ký tự',
+    otherProductDescLength: 'Mô tả tối đa 2000 ký tự',
     // Campaign details card — email section
     emailContent: '📧 Nội dung email:',
     createNewContent: '✨ Tạo nội dung mới',

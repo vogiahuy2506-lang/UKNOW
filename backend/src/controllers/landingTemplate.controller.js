@@ -1,6 +1,10 @@
 import landingTemplateService from '../services/landingTemplate/landingTemplate.service.js';
 import { saveMessages, saveAssistantMessage } from '../repositories/aiSession.repository.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
+import {
+  resolveLandingBrief,
+  buildLandingBriefContext,
+} from '../services/ai/landingBrief.service.js';
 
 /**
  * Controller for landing page templates.
@@ -265,7 +269,7 @@ class LandingTemplateController {
    */
   async generate(req, res) {
     try {
-      const { prompt, templateId, files, sessionId, userSummary } = req.body;
+      const { prompt, templateId, files, sessionId, userSummary, landingBrief } = req.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 10) {
         return res.status(400).json({
@@ -274,16 +278,26 @@ class LandingTemplateController {
         });
       }
 
-      const userId = req.user.id;
+      const actorUserId = req.user.id;
+      const resolvedBrief = await resolveLandingBrief({ landingBrief, user: req.user });
+      const ownerUserId = resolvedBrief?.ownerUserId
+        ?? (req.user?.activeContext?.type === 'employee'
+          ? req.user.activeContext.ownerId
+          : actorUserId);
+      const landingBriefContext = resolvedBrief
+        ? buildLandingBriefContext(resolvedBrief)
+        : null;
 
       const result = await landingTemplateService.generateLandingPage({
         prompt: prompt.trim(),
         templateId: templateId ? Number.parseInt(templateId, 10) : null,
-        userId,
+        userId: ownerUserId,
+        actorUserId,
         files: files || [],
+        landingBriefContext,
       });
 
-      // Lưu cả user message + assistant (landing page) vào session
+      // Lưu cả user message + assistant (landing page) vào session (actor)
       if (sessionId) {
         try {
           const userContent = String(userSummary || prompt).trim();
@@ -292,7 +306,7 @@ class LandingTemplateController {
             type: 'landing_page',
             data: { title: result.title, html: result.html, css: result.css },
           };
-          await saveMessages(sessionId, userId, userContent, assistantMsg);
+          await saveMessages(sessionId, actorUserId, userContent, assistantMsg);
         } catch (saveErr) {
           console.warn('[LandingTemplate] Could not save message to session:', saveErr.message);
         }

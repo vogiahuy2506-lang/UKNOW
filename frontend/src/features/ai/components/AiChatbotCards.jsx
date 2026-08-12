@@ -7,6 +7,10 @@ import {
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
+import {
+  isOtherProductDescriptionValid,
+  isOtherProductNameValid,
+} from '../utils/landingBrief.js';
 
 // Đổi ký hiệu LaTeX model hay chèn (vd "$\rightarrow$") thành mũi tên thường.
 function deLatexArrows(s) {
@@ -855,16 +859,36 @@ export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
   // formFields mặc định 'basic' — không bắt buộc thay đổi
   const [answers, setAnswers] = useState({ formFields: 'basic' });
   const [customFieldsText, setCustomFieldsText] = useState('');
+  const [productName, setProductName] = useState('');
+  const [productDescription, setProductDescription] = useState('');
   if (!data?.questions?.length) return null;
 
   const allAnswered = data.questions.every(q => answers[q.id]);
-  const canSubmit = allAnswered && (answers.formFields !== 'custom' || customFieldsText.trim().length > 0);
-  const pick = (qId, val) => setAnswers(prev => ({ ...prev, [qId]: val }));
+  const otherName = productName.trim();
+  const otherDesc = productDescription.trim();
+  const otherNameInvalid = answers.product === 'other' && !isOtherProductNameValid(otherName);
+  const otherDescInvalid = answers.product === 'other' && !isOtherProductDescriptionValid(otherDesc);
+  const canSubmit = allAnswered
+    && (answers.formFields !== 'custom' || customFieldsText.trim().length > 0)
+    && !otherNameInvalid
+    && !otherDescInvalid;
+
+  const pick = (qId, val) => {
+    setAnswers((prev) => ({ ...prev, [qId]: val }));
+    if (qId === 'product' && val !== 'other') {
+      setProductName('');
+      setProductDescription('');
+    }
+  };
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     const lines = data.questions.map(q => {
       const opt = q.options.find(o => o.value === answers[q.id]);
+      if (q.id === 'product' && answers.product === 'other') {
+        const desc = productDescription.trim();
+        return `${q.label} ${productName.trim()}${desc ? ` — ${desc}` : ''}`;
+      }
       return `${q.label} ${opt?.label || answers[q.id]}`;
     });
     if (answers.formFields === 'extended') {
@@ -872,7 +896,12 @@ export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
     } else if (answers.formFields === 'custom' && customFieldsText.trim()) {
       lines.push(`Form thu thập thêm các trường tùy chỉnh: ${customFieldsText.trim()}`);
     }
-    onSubmit(lines.join('\n'), { ...answers, customFields: customFieldsText.trim() });
+    onSubmit(lines.join('\n'), {
+      ...answers,
+      customFields: customFieldsText.trim(),
+      productName: answers.product === 'other' ? productName.trim() : undefined,
+      productDescription: answers.product === 'other' ? (productDescription.trim() || undefined) : undefined,
+    });
   };
 
   return (
@@ -906,6 +935,38 @@ export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
               </button>
             ))}
           </div>
+          {q.id === 'product' && answers.product === 'other' && (
+            <div className="mt-2 space-y-2">
+              <div>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder={t('aiChatbot.otherProductNamePlaceholder')}
+                  maxLength={160}
+                  className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                {otherNameInvalid && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    {otherName.length === 0
+                      ? t('aiChatbot.otherProductNameRequired')
+                      : t('aiChatbot.otherProductNameLength')}
+                  </p>
+                )}
+              </div>
+              <textarea
+                value={productDescription}
+                onChange={(e) => setProductDescription(e.target.value)}
+                placeholder={t('aiChatbot.otherProductDescPlaceholder')}
+                rows={2}
+                maxLength={2000}
+                className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+              {otherDescInvalid && (
+                <p className="text-[10px] text-amber-600">{t('aiChatbot.otherProductDescLength')}</p>
+              )}
+            </div>
+          )}
         </div>
       ))}
 
@@ -964,7 +1025,17 @@ export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
         disabled={!canSubmit}
         className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-600 text-white"
       >
-        {canSubmit ? '✓ ' + t('aiChatbot.createLandingWithOptions') : answers.formFields === 'custom' ? t('aiChatbot.enterFieldNameToContinue') : t('aiChatbot.selectAllAbove')}
+        {canSubmit
+          ? `✓ ${t('aiChatbot.createLandingWithOptions')}`
+          : otherNameInvalid
+            ? (otherName.length === 0
+              ? t('aiChatbot.otherProductNameRequired')
+              : t('aiChatbot.otherProductNameLength'))
+            : otherDescInvalid
+              ? t('aiChatbot.otherProductDescLength')
+              : answers.formFields === 'custom'
+                ? t('aiChatbot.enterFieldNameToContinue')
+                : t('aiChatbot.selectAllAbove')}
       </button>
     </div>
   );

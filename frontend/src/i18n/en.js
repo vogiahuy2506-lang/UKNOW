@@ -3002,6 +3002,11 @@ export default {
     customFieldsHint: 'Separate each field with a comma',
     createLandingWithOptions: 'Create Landing Page with these options',
     enterFieldNameToContinue: 'Enter field name to continue',
+    otherProductNamePlaceholder: 'Product / course name (required)',
+    otherProductDescPlaceholder: 'Short description (optional)',
+    otherProductNameRequired: 'Enter a product/course name to continue',
+    otherProductNameLength: 'Product name must be 2–160 characters',
+    otherProductDescLength: 'Description can be at most 2000 characters',
     // Campaign details card — email section
     emailContent: '📧 Email content:',
     createNewContent: '✨ Create new content',

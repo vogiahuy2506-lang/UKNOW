@@ -88,6 +88,26 @@ class CourseRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Tenant-scoped lookup for LandingBrief catalog resolve (404 when missing/wrong owner).
+   */
+  async findByIdAndUser(id, ownerUserId) {
+    const result = await db.query(
+      `SELECT
+        id,
+        course_name,
+        description,
+        category,
+        price,
+        original_price
+      FROM courses
+      WHERE id = $1 AND id_user = $2
+      LIMIT 1`,
+      [id, ownerUserId]
+    );
+    return result.rows[0] || null;
+  }
+
   async findAllByUser(userId) {
     const result = await db.query(
       `SELECT id, course_code, course_name, price, original_price, description, category, thumbnail_url, status

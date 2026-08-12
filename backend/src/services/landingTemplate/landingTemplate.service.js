@@ -106,7 +106,7 @@ class LandingTemplateService {
    * @param {Array} [params.files] - Files attached to request
    * @returns {Promise<object>} - { title, html, css, variables }
    */
-  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
+  async generateLandingPage({ prompt, templateId = null, userId = null, files = [], landingBriefContext = null, actorUserId = null }) {
     // 1. Get template if specified
     let template = null;
     if (templateId) {
@@ -139,12 +139,16 @@ Default Config: ${JSON.stringify(template.defaultConfig || {})}
 `
       : '';
 
+    const briefBlock = String(landingBriefContext || '').trim()
+      ? `${landingBriefContext}\n\nTHỨ TỰ DỮ KIỆN: (1) LANDING_BRIEF DATA / selected product, (2) yêu cầu khách hàng, (3) hồ sơ/RAG chỉ bổ sung brand/tone — không thay selected product.\n`
+      : '';
+
     const systemPrompt = `Bạn là chuyên gia thiết kế Landing Page với 10+ năm kinh nghiệm.
 Nhiệm vụ: Tạo landing page HTML đẹp, chuyên nghiệp dựa trên yêu cầu của khách hàng.
 
 ${templateInfo}
 
-${ragContext ? ragContext + '\n' : ''}
+${briefBlock}${ragContext ? ragContext + '\n' : ''}
 === YÊU CẦU CỦA KHÁCH HÀNG ===
 "${prompt}"
 
@@ -226,6 +230,9 @@ QUAN TRỌNG:
       temperature: 0.7,
       maxOutputTokens: 16384,
       feature: 'landing_template',
+      metadata: {
+        actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+      },
     });
 
     // 6. Parse response + điền biến vào HTML (tránh {{headline}} hiển thị raw)

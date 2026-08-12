@@ -32,6 +32,9 @@ import CreditWarningBanner from '../../components/layout/CreditWarningBanner';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service';
+import {
+  buildLandingBriefFromAnswers,
+} from './utils/landingBrief.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -2372,19 +2375,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (mySessionId) markTabPending(mySessionId);
     update(prev => [...prev, { role: 'user', content: summaryText }]);
 
-    const goalLabels = {
-      lead: 'Thu thập thông tin đăng ký (lead form)',
-      product: 'Giới thiệu sản phẩm / dịch vụ',
-      event: 'Đăng ký sự kiện / hội thảo',
-      trial: 'Dùng thử miễn phí / nhận ưu đãi',
-    };
-    const audienceLabels = {
-      student: 'Học viên / người muốn học',
-      business: 'Doanh nghiệp / B2B',
-      consumer: 'Cá nhân phổ thông',
-      parent_child: 'Phụ huynh & trẻ em',
-    };
-
     if (!hasProfile) {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -2392,23 +2382,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       }]);
     }
 
-    const parts = [pendingLandingPrompt];
-    if (answers.pageGoal) parts.push(`Mục tiêu trang: ${goalLabels[answers.pageGoal] || answers.pageGoal}`);
-    if (answers.targetAudience) parts.push(`Đối tượng: ${audienceLabels[answers.targetAudience] || answers.targetAudience}`);
-    if (answers.product && answers.product !== 'other' && pendingLandingData?.questions) {
-      const productQ = pendingLandingData.questions.find(q => q.id === 'product');
-      const productOpt = productQ?.options?.find(o => o.value === answers.product);
-      if (productOpt) parts.push(`Sản phẩm: ${productOpt.label}`);
-    }
-    if (answers.formFields === 'extended') {
-      parts.push('Form lead thu thập thêm: Nghề nghiệp và Lĩnh vực quan tâm');
-    } else if (answers.formFields === 'custom' && answers.customFields) {
-      parts.push(`Form lead thu thập thêm các trường: ${answers.customFields}`);
-    }
-    const enrichedPrompt = parts.join('. ');
+    const landingBrief = buildLandingBriefFromAnswers({
+      answers,
+      questions: pendingLandingData?.questions || [],
+      locale,
+    });
 
     try {
-      const response = await aiApi.generateLandingPage(enrichedPrompt, null, uploadedFiles, currentSessionId, summaryText);
+      const response = await aiApi.generateLandingPage(
+        pendingLandingPrompt,
+        null,
+        uploadedFiles,
+        currentSessionId,
+        summaryText,
+        landingBrief,
+      );
       if (response.success) {
         refreshAiCredits();
         const { title, html, css } = response.data;
@@ -2418,17 +2406,18 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           type: 'landing_page',
           data: { title, html, css },
         }]);
+        setPendingLandingPrompt(null);
+        setPendingLandingData(null);
       }
     } catch (err) {
       update(prev => [...prev, {
         role: 'assistant',
         content: `Có lỗi khi tạo landing page: ${err.response?.data?.message || err.message}`,
       }]);
+      // Keep pendingLandingPrompt/Data for retry on any generate error (validation or model/network).
     } finally {
       setIsTyping(false);
       clearTabPending(mySessionId);
-      setPendingLandingPrompt(null);
-      setPendingLandingData(null);
     }
   };
 

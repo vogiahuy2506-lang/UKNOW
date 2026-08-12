@@ -55,6 +55,25 @@ describe('aiUsageMeter.service', () => {
     expect(trackUsage).toHaveBeenCalledWith(10, 'ai_token', 3, expect.objectContaining({
       feature: 'test',
       totalTokens: 3,
+      actorUserId: 10,
+    }));
+  });
+
+  it('generateWithBudget keeps billing userId but records separate actorUserId', async () => {
+    generateGeminiContent.mockResolvedValue({
+      text: 'ok',
+      usage: { promptTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+
+    await aiUsageMeter.generateWithBudget(3, {
+      parts: [{ text: 'hi' }],
+      feature: 'landing_page',
+      metadata: { actorUserId: 9 },
+    });
+
+    expect(trackUsage).toHaveBeenCalledWith(3, 'ai_token', 2, expect.objectContaining({
+      feature: 'landing_page',
+      actorUserId: 9,
     }));
   });
 

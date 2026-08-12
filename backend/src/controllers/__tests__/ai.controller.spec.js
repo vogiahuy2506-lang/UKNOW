@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const processSmartChat = jest.fn();
+const processSmartChatV2 = jest.fn();
 const chargeAiCredit = jest.fn();
 const createSession = jest.fn();
 const saveMessages = jest.fn();
@@ -9,6 +10,7 @@ const tryHandleHelpChat = jest.fn(async () => null);
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
     processSmartChat,
+    processSmartChatV2,
   },
 }));
 
@@ -53,6 +55,7 @@ const makeRes = () => {
 describe('ai.controller', () => {
   beforeEach(() => {
     processSmartChat.mockReset();
+    processSmartChatV2.mockReset();
     chargeAiCredit.mockReset();
     createSession.mockReset();
     saveMessages.mockReset();
@@ -162,5 +165,37 @@ describe('ai.controller', () => {
       success: true,
       data: expect.objectContaining({ content: 'Chọn tài khoản gửi' }),
     });
+  });
+
+  it('employee chat V1/V2: truyền resourceOwnerUserId (owner) và userId (actor)', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'ok' });
+    processSmartChatV2.mockResolvedValue({ type: 'text', content: 'ok v2' });
+
+    const employee = {
+      id: 9,
+      role: 'user',
+      activeContext: { type: 'employee', ownerId: 3 },
+    };
+    const history = [{ role: 'user', content: 'Xin chào' }];
+
+    await aiController.chat({
+      body: { history, locale: 'vi' },
+      user: employee,
+    }, makeRes());
+
+    expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 9,
+      resourceOwnerUserId: 3,
+    }));
+
+    await aiController.chatV2({
+      body: { history, locale: 'vi' },
+      user: employee,
+    }, makeRes());
+
+    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 9,
+      resourceOwnerUserId: 3,
+    }));
   });
 });

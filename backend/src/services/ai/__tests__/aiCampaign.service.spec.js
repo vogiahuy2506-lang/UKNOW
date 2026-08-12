@@ -7,6 +7,16 @@ const reserve = jest.fn();
 const record = jest.fn();
 const getZaloAccountsFull = jest.fn();
 const getActiveEmailSenders = jest.fn();
+const getEmailTemplates = jest.fn(async () => []);
+const getZaloAccounts = jest.fn(async () => []);
+const getZaloGroups = jest.fn(async () => []);
+const getZaloTemplates = jest.fn(async () => []);
+const getRecommendedCampaignType = jest.fn(async () => 'mixed');
+const getCustomerStats = jest.fn(async () => ({ total: 0, hasEmail: 0, hasZalo: 0 }));
+const getCourses = jest.fn(async () => []);
+const getLandingPages = jest.fn(async () => []);
+const getFormattedProfileForPrompt = jest.fn(async () => '');
+const getContextForPrompt = jest.fn(async () => '');
 
 jest.unstable_mockModule('axios', () => ({
   default: {
@@ -21,9 +31,9 @@ jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
 jest.unstable_mockModule('../businessProfile.service.js', () => ({
   default: {
     getProfile: jest.fn(),
-    getContextForPrompt: jest.fn(),
+    getContextForPrompt,
     formatProfileForPrompt: jest.fn(() => ''),
-    getFormattedProfileForPrompt: jest.fn(() => Promise.resolve('')),
+    getFormattedProfileForPrompt,
   },
   serializeProductList: jest.fn(() => ''),
 }));
@@ -56,14 +66,14 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   default: {
     getZaloAccountsFull,
     getActiveEmailSenders,
-    getEmailTemplates: jest.fn(async () => []),
-    getZaloAccounts: jest.fn(async () => []),
-    getZaloGroups: jest.fn(async () => []),
-    getZaloTemplates: jest.fn(async () => []),
-    getRecommendedCampaignType: jest.fn(async () => 'mixed'),
-    getCustomerStats: jest.fn(async () => ({ total: 0 })),
-    getCourses: jest.fn(async () => []),
-    getLandingPages: jest.fn(async () => []),
+    getEmailTemplates,
+    getZaloAccounts,
+    getZaloGroups,
+    getZaloTemplates,
+    getRecommendedCampaignType,
+    getCustomerStats,
+    getCourses,
+    getLandingPages,
   },
 }));
 
@@ -90,8 +100,28 @@ describe('aiCampaign.service', () => {
     record.mockReset();
     getZaloAccountsFull.mockReset();
     getActiveEmailSenders.mockReset();
+    getEmailTemplates.mockReset();
+    getZaloAccounts.mockReset();
+    getZaloGroups.mockReset();
+    getZaloTemplates.mockReset();
+    getRecommendedCampaignType.mockReset();
+    getCustomerStats.mockReset();
+    getCourses.mockReset();
+    getLandingPages.mockReset();
+    getFormattedProfileForPrompt.mockReset();
+    getContextForPrompt.mockReset();
     getZaloAccountsFull.mockResolvedValue([]);
     getActiveEmailSenders.mockResolvedValue([]);
+    getEmailTemplates.mockResolvedValue([]);
+    getZaloAccounts.mockResolvedValue([]);
+    getZaloGroups.mockResolvedValue([]);
+    getZaloTemplates.mockResolvedValue([]);
+    getRecommendedCampaignType.mockResolvedValue('mixed');
+    getCustomerStats.mockResolvedValue({ total: 0, hasEmail: 0, hasZalo: 0 });
+    getCourses.mockResolvedValue([]);
+    getLandingPages.mockResolvedValue([]);
+    getFormattedProfileForPrompt.mockResolvedValue('');
+    getContextForPrompt.mockResolvedValue('');
   });
 
   it('passes userId into smart chat quota reservation and usage recording', async () => {
@@ -206,5 +236,67 @@ describe('aiCampaign.service', () => {
     expect(guarded.response.type).toBe('content_plan');
     expect(guarded.response.data.totalDays).toBe(4);
     expect(guarded.response.data.requiresApproval).toBe(true);
+  });
+
+  it('employee chat V1: loads tenant resources by owner, meters Gemini by actor', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"type":"text","content":"xin chào","missing_fields":[],"data":null}' }],
+            },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChat({
+      userId: 9,
+      resourceOwnerUserId: 3,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    expect(getCourses).toHaveBeenCalledWith(3);
+    expect(getEmailTemplates).toHaveBeenCalledWith(3);
+    expect(getLandingPages).toHaveBeenCalledWith(3);
+    expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3);
+    expect(getCourses).not.toHaveBeenCalledWith(9);
+    expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
+    expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
+  });
+
+  it('employee chat V2: loads tenant resources by owner, meters Gemini by actor', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"type":"text","content":"ok v2","missing_fields":[],"data":null}' }],
+            },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChatV2({
+      userId: 9,
+      resourceOwnerUserId: 3,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    expect(getEmailTemplates).toHaveBeenCalledWith(3);
+    expect(getZaloAccounts).toHaveBeenCalledWith(3);
+    expect(getCustomerStats).toHaveBeenCalledWith(3);
+    expect(getContextForPrompt).toHaveBeenCalledWith(3, 'Xin chào trợ lý');
+    expect(getEmailTemplates).not.toHaveBeenCalledWith(9);
+    expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
+    expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
   });
 });

@@ -33,6 +33,7 @@ import {
   shouldGuardCampaignResponse,
   withDeadEndNudge,
 } from './aiCampaignWizard.service.js';
+import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 
 class AiCampaignService {
   /**
@@ -418,8 +419,20 @@ D. ZALO NHÓM:
     return { response, gateAsked: null };
   }
 
-  async processSmartChat({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null, persistedWizardState = null }) {
+  async processSmartChat({
+    history = [],
+    files = [],
+    userId = null,
+    resourceOwnerUserId = null,
+    userRole = 'user',
+    locale = 'vi',
+    model = null,
+    persistedWizardState = null,
+  }) {
     let contextBlock = '';
+    // Tenant resources (courses, templates, profile) belong to workspace owner;
+    // chat metering/session stay on actor userId.
+    const ownerId = resourceOwnerUserId || userId;
 
     if (userRole === 'admin') {
       // Super admin: inject số liệu nền tảng real-time
@@ -454,7 +467,7 @@ QUY TẮC:
       return runChat({ systemPrompt: adminSystemPrompt, history, files, userId, requestedModel: model });
     }
 
-    const wizardResources = await this._getWizardResources(userId);
+    const wizardResources = await this._getWizardResources(ownerId);
     const lastUserText = lastUserMessageContent(history);
 
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
@@ -500,21 +513,21 @@ QUY TẮC:
       }
     }
 
-    // Thu thập existing resources cho non-admin users
+    // Thu thập existing resources cho non-admin users (theo workspace owner)
     let existingResources = '';
     let landingPages = [];
-    if (userId) {
+    if (ownerId) {
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages] =
           await Promise.all([
-            aiPromptResources.getEmailTemplates(userId),
-            aiPromptResources.getZaloAccounts(userId),
-            aiPromptResources.getZaloGroups(userId),
-            aiPromptResources.getZaloTemplates(userId),
-            aiPromptResources.getRecommendedCampaignType(userId),
-            aiPromptResources.getCustomerStats(userId),
-            aiPromptResources.getCourses(userId),
-            aiPromptResources.getLandingPages(userId),
+            aiPromptResources.getEmailTemplates(ownerId),
+            aiPromptResources.getZaloAccounts(ownerId),
+            aiPromptResources.getZaloGroups(ownerId),
+            aiPromptResources.getZaloTemplates(ownerId),
+            aiPromptResources.getRecommendedCampaignType(ownerId),
+            aiPromptResources.getCustomerStats(ownerId),
+            aiPromptResources.getCourses(ownerId),
+            aiPromptResources.getLandingPages(ownerId),
           ]);
 
         landingPages = _landingPages;
@@ -582,10 +595,10 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
-    // Luôn dùng full profile để AI thấy tất cả sản phẩm/thông tin mới nhất
-    if (userId) {
+    // Luôn dùng full profile để AI thấy tất cả sản phẩm/thông tin mới nhất (workspace owner)
+    if (ownerId) {
       try {
-        contextBlock = await businessProfileService.getFormattedProfileForPrompt(userId);
+        contextBlock = await businessProfileService.getFormattedProfileForPrompt(ownerId);
       } catch (e) {
         console.warn('[AI] Không lấy được business profile:', e.message);
       }
@@ -1102,8 +1115,17 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     };
   }
 
-  async processSmartChatV2({ history = [], files = [], userId = null, userRole = 'user', locale = 'vi', model = null }) {
+  async processSmartChatV2({
+    history = [],
+    files = [],
+    userId = null,
+    resourceOwnerUserId = null,
+    userRole = 'user',
+    locale = 'vi',
+    model = null,
+  }) {
     let contextBlock = '';
+    const ownerId = resourceOwnerUserId || userId;
 
     // Lấy existing resources
     let existingResources = '';
@@ -1111,16 +1133,16 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     let multiStepExample = '';
     let templateSelectionPrompt = '';
 
-    if (userId) {
+    if (ownerId) {
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats] =
           await Promise.all([
-            aiPromptResources.getEmailTemplates(userId),
-            aiPromptResources.getZaloAccounts(userId),
-            aiPromptResources.getZaloGroups(userId),
-            aiPromptResources.getZaloTemplates(userId),
-            aiPromptResources.getRecommendedCampaignType(userId),
-            aiPromptResources.getCustomerStats(userId),
+            aiPromptResources.getEmailTemplates(ownerId),
+            aiPromptResources.getZaloAccounts(ownerId),
+            aiPromptResources.getZaloGroups(ownerId),
+            aiPromptResources.getZaloTemplates(ownerId),
+            aiPromptResources.getRecommendedCampaignType(ownerId),
+            aiPromptResources.getCustomerStats(ownerId),
           ]);
 
         // Get node context từ registry
@@ -1162,18 +1184,18 @@ ${templateSelectionPrompt}
       }
     }
 
-    // RAG context
-    if (userId && history.length > 0) {
+    // RAG context (workspace owner profile; metering stays on actor userId)
+    if (ownerId && history.length > 0) {
       const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
       if (lastUserMsg) {
         try {
-          contextBlock = await businessProfileService.getContextForPrompt(userId, lastUserMsg.content);
+          contextBlock = await businessProfileService.getContextForPrompt(ownerId, lastUserMsg.content);
         } catch (e) {
           console.warn('[AI V2] Không lấy được RAG context:', e.message);
         }
         if (!contextBlock) {
           try {
-            contextBlock = await businessProfileService.getFormattedProfileForPrompt(userId);
+            contextBlock = await businessProfileService.getFormattedProfileForPrompt(ownerId);
           } catch (e) {
             console.warn('[AI V2] Không lấy được business profile:', e.message);
           }

@@ -16,17 +16,27 @@ class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
    *
-   * @param {{ userId: number, prompt: string, titleHint?: string }} opts
+   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null }} opts
    * @returns {Promise<{ title: string, html: string }>}
    */
-  async generate({ userId, prompt, titleHint = '' }) {
+  async generate({ userId, prompt, titleHint = '', landingBriefContext = null, actorUserId = null }) {
     const businessCtx = await businessProfileService.getContextForLandingAi(userId, prompt);
     const hasBusinessCtx = String(businessCtx || '').trim().length > 0;
+    const hasBrief = String(landingBriefContext || '').trim().length > 0;
     const hintLine = String(titleHint || '').trim()
       ? `Gợi ý tiêu đề trang (title / <title>): "${String(titleHint).trim()}".`
       : 'Không có gợi ý tiêu đề — bạn tự đặt title phù hợp.';
 
-    const noProfileNote = hasBusinessCtx ? '' : `LƯU Ý: Chưa có hồ sơ doanh nghiệp — hãy tự suy luận ngành nghề, tên công ty, sản phẩm và khách hàng mục tiêu hợp lý từ yêu cầu của người dùng bên dưới.\n\n`;
+    const noProfileNote = hasBusinessCtx
+      ? ''
+      : (hasBrief
+        ? `LƯU Ý: Chưa có hồ sơ doanh nghiệp — dùng LANDING_BRIEF DATA + yêu cầu người dùng; không bịa tên sản phẩm/giá/ưu đãi/số liệu ngoài các nguồn đó.\n\n`
+        : `LƯU Ý: Chưa có hồ sơ doanh nghiệp — hãy tự suy luận ngành nghề, tên công ty, sản phẩm và khách hàng mục tiêu hợp lý từ yêu cầu của người dùng bên dưới.\n\n`);
+
+    const briefBlock = hasBrief ? `${landingBriefContext}\n\n` : '';
+    const precedenceNote = hasBrief
+      ? `THỨ TỰ DỮ KIỆN: (1) LANDING_BRIEF DATA / selected product, (2) yêu cầu người dùng bên dưới, (3) hồ sơ doanh nghiệp chỉ bổ sung brand/tone/audience — không thay selected product.\n\n`
+      : '';
 
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing tại Việt Nam.
 
@@ -34,7 +44,7 @@ Nhiệm vụ: tạo MỘT trang landing HTML5 hoàn chỉnh, đẹp, responsive,
 
 QUAN TRỌNG: TUYỆT ĐỐI KHÔNG dùng placeholder dạng {{variable}}, [text], hoặc "Lorem ipsum" — hãy viết nội dung thật, cụ thể, tiếng Việt tự nhiên ngay trong HTML.
 
-${hasBusinessCtx ? `${businessCtx}\n\n` : noProfileNote}YÊU CẦU NỘI DUNG / CHỦ ĐỀ TỪ NGƯỜI DÙNG:
+${precedenceNote}${briefBlock}${hasBusinessCtx ? `${businessCtx}\n\n` : noProfileNote}YÊU CẦU NỘI DUNG / CHỦ ĐỀ TỪ NGƯỜI DÙNG:
 """${prompt}"""
 
 ${hintLine}
@@ -65,6 +75,9 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       timeoutMs: 120000,
       temperature: 0.4,
       feature: 'landing_page',
+      metadata: {
+        actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+      },
     });
 
     if (blockReason) {

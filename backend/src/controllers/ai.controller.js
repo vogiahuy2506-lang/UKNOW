@@ -17,6 +17,11 @@ import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../utils/manualRecipients.util.js';
+import {
+  resolveLandingBrief,
+  buildLandingBriefContext,
+  resolveOwnerUserId,
+} from '../services/ai/landingBrief.service.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -187,6 +192,7 @@ class AiController {
           history,
           files: files || [],
           userId: req.user.id,
+          resourceOwnerUserId: resolveOwnerUserId(req.user),
           userRole: req.user.role,
           locale: locale || 'vi',
           model,
@@ -326,6 +332,7 @@ class AiController {
         history,
         files: files || [],
         userId: req.user.id,
+        resourceOwnerUserId: resolveOwnerUserId(req.user),
         userRole: req.user.role,
         locale: locale || 'vi',
         model,
@@ -883,6 +890,7 @@ class AiController {
         userSummary,
         homepagePage,
         locale,
+        landingBrief,
       } = req.body;
       if (!String(prompt || '').trim()) {
         return res.status(400).json({
@@ -891,6 +899,15 @@ class AiController {
         });
       }
 
+      const resolvedBrief = await resolveLandingBrief({ landingBrief, user: req.user });
+      const ownerUserId = resolvedBrief?.ownerUserId
+        ?? (req.user?.activeContext?.type === 'employee'
+          ? req.user.activeContext.ownerId
+          : req.user.id);
+      const landingBriefContext = resolvedBrief
+        ? buildLandingBriefContext(resolvedBrief)
+        : null;
+
       const enrichedPrompt = this._buildHomepageHtmlPrompt({
         prompt: String(prompt).trim(),
         homepagePage,
@@ -898,12 +915,14 @@ class AiController {
       });
 
       const data = await aiLandingPageService.generate({
-        userId: req.user.id,
+        userId: ownerUserId,
+        actorUserId: req.user.id,
         prompt: enrichedPrompt,
         titleHint: title != null ? String(title) : '',
+        landingBriefContext,
       });
 
-      // Lưu vào session nếu có sessionId
+      // Lưu vào session nếu có sessionId (actor, not owner)
       const sid = sessionId ? Number(sessionId) : null;
       if (sid) {
         const userContent = String(userSummary || prompt).trim();
