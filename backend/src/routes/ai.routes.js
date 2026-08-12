@@ -35,6 +35,9 @@ router.post('/execute-campaign', aiLimiter, aiController.executeCampaign.bind(ai
 // Create campaign from AI draft (NO auto-run)
 router.post('/create-from-draft', aiLimiter, aiController.createCampaignFromDraft.bind(aiController));
 
+// Read-only, deterministic campaign preview before the user creates a draft.
+router.post('/prepare-campaign', aiLimiter, aiController.prepareCampaign.bind(aiController));
+
 // Push AI script to existing campaign
 router.post('/push-to-campaign/:id', aiLimiter, aiController.pushToCampaign.bind(aiController));
 

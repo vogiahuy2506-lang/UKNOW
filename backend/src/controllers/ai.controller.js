@@ -1,6 +1,7 @@
 import aiCampaignService from '../services/ai/aiCampaign.service.js';
 import aiLandingPageService from '../services/ai/aiLandingPage.service.js';
 import aiCampaignDraftService from '../services/ai/aiCampaignDraft.service.js';
+import campaignConfirmationService from '../services/ai/campaignConfirmation.service.js';
 import businessProfileService from '../services/ai/businessProfile.service.js';
 import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
@@ -28,6 +29,24 @@ function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu c
 }
 
 class AiController {
+  async prepareCampaign(req, res) {
+    try {
+      const { script } = req.body || {};
+      if (!script || !Array.isArray(script.nodes)) {
+        return res.status(400).json({ success: false, message: 'Kịch bản chiến dịch không hợp lệ' });
+      }
+
+      const confirmationView = await campaignConfirmationService.buildConfirmationView({
+        script,
+        userId: req.user.id,
+      });
+      return res.json({ success: true, data: { confirmationView } });
+    } catch (error) {
+      console.error('AI prepare campaign error:', error);
+      return res.status(500).json(buildAiErrorPayload(error, 'Không thể chuẩn bị bản xem trước chiến dịch'));
+    }
+  }
+
   /**
    * Generate campaign script from AI (V2 - Registry-based, multi-step support).
    *

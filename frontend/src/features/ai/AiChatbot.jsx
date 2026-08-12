@@ -435,6 +435,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [currentScript, setCurrentScript] = useState(null);
+  const [campaignConfirmation, setCampaignConfirmation] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
   const [templatePickerContext, setTemplatePickerContext] = useState(null);
@@ -473,6 +474,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const tabsDragRef = useRef({ dragging: false, startX: 0, scrollLeft: 0, moved: false });
   const currentSessionIdRef = useRef(null);
   const sessionMessagesCache = useRef(new Map()); // sessionId → messages[] (for background generation)
+  const campaignConfirmationRequestRef = useRef(0);
   const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
   const wizardPatchQueueRef = useRef(Promise.resolve()); // serialize PATCH wizard-state (tránh interleave khi "Lưu tất cả")
   const [serverWizardGates, setServerWizardGates] = useState(null); // gates persist trên server của session hiện tại
@@ -570,6 +572,28 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     };
   };
 
+  // Every confirm_create path flows through this one read-only preview request.
+  // The response is deliberately held only in component state, never appended to chat history.
+  const prepareAndShowCampaignConfirmation = async (rawScript, { sessionId = currentSessionIdRef.current, update, content, appendMessage = true } = {}) => {
+    const requestId = ++campaignConfirmationRequestRef.current;
+    const confirmationId = `campaign-confirmation-${requestId}`;
+    const message = { role: 'assistant', content, type: 'confirm_create', data: rawScript, confirmationId };
+    if (appendMessage && update) update((previous) => [...previous, message]);
+    setCurrentScript(rawScript);
+    setIsEditingDraft(false);
+    setCampaignConfirmation({ confirmationId, rawScript, status: 'loading', confirmationView: null, error: null });
+    try {
+      const response = await aiApi.prepareCampaign(rawScript);
+      if (requestId !== campaignConfirmationRequestRef.current) return;
+      if (sessionId && currentSessionIdRef.current && currentSessionIdRef.current !== sessionId) return;
+      if (!response.success || !response.data?.confirmationView) throw new Error(response.message || 'Không thể chuẩn bị bản xem trước');
+      setCampaignConfirmation({ confirmationId, rawScript, status: 'ready', confirmationView: response.data.confirmationView, error: null });
+    } catch (error) {
+      if (requestId !== campaignConfirmationRequestRef.current) return;
+      setCampaignConfirmation({ confirmationId, rawScript, status: 'error', confirmationView: null, error: error.response?.data?.message || error.message || 'Không thể chuẩn bị bản xem trước' });
+    }
+  };
+
   // Fire-and-forget PATCH wizard-state, serialize qua promise queue để "Lưu tất cả"
   // không gửi interleave. Chỉ gọi khi session đã tồn tại trên server.
   const enqueueWizardPatch = (action, payload = {}) => {
@@ -624,8 +648,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const loadSession = async (sessionId) => {
     // If this session has cached messages (background generation in-progress or just completed), load from cache
     if (sessionMessagesCache.current.has(sessionId)) {
+      currentSessionIdRef.current = sessionId;
       setCurrentSessionId(sessionId);
-      setMessages(sessionMessagesCache.current.get(sessionId));
+      const cachedMessages = sessionMessagesCache.current.get(sessionId);
+      setMessages(cachedMessages);
+      const cachedConfirmation = [...cachedMessages].reverse().find((message) => message.type === 'confirm_create' && message.data);
+      if (cachedConfirmation) {
+        await prepareAndShowCampaignConfirmation(cachedConfirmation.data, { sessionId, content: cachedConfirmation.content, appendMessage: false });
+      } else {
+        campaignConfirmationRequestRef.current += 1;
+        setCampaignConfirmation(null);
+      }
       setIsTyping(pendingTabIdRef.current.has(sessionId));
       // Cache path không hit server — restore wizard state từ cache; không clobber
       // workflow đang sống (có thể chứa draft chưa lưu)
@@ -671,6 +704,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         };
       });
 
+      currentSessionIdRef.current = sessionId;
       setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);
       setCurrentSessionId(sessionId);
 
@@ -697,7 +731,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setPendingCampaignData(lastAssistant.data);
         setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
       } else if (lastAssistant?.type === 'confirm_create') {
-        setCurrentScript(lastAssistant.data);
+        await prepareAndShowCampaignConfirmation(lastAssistant.data, {
+          sessionId,
+          content: lastAssistant.content,
+          appendMessage: false,
+        });
         setPendingCampaignPrompt(null); setPendingCampaignData(null);
         setPendingLandingPrompt(null); setPendingLandingData(null);
         if (!workflowRestored) setContentPlanWorkflow(null);
@@ -740,6 +778,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const startNewChat = () => {
+    campaignConfirmationRequestRef.current += 1;
     setCurrentSessionId(null);
     setMessages([{ role: 'assistant', content: welcomeMessage }]);
     setPendingCampaignPrompt(null);
@@ -747,6 +786,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setPendingLandingPrompt(null);
     setPendingLandingData(null);
     setCurrentScript(null);
+    setCampaignConfirmation(null);
     setContentPlanWorkflow(null);
     setWizardContext(deriveWizardContext([]));
     setServerWizardGates(null);
@@ -1535,8 +1575,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           // Derive từ newHistory (thay vì wizardContext state) để không bỏ sót
           // tin nhắn vừa gửi trong lượt này (ví dụ link Google Sheet vừa dán)
           const mergedScript = applyWizardSelectionsToScript(data, deriveWizardContext(newHistory));
-          setCurrentScript(mergedScript);
-          update(prev => [...prev, { role: 'assistant', content, type, data: mergedScript }]);
+          await prepareAndShowCampaignConfirmation(mergedScript, { sessionId: mySessionId, update, content });
           return;
         }
 
@@ -1583,11 +1622,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
+        if (type === 'confirm_create' && data) {
+          await prepareAndShowCampaignConfirmation(data, { sessionId: mySessionId, update, content });
+          return;
+        }
         update(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
         }]);
-        if (type === 'confirm_create') setCurrentScript(data);
       }
     } catch (error) {
       update(prev => [...prev, {
@@ -2284,8 +2326,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         refreshAiCredits();
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
-          setCurrentScript({ ...data, ...answers });
-          update(prev => [...prev, { role: 'assistant', content, type, data: { ...data, ...answers } }]);
+          await prepareAndShowCampaignConfirmation({ ...data, ...answers }, { sessionId: currentSessionIdRef.current, update, content });
         } else {
           update(prev => [...prev, { role: 'assistant', content, type, data }]);
           if (type === 'campaign_script' && data) setCurrentScript({ ...data, ...answers });
@@ -2395,16 +2436,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         
         // Nếu AI trả về confirm_create
         if (type === 'confirm_create' && data) {
-          setCurrentScript({
+          await prepareAndShowCampaignConfirmation({
             ...data,
             campaignType: campaignType, // Override với type user đã chọn
-          });
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Chiến dịch đã sẵn sàng!',
-            type: 'confirm_create',
-            data: { ...data, campaignType },
-          }]);
+          }, { sessionId: currentSessionIdRef.current, update: setMessages, content: content || 'Chiến dịch đã sẵn sàng!' });
         } else {
           // AI trả lời khác, hiển thị như bình thường
           setMessages(prev => [...prev, {
@@ -2459,17 +2494,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         // Nếu AI trả về confirm_create
         if (type === 'confirm_create' && data) {
-          setCurrentScript({
+          await prepareAndShowCampaignConfirmation({
             ...data,
             campaignType: pendingCampaignData?.campaignType,
             audience: audience,
-          });
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Chiến dịch đã sẵn sàng!',
-            type: 'confirm_create',
-            data: { ...data, campaignType: pendingCampaignData?.campaignType, audience },
-          }]);
+          }, { sessionId: currentSessionIdRef.current, update: setMessages, content: content || 'Chiến dịch đã sẵn sàng!' });
         } else {
           // AI trả lời khác, hiển thị như bình thường
           setMessages(prev => [...prev, {
@@ -2498,6 +2527,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
    */
   const handleConfirmCreate = async () => {
     if (!currentScript) return;
+    if (campaignConfirmation?.status !== 'ready' || !campaignConfirmation.confirmationView?.readyToCreate) {
+      toast.error('Hãy sửa các mục trong bản xem trước trước khi tạo chiến dịch.');
+      return;
+    }
     await handleCreateCampaign();
   };
 
@@ -2505,7 +2538,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
    * Xử lý khi user hủy tạo chiến dịch
    */
   const handleCancelCreate = () => {
+    campaignConfirmationRequestRef.current += 1;
     setCurrentScript(null);
+    setCampaignConfirmation(null);
     setPendingCampaignPrompt(null);
     setPendingCampaignData(null);
     setSelectedCampaignType(null);
@@ -2531,6 +2566,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const res = await aiApi.createCampaignFromDraft(scriptWithSelections);
       if (res.success) {
         toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
+        campaignConfirmationRequestRef.current += 1;
+        setCampaignConfirmation(null);
         setCurrentScript(null);
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -2704,6 +2741,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         {!centered && <p className="mt-2 text-[10px] text-center text-slate-400">{t('aiChatbot.poweredBy')}</p>}
       </div>
     </div>
+  );
+
+  const latestConfirmationIndex = messages.reduce(
+    (latest, message, index) => (message.type === 'confirm_create' ? index : latest),
+    -1,
   );
 
   return (
@@ -3136,22 +3178,28 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
 
               {/* Confirm create - xác nhận trước khi tạo */}
-              {msg.type === 'confirm_create' && msg.data && !isEditingDraft && (
+              {msg.type === 'confirm_create' && msg.data && !(isEditingDraft && idx === latestConfirmationIndex) && (
                 <ConfirmCreateCard
-                  script={msg.data}
+                  confirmationView={idx === latestConfirmationIndex ? campaignConfirmation?.confirmationView : null}
+                  isPreparing={idx === latestConfirmationIndex && campaignConfirmation?.status === 'loading'}
+                  prepareError={idx === latestConfirmationIndex && campaignConfirmation?.status === 'error' ? campaignConfirmation.error : null}
+                  isActive={idx === latestConfirmationIndex && Boolean(currentScript)}
                   onConfirm={handleConfirmCreate}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
+                  onRetry={() => prepareAndShowCampaignConfirmation(currentScript, { sessionId: currentSessionIdRef.current, appendMessage: false })}
                   t={t}
+                  locale={locale}
                 />
               )}
               
               {/* Campaign Draft Editor - Chỉnh sửa trong chatbot */}
-              {msg.type === 'confirm_create' && msg.data && isEditingDraft && (
+              {msg.type === 'confirm_create' && msg.data && isEditingDraft && idx === latestConfirmationIndex && (
                 <CampaignDraftEditor
-                  script={msg.data}
-                  onSave={(editedScript) => {
-                    setCurrentScript({ ...msg.data, ...editedScript });
+                  script={currentScript || msg.data}
+                  onSave={async (editedScript) => {
+                    const nextScript = { ...(currentScript || msg.data), ...editedScript };
+                    await prepareAndShowCampaignConfirmation(nextScript, { sessionId: currentSessionIdRef.current, appendMessage: false });
                     setIsEditingDraft(false);
                     toast.success('Đã cập nhật draft!');
                   }}

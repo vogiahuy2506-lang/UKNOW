@@ -45,6 +45,11 @@ const aiApi = {
     return response.data;
   },
 
+  prepareCampaign: async (script) => {
+    const response = await api.post('/ai/prepare-campaign', { script });
+    return response.data;
+  },
+
   /**
    * Push AI script to an existing campaign.
    * @param {number} campaignId Target campaign ID

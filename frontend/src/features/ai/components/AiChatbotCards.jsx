@@ -1208,11 +1208,39 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
   );
 };
 
-// Confirm create card - hiển thị summary và hỏi xác nhận
-export const ConfirmCreateCard = ({ script, onConfirm, onEdit, onCancel, t }) => {
-  const summary = script?.summary || {};
-  const steps = summary.steps || [];
-  
+const formatPreviewTiming = (timing, locale) => {
+  const value = Number(timing?.value || 0);
+  if (!value) return locale === 'en' ? 'Send immediately' : 'Gửi ngay';
+  const units = locale === 'en'
+    ? { minutes: 'minute', hours: 'hour', days: 'day', weeks: 'week' }
+    : { minutes: 'phút', hours: 'giờ', days: 'ngày', weeks: 'tuần' };
+  const unit = units[timing?.unit] || timing?.unit || (locale === 'en' ? 'day' : 'ngày');
+  const label = locale === 'en' && value !== 1 ? `${unit}s` : unit;
+  const anchor = timing?.anchor === 'prev'
+    ? (locale === 'en' ? ' from the previous step' : ' từ bước trước')
+    : (locale === 'en' ? ' from the start' : ' từ lúc bắt đầu');
+  return locale === 'en' ? `After ${value} ${label}${anchor}` : `Sau ${value} ${label}${anchor}`;
+};
+
+const previewChannelLabel = (channel, locale) => {
+  if (channel === 'email') return 'Email';
+  if (channel === 'zalo_group') return locale === 'en' ? 'Zalo group' : 'Zalo nhóm';
+  return locale === 'en' ? 'Zalo personal' : 'Zalo cá nhân';
+};
+
+// The server supplies this semantic view. Model-provided summary.steps is intentionally never rendered here.
+export const ConfirmCreateCard = ({ confirmationView, onConfirm, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, t, locale = 'vi' }) => {
+  const [expandedSteps, setExpandedSteps] = useState(new Set());
+  const steps = confirmationView?.steps || [];
+  const blockingIssues = confirmationView?.blockingIssues || [];
+  const canCreate = isActive && !isPreparing && !prepareError && confirmationView?.readyToCreate;
+  const toggleStep = (key) => setExpandedSteps((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+
   return (
     <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl overflow-hidden">
       {/* Header */}
@@ -1221,82 +1249,33 @@ export const ConfirmCreateCard = ({ script, onConfirm, onEdit, onCancel, t }) =>
           <HiOutlineSparkles className="w-5 h-5" />
           <span className="font-black text-[10px] uppercase tracking-[0.2em]">{t('aiChatbot.confirmCreateCampaign')}</span>
         </div>
-        <h4 className="font-bold text-lg">{script?.campaignName}</h4>
-        {script?.description && (
-          <p className="text-xs text-emerald-100 mt-1">{script.description}</p>
+        <h4 className="font-bold text-lg">{confirmationView?.campaign?.name || (locale === 'en' ? 'Campaign preview' : 'Xem trước chiến dịch')}</h4>
+        {confirmationView?.campaign?.description && (
+          <p className="text-xs text-emerald-100 mt-1">{confirmationView.campaign.description}</p>
         )}
       </div>
-      
-      {/* Summary stats */}
-      <div className="p-4 border-b border-emerald-100">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/60 rounded-lg p-2 text-center">
-            <p className="text-lg font-black text-emerald-700">{summary.totalSteps || script?.nodes?.length || 0}</p>
-            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">{t('aiChatbot.steps')}</p>
+      <div className="p-4 space-y-3">
+        {isPreparing && <p className="text-sm text-emerald-700">{locale === 'en' ? 'Preparing the delivery preview...' : 'Đang chuẩn bị bản xem trước gửi tin...'}</p>}
+        {prepareError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><p>{prepareError}</p>{isActive && <button onClick={onRetry} className="mt-2 font-bold underline">{locale === 'en' ? 'Retry' : 'Thử lại'}</button>}</div>}
+        {!isPreparing && !prepareError && confirmationView && <>
+          <div className="flex items-center justify-between text-xs text-emerald-700"><span>{locale === 'en' ? 'Messages to send' : 'Tin sẽ gửi'}</span><strong>{confirmationView.totals?.sendSteps || 0}</strong></div>
+          {blockingIssues.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><p className="font-bold">{locale === 'en' ? 'Fix these items before creating:' : 'Cần sửa trước khi tạo:'}</p><ul className="mt-1 list-disc pl-4">{blockingIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{locale === 'en' ? 'A send step is incomplete or unavailable.' : 'Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.'}</li>)}</ul></div>}
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {steps.map((step, index) => {
+              const expanded = expandedSteps.has(step.key);
+              return <div key={step.key} className="rounded-lg border border-emerald-100 bg-white/75 p-3"><div className="flex items-start gap-2"><div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">{index + 1}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-800 break-words">{step.title}</p><p className="text-[10px] text-slate-500">{previewChannelLabel(step.channel, locale)} · {formatPreviewTiming(step.timing, locale)}</p>{step.sender?.label && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Sender' : 'Tài khoản gửi'}: {step.sender.label}</p>}{step.recipients?.sourceLabel && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {step.recipients.sourceLabel}</p>}{step.content?.subject && <p className="mt-2 text-xs font-semibold text-slate-700 break-words">{step.content.subject}</p>}<p className={`mt-1 whitespace-pre-wrap break-words text-xs text-slate-600 ${expanded ? '' : 'line-clamp-3'}`}>{step.content?.bodyText || (locale === 'en' ? 'No message body' : 'Chưa có nội dung tin')}</p>{step.content?.bodyText && <button onClick={() => toggleStep(step.key)} className="mt-1 text-[10px] font-bold text-emerald-700">{expanded ? (locale === 'en' ? 'Collapse' : 'Thu gọn') : (locale === 'en' ? 'Show more' : 'Xem thêm')}</button>}{step.content?.attachments?.length > 0 && <p className="mt-1 text-[10px] text-slate-500">{locale === 'en' ? 'Attachments' : 'Tệp đính kèm'}: {step.content.attachments.map((file) => file.name || file.contentType).filter(Boolean).join(', ')}</p>}</div></div></div>;
+            })}
           </div>
-          <div className="bg-white/60 rounded-lg p-2 text-center">
-            <p className="text-lg font-black text-emerald-700">{summary.duration || 'N/A'}</p>
-            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">{t('aiChatbot.duration')}</p>
-          </div>
-          <div className="bg-white/60 rounded-lg p-2 text-center">
-            <p className="text-lg font-black text-emerald-700">
-              {script?.campaignType === 'email' ? '📧' : 
-               script?.campaignType === 'zalo' ? '💬' : 
-               script?.campaignType === 'zalo_group' ? '👥' : '📱'}
-            </p>
-            <p className="text-[10px] text-emerald-600 uppercase tracking-wider">
-              {script?.campaignType === 'email' ? 'Email' : 
-               script?.campaignType === 'zalo' ? 'Zalo' : 
-               script?.campaignType === 'zalo_group' ? t('aiChatbot.zaloGroup') : t('aiChatbot.multiChannel')}
-            </p>
-          </div>
-        </div>
+        </>}
+        {!isActive && <p className="text-xs text-slate-500">{locale === 'en' ? 'This is an earlier confirmation and is read-only.' : 'Đây là bản xác nhận cũ, chỉ để xem.'}</p>}
       </div>
-      
-      {/* Steps preview */}
-      <div className="p-4">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">{t('aiChatbot.stepsLabel')}</p>
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {steps.length > 0 ? steps.map((step, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                {step.step}
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-slate-700">{step.action}</p>
-                <p className="text-[10px] text-slate-400">{step.timing}</p>
-              </div>
-            </div>
-          )) : (
-            script?.nodes?.filter(n => n.nodeType !== 'trigger' && n.nodeType !== 'start').slice(0, 5).map((node, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                  {i + 1}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-semibold text-slate-700">{node.nodeName || node.nodeSubtype}</p>
-                  <p className="text-[10px] text-slate-400">
-                    {node.nodeType === 'action' ? (
-                      node.nodeSubtype === 'send_email' ? '📧 Email' :
-                      node.nodeSubtype === 'send_zalo_personal' ? '💬 ' + t('aiChatbot.zaloPersonal') :
-                      node.nodeSubtype === 'send_zalo_group' ? '👥 ' + t('aiChatbot.zaloGroup') :
-                      node.nodeSubtype === 'delay' || node.nodeSubtype === 'wait_time' ? '⏰ ' + t('aiChatbot.delay') :
-                      '⚡ ' + t('aiChatbot.action')
-                    ) : node.nodeType === 'logic' ? '⏰ ' + t('aiChatbot.delay') : '▶️ ' + t('aiChatbot.step')}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      
-      {/* Actions */}
+
       <div className="p-4 bg-white/50 border-t border-emerald-100">
-        <div className="space-y-2">
+        {isActive && <div className="space-y-2">
           <button 
             onClick={onConfirm}
-            className="w-full py-3 bg-emerald-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-emerald-600 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
+            disabled={!canCreate}
+            className="w-full py-3 bg-emerald-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
           >
             <HiOutlineCheck className="w-5 h-5" />
             {t('aiChatbot.createCampaignBtn')}
@@ -1316,7 +1295,7 @@ export const ConfirmCreateCard = ({ script, onConfirm, onEdit, onCancel, t }) =>
               {t('aiChatbot.cancelAction')}
             </button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
