@@ -11,6 +11,7 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' } },
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7,"accountName":"Sales"}\nSales' } },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"sheet"}\nGoogle Sheet' } },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Ra mắt sản phẩm"}\nChủ đề' } },
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":3,"slotsPerDay":1}\n3 ngày' } },
     {
       push: {

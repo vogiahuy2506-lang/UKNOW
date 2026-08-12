@@ -283,6 +283,7 @@ class AiController {
           await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
             gates: _wizard.gates,
             meta: _wizard.meta,
+            ...(_wizard.brief ? { brief: _wizard.brief } : {}),
             ...(_wizard.planChanged
               ? {
                 planSnapshot: _wizard.planSnapshot ?? null,
@@ -735,13 +736,30 @@ class AiController {
    */
   async createAndRunCampaign(req, res) {
     try {
-      const { script } = req.body;
+      const { script, directRecipients } = req.body;
 
       if (!script || !script.nodes || !script.connections) {
         return res.status(400).json({
           success: false,
           message: 'Script không hợp lệ. Cần có nodes và connections.',
         });
+      }
+
+      // M2 defense: manual recipients require private overlay — never silent auto-run with model-copied PII.
+      const looksManual = script.wizardDataSource === 'manual'
+        || (script.nodes || []).some((node) => {
+          const config = node?.config || {};
+          return config.recipientSource === 'manual' || config.zaloRecipientSource === 'manual';
+        });
+      if (looksManual) {
+        if (!directRecipients) {
+          return res.status(400).json({
+            success: false,
+            code: 'MANUAL_RECIPIENTS_REQUIRED',
+            message: 'Chiến dịch nhập người nhận trực tiếp cần xác nhận và danh sách người nhận. Vui lòng dùng bước xem trước.',
+          });
+        }
+        this.applyDirectRecipients(script, directRecipients);
       }
 
       // Tự động tạo email templates từ inline content

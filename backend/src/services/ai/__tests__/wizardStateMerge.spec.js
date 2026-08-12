@@ -132,6 +132,7 @@ describe('normalizeWizardState / computeWizardMeta', () => {
     expect(normalized.gates.channel).toBe('zalo');
     expect(normalized.gates.zaloGroupIds).toEqual([]);
     expect(normalized.plan.savedTemplates).toEqual([]);
+    expect(normalized.brief.contentMode).toBeNull();
     expect(normalized.meta.lastGateCount).toBe(0);
   });
 

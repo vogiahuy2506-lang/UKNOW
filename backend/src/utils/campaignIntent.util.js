@@ -3,6 +3,8 @@
  * Moved out of aiCampaign.service.js (god-object split PR2).
  */
 
+import { buildDataSourceQuestion } from '../services/ai/aiCampaignWizard.service.js';
+
 export function langInstruction(locale) {
   return locale === 'en'
     ? 'Always respond in English. All "content" fields in JSON must be written in English.'
@@ -35,49 +37,8 @@ export function asksOnlyForGoogleSheet(response) {
 }
 
 export function buildCampaignDataSourceQuestion(locale = 'vi') {
-  const isEnglish = locale === 'en';
-  return {
-    type: 'ask_campaign_details',
-    content: isEnglish
-      ? 'I can create this customer care campaign. Before setting it up, please choose where the customer list should come from.'
-      : 'Tôi có thể tạo chiến dịch chăm sóc khách hàng này. Trước khi thiết lập, bạn chọn giúp tôi nguồn danh sách khách hàng nhé.',
-    missing_fields: [],
-    data: {
-      campaignName: isEnglish ? 'Travel customer care campaign' : 'Chiến dịch chăm sóc khách du lịch',
-      description: isEnglish
-        ? 'Send thank-you messages after a trip and a follow-up promotion later.'
-        : 'Gửi lời cảm ơn sau chuyến đi và gửi ưu đãi tour mới sau một khoảng thời gian.',
-      questions: [
-        {
-          id: 'dataSource',
-          label: isEnglish ? 'Where should the customer list come from?' : 'Lấy danh sách khách từ đâu?',
-          options: [
-            {
-              value: 'db',
-              label: isEnglish ? 'Saved customer list' : 'Danh sách khách hàng',
-              description: isEnglish
-                ? 'People already in your account (from past campaigns, courses, or CRM)'
-                : 'Khách đã có trong tài khoản (từ chiến dịch cũ, khóa học, CRM)',
-            },
-            {
-              value: 'sheet',
-              label: isEnglish ? 'Excel / Google Sheet' : 'File Excel / Google Sheet',
-              description: isEnglish
-                ? 'A spreadsheet file or Google Sheet link you provide'
-                : 'File hoặc link bảng tính bạn tự cung cấp',
-            },
-            {
-              value: 'landing',
-              label: isEnglish ? 'Landing page sign-ups' : 'Đăng ký từ Landing Page',
-              description: isEnglish
-                ? 'People who submitted the form on your landing page (name, phone, email)'
-                : 'Người điền form trên trang landing (tên, SĐT, email)',
-            },
-          ],
-        },
-      ],
-    },
-  };
+  // A4b: unify with wizard helper (manual + wizardGate)
+  return buildDataSourceQuestion(locale);
 }
 
 export function isMultiDaySeriesRequest(text = '') {

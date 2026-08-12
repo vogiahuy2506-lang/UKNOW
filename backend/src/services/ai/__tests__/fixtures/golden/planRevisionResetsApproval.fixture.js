@@ -11,6 +11,7 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo cá nhân' } },
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":12,"accountName":"TK Zalo"}\nTK Zalo' } },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDanh sách khách hàng' } },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Chăm sóc khách 5 ngày"}\nChủ đề' } },
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":5,"slotsPerDay":1}\n5 ngày' } },
     {
       push: {

@@ -108,6 +108,34 @@ class CourseRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Batch tenant-scoped lookup for CampaignBrief catalog_set.
+   * Missing/wrong-owner IDs are simply absent from the result set.
+   */
+  async findByIdsAndUser(ids, ownerUserId) {
+    const uniqueIds = [...new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )];
+    if (!uniqueIds.length || !Number.isFinite(Number(ownerUserId)) || Number(ownerUserId) <= 0) {
+      return [];
+    }
+    const result = await db.query(
+      `SELECT
+        id,
+        course_name,
+        description,
+        category,
+        price,
+        original_price
+      FROM courses
+      WHERE id_user = $1 AND id = ANY($2::int[])`,
+      [ownerUserId, uniqueIds]
+    );
+    return result.rows;
+  }
+
   async findAllByUser(userId) {
     const result = await db.query(
       `SELECT id, course_code, course_name, price, original_price, description, category, thumbnail_url, status

@@ -11,6 +11,8 @@ export default {
     { push: { role: 'user', content: 'Tạo chiến dịch email gửi mỗi 7 ngày cho khách trong DB' } },
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7,"accountName":"Sales"}\nSales' } },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' } },
+    { expectGate: 'campaignBrief' },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Chăm sóc khách định kỳ"}\nChủ đề' } },
     { expectGate: 'schedule' },
     // Trả lời bằng marker schedule recurring tường minh → vẫn re-ask
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"recurring","mode":"recurring","days":7}\nMỗi 7 ngày' } },

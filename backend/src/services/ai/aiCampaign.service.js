@@ -13,7 +13,6 @@ import {
   hasExplicitCustomerSource,
   looksLikeCampaignRequest,
   asksOnlyForGoogleSheet,
-  buildCampaignDataSourceQuestion,
   isMultiDaySeriesRequest,
   looksLikeInlineSeriesDraft,
 } from '../../utils/campaignIntent.util.js';
@@ -22,6 +21,7 @@ import {
   extractWizardState,
   findOriginalCampaignPrompt,
   buildCampaignPromptWithWizardState,
+  buildDataSourceQuestion,
   computeWizardMeta,
   isContentPlanRevisionText,
   mergeWizardState,
@@ -29,10 +29,26 @@ import {
   parseWizardMarker,
   isPlanTemplateDraftRequest,
   isWizardMarkerMessage,
+  isPlanCancelText,
+  createEmptyWizardState,
   normalizeChannel,
   shouldGuardCampaignResponse,
   withDeadEndNudge,
 } from './aiCampaignWizard.service.js';
+import {
+  extractCampaignBriefFromHistory,
+  mergeCampaignBrief,
+  isCampaignBriefReady,
+  resolveCampaignBrief,
+  clearCampaignBriefProductFacts,
+  createEmptyCampaignBrief,
+} from './campaignBrief.service.js';
+import {
+  isQuickSendRequest,
+  inferCampaignBriefFromText,
+  inferQuickSendChannel,
+  isCampaignScriptShaped,
+} from '../../utils/campaignQuickSend.util.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 
 class AiCampaignService {
@@ -340,15 +356,21 @@ D. ZALO NHÓM:
       && asksOnlyForGoogleSheet(response)
       && !hasExplicitCustomerSource(lastUserText)
     ) {
-      return buildCampaignDataSourceQuestion(locale);
+      return buildDataSourceQuestion(locale);
     }
     return response;
   }
 
-  _guardContentPlanResponse(response, history = []) {
+  _guardContentPlanResponse(response, history = [], brief = null) {
     if (response?.type === 'content_plan') return response;
 
     const lastUserText = lastUserMessageContent(history);
+    const sourcePrompt = findOriginalCampaignPrompt(history);
+    const quickSend = brief?.flowMode === 'quick_send'
+      || isQuickSendRequest(sourcePrompt)
+      || isQuickSendRequest(lastUserText);
+    if (quickSend) return response;
+
     if (!isMultiDaySeriesRequest(lastUserText)) return response;
 
     if (response?.type === 'text' && looksLikeInlineSeriesDraft(response.content)) {
@@ -362,13 +384,84 @@ D. ZALO NHÓM:
     return response;
   }
 
+  /**
+   * Quick-send must confirm before run. "gửi nhanh" alone is not create_and_run.
+   * Never escalate quick-send into a content_plan series unless payload is script-shaped.
+   */
+  _guardQuickSendResponse(response, history = [], brief = null) {
+    const lastUserText = lastUserMessageContent(history);
+    const sourcePrompt = findOriginalCampaignPrompt(history);
+    const quickSend = brief?.flowMode === 'quick_send'
+      || isQuickSendRequest(sourcePrompt)
+      || isQuickSendRequest(lastUserText);
+    if (!quickSend || !response) return response;
+
+    if (response.type === 'content_plan' || response.type === 'suggest_content_plan') {
+      // Only retype when FE can actually prepare/create — never fake confirm from {days,...}.
+      if (isCampaignScriptShaped(response.data)) {
+        return {
+          ...response,
+          type: 'confirm_create',
+          data: { ...response.data, autoRun: false },
+        };
+      }
+      return {
+        type: 'text',
+        content: response.content
+          || 'Mình sẽ soạn một email gửi một lần. Bạn cho thêm nguồn khách (hoặc xác nhận các bước còn thiếu) nhé.',
+        missing_fields: [],
+        data: null,
+      };
+    }
+
+    if (response.type === 'create_and_run') {
+      const EXPLICIT_CREATE_AND_RUN = /tạo\s*và\s*chạy|tao\s*va\s*chay|create\s*and\s*run|auto\s*-?\s*run|chạy\s*ngay\s*(?:chiến\s*dịch|chien\s*dich|campaign)|chay\s*ngay\s*(?:chien\s*dich|campaign)/i;
+      if (EXPLICIT_CREATE_AND_RUN.test(lastUserText) || EXPLICIT_CREATE_AND_RUN.test(sourcePrompt)) {
+        return response;
+      }
+      return {
+        ...response,
+        type: 'confirm_create',
+        data: response.data && typeof response.data === 'object'
+          ? { ...response.data, autoRun: false }
+          : response.data,
+      };
+    }
+
+    return response;
+  }
+
+  /**
+   * M2: manual recipient source must never auto-run without private directRecipients overlay.
+   * Always downgrade to confirm_create so FE opens prepare + recipient overlay.
+   */
+  _guardManualRecipientsNoAutoRun(response, gates = null) {
+    if (response?.type !== 'create_and_run') return response;
+    const data = response.data && typeof response.data === 'object' ? response.data : null;
+    const manualFromGate = gates?.dataSource === 'manual';
+    const manualFromScript = data?.wizardDataSource === 'manual'
+      || (Array.isArray(data?.nodes) && data.nodes.some((node) => {
+        const config = node?.config || {};
+        return config.recipientSource === 'manual' || config.zaloRecipientSource === 'manual';
+      }));
+    if (!manualFromGate && !manualFromScript) return response;
+    return {
+      ...response,
+      type: 'confirm_create',
+      data: data
+        ? { ...data, autoRun: false, wizardDataSource: data.wizardDataSource || 'manual' }
+        : { autoRun: false, wizardDataSource: 'manual' },
+    };
+  }
+
   async _getWizardResources(userId) {
-    if (!userId) return { zaloAccounts: [], emailSenders: [] };
-    const [zaloAccounts, emailSenders] = await Promise.all([
+    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [] };
+    const [zaloAccounts, emailSenders, courses] = await Promise.all([
       aiPromptResources.getZaloAccountsFull(userId),
       aiPromptResources.getActiveEmailSenders(userId),
+      aiPromptResources.getCourses(userId),
     ]);
-    return { zaloAccounts, emailSenders };
+    return { zaloAccounts, emailSenders, courses };
   }
 
   // mergedGates: state đã merge persisted + derived (bước wizard-state DB); nếu không
@@ -477,18 +570,155 @@ QUY TẮC:
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
     const isRevision = isContentPlanRevisionText(lastUserText);
 
+    const sourcePrompt = findOriginalCampaignPrompt(history);
+    const extracted = extractCampaignBriefFromHistory(history);
+    let resolvedBriefContext = '';
+    let briefStale = false;
+    let briefForState;
+
+    if (extracted.invalid) {
+      // Latest marker authoritative — never fall back to older/persisted brief facts.
+      briefForState = clearCampaignBriefProductFacts({
+        contentMode: extracted.preferredContentMode,
+        contentLocale: locale === 'en' ? 'en' : 'vi',
+      });
+    } else {
+      const mergedBrief = mergeCampaignBrief(persistedState.brief, extracted.brief, { locale });
+      if (!mergedBrief.contentLocale) {
+        mergedBrief.contentLocale = locale === 'en' ? 'en' : 'vi';
+      }
+      briefForState = mergedBrief;
+    }
+
+    // PR-B quick-send: once schedule + optional inferred brief; multi-day already excluded.
+    // Latest free-text campaign intent from extractWizardState wins over older quick-send.
+    const quickSendActive = derivedState.latestIntentIsQuickSend === true;
+    const intentPrompt = sourcePrompt || lastUserText;
+
+    if (quickSendActive) {
+      const scheduleFromMarker = Array.isArray(derivedState.markerGates)
+        && derivedState.markerGates.includes('schedule');
+      if (!scheduleFromMarker) {
+        mergedGates.schedule = { mode: 'once' };
+      }
+      if (!mergedGates.channel) {
+        mergedGates.channel = inferQuickSendChannel(intentPrompt);
+      }
+      briefForState = {
+        ...(briefForState || createEmptyCampaignBrief(locale)),
+        flowMode: 'quick_send',
+      };
+      if (!extracted.invalid && !isCampaignBriefReady(briefForState)) {
+        const inferred = inferCampaignBriefFromText(intentPrompt, wizardResources.courses);
+        if (inferred) {
+          briefForState = mergeCampaignBrief(briefForState, { ...inferred, flowMode: 'quick_send' }, { locale });
+          if (!briefForState.contentLocale) {
+            briefForState.contentLocale = locale === 'en' ? 'en' : 'vi';
+          }
+        }
+      }
+    } else if (derivedState.latestIntentIsQuickSend === false && briefForState?.flowMode === 'quick_send') {
+      // Explicit non-quick latest intent (e.g. switched to drip) — reset sticky flowMode.
+      // latestIntentIsQuickSend === null (marker-only / truncated history) must keep persisted quick_send.
+      briefForState = { ...briefForState, flowMode: 'standard' };
+      if (!derivedState.markerGates?.includes('schedule')) {
+        mergedGates.schedule = derivedState.schedule ?? mergedGates.schedule;
+      }
+    }
+
+    if (!extracted.invalid && isCampaignBriefReady(briefForState)) {
+      try {
+        const resolved = await resolveCampaignBrief({
+          brief: briefForState,
+          ownerUserId: ownerId,
+          sourcePrompt,
+          catalogCourses: wizardResources.courses,
+        });
+        briefForState = resolved.brief;
+        if (quickSendActive) briefForState.flowMode = 'quick_send';
+        resolvedBriefContext = resolved.briefContext;
+      } catch (e) {
+        if (
+          e.code === 'CAMPAIGN_PRODUCT_NOT_FOUND'
+          || e.code === 'CAMPAIGN_BRIEF_INVALID'
+          || e.code === 'CAMPAIGN_PRODUCT_NAME_REQUIRED'
+          || e.code === 'CAMPAIGN_TOPIC_REQUIRED'
+        ) {
+          briefStale = e.code === 'CAMPAIGN_PRODUCT_NOT_FOUND';
+          briefForState = clearCampaignBriefProductFacts(briefForState);
+          if (quickSendActive) briefForState.flowMode = 'quick_send';
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Keep brief off gates (top-level _wizard.brief only); pass a copy into evaluator.
+    const gatesForPersist = { ...mergedGates };
+    delete gatesForPersist.brief;
+    const gateState = { ...gatesForPersist, brief: briefForState };
+
+    const marker = isWizardMarkerMessage(lastUserText) ? parseWizardMarker(lastUserText) : null;
+    const briefMarkerJustSet = marker?.gate === 'campaignBrief';
+    const hadPlanBeforeBriefMarker = Boolean(
+      gatesForPersist.hasContentPlan || persistedState.plan?.snapshot
+    );
+    if (briefMarkerJustSet && hadPlanBeforeBriefMarker) {
+      gatesForPersist.hasContentPlan = false;
+      gatesForPersist.planApproved = false;
+      gateState.hasContentPlan = false;
+      gateState.planApproved = false;
+    }
+
     // Đóng gói state cho controller persist (field nội bộ, bị strip trước khi trả client)
     const buildWizard = (gateAsked, planChange = null) => ({
-      gates: mergedGates,
+      gates: gatesForPersist,
+      brief: briefForState,
       gateAsked,
       meta: computeWizardMeta(persistedState.meta, gateAsked),
       ...(planChange
-        || (isRevision ? { planChanged: true, planReset: true } : { planChanged: false })),
+        || (isRevision || (briefMarkerJustSet && hadPlanBeforeBriefMarker)
+          ? { planChanged: true, planReset: true }
+          : { planChanged: false })),
     });
 
-    if (isWizardMarkerMessage(lastUserText)) {
-      const marker = parseWizardMarker(lastUserText);
-      const nextGate = evaluateNextGate(mergedGates, wizardResources, locale);
+    const gateResources = {
+      ...wizardResources,
+      briefStale,
+      briefPreferredContentMode: briefForState?.contentMode || null,
+    };
+
+    // Free-text cancel must beat deterministic re-ask (dead-end nudge says "gõ huỷ").
+    if (
+      gatesForPersist.isCampaignFlow
+      && isPlanCancelText(lastUserText)
+      && !isWizardMarkerMessage(lastUserText)
+      && !isPlanTemplateDraftRequest(lastUserText)
+    ) {
+      const empty = createEmptyWizardState();
+      briefForState = createEmptyCampaignBrief(locale === 'en' ? 'en' : 'vi');
+      return {
+        type: 'text',
+        content: locale === 'en'
+          ? 'Stopped. The campaign wizard was cleared. Tell me if you want to start a new campaign.'
+          : 'Đã dừng. Wizard chiến dịch đã được xoá. Bạn muốn bắt đầu chiến dịch mới thì cứ nói nhé.',
+        missing_fields: [],
+        data: null,
+        wizardShortCircuit: true,
+        _wizard: {
+          gates: empty.gates,
+          brief: briefForState,
+          gateAsked: null,
+          meta: computeWizardMeta(persistedState.meta, null),
+          planChanged: true,
+          planReset: true,
+        },
+      };
+    }
+
+    // Deterministic gates before Gemini for any campaign-flow turn (marker or free-text).
+    if (gatesForPersist.isCampaignFlow && !isPlanTemplateDraftRequest(lastUserText)) {
+      const nextGate = evaluateNextGate(gateState, gateResources, locale);
       if (nextGate?.response) {
         const _wizard = buildWizard(nextGate.gate || null);
         return {
@@ -498,14 +728,21 @@ QUY TẮC:
         };
       }
 
-      if (marker?.gate === 'schedule' && mergedGates.schedule?.mode === 'drip') {
+      if (marker?.gate === 'schedule' && gatesForPersist.schedule?.mode === 'drip') {
         const basePrompt = findOriginalCampaignPrompt(history);
         return {
           type: 'suggest_content_plan',
           content: locale === 'en'
             ? 'Next I will draft a day-by-day sending plan for you.'
             : 'Tiếp theo mình sẽ lên kế hoạch gửi theo từng ngày cho bạn.',
-          data: { userPrompt: buildCampaignPromptWithWizardState(mergedGates, basePrompt, locale) },
+          data: {
+            userPrompt: buildCampaignPromptWithWizardState(
+              gatesForPersist,
+              basePrompt,
+              locale,
+              resolvedBriefContext
+            ),
+          },
           missing_fields: [],
           wizardShortCircuit: true,
           _wizard: buildWizard(null),
@@ -613,13 +850,14 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - HỒ SƠ DOANH NGHIỆP VÀ TÀI NGUYÊN bên dưới được hệ thống TẢI TRỰC TIẾP TỪ DATABASE ngay trước mỗi tin nhắn — luôn phản ánh trạng thái MỚI NHẤT. Khi user nói "tôi vừa thêm sản phẩm", "tôi vừa cập nhật hồ sơ", v.v., hãy XÁC NHẬN bạn thấy thông tin đó trong phần hồ sơ bên dưới. KHÔNG BAO GIỜ nói "tôi không thể đọc thay đổi mới" hoặc "hồ sơ của tôi là thông tin cũ".
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
+- Nếu có khối CAMPAIGN_BRIEF DATA: đó là nguồn sự thật về sản phẩm/chủ đề đã chọn. Ưu tiên (1) CAMPAIGN_BRIEF DATA → (2) prompt nguyên bản + file đính kèm → (3) hồ sơ doanh nghiệp chỉ cho brand/tone/context, KHÔNG thay selected product/topic.
 - Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
 - Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
 - Nếu thiếu thông tin cần thiết để tạo template/chiến dịch/landing page → type: "ask_more", hỏi cụ thể những gì còn thiếu.
 - Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
 - Với yêu cầu tạo chiến dịch, KHÔNG tự suy đoán nguồn khách hàng là Google Sheet chỉ vì user nhắc các cột như full_name, email, phone, tour_name, end_date. Nếu user chưa nói rõ "Google Sheet", "Excel", "file", "landing page", "khách hàng trong hệ thống/database" hoặc chưa chọn dataSource trong câu trả lời trước, BẮT BUỘC dùng type="ask_campaign_details" và hỏi câu "dataSource".
 
-${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
+${resolvedBriefContext ? resolvedBriefContext + '\n\n' : ''}${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
 ### 1. type: "text"
 Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận không liên quan đến tạo nội dung.
@@ -803,8 +1041,8 @@ QUAN TRỌNG: Chỉ bỏ câu hỏi khi user đã nói RÕ RÀNG và CHẮC CH�
 - Đã đề cập "sheet", "excel", "file" NHƯNG chưa có URL → bỏ "dataSource", tự chọn sheet — SAU ĐÓ hỏi URL qua ask_more
 - User upload file CSV/Excel (nội dung file được trích xuất thành text trong message) → bỏ "dataSource", xem đây là dataSource="sheet_uploaded" — xử lý theo hướng dẫn UPLOADED FILE bên dưới
 - Đã đề cập "khách hàng", "database", "hệ thống" → bỏ "dataSource", tự chọn db
-- User cung cấp email/SĐT cụ thể (vd: "gửi cho abc@gmail.com") → bỏ "dataSource", dùng db với filter email đó; nếu người đó chưa có trong DB thì trả lời bằng type "text" hướng dẫn thêm vào Danh sách khách trước
-- KHÔNG bỏ "productCount" hay "sendingStyle" trừ khi user nói thật sự rõ. Nếu không chắc → vẫn hỏi
+- Đã đề cập "nhập trực tiếp", "manual", "dán email", "dán SĐT" → bỏ "dataSource", tự chọn manual
+- KHÔNG hỏi productCount / sendingStyle / campaignBrief / schedule — các cổng này do wizard deterministic xử lý. Nếu thiếu sản phẩm/chủ đề hoặc lịch gửi, đừng tự hỏi lại các field đó trong ask_campaign_details.
 - KHÔNG được coi việc user liệt kê tên cột dữ liệu (full_name/email/phone/tour_name/end_date) là đã chọn Google Sheet. Đây chỉ là cấu trúc dữ liệu mong muốn; vẫn phải hỏi "dataSource" nếu nguồn chưa rõ.
 - KHÔNG hỏi "Đường dẫn Google Sheet" nếu user chưa nói rõ muốn dùng Google Sheet/Excel/file hoặc chưa chọn dataSource="sheet".
 
@@ -829,28 +1067,13 @@ Data structure:
       ]
     },
     {
-      "id": "productCount",
-      "label": "Lần này muốn giới thiệu:",
-      "options": [
-        { "value": "1", "label": "1 sản phẩm / dịch vụ" },
-        { "value": "nhieu", "label": "Nhiều sản phẩm cùng lúc" }
-      ]
-    },
-    {
-      "id": "sendingStyle",
-      "label": "Cách gửi:",
-      "options": [
-        { "value": "1_lan", "label": "Gửi 1 lần là xong" },
-        { "value": "nhieu_dot", "label": "Gửi nhiều lần, cách nhau vài ngày" }
-      ]
-    },
-    {
       "id": "dataSource",
       "label": "Lấy danh sách khách từ đâu?",
       "options": [
         { "value": "db", "label": "👥 Khách hàng có sẵn trong hệ thống" },
         { "value": "sheet", "label": "📊 File Excel / Google Sheet" },
-        { "value": "landing", "label": "📋 Danh sách đăng ký từ Landing Page" }
+        { "value": "landing", "label": "📋 Danh sách đăng ký từ Landing Page" },
+        { "value": "manual", "label": "✏️ Nhập người nhận trực tiếp" }
       ]
     }
   ]
@@ -1033,28 +1256,21 @@ UPLOADED FILE (CSV / Excel) — user tải file lên chat:
 - channel: email/zalo/zalo_group → chọn đúng action node
 - zaloAccount="<id>" → dùng ID đó làm zaloAccountId trong tất cả action/data node Zalo; nếu không có câu hỏi này → dùng tài khoản mặc định (firstZaloAccountId)
 - landingPage="<slug>" → dùng slug đó trong landingLeadsSlugs của read_landing_leads
-- productCount="nhieu" → nhiều action node, mỗi node 1 sản phẩm khác nhau
-- sendingStyle="nhieu_dot" → các action node có delayValue > 0 (3-7 ngày)
+- Dùng CAMPAIGN_BRIEF DATA (nếu có) để viết nội dung: không bịa sản phẩm ngoài brief; không tự map productIds sang interestedCourseIds / notPurchasedCourseIds trừ khi user NÓI RÕ muốn lọc audience theo đã mua/chưa mua/quan tâm khóa đó
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
-- dataSource="db" với email cụ thể → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 } — ghi email cụ thể vào description để user tự lọc trong Campaign Builder (interestedCustomerType chỉ nhận "both"|"interested"|"purchased")
+- dataSource="manual"  → không tạo interested_customers/read_sheet; để trống danh sách — hệ thống sẽ dùng người nhận nhập trực tiếp ở bước chuẩn bị gửi
 - "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
 - "chưa mua [khóa X]" → interestedCustomerType: "interested", interestedCourseIds: [id_khoaX]
 - "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
-- productCount="nhieu" + user đề cập chủ đề/loại sản phẩm (vd: "khóa học AI", "tất cả khóa học") → tìm tất cả ID khóa phù hợp trong danh sách TÀI NGUYÊN và đặt vào interestedCourseIds. Nếu không match khóa nào → để interestedCourseIds: [] (lấy tất cả)
-- productCount="1" nhưng user CHƯA nói rõ tên sản phẩm/khóa học → type: "ask_more", missing_fields: ["Tên sản phẩm hoặc khóa học muốn giới thiệu"], message: "Bạn muốn giới thiệu sản phẩm hoặc khóa học nào? Vui lòng cho tôi biết tên nhé!"
-- productCount="1" + user đã nói tên sản phẩm/khóa → tìm ID khớp trong TÀI NGUYÊN:
-  • Nếu khớp → đặt interestedCourseIds: [id], dùng tên thật từ TÀI NGUYÊN để viết nội dung
-  • Nếu KHÔNG khớp (sản phẩm chưa có trong hệ thống):
-    - Nếu user CHƯA cung cấp mô tả/thông tin gì về sản phẩm đó → type: "ask_more", missing_fields: ["Thông tin sản phẩm"], message: "Sản phẩm '[tên]' chưa có trong hệ thống. Bạn có thể mô tả ngắn về sản phẩm này không? (ví dụ: mô tả, giá, điểm nổi bật) để tôi viết nội dung phù hợp hơn."
-    - Nếu user ĐÃ mô tả sản phẩm → dùng thông tin đó để viết nội dung, interestedCourseIds: [], KHÔNG tạo sản phẩm mới. Ghi chú trong description: "(Sản phẩm chưa có trong hệ thống — gửi đến toàn bộ khách hàng)"
-- Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN
+- "quan tâm [khóa X]" / "interested [khóa X]" → interestedCourseIds: [id_khoaX] chỉ khi user yêu cầu lọc audience rõ ràng
+- Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN chỉ cho audience filter khi user yêu cầu lọc; nội dung quảng bá lấy từ CAMPAIGN_BRIEF DATA
 - dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
 - dataSource="sheet" + CHƯA có URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
 - dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
 
-Ví dụ campaign drip 2 đợt (sendingStyle=nhieu_dot, dataSource=db):
+Ví dụ campaign drip 2 đợt (dataSource=db):
 nodes: trigger → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
 
 Ví dụ lấy từ sheet (dataSource=sheet):
@@ -1063,7 +1279,7 @@ nodes: trigger → read_sheet(sheetUrl="") → action_wave1(delay=0) → end
 Ví dụ lấy từ landing page (dataSource=landing):
 nodes: trigger → read_landing_leads → action_wave1(delay=0) → end
 
-Ví dụ 2 sản phẩm gửi 1 lần (productCount=nhieu, sendingStyle=1_lan):
+Ví dụ nhiều sản phẩm gửi 1 lần (CAMPAIGN_BRIEF multiple_products):
 nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days) → end
 
 ### Các từ khóa xác định kênh:
@@ -1074,32 +1290,47 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 ### Audience và nguồn khách:
 - KHÔNG có field audience trong ask_campaign_details; nguồn khách được chọn bằng dataSource.
 - KHÔNG bao giờ giả định khách hàng lấy từ file/sheet khi user chưa nói rõ.
-- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing.
+- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/manual.
 
 ## HEURISTICS CHO type="create_and_run":
-- Người dùng nói "tạo chiến dịch", "chạy chiến dịch", "bắt đầu chiến dịch" mà KHÔNG có từ "xem trước", "draft", "thiết kế"
-- Người dùng mô tả rõ ràng mục tiêu: "quảng cáo khóa học", "gửi email chào hàng", "chiến dịch bán hàng"
-- Người dùng dùng từ khóa: "ngay", "luôn", "bắt đầu ngay", "chạy ngay"
-- Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) → vẫn tạo nhưng dùng placeholder có ý nghĩa`;
+- CHỈ khi người dùng nói RÕ ràng muốn bỏ xác nhận: "tạo và chạy", "create and run", "chạy ngay chiến dịch"
+- "gửi nhanh" / "gui nhanh" / "quick send" / "send one email" KHÔNG đủ → dùng type="confirm_create" (vẫn cần user bấm xác nhận)
+- Người dùng mô tả rõ ràng mục tiêu nhưng không nói chạy ngay → confirm_create, không create_and_run
+- Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) mà wizard chưa có CAMPAIGN_BRIEF → hỏi qua wizard/gates, không bịa
+
+## QUICK-SEND (gửi nhanh / one-shot):
+- Marker: "gửi nhanh", "gửi 1 email", "quick send", "send one email", "send a single message"
+- Đây là gửi MỘT lần (schedule once). KHÔNG trả content_plan / suggest_content_plan. KHÔNG tự nâng thành chuỗi nhiều ngày.
+- Nếu CAMPAIGN_BRIEF DATA đã có (kể cả contentMode=context cảm ơn/thông báo) → đừng hỏi lại sản phẩm/chủ đề.
+- dataSource="manual": KHÔNG chép email/SĐT cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
+- Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.`;
 
     const response = await runChat({ systemPrompt, history, files, userId, requestedModel: model });
     const guarded = this._guardWizardGates(
-      this._guardContentPlanResponse(
-        this._guardCampaignDataSourceResponse(response, history, locale),
-        history
+      this._guardManualRecipientsNoAutoRun(
+        this._guardQuickSendResponse(
+          this._guardContentPlanResponse(
+            this._guardCampaignDataSourceResponse(response, history, locale),
+            history,
+            briefForState
+          ),
+          history,
+          briefForState
+        ),
+        gateState
       ),
       history,
-      wizardResources,
+      gateResources,
       locale,
-      mergedGates
+      gateState
     );
     const finalResponse = guarded.response;
 
     // AI vừa sinh content_plan mới → plan lifecycle mới, replace nguyên section plan
     let planChange = null;
     if (finalResponse?.type === 'content_plan' && finalResponse.data) {
-      mergedGates.hasContentPlan = true;
-      mergedGates.planApproved = false;
+      gatesForPersist.hasContentPlan = true;
+      gatesForPersist.planApproved = false;
       planChange = {
         planChanged: true,
         planSnapshot: finalResponse.data,

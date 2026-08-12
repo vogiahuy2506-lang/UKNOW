@@ -14,7 +14,9 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":12,"accountName":"TK Zalo"}\nTK Zalo' } },
     { expectGate: 'zaloGroups' },
     { push: { role: 'user', content: '[wizard]{"gate":"zaloGroups","accountId":12,"groupIds":["g1","g2"]}\nTôi chọn 2 nhóm.' } },
-    // zalo_group bỏ qua dataSource — gate kế tiếp phải là schedule
+    // zalo_group bỏ qua dataSource — gate kế tiếp là campaignBrief rồi schedule
+    { expectGate: 'campaignBrief' },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Thông báo khai giảng"}\nChủ đề' } },
     { expectGate: 'schedule' },
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"once","mode":"once"}\nGửi một lần' } },
     { expectNoGate: true },

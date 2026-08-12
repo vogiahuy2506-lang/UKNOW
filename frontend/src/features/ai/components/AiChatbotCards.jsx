@@ -11,6 +11,16 @@ import {
   isOtherProductDescriptionValid,
   isOtherProductNameValid,
 } from '../utils/landingBrief.js';
+import {
+  isCampaignBriefAnswersValid,
+  isProductDescriptionValid,
+  isProductNameValid,
+  isTopicTextValid,
+  PRODUCT_DESC_MAX,
+  PRODUCT_NAME_MAX,
+  TOPIC_MAX,
+  buildCampaignBriefSummaryLine,
+} from '../utils/campaignBrief.js';
 
 // Đổi ký hiệu LaTeX model hay chèn (vd "$\rightarrow$") thành mũi tên thường.
 function deLatexArrows(s) {
@@ -634,10 +644,16 @@ export const AskCampaignTypeCard = ({ data, onSelect, t }) => {
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
 export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState(() => {
+    const preferred = data?.preferredContentMode;
+    return preferred ? { campaignBrief: preferred } : {};
+  });
   const [emailChoice, setEmailChoice] = useState(null); // 'new' | 'existing'
   const [emailTemplateName, setEmailTemplateName] = useState('');
   const [manualRecipients, setManualRecipients] = useState('');
+  const [productName, setProductName] = useState('');
+  const [productDescription, setProductDescription] = useState('');
+  const [topicText, setTopicText] = useState('');
   if (!data?.questions?.length) return null;
 
   const isWizardQuestion = data.questions.some((q) => q.wizardGate);
@@ -645,8 +661,17 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
   const manualRecipientsRequired = answers.dataSource === 'manual';
+  const briefQuestion = data.questions.find((q) => q.inputType === 'campaign_brief' || q.wizardGate === 'campaignBrief');
 
   const isScheduleQuestion = (question) => question.wizardGate === 'schedule' || question.inputType === 'schedule';
+  const isBriefQuestion = (question) => question.inputType === 'campaign_brief' || question.wizardGate === 'campaignBrief';
+
+  const briefAnswers = {
+    ...answers,
+    productName,
+    productDescription,
+    topicText,
+  };
 
   const isQuestionAnswered = (question) => {
     if (isScheduleQuestion(question)) {
@@ -657,6 +682,9 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         return days >= 1 && days <= 30 && slotsPerDay >= 1 && slotsPerDay <= 5;
       }
       return true;
+    }
+    if (isBriefQuestion(question)) {
+      return isCampaignBriefAnswersValid(briefAnswers, question);
     }
     return Boolean(answers[question.id]);
   };
@@ -674,6 +702,16 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
       next.scheduleDays = prev.scheduleDays || String(scheduleQuestion?.defaults?.days || 3);
       next.scheduleSlotsPerDay = prev.scheduleSlotsPerDay || String(scheduleQuestion?.defaults?.slotsPerDay || 1);
     }
+    if (qId === 'campaignBrief') {
+      delete next.campaignProduct;
+      setProductName('');
+      setProductDescription('');
+      setTopicText('');
+    }
+    if (qId === 'campaignProduct' && val !== 'other') {
+      setProductName('');
+      setProductDescription('');
+    }
     return next;
   });
 
@@ -681,9 +719,22 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const dripDays = Number(answers.scheduleDays);
   const dripSlotsPerDay = Number(answers.scheduleSlotsPerDay);
   const isDripSchedule = scheduleQuestion && answers[scheduleQuestion.id] === 'drip';
+  const otherNameInvalid = answers.campaignProduct === 'other' && !isProductNameValid(productName);
+  const otherDescInvalid = answers.campaignProduct === 'other' && !isProductDescriptionValid(productDescription);
+  const topicInvalid = answers.campaignBrief === 'custom_topic' && topicText.trim().length > 0 && !isTopicTextValid(topicText);
 
   const submitLabel = (() => {
-    if (!allAnswered) return t('aiChatbot.selectAllAbove');
+    if (!allAnswered) {
+      if (briefQuestion && answers.campaignBrief === 'single_product' && answers.campaignProduct === 'other' && otherNameInvalid) {
+        return productName.trim().length === 0
+          ? (t('aiChatbot.otherProductNameRequired') || 'Nhập tên sản phẩm')
+          : (t('aiChatbot.otherProductNameLength') || 'Tên sản phẩm 2–160 ký tự');
+      }
+      if (briefQuestion && answers.campaignBrief === 'custom_topic' && !isTopicTextValid(topicText)) {
+        return t('aiChatbot.campaignTopicRequired') || 'Nhập chủ đề / mục đích (2–500 ký tự)';
+      }
+      return t('aiChatbot.selectAllAbove');
+    }
     if (isDripSchedule && dripDays >= 1 && dripSlotsPerDay >= 1) {
       return t('aiChatbot.wizardScheduleContinueDrip', {
         days: dripDays,
@@ -692,6 +743,9 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
     }
     if (scheduleQuestion && answers[scheduleQuestion.id] === 'once') {
       return t('aiChatbot.wizardScheduleContinueOnce') || 'Tiếp tục — Gửi một lần';
+    }
+    if (briefQuestion) {
+      return t('aiChatbot.campaignBriefContinue') || 'Tiếp tục';
     }
     return t('aiChatbot.createCampaignWithOptions');
   })();
@@ -702,6 +756,9 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
       if (isScheduleQuestion(q)) {
         if (answers[q.id] === 'once') return `${q.label}: Gửi một lần`;
         return `${q.label}: ${answers.scheduleDays} ngày, mỗi ngày ${answers.scheduleSlotsPerDay} tin`;
+      }
+      if (isBriefQuestion(q)) {
+        return buildCampaignBriefSummaryLine(briefAnswers, q, t);
       }
       const opt = q.options.find((o) => o.value === answers[q.id]);
       return q.id === 'dataSource' && answers[q.id] === 'manual'
@@ -715,7 +772,12 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         lines.push('Nội dung email: Tạo nội dung mới bằng AI');
       }
     }
-    onSubmit(lines.join('\n'), { ...answers, emailChoice, emailTemplateName: emailTemplateName.trim(), directRecipients: manualRecipients.trim() });
+    onSubmit(lines.join('\n'), {
+      ...briefAnswers,
+      emailChoice,
+      emailTemplateName: emailTemplateName.trim(),
+      directRecipients: manualRecipients.trim(),
+    });
   };
 
   return (
@@ -758,6 +820,81 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
               </button>
             ))}
           </div>
+          {isBriefQuestion(q) && answers.campaignBrief === 'single_product' && (
+            <div className="mt-3 space-y-2 rounded-xl border border-orange-200 bg-white p-3">
+              <p className="text-[11px] font-semibold text-orange-800">
+                {t('aiChatbot.campaignPickProduct') || 'Chọn sản phẩm / khóa học:'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(q.courseOptions || []).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => pick('campaignProduct', opt.value)}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                      answers.campaignProduct === opt.value
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {answers.campaignProduct === 'other' && (
+                <div className="space-y-2 pt-1">
+                  <input
+                    type="text"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    placeholder={t('aiChatbot.otherProductNamePlaceholder')}
+                    maxLength={PRODUCT_NAME_MAX}
+                    className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  {otherNameInvalid && (
+                    <p className="text-[10px] text-amber-600">
+                      {productName.trim().length === 0
+                        ? t('aiChatbot.otherProductNameRequired')
+                        : t('aiChatbot.otherProductNameLength')}
+                    </p>
+                  )}
+                  <textarea
+                    value={productDescription}
+                    onChange={(e) => setProductDescription(e.target.value)}
+                    placeholder={t('aiChatbot.otherProductDescPlaceholder')}
+                    rows={2}
+                    maxLength={PRODUCT_DESC_MAX}
+                    className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  {otherDescInvalid && (
+                    <p className="text-[10px] text-amber-600">{t('aiChatbot.otherProductDescLength')}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {isBriefQuestion(q) && answers.campaignBrief === 'custom_topic' && (
+            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
+              <textarea
+                value={topicText}
+                onChange={(e) => setTopicText(e.target.value)}
+                placeholder={t('aiChatbot.campaignTopicPlaceholder') || 'Ví dụ: Email cảm ơn sau mua hàng, thông báo nghỉ lễ…'}
+                rows={3}
+                maxLength={TOPIC_MAX}
+                className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              {topicInvalid && (
+                <p className="mt-1 text-[10px] text-amber-600">
+                  {t('aiChatbot.campaignTopicLength') || 'Chủ đề cần từ 2 đến 500 ký tự'}
+                </p>
+              )}
+            </div>
+          )}
+          {isBriefQuestion(q) && answers.campaignBrief === 'multiple_products' && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              {t('aiChatbot.campaignMultipleHint') || 'Sẽ dùng danh sách sản phẩm hiện có trong tài khoản để soạn nội dung.'}
+            </p>
+          )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
             <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
               <p className="mb-2 text-xs font-semibold text-orange-800">

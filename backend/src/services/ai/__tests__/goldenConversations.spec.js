@@ -5,6 +5,11 @@ import {
   mergeWizardState,
   parseWizardMarker,
 } from '../aiCampaignWizard.service.js';
+import {
+  extractCampaignBriefFromHistory,
+  mergeCampaignBrief,
+  clearCampaignBriefProductFacts,
+} from '../campaignBrief.service.js';
 
 import emailSheetUrlAfterDrafts from './fixtures/golden/emailSheetUrlAfterDrafts.fixture.js';
 import reloadLostApprovalMarker from './fixtures/golden/reloadLostApprovalMarker.fixture.js';
@@ -41,20 +46,40 @@ const lastUserContent = (history) => {
 
 /**
  * Replay engine: state tại mỗi thời điểm = mergeWizardState(persistedGates,
- * extractWizardState(history), { lastUserText }) — đúng công thức production.
+ * extractWizardState(history), { lastUserText }) + brief từ history/persisted —
+ * đúng công thức production.
  * `snapshotPersisted` mô phỏng server ghi wizard_state sau 1 request;
  * `dropMarkers` mô phỏng session reload làm mất các marker [wizard] khỏi history.
  */
 const runFixture = (fixture) => {
   let history = [];
   let persistedGates = null;
+  let persistedBrief = null;
   const { resources = {}, locale = 'vi' } = fixture;
 
-  const currentState = () => mergeWizardState(
-    persistedGates,
-    extractWizardState(history),
-    { lastUserText: lastUserContent(history) }
-  );
+  const currentState = () => {
+    const gates = mergeWizardState(
+      persistedGates,
+      extractWizardState(history),
+      { lastUserText: lastUserContent(history) }
+    );
+    let derivedBrief = null;
+    let extractInvalid = false;
+    const extracted = extractCampaignBriefFromHistory(history);
+    if (extracted.invalid) {
+      extractInvalid = true;
+      derivedBrief = null;
+    } else {
+      derivedBrief = extracted.brief;
+    }
+    const brief = extractInvalid
+      ? clearCampaignBriefProductFacts({
+        contentMode: extracted.preferredContentMode,
+        contentLocale: locale === 'en' ? 'en' : 'vi',
+      })
+      : mergeCampaignBrief(persistedBrief, derivedBrief, { locale });
+    return { ...gates, brief };
+  };
 
   fixture.turns.forEach((turn, turnIndex) => {
     const label = `${fixture.name} — turn ${turnIndex}`;
@@ -63,7 +88,10 @@ const runFixture = (fixture) => {
       return;
     }
     if (turn.snapshotPersisted) {
-      persistedGates = clone(currentState());
+      const state = currentState();
+      const { brief, ...gates } = state;
+      persistedGates = clone(gates);
+      persistedBrief = clone(brief);
       return;
     }
     if (turn.dropMarkers) {

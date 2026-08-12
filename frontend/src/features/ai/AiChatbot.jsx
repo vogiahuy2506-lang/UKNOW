@@ -35,6 +35,7 @@ import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service
 import {
   buildLandingBriefFromAnswers,
 } from './utils/landingBrief.js';
+import { buildCampaignBriefMarker } from './utils/campaignBrief.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -179,6 +180,22 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
         || `Đã chọn ${marker.groupIds?.length || 0} nhóm Zalo.`;
     case 'planApproved':
       return t('aiChatbot.wizardDisplayPlanApproved') || 'Đã đồng ý với kế hoạch này.';
+    case 'campaignBrief': {
+      if (marker.contentMode === 'custom_topic') {
+        return t('aiChatbot.wizardDisplayCampaignTopic', { topic: marker.topicText || '' })
+          || `Chủ đề: ${marker.topicText || ''}`;
+      }
+      if (marker.contentMode === 'multiple_products') {
+        return t('aiChatbot.wizardDisplayCampaignMultiple')
+          || 'Đã chọn nhiều sản phẩm trong tài khoản.';
+      }
+      if (marker.productMode === 'other' || (marker.contentMode === 'single_product' && !marker.productId)) {
+        return t('aiChatbot.wizardDisplayCampaignOtherProduct', { name: marker.productName || '' })
+          || `Sản phẩm: ${marker.productName || ''}`;
+      }
+      return t('aiChatbot.wizardDisplayCampaignCatalogProduct', { id: marker.productId })
+        || `Đã chọn sản phẩm #${marker.productId}.`;
+    }
     default: {
       const readable = String(content).split('\n').slice(1).join('\n').trim();
       return readable || '';
@@ -2305,6 +2322,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           // gửi marker duyệt kế hoạch cho backend để wizard đi tiếp thay vì kẹt im lặng
           await emitWizardAnswer({ gate: 'planApproved', value: true }, 'Đồng ý với kế hoạch này.');
         }
+        return;
+      }
+      if (wizardQuestion.wizardGate === 'campaignBrief') {
+        const marker = buildCampaignBriefMarker(answers);
+        if (!marker) {
+          toast.error(t('aiChatbot.selectAllAbove') || 'Vui lòng chọn đầy đủ thông tin');
+          return;
+        }
+        await emitWizardAnswer(marker, summaryText);
         return;
       }
     }

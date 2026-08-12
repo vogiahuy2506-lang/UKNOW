@@ -44,12 +44,14 @@ describe('campaignIntent.util', () => {
     expect(asksOnlyForGoogleSheet({ type: 'text', content: 'Google Sheet' })).toBe(false);
   });
 
-  it('buildCampaignDataSourceQuestion returns ask_campaign_details', () => {
+  it('buildCampaignDataSourceQuestion returns ask_campaign_details with manual + wizardGate', () => {
     const vi = buildCampaignDataSourceQuestion('vi');
     expect(vi.type).toBe('ask_campaign_details');
     expect(vi.data.questions[0].id).toBe('dataSource');
+    expect(vi.data.questions[0].wizardGate).toBe('dataSource');
+    expect(vi.data.questions[0].options.map((o) => o.value)).toEqual(['db', 'sheet', 'landing', 'manual']);
     const en = buildCampaignDataSourceQuestion('en');
-    expect(en.content).toMatch(/customer list/i);
+    expect(en.content).toMatch(/recipient list/i);
   });
 
   it('isMultiDaySeriesRequest', () => {

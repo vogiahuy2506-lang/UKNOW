@@ -16,6 +16,8 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7,"accountName":"Sales"}\nTôi chọn email sender "Sales".' } },
     { expectGate: 'dataSource' },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"sheet"}\nFile Excel / Google Sheet' } },
+    { expectGate: 'campaignBrief' },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Ra mắt sản phẩm mới"}\nChủ đề' } },
     { expectGate: 'schedule' },
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":3,"slotsPerDay":1}\nChuỗi 3 ngày' } },
     { expectNoGate: true },

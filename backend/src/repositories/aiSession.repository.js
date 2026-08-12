@@ -51,12 +51,16 @@ const EMPTY_PLAN_SECTION = {
   snapshot: null, sourcePrompt: '', requiresApproval: true, savedTemplates: [], status: null, campaignId: null,
 };
 
-// Ghi state theo section từ chat path (gates/meta/plan) bằng jsonb_set.
+const EMPTY_WIZARD_STATE_DEFAULT = {
+  v: 1, gates: {}, plan: EMPTY_PLAN_SECTION, brief: {}, meta: {},
+};
+
+// Ghi state theo section từ chat path (gates/meta/plan/brief) bằng jsonb_set.
 // Khi KHÔNG có planReset/planSnapshot thì tuyệt đối không đụng section plan —
 // tránh clobber plan.savedTemplates do PATCH ghi song song.
-// sections = { gates?, meta?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset? }
+// sections = { gates?, meta?, brief?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset? }
 export async function updateWizardStateSections(sessionId, userId, sections = {}) {
-  const base = `COALESCE(wizard_state, '${JSON.stringify({ v: 1, gates: {}, plan: EMPTY_PLAN_SECTION, meta: {} })}'::jsonb)`;
+  const base = `COALESCE(wizard_state, '${JSON.stringify(EMPTY_WIZARD_STATE_DEFAULT)}'::jsonb)`;
   let expr = base;
   const params = [sessionId, userId];
   const addSet = (path, value) => {
@@ -79,6 +83,7 @@ export async function updateWizardStateSections(sessionId, userId, sections = {}
   }
   if (sections.gates) addSet('gates', sections.gates);
   if (sections.meta) addSet('meta', sections.meta);
+  if (sections.brief) addSet('brief', sections.brief);
   if (expr === base) return;
 
   await db.query(

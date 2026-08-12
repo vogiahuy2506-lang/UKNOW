@@ -16,7 +16,10 @@ jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
 
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({
+  default: {},
+  serializeProductList: jest.fn(() => ''),
+}));
 jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({
   default: {

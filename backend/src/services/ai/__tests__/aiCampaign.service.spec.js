@@ -169,6 +169,87 @@ describe('aiCampaign.service', () => {
     expect(response.data.userPrompt).toContain('5 tin nhắn Zalo');
   });
 
+  it('does not convert inline drafts to content_plan for quick-send', () => {
+    const response = aiCampaignService._guardContentPlanResponse(
+      {
+        type: 'text',
+        content: 'Tin nhắn 1: Cảm ơn\nTin nhắn 2: Theo dõi',
+      },
+      [{ role: 'user', content: 'Gửi nhanh 1 email cảm ơn đơn hàng' }],
+      { flowMode: 'quick_send', contentMode: 'context' }
+    );
+    expect(response.type).toBe('text');
+  });
+
+  it('downgrades create_and_run to confirm_create for quick-send without explicit run', () => {
+    const response = aiCampaignService._guardQuickSendResponse(
+      {
+        type: 'create_and_run',
+        content: 'Đang chạy',
+        data: { campaignType: 'email', nodes: [], autoRun: true },
+      },
+      [{ role: 'user', content: 'Gửi nhanh 1 email cảm ơn đơn hàng' }],
+      { flowMode: 'quick_send' }
+    );
+    expect(response.type).toBe('confirm_create');
+    expect(response.data.autoRun).toBe(false);
+  });
+
+  it('keeps create_and_run when user explicitly asks to create and run', () => {
+    const response = aiCampaignService._guardQuickSendResponse(
+      {
+        type: 'create_and_run',
+        content: 'Đang chạy',
+        data: { campaignType: 'email', autoRun: true },
+      },
+      [{ role: 'user', content: 'Tạo và chạy ngay email cảm ơn đơn hàng' }],
+      { flowMode: 'quick_send' }
+    );
+    expect(response.type).toBe('create_and_run');
+  });
+
+  it('does not fake confirm_create from content_plan day payload', () => {
+    const response = aiCampaignService._guardQuickSendResponse(
+      {
+        type: 'content_plan',
+        content: 'Kế hoạch 5 ngày',
+        data: { totalDays: 5, days: [{ day: 1, slots: [] }] },
+      },
+      [{ role: 'user', content: 'Gửi nhanh 1 email cảm ơn' }],
+      { flowMode: 'quick_send' }
+    );
+    expect(response.type).toBe('text');
+    expect(response.data).toBeNull();
+  });
+
+  it('retypes content_plan to confirm_create only when script-shaped', () => {
+    const response = aiCampaignService._guardQuickSendResponse(
+      {
+        type: 'content_plan',
+        content: 'Script',
+        data: { campaignType: 'email', nodes: [{ tempId: 'n1' }], connections: [] },
+      },
+      [{ role: 'user', content: 'Gửi nhanh 1 email cảm ơn' }],
+      { flowMode: 'quick_send' }
+    );
+    expect(response.type).toBe('confirm_create');
+    expect(response.data.nodes).toHaveLength(1);
+  });
+
+  it('downgrades create_and_run when dataSource is manual even if explicit run', () => {
+    const response = aiCampaignService._guardManualRecipientsNoAutoRun(
+      {
+        type: 'create_and_run',
+        content: 'Đang chạy',
+        data: { campaignType: 'email', nodes: [], connections: [], autoRun: true },
+      },
+      { dataSource: 'manual' }
+    );
+    expect(response.type).toBe('confirm_create');
+    expect(response.data.wizardDataSource).toBe('manual');
+    expect(response.data.autoRun).toBe(false);
+  });
+
   it('short-circuits wizard marker replies without calling Gemini or reserving quota', async () => {
     const response = await aiCampaignService.processSmartChat({
       userId: 42,
@@ -185,6 +266,142 @@ describe('aiCampaign.service', () => {
     expect(axiosPost).not.toHaveBeenCalled();
     expect(reserve).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('quick-send with thank-you purpose skips campaignBrief and asks sender', async () => {
+    getActiveEmailSenders.mockResolvedValue([
+      { id: 7, name: 'Sales', email: 'sales@example.com', status: 'active' },
+    ]);
+    const response = await aiCampaignService.processSmartChat({
+      userId: 42,
+      history: [
+        { role: 'user', content: 'Gửi nhanh 1 email cảm ơn đơn hàng' },
+      ],
+      locale: 'vi',
+    });
+
+    expect(response.wizardShortCircuit).toBe(true);
+    expect(response._wizard.brief).toMatchObject({
+      flowMode: 'quick_send',
+      contentMode: 'context',
+      productMode: 'context',
+    });
+    expect(response._wizard.gates.schedule).toEqual({ mode: 'once' });
+    expect(response._wizard.gateAsked).toBe('senderAccount');
+    expect(axiosPost).not.toHaveBeenCalled();
+  });
+
+  it('quick-send without purpose still asks campaignBrief after source', async () => {
+    getActiveEmailSenders.mockResolvedValue([
+      { id: 7, name: 'Sales', email: 'sales@example.com', status: 'active' },
+    ]);
+    const response = await aiCampaignService.processSmartChat({
+      userId: 42,
+      history: [
+        { role: 'user', content: 'Gửi nhanh 1 email' },
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nSales' },
+        { role: 'user', content: '[wizard]{"gate":"dataSource","value":"manual"}\nManual' },
+      ],
+      locale: 'vi',
+    });
+
+    expect(response._wizard.gateAsked).toBe('campaignBrief');
+    expect(response._wizard.gates.schedule).toEqual({ mode: 'once' });
+    expect(response._wizard.brief?.flowMode).toBe('quick_send');
+    expect(axiosPost).not.toHaveBeenCalled();
+  });
+
+  it('keeps persisted quick_send when history is marker-only (latestIntent null)', async () => {
+    getActiveEmailSenders.mockResolvedValue([
+      { id: 7, name: 'Sales', email: 'sales@example.com', status: 'active' },
+    ]);
+    const response = await aiCampaignService.processSmartChat({
+      userId: 42,
+      history: [
+        // Marker-only: no free-text campaign → latestIntentIsQuickSend stays null
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nSales' },
+      ],
+      locale: 'vi',
+      persistedWizardState: {
+        v: 1,
+        gates: {
+          isCampaignFlow: true,
+          channel: 'email',
+          senderAccountId: 7,
+          dataSource: null,
+          schedule: { mode: 'once' },
+          planApproved: false,
+          hasContentPlan: false,
+          zaloGroupIds: [],
+        },
+        brief: {
+          version: 1,
+          source: 'assistant_campaign_wizard',
+          flowMode: 'quick_send',
+          contentMode: 'context',
+          productMode: 'context',
+          productIds: [],
+          productName: null,
+          productDescription: null,
+          topicText: null,
+          contentLocale: 'vi',
+        },
+        plan: {},
+        meta: {},
+      },
+    });
+
+    expect(response.wizardShortCircuit).toBe(true);
+    expect(response._wizard.brief.flowMode).toBe('quick_send');
+    expect(response._wizard.gates.schedule).toEqual({ mode: 'once' });
+    expect(response._wizard.gateAsked).toBe('dataSource');
+    expect(axiosPost).not.toHaveBeenCalled();
+  });
+
+  it('free-text huỷ resets wizard gates/brief/plan before re-asking gates', async () => {
+    const response = await aiCampaignService.processSmartChat({
+      userId: 42,
+      history: [
+        { role: 'user', content: 'Tạo chiến dịch email chăm sóc khách hàng' },
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+        { role: 'assistant', type: 'ask_campaign_details', content: 'Chọn sender', data: { questions: [] } },
+        { role: 'user', content: 'huỷ' },
+      ],
+      locale: 'vi',
+      persistedWizardState: {
+        v: 1,
+        gates: {
+          isCampaignFlow: true,
+          channel: 'email',
+          senderAccountId: null,
+          dataSource: null,
+          schedule: null,
+          planApproved: false,
+          hasContentPlan: true,
+          zaloGroupIds: [],
+        },
+        brief: {
+          contentMode: 'custom_topic',
+          productMode: 'context',
+          topicText: 'Cũ',
+          productIds: [],
+        },
+        plan: { snapshot: { totalDays: 3 }, sourcePrompt: 'x', requiresApproval: true, savedTemplates: [], status: null, campaignId: null },
+        meta: {},
+      },
+    });
+
+    expect(response.wizardShortCircuit).toBe(true);
+    expect(response.type).toBe('text');
+    expect(response.content).toMatch(/dừng|xoá|xóa/i);
+    expect(response._wizard.planReset).toBe(true);
+    expect(response._wizard.gates.isCampaignFlow).toBe(false);
+    expect(response._wizard.gates.channel).toBeNull();
+    expect(response._wizard.brief.contentMode).toBeNull();
+    expect(axiosPost).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
   });
 
   it('forces wizard gates when Gemini returns a campaign response for a loose campaign prompt', () => {
@@ -221,6 +438,7 @@ describe('aiCampaign.service', () => {
       { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
       { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":12}\nTK 12' },
       { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+      { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Chăm sóc khách"}\nChủ đề' },
       { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":5,"slotsPerDay":1}\n5 ngày' },
       {
         role: 'assistant',
@@ -231,7 +449,30 @@ describe('aiCampaign.service', () => {
       { role: 'user', content: 'Góp ý chỉnh kế hoạch: chỉ 4 ngày thôi' },
     ];
 
-    const guarded = aiCampaignService._guardWizardGates(contentPlanResponse, history, {}, 'vi');
+    const mergedGates = {
+      isCampaignFlow: true,
+      channel: 'zalo',
+      senderAccountId: 12,
+      dataSource: 'db',
+      schedule: { mode: 'drip', days: 5, slotsPerDay: 1 },
+      hasContentPlan: false,
+      planApproved: false,
+      zaloGroupIds: [],
+      brief: {
+        contentMode: 'custom_topic',
+        productMode: 'context',
+        topicText: 'Chăm sóc khách',
+        productIds: [],
+      },
+    };
+
+    const guarded = aiCampaignService._guardWizardGates(
+      contentPlanResponse,
+      history,
+      { zaloAccounts: [{ id: 12, displayName: 'TK', status: 'connected', isActive: true }] },
+      'vi',
+      mergedGates
+    );
 
     expect(guarded.response.type).toBe('content_plan');
     expect(guarded.response.data.totalDays).toBe(4);

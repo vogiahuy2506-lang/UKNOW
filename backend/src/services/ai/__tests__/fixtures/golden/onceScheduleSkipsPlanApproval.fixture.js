@@ -12,6 +12,7 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' } },
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7,"accountName":"Sales"}\nSales' } },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDanh sách khách hàng' } },
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Thông báo khuyến mãi"}\nChủ đề' } },
     { push: { role: 'user', content: '[wizard]{"gate":"schedule","value":"once","mode":"once"}\nGửi một lần' } },
     { expectNoGate: true },
     // Kể cả khi AI lỡ trả content_plan, schedule once vẫn không sinh gate planApproved

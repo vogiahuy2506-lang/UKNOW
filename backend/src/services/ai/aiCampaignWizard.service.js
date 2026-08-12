@@ -1,4 +1,22 @@
 import { MAX_AI_MANUAL_RECIPIENTS } from '../../utils/manualRecipients.util.js';
+import {
+  createEmptyCampaignBrief,
+  isCampaignBriefReady,
+  mergeCampaignBrief,
+} from './campaignBrief.service.js';
+import {
+  isQuickSendRequest,
+  inferQuickSendChannel,
+  isMultiDaySeriesRequestLocal,
+} from '../../utils/campaignQuickSend.util.js';
+
+export {
+  createEmptyCampaignBrief,
+  isCampaignBriefReady,
+  mergeCampaignBrief,
+  extractCampaignBriefFromHistory,
+  clearCampaignBriefProductFacts,
+} from './campaignBrief.service.js';
 
 const WIZARD_MARKER_RE = /^\[wizard\](\{.*\})/;
 
@@ -103,7 +121,9 @@ const inferScheduleFromText = (text = '') => {
 
 const isCampaignRequestText = (text = '') => {
   const normalized = String(text || '').toLowerCase();
-  return /chiến dịch|chien dich|campaign|gửi email|gui email|gửi mail|gui mail|tin nhắn zalo|tin nhan zalo|zalo nhóm|zalo nhom|drip/.test(normalized);
+  return /chiến dịch|chien dich|campaign|gửi email|gui email|gửi mail|gui mail|tin nhắn zalo|tin nhan zalo|zalo nhóm|zalo nhom|drip/.test(normalized)
+    || isQuickSendRequest(text)
+    || isMultiDaySeriesRequestLocal(text);
 };
 
 const isPlanTemplatePrompt = (text = '') => (
@@ -177,6 +197,10 @@ export function extractWizardState(history = []) {
     // Tên các gate được trả lời bằng marker TƯỜNG MINH sau channel marker cuối cùng —
     // mergeWizardState dùng để biết field nào derived phải thắng persisted.
     markerGates: [],
+    // Latest free-text campaign intent (not marker). null | true | false.
+    latestIntentIsQuickSend: null,
+    // True only when the latest free-text campaign message explicitly set/cleared schedule.
+    latestIntentScheduleFresh: false,
   };
 
   const recordMarkerGate = (gate) => {
@@ -184,6 +208,7 @@ export function extractWizardState(history = []) {
   };
 
   const messages = Array.isArray(history) ? history : [];
+  let latestFreeTextCampaign = null;
 
   messages.forEach((message, index) => {
     const content = message?.content || '';
@@ -194,15 +219,38 @@ export function extractWizardState(history = []) {
       state.planApproved = false;
     }
 
-    if (message?.role === 'user' && isCampaignRequestText(content)) {
+    if (message?.role === 'user' && !marker && isCampaignRequestText(content)) {
       state.isCampaignFlow = true;
+      latestFreeTextCampaign = content;
       state.channel ||= inferChannelFromText(content);
+      if (!state.channel && isQuickSendRequest(content)) {
+        state.channel ||= inferQuickSendChannel(content);
+      }
       state.dataSource ||= inferDataSourceFromText(content);
       const inferredSchedule = inferScheduleFromText(content);
-      if (inferredSchedule && inferredSchedule.mode !== 'recurring') {
-        state.schedule ||= inferredSchedule;
-      } else if (inferredSchedule?.mode === 'recurring') {
-        state.schedule = { mode: 'recurring', days: inferredSchedule.days };
+      if (isQuickSendRequest(content)) {
+        // Latest quick-send forces once (multi-day already excluded by isQuickSendRequest).
+        state.schedule = { mode: 'once' };
+        state.latestIntentIsQuickSend = true;
+        state.latestIntentScheduleFresh = true;
+      } else {
+        // Newer non-quick campaign intent wins over an earlier once.
+        state.latestIntentIsQuickSend = false;
+        if (inferredSchedule) {
+          state.schedule = inferredSchedule;
+          state.latestIntentScheduleFresh = true;
+        } else if (isMultiDaySeriesRequestLocal(content)) {
+          const daysMatch = String(content).match(/(\d+)\s*(?:ngày|ngay|day|days)/i);
+          state.schedule = {
+            mode: 'drip',
+            days: daysMatch ? Number(daysMatch[1]) : undefined,
+          };
+          state.latestIntentScheduleFresh = true;
+        } else if (state.schedule?.mode === 'once') {
+          // Left quick-send without a new schedule → re-ask (don't keep sticky once).
+          state.schedule = null;
+          state.latestIntentScheduleFresh = true;
+        }
       }
     }
 
@@ -292,6 +340,17 @@ export function extractWizardState(history = []) {
       state.planApproved = true;
     }
   });
+
+  // After channel switch clears schedule: re-apply once only if LATEST free-text intent is still quick-send.
+  if (
+    latestFreeTextCampaign
+    && isQuickSendRequest(latestFreeTextCampaign)
+    && !state.markerGates.includes('schedule')
+  ) {
+    state.schedule = { mode: 'once' };
+    state.latestIntentIsQuickSend = true;
+    state.latestIntentScheduleFresh = true;
+  }
 
   return state;
 }
@@ -402,7 +461,75 @@ export function buildScheduleQuestion(locale = 'vi') {
   };
 }
 
-export function buildCampaignPromptWithWizardState(state, basePrompt = '', locale = 'vi') {
+/**
+ * Deterministic CampaignBrief gate — product/topic picker before schedule.
+ * @param {Array<{id:number|string, name?:string}>} courses
+ * @param {string} locale
+ * @param {{ stale?: boolean, preferredContentMode?: string|null }} [opts]
+ */
+export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
+  stale = false,
+  preferredContentMode = null,
+} = {}) {
+  const isEnglish = locale === 'en';
+  const list = Array.isArray(courses) ? courses : [];
+  const options = [
+    {
+      value: 'single_product',
+      label: isEnglish ? 'One product / service' : '1 sản phẩm / dịch vụ',
+    },
+  ];
+  if (list.length >= 2) {
+    options.push({
+      value: 'multiple_products',
+      label: isEnglish ? 'Multiple products' : 'Nhiều sản phẩm cùng lúc',
+    });
+  }
+  options.push({
+    value: 'custom_topic',
+    label: isEnglish ? 'Other content (thank-you, notice, …)' : 'Nội dung khác (cảm ơn, thông báo, …)',
+  });
+
+  const courseOptions = [
+    ...list.map((course) => ({
+      value: String(course.id),
+      label: String(course.name || course.course_name || `#${course.id}`),
+    })),
+    { value: 'other', label: isEnglish ? 'Other' : 'Khác' },
+  ];
+
+  const question = {
+    id: 'campaignBrief',
+    label: isEnglish ? 'What is this campaign about?' : 'Chiến dịch này nói về gì?',
+    wizardGate: 'campaignBrief',
+    inputType: 'campaign_brief',
+    options,
+    courseOptions,
+  };
+
+  const data = { questions: [question] };
+  if (preferredContentMode) data.preferredContentMode = preferredContentMode;
+
+  let content;
+  if (stale) {
+    content = isEnglish
+      ? 'That product is no longer available. Please choose again.'
+      : 'Sản phẩm đó không còn khả dụng. Bạn chọn lại nhé.';
+  } else {
+    content = isEnglish
+      ? 'What should this campaign promote or talk about?'
+      : 'Bạn muốn chiến dịch này quảng bá sản phẩm nào, hoặc nói về chủ đề gì?';
+  }
+
+  return {
+    type: 'ask_campaign_details',
+    content,
+    missing_fields: [],
+    data,
+  };
+}
+
+export function buildCampaignPromptWithWizardState(state, basePrompt = '', locale = 'vi', briefContext = '') {
   const isEnglish = locale === 'en';
   const parts = [String(basePrompt || '').trim()].filter(Boolean);
   if (state?.schedule?.mode === 'drip') {
@@ -414,6 +541,8 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
   } else if (state?.schedule?.mode === 'once') {
     parts.push(isEnglish ? 'Schedule: send once.' : 'Lịch gửi: gửi một lần.');
   }
+  const ctx = String(briefContext || '').trim();
+  if (ctx) parts.push(ctx);
   return parts.join('\n');
 }
 
@@ -552,6 +681,16 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'dataSource', response: buildDataSourceQuestion(locale) };
   }
 
+  if (!isCampaignBriefReady(state.brief || resources.brief)) {
+    return {
+      gate: 'campaignBrief',
+      response: buildCampaignBriefQuestion(resources.courses || [], locale, {
+        stale: Boolean(resources.briefStale),
+        preferredContentMode: resources.briefPreferredContentMode || null,
+      }),
+    };
+  }
+
   const hasValidSchedule = isValidWizardSchedule(state.schedule);
   if (!hasValidSchedule) {
     const response = buildScheduleQuestion(locale);
@@ -619,6 +758,7 @@ export function createEmptyWizardState() {
       status: null,
       campaignId: null,
     },
+    brief: createEmptyCampaignBrief('vi'),
     meta: {
       lastGate: null,
       lastGateCount: 0,
@@ -635,6 +775,7 @@ export function normalizeWizardState(raw) {
     v: WIZARD_STATE_VERSION,
     gates: { ...empty.gates, ...(raw.gates || {}) },
     plan: { ...empty.plan, ...(raw.plan || {}) },
+    brief: mergeCampaignBrief(raw.brief, null),
     meta: { ...empty.meta, ...(raw.meta || {}) },
   };
 }
@@ -675,7 +816,13 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
       p.zaloGroupIds,
       (v) => Array.isArray(v) && v.length > 0
     ),
-    schedule: pick('schedule', d.schedule ?? null, p.schedule),
+    // Latest free-text intent schedule beats sticky persisted only when that intent set schedule.
+    schedule: (() => {
+      if (markerGates.includes('schedule') || channelSwitched) return d.schedule ?? null;
+      if (d.latestIntentScheduleFresh) return d.schedule ?? null;
+      if (d.latestIntentIsQuickSend === true) return d.schedule ?? { mode: 'once' };
+      return (p.schedule != null) ? p.schedule : (d.schedule ?? null);
+    })(),
     hasContentPlan: channelSwitched ? Boolean(d.hasContentPlan) : Boolean(d.hasContentPlan || p.hasContentPlan),
     planApproved: channelSwitched ? Boolean(d.planApproved) : Boolean(d.planApproved || p.planApproved),
   };
@@ -756,6 +903,7 @@ export function applyWizardStateAction(state, action, payload = {}) {
     v: WIZARD_STATE_VERSION,
     gates: { ...current.gates },
     plan: { ...current.plan, savedTemplates: [...current.plan.savedTemplates] },
+    brief: current.brief,
     meta: { ...current.meta },
   };
 
