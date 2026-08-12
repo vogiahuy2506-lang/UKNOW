@@ -11,6 +11,8 @@ import {
   classifyCapabilityProbe,
   formatAssistantCapabilities,
 } from '../ai/assistantCapabilities.js';
+import { isPlanAdviceQuestion } from '../../utils/planAdviceIntent.util.js';
+import { answerPlanAdvice } from './planAdvisor.service.js';
 
 const FIXED_REPLIES = {
   vi: {
@@ -452,7 +454,12 @@ ${chunkBlock}`;
  * Entry for assistant chat: route then handle help branches.
  * Returns null when branch is làm_giúp or không_rõ (caller continues to aiCampaign).
  */
-export async function tryHandleHelpChat({ history, userId, locale = 'vi' } = {}) {
+export async function tryHandleHelpChat({
+  history,
+  userId,
+  planOwnerUserId = null,
+  locale = 'vi',
+} = {}) {
   const lang = normalizeLocale(locale);
   const copy = fixedReplies(lang);
   const question = extractLastUserText(history);
@@ -462,6 +469,16 @@ export async function tryHandleHelpChat({ history, userId, locale = 'vi' } = {})
       content: copy.clarify,
       data: { helpRoute: HELP_ROUTE_LABELS.không_rõ },
     };
+  }
+
+  // Live plan advice before sensitive docs — pricing/upgrade use DB, not stale articles.
+  if (isPlanAdviceQuestion(question)) {
+    return answerPlanAdvice({
+      question,
+      userId,
+      planOwnerUserId: planOwnerUserId != null ? planOwnerUserId : userId,
+      locale: lang,
+    });
   }
 
   // Billing, login, and tax queries must never fall through the LLM router.

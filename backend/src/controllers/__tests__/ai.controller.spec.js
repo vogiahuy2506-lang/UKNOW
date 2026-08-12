@@ -119,6 +119,8 @@ describe('ai.controller', () => {
     expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
     expect(tryHandleHelpChat).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'vi',
+      userId: 7,
+      planOwnerUserId: 7,
     }));
     expect(processSmartChat).not.toHaveBeenCalled();
     expect(updateWizardStateSections).toHaveBeenCalledWith(
@@ -208,6 +210,10 @@ describe('ai.controller', () => {
       user: employee,
     }, makeRes());
 
+    expect(tryHandleHelpChat).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 9,
+      planOwnerUserId: 3,
+    }));
     expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({
       userId: 9,
       resourceOwnerUserId: 3,
@@ -222,5 +228,43 @@ describe('ai.controller', () => {
       userId: 9,
       resourceOwnerUserId: 3,
     }));
+  });
+
+  it('plan-advice help response still meta-only persists locale without touching gates/brief', async () => {
+    tryHandleHelpChat.mockResolvedValue({
+      type: 'text',
+      content: 'Starter phù hợp.\n\n[Xem Bảng giá](/pricing)',
+      data: { planAdvice: true, currentPlanCode: 'starter', pricingPath: '/pricing' },
+    });
+
+    const req = {
+      body: {
+        history: [{ role: 'user', content: 'Gói nào phù hợp cho shop nhỏ?' }],
+        locale: 'vi',
+        sessionId: 55,
+      },
+      user: { id: 7, role: 'user' },
+    };
+    getSessionWizardState.mockResolvedValue({
+      wizard_state: {
+        version: 1,
+        gates: { channel: 'email' },
+        brief: { version: 1, contentLocale: 'vi' },
+        meta: { conversationLocale: 'vi' },
+      },
+    });
+    const res = makeRes();
+    await aiController.chat(req, res);
+
+    expect(processSmartChat).not.toHaveBeenCalled();
+    expect(updateWizardStateSections).toHaveBeenCalledWith(
+      55,
+      7,
+      expect.objectContaining({
+        meta: expect.objectContaining({ conversationLocale: expect.any(String) }),
+      }),
+    );
+    expect(updateWizardStateSections.mock.calls[0][2].gates).toBeUndefined();
+    expect(updateWizardStateSections.mock.calls[0][2].brief).toBeUndefined();
   });
 });

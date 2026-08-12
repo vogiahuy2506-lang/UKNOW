@@ -185,11 +185,13 @@ class AiController {
       // đính tệp / giữa flow là dấu hiệu muốn AI xử lý, không phải hỏi trợ giúp.
       const hasFiles = Array.isArray(files) && files.length > 0;
       const inWizard = isWizardAnswerTurn(history);
+      const resourceOwnerUserId = resolveOwnerUserId(req.user);
       const helpResponse = (hasFiles || inWizard)
         ? null
         : await tryHandleHelpChat({
           history,
           userId: req.user.id,
+          planOwnerUserId: resourceOwnerUserId,
           locale: localeContext.conversationLocale,
         });
 
@@ -207,7 +209,7 @@ class AiController {
           history,
           files: files || [],
           userId: req.user.id,
-          resourceOwnerUserId: resolveOwnerUserId(req.user),
+          resourceOwnerUserId,
           userRole: req.user.role,
           locale: uiLocale,
           localeContext,

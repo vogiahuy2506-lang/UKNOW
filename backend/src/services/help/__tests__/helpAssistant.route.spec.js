@@ -5,6 +5,7 @@ const mockRecord = jest.fn();
 const mockSearchHelpChunks = jest.fn();
 const mockGetCapabilityMapText = jest.fn();
 const mockInsertUnanswered = jest.fn();
+const mockAnswerPlanAdvice = jest.fn();
 
 jest.unstable_mockModule('../geminiText.util.js', () => ({
   generateGeminiText: mockGenerate,
@@ -23,6 +24,10 @@ jest.unstable_mockModule('../../../repositories/help/helpArticle.repository.js',
   insertUnanswered: mockInsertUnanswered,
 }));
 
+jest.unstable_mockModule('../planAdvisor.service.js', () => ({
+  answerPlanAdvice: mockAnswerPlanAdvice,
+}));
+
 const {
   tryHandleHelpChat,
   HELP_ROUTE_LABELS,
@@ -36,8 +41,19 @@ describe('tryHandleHelpChat route branches', () => {
     mockSearchHelpChunks.mockReset();
     mockGetCapabilityMapText.mockReset();
     mockInsertUnanswered.mockReset();
+    mockAnswerPlanAdvice.mockReset();
     mockGetCapabilityMapText.mockResolvedValue('');
     mockSearchHelpChunks.mockResolvedValue({ chunks: [], topSimilarity: 0 });
+    mockAnswerPlanAdvice.mockResolvedValue({
+      type: 'text',
+      content: 'Gợi ý gói từ DB.\n\n[Xem Bảng giá](/pricing)',
+      data: {
+        helpRoute: HELP_ROUTE_LABELS.hỏi_đáp,
+        planAdvice: true,
+        currentPlanCode: 'starter',
+        pricingPath: '/pricing',
+      },
+    });
   });
 
   function historyWith(text) {
@@ -68,44 +84,74 @@ describe('tryHandleHelpChat route branches', () => {
     expect(mockGenerate).not.toHaveBeenCalled();
   });
 
-  it('sensitive question without a matching document stays behind the fixed guard', async () => {
+  it('plan-advisor short-circuits before sensitive docs/router', async () => {
+    const result = await tryHandleHelpChat({
+      history: historyWith('bảng giá có những tính năng gì'),
+      userId: 1,
+      planOwnerUserId: 3,
+    });
+
+    expect(result.data.planAdvice).toBe(true);
+    expect(mockAnswerPlanAdvice).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'bảng giá có những tính năng gì',
+      userId: 1,
+      planOwnerUserId: 3,
+    }));
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(mockSearchHelpChunks).not.toHaveBeenCalled();
+    expect(mockInsertUnanswered).not.toHaveBeenCalled();
+  });
+
+  it('pricing intent uses plan-advisor instead of stale help docs', async () => {
+    const result = await tryHandleHelpChat({
+      history: historyWith('giá gói professional'),
+      userId: 1,
+    });
+
+    expect(result.data.planAdvice).toBe(true);
+    expect(mockAnswerPlanAdvice).toHaveBeenCalled();
+    expect(mockSearchHelpChunks).not.toHaveBeenCalled();
+  });
+
+  it('sensitive payment question without docs stays behind the fixed guard', async () => {
     const result = await tryHandleHelpChat({
       history: historyWith('thanh toán gói được không'),
       userId: 1,
     });
 
     expect(result.content).toMatch(/không nên đoán thông tin về thanh toán/i);
+    expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
     expect(mockGenerate).not.toHaveBeenCalled();
     expect(mockInsertUnanswered).toHaveBeenCalledWith(expect.objectContaining({
       question: 'thanh toán gói được không',
     }));
   });
 
-  it('sensitive overview without a matching document stays behind the fixed guard', async () => {
+  it('payment failed stays sensitive, not plan-advisor', async () => {
     const result = await tryHandleHelpChat({
-      history: historyWith('bảng giá có những tính năng gì'),
+      history: historyWith('Payment failed'),
       userId: 1,
     });
-
-    expect(result.content).toMatch(/không nên đoán thông tin về thanh toán/i);
-    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
+    expect(result.content).toMatch(/không nên đoán|should not guess/i);
   });
 
-  it('answers a sensitive question from official matching documents without calling the router', async () => {
-    mockGenerate.mockResolvedValueOnce({ text: 'Gói hiện có trong tài liệu.', modelName: 'm', raw: {} });
-    mockSearchHelpChunks.mockResolvedValue({
-      chunks: [{ slug: 'bang-gia', title: 'Bảng giá', content_text: 'Gói Professional có giá...' }],
-      topSimilarity: 0.9,
-    });
-
-    const result = await tryHandleHelpChat({
-      history: historyWith('giá gói professional'),
+  it('content-creation pricing email falls through to aiCampaign', async () => {
+    mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
+    await expect(tryHandleHelpChat({
+      history: historyWith('Write an email about our pricing plans'),
       userId: 1,
-    });
+    })).resolves.toBeNull();
+    expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
+  });
 
-    expect(result.content).toContain('Gói hiện có trong tài liệu.');
-    expect(mockGenerate).toHaveBeenCalledTimes(1);
-    expect(mockGenerate.mock.calls[0][0].systemPrompt).not.toContain('bộ định tuyến ý định');
+  it('campaign plan creation falls through to aiCampaign', async () => {
+    mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
+    await expect(tryHandleHelpChat({
+      history: historyWith('Create a campaign plan'),
+      userId: 1,
+    })).resolves.toBeNull();
+    expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
   });
 
   it('hỏi_đáp → answerWithDocs (không null)', async () => {
