@@ -5,6 +5,8 @@ const processSmartChatV2 = jest.fn();
 const chargeAiCredit = jest.fn();
 const createSession = jest.fn();
 const saveMessages = jest.fn();
+const getSessionWizardState = jest.fn();
+const updateWizardStateSections = jest.fn();
 const tryHandleHelpChat = jest.fn(async () => null);
 
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
@@ -43,6 +45,8 @@ jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () =
 jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession,
   saveMessages,
+  getSessionWizardState,
+  updateWizardStateSections,
 }));
 
 const { default: aiController } = await import('../ai.controller.js');
@@ -65,6 +69,10 @@ describe('ai.controller', () => {
     tryHandleHelpChat.mockReset();
     tryHandleHelpChat.mockResolvedValue(null);
     createSession.mockResolvedValue({ id: 123, title: 'Wizard chat' });
+    getSessionWizardState.mockReset();
+    getSessionWizardState.mockResolvedValue(null);
+    updateWizardStateSections.mockReset();
+    updateWizardStateSections.mockResolvedValue(undefined);
   });
 
   it('does not charge AI credit for wizard short-circuit chat responses', async () => {
@@ -109,7 +117,21 @@ describe('ai.controller', () => {
     await aiController.chat(req, res);
 
     expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+    expect(tryHandleHelpChat).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'vi',
+    }));
     expect(processSmartChat).not.toHaveBeenCalled();
+    expect(updateWizardStateSections).toHaveBeenCalledWith(
+      123,
+      7,
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          conversationLocale: expect.any(String),
+        }),
+      })
+    );
+    expect(updateWizardStateSections.mock.calls[0][2].gates).toBeUndefined();
+    expect(updateWizardStateSections.mock.calls[0][2].brief).toBeUndefined();
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.objectContaining({ content: 'Xem hướng dẫn' }),

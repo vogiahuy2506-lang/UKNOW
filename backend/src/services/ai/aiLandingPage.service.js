@@ -1,5 +1,6 @@
 import businessProfileService from './businessProfile.service.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
+import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
 
 /** Marker để frontend (khi đã có slug) thay bằng iframe form embed. */
 const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
@@ -12,14 +13,30 @@ function stripJsonFences(raw) {
   return t.trim();
 }
 
+function contentLanguageInstruction(contentLocale) {
+  return contentLocale === 'en'
+    ? 'CUSTOMER_CONTENT_LANGUAGE: Write ALL customer-visible landing copy (headlines, body, CTA, form labels, button text) in English. Do not mix Vietnamese.'
+    : 'CUSTOMER_CONTENT_LANGUAGE: Viết TOÀN BỘ copy landing hiển thị (headline, body, CTA, nhãn form, nút) bằng tiếng Việt tự nhiên. Không trộn tiếng Anh trừ tên riêng/sản phẩm.';
+}
+
 class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
    *
-   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null }} opts
+   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string }} opts
    * @returns {Promise<{ title: string, html: string }>}
    */
-  async generate({ userId, prompt, titleHint = '', landingBriefContext = null, actorUserId = null }) {
+  async generate({
+    userId,
+    prompt,
+    titleHint = '',
+    landingBriefContext = null,
+    actorUserId = null,
+    contentLocale = 'vi',
+  }) {
+    const locale = normalizeAssistantLocale(contentLocale, 'vi');
+    const htmlLang = locale === 'en' ? 'en' : 'vi';
+    const formHeading = locale === 'en' ? 'Sign up' : 'Đăng ký';
     const businessCtx = await businessProfileService.getContextForLandingAi(userId, prompt);
     const hasBusinessCtx = String(businessCtx || '').trim().length > 0;
     const hasBrief = String(landingBriefContext || '').trim().length > 0;
@@ -38,11 +55,13 @@ class AiLandingPageService {
       ? `THỨ TỰ DỮ KIỆN: (1) LANDING_BRIEF DATA / selected product, (2) yêu cầu người dùng bên dưới, (3) hồ sơ doanh nghiệp chỉ bổ sung brand/tone/audience — không thay selected product.\n\n`
       : '';
 
-    const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing tại Việt Nam.
+    const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing.
 
 Nhiệm vụ: tạo MỘT trang landing HTML5 hoàn chỉnh, đẹp, responsive, theo đúng yêu cầu người dùng.
 
-QUAN TRỌNG: TUYỆT ĐỐI KHÔNG dùng placeholder dạng {{variable}}, [text], hoặc "Lorem ipsum" — hãy viết nội dung thật, cụ thể, tiếng Việt tự nhiên ngay trong HTML.
+${contentLanguageInstruction(locale)}
+
+QUAN TRỌNG: TUYỆT ĐỐI KHÔNG dùng placeholder dạng {{variable}}, [text], hoặc "Lorem ipsum" — hãy viết nội dung thật, cụ thể ngay trong HTML.
 
 ${precedenceNote}${briefBlock}${hasBusinessCtx ? `${businessCtx}\n\n` : noProfileNote}YÊU CẦU NỘI DUNG / CHỦ ĐỀ TỪ NGƯỜI DÙNG:
 """${prompt}"""
@@ -51,7 +70,7 @@ ${hintLine}
 
 QUY TẮC KỸ THUẬT (bắt buộc):
 1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Hai khóa: "title" (string) và "html" (string).
-2) "html" phải là tài liệu HTML5 đầy đủ: bắt đầu bằng <!DOCTYPE html>, có <html lang="vi">, <head>, <body>.
+2) "html" phải là tài liệu HTML5 đầy đủ: bắt đầu bằng <!DOCTYPE html>, có <html lang="${htmlLang}">, <head>, <body>.
 3) Trong <head> luôn có:
    - <meta charset="utf-8"/>
    - <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -62,7 +81,7 @@ QUY TẮC KỸ THUẬT (bắt buộc):
 6) Trang phải có vùng đăng ký lead: tại vị trí form (ví dụ sau khối CTA chính), chèn ĐÚNG một dòng comment HTML sau, đứng một mình giữa các thẻ cha phù hợp (ví dụ trong <section>):
    ${LANDING_FORM_PLACEHOLDER}
    Không bọc comment trong <script>. Không thay nội dung comment — giữ nguyên ký tự.
-7) Nội dung chữ có thể tiếng Việt. Link ngoài dùng https, ngắn gọn.
+7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
 8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh.
 
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
@@ -137,7 +156,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 
     if (!html.includes(LANDING_FORM_PLACEHOLDER)) {
       if (/<\/body>/i.test(html)) {
-        html = html.replace(/<\/body>/i, `  <section class="py-10 px-4 max-w-3xl mx-auto">\n    <h2 class="text-xl font-semibold text-gray-900 mb-4">Đăng ký</h2>\n    ${LANDING_FORM_PLACEHOLDER}\n  </section>\n</body>`);
+        html = html.replace(/<\/body>/i, `  <section class="py-10 px-4 max-w-3xl mx-auto">\n    <h2 class="text-xl font-semibold text-gray-900 mb-4">${formHeading}</h2>\n    ${LANDING_FORM_PLACEHOLDER}\n  </section>\n</body>`);
       } else {
         html = `${html}\n<!-- appended -->\n<section class="py-10 px-4">${LANDING_FORM_PLACEHOLDER}</section>`;
       }

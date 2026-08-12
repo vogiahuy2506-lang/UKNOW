@@ -77,7 +77,7 @@ const runFixture = (fixture) => {
         contentMode: extracted.preferredContentMode,
         contentLocale: locale === 'en' ? 'en' : 'vi',
       })
-      : mergeCampaignBrief(persistedBrief, derivedBrief, { locale });
+      : mergeCampaignBrief(persistedBrief, derivedBrief, { defaultContentLocale: locale === 'en' ? 'en' : 'vi' });
     return { ...gates, brief };
   };
 

@@ -15,6 +15,7 @@ export function isOtherProductDescriptionValid(description) {
 export function buildLandingBriefFromAnswers({
   answers = {},
   questions = [],
+  contentLocale = null,
   locale = 'vi',
 } = {}) {
   const hasProductQuestion = questions.some((q) => q.id === 'product');
@@ -36,6 +37,9 @@ export function buildLandingBriefFromAnswers({
   }
 
   const formPreset = answers.formFields || 'basic';
+  const semanticLocale = contentLocale === 'en' || contentLocale === 'vi'
+    ? contentLocale
+    : (locale === 'en' ? 'en' : 'vi');
   return {
     version: 1,
     source: 'assistant_wizard',
@@ -51,6 +55,6 @@ export function buildLandingBriefFromAnswers({
         ? (String(answers.customFields || '').trim() || null)
         : null,
     },
-    contentLocale: locale === 'en' ? 'en' : 'vi',
+    contentLocale: semanticLocale,
   };
 }

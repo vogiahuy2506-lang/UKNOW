@@ -76,12 +76,34 @@ QUY TẮC LIÊN KẾT (bắt buộc):
 const OVERVIEW_RE =
   /làm được gì|làm những gì|làm gì|giúp (được )?gì|hỗ trợ (được )?gì|dùng để làm gì|tính năng|chức năng|hệ thống .+ (gì|nào)|overview|capabilit|what can (you|it|i) do|what can i do|features?|how does .+ work/i;
 
-/** Chủ đề nhạy — không best-effort khi thiếu chunk (tránh bịa tiền/pháp lý). */
+/** Chủ đề nhạy — giữ export tương thích; route chính dùng isSensitiveHelpQuestion(). */
 export const SENSITIVE_HELP_TOPIC_RE =
-  /giá gói|bảng giá|pricing|hoá đơn|hóa đơn|thanh toán|hoàn tiền|hoan tien|refund|invoice|billing|mật khẩu|mat khau|đăng nhập|dang nhap|mã số thuế|ma so thue/i;
+  /giá gói|bảng giá|pricing|hoá đơn|hóa đơn|thanh toán|hoàn tiền|hoan tien|refund|invoice|billing|mật khẩu|mat khau|đăng nhập|dang nhap|mã số thuế|ma so thue|password|\blog\s*in\b|\bsign\s*in\b|\bpayment\b|\bvat\b|tax\s*id|(?:upgrade|downgrade)\s+(?:my\s+)?(?:plan|subscription|account)|nâng\s*gói|nang\s*goi|hạ\s*gói|ha\s*goi/i;
 
+const CONTENT_CREATION_GUARD_RE =
+  /(?:viết|viet|soạn|soan|write|draft|compose|create|tạo|tao|build|upgrade\s+this)\s+.{0,80}(?:email|mail|tin(?:\s*nhắn)?|message|template|campaign|chiến\s*dịch|chien\s*dich|landing(?:\s*page)?|zalo|billing\s+notice|invoice\s+email|payment\s+reminder)|(?:email|mail|template).{0,24}(?:nhắc\s*thanh\s*toán|nhac\s*thanh\s*toan|payment\s+reminder|billing\s+notice)|(?:chiến\s*dịch|chien\s*dich|campaign|landing(?:\s*page)?).{0,48}(?:cho|for|về|ve|about)/i;
+
+const ACCOUNT_ISSUE_RE =
+  /payment\s+failed|cannot\s+(?:log\s*in|sign\s*in)|can't\s+(?:log\s*in|sign\s*in)|forgot\s+(?:my\s+)?password|không\s+đăng\s*nhập|khong\s+dang\s*nhap|quên\s*mật\s*khẩu|quen\s*mat\s*khau|thanh\s*toán\s*thất\s*bại|thanh\s*toan\s*that\s*bai/i;
+
+/**
+ * Intent-aware sensitive help (M4). Account/billing/login/tax issues route to docs.
+ * Content-creation commands with the same keywords do NOT.
+ */
+export function isSensitiveHelpQuestion(text = '') {
+  const question = String(text || '').trim();
+  if (!question) return false;
+  if (ACCOUNT_ISSUE_RE.test(question)) return true;
+  if (CONTENT_CREATION_GUARD_RE.test(question)) return false;
+  // Bare "create a campaign plan" / product names with Payment — not sensitive.
+  if (/\bcreate\s+a\s+campaign\s+plan\b/i.test(question)) return false;
+  if (/\bupgrade\s+this\s+email\s+template\b/i.test(question)) return false;
+  return SENSITIVE_HELP_TOPIC_RE.test(question);
+}
+
+/** @deprecated Prefer isSensitiveHelpQuestion — kept as alias for callers/tests. */
 export function isSensitiveHelpTopic(question = '') {
-  return SENSITIVE_HELP_TOPIC_RE.test(String(question || ''));
+  return isSensitiveHelpQuestion(question);
 }
 
 function softFallbackIntro(locale) {
@@ -249,7 +271,7 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
   // Overview questions → capability map even without strong chunk hits.
   const isOverview = OVERVIEW_RE.test(question);
 
-  if (!chunks.length && isSensitiveHelpTopic(question)) {
+  if (!chunks.length && isSensitiveHelpQuestion(question)) {
     if (allowSoftFallback) {
       await helpRepo.insertUnanswered({
         question,
@@ -443,7 +465,7 @@ export async function tryHandleHelpChat({ history, userId, locale = 'vi' } = {})
   }
 
   // Billing, login, and tax queries must never fall through the LLM router.
-  if (isSensitiveHelpTopic(question)) {
+  if (isSensitiveHelpQuestion(question)) {
     return answerWithDocs(question, userId, lang);
   }
 

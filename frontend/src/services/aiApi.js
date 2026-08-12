@@ -156,7 +156,10 @@ const aiApi = {
     const hasTemplate = templateId != null && templateId !== '';
     const hasFiles = Array.isArray(files) && files.length > 0;
     const payload = { prompt, sessionId, userSummary };
-    if (landingBrief) payload.landingBrief = landingBrief;
+    if (landingBrief) {
+      payload.landingBrief = landingBrief;
+      if (landingBrief.contentLocale) payload.locale = landingBrief.contentLocale;
+    }
     if (hasTemplate || hasFiles) {
       const response = await api.post('/landing-templates/generate', {
         ...payload,

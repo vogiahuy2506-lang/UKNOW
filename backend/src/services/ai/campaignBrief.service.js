@@ -179,18 +179,23 @@ export function parseCampaignBriefMarker(marker) {
   };
 }
 
-export function mergeCampaignBrief(persisted, derived, { locale = 'vi' } = {}) {
-  const requestLocale = CONTENT_LOCALES.has(locale) ? locale : 'vi';
-  const empty = createEmptyCampaignBrief(requestLocale);
+export function mergeCampaignBrief(persisted, derived, options = {}) {
+  // `locale` kept as deprecated alias for callers not yet migrated.
+  const { defaultContentLocale, locale } = options;
+  const fallback = CONTENT_LOCALES.has(defaultContentLocale)
+    ? defaultContentLocale
+    : (CONTENT_LOCALES.has(locale) ? locale : 'vi');
+  const empty = createEmptyCampaignBrief(fallback);
   const p = persisted && typeof persisted === 'object' ? persisted : null;
   const d = derived && typeof derived === 'object' ? derived : null;
   if (!p && !d) return empty;
 
+  // Sticky: derived → persisted → default. Never insert UI/default between derived and persisted.
   const pickLocale = (...candidates) => {
     for (const value of candidates) {
       if (CONTENT_LOCALES.has(value)) return value;
     }
-    return requestLocale;
+    return fallback;
   };
 
   if (d?.contentMode) {
@@ -200,8 +205,7 @@ export function mergeCampaignBrief(persisted, derived, { locale = 'vi' } = {}) {
       version: 1,
       source: 'assistant_campaign_wizard',
       flowMode: FLOW_MODES.has(d.flowMode) ? d.flowMode : (FLOW_MODES.has(p?.flowMode) ? p.flowMode : 'standard'),
-      // Prefer explicit derived → current UI locale → persisted (never sticky empty default).
-      contentLocale: pickLocale(d.contentLocale, requestLocale, p?.contentLocale),
+      contentLocale: pickLocale(d.contentLocale, p?.contentLocale, fallback),
       productIds: Array.isArray(d.productIds) ? d.productIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [],
     };
   }
@@ -212,13 +216,13 @@ export function mergeCampaignBrief(persisted, derived, { locale = 'vi' } = {}) {
       version: 1,
       source: 'assistant_campaign_wizard',
       flowMode: FLOW_MODES.has(p.flowMode) ? p.flowMode : 'standard',
-      contentLocale: pickLocale(p.contentLocale, requestLocale),
+      contentLocale: pickLocale(p.contentLocale, fallback),
       productIds: Array.isArray(p.productIds) ? p.productIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [],
     };
   }
   return {
     ...empty,
-    contentLocale: requestLocale,
+    contentLocale: fallback,
   };
 }
 

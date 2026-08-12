@@ -106,7 +106,15 @@ class LandingTemplateService {
    * @param {Array} [params.files] - Files attached to request
    * @returns {Promise<object>} - { title, html, css, variables }
    */
-  async generateLandingPage({ prompt, templateId = null, userId = null, files = [], landingBriefContext = null, actorUserId = null }) {
+  async generateLandingPage({
+    prompt,
+    templateId = null,
+    userId = null,
+    files = [],
+    landingBriefContext = null,
+    actorUserId = null,
+    contentLocale = 'vi',
+  }) {
     // 1. Get template if specified
     let template = null;
     if (templateId) {
@@ -143,8 +151,15 @@ Default Config: ${JSON.stringify(template.defaultConfig || {})}
       ? `${landingBriefContext}\n\nTHỨ TỰ DỮ KIỆN: (1) LANDING_BRIEF DATA / selected product, (2) yêu cầu khách hàng, (3) hồ sơ/RAG chỉ bổ sung brand/tone — không thay selected product.\n`
       : '';
 
+    const locale = String(contentLocale || 'vi').trim().toLowerCase() === 'en' ? 'en' : 'vi';
+    const contentLangLine = locale === 'en'
+      ? 'CUSTOMER_CONTENT_LANGUAGE: Write ALL customer-visible landing copy (headlines, body, CTA, form labels, button text) in English. Do not mix Vietnamese.'
+      : 'CUSTOMER_CONTENT_LANGUAGE: Viết TOÀN BỘ copy landing hiển thị (headline, body, CTA, nhãn form, nút) bằng tiếng Việt. Không trộn tiếng Anh trừ tên riêng/sản phẩm.';
+
     const systemPrompt = `Bạn là chuyên gia thiết kế Landing Page với 10+ năm kinh nghiệm.
 Nhiệm vụ: Tạo landing page HTML đẹp, chuyên nghiệp dựa trên yêu cầu của khách hàng.
+
+${contentLangLine}
 
 ${templateInfo}
 
@@ -155,7 +170,7 @@ ${briefBlock}${ragContext ? ragContext + '\n' : ''}
 === QUY TẮC THIẾT KẾ ===
 1. Sử dụng Tailwind CSS (CDN) cho styling
 2. HTML phải là FRAGMENT - không cần html/head/body tags
-3. Nội dung phải SÚC TÍNH, THUYẾT PHỤC, PHÙ HỢP thương hiệu
+3. Nội dung phải SÚC TÍNH, THUYẾT PHỤC, PHÙ HỢP thương hiệu và tuân thủ CUSTOMER_CONTENT_LANGUAGE
 4. Form đăng ký PHẢI dùng đúng các thuộc tính name sau để hệ thống lưu lead tự động:
    - Thêm data-lp-lead-form='1' vào thẻ <form>
    - input name='lastName' (Họ - bắt buộc)

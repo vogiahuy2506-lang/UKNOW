@@ -47,4 +47,13 @@ describe('landingBrief helpers', () => {
       pageGoal: 'trial',
     });
   });
+
+  it('prefers semantic contentLocale over UI locale', () => {
+    expect(buildLandingBriefFromAnswers({
+      answers: { pageGoal: 'lead' },
+      questions: [],
+      contentLocale: 'vi',
+      locale: 'en',
+    }).contentLocale).toBe('vi');
+  });
 });

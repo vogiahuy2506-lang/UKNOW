@@ -134,11 +134,11 @@ describe('campaignBrief.service', () => {
       })).toBe(true);
     });
 
-    it('merge prefers derived contentMode', () => {
+    it('merge prefers derived contentMode and default locale when neither side has locale', () => {
       const merged = mergeCampaignBrief(
         { contentMode: 'custom_topic', topicText: 'old topic' },
         { contentMode: 'single_product', productMode: 'catalog', productIds: [9] },
-        { locale: 'en' }
+        { defaultContentLocale: 'en' }
       );
       expect(merged.contentMode).toBe('single_product');
       expect(merged.productIds).toEqual([9]);
@@ -214,8 +214,11 @@ describe('campaignBrief.service', () => {
   });
 
   describe('mergeCampaignBrief locale', () => {
-    it('uses request locale over sticky persisted empty vi', () => {
+    it('keeps sticky persisted locale when derived contentLocale is null', () => {
       const persisted = createEmptyCampaignBrief('vi');
+      persisted.contentMode = 'custom_topic';
+      persisted.productMode = 'context';
+      persisted.topicText = 'Thanks';
       persisted.contentLocale = 'vi';
       const merged = mergeCampaignBrief(
         persisted,
@@ -225,7 +228,21 @@ describe('campaignBrief.service', () => {
           topicText: 'Thanks',
           contentLocale: null,
         },
-        { locale: 'en' }
+        { defaultContentLocale: 'en' }
+      );
+      expect(merged.contentLocale).toBe('vi');
+    });
+
+    it('uses defaultContentLocale only when neither side has locale', () => {
+      const merged = mergeCampaignBrief(
+        null,
+        {
+          contentMode: 'custom_topic',
+          productMode: 'context',
+          topicText: 'Hello',
+          contentLocale: null,
+        },
+        { defaultContentLocale: 'en' }
       );
       expect(merged.contentLocale).toBe('en');
     });

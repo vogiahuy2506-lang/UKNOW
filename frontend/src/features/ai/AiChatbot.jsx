@@ -2411,6 +2411,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const landingBrief = buildLandingBriefFromAnswers({
       answers,
       questions: pendingLandingData?.questions || [],
+      contentLocale: pendingLandingData?.contentLocale,
       locale,
     });
 

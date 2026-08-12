@@ -4,12 +4,15 @@
  */
 
 import { buildDataSourceQuestion } from '../services/ai/aiCampaignWizard.service.js';
+import {
+  langInstruction,
+  buildAssistantLanguageInstructions,
+} from './assistantLocale.util.js';
 
-export function langInstruction(locale) {
-  return locale === 'en'
-    ? 'Always respond in English. All "content" fields in JSON must be written in English.'
-    : 'Luôn trả lời bằng tiếng Việt. Tất cả trường "content" trong JSON phải viết bằng tiếng Việt.';
-}
+export {
+  langInstruction,
+  buildAssistantLanguageInstructions,
+};
 
 export function lastUserMessageContent(history = []) {
   const lastUserMessage = [...history].reverse().find((message) => message?.role === 'user');

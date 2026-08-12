@@ -150,4 +150,17 @@ describe('normalizeWizardState / computeWizardMeta', () => {
     meta = computeWizardMeta(meta, null);
     expect(meta).toMatchObject({ lastGate: null, lastGateCount: 0, deadEndLoggedAt: null });
   });
+
+  it('preserves conversationLocale keys across computeWizardMeta updates', () => {
+    const meta = computeWizardMeta({
+      conversationLocale: 'en',
+      conversationLocaleSource: 'explicit',
+      lastGate: 'dataSource',
+      lastGateCount: 1,
+    }, 'senderAccount');
+    expect(meta.conversationLocale).toBe('en');
+    expect(meta.conversationLocaleSource).toBe('explicit');
+    expect(meta.lastGate).toBe('senderAccount');
+    expect(meta.lastGateCount).toBe(1);
+  });
 });

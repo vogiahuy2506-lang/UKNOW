@@ -837,15 +837,25 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
 
 export function computeWizardMeta(prevMeta = {}, gateAsked = null) {
   const now = new Date().toISOString();
+  const {
+    lastGate: _ignoredLastGate,
+    lastGateCount: _ignoredCount,
+    deadEndLoggedAt: prevDeadEnd,
+    updatedAt: _ignoredUpdated,
+    ...preserved
+  } = prevMeta && typeof prevMeta === 'object' ? prevMeta : {};
+
   if (gateAsked && prevMeta?.lastGate === gateAsked) {
     return {
+      ...preserved,
       lastGate: gateAsked,
       lastGateCount: (Number(prevMeta.lastGateCount) || 0) + 1,
-      deadEndLoggedAt: prevMeta.deadEndLoggedAt || null,
+      deadEndLoggedAt: prevDeadEnd || null,
       updatedAt: now,
     };
   }
   return {
+    ...preserved,
     lastGate: gateAsked || null,
     lastGateCount: gateAsked ? 1 : 0,
     deadEndLoggedAt: null,

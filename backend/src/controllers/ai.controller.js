@@ -22,6 +22,10 @@ import {
   buildLandingBriefContext,
   resolveOwnerUserId,
 } from '../services/ai/landingBrief.service.js';
+import {
+  normalizeAssistantLocale,
+  resolveAssistantLocaleContext,
+} from '../utils/assistantLocale.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -153,6 +157,28 @@ class AiController {
         });
       }
 
+      const uiLocale = normalizeAssistantLocale(locale, 'vi');
+
+      // Load wizard state once before help routing (conversation locale + campaign reuse).
+      let persistedWizardState = null;
+      if (sessionId) {
+        try {
+          const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
+          persistedWizardState = row?.wizard_state || null;
+        } catch (stateErr) {
+          console.warn('[AI] Không đọc được wizard state:', stateErr.message);
+        }
+      }
+      const normalizedPersisted = normalizeWizardState(persistedWizardState);
+      const persistedMeta = normalizedPersisted.meta || {};
+      const localeContext = resolveAssistantLocaleContext({
+        history,
+        uiLocale,
+        persistedConversationLocale: persistedMeta.conversationLocale || null,
+        // CampaignBrief contentLocale is artifact-scoped — apply inside processSmartChat only.
+        briefContentLocale: null,
+      });
+
       // Định tuyến mỏng: hỏi_đáp / ngoài_phạm_vi → help center;
       // làm_giúp / không_rõ → aiCampaign. Không nhét tài liệu vào prompt aiCampaign.
       // Có tệp đính kèm hoặc đang trả lời gate wizard → BỎ QUA help-router:
@@ -164,7 +190,7 @@ class AiController {
         : await tryHandleHelpChat({
           history,
           userId: req.user.id,
-          locale: locale || 'vi',
+          locale: localeContext.conversationLocale,
         });
 
       let response;
@@ -177,24 +203,14 @@ class AiController {
         wizardShortCircuit = false;
         _wizard = null;
       } else {
-        // Load wizard state đã persist (sống sót qua session reload) — không block chat khi lỗi
-        let persistedWizardState = null;
-        if (sessionId) {
-          try {
-            const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
-            persistedWizardState = row?.wizard_state || null;
-          } catch (stateErr) {
-            console.warn('[AI] Không đọc được wizard state:', stateErr.message);
-          }
-        }
-
         response = await aiCampaignService.processSmartChat({
           history,
           files: files || [],
           userId: req.user.id,
           resourceOwnerUserId: resolveOwnerUserId(req.user),
           userRole: req.user.role,
-          locale: locale || 'vi',
+          locale: uiLocale,
+          localeContext,
           model,
           persistedWizardState,
         });
@@ -261,6 +277,11 @@ class AiController {
           safeFiles
         );
 
+        const localeMetaPatch = {
+          conversationLocale: localeContext.conversationLocale,
+          conversationLocaleSource: localeContext.conversationLocaleSource,
+        };
+
         if (_wizard) {
           // Dead-end: cùng 1 gate bị hỏi lần thứ 3 liên tiếp → log 1 lần cho mỗi streak
           if (_wizard.gateAsked && _wizard.meta.lastGateCount >= 2 && !_wizard.meta.deadEndLoggedAt) {
@@ -282,7 +303,10 @@ class AiController {
 
           await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
             gates: _wizard.gates,
-            meta: _wizard.meta,
+            meta: {
+              ...(_wizard.meta || {}),
+              ...localeMetaPatch,
+            },
             ...(_wizard.brief ? { brief: _wizard.brief } : {}),
             ...(_wizard.planChanged
               ? {
@@ -292,6 +316,14 @@ class AiController {
                 planReset: Boolean(_wizard.planReset),
               }
               : {}),
+          });
+        } else {
+          // Help path: meta-only — never touch gates/brief/plan.
+          await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
+            meta: {
+              ...persistedMeta,
+              ...localeMetaPatch,
+            },
           });
         }
       } catch (dbErr) {
@@ -329,13 +361,23 @@ class AiController {
         });
       }
 
+      // Stateless: no wizard session memory — resolve from this request only.
+      const uiLocale = normalizeAssistantLocale(locale, 'vi');
+      const localeContext = resolveAssistantLocaleContext({
+        history,
+        uiLocale,
+        persistedConversationLocale: null,
+        briefContentLocale: null,
+      });
+
       const response = await aiCampaignService.processSmartChatV2({
         history,
         files: files || [],
         userId: req.user.id,
         resourceOwnerUserId: resolveOwnerUserId(req.user),
         userRole: req.user.role,
-        locale: locale || 'vi',
+        locale: uiLocale,
+        localeContext,
         model,
       });
 
@@ -925,11 +967,15 @@ class AiController {
       const landingBriefContext = resolvedBrief
         ? buildLandingBriefContext(resolvedBrief)
         : null;
+      const contentLocale = normalizeAssistantLocale(
+        resolvedBrief?.normalizedBrief?.contentLocale || locale,
+        'vi',
+      );
 
       const enrichedPrompt = this._buildHomepageHtmlPrompt({
         prompt: String(prompt).trim(),
         homepagePage,
-        locale,
+        locale: contentLocale,
       });
 
       const data = await aiLandingPageService.generate({
@@ -938,6 +984,7 @@ class AiController {
         prompt: enrichedPrompt,
         titleHint: title != null ? String(title) : '',
         landingBriefContext,
+        contentLocale,
       });
 
       // Lưu vào session nếu có sessionId (actor, not owner)

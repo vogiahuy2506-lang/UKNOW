@@ -5,6 +5,7 @@ import {
   resolveLandingBrief,
   buildLandingBriefContext,
 } from '../services/ai/landingBrief.service.js';
+import { normalizeAssistantLocale } from '../utils/assistantLocale.util.js';
 
 /**
  * Controller for landing page templates.
@@ -269,7 +270,7 @@ class LandingTemplateController {
    */
   async generate(req, res) {
     try {
-      const { prompt, templateId, files, sessionId, userSummary, landingBrief } = req.body;
+      const { prompt, templateId, files, sessionId, userSummary, landingBrief, locale } = req.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 10) {
         return res.status(400).json({
@@ -287,6 +288,10 @@ class LandingTemplateController {
       const landingBriefContext = resolvedBrief
         ? buildLandingBriefContext(resolvedBrief)
         : null;
+      const contentLocale = normalizeAssistantLocale(
+        resolvedBrief?.normalizedBrief?.contentLocale || locale,
+        'vi',
+      );
 
       const result = await landingTemplateService.generateLandingPage({
         prompt: prompt.trim(),
@@ -295,6 +300,7 @@ class LandingTemplateController {
         actorUserId,
         files: files || [],
         landingBriefContext,
+        contentLocale,
       });
 
       // Lưu cả user message + assistant (landing page) vào session (actor)

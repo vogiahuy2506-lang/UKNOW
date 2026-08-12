@@ -8,14 +8,19 @@ import aiPromptResources from './aiPromptResources.service.js';
 import { runChat } from './aiChatTransport.service.js';
 import { parseAiJson } from '../../utils/aiJsonParse.util.js';
 import {
-  langInstruction,
   lastUserMessageContent,
   hasExplicitCustomerSource,
   looksLikeCampaignRequest,
   asksOnlyForGoogleSheet,
   isMultiDaySeriesRequest,
   looksLikeInlineSeriesDraft,
+  buildAssistantLanguageInstructions,
 } from '../../utils/campaignIntent.util.js';
+import {
+  resolveAssistantLocaleContext,
+  normalizeAssistantLocale,
+  isLandingOrientedTurn,
+} from '../../utils/assistantLocale.util.js';
 import {
   evaluateNextGate,
   extractWizardState,
@@ -519,6 +524,7 @@ D. ZALO NHÓM:
     resourceOwnerUserId = null,
     userRole = 'user',
     locale = 'vi',
+    localeContext = null,
     model = null,
     persistedWizardState = null,
   }) {
@@ -526,6 +532,7 @@ D. ZALO NHÓM:
     // Tenant resources (courses, templates, profile) belong to workspace owner;
     // chat metering/session stay on actor userId.
     const ownerId = resourceOwnerUserId || userId;
+    const uiLocale = normalizeAssistantLocale(localeContext?.uiLocale || locale, 'vi');
 
     if (userRole === 'admin') {
       // Super admin: inject số liệu nền tảng real-time
@@ -535,7 +542,13 @@ D. ZALO NHÓM:
         console.warn('[AI] Không lấy được admin context:', e.message);
       }
 
-      const langInstr = langInstruction(locale);
+      const adminLocaleContext = localeContext || resolveAssistantLocaleContext({
+        history,
+        uiLocale,
+        persistedConversationLocale: null,
+        briefContentLocale: null,
+      });
+      const langInstr = buildAssistantLanguageInstructions(adminLocaleContext);
       const adminSystemPrompt = `Bạn là Founder AI AI - Trợ lý thông minh cho System Admin của nền tảng Founder AI, và chuyên phân tích tài liệu/dữ liệu doanh nghiệp.
 Nhiệm vụ của bạn là phân tích số liệu, tư vấn chiến lược, trả lời câu hỏi về tình trạng hoạt động của nền tảng, và giải đáp/tổng hợp bất kỳ tài liệu nào được gửi kèm.
 
@@ -570,24 +583,67 @@ QUY TẮC:
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
     const isRevision = isContentPlanRevisionText(lastUserText);
 
+    const campaignBriefContentLocale = isLandingOrientedTurn(history)
+      ? null
+      : (persistedState.brief?.contentLocale || null);
+    let resolvedLocaleContext;
+    if (localeContext) {
+      resolvedLocaleContext = { ...localeContext };
+      if (
+        resolvedLocaleContext.contentLocaleSource !== 'explicit'
+        && (campaignBriefContentLocale === 'vi' || campaignBriefContentLocale === 'en')
+      ) {
+        resolvedLocaleContext = {
+          ...resolvedLocaleContext,
+          contentLocale: campaignBriefContentLocale,
+          contentLocaleSource: 'brief',
+        };
+      }
+    } else {
+      resolvedLocaleContext = resolveAssistantLocaleContext({
+        history,
+        uiLocale,
+        persistedConversationLocale: persistedState.meta?.conversationLocale || null,
+        briefContentLocale: campaignBriefContentLocale,
+      });
+    }
+    // Cards / deterministic copy follow UI (locale arg); prose+artifact follow resolved context.
+    const defaultContentLocale = resolvedLocaleContext.contentLocale;
+    const conversationLocale = resolvedLocaleContext.conversationLocale;
+
     const sourcePrompt = findOriginalCampaignPrompt(history);
     const extracted = extractCampaignBriefFromHistory(history);
     let resolvedBriefContext = '';
     let briefStale = false;
     let briefForState;
+    let contentLocaleNeedsPlanReset = false;
 
     if (extracted.invalid) {
       // Latest marker authoritative — never fall back to older/persisted brief facts.
       briefForState = clearCampaignBriefProductFacts({
         contentMode: extracted.preferredContentMode,
-        contentLocale: locale === 'en' ? 'en' : 'vi',
+        contentLocale: defaultContentLocale,
       });
     } else {
-      const mergedBrief = mergeCampaignBrief(persistedState.brief, extracted.brief, { locale });
+      const mergedBrief = mergeCampaignBrief(persistedState.brief, extracted.brief, {
+        defaultContentLocale,
+      });
       if (!mergedBrief.contentLocale) {
-        mergedBrief.contentLocale = locale === 'en' ? 'en' : 'vi';
+        mergedBrief.contentLocale = defaultContentLocale;
       }
       briefForState = mergedBrief;
+    }
+
+    // Explicit artifact-language directive updates brief content locale before resolve/gates.
+    if (resolvedLocaleContext.contentLocaleSource === 'explicit' && briefForState) {
+      const beforeLocale = briefForState.contentLocale || persistedState.brief?.contentLocale || null;
+      const nextLocale = resolvedLocaleContext.contentLocale;
+      if (beforeLocale !== nextLocale) {
+        contentLocaleNeedsPlanReset = Boolean(
+          persistedState.plan?.snapshot || mergedGates.hasContentPlan
+        );
+      }
+      briefForState = { ...briefForState, contentLocale: nextLocale };
     }
 
     // PR-B quick-send: once schedule + optional inferred brief; multi-day already excluded.
@@ -605,17 +661,24 @@ QUY TẮC:
         mergedGates.channel = inferQuickSendChannel(intentPrompt);
       }
       briefForState = {
-        ...(briefForState || createEmptyCampaignBrief(locale)),
+        ...(briefForState || createEmptyCampaignBrief(defaultContentLocale)),
         flowMode: 'quick_send',
       };
       if (!extracted.invalid && !isCampaignBriefReady(briefForState)) {
         const inferred = inferCampaignBriefFromText(intentPrompt, wizardResources.courses);
         if (inferred) {
-          briefForState = mergeCampaignBrief(briefForState, { ...inferred, flowMode: 'quick_send' }, { locale });
+          briefForState = mergeCampaignBrief(
+            briefForState,
+            { ...inferred, flowMode: 'quick_send', contentLocale: defaultContentLocale },
+            { defaultContentLocale }
+          );
           if (!briefForState.contentLocale) {
-            briefForState.contentLocale = locale === 'en' ? 'en' : 'vi';
+            briefForState.contentLocale = defaultContentLocale;
           }
         }
+      }
+      if (!briefForState.contentLocale) {
+        briefForState.contentLocale = defaultContentLocale;
       }
     } else if (derivedState.latestIntentIsQuickSend === false && briefForState?.flowMode === 'quick_send') {
       // Explicit non-quick latest intent (e.g. switched to drip) — reset sticky flowMode.
@@ -656,19 +719,21 @@ QUY TẮC:
     // Keep brief off gates (top-level _wizard.brief only); pass a copy into evaluator.
     const gatesForPersist = { ...mergedGates };
     delete gatesForPersist.brief;
-    const gateState = { ...gatesForPersist, brief: briefForState };
 
     const marker = isWizardMarkerMessage(lastUserText) ? parseWizardMarker(lastUserText) : null;
     const briefMarkerJustSet = marker?.gate === 'campaignBrief';
     const hadPlanBeforeBriefMarker = Boolean(
       gatesForPersist.hasContentPlan || persistedState.plan?.snapshot
     );
-    if (briefMarkerJustSet && hadPlanBeforeBriefMarker) {
+    const semanticBriefNeedsPlanReset = Boolean(
+      contentLocaleNeedsPlanReset || (briefMarkerJustSet && hadPlanBeforeBriefMarker)
+    );
+    if (semanticBriefNeedsPlanReset) {
       gatesForPersist.hasContentPlan = false;
       gatesForPersist.planApproved = false;
-      gateState.hasContentPlan = false;
-      gateState.planApproved = false;
     }
+
+    const gateState = { ...gatesForPersist, brief: briefForState };
 
     // Đóng gói state cho controller persist (field nội bộ, bị strip trước khi trả client)
     const buildWizard = (gateAsked, planChange = null) => ({
@@ -677,7 +742,7 @@ QUY TẮC:
       gateAsked,
       meta: computeWizardMeta(persistedState.meta, gateAsked),
       ...(planChange
-        || (isRevision || (briefMarkerJustSet && hadPlanBeforeBriefMarker)
+        || (isRevision || semanticBriefNeedsPlanReset
           ? { planChanged: true, planReset: true }
           : { planChanged: false })),
     });
@@ -696,10 +761,10 @@ QUY TẮC:
       && !isPlanTemplateDraftRequest(lastUserText)
     ) {
       const empty = createEmptyWizardState();
-      briefForState = createEmptyCampaignBrief(locale === 'en' ? 'en' : 'vi');
+      briefForState = createEmptyCampaignBrief(defaultContentLocale);
       return {
         type: 'text',
-        content: locale === 'en'
+        content: conversationLocale === 'en'
           ? 'Stopped. The campaign wizard was cleared. Tell me if you want to start a new campaign.'
           : 'Đã dừng. Wizard chiến dịch đã được xoá. Bạn muốn bắt đầu chiến dịch mới thì cứ nói nhé.',
         missing_fields: [],
@@ -841,11 +906,12 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       }
     }
 
-    const langInstr = langInstruction(locale);
+    const langInstr = buildAssistantLanguageInstructions(resolvedLocaleContext);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing, landing page, và phân tích tài liệu/dữ liệu doanh nghiệp.
 
 ## NGÔN NGỮ:
 - ${langInstr}
+- Field inventory: ASSISTANT PROSE = top-level response "content", free-form ask_more questions, help-style explanations. CUSTOMER ARTIFACTS = email subject/bodyHtml/bodyText, Zalo message text, landing HTML/copy, content_plan day/slot summaries and template bodies, campaign script message bodies. Do NOT treat every JSON key named "content" as customer artifact — top-level response content is assistant prose.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - HỒ SƠ DOANH NGHIỆP VÀ TÀI NGUYÊN bên dưới được hệ thống TẢI TRỰC TIẾP TỪ DATABASE ngay trước mỗi tin nhắn — luôn phản ánh trạng thái MỚI NHẤT. Khi user nói "tôi vừa thêm sản phẩm", "tôi vừa cập nhật hồ sơ", v.v., hãy XÁC NHẬN bạn thấy thông tin đó trong phần hồ sơ bên dưới. KHÔNG BAO GIỜ nói "tôi không thể đọc thay đổi mới" hoặc "hồ sơ của tôi là thông tin cũ".
@@ -1157,7 +1223,7 @@ Data structure:
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
 {
   "type": "text" | "ask_more" | "template_draft" | "content_plan" | "ask_campaign_details" | "confirm_create" | "create_and_run" | "ask_landing_details" | "landing_page",
-  "content": "Message to user (${langInstr} — friendly, NO jargon, NO markdown **bold** or *italic*, plain text, use - for bullet points)",
+  "content": "Message to user (assistant prose language per ASSISTANT_REPLY_LANGUAGE — friendly, NO jargon, NO markdown **bold** or *italic*, plain text, use - for bullet points)",
   "missing_fields": [] | ["tên sản phẩm", "mục tiêu email"],
   "data": null | { ... }
 }
@@ -1324,7 +1390,18 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       locale,
       gateState
     );
-    const finalResponse = guarded.response;
+    let finalResponse = guarded.response;
+
+    // Trust boundary: server owns ask_landing_details.data.contentLocale (never trust model).
+    if (finalResponse?.type === 'ask_landing_details') {
+      finalResponse = {
+        ...finalResponse,
+        data: {
+          ...(finalResponse.data && typeof finalResponse.data === 'object' ? finalResponse.data : {}),
+          contentLocale: resolvedLocaleContext.contentLocale,
+        },
+      };
+    }
 
     // AI vừa sinh content_plan mới → plan lifecycle mới, replace nguyên section plan
     let planChange = null;
@@ -1353,10 +1430,18 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     resourceOwnerUserId = null,
     userRole = 'user',
     locale = 'vi',
+    localeContext = null,
     model = null,
   }) {
     let contextBlock = '';
     const ownerId = resourceOwnerUserId || userId;
+    const uiLocale = normalizeAssistantLocale(localeContext?.uiLocale || locale, 'vi');
+    const resolvedLocaleContext = localeContext || resolveAssistantLocaleContext({
+      history,
+      uiLocale,
+      persistedConversationLocale: null,
+      briefContentLocale: null,
+    });
 
     // Lấy existing resources
     let existingResources = '';
@@ -1434,11 +1519,12 @@ ${templateSelectionPrompt}
       }
     }
 
-    const langInstrV2 = langInstruction(locale);
+    const langInstrV2 = buildAssistantLanguageInstructions(resolvedLocaleContext);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo chiến dịch marketing với multi-step support.
 
 ## NGÔN NGỮ:
 - ${langInstrV2}
+- Field inventory: ASSISTANT PROSE = top-level "content". CUSTOMER ARTIFACTS = email subject/body, Zalo message, landing copy, multi-step campaign node message bodies. Top-level response content is assistant prose, not customer artifact.
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
