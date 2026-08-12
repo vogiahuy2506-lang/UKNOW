@@ -16,6 +16,7 @@ import campaignNodeRegistryService from '../services/campaign/campaignNodeRegist
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../utils/manualRecipients.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -32,17 +33,19 @@ function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu c
 class AiController {
   async prepareCampaign(req, res) {
     try {
-      const { script } = req.body || {};
+      const { script, directRecipients } = req.body || {};
       if (!script || !Array.isArray(script.nodes)) {
         return res.status(400).json({ success: false, message: 'Kịch bản chiến dịch không hợp lệ' });
       }
 
       const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
+      if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
+      else if (preparedScript.wizardDataSource === 'manual') this.markManualRecipientsRequired(preparedScript);
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
       });
-      return res.json({ success: true, data: { preparedScript, confirmationView } });
+      return res.json({ success: true, data: { preparedScript, confirmationView, maxRecipients: MAX_AI_MANUAL_RECIPIENTS } });
     } catch (error) {
       console.error('AI prepare campaign error:', error);
       return res.status(500).json(buildAiErrorPayload(error, 'Không thể chuẩn bị bản xem trước chiến dịch'));
@@ -496,7 +499,7 @@ class AiController {
    */
   async createCampaignFromDraft(req, res) {
     try {
-      const { script, resourceVersions = [] } = req.body;
+      const { script, resourceVersions = [], directRecipients } = req.body;
 
       if (!script || !script.nodes || !script.connections) {
         return res.status(400).json({
@@ -506,6 +509,13 @@ class AiController {
       }
 
       const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
+      if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
+      else if (preparedScript.wizardDataSource === 'manual') {
+        const error = new Error('Danh sách người nhận trực tiếp đã hết phiên. Vui lòng nhập lại.');
+        error.code = 'MANUAL_RECIPIENTS_REQUIRED';
+        error.statusCode = 400;
+        throw error;
+      }
       await campaignConfirmationService.assertResourceVersionsCurrent({ resourceVersions, userId: req.user.id });
       const normalizedNodes = preparedScript.nodes;
       const normalizedConnections = preparedScript.connections;
@@ -569,6 +579,52 @@ class AiController {
         ...(error.code ? { code: error.code } : {}),
         message: error.message || 'Lỗi khi tạo chiến dịch từ draft AI',
       });
+    }
+  }
+
+  applyDirectRecipients(script, directRecipients) {
+    const recipients = validateManualRecipients(directRecipients);
+    const hasEmailAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_email');
+    const hasZaloPersonalAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_zalo_personal');
+    if ((recipients.emails.length && !hasEmailAction) || (recipients.phones.length && !hasZaloPersonalAction)) {
+      const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại chỉ dùng cho Zalo cá nhân.');
+      error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
+      error.statusCode = 400;
+      throw error;
+    }
+    let matched = false;
+    for (const node of script.nodes || []) {
+      const subtype = node.node_subtype || node.nodeSubtype;
+      const config = node.config || (node.config = {});
+      if (subtype === 'send_email' && recipients.emails.length) {
+        config.recipientSource = 'manual';
+        config.recipientEmails = recipients.emails;
+        matched = true;
+      } else if (subtype === 'send_zalo_personal' && recipients.phones.length) {
+        config.zaloRecipientSource = 'manual';
+        config.zaloRecipientPhones = recipients.phones;
+        matched = true;
+      }
+    }
+    if (!matched) {
+      const error = new Error('Danh sách nhập trực tiếp chỉ hỗ trợ Email hoặc Zalo cá nhân đúng với kênh gửi.');
+      error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  markManualRecipientsRequired(script) {
+    for (const node of script.nodes || []) {
+      const subtype = node.node_subtype || node.nodeSubtype;
+      const config = node.config || (node.config = {});
+      if (subtype === 'send_email') {
+        config.recipientSource = 'manual';
+        config.recipientEmails = [];
+      } else if (subtype === 'send_zalo_personal') {
+        config.zaloRecipientSource = 'manual';
+        config.zaloRecipientPhones = [];
+      }
     }
   }
 

@@ -1,3 +1,5 @@
+import { MAX_AI_MANUAL_RECIPIENTS } from '../../utils/manualRecipients.util.js';
+
 const WIZARD_MARKER_RE = /^\[wizard\](\{.*\})/;
 
 export const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
@@ -354,6 +356,12 @@ export function buildDataSourceQuestion(locale = 'vi') {
               description: isEnglish
                 ? 'People who submitted the form on your landing page (name, phone, email)'
                 : 'Người điền form trên trang landing (tên, SĐT, email)',
+            },
+            {
+              value: 'manual',
+              label: isEnglish ? 'Enter recipients directly' : 'Nhập người nhận trực tiếp',
+              description: isEnglish ? 'Paste email addresses or phone numbers for one send' : 'Dán email hoặc số điện thoại để gửi trực tiếp',
+              maxRecipients: MAX_AI_MANUAL_RECIPIENTS,
             },
           ],
         },

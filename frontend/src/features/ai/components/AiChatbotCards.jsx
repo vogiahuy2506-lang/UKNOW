@@ -633,12 +633,14 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const [answers, setAnswers] = useState({});
   const [emailChoice, setEmailChoice] = useState(null); // 'new' | 'existing'
   const [emailTemplateName, setEmailTemplateName] = useState('');
+  const [manualRecipients, setManualRecipients] = useState('');
   if (!data?.questions?.length) return null;
 
   const isWizardQuestion = data.questions.some((q) => q.wizardGate);
   const isEmailChannel = answers.channel === 'email';
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
+  const manualRecipientsRequired = answers.dataSource === 'manual';
 
   const isScheduleQuestion = (question) => question.wizardGate === 'schedule' || question.inputType === 'schedule';
 
@@ -658,7 +660,8 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
   const allAnswered =
     data.questions.every(isQuestionAnswered) &&
     (!emailChoiceRequired || emailChoice !== null) &&
-    (!emailTemplateRequired || emailTemplateName.trim().length > 0);
+    (!emailTemplateRequired || emailTemplateName.trim().length > 0) &&
+    (!manualRecipientsRequired || manualRecipients.trim().length > 0);
 
   const pick = (qId, val) => setAnswers((prev) => {
     const next = { ...prev, [qId]: val };
@@ -697,7 +700,9 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         return `${q.label}: ${answers.scheduleDays} ngày, mỗi ngày ${answers.scheduleSlotsPerDay} tin`;
       }
       const opt = q.options.find((o) => o.value === answers[q.id]);
-      return `${q.label} ${opt?.label || answers[q.id]}`;
+      return q.id === 'dataSource' && answers[q.id] === 'manual'
+        ? `${q.label} ${opt?.label || answers[q.id]}`
+        : `${q.label} ${opt?.label || answers[q.id]}`;
     });
     if (isEmailChannel) {
       if (emailChoice === 'existing') {
@@ -706,7 +711,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
         lines.push('Nội dung email: Tạo nội dung mới bằng AI');
       }
     }
-    onSubmit(lines.join('\n'), { ...answers, emailChoice, emailTemplateName: emailTemplateName.trim() });
+    onSubmit(lines.join('\n'), { ...answers, emailChoice, emailTemplateName: emailTemplateName.trim(), directRecipients: manualRecipients.trim() });
   };
 
   return (
@@ -782,6 +787,20 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
                 />
               </label>
               </div>
+            </div>
+          )}
+          {q.id === 'dataSource' && answers[q.id] === 'manual' && (
+            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
+              <label className="block text-xs font-semibold text-slate-700">
+                {t('aiChatbot.manualRecipientsLabel') || 'Email hoặc số điện thoại người nhận'}
+                <textarea
+                  value={manualRecipients}
+                  onChange={(event) => setManualRecipients(event.target.value)}
+                  rows={4}
+                  placeholder={t('aiChatbot.manualRecipientsPlaceholder') || 'Dán mỗi email hoặc số điện thoại trên một dòng'}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal text-slate-700 focus:border-orange-400 focus:outline-none"
+                />
+              </label>
             </div>
           )}
         </div>

@@ -435,6 +435,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [currentScript, setCurrentScript] = useState(null);
+  const [directRecipients, setDirectRecipients] = useState(null);
   const [campaignConfirmation, setCampaignConfirmation] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
   const [showCampaignPicker, setShowCampaignPicker] = useState(false);
@@ -475,6 +476,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const currentSessionIdRef = useRef(null);
   const sessionMessagesCache = useRef(new Map()); // sessionId → messages[] (for background generation)
   const campaignConfirmationRequestRef = useRef(0);
+  const directRecipientsRef = useRef(null);
   const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
   const wizardPatchQueueRef = useRef(Promise.resolve()); // serialize PATCH wizard-state (tránh interleave khi "Lưu tất cả")
   const [serverWizardGates, setServerWizardGates] = useState(null); // gates persist trên server của session hiện tại
@@ -574,7 +576,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   // Every confirm_create path flows through this one read-only preview request.
   // The response is deliberately held only in component state, never appended to chat history.
-  const prepareAndShowCampaignConfirmation = async (rawScript, { sessionId = currentSessionIdRef.current, update, content, appendMessage = true } = {}) => {
+  const prepareAndShowCampaignConfirmation = async (rawScript, { sessionId = currentSessionIdRef.current, update, content, appendMessage = true, recipients = directRecipientsRef.current } = {}) => {
     const requestId = ++campaignConfirmationRequestRef.current;
     const confirmationId = `campaign-confirmation-${requestId}`;
     const message = { role: 'assistant', content, type: 'confirm_create', data: rawScript, confirmationId };
@@ -583,7 +585,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setIsEditingDraft(false);
     setCampaignConfirmation({ confirmationId, rawScript, status: 'loading', confirmationView: null, error: null });
     try {
-      const response = await aiApi.prepareCampaign(rawScript);
+      const response = await aiApi.prepareCampaign(rawScript, recipients);
       if (requestId !== campaignConfirmationRequestRef.current) return;
       if (sessionId && currentSessionIdRef.current && currentSessionIdRef.current !== sessionId) return;
       if (!response.success || !response.data?.confirmationView || !response.data?.preparedScript) throw new Error(response.message || 'Không thể chuẩn bị bản xem trước');
@@ -648,6 +650,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const loadSession = async (sessionId) => {
+    // Direct recipients are intentionally volatile: never restore PII from a chat session.
+    directRecipientsRef.current = null;
+    setDirectRecipients(null);
     // If this session has cached messages (background generation in-progress or just completed), load from cache
     if (sessionMessagesCache.current.has(sessionId)) {
       currentSessionIdRef.current = sessionId;
@@ -788,6 +793,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setPendingLandingPrompt(null);
     setPendingLandingData(null);
     setCurrentScript(null);
+    directRecipientsRef.current = null;
+    setDirectRecipients(null);
     setCampaignConfirmation(null);
     setContentPlanWorkflow(null);
     setWizardContext(deriveWizardContext([]));
@@ -2252,6 +2259,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         return;
       }
       if (wizardQuestion.wizardGate === 'dataSource') {
+        if (answers.dataSource === 'manual') {
+          const channel = wizardContext.channel || pendingCampaignData?.channel || null;
+          const list = String(answers.directRecipients || '').trim();
+          const values = list.split(/[\s,;\n]+/).filter(Boolean);
+          const recipientPayload = channel === 'email' ? { emails: values } : { phones: values };
+          directRecipientsRef.current = recipientPayload;
+          setDirectRecipients(recipientPayload);
+          await emitWizardAnswer(
+            { gate: 'dataSource', value: 'manual', recipientCount: values.length },
+            summaryText,
+          );
+          return;
+        }
         await emitWizardAnswer(
           { gate: 'dataSource', value: answers.dataSource },
           summaryText
@@ -2542,6 +2562,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const handleCancelCreate = () => {
     campaignConfirmationRequestRef.current += 1;
     setCurrentScript(null);
+    directRecipientsRef.current = null;
+    setDirectRecipients(null);
     setCampaignConfirmation(null);
     setPendingCampaignPrompt(null);
     setPendingCampaignData(null);
@@ -2565,12 +2587,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const res = await aiApi.createCampaignFromDraft(
         currentScript,
         campaignConfirmation?.confirmationView?.resourceVersions || [],
+        directRecipients,
       );
       if (res.success) {
         toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
         campaignConfirmationRequestRef.current += 1;
         setCampaignConfirmation(null);
         setCurrentScript(null);
+        directRecipientsRef.current = null;
+        setDirectRecipients(null);
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: `🎉 Chiến dịch "${currentScript.campaignName}" đã được tạo thành công!\n\nVào Campaign Builder để xem chi tiết và nhấn "Chạy" khi sẵn sàng.`

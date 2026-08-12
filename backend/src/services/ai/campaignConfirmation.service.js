@@ -200,6 +200,9 @@ class CampaignConfirmationService {
           : channel === 'zalo_group'
             ? config.zaloGroupIds
             : config.zaloRecipientPhones;
+        if (manual && manualRecipientCount(recipientList) === 0) {
+          addIssue({ code: 'manual_recipients_required', nodeId: currentNodeId, stepIndex });
+        }
         steps.push({
           key: `${currentNodeId}:${stepIndex}`,
           nodeId: currentNodeId,
