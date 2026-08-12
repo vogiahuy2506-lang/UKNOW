@@ -586,8 +586,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const response = await aiApi.prepareCampaign(rawScript);
       if (requestId !== campaignConfirmationRequestRef.current) return;
       if (sessionId && currentSessionIdRef.current && currentSessionIdRef.current !== sessionId) return;
-      if (!response.success || !response.data?.confirmationView) throw new Error(response.message || 'Không thể chuẩn bị bản xem trước');
-      setCampaignConfirmation({ confirmationId, rawScript, status: 'ready', confirmationView: response.data.confirmationView, error: null });
+      if (!response.success || !response.data?.confirmationView || !response.data?.preparedScript) throw new Error(response.message || 'Không thể chuẩn bị bản xem trước');
+      const preparedScript = response.data.preparedScript;
+      setCurrentScript(preparedScript);
+      setCampaignConfirmation({ confirmationId, rawScript: preparedScript, status: 'ready', confirmationView: response.data.confirmationView, error: null });
     } catch (error) {
       if (requestId !== campaignConfirmationRequestRef.current) return;
       setCampaignConfirmation({ confirmationId, rawScript, status: 'error', confirmationView: null, error: error.response?.data?.message || error.message || 'Không thể chuẩn bị bản xem trước' });
@@ -2560,10 +2562,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (!currentScript) return;
     const t = toast.loading('Đang tạo chiến dịch...');
     try {
-      // Merge lựa chọn wizard (tài khoản gửi, nhóm Zalo, link Sheet) vào script
-      // tại thời điểm tạo — currentScript có thể được set từ nhiều đường chưa merge
-      const scriptWithSelections = applyWizardSelectionsToScript(currentScript, wizardContext);
-      const res = await aiApi.createCampaignFromDraft(scriptWithSelections);
+      const res = await aiApi.createCampaignFromDraft(
+        currentScript,
+        campaignConfirmation?.confirmationView?.resourceVersions || [],
+      );
       if (res.success) {
         toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
         campaignConfirmationRequestRef.current += 1;

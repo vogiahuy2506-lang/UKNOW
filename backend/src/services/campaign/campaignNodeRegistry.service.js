@@ -826,7 +826,12 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
     if (nodeType.multiStep && nodeType.multiStepField) {
       const steps = config[nodeType.multiStepField];
       if (!Array.isArray(steps) || steps.length === 0) {
-        errors.push(`${nodeType.multiStepField} phải là mảng và có ít nhất 1 phần tử`);
+        const hasTopLevelPayload = nodeType.multiStepField === 'emailSteps'
+          ? Boolean(config.emailTemplateId || config.emailBody)
+          : nodeType.multiStepField === 'zaloPersonalTemplateSteps'
+            ? Boolean(config.message)
+            : Boolean(config.zaloGroupMessage);
+        if (!hasTopLevelPayload) errors.push(`${nodeType.multiStepField} phải là mảng có ít nhất 1 phần tử hoặc có nội dung top-level hợp lệ`);
       }
     }
 

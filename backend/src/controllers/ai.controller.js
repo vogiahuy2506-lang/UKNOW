@@ -12,6 +12,7 @@ import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { tryHandleHelpChat } from '../services/help/helpAssistant.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -36,11 +37,12 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Kịch bản chiến dịch không hợp lệ' });
       }
 
+      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
-        script,
+        script: preparedScript,
         userId: req.user.id,
       });
-      return res.json({ success: true, data: { confirmationView } });
+      return res.json({ success: true, data: { preparedScript, confirmationView } });
     } catch (error) {
       console.error('AI prepare campaign error:', error);
       return res.status(500).json(buildAiErrorPayload(error, 'Không thể chuẩn bị bản xem trước chiến dịch'));
@@ -494,7 +496,7 @@ class AiController {
    */
   async createCampaignFromDraft(req, res) {
     try {
-      const { script } = req.body;
+      const { script, resourceVersions = [] } = req.body;
 
       if (!script || !script.nodes || !script.connections) {
         return res.status(400).json({
@@ -503,32 +505,38 @@ class AiController {
         });
       }
 
-      // Tự động tạo email templates từ inline content trước khi normalize
-      await aiCampaignDraftService.autoCreateEmailTemplates(script.nodes, req.user.id);
-
-      // Normalize AI nodes to match database schema (uses snake_case: node_type, node_subtype)
-      // AI returns: { nodeType: "action", nodeSubtype: "send_email" } but DB needs: { node_type: "send_email", node_subtype: "send_email" }
-      console.log('[AI Controller] Raw script nodes:', JSON.stringify(script.nodes, null, 2));
-      const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
-
-      // Auto-fill fromEmailId và zaloAccountId với channel đầu tiên của user
-      await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
-      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
-
-      // Normalize connections: support { source, target } or { sourceNodeId, targetNodeId }
-      const normalizedConnections = (script.connections || []).map(conn => ({
-        sourceNodeId: conn.sourceNodeId || conn.source || conn.from,
-        targetNodeId: conn.targetNodeId || conn.target || conn.to,
-        connectionType: conn.connectionType || 'default',
-        connectionLabel: conn.connectionLabel || '',
-      }));
+      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
+      await campaignConfirmationService.assertResourceVersionsCurrent({ resourceVersions, userId: req.user.id });
+      const normalizedNodes = preparedScript.nodes;
+      const normalizedConnections = preparedScript.connections;
+      // Runtime only executes emailSteps with templateId. Materialize inline steps before validation.
+      // A later create failure can leave an orphan template; transaction coupling is intentionally deferred.
+      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id);
+      const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
+        script: preparedScript,
+        userId: req.user.id,
+      });
+      if (!ownershipPreview.readyToCreate) {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_DRAFT_RESOURCES',
+          message: 'Kịch bản có tài khoản gửi, mẫu tin hoặc nội dung chưa hợp lệ.',
+        });
+      }
+      for (const node of normalizedNodes) {
+        const subtype = node.node_subtype || node.nodeSubtype;
+        const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
+        if (!validation.valid) {
+          return res.status(400).json({ success: false, code: 'INVALID_NODE_CONFIG', message: validation.errors.join(', ') });
+        }
+      }
 
       const createReq = {
         ...req,
         body: {
-          campaignName: script.campaignName,
-          description: script.description || '',
-          campaignType: script.campaignType || 'mixed',
+          campaignName: preparedScript.campaignName,
+          description: preparedScript.description || '',
+          campaignType: preparedScript.campaignType || 'mixed',
           nodes: normalizedNodes,
           connections: normalizedConnections,
         },
@@ -552,13 +560,14 @@ class AiController {
         success: true,
         message: 'Đã tạo chiến dịch từ draft AI. Vào Campaign Builder để xem và chạy khi sẵn sàng.',
         campaignId: createRes.data.data?.id,
-        campaignName: script.campaignName,
+        campaignName: preparedScript.campaignName,
       });
     } catch (error) {
       console.error('AI create from draft error:', error);
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
-        message: 'Lỗi khi tạo chiến dịch từ draft AI',
+        ...(error.code ? { code: error.code } : {}),
+        message: error.message || 'Lỗi khi tạo chiến dịch từ draft AI',
       });
     }
   }

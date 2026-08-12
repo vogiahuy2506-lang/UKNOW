@@ -1,5 +1,18 @@
 import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.repository.js';
 
+const NODE_REFERENCE_KEYS = [
+  'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
+  'zaloRecipientNodeId', 'zaloFriendNodeId', 'zaloGroupNodeId',
+  'zaloFriendAccountNodeId', 'zaloGroupAccountNodeId',
+];
+
+function draftError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = 400;
+  return error;
+}
+
 class AiCampaignDraftService {
   async autoCreateEmailTemplates(nodes, userId) {
     for (const node of nodes) {
@@ -8,26 +21,36 @@ class AiCampaignDraftService {
       const isSendEmail = ['send_email', 'email', 'email_send'].includes(nodeType) ||
         ['send_email', 'email', 'email_send'].includes(node.nodeSubtype || node.subtype || '');
       if (!isSendEmail) continue;
-      if (cfg.emailTemplateId || !cfg.emailBody) continue;
-
-      try {
+      const createTemplate = async ({ subject, body, suffix = '' }) => {
         const name = node.nodeName || node.name || 'Email từ AI';
         const row = await aiCampaignDraftRepository.createEmailTemplate({
           userId,
-          name,
+          name: suffix ? `${name} ${suffix}` : name,
           code: `ai_${Date.now()}`,
-          subject: cfg.emailSubject || name,
-          bodyHtml: cfg.emailBody,
+          subject: subject || name,
+          bodyHtml: body,
         });
+        if (!row?.id) throw new Error('Không thể tạo email template từ nội dung nháp');
+        return row.id;
+      };
 
-        cfg.emailTemplateId = row.id;
+      if (!cfg.emailTemplateId && cfg.emailBody) {
+        cfg.emailTemplateId = await createTemplate({ subject: cfg.emailSubject, body: cfg.emailBody });
         cfg.emailBody = '';
         cfg.emailSubject = '';
-        node.config = cfg;
-        console.log(`[AI] Auto-created email template id=${row.id} for node "${name}"`);
-      } catch (e) {
-        console.warn('[AI] Không tạo được email template tự động:', e.message);
       }
+      if (Array.isArray(cfg.emailSteps)) {
+        for (let index = 0; index < cfg.emailSteps.length; index += 1) {
+          const step = cfg.emailSteps[index] || {};
+          if (!step.templateId && step.emailBody) {
+            step.templateId = await createTemplate({ subject: step.emailSubject, body: step.emailBody, suffix: `#${index + 1}` });
+            step.emailBody = '';
+            step.emailSubject = '';
+          }
+          cfg.emailSteps[index] = step;
+        }
+      }
+      node.config = cfg;
     }
   }
 
@@ -160,6 +183,67 @@ class AiCampaignDraftService {
         config,
       };
     });
+  }
+
+  canonicalizeScript(script) {
+    if (!script || !Array.isArray(script.nodes) || !Array.isArray(script.connections)) {
+      throw draftError('INVALID_DRAFT', 'Script không hợp lệ. Cần có nodes và connections.');
+    }
+    const cloned = structuredClone(script);
+    const seenIds = new Set();
+    cloned.nodes = cloned.nodes.map((node, index) => {
+      const next = { ...node };
+      const id = String(next.tempId || next.id || `ai-node-${index + 1}`).trim();
+      if (!id || seenIds.has(id)) throw draftError('DUPLICATE_NODE_ID', `Node ID bị trùng hoặc không hợp lệ: ${id || index + 1}`);
+      seenIds.add(id);
+      next.id = id;
+      next.tempId = id;
+      next.config = { ...(next.config || next.nodeConfig || next.settings || {}) };
+      const subtype = String(next.nodeSubtype || next.node_subtype || next.subtype || '').toLowerCase();
+      if (next.config.zaloAccountNodeId) {
+        if (subtype === 'get_all_groups') next.config.zaloGroupAccountNodeId = next.config.zaloGroupAccountNodeId || next.config.zaloAccountNodeId;
+        if (subtype === 'get_all_friends') next.config.zaloFriendAccountNodeId = next.config.zaloFriendAccountNodeId || next.config.zaloAccountNodeId;
+        delete next.config.zaloAccountNodeId;
+      }
+      return next;
+    });
+    cloned.connections = cloned.connections.map((connection) => ({
+      sourceNodeId: String(connection?.sourceNodeId || connection?.source || connection?.from || '').trim(),
+      targetNodeId: String(connection?.targetNodeId || connection?.target || connection?.to || '').trim(),
+      connectionType: connection?.connectionType || 'default',
+      connectionLabel: connection?.connectionLabel || '',
+    }));
+    for (const connection of cloned.connections) {
+      if (!seenIds.has(connection.sourceNodeId) || !seenIds.has(connection.targetNodeId)) {
+        throw draftError('DANGLING_CONNECTION', 'Kết nối đang trỏ tới node không tồn tại.');
+      }
+    }
+
+    const assertReference = (value) => {
+      if (value == null || String(value).trim() === '') return;
+      if (!seenIds.has(String(value))) throw draftError('DANGLING_REFERENCE', 'Cấu hình đang trỏ tới node không tồn tại.');
+    };
+    const assertMappings = (mappings) => (Array.isArray(mappings) ? mappings.forEach((mapping) => assertReference(mapping?.nodeId)) : null);
+    for (const node of cloned.nodes) {
+      const config = node.config;
+      NODE_REFERENCE_KEYS.forEach((key) => assertReference(config[key]));
+      assertMappings(config.templateMappings);
+      assertMappings(config.zaloFriendTemplateMappings);
+      ['emailSteps', 'zaloPersonalTemplateSteps', 'zaloGroupTemplateSteps'].forEach((key) => {
+        (Array.isArray(config[key]) ? config[key] : []).forEach((step) => assertMappings(step?.templateMappings));
+      });
+      Object.values(config.saveCustomerFieldMap || {}).forEach((mapping) => assertReference(mapping?.nodeId));
+      (Array.isArray(config.saveCustomerCustomFields) ? config.saveCustomerCustomFields : []).forEach((mapping) => assertReference(mapping?.nodeId));
+    }
+    return cloned;
+  }
+
+  async prepareScript(script, userId) {
+    const canonical = this.canonicalizeScript(script);
+    const nodes = this.normalizeNodes(canonical.nodes);
+    await this.autoFillEmailChannels(nodes, userId);
+    await this.autoFillZaloAccounts(nodes, userId);
+    return { ...canonical, nodes };
   }
 }
 

@@ -63,6 +63,27 @@ const manualRecipientCount = (value) => String(value || '')
   .filter(Boolean).length;
 
 class CampaignConfirmationService {
+  async assertResourceVersionsCurrent({ resourceVersions, userId }) {
+    if (!Array.isArray(resourceVersions)) return;
+    for (const resource of resourceVersions) {
+      const id = asNumber(resource?.id);
+      if (!id || !resource?.updatedAt) continue;
+      const template = resource.kind === 'email_template'
+        ? await emailTemplateRepository.findById({ id, userId, isAdmin: false })
+        : resource.kind === 'zalo_template'
+          ? await zaloTemplateRepository.findById({ id, userId, isAdmin: false })
+          : null;
+      const expected = new Date(resource.updatedAt).getTime();
+      const current = new Date(template?.updated_at || template?.updatedAt || 0).getTime();
+      if (!template || !Number.isFinite(expected) || expected !== current) {
+        const error = new Error('Mẫu tin đã thay đổi. Vui lòng xem lại bản xác nhận.');
+        error.code = 'PREPARE_STALE';
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+  }
+
   async buildConfirmationView({ script, userId }) {
     const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
     const issues = [];

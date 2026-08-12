@@ -40,8 +40,8 @@ const aiApi = {
    * User will review and run manually.
    * @param {object} script The campaign script from AI
    */
-  createCampaignFromDraft: async (script) => {
-    const response = await api.post('/ai/create-from-draft', { script });
+  createCampaignFromDraft: async (script, resourceVersions = []) => {
+    const response = await api.post('/ai/create-from-draft', { script, resourceVersions });
     return response.data;
   },
 
