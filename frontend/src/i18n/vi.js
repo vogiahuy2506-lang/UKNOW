@@ -1931,6 +1931,8 @@ export default {
     manualVoucherPriority: 'Mã nhập tay đang được ưu tiên áp dụng cho đơn này.',
     availableVoucherCodes: 'Mã voucher có thể dùng',
     useCode: 'Dùng mã',
+    selectVoucher: 'Chọn mã này',
+    deselectVoucher: 'Bỏ chọn mã này',
     notEligible: 'Chưa đủ điều kiện',
     voucherMinOrder: 'Dùng cho hóa đơn từ {amount}',
     voucherNoMinOrder: 'Không yêu cầu đơn tối thiểu',

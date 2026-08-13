@@ -1900,6 +1900,8 @@ export default {
     manualVoucherPriority: 'Manual code is currently prioritized for this order.',
     availableVoucherCodes: 'Available voucher codes',
     useCode: 'Use code',
+    selectVoucher: 'Select this code',
+    deselectVoucher: 'Deselect this code',
     notEligible: 'Not eligible',
     voucherMinOrder: 'For orders from {amount}',
     voucherNoMinOrder: 'No minimum order required',

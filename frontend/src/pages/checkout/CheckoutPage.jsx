@@ -518,20 +518,55 @@ const CheckoutPage = () => {
                                                 <button
                                                     key={voucher.id || voucher.code}
                                                     type="button"
+                                                    role="checkbox"
+                                                    aria-checked={isSelected}
+                                                    aria-label={
+                                                        !isEligible
+                                                            ? t('checkout.notEligible')
+                                                            : isSelected
+                                                                ? t('checkout.deselectVoucher')
+                                                                : t('checkout.selectVoucher')
+                                                    }
                                                     className={`w-full rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed ${isSelected ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-200' : isEligible ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-100/70' : 'border-slate-200 bg-white/40 opacity-60'}`}
-                                                    onClick={() => applyVoucherCode(voucher.code)}
-                                                    disabled={voucherLoading || paymentStarted || isSelected || !isEligible}
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setManualVoucher(null);
+                                                            setAuthoritativePayment(null);
+                                                            setVoucherCode('');
+                                                            return;
+                                                        }
+                                                        applyVoucherCode(voucher.code);
+                                                    }}
+                                                    disabled={voucherLoading || paymentStarted || !isEligible}
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
                                                         <div className="min-w-0">
                                                             <p className={`font-semibold text-sm truncate ${isEligible ? 'text-orange-800' : 'text-slate-500'}`}>{voucher.name || voucher.code}</p>
                                                             <p className={`text-[11px] truncate ${isEligible ? 'text-orange-600' : 'text-slate-400'}`}>{conditionText} · {t('checkout.codeLabel', { code: voucher.code })}</p>
                                                         </div>
-                                                        <div className="text-right shrink-0">
-                                                            <p className={`text-xs font-bold ${isEligible ? 'text-orange-700' : 'text-slate-400'}`}>-{fmtVnd(voucher.discountAmount)}</p>
-                                                            <p className={`text-[10px] font-semibold ${isSelected ? 'text-orange-600' : isEligible ? 'text-orange-500' : 'text-slate-400'}`}>
-                                                                {isSelected ? t('checkout.currentlyApplied') : isEligible ? t('checkout.useCode') : t('checkout.notEligible')}
-                                                            </p>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <div className="text-right">
+                                                                <p className={`text-xs font-bold ${isEligible ? 'text-orange-700' : 'text-slate-400'}`}>-{fmtVnd(voucher.discountAmount)}</p>
+                                                                {!isEligible && (
+                                                                    <p className="text-[10px] font-semibold text-slate-400">
+                                                                        {t('checkout.notEligible')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            {isEligible && (
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+                                                                        isSelected
+                                                                            ? 'border-orange-500 bg-orange-500 text-white'
+                                                                            : 'border-orange-300 bg-white'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected && (
+                                                                        <HiOutlineCheck className="h-3.5 w-3.5" strokeWidth={3} />
+                                                                    )}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </button>
